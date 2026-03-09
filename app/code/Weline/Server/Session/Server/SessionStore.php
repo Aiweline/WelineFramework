@@ -245,7 +245,8 @@ final class SessionStore
             return $key === null ? [] : null;
         }
 
-        $this->touchLru($sessionId);
+        // Sliding expiration: active sessions should refresh TTL on reads.
+        $this->touch($sessionId);
 
         if ($key === null) {
             return $entry['data'];
@@ -528,17 +529,7 @@ final class SessionStore
         $cleaned = 0;
 
         foreach ($this->store as $sessionId => $entry) {
-            $expired = false;
-            
-            if ($entry['expire'] > 0 && $entry['expire'] < $now) {
-                $expired = true;
-            }
-            
-            if ($maxLifetime > 0 && ($entry['atime'] + $maxLifetime) < $now) {
-                $expired = true;
-            }
-
-            if ($expired) {
+            if ($this->isEntryExpired($entry, $now, $maxLifetime)) {
                 unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
                 $cleaned++;
             }
@@ -550,6 +541,37 @@ final class SessionStore
             $this->log("GC cleaned {$cleaned} expired sessions");
         }
 
+        return $cleaned;
+    }
+
+    /**
+     * 按指定 Session ID 子集执行 GC（用于按域隔离清理）。
+     *
+     * @param string[] $sessionIds
+     */
+    public function gcBySessionIds(array $sessionIds, int $maxLifetime = 0): int
+    {
+        if (empty($sessionIds)) {
+            return 0;
+        }
+        $now = \time();
+        $cleaned = 0;
+        foreach ($sessionIds as $sessionId) {
+            if (!isset($this->store[$sessionId])) {
+                continue;
+            }
+            $entry = $this->store[$sessionId];
+            if (!$this->isEntryExpired($entry, $now, $maxLifetime)) {
+                continue;
+            }
+            unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
+            $cleaned++;
+        }
+        if ($cleaned > 0) {
+            $this->gcCleanedCount += $cleaned;
+            $this->markDirty();
+            $this->log("Scoped GC cleaned {$cleaned} sessions");
+        }
         return $cleaned;
     }
 
@@ -705,6 +727,20 @@ final class SessionStore
     {
         $this->dirty = true;
         $this->writesSinceLastPersist++;
+    }
+
+    /**
+     * 判断条目是否过期。
+     */
+    private function isEntryExpired(array $entry, int $now, int $maxLifetime): bool
+    {
+        if (($entry['expire'] ?? 0) > 0 && (int)$entry['expire'] < $now) {
+            return true;
+        }
+        if ($maxLifetime > 0 && ((int)($entry['atime'] ?? 0) + $maxLifetime) < $now) {
+            return true;
+        }
+        return false;
     }
 
     /**

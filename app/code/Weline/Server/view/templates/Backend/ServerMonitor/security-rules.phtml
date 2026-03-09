@@ -1,47 +1,613 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
-$rulesJson = (string)$this->getData('rulesJson');
+$rulesJson = (string) $this->getData('rulesJson');
+if ($rulesJson === '') {
+    $rulesJson = '{}';
+}
 ?>
-<div class="card">
-    <div class="card-header">
-        <h5 class="mb-0"><?= __('WLS 安全规则配置') ?></h5>
+<style>
+.wls-security-rules-panel { background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius-md); }
+.wls-security-rules-grid { display: grid; gap: var(--backend-spacing-md, 1rem); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.wls-security-rules-card { border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius); background: var(--backend-color-card-bg); padding: var(--backend-spacing-md); }
+.wls-security-rules-card-title { margin: 0 0 var(--backend-spacing-sm); color: var(--backend-color-text-primary); font-size: .95rem; font-weight: 600; }
+.wls-security-rules-form-row { display: grid; gap: var(--backend-spacing-sm); grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: var(--backend-spacing-sm); }
+.wls-security-rules-table-wrap { overflow-x: auto; border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius); }
+.wls-security-rules-table { width: 100%; border-collapse: collapse; }
+.wls-security-rules-table th, .wls-security-rules-table td { border-bottom: 1px solid var(--backend-color-border-light); padding: var(--backend-spacing-sm); font-size: .85rem; vertical-align: middle; }
+.wls-security-rules-tag { display: inline-block; padding: .15rem .5rem; border-radius: 999px; background: var(--backend-color-info-bg-subtle); color: var(--backend-color-text-primary); font-size: .75rem; }
+.wls-security-rules-list { display: flex; flex-direction: column; gap: var(--backend-spacing-xs); }
+.wls-security-rules-list-item { display: grid; gap: var(--backend-spacing-xs); grid-template-columns: 1fr auto; }
+.wls-security-rules-actions { display: flex; gap: var(--backend-spacing-sm); flex-wrap: wrap; }
+.wls-security-rules-json { min-height: 220px; font-family: Consolas, Monaco, monospace; font-size: .8rem; }
+</style>
+
+<div class="card wls-security-rules-panel">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div>
+            <h5 class="mb-1"><?= __('WLS 安全规则可视化配置') ?></h5>
+            <small class="text-muted"><?= __('类似 Cloudflare 规则面板：开关、阈值、列表可直接编辑，保存后自动下发运行中 WLS。') ?></small>
+        </div>
+        <span class="wls-security-rules-tag"><?= __('AttackDetector') ?></span>
     </div>
     <div class="card-body">
-        <p class="text-muted"><?= __('可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。') ?></p>
-        <textarea id="wls-security-rules" class="form-control" rows="24"><?= htmlspecialchars($rulesJson) ?></textarea>
-        <div class="mt-3">
+        <div class="wls-security-rules-grid mb-3">
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('全局限流（rate_limit）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-rate-enabled">
+                    <label class="form-check-label" for="sr-rate-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="wls-security-rules-form-row">
+                    <div>
+                        <label class="form-label"><?= __('窗口(秒)') ?></label>
+                        <input id="sr-rate-window" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                    <div>
+                        <label class="form-label"><?= __('最大请求数') ?></label>
+                        <input id="sr-rate-max" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                    <input id="sr-rate-block" class="form-control form-control-sm" type="number" min="1">
+                </div>
+            </div>
+
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('路径扫描（path_scan）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-path-scan-enabled">
+                    <label class="form-check-label" for="sr-path-scan-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="wls-security-rules-form-row">
+                    <div>
+                        <label class="form-label"><?= __('窗口(秒)') ?></label>
+                        <input id="sr-path-scan-window" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                    <div>
+                        <label class="form-label"><?= __('最大不同路径') ?></label>
+                        <input id="sr-path-scan-max" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                </div>
+                <div>
+                    <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                    <input id="sr-path-scan-block" class="form-control form-control-sm" type="number" min="1">
+                </div>
+            </div>
+
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('SSL 握手失败（ssl_handshake_failure）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-ssl-enabled">
+                    <label class="form-check-label" for="sr-ssl-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="wls-security-rules-form-row">
+                    <div>
+                        <label class="form-label"><?= __('窗口(秒)') ?></label>
+                        <input id="sr-ssl-window" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                    <div>
+                        <label class="form-label"><?= __('最大失败数') ?></label>
+                        <input id="sr-ssl-max" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                </div>
+                <div class="wls-security-rules-form-row">
+                    <div>
+                        <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                        <input id="sr-ssl-block" class="form-control form-control-sm" type="number" min="1">
+                    </div>
+                    <div>
+                        <label class="form-label"><?= __('快速关闭阈值(秒)') ?></label>
+                        <input id="sr-ssl-fast-close" class="form-control form-control-sm" type="number" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="wls-security-rules-card mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="wls-security-rules-card-title mb-0"><?= __('路径级限流（path_rate_limits）') ?></h6>
+                <button id="sr-add-path-limit" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增路径规则') ?></button>
+            </div>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="sr-path-rate-enabled">
+                <label class="form-check-label" for="sr-path-rate-enabled"><?= __('启用') ?></label>
+            </div>
+            <div class="wls-security-rules-table-wrap">
+                <table class="wls-security-rules-table">
+                    <thead>
+                    <tr>
+                        <th><?= __('启用') ?></th>
+                        <th><?= __('路径前缀') ?></th>
+                        <th><?= __('窗口(秒)') ?></th>
+                        <th><?= __('最大请求') ?></th>
+                        <th><?= __('封禁(秒)') ?></th>
+                        <th><?= __('操作') ?></th>
+                    </tr>
+                    </thead>
+                    <tbody id="sr-path-rate-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="wls-security-rules-grid mb-3">
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('白名单（ip_whitelist）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-ip-whitelist-enabled">
+                    <label class="form-check-label" for="sr-ip-whitelist-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="wls-security-rules-actions mb-2">
+                    <button id="sr-add-whitelist-ip" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增 IP/CIDR') ?></button>
+                </div>
+                <div id="sr-ip-whitelist-list" class="wls-security-rules-list"></div>
+            </div>
+
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('CDN 信任 IP（cdn_trusted_ips）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-cdn-enabled">
+                    <label class="form-check-label" for="sr-cdn-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="wls-security-rules-actions mb-2">
+                    <button id="sr-add-cdn-ip" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增 IP/CIDR') ?></button>
+                </div>
+                <div id="sr-cdn-list" class="wls-security-rules-list"></div>
+            </div>
+        </div>
+
+        <div class="wls-security-rules-grid mb-3">
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('恶意特征（malicious_patterns）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-malicious-enabled">
+                    <label class="form-check-label" for="sr-malicious-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                    <input id="sr-malicious-block" class="form-control form-control-sm" type="number" min="1">
+                </div>
+                <div class="wls-security-rules-actions mb-2">
+                    <button id="sr-add-malicious-pattern" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增正则') ?></button>
+                </div>
+                <div id="sr-malicious-list" class="wls-security-rules-list"></div>
+            </div>
+
+            <div class="wls-security-rules-card">
+                <h6 class="wls-security-rules-card-title"><?= __('恶意 UA（bad_user_agents）') ?></h6>
+                <div class="form-check form-switch mb-2">
+                    <input class="form-check-input" type="checkbox" id="sr-ua-enabled">
+                    <label class="form-check-label" for="sr-ua-enabled"><?= __('启用') ?></label>
+                </div>
+                <div class="mb-2">
+                    <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                    <input id="sr-ua-block" class="form-control form-control-sm" type="number" min="1">
+                </div>
+                <div class="wls-security-rules-actions mb-2">
+                    <button id="sr-add-ua-pattern" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增 UA 正则') ?></button>
+                </div>
+                <div id="sr-ua-list" class="wls-security-rules-list"></div>
+            </div>
+        </div>
+
+        <div class="wls-security-rules-card mb-3">
+            <h6 class="wls-security-rules-card-title"><?= __('敏感路径（protected_paths）') ?></h6>
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="sr-protected-enabled">
+                <label class="form-check-label" for="sr-protected-enabled"><?= __('启用') ?></label>
+            </div>
+            <div class="mb-2">
+                <label class="form-label"><?= __('封禁时长(秒)') ?></label>
+                <input id="sr-protected-block" class="form-control form-control-sm" type="number" min="1">
+            </div>
+            <div class="wls-security-rules-actions mb-2">
+                <button id="sr-add-protected-path" type="button" class="btn btn-sm btn-outline-primary"><?= __('新增敏感路径') ?></button>
+            </div>
+            <div id="sr-protected-list" class="wls-security-rules-list"></div>
+        </div>
+
+        <div class="wls-security-rules-card mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="wls-security-rules-card-title mb-0"><?= __('规则 JSON 预览（只读）') ?></h6>
+                <small class="text-muted"><?= __('用于审查最终将提交的数据') ?></small>
+            </div>
+            <textarea id="sr-json-preview" class="form-control wls-security-rules-json" readonly></textarea>
+        </div>
+
+        <div class="wls-security-rules-actions">
             <button type="button" id="save-wls-security-rules" class="btn btn-primary"><?= __('保存规则') ?></button>
+            <button type="button" id="refresh-wls-security-rules" class="btn btn-outline-secondary"><?= __('重载页面数据') ?></button>
         </div>
     </div>
 </div>
+
+<script id="wls-security-rules-json" type="application/json"><?= htmlspecialchars($rulesJson, ENT_QUOTES) ?></script>
 <script>
-(() => {
-    const button = document.getElementById('save-wls-security-rules');
-    const textarea = document.getElementById('wls-security-rules');
-    if (!button || !textarea) {
-        return;
-    }
-    button.addEventListener('click', async () => {
-        try {
-            JSON.parse(textarea.value);
-        } catch (error) {
-            AdminToast.error(__('JSON 格式错误：%{1}', {1: error.message || ''}));
+(function () {
+    'use strict';
+
+    function toastSuccess(message) {
+        if (window.BackendToast && window.BackendToast.success) {
+            window.BackendToast.success(message);
             return;
         }
-        try {
-            var url = '<?= $this->getUrl('server/backend/server-monitor/save-security-rules') ?>';
-            var opts = { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({rules: textarea.value}) };
-            var response = await window.Weline.Api.request(url, opts);
-            var result = (response && response.data) !== undefined ? response.data : response;
-            if (result.success) {
-                AdminToast.success(result.message || __('保存成功'));
-            } else {
-                AdminToast.error(result.message || __('保存失败'));
-            }
-        } catch (error) {
-            AdminToast.error(__('请求失败：%{1}', {1: error.message || ''}));
+        if (window.AdminToast && window.AdminToast.success) {
+            window.AdminToast.success(message);
         }
-    });
+    }
+
+    function toastError(message) {
+        if (window.BackendToast && window.BackendToast.error) {
+            window.BackendToast.error(message);
+            return;
+        }
+        if (window.AdminToast && window.AdminToast.error) {
+            window.AdminToast.error(message);
+        }
+    }
+
+    function getDefaultRules() {
+        return {
+            rate_limit: { enabled: true, window: 60, max_requests: 200, block_duration: 300 },
+            path_rate_limits: {
+                enabled: true,
+                rules: [
+                    { path: '/api/framework/query', window: 60, max_requests: 120, block_duration: 120, enabled: true },
+                    { path: '/api_admin/framework/query', window: 60, max_requests: 300, block_duration: 120, enabled: true }
+                ]
+            },
+            cdn_trusted_ips: { enabled: true, ips: [] },
+            ip_whitelist: { enabled: true, ips: [] },
+            path_scan: { enabled: true, window: 60, max_unique_paths: 50, block_duration: 600 },
+            malicious_patterns: {
+                enabled: true,
+                patterns: [
+                    '/(\\bunion\\b.*\\bselect\\b|\\bor\\b\\s+\\d+=\\d+|\\band\\b\\s+\\d+=\\d+|\\\'.*--)/i',
+                    '/<script[^>]*>|javascript:|on\\w+\\s*=/i'
+                ],
+                block_duration: 3600
+            },
+            bad_user_agents: { enabled: true, patterns: ['/^$/i', '/sqlmap/i'], block_duration: 300 },
+            protected_paths: { enabled: true, paths: ['/.git/', '/.env'], block_duration: 1800 },
+            ssl_handshake_failure: { enabled: true, window: 60, max_failures: 30, block_duration: 60, fast_close_threshold: 0.2 }
+        };
+    }
+
+    function deepMerge(base, incoming) {
+        var result = Array.isArray(base) ? base.slice() : Object.assign({}, base);
+        if (!incoming || typeof incoming !== 'object') {
+            return result;
+        }
+        Object.keys(incoming).forEach(function (key) {
+            var value = incoming[key];
+            if (Array.isArray(value)) {
+                result[key] = value.slice();
+                return;
+            }
+            if (value && typeof value === 'object') {
+                var current = result[key] && typeof result[key] === 'object' ? result[key] : {};
+                result[key] = deepMerge(current, value);
+                return;
+            }
+            result[key] = value;
+        });
+        return result;
+    }
+
+    function parseRulesJson() {
+        var node = document.getElementById('wls-security-rules-json');
+        if (!node) {
+            return getDefaultRules();
+        }
+        try {
+            var parsed = JSON.parse(node.textContent || '{}');
+            if (!parsed || typeof parsed !== 'object') {
+                return getDefaultRules();
+            }
+            return deepMerge(getDefaultRules(), parsed);
+        } catch (error) {
+            toastError(__('规则数据解析失败，已回退默认值：%{1}', {1: (error && error.message) || ''}));
+            return getDefaultRules();
+        }
+    }
+
+    function asBool(value) {
+        return value === true || value === 1 || value === '1';
+    }
+
+    function asInt(value, fallback) {
+        var n = Number.parseInt(String(value), 10);
+        return Number.isFinite(n) ? n : fallback;
+    }
+
+    function asFloat(value, fallback) {
+        var n = Number.parseFloat(String(value));
+        return Number.isFinite(n) ? n : fallback;
+    }
+
+    function bindSimpleRules(rules) {
+        document.getElementById('sr-rate-enabled').checked = asBool(rules.rate_limit.enabled);
+        document.getElementById('sr-rate-window').value = asInt(rules.rate_limit.window, 60);
+        document.getElementById('sr-rate-max').value = asInt(rules.rate_limit.max_requests, 200);
+        document.getElementById('sr-rate-block').value = asInt(rules.rate_limit.block_duration, 300);
+
+        document.getElementById('sr-path-scan-enabled').checked = asBool(rules.path_scan.enabled);
+        document.getElementById('sr-path-scan-window').value = asInt(rules.path_scan.window, 60);
+        document.getElementById('sr-path-scan-max').value = asInt(rules.path_scan.max_unique_paths, 50);
+        document.getElementById('sr-path-scan-block').value = asInt(rules.path_scan.block_duration, 600);
+
+        document.getElementById('sr-ssl-enabled').checked = asBool(rules.ssl_handshake_failure.enabled);
+        document.getElementById('sr-ssl-window').value = asInt(rules.ssl_handshake_failure.window, 60);
+        document.getElementById('sr-ssl-max').value = asInt(rules.ssl_handshake_failure.max_failures, 30);
+        document.getElementById('sr-ssl-block').value = asInt(rules.ssl_handshake_failure.block_duration, 60);
+        document.getElementById('sr-ssl-fast-close').value = asFloat(rules.ssl_handshake_failure.fast_close_threshold, 0.2);
+
+        document.getElementById('sr-path-rate-enabled').checked = asBool(rules.path_rate_limits.enabled);
+
+        document.getElementById('sr-ip-whitelist-enabled').checked = asBool(rules.ip_whitelist.enabled);
+        document.getElementById('sr-cdn-enabled').checked = asBool(rules.cdn_trusted_ips.enabled);
+
+        document.getElementById('sr-malicious-enabled').checked = asBool(rules.malicious_patterns.enabled);
+        document.getElementById('sr-malicious-block').value = asInt(rules.malicious_patterns.block_duration, 3600);
+
+        document.getElementById('sr-ua-enabled').checked = asBool(rules.bad_user_agents.enabled);
+        document.getElementById('sr-ua-block').value = asInt(rules.bad_user_agents.block_duration, 300);
+
+        document.getElementById('sr-protected-enabled').checked = asBool(rules.protected_paths.enabled);
+        document.getElementById('sr-protected-block').value = asInt(rules.protected_paths.block_duration, 1800);
+    }
+
+    function createListItem(value) {
+        var row = document.createElement('div');
+        row.className = 'wls-security-rules-list-item';
+        row.innerHTML = ''
+            + '<input type="text" class="form-control form-control-sm" value="' + String(value || '').replace(/"/g, '&quot;') + '">'
+            + '<button type="button" class="btn btn-sm btn-outline-danger"><?= __('删除') ?></button>';
+        row.querySelector('button').addEventListener('click', function () {
+            row.remove();
+            updateJsonPreview();
+        });
+        row.querySelector('input').addEventListener('input', updateJsonPreview);
+        return row;
+    }
+
+    function renderList(containerId, items) {
+        var container = document.getElementById(containerId);
+        if (!container) {
+            return;
+        }
+        container.innerHTML = '';
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            container.appendChild(createListItem(item));
+        });
+        if (!container.children.length) {
+            container.appendChild(createListItem(''));
+        }
+    }
+
+    function collectList(containerId) {
+        var container = document.getElementById(containerId);
+        if (!container) {
+            return [];
+        }
+        return Array.from(container.querySelectorAll('input'))
+            .map(function (input) { return (input.value || '').trim(); })
+            .filter(function (value) { return value.length > 0; });
+    }
+
+    function createPathRateRow(rule) {
+        var tr = document.createElement('tr');
+        tr.innerHTML = ''
+            + '<td><input type="checkbox" class="form-check-input sr-path-enabled"></td>'
+            + '<td><input type="text" class="form-control form-control-sm sr-path-path" placeholder="/api/framework/query"></td>'
+            + '<td><input type="number" min="1" class="form-control form-control-sm sr-path-window"></td>'
+            + '<td><input type="number" min="1" class="form-control form-control-sm sr-path-max"></td>'
+            + '<td><input type="number" min="1" class="form-control form-control-sm sr-path-block"></td>'
+            + '<td><button type="button" class="btn btn-sm btn-outline-danger"><?= __('删除') ?></button></td>';
+        tr.querySelector('.sr-path-enabled').checked = asBool(rule.enabled);
+        tr.querySelector('.sr-path-path').value = rule.path || '';
+        tr.querySelector('.sr-path-window').value = asInt(rule.window, 60);
+        tr.querySelector('.sr-path-max').value = asInt(rule.max_requests, 120);
+        tr.querySelector('.sr-path-block').value = asInt(rule.block_duration, 120);
+        tr.querySelector('button').addEventListener('click', function () {
+            tr.remove();
+            updateJsonPreview();
+        });
+        tr.querySelectorAll('input').forEach(function (input) {
+            input.addEventListener('input', updateJsonPreview);
+            input.addEventListener('change', updateJsonPreview);
+        });
+        return tr;
+    }
+
+    function renderPathRateRows(rules) {
+        var body = document.getElementById('sr-path-rate-body');
+        if (!body) {
+            return;
+        }
+        body.innerHTML = '';
+        (Array.isArray(rules) ? rules : []).forEach(function (item) {
+            body.appendChild(createPathRateRow(item || {}));
+        });
+        if (!body.children.length) {
+            body.appendChild(createPathRateRow({ path: '', window: 60, max_requests: 120, block_duration: 120, enabled: true }));
+        }
+    }
+
+    function collectPathRateRows() {
+        var body = document.getElementById('sr-path-rate-body');
+        if (!body) {
+            return [];
+        }
+        return Array.from(body.querySelectorAll('tr')).map(function (tr) {
+            return {
+                enabled: tr.querySelector('.sr-path-enabled').checked,
+                path: (tr.querySelector('.sr-path-path').value || '').trim(),
+                window: asInt(tr.querySelector('.sr-path-window').value, 60),
+                max_requests: asInt(tr.querySelector('.sr-path-max').value, 120),
+                block_duration: asInt(tr.querySelector('.sr-path-block').value, 120)
+            };
+        }).filter(function (item) {
+            return item.path.length > 0;
+        });
+    }
+
+    function collectRules() {
+        return {
+            rate_limit: {
+                enabled: document.getElementById('sr-rate-enabled').checked,
+                window: asInt(document.getElementById('sr-rate-window').value, 60),
+                max_requests: asInt(document.getElementById('sr-rate-max').value, 200),
+                block_duration: asInt(document.getElementById('sr-rate-block').value, 300)
+            },
+            path_rate_limits: {
+                enabled: document.getElementById('sr-path-rate-enabled').checked,
+                rules: collectPathRateRows()
+            },
+            cdn_trusted_ips: {
+                enabled: document.getElementById('sr-cdn-enabled').checked,
+                ips: collectList('sr-cdn-list')
+            },
+            ip_whitelist: {
+                enabled: document.getElementById('sr-ip-whitelist-enabled').checked,
+                ips: collectList('sr-ip-whitelist-list')
+            },
+            path_scan: {
+                enabled: document.getElementById('sr-path-scan-enabled').checked,
+                window: asInt(document.getElementById('sr-path-scan-window').value, 60),
+                max_unique_paths: asInt(document.getElementById('sr-path-scan-max').value, 50),
+                block_duration: asInt(document.getElementById('sr-path-scan-block').value, 600)
+            },
+            malicious_patterns: {
+                enabled: document.getElementById('sr-malicious-enabled').checked,
+                patterns: collectList('sr-malicious-list'),
+                block_duration: asInt(document.getElementById('sr-malicious-block').value, 3600)
+            },
+            bad_user_agents: {
+                enabled: document.getElementById('sr-ua-enabled').checked,
+                patterns: collectList('sr-ua-list'),
+                block_duration: asInt(document.getElementById('sr-ua-block').value, 300)
+            },
+            protected_paths: {
+                enabled: document.getElementById('sr-protected-enabled').checked,
+                paths: collectList('sr-protected-list'),
+                block_duration: asInt(document.getElementById('sr-protected-block').value, 1800)
+            },
+            ssl_handshake_failure: {
+                enabled: document.getElementById('sr-ssl-enabled').checked,
+                window: asInt(document.getElementById('sr-ssl-window').value, 60),
+                max_failures: asInt(document.getElementById('sr-ssl-max').value, 30),
+                block_duration: asInt(document.getElementById('sr-ssl-block').value, 60),
+                fast_close_threshold: asFloat(document.getElementById('sr-ssl-fast-close').value, 0.2)
+            }
+        };
+    }
+
+    function updateJsonPreview() {
+        var preview = document.getElementById('sr-json-preview');
+        if (!preview) {
+            return;
+        }
+        preview.value = JSON.stringify(collectRules(), null, 2);
+    }
+
+    function bindListButtons() {
+        var mappings = [
+            ['sr-add-whitelist-ip', 'sr-ip-whitelist-list', '127.0.0.1'],
+            ['sr-add-cdn-ip', 'sr-cdn-list', '10.0.0.0/8'],
+            ['sr-add-malicious-pattern', 'sr-malicious-list', '/<script[^>]*>/i'],
+            ['sr-add-ua-pattern', 'sr-ua-list', '/sqlmap/i'],
+            ['sr-add-protected-path', 'sr-protected-list', '/.git/']
+        ];
+        mappings.forEach(function (item) {
+            var btn = document.getElementById(item[0]);
+            var container = document.getElementById(item[1]);
+            if (!btn || !container) {
+                return;
+            }
+            btn.addEventListener('click', function () {
+                container.appendChild(createListItem(item[2]));
+                updateJsonPreview();
+            });
+        });
+    }
+
+    function bindPathRateButton() {
+        var btn = document.getElementById('sr-add-path-limit');
+        var body = document.getElementById('sr-path-rate-body');
+        if (!btn || !body) {
+            return;
+        }
+        btn.addEventListener('click', function () {
+            body.appendChild(createPathRateRow({
+                path: '/api/',
+                window: 60,
+                max_requests: 120,
+                block_duration: 120,
+                enabled: true
+            }));
+            updateJsonPreview();
+        });
+    }
+
+    function bindCommonInputEvents() {
+        document.querySelectorAll('#save-wls-security-rules, #refresh-wls-security-rules').forEach(function () {});
+        document.querySelectorAll('input').forEach(function (input) {
+            input.addEventListener('input', updateJsonPreview);
+            input.addEventListener('change', updateJsonPreview);
+        });
+    }
+
+    async function saveRules() {
+        var url = '<?= $this->getBackendUrl('*/backend/server-monitor/save-security-rules') ?>';
+        var payload = collectRules();
+        try {
+            var response = await Weline.Api.request(url, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ rules: payload })
+            });
+            var result = (response && response.data !== undefined) ? response.data : response;
+            if (result && result.success) {
+                toastSuccess(result.message || __('安全规则已保存'));
+                return;
+            }
+            toastError((result && result.message) || __('保存失败'));
+        } catch (error) {
+            toastError(__('请求失败：%{1}', {1: (error && error.message) || ''}));
+        }
+    }
+
+    function renderAll(rules) {
+        bindSimpleRules(rules);
+        renderPathRateRows(rules.path_rate_limits.rules);
+        renderList('sr-ip-whitelist-list', rules.ip_whitelist.ips);
+        renderList('sr-cdn-list', rules.cdn_trusted_ips.ips);
+        renderList('sr-malicious-list', rules.malicious_patterns.patterns);
+        renderList('sr-ua-list', rules.bad_user_agents.patterns);
+        renderList('sr-protected-list', rules.protected_paths.paths);
+        bindCommonInputEvents();
+        updateJsonPreview();
+    }
+
+    function init() {
+        var rules = parseRulesJson();
+        renderAll(rules);
+        bindListButtons();
+        bindPathRateButton();
+        var saveButton = document.getElementById('save-wls-security-rules');
+        if (saveButton) {
+            saveButton.addEventListener('click', saveRules);
+        }
+        var refreshButton = document.getElementById('refresh-wls-security-rules');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', function () {
+                location.reload();
+            });
+        }
+    }
+
+    init();
 })();
 </script>
 

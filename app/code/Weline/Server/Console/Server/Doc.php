@@ -89,7 +89,7 @@ class Doc extends CommandAbstract
         // 显示文档链接
         $this->printer->setup(__('📖 在线优化指南'));
         echo "\n";
-        $docUrl = "{$baseUrl}/backend/server/optimization-guide";
+        $docUrl = "{$baseUrl}/weline_server/backend/optimization-guide";
         $this->printer->note(__('访问以下链接查看详细的安装步骤：'));
         echo "\n";
         $this->printer->success("  {$docUrl}");

@@ -6,15 +6,25 @@
  * 
  * @var \Weline\Framework\View\Template $block
  */
-$block->setTitle(__('Weline Server 管理'));
-$statusApiUrl = $block->getUrl('backend/server/server-manager/status');
-$startApiUrl = $block->getUrl('backend/server/server-manager/start');
-$stopApiUrl = $block->getUrl('backend/server/server-manager/stop');
-$restartApiUrl = $block->getUrl('backend/server/server-manager/restart');
-$reloadApiUrl = $block->getUrl('backend/server/server-manager/reload');
-$maintenanceEnableApiUrl = $block->getUrl('backend/server/server-manager/maintenance-enable');
-$maintenanceDisableApiUrl = $block->getUrl('backend/server/server-manager/maintenance-disable');
-$guideUrl = $block->getUrl('backend/server/optimization-guide');
+$statusApiUrl = $this->getBackendUrl('*/backend/server-manager/status');
+$startApiUrl = $this->getBackendUrl('*/backend/server-manager/start');
+$stopApiUrl = $this->getBackendUrl('*/backend/server-manager/stop');
+$restartApiUrl = $this->getBackendUrl('*/backend/server-manager/restart');
+$reloadApiUrl = $this->getBackendUrl('*/backend/server-manager/reload');
+$maintenanceEnableApiUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-enable');
+$maintenanceDisableApiUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-disable');
+$sessionListApiUrl = $this->getBackendUrl('*/backend/server-manager/session-list');
+$sessionDestroyApiUrl = $this->getBackendUrl('*/backend/server-manager/session-destroy');
+$sessionPersistApiUrl = $this->getBackendUrl('*/backend/server-manager/session-persist');
+$sessionGcApiUrl = $this->getBackendUrl('*/backend/server-manager/session-gc');
+$memoryNamespacesApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespaces');
+$memoryNamespaceDetailApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespace-detail');
+$memoryNamespaceClearApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespace-clear');
+$memoryKeyDeleteApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-key-delete');
+$memoryPersistApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-persist');
+$memoryGcApiUrl = $this->getBackendUrl('*/backend/server-manager/memory-gc');
+$defaultTab = (string)($this->getData('defaultTab') ?: 'overview');
+$guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
 ?>
 
 <div class="server-manager" id="server-manager-container">
@@ -78,6 +88,15 @@ $guideUrl = $block->getUrl('backend/server/optimization-guide');
 .server-action-btn {
     min-width: 36px;
 }
+.weline-session-preview summary {
+    cursor: pointer;
+    outline: none;
+}
+.weline-session-preview summary::-webkit-details-marker { display: none; }
+.weline-session-preview-cell {
+    max-width: 320px;
+    min-width: 180px;
+}
 </style>
 
 <script>
@@ -88,6 +107,17 @@ const RESTART_API_URL = '<?= $restartApiUrl ?>';
 const RELOAD_API_URL = '<?= $reloadApiUrl ?>';
 const MAINTENANCE_ENABLE_API_URL = '<?= $maintenanceEnableApiUrl ?>';
 const MAINTENANCE_DISABLE_API_URL = '<?= $maintenanceDisableApiUrl ?>';
+const SESSION_LIST_API_URL = '<?= $sessionListApiUrl ?>';
+const SESSION_DESTROY_API_URL = '<?= $sessionDestroyApiUrl ?>';
+const SESSION_PERSIST_API_URL = '<?= $sessionPersistApiUrl ?>';
+const SESSION_GC_API_URL = '<?= $sessionGcApiUrl ?>';
+const MEMORY_NAMESPACES_API_URL = '<?= $memoryNamespacesApiUrl ?>';
+const MEMORY_NAMESPACE_DETAIL_API_URL = '<?= $memoryNamespaceDetailApiUrl ?>';
+const MEMORY_NAMESPACE_CLEAR_API_URL = '<?= $memoryNamespaceClearApiUrl ?>';
+const MEMORY_KEY_DELETE_API_URL = '<?= $memoryKeyDeleteApiUrl ?>';
+const MEMORY_PERSIST_API_URL = '<?= $memoryPersistApiUrl ?>';
+const MEMORY_GC_API_URL = '<?= $memoryGcApiUrl ?>';
+const DEFAULT_TAB = '<?= $defaultTab ?>';
 const GUIDE_URL = '<?= $guideUrl ?>';
 
 let refreshInterval = null;
@@ -121,6 +151,14 @@ async function loadServerData() {
         
         renderContent(data);
         showContent();
+        loadSessionList();
+        loadMemoryNamespaces();
+        if (DEFAULT_TAB === 'session') {
+            scrollToSharedState();
+        }
+        if (DEFAULT_TAB === 'memory') {
+            scrollToSharedState();
+        }
         
     } catch (error) {
         console.error('Failed to load server data:', error);
@@ -151,6 +189,27 @@ function renderContent(data) {
     const container = document.getElementById('content-container');
     const { servers, summary, php_info } = data;
     
+    if (DEFAULT_TAB === 'memory' || DEFAULT_TAB === 'session') {
+        const title = DEFAULT_TAB === 'memory'
+            ? '<?= __('内存服务管理') ?>'
+            : '<?= __('Session 管理') ?>';
+        const desc = DEFAULT_TAB === 'memory'
+            ? '<?= __('当前页面已聚焦到内存服务管理，仅展示内存缓存相关管理能力。') ?>'
+            : '<?= __('当前页面已聚焦到 Session 管理，仅展示会话相关管理能力。') ?>';
+        container.innerHTML = `
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-database-gear me-2"></i>${title}</h5>
+                    <a href="<?= $this->getBackendUrl('*/backend/server-manager') ?>" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> <?= __('返回实例管理') ?>
+                    </a>
+                </div>
+                <div class="card-body text-muted">${desc}</div>
+            </div>
+        ` + renderSharedStateManagement(data, DEFAULT_TAB);
+        return;
+    }
+
     const runningCount = Object.values(servers).filter(s => s.running).length;
     const totalCount = Object.keys(servers).length;
     
@@ -385,8 +444,126 @@ function renderContent(data) {
             </div>
         </div>
     `;
+    html += renderSharedStateManagement(data);
     
     container.innerHTML = html;
+}
+
+function renderSharedStateManagement(data, mode = 'all') {
+    const session = data.session || {};
+    const memory = data.memory || {};
+    const sessionStats = session.stats || {};
+    const memoryStats = memory.stats || {};
+    const sessionConnectedClass = session.connected ? 'bg-success' : 'bg-danger';
+    const sessionConnectedText = session.connected ? '<?= __('已连接') ?>' : '<?= __('不可用') ?>';
+    const memoryConnectedClass = memory.connected ? 'bg-success' : 'bg-danger';
+    const memoryConnectedText = memory.connected ? '<?= __('已连接') ?>' : '<?= __('不可用') ?>';
+
+    const showSession = mode === 'all' || mode === 'session';
+    const showMemory = mode === 'all' || mode === 'memory';
+    return `
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-database-gear me-2"></i><?= __('共享状态管理') ?></h5>
+                <span class="text-muted small"><?= __('覆盖 Session 与 Memory Service 的状态、检索、清理能力') ?></span>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    ${showSession ? `
+                    <div class="${showMemory ? 'col-lg-6' : 'col-12'}">
+                        <div class="border rounded p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="bi bi-person-lines-fill me-1"></i><?= __('Session 管理') ?></h6>
+                                <span class="badge ${sessionConnectedClass}">${sessionConnectedText}</span>
+                            </div>
+                            <div class="small text-muted mb-2">
+                                ${escapeHtml(session.host || '127.0.0.1')}:${escapeHtml(session.port || 19970)} / ${escapeHtml(session.token_file_name || '')}
+                            </div>
+                            <div class="mb-2 small">
+                                <?= __('Session 数') ?>: <strong>${sessionStats.session_count || 0}</strong>,
+                                <?= __('客户端') ?>: <strong>${sessionStats.client_count || 0}</strong>,
+                                <?= __('内存') ?>: <strong>${formatBytes(sessionStats.memory_usage || 0)}</strong>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap mb-3">
+                                <button class="btn btn-sm btn-outline-primary" onclick="loadSessionList()"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新列表') ?></button>
+                                <button class="btn btn-sm btn-outline-info" onclick="persistSessionStore()"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="gcSessionStore()"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th><?= __('Session ID') ?></th>
+                                            <th><?= __('字段数') ?></th>
+                                            <th><?= __('预览') ?></th>
+                                            <th><?= __('操作') ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="session-list-body">
+                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击“刷新列表”加载 Session 数据') ?></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    ${showMemory ? `
+                    <div class="${showSession ? 'col-lg-6' : 'col-12'}">
+                        <div class="border rounded p-3 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0"><i class="bi bi-memory me-1"></i><?= __('内存缓存管理') ?></h6>
+                                <span class="badge ${memoryConnectedClass}">${memoryConnectedText}</span>
+                            </div>
+                            <div class="small text-muted mb-2">
+                                ${escapeHtml(memory.host || '127.0.0.1')}:${escapeHtml(memory.port || 19971)} / ${escapeHtml(memory.token_file_name || '')}
+                            </div>
+                            <div class="mb-2 small">
+                                <?= __('命名空间') ?>: <strong>${memoryStats.session_count || 0}</strong>,
+                                <?= __('客户端') ?>: <strong>${memoryStats.client_count || 0}</strong>,
+                                <?= __('内存') ?>: <strong>${formatBytes(memoryStats.memory_usage || 0)}</strong>
+                            </div>
+                            <div class="d-flex gap-2 flex-wrap mb-3">
+                                <button class="btn btn-sm btn-outline-primary" onclick="loadMemoryNamespaces()"><i class="bi bi-arrow-clockwise"></i> <?= __('刷新命名空间') ?></button>
+                                <button class="btn btn-sm btn-outline-info" onclick="persistMemoryStore()"><i class="bi bi-save"></i> <?= __('立即持久化') ?></button>
+                                <button class="btn btn-sm btn-outline-warning" onclick="gcMemoryStore()"><i class="bi bi-recycle"></i> <?= __('GC 清理') ?></button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th><?= __('命名空间') ?></th>
+                                            <th><?= __('键数量') ?></th>
+                                            <th><?= __('示例键') ?></th>
+                                            <th><?= __('操作') ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="memory-namespace-body">
+                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击“刷新命名空间”加载缓存目录') ?></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="table-responsive mt-3">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th><?= __('键') ?></th>
+                                            <th><?= __('类型') ?></th>
+                                            <th><?= __('预览值') ?></th>
+                                            <th><?= __('操作') ?></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="memory-key-body">
+                                        <tr><td colspan="4" class="text-muted text-center"><?= __('点击命名空间的“查看键”按钮加载详情') ?></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 function escapeHtml(text) {
@@ -394,6 +571,385 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = String(text);
     return div.innerHTML;
+}
+
+function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value >= 1073741824) return (value / 1073741824).toFixed(2) + ' GB';
+    if (value >= 1048576) return (value / 1048576).toFixed(2) + ' MB';
+    if (value >= 1024) return (value / 1024).toFixed(2) + ' KB';
+    return value + ' B';
+}
+
+function scrollToSharedState() {
+    const title = document.querySelector('#content-container .card .bi-database-gear');
+    if (!title) {
+        return;
+    }
+    const card = title.closest('.card');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+}
+
+async function loadSessionList() {
+    const body = document.getElementById('session-list-body');
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    try {
+        const response = await fetch(SESSION_LIST_API_URL + '?limit=50', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.message || '<?= __('加载失败') ?>');
+        }
+        const rows = Array.isArray(data.data) ? data.data : [];
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无 Session 数据') ?></td></tr>`;
+            return;
+        }
+        body.innerHTML = rows.map(row => {
+            const sessionId = String(row.session_id || '');
+            const previewHtml = renderSessionPreview(row.preview);
+            return `
+                <tr>
+                    <td><code class="small text-break" style="max-width: 140px;" title="${escapeHtml(sessionId)}">${escapeHtml(sessionId.length > 16 ? sessionId.substring(0, 16) + '…' : sessionId)}</code></td>
+                    <td><span class="badge bg-secondary">${Number(row.data_count || 0)}</span></td>
+                    <td class="weline-session-preview-cell">${previewHtml}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="destroySession('${encodeURIComponent(sessionId)}')">
+                            <i class="bi bi-trash"></i> <?= __('销毁') ?>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+    }
+}
+
+async function destroySession(encodedSessionId) {
+    const sessionId = decodeURIComponent(encodedSessionId);
+    const confirmed = await BackendConfirm.show('<?= __('确认销毁该 Session 吗？此操作会让对应用户立即失效。') ?>', {
+        title: '<?= __('销毁 Session') ?>',
+        type: 'warning',
+        confirmText: '<?= __('确认销毁') ?>',
+        cancelText: '<?= __('取消') ?>'
+    });
+    if (!confirmed) return;
+    try {
+        const response = await fetch(SESSION_DESTROY_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: 'session_id=' + encodeURIComponent(sessionId),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('Session 已销毁') ?>');
+            loadSessionList();
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('操作失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('销毁失败') ?>: ' + error.message);
+    }
+}
+
+async function persistSessionStore() {
+    try {
+        const response = await fetch(SESSION_PERSIST_API_URL, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('Session 持久化成功') ?>');
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('Session 持久化失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('Session 持久化失败') ?>: ' + error.message);
+    }
+}
+
+async function gcSessionStore() {
+    const input = await BackendConfirm.showInput({
+        title: '<?= __('Session 垃圾回收') ?>',
+        message: '<?= __('请输入最大存活秒数（默认 3600）') ?>',
+        placeholder: '3600',
+        defaultValue: '3600'
+    });
+    if (input === null) return;
+    const maxLifetime = Number(input || 3600);
+    try {
+        const response = await fetch(SESSION_GC_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: 'max_lifetime=' + encodeURIComponent(maxLifetime),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('Session GC 执行成功') ?>');
+            loadSessionList();
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('Session GC 执行失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('Session GC 执行失败') ?>: ' + error.message);
+    }
+}
+
+async function loadMemoryNamespaces() {
+    const body = document.getElementById('memory-namespace-body');
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    try {
+        const response = await fetch(MEMORY_NAMESPACES_API_URL + '?limit=300', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.message || '<?= __('加载失败') ?>');
+        }
+        const rows = Array.isArray(data.data) ? data.data : [];
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无内存命名空间') ?></td></tr>`;
+            document.getElementById('memory-key-body').innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('暂无可展示键数据') ?></td></tr>`;
+            return;
+        }
+        body.innerHTML = rows.map(row => {
+            const ns = String(row.namespace || '');
+            const sample = Array.isArray(row.sample_keys) ? row.sample_keys.join(', ') : '';
+            return `
+                <tr>
+                    <td><code class="small">${escapeHtml(ns)}</code></td>
+                    <td>${Number(row.keys || 0)}</td>
+                    <td class="small text-muted">${escapeHtml(sample)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="loadMemoryNamespaceDetail('${encodeURIComponent(ns)}')">
+                            <i class="bi bi-search"></i> <?= __('查看键') ?>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="clearMemoryNamespace('${encodeURIComponent(ns)}')">
+                            <i class="bi bi-trash"></i> <?= __('清空') ?>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+    }
+}
+
+async function loadMemoryNamespaceDetail(encodedNamespace) {
+    const namespace = decodeURIComponent(encodedNamespace);
+    const body = document.getElementById('memory-key-body');
+    if (!body) return;
+    body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('加载中...') ?></td></tr>`;
+    try {
+        const response = await fetch(MEMORY_NAMESPACE_DETAIL_API_URL + '?namespace=' + encodeURIComponent(namespace) + '&limit=100', {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.message || '<?= __('加载失败') ?>');
+        }
+        const rows = Array.isArray(data.data) ? data.data : [];
+        if (!rows.length) {
+            body.innerHTML = `<tr><td colspan="4" class="text-muted text-center"><?= __('该命名空间暂无键') ?></td></tr>`;
+            return;
+        }
+        body.innerHTML = rows.map(row => {
+            const key = String(row.key || '');
+            return `
+                <tr>
+                    <td><code class="small">${escapeHtml(key)}</code></td>
+                    <td>${escapeHtml(row.type || '')}</td>
+                    <td class="small">${renderMemoryPreview(row)}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteMemoryKey('${encodeURIComponent(namespace)}','${encodeURIComponent(key)}')">
+                            <i class="bi bi-trash"></i> <?= __('删除键') ?>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
+    }
+}
+
+function renderSessionPreview(preview) {
+    if (!preview || typeof preview !== 'object') {
+        return '<span class="text-muted small">-</span>';
+    }
+    const entries = Object.entries(preview);
+    if (!entries.length) {
+        return '<span class="text-muted small">-</span>';
+    }
+    const authKeys = ['WF_BACKEND_USER', 'WF_FRONTEND_USER', 'WF_BACKEND_USER_ID', 'WF_FRONTEND_USER_ID'];
+    const items = entries.map(([k, v]) => {
+        const isSensitive = v === '***';
+        const isAuth = authKeys.includes(k);
+        const val = escapeHtml(String(v));
+        const keyCls = isAuth ? 'bg-primary text-white' : 'bg-secondary';
+        const valCls = isSensitive ? 'text-muted' : 'text-dark';
+        const valIcon = isSensitive ? '<i class="bi bi-shield-lock-fill small me-1" title="<?= __('敏感') ?>"></i>' : '';
+        return `<span class="d-inline-flex align-items-center gap-1 me-2 mb-1">
+            <span class="badge ${keyCls}">${escapeHtml(k)}</span>
+            <span class="small ${valCls}">${valIcon}${val.length > 40 ? val.substring(0, 40) + '…' : val}</span>
+        </span>`;
+    });
+    const shortHtml = items.join('');
+    const fullHtml = entries.map(([k, v]) => `<div class="mb-1"><span class="badge bg-body-secondary me-1">${escapeHtml(k)}</span><span class="small">${escapeHtml(String(v))}</span></div>`).join('');
+    return `
+        <details class="weline-session-preview">
+            <summary class="small cursor-pointer list-unstyled mb-0">${shortHtml}</summary>
+            <div class="mt-2 p-2 rounded border bg-body-tertiary small" style="max-width: 420px; max-height: 200px; overflow-y: auto;">${fullHtml}</div>
+        </details>
+    `;
+}
+
+function renderMemoryPreview(row) {
+    const detail = row && row.preview_detail && typeof row.preview_detail === 'object' ? row.preview_detail : null;
+    const fallback = escapeHtml(row && row.preview ? row.preview : '');
+    if (!detail) {
+        return `<span class="text-muted">${fallback}</span>`;
+    }
+
+    const kind = String(detail.kind || '');
+    const display = escapeHtml(detail.display || row.preview || '');
+    const size = Number(detail.size || 0);
+    const json = typeof detail.json === 'string' ? detail.json.trim() : '';
+    if ((kind === 'array' || kind === 'object') && json) {
+        return `
+            <details class="mt-1">
+                <summary>
+                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${display}</span>
+                    <span class="text-muted ms-1">(<?= __('元素') ?>: ${Number.isFinite(size) ? size : 0})</span>
+                </summary>
+                <pre class="small mb-0 mt-2 p-2 border rounded bg-body-tertiary" style="max-width:560px; white-space:pre-wrap; word-break:break-word;">${escapeHtml(json)}</pre>
+            </details>
+        `;
+    }
+    if (kind === 'null') {
+        return `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">null</span>`;
+    }
+    return `<span class="text-muted">${display}</span>`;
+}
+
+async function clearMemoryNamespace(encodedNamespace) {
+    const namespace = decodeURIComponent(encodedNamespace);
+    const confirmed = await BackendConfirm.show('<?= __('确认清空该命名空间的所有缓存键吗？') ?>', {
+        title: '<?= __('清空命名空间') ?>',
+        type: 'warning',
+        confirmText: '<?= __('确认清空') ?>',
+        cancelText: '<?= __('取消') ?>'
+    });
+    if (!confirmed) return;
+    try {
+        const response = await fetch(MEMORY_NAMESPACE_CLEAR_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: 'namespace=' + encodeURIComponent(namespace),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('命名空间已清空') ?>');
+            loadMemoryNamespaces();
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('清空失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('清空失败') ?>: ' + error.message);
+    }
+}
+
+async function deleteMemoryKey(encodedNamespace, encodedKey) {
+    const namespace = decodeURIComponent(encodedNamespace);
+    const key = decodeURIComponent(encodedKey);
+    try {
+        const response = await fetch(MEMORY_KEY_DELETE_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: 'namespace=' + encodeURIComponent(namespace) + '&key=' + encodeURIComponent(key),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('缓存键已删除') ?>');
+            loadMemoryNamespaceDetail(encodedNamespace);
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('删除失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('删除失败') ?>: ' + error.message);
+    }
+}
+
+async function persistMemoryStore() {
+    try {
+        const response = await fetch(MEMORY_PERSIST_API_URL, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('内存服务持久化成功') ?>');
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('内存服务持久化失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('内存服务持久化失败') ?>: ' + error.message);
+    }
+}
+
+async function gcMemoryStore() {
+    const input = await BackendConfirm.showInput({
+        title: '<?= __('内存服务垃圾回收') ?>',
+        message: '<?= __('请输入最大存活秒数（默认 3600）') ?>',
+        placeholder: '3600',
+        defaultValue: '3600'
+    });
+    if (input === null) return;
+    const maxLifetime = Number(input || 3600);
+    try {
+        const response = await fetch(MEMORY_GC_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
+            body: 'max_lifetime=' + encodeURIComponent(maxLifetime),
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        if (data.success) {
+            BackendToast.success(data.message || '<?= __('内存服务 GC 执行成功') ?>');
+            loadMemoryNamespaces();
+            loadServerData();
+        } else {
+            BackendToast.warning(data.message || '<?= __('内存服务 GC 执行失败') ?>');
+        }
+    } catch (error) {
+        BackendToast.error('<?= __('内存服务 GC 执行失败') ?>: ' + error.message);
+    }
 }
 
 async function startServer(instance) {

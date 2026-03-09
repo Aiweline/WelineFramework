@@ -464,7 +464,7 @@ html[data-theme="dark"] .component-region-header .region-info .badge-info,
 .component-delete-btn {
     position: absolute;
     bottom: 4px;
-    z-index: 3;
+    z-index: 12;
     width: 22px;
     height: 22px;
     padding: 0;
@@ -770,9 +770,11 @@ html[data-theme="dark"] .component-tag.ai-cyan,
     margin-right: 4px;
 }
 
-/* AI 组件工坊 modal 需要高于可视化编辑器(9999)、全屏(99999)、asset_manager(100003) */
-.ai-workshop-modal { z-index: 100010 !important; }
-body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 100009 !important; }
+/* AI 组件工坊 modal 需要高于可视化编辑器、全屏预览与资产管理弹层 */
+.ai-workshop-modal { z-index: 200010 !important; }
+body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 200009 !important; }
+.ai-workshop-modal .modal-dialog,
+.ai-workshop-modal .modal-content { position: relative; z-index: 200011; }
 
 /* 组件配置弹窗 */
 .component-config-modal {
@@ -785,7 +787,7 @@ body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 100009 !important; 
     display: none;
     align-items: center;
     justify-content: center;
-    z-index: 12000;
+    z-index: 200030;
 }
 
 .component-config-modal.active {
@@ -2492,8 +2494,8 @@ function _buildWorkshopHtml(s) {
         </div>
     </div>
     <div class="ai-ws-footer">
-        <button class="ai-ws-btn-secondary" onclick="_closeWorkshopModal()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
-        <button class="ai-ws-btn-primary" onclick="_workshopStartGenerate()"><i class="mdi mdi-robot"></i> <?= __('开始生成') ?></button>
+        <button type="button" class="ai-ws-btn-secondary" onclick="_closeWorkshopModal()"><i class="mdi mdi-close"></i> <?= __('关闭') ?></button>
+        <button type="button" id="ai-ws-start-generate" data-ai-action="start-generate" class="ai-ws-btn-primary" onclick="_workshopStartGenerate()"><i class="mdi mdi-robot"></i> <?= __('开始生成') ?></button>
     </div>
 </div>
 
@@ -2689,23 +2691,145 @@ function _workshopGoToStep(step) {
     }
 }
 
-// 用户点击步骤指示器
-function _wsStepClick(step) {
-    // 正在生成中时，点击其他步骤会中断生成
-    if (_aiWorkshop.eventSource && step !== 2) {
-        if (!confirm('<?= __('正在生成中，切换步骤将中断生成，确定吗？') ?>')) return;
-        _workshopAbort();
-    }
-    // 预览和微调步骤需要有数据才能看
-    if ((step === 3 || step === 4) && !_aiWorkshop.result) {
-        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('请先生成组件') ?>');
+function _workshopNotify(level, message) {
+    const toast = window.BackendToast || window.AdminToast || null;
+    if (toast && typeof toast[level] === 'function') {
+        toast[level](message);
         return;
     }
-    // 切换到微调时同步预览
-    if (step === 4 && _aiWorkshop.result) {
-        _syncRefinePreview();
+    if (level === 'error') {
+        console.error(message);
+    } else {
+        console.warn(message);
     }
-    _workshopGoToStep(step);
+}
+
+function _workshopAskConfirm(message, onConfirmed) {
+    const confirmer = window.BackendConfirm || window.AdminConfirm || null;
+    if (confirmer && typeof confirmer.show === 'function') {
+        confirmer.show(message, {
+            title: '<?= __('确认操作') ?>',
+            confirmText: '<?= __('确定') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'warning'
+        }).then(function(confirmed) {
+            if (confirmed && typeof onConfirmed === 'function') onConfirmed();
+        });
+        return;
+    }
+    _workshopNotify('warning', message);
+}
+
+function _workshopSetStartButtonLoading(isLoading) {
+    const btn = document.getElementById('ai-ws-start-generate');
+    if (!btn) return;
+    if (isLoading) {
+        btn.disabled = true;
+        btn.dataset.originalHtml = btn.dataset.originalHtml || btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('生成中...') ?>';
+    } else {
+        btn.disabled = false;
+        if (btn.dataset.originalHtml) {
+            btn.innerHTML = btn.dataset.originalHtml;
+        }
+    }
+}
+
+function _workshopClearFieldValidation() {
+    const step1 = document.getElementById('ai-ws-step1');
+    if (!step1) return;
+    step1.querySelectorAll('.is-invalid').forEach(function(el) {
+        el.classList.remove('is-invalid');
+    });
+}
+
+function _workshopMarkFieldInvalid(field) {
+    if (!field) return;
+    field.classList.add('is-invalid');
+}
+
+function _workshopCollectStep1Params() {
+    const step1 = document.getElementById('ai-ws-step1');
+    const getField = function(selector) {
+        if (step1) return step1.querySelector(selector);
+        return document.querySelector(selector);
+    };
+
+    const nameEl = getField('#aiComponentName');
+    const descEl = getField('#aiComponentDesc');
+    const regionEl = getField('#aiComponentRegion');
+    const styleEl = getField('#aiComponentStyle');
+    const refEl = getField('#aiReferenceComponent');
+    const fieldsEl = getField('#aiComponentFields');
+
+    if (!nameEl || !descEl || !regionEl || !styleEl || !refEl || !fieldsEl) {
+        return {
+            ok: false,
+            message: '<?= __('组件工坊界面未初始化完成，请关闭后重试') ?>',
+            firstInvalid: null
+        };
+    }
+
+    _workshopClearFieldValidation();
+
+    const name = (nameEl.value || '').trim();
+    const description = (descEl.value || '').trim();
+    let firstInvalid = null;
+
+    if (!name) {
+        _workshopMarkFieldInvalid(nameEl);
+        firstInvalid = firstInvalid || nameEl;
+    }
+    if (!description) {
+        _workshopMarkFieldInvalid(descEl);
+        firstInvalid = firstInvalid || descEl;
+    }
+
+    if (firstInvalid) {
+        return {
+            ok: false,
+            message: '<?= __('请先完善必填项：组件名称与功能描述') ?>',
+            firstInvalid: firstInvalid
+        };
+    }
+
+    return {
+        ok: true,
+        params: {
+            region: regionEl.value || 'content',
+            referenceComponent: refEl.value || '',
+            name: name,
+            description: description,
+            style: styleEl.value || 'modern',
+            fields: fieldsEl.value || ''
+        }
+    };
+}
+
+// 用户点击步骤指示器
+function _wsStepClick(step) {
+    const continueSwitch = function() {
+        // 预览和微调步骤需要有数据才能看
+        if ((step === 3 || step === 4) && !_aiWorkshop.result) {
+            _workshopNotify('warning', '<?= __('请先生成组件') ?>');
+            return;
+        }
+        // 切换到微调时同步预览
+        if (step === 4 && _aiWorkshop.result) {
+            _syncRefinePreview();
+        }
+        _workshopGoToStep(step);
+    };
+
+    // 正在生成中时，点击其他步骤会中断生成
+    if (_aiWorkshop.eventSource && step !== 2) {
+        _workshopAskConfirm('<?= __('正在生成中，切换步骤将中断生成，确定吗？') ?>', function() {
+            _workshopAbort();
+            continueSwitch();
+        });
+        return;
+    }
+    continueSwitch();
 }
 
 // 控制台 Tab 切换
@@ -2807,10 +2931,17 @@ function _wsPreviewTab(tab, btn) {
 
 // 开始生成
 function _workshopStartGenerate() {
-    const name = document.getElementById('aiComponentName')?.value.trim();
-    const desc = document.getElementById('aiComponentDesc')?.value.trim();
-    if (!name) { (typeof AdminToast !== 'undefined') ? AdminToast.warning('<?= __('请输入组件名称') ?>') : alert('<?= __('请输入组件名称') ?>'); return; }
-    if (!desc) { (typeof AdminToast !== 'undefined') ? AdminToast.warning('<?= __('请输入组件描述') ?>') : alert('<?= __('请输入组件描述') ?>'); return; }
+    if (_aiWorkshop.eventSource) {
+        _workshopNotify('info', '<?= __('正在生成中，请稍候...') ?>');
+        return;
+    }
+    const collected = _workshopCollectStep1Params();
+    if (!collected.ok) {
+        _workshopNotify('warning', collected.message || '<?= __('请先完善参数') ?>');
+        if (collected.firstInvalid) collected.firstInvalid.focus();
+        return;
+    }
+    _workshopSetStartButtonLoading(true);
     
     // 根据模式确定智能体代码
     let agentCode = '';
@@ -2820,12 +2951,7 @@ function _workshopStartGenerate() {
     }
     
     _aiWorkshop.params = {
-        region: document.getElementById('aiComponentRegion').value,
-        referenceComponent: document.getElementById('aiReferenceComponent').value,
-        name: name,
-        description: desc,
-        style: document.getElementById('aiComponentStyle').value,
-        fields: document.getElementById('aiComponentFields').value,
+        ...collected.params,
         agent_code: agentCode
     };
     saveAiGenerationParams(_aiWorkshop.params);
@@ -2861,6 +2987,7 @@ function _workshopAbort() {
         try { _aiWorkshop.eventSource.close(); } catch(e) {}
         _aiWorkshop.eventSource = null;
     }
+    _workshopSetStartButtonLoading(false);
     _workshopGoToStep(1);
 }
 
@@ -2892,6 +3019,7 @@ function _workshopShowResult(result) {
         fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ location: 'component_panel:_workshopShowResult', message: 'entry', data: { draft_id: result.draft_id ?? null, component_id: result.component_id ?? null, keys: result ? Object.keys(result) : [] }, timestamp: Date.now(), hypothesisId: 'H1' }) }).catch(() => {});
     } catch (e) {}
     // #endregion
+    _workshopSetStartButtonLoading(false);
     _aiWorkshop.result = result;
     const component = result.component || {};
     const validation = result.validation || {};
@@ -3410,6 +3538,7 @@ body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 
     } catch (error) {
         console.error('智能体生成失败:', error);
+        _workshopSetStartButtonLoading(false);
         updateStreamStatus('<?= __('生成失败') ?>: ' + error.message, 0);
         const spinnerEl = document.getElementById('ai-gen-spinner');
         if (spinnerEl) { spinnerEl.className = 'me-2'; spinnerEl.innerHTML = '<i class="mdi mdi-alert-circle text-danger"></i>'; }
@@ -4251,6 +4380,7 @@ async function generateComponentWithAi(params) {
         
     } catch (error) {
         console.error('流式生成失败:', error);
+        _workshopSetStartButtonLoading(false);
         let errorMessage = error.message || '<?= __('未知错误') ?>';
         let errorTip = '<?= __('您可以重新尝试生成组件。') ?>';
         
@@ -4270,6 +4400,7 @@ async function generateComponentWithAi(params) {
 
 // 在工坊步骤2中显示错误并提供重试按钮
 function showStreamError(errorMessage, errorTip, params) {
+    _workshopSetStartButtonLoading(false);
     const statusEl = document.getElementById('ai-gen-status');
     const progressEl = document.getElementById('ai-gen-progress');
     const spinnerEl = document.getElementById('ai-gen-spinner');
@@ -4516,7 +4647,7 @@ window.openFullscreenPreview = function openFullscreenPreview() {
         styleEl.id = 'ai-fullscreen-preview-styles';
         styleEl.textContent = `
 .ai-fullscreen-preview-open{overflow:hidden}
-.ai-fullscreen-preview-overlay{position:fixed;inset:0;z-index:99999;background:rgba(10,10,10,0.92);display:flex;align-items:center;justify-content:center}
+.ai-fullscreen-preview-overlay{position:fixed;inset:0;z-index:200050;background:rgba(10,10,10,0.92);display:flex;align-items:center;justify-content:center}
 .ai-fullscreen-preview-overlay .ai-fullscreen-preview-popup{width:95vw;height:95vh;background:var(--backend-color-body-bg,#0f0f12);border-radius:8px;box-shadow:0 8px 30px rgba(0,0,0,0.4);padding:10px;position:relative}
 .ai-fullscreen-preview-overlay .ai-fullscreen-preview-close{position:absolute;top:12px;right:12px;z-index:110}
 .ai-fullscreen-preview-overlay .ai-fullscreen-preview-toolbar{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:110;display:flex;gap:0}

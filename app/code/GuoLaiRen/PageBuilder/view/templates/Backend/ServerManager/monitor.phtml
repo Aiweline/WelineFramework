@@ -1,0 +1,66 @@
+<?php $statusUrl = $this->getBackendUrl('*/backend/server-manager/status'); ?>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-muted"><?= __('运行实例') ?></div>
+                <div class="display-6" id="pb-monitor-running">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-muted"><?= __('总实例') ?></div>
+                <div class="display-6" id="pb-monitor-total">0</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <div class="text-muted"><?= __('时间戳') ?></div>
+                <div class="small" id="pb-monitor-time">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var statusUrl = '<?= $statusUrl ?>';
+    var runningEl = document.getElementById('pb-monitor-running');
+    var totalEl = document.getElementById('pb-monitor-total');
+    var timeEl = document.getElementById('pb-monitor-time');
+
+    function refresh() {
+        fetch(statusUrl, {
+            method: 'GET',
+            headers: {'Accept': 'application/json'},
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        }).then(function (result) {
+            if (!result.success) {
+                BackendToast.warning(result.message || '<?= __('监控数据加载失败') ?>');
+                return;
+            }
+            var servers = result.servers || {};
+            var entries = Object.values(servers);
+            var running = entries.filter(function (item) {
+                return !!(item && item.running);
+            }).length;
+            runningEl.textContent = String(running);
+            totalEl.textContent = String(entries.length);
+            timeEl.textContent = new Date((result.timestamp || 0) * 1000).toLocaleString();
+        }).catch(function () {
+            BackendToast.error('<?= __('监控请求失败') ?>');
+        });
+    }
+
+    refresh();
+    setInterval(refresh, 30000);
+})();
+</script>

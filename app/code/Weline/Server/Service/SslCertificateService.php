@@ -384,6 +384,21 @@ class SslCertificateService
      */
     public function ensureCertificate(string $domain, string $webroot = '', string $email = '', int $websiteId = 0): array
     {
+        // 0. 若后台已禁用该域名的 HTTPS，直接返回「不使用 SSL」
+        $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+        if ($cert->getCertId() && !$cert->getHttpsEnabled()) {
+            return [
+                'success' => true,
+                'message' => __('HTTPS 已在此域名禁用'),
+                'cert_path' => '',
+                'key_path' => '',
+                'issuer' => '',
+                'expires_at' => '',
+                'is_new' => false,
+                'ssl_enabled' => false,
+            ];
+        }
+        
         $certDir = $this->getCertificateDir($domain);
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
@@ -399,6 +414,7 @@ class SslCertificateService
                 'issuer' => $certInfo['issuer'] ?? 'Unknown',
                 'expires_at' => $certInfo['expires_at'] ?? '',
                 'is_new' => false,
+                'ssl_enabled' => true,
             ];
         }
         
@@ -771,6 +787,7 @@ CNF;
                 'issuer' => self::ISSUER_SELF_SIGNED,
                 'expires_at' => \date('Y-m-d H:i:s', \strtotime("+{$validDays} days")),
                 'is_new' => true,
+                'ssl_enabled' => true,
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
@@ -995,6 +1012,115 @@ CNF;
         }
         return $dir;
     }
+
+    /**
+     * 将当前正在使用的证书路径同步到证书表（框架级兜底）。
+     *
+     * 适用于以下场景：
+     * - 启动参数直接指定 ssl_cert/ssl_key
+     * - 启动时自动检测到 app/etc/ssl 目录证书
+     * - 本地开发证书已存在但尚未入库
+     */
+    public function syncCertificateRecordFromFiles(
+        string $domain,
+        string $certPath,
+        string $keyPath,
+        int $websiteId = 0,
+        bool $httpsEnabled = true,
+        string $provider = ''
+    ): ?SslCertificate {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+
+        try {
+            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            if (!$cert->getCertId()) {
+                $cert = ObjectManager::getInstance(SslCertificate::class);
+            }
+
+            $parsed = $this->parseCertificate($certPath);
+            $issuer = (string)($parsed['issuer'] ?? '');
+            $issuedAt = (string)($parsed['issued_at'] ?? '');
+            $expiresAt = (string)($parsed['expires_at'] ?? '');
+
+            $provider = $this->inferProviderByIssuer(
+                $provider !== '' ? $provider : (string)$cert->getProvider(),
+                $issuer
+            );
+            $isSelfSigned = ($provider === self::PROVIDER_SELF_SIGNED);
+
+            $certType = \str_starts_with($domain, '*.')
+                ? SslCertificate::CERT_TYPE_WILDCARD
+                : SslCertificate::CERT_TYPE_EXACT;
+
+            $status = SslCertificate::STATUS_ACTIVE;
+            if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
+                $status = SslCertificate::STATUS_EXPIRED;
+            }
+
+            $chainPath = '';
+            $candidateChainPath = \dirname($certPath) . DS . 'chain.pem';
+            if (\is_file($candidateChainPath)) {
+                $chainPath = $candidateChainPath;
+            }
+
+            $cert->setDomain($domain)
+                ->setWebsiteId($websiteId)
+                ->setCertType($certType)
+                ->setCertPath($certPath)
+                ->setKeyPath($keyPath)
+                ->setChainPath($chainPath)
+                ->setIssuer($issuer !== '' ? $issuer : ($isSelfSigned ? self::ISSUER_SELF_SIGNED : "Let's Encrypt"))
+                ->setProvider($provider)
+                ->setStatus($status)
+                ->setHttpsEnabled($httpsEnabled)
+                ->setAutoRenew(!$isSelfSigned);
+
+            if ($issuedAt !== '') {
+                $cert->setIssuedAt($issuedAt);
+            }
+            if ($expiresAt !== '') {
+                $cert->setExpiresAt($expiresAt);
+            }
+            if ($status === SslCertificate::STATUS_ACTIVE) {
+                $cert->setRenewError('');
+            }
+
+            $cert->save();
+            return $cert;
+        } catch (\Throwable $e) {
+            w_log_error('[SslCertificateService] ' . __('同步证书记录失败：%{1}', [$e->getMessage()]));
+            return null;
+        }
+    }
+
+    /**
+     * 基于 issuer 推断 provider（优先保留已知 provider）。
+     */
+    protected function inferProviderByIssuer(string $provider, string $issuer): string
+    {
+        $normalizedProvider = $this->normalizeAcmeProvider($provider);
+        if ($this->isSupportedProvider($normalizedProvider)) {
+            return $normalizedProvider;
+        }
+
+        $issuerLower = \strtolower(\trim($issuer));
+        if ($issuerLower === '') {
+            return self::PROVIDER_LETS_ENCRYPT;
+        }
+        if (\str_contains($issuerLower, 'self')) {
+            return self::PROVIDER_SELF_SIGNED;
+        }
+        if (\str_contains($issuerLower, 'let') && \str_contains($issuerLower, 'encrypt')) {
+            return self::PROVIDER_LETS_ENCRYPT;
+        }
+        if (\str_contains($issuerLower, 'sectigo') || \str_contains($issuerLower, 'litessl')) {
+            return self::PROVIDER_LITESSL;
+        }
+        return self::PROVIDER_LETS_ENCRYPT;
+    }
     
     /**
      * 获取所有证书目录映射（用于 SNI）
@@ -1086,6 +1212,83 @@ CNF;
         }
 
         return $result;
+    }
+
+    /**
+     * 扫描证书目录并自动入库（页面/命令可复用）。
+     *
+     * 扫描范围：
+     * - app/etc/ssl/{domain}/
+     * - app/etc/ 下兼容旧格式（cert.pem/key.pem 等）
+     *
+     * @return array{synced:int, skipped:int}
+     */
+    public function syncCertificatesFromStorage(): array
+    {
+        $etcDir = \dirname(Env::path_ENV_FILE) . DS;
+        $sslDir = $etcDir . 'ssl' . DS;
+        $synced = 0;
+        $skipped = 0;
+
+        $certFormats = [
+            ['cert' => 'fullchain.pem', 'key' => 'privkey.pem'],
+            ['cert' => 'cert.pem', 'key' => 'key.pem'],
+            ['cert' => 'ssl.crt', 'key' => 'ssl.key'],
+            ['cert' => 'ssl.pem', 'key' => 'ssl.key'],
+            ['cert' => 'server.crt', 'key' => 'server.key'],
+            ['cert' => 'certificate.crt', 'key' => 'private.key'],
+        ];
+
+        if (\is_dir($sslDir)) {
+            $domains = @\scandir($sslDir) ?: [];
+            foreach ($domains as $domain) {
+                if ($domain === '.' || $domain === '..') {
+                    continue;
+                }
+                $domainDir = $sslDir . $domain . DS;
+                if (!\is_dir($domainDir)) {
+                    continue;
+                }
+                $matched = false;
+                foreach ($certFormats as $format) {
+                    $certPath = $domainDir . $format['cert'];
+                    $keyPath = $domainDir . $format['key'];
+                    if (\is_file($certPath) && \is_file($keyPath)) {
+                        $matched = true;
+                        if ($this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath) instanceof SslCertificate) {
+                            $synced++;
+                        } else {
+                            $skipped++;
+                        }
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    $skipped++;
+                }
+            }
+        }
+
+        // 兼容旧格式：app/etc 下直接放证书
+        $defaultDomain = (string)(Env::get('server.host') ?? 'localhost');
+        if ($defaultDomain === '127.0.0.1' || $defaultDomain === '::1') {
+            $defaultDomain = 'localhost';
+        }
+        $defaultDomain = \strtolower(\trim($defaultDomain));
+        foreach ($certFormats as $format) {
+            $certPath = $etcDir . $format['cert'];
+            $keyPath = $etcDir . $format['key'];
+            if (\is_file($certPath) && \is_file($keyPath)) {
+                if ($this->syncCertificateRecordFromFiles($defaultDomain, $certPath, $keyPath) instanceof SslCertificate) {
+                    $synced++;
+                } else {
+                    $skipped++;
+                }
+                break;
+            }
+        }
+
+        return ['synced' => $synced, 'skipped' => $skipped];
     }
 
     private function copyIfChanged(string $source, string $target): bool
@@ -1861,6 +2064,9 @@ CNF;
             
             $cert->setHttpsEnabled($enabled)->save();
             
+            // 禁用时：触发服务器重启以使配置实时生效
+            $restartTriggered = !$enabled && $this->triggerServerRestartForDomain($domain);
+            
             // 通过事件同步 HTTPS 状态（解耦模块间依赖）
             if ($enabled) {
                 $this->dispatchCertificateIssuedEvent(
@@ -1879,12 +2085,94 @@ CNF;
             // 清理服务器缓存，确保配置立即生效
             $this->clearServerCache();
             
+            $message = $enabled ? __('HTTPS 已启用') : __('HTTPS 已禁用');
+            if (!$enabled && $restartTriggered) {
+                $message = __('HTTPS 已禁用，服务器正在重启以使配置生效');
+            }
             return [
                 'success' => true,
-                'message' => $enabled ? __('HTTPS 已启用') : __('HTTPS 已禁用'),
+                'message' => $message,
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+    
+    /**
+     * 禁用 HTTPS 后触发服务器重启，使配置实时生效
+     */
+    protected function triggerServerRestartForDomain(string $domain): bool
+    {
+        $instanceNames = $this->findInstancesUsingDomain($domain);
+        if (empty($instanceNames)) {
+            return false;
+        }
+        try {
+            $ipcGateway = ObjectManager::getInstance(\Weline\Server\Service\Control\IpcControlGateway::class);
+            $controlMessage = \Weline\Server\IPC\ControlMessage::class;
+            $anyOk = false;
+            foreach ($instanceNames as $instanceName) {
+                $res = $ipcGateway->command($instanceName, $controlMessage::ACTION_STOP, '', [], 8.0);
+                if ($res['success'] ?? false) {
+                    $this->scheduleServerStart($instanceName);
+                    $anyOk = true;
+                }
+            }
+            return $anyOk;
+        } catch (\Throwable $e) {
+            Env::log_warning('ssl_cert_toggle', 'SslCertificateService::triggerServerRestartForDomain failed: ' . $e->getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 查找使用指定域名的 WLS 实例
+     */
+    protected function findInstancesUsingDomain(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        if (!\is_dir($instanceDir)) {
+            return [];
+        }
+        $found = [];
+        $files = @\glob($instanceDir . '*.json');
+        if (!$files) {
+            return [];
+        }
+        foreach ($files as $file) {
+            $data = @\json_decode((string)\file_get_contents($file), true);
+            if (!\is_array($data)) {
+                continue;
+            }
+            $instDomain = \strtolower(\trim((string)($data['ssl_domain'] ?? '')));
+            $sslCert = (string)($data['ssl_cert'] ?? '');
+            $matches = $instDomain === $domain
+                || ($domain === 'localhost' && ($instDomain === 'localhost' || \str_contains($sslCert, 'localhost')))
+                || ($domain === '127.0.0.1' && ($instDomain === '127.0.0.1' || \str_contains($sslCert, 'localhost')));
+            if ($matches) {
+                $found[] = \basename($file, '.json');
+            }
+        }
+        return $found;
+    }
+    
+    /**
+     * 延迟 4 秒后后台启动服务器（等待旧进程完全退出）
+     */
+    protected function scheduleServerStart(string $instanceName): void
+    {
+        $bp = \defined('BP') ? BP : \dirname(__DIR__, 4) . DS;
+        $php = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
+        $w = $bp . 'bin' . DS . 'w';
+        $tmp = \sys_get_temp_dir() . DS . 'weline_ssl_restart_' . \getmypid() . '_' . \uniqid() . '.php';
+        $code = '<?php sleep(4); passthru(' . \var_export($php . ' ' . \escapeshellarg($w) . ' server:start ' . \escapeshellarg($instanceName) . ' -d', true) . ');';
+        if (@\file_put_contents($tmp, $code) && \is_file($tmp)) {
+            \register_shutdown_function(static fn () => @\unlink($tmp));
+            $pid = \Weline\Framework\System\Process\Processer::create($php . ' ' . \escapeshellarg($tmp), false);
+            if ($pid <= 0) {
+                @\unlink($tmp);
+            }
         }
     }
     

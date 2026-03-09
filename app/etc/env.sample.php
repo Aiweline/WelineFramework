@@ -139,7 +139,9 @@ return [
     'session' => [
         'default' => 'file',
         'wls_default' => 'wls',
+        // Session 服务端 TTL（秒）。建议与 cookie_lifetime 对齐，避免浏览器 Cookie 仍在但服务端 Session 已过期。
         'lifetime' => 86400,
+        // Session Cookie 生命周期（秒）。
         'cookie_lifetime' => 604800,
         'drivers' => [
             'file' => [
@@ -158,6 +160,7 @@ return [
             ],
             'wls' => [
                 'port' => 19970,
+                // WLS Session Server 内部 TTL（秒），建议不小于 session.lifetime。
                 'session_ttl' => 86400,
                 'max_sessions' => 50000,
                 'persist_interval' => 30,

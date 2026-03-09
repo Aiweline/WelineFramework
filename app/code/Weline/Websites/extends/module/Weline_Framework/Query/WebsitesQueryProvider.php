@@ -7,6 +7,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Websites\Model\Domain;
+use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
@@ -57,6 +58,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteById'         => $this->getWebsiteById($params),
             'getWebsiteList'         => $this->getWebsiteList($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
+            'getDomainPoolList'      => $this->getDomainPoolList($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -235,6 +237,14 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('获取站点关联的语言代码列表'),
                     'params'      => [
                         ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name'        => 'getDomainPoolList',
+                    'description' => __('获取域名池列表（用于 SSL/建站选择）'),
+                    'params'      => [
+                        ['name' => 'status', 'type' => 'int|string|null', 'required' => false],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
                     ],
                 ],
             ],
@@ -756,5 +766,42 @@ class WebsitesQueryProvider implements QueryProviderInterface
             return [];
         }
         return $this->websiteLanguageModel->getWebsiteLanguageCodes($websiteId);
+    }
+
+    private function getDomainPoolList(array $params): array
+    {
+        $status = $params['status'] ?? DomainPool::STATUS_ACTIVE;
+        $limit = (int)($params['limit'] ?? 500);
+        if ($limit <= 0) {
+            $limit = 500;
+        }
+        $limit = \min($limit, 2000);
+
+        /** @var DomainPool $pool */
+        $pool = ObjectManager::getInstance(DomainPool::class);
+        $pool->clearQuery();
+        if ($status !== null && $status !== '') {
+            $pool->where(DomainPool::schema_fields_STATUS, (string)$status);
+        }
+        $rows = $pool->order(DomainPool::schema_fields_DOMAIN, 'ASC')
+            ->pagination(1, $limit)
+            ->select()
+            ->fetchArray();
+
+        $list = [];
+        foreach ($rows as $row) {
+            $domain = (string)($row[DomainPool::schema_fields_DOMAIN] ?? '');
+            if ($domain === '') {
+                continue;
+            }
+            $list[] = [
+                'pool_id' => (int)($row[DomainPool::schema_fields_ID] ?? 0),
+                'domain' => $domain,
+                'root_domain' => (string)($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? ''),
+                'status' => (string)($row[DomainPool::schema_fields_STATUS] ?? ''),
+                'https_status' => (string)($row[DomainPool::schema_fields_HTTPS_STATUS] ?? ''),
+            ];
+        }
+        return $list;
     }
 }

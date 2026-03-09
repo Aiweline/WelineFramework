@@ -622,8 +622,6 @@ unknown,unknown
 "状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
 "测试请求：curl %{1}/","测试请求：curl %{1}/"
 端口：,Port:
-"Session Server","Session Server"
-"Maintenance Worker","Maintenance Worker"
 "查看 Weline Server 运行状态","View Weline Server status"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
@@ -659,17 +657,20 @@ unknown,unknown
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
 强制停止,"Force stop"
 "请指定域名：--domain example.com","请指定域名：--domain example.com"
-"请先安装 event 扩展后再执行申请证书。","请先安装 event 扩展后再执行申请证书。"
 "正在为 %{1} 申请 SSL 证书...","Requesting SSL certificate for %{1}..."
 联系邮箱：%{1},"Contact email: %{1}"
 Webroot：%{1},"Webroot: %{1}"
-证书提供商：%{1},证书提供商：%{1}
-"Webroot 目录不存在：%{1}","Webroot directory not found: %{1}"
-"✓ 证书申请成功！","✓ Certificate request successful!"
+检测到本地/开发环境，将生成自签证书,检测到本地/开发环境，将生成自签证书
+"✓ 自签证书生成成功！","✓ 自签证书生成成功！"
 证书路径：%{1},"Certificate path: %{1}"
 私钥路径：%{1},"Private key path: %{1}"
 到期时间：%{1},"Expires at: %{1}"
 "启用 HTTPS：","Enable HTTPS:"
+"✗ 证书生成失败：%{1}","✗ 证书生成失败：%{1}"
+"请先安装 event 扩展后再执行申请证书。","请先安装 event 扩展后再执行申请证书。"
+证书提供商：%{1},证书提供商：%{1}
+"Webroot 目录不存在：%{1}","Webroot directory not found: %{1}"
+"✓ 证书申请成功！","✓ Certificate request successful!"
 "✗ 证书申请失败：%{1}","✗ Certificate request failed: %{1}"
 "续签将继续执行，但启用 HTTPS 前请先安装 event 扩展。","续签将继续执行，但启用 HTTPS 前请先安装 event 扩展。"
 未找到域名证书：%{1},"Domain certificate not found: %{1}"
@@ -699,7 +700,7 @@ HTTPS,HTTPS
 即将过期（30天内）：%{1},"Expiring soon (within 30 days): %{1}"
 可用命令：,"Available commands:"
 "- 查看证书列表","- View certificate list"
-"- 申请新证书","- Request new certificate"
+"- 申请新证书（localhost 自动生成自签证书）","- 申请新证书（localhost 自动生成自签证书）"
 "- 续签到期证书","- Renew expiring certificates"
 "- 同步网站域名","- Sync website domains"
 "- 启用 HTTPS","- Enable HTTPS"
@@ -735,17 +736,43 @@ HTTPS,HTTPS
 同步并申请,"Sync and request"
 访问被拒绝：仅允许本地请求,访问被拒绝：仅允许本地请求
 "仅支持 AJAX 请求","仅支持 AJAX 请求"
+"Weline Server 管理","Weline Server 管理"
+"Session 管理","Session 管理"
+内存服务管理,内存服务管理
 启动命令已提交,启动命令已提交
 停止命令已发送,停止命令已发送
 重启命令已发送,重启命令已发送
 热重载命令已发送,热重载命令已发送
 维护模式已启用,维护模式已启用
 维护模式已禁用,维护模式已禁用
+"Session 列表加载完成","Session 列表加载完成"
+"缺少 Session ID","缺少 Session ID"
+"Session 已销毁","Session 已销毁"
+"Session 销毁失败，请确认服务可用后重试","Session 销毁失败，请确认服务可用后重试"
+"Session 数据已持久化","Session 数据已持久化"
+"Session 持久化失败，请检查 Session 服务状态","Session 持久化失败，请检查 Session 服务状态"
+"Session 垃圾回收已执行","Session 垃圾回收已执行"
+"Session 垃圾回收执行失败","Session 垃圾回收执行失败"
+内存命名空间加载完成,内存命名空间加载完成
+缺少命名空间参数,缺少命名空间参数
+命名空间详情加载完成,命名空间详情加载完成
+内存命名空间已清空,内存命名空间已清空
+"命名空间清理失败，请检查 Memory Service 状态","命名空间清理失败，请检查 Memory Service 状态"
+缺少命名空间或键名参数,缺少命名空间或键名参数
+缓存键已删除,缓存键已删除
+缓存键删除失败,缓存键删除失败
+内存服务数据已持久化,内存服务数据已持久化
+内存服务持久化失败,内存服务持久化失败
+内存服务垃圾回收已执行,内存服务垃圾回收已执行
+"内存服务垃圾回收执行失败，请检查 Memory Service 连接状态","内存服务垃圾回收执行失败，请检查 Memory Service 连接状态"
+服务器监控,服务器监控
 "请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。","请先输入压测目标 URL，例如 http://127.0.0.1:9981/_wls/health。"
 压测完成,压测完成
 压测失败,压测失败
 "请传入有效的压测记录 ID。","请传入有效的压测记录 ID。"
 未找到对应的压测记录。,未找到对应的压测记录。
+攻击日志,攻击日志
+"WLS API 文档","WLS API 文档"
 健康检查,健康检查
 基础健康检查,基础健康检查
 "返回 Worker 基础健康状态","返回 Worker 基础健康状态"
@@ -767,6 +794,7 @@ HTTPS,HTTPS
 内存缓存状态,内存缓存状态
 "获取 WLS 内存缓存状态","获取 WLS 内存缓存状态"
 日志清理完成,日志清理完成
+安全规则,安全规则
 "规则 JSON 格式不正确","规则 JSON 格式不正确"
 规则数据不能为空,规则数据不能为空
 安全规则已保存,安全规则已保存
@@ -775,6 +803,7 @@ HTTPS,HTTPS
 请指定域名,"Please specify domain"
 请指定联系邮箱,请指定联系邮箱
 未找到证书记录,"Certificate record not found"
+"本地域名证书（localhost/127.0.0.1）不允许删除，用于后台 HTTPS 访问","Local domain certificates (localhost/127.0.0.1) cannot be deleted; they are required for backend HTTPS access"
 证书已删除,"Certificate deleted"
 "同步完成，新增 %{1} 个域名","Sync complete, added %{1} domains"
 请选择要签发证书的域名,"Please select domains to issue certificates"
@@ -839,7 +868,21 @@ HTTPS,HTTPS
 "证书提供商 letsencrypt/litessl","证书提供商 letsencrypt/litessl"
 "证书类型 exact|wildcard","证书类型 exact|wildcard"
 "策略 single|wildcard_prefer|both","策略 single|wildcard_prefer|both"
+获取服务器状态,获取服务器状态
+启动实例,启动实例
+停止实例,停止实例
+重启实例,重启实例
+热重载实例,热重载实例
+启用维护模式,启用维护模式
+禁用维护模式,禁用维护模式
+获取优化指南数据,获取优化指南数据
+"获取 SSL 证书列表","获取 SSL 证书列表"
 域名不能为空,域名不能为空
+本地域名证书不允许删除,"Local domain certificate cannot be deleted"
+"Session 销毁失败，请稍后重试","Session 销毁失败，请稍后重试"
+"Session 持久化失败","Session 持久化失败"
+命名空间清理失败,命名空间清理失败
+内存服务垃圾回收执行失败,内存服务垃圾回收执行失败
 "WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。","WLS 实例 [%s] Master 复活失败，已尝试 %d 次，请人工检查并执行 server:start 或 server:restart。"
 频率限制,频率限制
 路径扫描,路径扫描
@@ -854,7 +897,7 @@ DDoS攻击,DDoS攻击
 严重,严重
 仅清缓存,仅清缓存
 代码重载,代码重载
-"WLS 重载：已通过 IPC 控制通道通知 Master（%{1}）","WLS 重载：已通过 IPC 控制通道通知 Master（%{1}）"
+"WLS 重载：已通过 IPC 控制通道通知 Master（%{1}，%{2} 个实例）","WLS 重载：已通过 IPC 控制通道通知 Master（%{1}，%{2} 个实例）"
 "WLS 重载：已通知 Master（%{1} 个实例），由 Master 通知 Worker 重载","WLS 重载：已通知 Master（%{1} 个实例），由 Master 通知 Worker 重载"
 "WLS 重载：未检测到运行中的 WLS，已跳过","WLS reload: no running WLS detected, skipped"
 信号,signal
@@ -892,6 +935,7 @@ DDoS攻击,DDoS攻击
 "Master 进入主循环，监控子进程...","Master 进入主循环，监控子进程..."
 "Master 主循环结束","Master 主循环结束"
 "Master PID %{1} 已注册到索引","Master PID %{1} 已注册到索引"
+"Master PID 索引已移除","Master PID 索引已移除"
 "收到 SIGTERM 信号，开始优雅停止...","收到 SIGTERM 信号，开始优雅停止..."
 "收到 SIGINT 信号，开始优雅停止...","收到 SIGINT 信号，开始优雅停止..."
 "收到 SIGHUP 信号，开始重载...","收到 SIGHUP 信号，开始重载..."
@@ -1020,6 +1064,7 @@ DDoS攻击,DDoS攻击
 "已通知 %{1} 个 Dispatcher 解封 IP %{2}","已通知 %{1} 个 Dispatcher 解封 IP %{2}"
 "未指定 ip 或 clear_all","未指定 ip 或 clear_all"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","On Windows, PHP event extension is required to start HTTPS after obtaining a certificate. Please install the event extension before applying for a certificate. Download: %{1}"
+"HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
 使用已有证书,"Using existing certificate"
 生成私钥失败,"Failed to generate private key"
 "生成 CSR 失败","Failed to generate CSR"
@@ -1034,6 +1079,7 @@ DDoS攻击,DDoS攻击
 证书更新事件调度失败：%{1},"Certificate renewed event dispatch failed: %{1}"
 请求域名列表失败：%{1},"Request domain list failed: %{1}"
 手动禁用,"Manually disabled"
+同步证书记录失败：%{1},同步证书记录失败：%{1}
 证书源文件不存在：%{1},证书源文件不存在：%{1}
 "同步证书失败 %{1}: %{2}","同步证书失败 %{1}: %{2}"
 不支持的证书提供商：%{provider},不支持的证书提供商：%{provider}
@@ -1058,6 +1104,7 @@ DDoS攻击,DDoS攻击
 用户手动禁用,"User manually disabled"
 "HTTPS 已启用","HTTPS enabled"
 "HTTPS 已禁用","HTTPS disabled"
+"HTTPS 已禁用，服务器正在重启以使配置生效","HTTPS 已禁用，服务器正在重启以使配置生效"
 "Linux/Mac SO_REUSEPORT 直连模式","Linux/Mac SO_REUSEPORT 直连模式"
 "使用 %{1} 启动服务器","使用 %{1} 启动服务器"
 "启动 Worker 失败","启动 Worker 失败"
@@ -1116,8 +1163,10 @@ DDoS攻击,DDoS攻击
 选择您的系统：,选择您的系统：
 打开下载页面,打开下载页面
 已复制到剪贴板,已复制到剪贴板
-"Weline Server 管理","Weline Server 管理"
 正在加载服务器状态...,正在加载服务器状态...
+当前页面已聚焦到内存服务管理，仅展示内存缓存相关管理能力。,当前页面已聚焦到内存服务管理，仅展示内存缓存相关管理能力。
+"当前页面已聚焦到 Session 管理，仅展示会话相关管理能力。","当前页面已聚焦到 Session 管理，仅展示会话相关管理能力。"
+返回实例管理,返回实例管理
 服务器状态,服务器状态
 刷新,刷新
 实例总数,实例总数
@@ -1136,13 +1185,66 @@ DDoS攻击,DDoS攻击
 操作,操作
 重启,重启
 停止,停止
-启用维护模式,启用维护模式
-禁用维护模式,禁用维护模式
 启动,启动
 性能优化,性能优化
 可优化,可优化
 已最优,已最优
 查看安装指南,查看安装指南
+已连接,已连接
+不可用,不可用
+共享状态管理,共享状态管理
+"覆盖 Session 与 Memory Service 的状态、检索、清理能力","覆盖 Session 与 Memory Service 的状态、检索、清理能力"
+"Session 数","Session 数"
+客户端,客户端
+内存,内存
+刷新列表,刷新列表
+立即持久化,立即持久化
+"GC 清理","GC 清理"
+"Session ID","Session ID"
+字段数,字段数
+预览,预览
+"点击“刷新列表”加载 Session 数据","点击“刷新列表”加载 Session 数据"
+内存缓存管理,内存缓存管理
+命名空间,命名空间
+刷新命名空间,刷新命名空间
+键数量,键数量
+示例键,示例键
+点击“刷新命名空间”加载缓存目录,点击“刷新命名空间”加载缓存目录
+键,键
+类型,类型
+预览值,预览值
+点击命名空间的“查看键”按钮加载详情,点击命名空间的“查看键”按钮加载详情
+"暂无 Session 数据","暂无 Session 数据"
+销毁,销毁
+"确认销毁该 Session 吗？此操作会让对应用户立即失效。","确认销毁该 Session 吗？此操作会让对应用户立即失效。"
+"销毁 Session","销毁 Session"
+确认销毁,确认销毁
+取消,取消
+操作失败,操作失败
+销毁失败,销毁失败
+"Session 持久化成功","Session 持久化成功"
+"Session 垃圾回收","Session 垃圾回收"
+"请输入最大存活秒数（默认 3600）","请输入最大存活秒数（默认 3600）"
+"Session GC 执行成功","Session GC 执行成功"
+"Session GC 执行失败","Session GC 执行失败"
+暂无内存命名空间,暂无内存命名空间
+暂无可展示键数据,暂无可展示键数据
+查看键,查看键
+清空,清空
+该命名空间暂无键,该命名空间暂无键
+删除键,删除键
+敏感,敏感
+元素,元素
+确认清空该命名空间的所有缓存键吗？,确认清空该命名空间的所有缓存键吗？
+清空命名空间,清空命名空间
+确认清空,确认清空
+命名空间已清空,命名空间已清空
+清空失败,清空失败
+删除失败,删除失败
+内存服务持久化成功,内存服务持久化成功
+内存服务垃圾回收,内存服务垃圾回收
+"内存服务 GC 执行成功","内存服务 GC 执行成功"
+"内存服务 GC 执行失败","内存服务 GC 执行失败"
 正在启动...,正在启动...
 启动成功,启动成功
 启动失败,启动失败
@@ -1157,7 +1259,6 @@ DDoS攻击,DDoS攻击
 热重载失败：请检查网络连接后重试。,热重载失败：请检查网络连接后重试。
 确认执行该操作吗？此操作会影响流量接入状态。,确认执行该操作吗？此操作会影响流量接入状态。
 确认,确认
-取消,取消
 成功,成功
 失败,失败
 失败：请检查网络连接后重试。,失败：请检查网络连接后重试。
@@ -1166,8 +1267,6 @@ DDoS攻击,DDoS攻击
 正在启动新实例...,正在启动新实例...
 启动命令已发送，请稍后刷新状态。,启动命令已发送，请稍后刷新状态。
 启动失败：请检查网络连接后重试。,启动失败：请检查网络连接后重试。
-"WLS API 文档","WLS API 文档"
-服务器监控,服务器监控
 "API 文档","API 文档"
 概述,概述
 "WLS (Weline Server) 提供了一系列内部 API 接口，用于健康检查、进程管理和调试。","WLS (Weline Server) 提供了一系列内部 API 接口，用于健康检查、进程管理和调试。"
@@ -1180,7 +1279,6 @@ DDoS攻击,DDoS攻击
 触发热重载,触发热重载
 "PHP 示例","PHP 示例"
 "检查 WLS 是否运行","检查 WLS 是否运行"
-攻击日志,攻击日志
 总攻击次数,总攻击次数
 已拦截,已拦截
 攻击IP数,攻击IP数
@@ -1190,7 +1288,6 @@ CDN通知,CDN通知
 全部实例,全部实例
 暂无攻击记录,暂无攻击记录
 时间,时间
-类型,类型
 IP,IP
 URI,URI
 严重程度,严重程度
@@ -1210,7 +1307,21 @@ URI,URI
 端口,端口
 连接,连接
 请求,请求
-内存,内存
+进程明细（实时）,进程明细（实时）
+"来自 Orchestrator + Worker Health","来自 Orchestrator + Worker Health"
+角色,角色
+实例,实例
+PID,PID
+运行时长,运行时长
+连接/活跃,连接/活跃
+总请求,总请求
+心跳,心跳
+等待状态刷新...,等待状态刷新...
+进程状态记录（最近）,进程状态记录（最近）
+"日志保留默认 7 天","日志保留默认 7 天"
+进程ID,进程ID
+活跃请求,活跃请求
+最后错误,最后错误
 "Master API 接口","Master API 接口"
 完整文档,完整文档
 接口,接口
@@ -1237,6 +1348,8 @@ Host,Host
 快速操作,快速操作
 服务器管理,服务器管理
 清理过期日志,清理过期日志
+暂无进程明细数据,暂无进程明细数据
+暂无状态日志,暂无状态日志
 "请先输入压测目标 URL。","请先输入压测目标 URL。"
 压测执行中，请稍候...,压测执行中，请稍候...
 压测失败：请检查网络连接后重试。,压测失败：请检查网络连接后重试。
@@ -1244,11 +1357,38 @@ Host,Host
 确认清理,确认清理
 正在清理...,正在清理...
 清理失败,清理失败
-"WLS 安全规则配置","WLS 安全规则配置"
-"可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。","可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。"
+"WLS 安全规则可视化配置","WLS 安全规则可视化配置"
+"类似 Cloudflare 规则面板：开关、阈值、列表可直接编辑，保存后自动下发运行中 WLS。","类似 Cloudflare 规则面板：开关、阈值、列表可直接编辑，保存后自动下发运行中 WLS。"
+AttackDetector,AttackDetector
+全局限流（rate_limit）,全局限流（rate_limit）
+窗口(秒),窗口(秒)
+最大请求数,最大请求数
+封禁时长(秒),封禁时长(秒)
+路径扫描（path_scan）,路径扫描（path_scan）
+最大不同路径,最大不同路径
+"SSL 握手失败（ssl_handshake_failure）","SSL 握手失败（ssl_handshake_failure）"
+最大失败数,最大失败数
+快速关闭阈值(秒),快速关闭阈值(秒)
+路径级限流（path_rate_limits）,路径级限流（path_rate_limits）
+新增路径规则,新增路径规则
+路径前缀,路径前缀
+最大请求,最大请求
+封禁(秒),封禁(秒)
+白名单（ip_whitelist）,白名单（ip_whitelist）
+"新增 IP/CIDR","新增 IP/CIDR"
+"CDN 信任 IP（cdn_trusted_ips）","CDN 信任 IP（cdn_trusted_ips）"
+恶意特征（malicious_patterns）,恶意特征（malicious_patterns）
+新增正则,新增正则
+"恶意 UA（bad_user_agents）","恶意 UA（bad_user_agents）"
+"新增 UA 正则","新增 UA 正则"
+敏感路径（protected_paths）,敏感路径（protected_paths）
+新增敏感路径,新增敏感路径
+"规则 JSON 预览（只读）","规则 JSON 预览（只读）"
+用于审查最终将提交的数据,用于审查最终将提交的数据
 保存规则,保存规则
-"JSON 格式错误：%{1}","JSON 格式错误：%{1}"
-保存成功,保存成功
+重载页面数据,重载页面数据
+规则数据解析失败，已回退默认值：%{1},规则数据解析失败，已回退默认值：%{1}
+删除,删除
 保存失败,保存失败
 请求失败：%{1},请求失败：%{1}
 同步域名,"Sync Domains"
@@ -1300,6 +1440,14 @@ LiteSSL,LiteSSL
 "Weline Server 未运行","Weline Server is not running"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server is running, Master PID: %{1}"
 "Weline Server 已停止","Weline Server stopped"
+"- 申请新证书","- Request new certificate"
+"WLS 安全规则配置","WLS 安全规则配置"
+"可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。","可编辑 path_rate_limits、cdn_trusted_ips 等规则，保存后自动下发到运行中的 WLS。"
+"JSON 格式错误：%{1}","JSON 格式错误：%{1}"
+保存成功,保存成功
+"Session Server","Session Server"
+"Maintenance Worker","Maintenance Worker"
+"WLS 重载：已通过 IPC 控制通道通知 Master（%{1}）","WLS 重载：已通过 IPC 控制通道通知 Master（%{1}）"
 "证书自动续签完成：检查 %{1} 个，成功 %{2} 个，失败 %{3} 个，跳过 %{4} 个","Certificate auto-renewal completed: checked %{1}, renewed %{2}, failed %{3}, skipped %{4}"
 服务器启动命令已发送,服务器启动命令已发送
 服务器已停止,服务器已停止
