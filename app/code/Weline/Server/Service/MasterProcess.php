@@ -296,7 +296,7 @@ class MasterProcess
             epoch: 1,
             controlPort: $this->controlPort,
             masterPid: \getmypid(),
-            host: $this->config['host'] ?? '0.0.0.0',
+            host: $this->config['host'] ?? '127.0.0.1',
             mainPort: $this->mainPort,
             sslEnabled: $this->sslEnabled,
             sslCert: $this->sslCert,
