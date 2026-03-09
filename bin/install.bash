@@ -187,6 +187,9 @@ ensure_weline_user() {
     run_privileged usermod -aG sudo "$WELINE_USER" 2>/dev/null || true
   fi
   echo "User $WELINE_USER created."
+  echo ""
+  echo "请为用户 $WELINE_USER 设置登录密码（用于 SSH、sudo 等）："
+  run_privileged passwd "$WELINE_USER"
 }
 
 # Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
