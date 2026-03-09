@@ -37,6 +37,10 @@ CDN,CDN
 SSL,SSL
 已完成,Completed
 失败,Failed
+域名生命周期编排,域名生命周期编排
+"轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程","轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程"
+"域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条","域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条"
+域名生命周期轮询失败：%{error},域名生命周期轮询失败：%{error}
 "SaaS 配置 - 绑定 DNS","SaaS 配置 - 绑定 DNS"
 "一站式配置流程执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录（如通过 Terraform）。","一站式配置流程执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录（如通过 Terraform）。"
 "SaaS 查询器不支持的操作：%{1}","SaaS 查询器不支持的操作：%{1}"
@@ -53,13 +57,22 @@ SSL,SSL
 "CDN 供应商","CDN 供应商"
 "CDN 账户 ID","CDN 账户 ID"
 "是否申请 SSL 证书","是否申请 SSL 证书"
+为已购买域名启动生命周期编排,为已购买域名启动生命周期编排
+是否自动解析到本服务器,是否自动解析到本服务器
+子域名列表,子域名列表
+"DNS 策略","DNS 策略"
+"自定义 Nameserver","自定义 Nameserver"
+"CDN 策略","CDN 策略"
 获取配置订单详情,获取配置订单详情
 "订单 ID","订单 ID"
 根据域名获取配置订单,根据域名获取配置订单
+按根域名获取生命周期状态详情,按根域名获取生命周期状态详情
+根域名,根域名
 获取配置订单列表,获取配置订单列表
 按状态过滤,按状态过滤
 页码,页码
 每页数量,每页数量
+推进生命周期订单到下一状态,推进生命周期订单到下一状态
 "执行 DNS 绑定步骤","执行 DNS 绑定步骤"
 "执行 CDN 绑定步骤","执行 CDN 绑定步骤"
 "执行 SSL 证书申请步骤","执行 SSL 证书申请步骤"
@@ -71,7 +84,7 @@ SSL,SSL
 "订单 ID 无效","订单 ID 无效"
 "订单 ID 和 NS 列表不能为空","订单 ID 和 NS 列表不能为空"
 证书签发后更新配置订单状态失败：%{1},"Failed to update provisioning order after certificate issued: %{1}"
-"域名购买成功后续 DNS 步骤失败：%{1}","DNS step after domain purchase failed: %{1}"
+域名购买成功后续生命周期步骤失败：%{1},域名购买成功后续生命周期步骤失败：%{1}
 事件数据格式错误,事件数据格式错误
 "请选择域名商账号（registrar_account_id 无效）","请选择域名商账号（registrar_account_id 无效）"
 启动一站式配置失败：%{1},启动一站式配置失败：%{1}
@@ -79,11 +92,19 @@ SSL,SSL
 一站式配置,一站式配置
 "域名购买→DNS→CDN→SSL 全自动配置流程","域名购买→DNS→CDN→SSL 全自动配置流程"
 "SaaS 一站式配置：域名购买、DNS 绑定、CDN 绑定、SSL 证书申请","SaaS one-stop: domain purchase, DNS bind, CDN bind, SSL certificate"
+域名和账号不能为空,域名和账号不能为空
+生命周期订单创建成功，但无法读取订单,生命周期订单创建成功，但无法读取订单
+配置订单不存在,"Provisioning order not found"
+等待根域名同步到本地,等待根域名同步到本地
+"等待根域/@/www 解析到当前服务器","等待根域/@/www 解析到当前服务器"
+等待域名可访问,等待域名可访问
+"等待 HTTPS 生效","等待 HTTPS 生效"
+域名全流程已完成,域名全流程已完成
+未找到该域名的生命周期订单,未找到该域名的生命周期订单
 该域名已有进行中的配置流程,"This domain already has a provisioning flow in progress"
 "配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤","配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤"
 购买失败,购买失败
 "域名购买成功，请继续 DNS/CDN/证书 步骤","Domain purchased. Continue with DNS/CDN/certificate steps"
-配置订单不存在,"Provisioning order not found"
 "DNS 绑定已提交","DNS binding submitted"
 "DNS 步骤已记录，可由 Terraform 等模块执行","DNS step recorded; Terraform or other modules may execute it"
 "请指定 CDN 供应商与账户，或先在订单中配置 cdn_vendor/cdn_account_id","Specify CDN vendor and account, or set cdn_vendor/cdn_account_id on the order"
@@ -109,6 +130,7 @@ SSL,SSL
 创建时间,创建时间
 暂无数据,"No data"
 "共 %{total} 条","Total %{total} records"
+"域名购买成功后续 DNS 步骤失败：%{1}","DNS step after domain purchase failed: %{1}"
 "SaaS 配置订单表","SaaS provisioning order table"
 配置订单ID,配置订单ID
 域名商账号ID,域名商账号ID

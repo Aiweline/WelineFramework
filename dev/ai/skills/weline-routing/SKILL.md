@@ -875,6 +875,39 @@ php bin/w route:list | Select-String "env-manager"
 - 模板/服务中统一使用 `getBackendUrl('{backend_router}/backend/...')`，不要手写 `backend/...`。  
 - 修改控制器/菜单后执行：`php bin/w setup:upgrade --route`。
 
+### Q9: `setup:upgrade` 路由导入阶段内存溢出怎么办？
+
+**典型报错：**
+```text
+Allowed memory size exhausted
+.../Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php
+```
+
+**根因模式：**
+1. 在一个方法内顺序 `include` 多个大型路由数组（frontend/backend + pc/rest），导致数组变量在方法结束前持续占用内存。  
+2. 循环中重复做模块名到模块 ID 的查询，进一步增加内存和 CPU 压力。
+
+**推荐做法（与事件分段处理思路对齐）：**
+1. 将每个路由文件处理抽成独立方法（按文件分段）。  
+2. 每段处理后显式释放：`unset($urls); gc_collect_cycles();`。  
+3. 对高频查询（如 `module_name -> module_id`）做本轮导入缓存。
+
+**示例模式：**
+```php
+private function syncRoutesFromFile(string $filePath, string $type): void
+{
+    $urls = include $filePath;
+    if (!is_array($urls)) {
+        unset($urls);
+        gc_collect_cycles();
+        return;
+    }
+    // ... loop save
+    unset($urls);
+    gc_collect_cycles();
+}
+```
+
 ---
 
 ## 参考资料
@@ -889,5 +922,6 @@ php bin/w route:list | Select-String "env-manager"
 
 | 日期 | 更新内容 |
 |------|----------|
+| 2026-03-09 | 新增 Q9：`setup:upgrade` 路由导入内存溢出的分段处理与释放模式 |
 | 2026-02-25 | 添加 URL 结构、语言/货币解析、WLS 状态管理章节 |
 | 2026-01-29 | 添加 JSON 数据获取、依赖注入相关 Q&A |

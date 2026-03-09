@@ -20,6 +20,8 @@ class ModuleUpgradeExecuteAfterPlugin
 {
     private $module =  null;
     private $urlManager =  null;
+    /** @var array<string, int> */
+    private array $moduleIdCache = [];
     function __construct(Module $module,UrlManager $urlManager)
     {
         $this->module = $module;
@@ -28,89 +30,61 @@ class ModuleUpgradeExecuteAfterPlugin
 
     function afterExecute()
     {
-        # 读取前端PC url存放位置更新到数据库中
-        if (is_file(Env::path_FRONTEND_PC_ROUTER_FILE)) {
-            $type             = 'frontend_pc';
-            $frontend_pc_urls = include Env::path_FRONTEND_PC_ROUTER_FILE;
-            if (is_array($frontend_pc_urls))
-                foreach ($frontend_pc_urls as $path => $frontend_pc_url) {
-                    $this->module->recovery();
-                    $module_id = $this->module->load('name', $frontend_pc_url['module'])->getId();
-                    if ($module_id) {
-                        $this->urlManager->recovery();
-                        $this->urlManager
-                            ->setData('module_id', $module_id)
-                            ->setData('path', $path)
-                            ->setData('identify', md5($path . $type), true)
-                            ->setData('data', json_encode($frontend_pc_url))
-                            ->setData('type', $type)
-                            ->save();
-                    }
-                }
+        # 按类型分段处理并及时释放内存，避免升级阶段峰值过高
+        $this->syncRoutesFromFile(Env::path_FRONTEND_PC_ROUTER_FILE, 'frontend_pc');
+        $this->syncRoutesFromFile(Env::path_FRONTEND_REST_API_ROUTER_FILE, 'frontend_rest');
+        $this->syncRoutesFromFile(Env::path_BACKEND_PC_ROUTER_FILE, 'backend_pc');
+        $this->syncRoutesFromFile(Env::path_BACKEND_REST_API_ROUTER_FILE, 'backend_rest');
+    }
+
+    private function syncRoutesFromFile(string $filePath, string $type): void
+    {
+        if (!is_file($filePath)) {
+            return;
         }
 
-        # 读取前端REST api存放位置更新到数据库中
-        if (is_file(Env::path_FRONTEND_REST_API_ROUTER_FILE)) {
-            $frontend_api_urls = include Env::path_FRONTEND_REST_API_ROUTER_FILE;
-            $type              = 'frontend_rest';
-            if (is_array($frontend_api_urls))
-                foreach ($frontend_api_urls as $path => $frontend_api_url) {
-                    $this->module->recovery();
-                    $module_id = $this->module->load('name', $frontend_api_url['module'])->getId();
-                    if ($module_id) {
-                        $this->urlManager->recovery();
-                        $this->urlManager
-                            ->setData('module_id', $module_id)
-                            ->setData('path', $path)
-                            ->setData('identify', md5($path . $type), true)
-                            ->setData('data', json_encode($frontend_api_url))
-                            ->setData('type', $type)
-                            ->save();
-                    }
-                }
+        $urls = include $filePath;
+        if (!is_array($urls)) {
+            unset($urls);
+            gc_collect_cycles();
+            return;
         }
 
-        # 读取后端PC url存放位置更新到数据库中
-        if (is_file(Env::path_BACKEND_PC_ROUTER_FILE)) {
-            $type            = 'backend_pc';
-            $backend_pc_urls = include Env::path_BACKEND_PC_ROUTER_FILE;
-            if (is_array($backend_pc_urls))
-                foreach ($backend_pc_urls as $path => $backend_pc_url) {
-                    $this->module->recovery();
-                    $module_id = $this->module->load('name', $backend_pc_url['module'])->getId();
-                    if ($module_id) {
-                        $this->urlManager->recovery();
-                        $this->urlManager
-                            ->setData('module_id', $module_id)
-                            ->setData('path', $path)
-                            ->setData('identify', md5($path . $type), true)
-                            ->setData('data', json_encode($backend_pc_url))
-                            ->setData('type', $type)
-                            ->save();
-                    }
-                }
-        }
-
-        # 读取后端REST api存放位置更新到数据库中
-        if (is_file(Env::path_BACKEND_REST_API_ROUTER_FILE)) {
-            $backend_api_urls = include Env::path_BACKEND_REST_API_ROUTER_FILE;
-            $type             = 'backend_rest';
-            if (is_array($backend_api_urls)) {
-                foreach ($backend_api_urls as $path => $backend_api_url) {
-                    $this->module->recovery();
-                    $module_id = $this->module->load('name', $backend_api_url['module'])->getId();
-                    if ($module_id) {
-                        $this->urlManager->recovery();
-                        $this->urlManager
-                            ->setData('module_id', $module_id)
-                            ->setData('path', $path)
-                            ->setData('identify', md5($path . $type), true)
-                            ->setData('data', json_encode($backend_api_url))
-                            ->setData('type', $type)
-                            ->save();
-                    }
-                }
+        foreach ($urls as $path => $urlConfig) {
+            if (!is_array($urlConfig)) {
+                continue;
             }
+            $moduleName = (string)($urlConfig['module'] ?? '');
+            if ($moduleName === '') {
+                continue;
+            }
+            $module_id = $this->getModuleIdByName($moduleName);
+            if (!$module_id) {
+                continue;
+            }
+            $this->urlManager->recovery();
+            $this->urlManager
+                ->setData('module_id', $module_id)
+                ->setData('path', $path)
+                ->setData('identify', md5($path . $type), true)
+                ->setData('data', json_encode($urlConfig))
+                ->setData('type', $type)
+                ->save();
         }
+
+        unset($urls);
+        gc_collect_cycles();
+    }
+
+    private function getModuleIdByName(string $moduleName): int
+    {
+        if (isset($this->moduleIdCache[$moduleName])) {
+            return $this->moduleIdCache[$moduleName];
+        }
+
+        $this->module->recovery();
+        $moduleId = (int)$this->module->load('name', $moduleName)->getId();
+        $this->moduleIdCache[$moduleName] = $moduleId;
+        return $moduleId;
     }
 }
