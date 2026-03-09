@@ -658,8 +658,10 @@ install_php_from_source() {
   while IFS= read -r flag; do
     [[ -n "$flag" ]] && conf+=("$flag")
   done < <(get_php_configure_flags_for_extensions)
-  # xsl 固定编译进 PHP，不依赖动态解析
+  # 固定编译进 PHP：xsl、exif、fileinfo（composer 与框架必需要求）
   conf+=("--with-xsl")
+  conf+=("--enable-exif")
+  conf+=("--enable-fileinfo")
 
   if [[ "$PLATFORM" == "mac" && -n "$brew_prefix" ]]; then
     conf+=(
@@ -1110,10 +1112,14 @@ if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
   exit 1
 fi
 
-# 尝试在 php.ini 中启用指定扩展（适用于宝塔等非 apt 安装的 PHP）
+# 尝试在 php.ini 中启用指定扩展（仅当 .so 已存在时，适用于宝塔等）
+# 若 .so 不存在，勿添加 extension=，否则会导致 PHP 启动警告
 enable_php_ext_via_ini() {
   local -a exts=("$@")
   [[ ${#exts[@]} -eq 0 ]] && return 0
+  local ext_dir
+  ext_dir=$("$PHP_EXE" -r "echo ini_get('extension_dir');" 2>/dev/null || true)
+  [[ -z "$ext_dir" ]] || [[ ! -d "$ext_dir" ]] && return 1
   local ini_file
   ini_file=$("$PHP_EXE" -r "echo php_ini_loaded_file();" 2>/dev/null || true)
   [[ -z "$ini_file" ]] || [[ ! -f "$ini_file" ]] && return 1
@@ -1126,6 +1132,7 @@ enable_php_ext_via_ini() {
     if echo "$content" | grep -qE '^[[:space:]]*extension[[:space:]]*=[[:space:]]*'"$ext"'(\.so)?[[:space:]]*$'; then
       continue
     fi
+    [[ -f "$ext_dir/${ext}.so" ]] || continue
     run_privileged sh -c "echo 'extension=${ext}' >> \"$ini_file\"" 2>/dev/null && changed=1
   done
   [[ "$changed" -eq 1 ]] && echo "Enabled PHP extensions in $ini_file: ${exts[*]}"
@@ -1155,9 +1162,21 @@ ensure_framework_php_extensions() {
     return 0
   fi
 
-  # 宝塔等 /www/server/php/ 下的 PHP：apt 无效，尝试在 php.ini 中启用
+  # 宝塔等 /www/server/php/ 下的 PHP：apt 无效；仅当 .so 存在时才启用，否则移除误加的 extension 行以消除启动警告
   if [[ "$php_exe_abs" == *"/www/server/php/"* ]]; then
-    echo "Detected panel PHP (/www/server/php/). Enabling extensions in php.ini..."
+    local ext_dir
+    ext_dir=$("$PHP_EXE" -r "echo ini_get('extension_dir');" 2>/dev/null || true)
+    local ini_file
+    ini_file=$("$PHP_EXE" -r "echo php_ini_loaded_file();" 2>/dev/null || true)
+    if [[ -n "$ext_dir" ]] && [[ -n "$ini_file" ]] && [[ -f "$ini_file" ]]; then
+      for ext in exif fileinfo; do
+        if [[ ! -f "$ext_dir/${ext}.so" ]]; then
+          run_privileged sed -i '/^[[:space:]]*extension[[:space:]]*=[[:space:]]*'"$ext"'[[:space:]]*$/d' "$ini_file" 2>/dev/null || true
+          run_privileged sed -i '/^[[:space:]]*extension[[:space:]]*=[[:space:]]*'"$ext"'\.so/d' "$ini_file" 2>/dev/null || true
+        fi
+      done
+    fi
+    echo "Detected panel PHP (/www/server/php/). Enabling extensions in php.ini (only if .so exists)..."
     enable_php_ext_via_ini exif fileinfo 2>/dev/null || true
   fi
 
