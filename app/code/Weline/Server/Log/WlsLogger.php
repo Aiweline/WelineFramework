@@ -358,18 +358,17 @@ class WlsLogger
     }
 
     /**
-     * 输出到终端（带颜色）
+     * 输出到终端（分段着色：时间戳灰、进程标签按类型、级别按级别、消息默认）
      */
     private function writeStdout(string $line, string $level): void
     {
-        $color = LogLevel::getColor($level);
-        $reset = LogLevel::getReset();
+        $colored = LogLevel::colorLine($line, $level, $this->processTag);
 
         if (\defined('STDOUT') && \is_resource(STDOUT)) {
-            @\fwrite(STDOUT, $color . $line . $reset);
+            @\fwrite(STDOUT, $colored);
             @\fflush(STDOUT);
         } else {
-            echo $color . $line . $reset;
+            echo $colored;
             @\flush();
         }
     }

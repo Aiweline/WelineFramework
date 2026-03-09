@@ -230,15 +230,14 @@ class LogAggregator
     }
 
     /**
-     * 输出到终端
+     * 输出到终端（分段着色）
      */
     private function writeStdout(string $line, string $level): void
     {
-        $color = LogLevel::getColor($level);
-        $reset = LogLevel::getReset();
+        $colored = LogLevel::colorLine($line, $level);
 
         if (\defined('STDOUT') && \is_resource(STDOUT)) {
-            @\fwrite(STDOUT, $color . $line . $reset);
+            @\fwrite(STDOUT, $colored);
             @\fflush(STDOUT);
         }
     }
