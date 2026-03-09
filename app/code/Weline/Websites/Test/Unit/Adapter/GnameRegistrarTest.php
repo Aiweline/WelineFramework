@@ -185,8 +185,8 @@ class GnameRegistrarTest extends TestCase
         $method = $reflection->getMethod('normalizeStatus');
         $method->setAccessible(true);
 
-        $this->assertSame('active', $method->invoke($this->adapter, '1'));
-        $this->assertSame('pending', $method->invoke($this->adapter, '0'));
+        $this->assertSame('suspended', $method->invoke($this->adapter, '1'));
+        $this->assertSame('active', $method->invoke($this->adapter, '0'));
         $this->assertSame('expired', $method->invoke($this->adapter, '-1'));
         $this->assertSame('active', $method->invoke($this->adapter, 'active'));
         $this->assertSame('suspended', $method->invoke($this->adapter, 'clientHold'));
@@ -198,5 +198,58 @@ class GnameRegistrarTest extends TestCase
         $desc = $this->adapter->getDescription();
         $this->assertIsString($desc);
         $this->assertNotEmpty($desc);
+    }
+
+    public function testShouldConfirmPurchasedDomainForAmbiguousAlreadyRegisteredResponse(): void
+    {
+        $reflection = new \ReflectionClass($this->adapter);
+        $method = $reflection->getMethod('shouldConfirmPurchasedDomain');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($this->adapter, -1, [
+            'msg' => '对不起，域名已被注册了',
+        ]);
+
+        $this->assertTrue($result);
+    }
+
+    public function testShouldNotConfirmPurchasedDomainForUnrelatedErrorCode(): void
+    {
+        $reflection = new \ReflectionClass($this->adapter);
+        $method = $reflection->getMethod('shouldConfirmPurchasedDomain');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($this->adapter, -1002, [
+            'msg' => '权限错误',
+        ]);
+
+        $this->assertFalse($result);
+    }
+
+    public function testDomainExistsInListMatchesCaseInsensitive(): void
+    {
+        $reflection = new \ReflectionClass($this->adapter);
+        $method = $reflection->getMethod('domainExistsInList');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($this->adapter, 'Example.COM', [
+            ['domain' => 'example.com'],
+            ['domain' => 'demo.net'],
+        ]);
+
+        $this->assertTrue($result);
+    }
+
+    public function testDomainExistsInListReturnsFalseWhenDomainMissing(): void
+    {
+        $reflection = new \ReflectionClass($this->adapter);
+        $method = $reflection->getMethod('domainExistsInList');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($this->adapter, 'missing.com', [
+            ['domain' => 'example.com'],
+        ]);
+
+        $this->assertFalse($result);
     }
 }

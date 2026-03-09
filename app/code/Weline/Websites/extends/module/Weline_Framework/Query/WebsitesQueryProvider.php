@@ -130,6 +130,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'auto_resolve', 'type' => 'bool', 'required' => false, 'description' => __('是否自动解析到本地，默认 true')],
                         ['name' => 'resolve_to_local', 'type' => 'string', 'required' => false, 'description' => __('默认 yes/no，对 items 中未指定者生效')],
                         ['name' => 'subdomains', 'type' => 'array|string', 'required' => false, 'description' => __('默认子域名列表，如 ["@","www"] 或 "@,www"')],
+                        ['name' => 'dns_choice', 'type' => 'string', 'required' => false, 'description' => __('DNS 策略：follow_registrar/custom_nameservers')],
+                        ['name' => 'dns_nameservers', 'type' => 'string', 'required' => false, 'description' => __('自定义 Nameserver，逗号分隔')],
+                        ['name' => 'cdn_choice', 'type' => 'string', 'required' => false, 'description' => __('CDN 策略：follow_registrar/none')],
+                        ['name' => 'start_lifecycle', 'type' => 'string|bool', 'required' => false, 'description' => __('是否启动后续全流程状态跟踪')],
                     ],
                 ],
                 [
@@ -526,6 +530,12 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ? (($params['resolve_to_local'] ?? 'yes') === 'yes')
             : $autoResolve;
         $defaultSubdomains = $params['subdomains'] ?? ['@', 'www'];
+        $defaultDnsChoice = (string)($params['dns_choice'] ?? 'follow_registrar');
+        $defaultDnsNameservers = (string)($params['dns_nameservers'] ?? '');
+        $defaultCdnChoice = (string)($params['cdn_choice'] ?? 'follow_registrar');
+        $defaultStartLifecycle = isset($params['start_lifecycle'])
+            ? (string) $params['start_lifecycle']
+            : '1';
         if (!\is_array($defaultSubdomains)) {
             $defaultSubdomains = \array_map('trim', \explode(',', (string)$defaultSubdomains));
         }
@@ -536,6 +546,18 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             if (!isset($item['subdomains'])) {
                 $item['subdomains'] = $defaultSubdomains;
+            }
+            if (!isset($item['dns_choice'])) {
+                $item['dns_choice'] = $defaultDnsChoice;
+            }
+            if (!isset($item['dns_nameservers'])) {
+                $item['dns_nameservers'] = $defaultDnsNameservers;
+            }
+            if (!isset($item['cdn_choice'])) {
+                $item['cdn_choice'] = $defaultCdnChoice;
+            }
+            if (!isset($item['start_lifecycle'])) {
+                $item['start_lifecycle'] = $defaultStartLifecycle;
             }
         }
         unset($item);

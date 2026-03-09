@@ -4,6 +4,86 @@
 
 ---
 
+## [2026-03-09] GName DNS 记录接口路径过时导致 `-1`（误命中“修改 DNS”错误）✅ 已修复
+
+**错误类型**: 第三方 API 对接 / 接口路径漂移
+
+**错误信息**:
+```text
+获取 DNS 记录失败：获取 DNS 记录失败：对不起，提交修改DNS失败，请选择您要修改的DNS地址（错误码：-1）
+```
+
+**根本原因**:
+1. `GnameRegistrar` 的 DNS 记录接口仍使用历史路径 `api/domain/dnslist|dnsadd|dnsupdate|dnsdel`。  
+2. GName 当前文档对应“解析记录”接口为 `api/resolution/list|add|edit|delete`（兼容别名 `api/jiexi/*`）。  
+3. 获取记录请求打到错误端点后返回了“提交修改DNS失败”文案，造成“获取 DNS 记录失败”二次包装和误导。
+
+**解决方案**:
+1. `getDnsRecords/addDnsRecord/updateDnsRecord/deleteDnsRecord` 全部切换为新端点优先：  
+   - `api/resolution/list|add|edit|delete`  
+   - 回退 `api/jiexi/list|add|edit|del`  
+   - 最后兜底历史 `api/domain/dns*`  
+2. 同步修正字段映射：`jxid/zjt/jxz` 与历史 `id/zj/jlz` 兼容。  
+3. `modifyDns` 优先改用 `api/domain/xgdns`，再回退历史 `api/domain/dns`。  
+4. `PageBuilder\DomainManagement::getGetDnsRecords()` 修复 records 结构读取（适配器返回数组列表），并去掉重复“获取 DNS 记录失败”前缀。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Websites/Adapter/GnameRegistrar.php
+php -l app/code/GuoLaiRen/PageBuilder/Controller/Backend/DomainManagement.php
+```
+
+**验证结果**: ✅ 成功（两文件语法检查通过，IDE lints 无新增错误）
+
+**预防措施**:
+1. 对接第三方 API 时，端点与参数必须按官方文档定期校验，避免长期保留历史路径。  
+2. 适配器层优先“新接口 + 别名 + 历史兜底”策略，降低供应商变更风险。  
+3. 上层控制器捕获异常时避免重复包装同前缀错误文案，防止排障信息失真。
+
+**相关文件**:
+- `app/code/Weline/Websites/Adapter/GnameRegistrar.php`
+- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/DomainManagement.php`
+
+---
+
+## [2026-03-09] Session 管理页混入 `cache:*` 命名空间（误判为“缓存写入 Session”）✅ 已修复
+
+**错误类型**: Session 管理视图筛选缺失 / 共享状态命名空间混淆
+
+**错误现象**:
+```text
+后台 Session 管理列表中出现大量 __ns__:cache:* 键（如 cache:plugin/cache:view/cache:taglib）。
+看起来像“缓存被写入了 Session”。
+```
+
+**根本原因**:
+1. WLS 使用统一状态服务，Session 与 Cache 共用协议但按命名空间隔离（`sess` vs `cache:*`）。  
+2. `SharedStateAdminService::listSessions()` 调 `storage->list()` 时未限定 session domain。  
+3. `SessionServer::listSessions()` 在未带 domain 的情况下会返回全部 state id，导致 `__ns__:cache:*` 被展示到 Session 页。
+
+**解决方案**:
+1. 在 `SharedStateAdminService::listSessions()` 中，针对 `WlsSharedStorage` 强制注入 `__domain=session`。  
+2. 保持 FPM/file/redis 场景兼容：仅 WLS 存储启用该内部过滤键。  
+3. 继续保留 payload 过滤清洗逻辑，避免内部键参与业务字段匹配。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/Control/SharedStateAdminService.php
+```
+
+**验证结果**: ✅ 成功（语法检查通过，IDE lints 无新增错误）
+
+**预防措施**:
+1. 统一状态服务下，管理接口必须显式传 domain，不能用“全量 list”直接当 Session 列表。  
+2. 协议内部参数（`__domain`、`__*`）只用于传输层，不能泄漏到业务展示筛选。  
+3. 发现 `__ns__:cache:*` 出现在 Session 页时，优先排查“查询域”而非立即判定“缓存写入 Session”。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Control/SharedStateAdminService.php`
+- `app/code/Weline/Server/Session/Server/SessionServer.php`
+
+---
+
 ## [2026-03-09] Linux 前台 Ctrl+C 未复用 IPC 停机流程，导致停机阶段输出与 Windows 不一致 ✅ 已修复
 
 **错误类型**: WLS 进程信号处理 / 停机协议分叉

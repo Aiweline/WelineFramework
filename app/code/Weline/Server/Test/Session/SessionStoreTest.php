@@ -154,6 +154,45 @@ class SessionStoreTest extends TestCase
         $this->assertFalse($this->store->touch('nonexistent'));
     }
 
+    public function testExistsKey(): void
+    {
+        $sessionId = 'test_session_exists_key';
+        $this->store->set($sessionId, 'present', 'value');
+
+        $this->assertTrue($this->store->existsKey($sessionId, 'present'));
+        $this->assertFalse($this->store->existsKey($sessionId, 'missing'));
+        $this->assertFalse($this->store->existsKey('missing_session', 'present'));
+    }
+
+    public function testMgetReturnsAllRequestedKeys(): void
+    {
+        $sessionId = 'test_session_mget';
+        $this->store->set($sessionId, 'key1', 'value1');
+        $this->store->set($sessionId, 'key2', 'value2');
+
+        $result = $this->store->mget($sessionId, ['key1', 'key2', 'missing']);
+
+        $this->assertSame([
+            'key1' => 'value1',
+            'key2' => 'value2',
+            'missing' => null,
+        ], $result);
+    }
+
+    public function testMsetWritesMultipleKeysOnce(): void
+    {
+        $sessionId = 'test_session_mset';
+        $this->assertTrue($this->store->mset($sessionId, [
+            'user_id' => 100,
+            'role' => 'admin',
+            'enabled' => true,
+        ], 7200));
+
+        $this->assertSame(100, $this->store->get($sessionId, 'user_id'));
+        $this->assertSame('admin', $this->store->get($sessionId, 'role'));
+        $this->assertTrue($this->store->get($sessionId, 'enabled'));
+    }
+
     /**
      * 测试读取触发滑动过期
      */

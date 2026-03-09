@@ -19,6 +19,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\StateManager;
+use Weline\Framework\Session\Session;
 
 /**
  * WLS 运行时
@@ -66,6 +67,9 @@ class WlsRuntime implements RuntimeInterface
      * 待发送的响应头（在 StateManager 重置前从 HeaderCollector 提取）
      */
     private array $pendingHeaders = [];
+
+    /** WLS 运行时性能配置缓存 */
+    private ?array $performanceConfig = null;
     
     /**
      * @inheritDoc
@@ -250,9 +254,11 @@ class WlsRuntime implements RuntimeInterface
             $t5_end = \microtime(true);
             $timing['total_ms'] = \round(($t5_end - $t0) * 1000, 2);
             
-            // 如果总耗时超过500ms或DEV模式，添加性能数据到响应头
+            // 如果总耗时超过阈值或 DEV 模式，按配置追加性能响应头
             $isDev = \defined('DEV') && DEV;
-            if ($timing['total_ms'] >= 500 || $isDev) {
+            $performanceConfig = $this->getPerformanceConfig();
+            $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
+            if (!empty($performanceConfig['response_headers_enabled']) && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
                 // 尝试将性能数据添加到响应头（如果响应对象可用）
                 try {
                     $request = ObjectManager::getInstance(Request::class);
@@ -292,6 +298,7 @@ class WlsRuntime implements RuntimeInterface
             
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：转换为重定向响应
+            Session::flushRequestSessions();
             // 记录重定向信息
             $redirectCount = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
             $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -372,6 +379,7 @@ class WlsRuntime implements RuntimeInterface
             
         } finally {
             $t6 = \microtime(true);
+            Session::flushRequestSessions();
             // 在重置前保存 HeaderCollector 的 Cookie/Header（Worker 构建响应时需要）
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
@@ -389,56 +397,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
             $timing['timestamp'] = date('Y-m-d H:i:s');
             $timing['redirect_count'] = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
-
-            // 总是记录到控制台（如果超过500ms或DEV模式）
-            // 在DEV模式下，总是记录性能数据；在生产模式下，只记录超过500ms的请求
-            if ($timing['total_ms'] >= 500 || $isDev) {
-                // 构建性能日志字符串，包含关键指标
-                $performanceSummary = sprintf(
-                    '[WLS Performance] URI=%s Total=%.2fms | run_before=%.2fms | url_parser=%.2fms | router_init=%.2fms | router_start=%.2fms | run_after=%.2fms',
-                    $timing['uri'],
-                    $timing['total_ms'],
-                    $timing['run_before_ms'],
-                    $timing['url_parser_call_ms'] ?? 0,
-                    $timing['router_init_ms'] ?? 0,
-                    $timing['router_start_call_ms'] ?? 0,
-                    $timing['run_after_ms']
-                );
-                w_log_debug($performanceSummary);
-                
-                $performanceLog = '[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE);
-                w_log_debug($performanceLog);
-                
-                // 写入性能日志到 var/log
-                $logFile = Env::VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'wls_timing.log';
-                $dir = \dirname($logFile);
-                if (!\is_dir($dir)) {
-                    @\mkdir($dir, 0755, true);
-                }
-                if (\is_dir($dir)) {
-                    @\file_put_contents($logFile, \json_encode($timing, \JSON_UNESCAPED_UNICODE) . "\n", \FILE_APPEND);
-                }
-                
-                // 如果总耗时超过1秒，输出详细分析
-                if ($timing['total_ms'] >= 1000) {
-                    $analysis = [];
-                    if ($timing['run_before_ms'] > 200) {
-                        $analysis[] = "run_before事件耗时过长: {$timing['run_before_ms']}ms";
-                    }
-                    if (isset($timing['url_parser_call_ms']) && $timing['url_parser_call_ms'] > 200) {
-                        $analysis[] = "URL解析耗时过长: {$timing['url_parser_call_ms']}ms";
-                    }
-                    if (isset($timing['router_start_call_ms']) && $timing['router_start_call_ms'] > 500) {
-                        $analysis[] = "路由处理耗时过长: {$timing['router_start_call_ms']}ms";
-                    }
-                    if ($timing['run_after_ms'] > 200) {
-                        $analysis[] = "run_after事件耗时过长: {$timing['run_after_ms']}ms";
-                    }
-                    if (!empty($analysis)) {
-                        w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
-                    }
-                }
-            }
+            $this->recordPerformanceTiming($timing, $isDev);
         }
     }
     
@@ -699,6 +658,9 @@ class WlsRuntime implements RuntimeInterface
     private function logWlsRequest(Request $request, bool $isFrontend = false): void
     {
         $isDev = \defined('DEV') && DEV;
+        if (!$this->shouldWriteRequestLog($isDev, $isFrontend)) {
+            return;
+        }
         
         $logEntry = [
             'timestamp' => \date('Y-m-d H:i:s'),
@@ -711,16 +673,7 @@ class WlsRuntime implements RuntimeInterface
         // 前端模式：输出到控制台（已在 worker.php 中输出，这里不再重复）
         // 注意：请求日志已在 worker.php 接收到请求的第一时间输出
         
-        // DEV 模式：写入日志文件
-        if ($isDev) {
-            $logFile = Env::VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'wls.log';
-            $logDir = \dirname($logFile);
-            if (!\is_dir($logDir)) {
-                @\mkdir($logDir, 0755, true);
-            }
-            
-            @\file_put_contents($logFile, \json_encode($logEntry, \JSON_UNESCAPED_UNICODE) . "\n", \FILE_APPEND);
-        }
+        $this->appendJsonLine($this->getRuntimeLogFile(), $logEntry);
     }
     
     /**
@@ -729,14 +682,8 @@ class WlsRuntime implements RuntimeInterface
     private function logWlsError(\Throwable $e): void
     {
         $isDev = \defined('DEV') && DEV;
-        if (!$isDev) {
+        if (!$this->shouldWriteErrorLog($isDev)) {
             return;
-        }
-        
-        $logFile = Env::VAR_DIR . 'log' . \DIRECTORY_SEPARATOR . 'wls.log';
-        $logDir = \dirname($logFile);
-        if (!\is_dir($logDir)) {
-            @\mkdir($logDir, 0755, true);
         }
         
         $logEntry = [
@@ -749,8 +696,138 @@ class WlsRuntime implements RuntimeInterface
             'line' => $e->getLine(),
             'trace' => $e->getTraceAsString(),
         ];
-        
-        @\file_put_contents($logFile, \json_encode($logEntry, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) . "\n", \FILE_APPEND);
+
+        $this->appendJsonLine($this->getRuntimeLogFile(), $logEntry, true);
+    }
+
+    private function recordPerformanceTiming(array $timing, bool $isDev): void
+    {
+        $config = $this->getPerformanceConfig();
+        $slowThreshold = (float)($config['slow_request_threshold_ms'] ?? 500.0);
+        $shouldLog = ($timing['total_ms'] >= $slowThreshold) || ($isDev && !empty($config['log_all_in_dev']));
+        if (!$shouldLog) {
+            return;
+        }
+
+        if (!empty($config['debug_log_enabled'])) {
+            $performanceSummary = sprintf(
+                '[WLS Performance] URI=%s Total=%.2fms | run_before=%.2fms | url_parser=%.2fms | router_init=%.2fms | router_start=%.2fms | run_after=%.2fms',
+                $timing['uri'],
+                $timing['total_ms'],
+                $timing['run_before_ms'],
+                $timing['url_parser_call_ms'] ?? 0,
+                $timing['router_init_ms'] ?? 0,
+                $timing['router_start_call_ms'] ?? 0,
+                $timing['run_after_ms']
+            );
+            w_log_debug($performanceSummary);
+            w_log_debug('[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE));
+        }
+
+        if (!empty($config['file_log_enabled'])) {
+            $this->appendJsonLine($this->getPerformanceLogFile(), $timing);
+        }
+
+        if (!empty($config['analysis_log_enabled']) && $timing['total_ms'] >= 1000) {
+            $analysis = [];
+            if ($timing['run_before_ms'] > 200) {
+                $analysis[] = "run_before事件耗时过长: {$timing['run_before_ms']}ms";
+            }
+            if (($timing['url_parser_call_ms'] ?? 0) > 200) {
+                $analysis[] = "URL解析耗时过长: {$timing['url_parser_call_ms']}ms";
+            }
+            if (($timing['router_start_call_ms'] ?? 0) > 500) {
+                $analysis[] = "路由处理耗时过长: {$timing['router_start_call_ms']}ms";
+            }
+            if ($timing['run_after_ms'] > 200) {
+                $analysis[] = "run_after事件耗时过长: {$timing['run_after_ms']}ms";
+            }
+            if (!empty($analysis)) {
+                w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
+            }
+        }
+    }
+
+    private function getPerformanceConfig(): array
+    {
+        if ($this->performanceConfig !== null) {
+            return $this->performanceConfig;
+        }
+
+        $serverConfig = Env::getInstance()->getConfig('server') ?? [];
+        $performanceConfig = \is_array($serverConfig['performance'] ?? null) ? $serverConfig['performance'] : [];
+        $this->performanceConfig = \array_merge([
+            'slow_request_threshold_ms' => 500,
+            'response_headers_enabled' => true,
+            'file_log_enabled' => true,
+            'debug_log_enabled' => true,
+            'analysis_log_enabled' => true,
+            'log_all_in_dev' => true,
+            'request_log_enabled' => null,
+            'error_log_enabled' => null,
+            'runtime_log_file' => 'var/log/wls.log',
+            'timing_log_file' => 'var/log/wls_timing.log',
+        ], $performanceConfig);
+
+        return $this->performanceConfig;
+    }
+
+    private function shouldWriteRequestLog(bool $isDev, bool $isFrontend): bool
+    {
+        $enabled = $this->getPerformanceConfig()['request_log_enabled'];
+        if ($enabled === null) {
+            return $isDev || $isFrontend;
+        }
+
+        return (bool)$enabled;
+    }
+
+    private function shouldWriteErrorLog(bool $isDev): bool
+    {
+        $enabled = $this->getPerformanceConfig()['error_log_enabled'];
+        if ($enabled === null) {
+            return $isDev;
+        }
+
+        return (bool)$enabled;
+    }
+
+    private function getRuntimeLogFile(): string
+    {
+        return $this->resolveLogPath((string)$this->getPerformanceConfig()['runtime_log_file']);
+    }
+
+    private function getPerformanceLogFile(): string
+    {
+        return $this->resolveLogPath((string)$this->getPerformanceConfig()['timing_log_file']);
+    }
+
+    private function resolveLogPath(string $path): string
+    {
+        if ($path === '') {
+            $path = 'var/log/wls.log';
+        }
+
+        if (\str_starts_with($path, '/') || \preg_match('/^[A-Za-z]:[\\\\\\/]/', $path)) {
+            return $path;
+        }
+
+        return BP . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $path);
+    }
+
+    private function appendJsonLine(string $logFile, array $data, bool $pretty = false): void
+    {
+        $logDir = \dirname($logFile);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0755, true);
+        }
+
+        $flags = \JSON_UNESCAPED_UNICODE;
+        if ($pretty) {
+            $flags |= \JSON_PRETTY_PRINT;
+        }
+
+        @\file_put_contents($logFile, \json_encode($data, $flags) . "\n", \FILE_APPEND);
     }
     
     /**

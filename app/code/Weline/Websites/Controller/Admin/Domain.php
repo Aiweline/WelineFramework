@@ -507,6 +507,10 @@ class Domain extends BackendController
             $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
             $resolveToLocal = $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no');
             $subdomainsRaw = $this->request->getPost('subdomains', '');
+            $dnsChoice = (string) $this->request->getPost('dns_choice', 'follow_registrar');
+            $dnsNameservers = (string) $this->request->getPost('dns_nameservers', '');
+            $cdnChoice = (string) $this->request->getPost('cdn_choice', 'follow_registrar');
+            $startLifecycle = (string) $this->request->getPost('start_lifecycle', '1');
             $subdomains = \is_string($subdomainsRaw) ? (json_decode($subdomainsRaw, true) ?: \array_map('trim', \explode(',', $subdomainsRaw))) : (array) $subdomainsRaw;
             if ($subdomains === []) {
                 $subdomains = ['@', 'www'];
@@ -525,6 +529,18 @@ class Domain extends BackendController
                 }
                 if (!isset($it['subdomains'])) {
                     $it['subdomains'] = $subdomains;
+                }
+                if (!isset($it['dns_choice'])) {
+                    $it['dns_choice'] = $dnsChoice;
+                }
+                if (!isset($it['dns_nameservers'])) {
+                    $it['dns_nameservers'] = $dnsNameservers;
+                }
+                if (!isset($it['cdn_choice'])) {
+                    $it['cdn_choice'] = $cdnChoice;
+                }
+                if (!isset($it['start_lifecycle'])) {
+                    $it['start_lifecycle'] = $startLifecycle;
                 }
             }
             unset($it);

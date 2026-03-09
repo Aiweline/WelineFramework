@@ -85,6 +85,12 @@ final class SessionProtocol
     /** 刷新 Session 过期时间 */
     public const CMD_TOUCH = 'touch';
 
+    /** 批量获取多个键 */
+    public const CMD_MGET = 'mget';
+
+    /** 批量设置多个键 */
+    public const CMD_MSET = 'mset';
+
     /** 垃圾回收 */
     public const CMD_GC = 'gc';
 
@@ -310,6 +316,33 @@ final class SessionProtocol
     {
         return self::encodeRequest(self::CMD_TOUCH, [
             'sid' => $sessionId,
+            'ttl' => $ttl,
+        ]);
+    }
+
+    /**
+     * 构建 MGET 请求
+     *
+     * @param string[] $keys
+     */
+    public static function buildMget(string $sessionId, array $keys): string
+    {
+        return self::encodeRequest(self::CMD_MGET, [
+            'sid' => $sessionId,
+            'keys' => $keys,
+        ]);
+    }
+
+    /**
+     * 构建 MSET 请求
+     *
+     * @param array<string, mixed> $data
+     */
+    public static function buildMset(string $sessionId, array $data, int $ttl = 3600): string
+    {
+        return self::encodeRequest(self::CMD_MSET, [
+            'sid' => $sessionId,
+            'data' => $data,
             'ttl' => $ttl,
         ]);
     }

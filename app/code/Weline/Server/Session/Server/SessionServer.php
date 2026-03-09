@@ -415,13 +415,29 @@ final class SessionServer
                 break;
 
             case SessionProtocol::CMD_EXISTS:
-                $exists = $this->store->exists($sessionId);
+                $exists = $key !== null
+                    ? $this->store->existsKey($sessionId, (string)$key)
+                    : $this->store->exists($sessionId);
                 $response = SessionProtocol::encodeSuccess($exists);
                 break;
 
             case SessionProtocol::CMD_TOUCH:
-                $ok = $this->store->touch($sessionId, $ttl);
+                $ok = $key !== null
+                    ? ($this->store->existsKey($sessionId, (string)$key) && $this->store->touch($sessionId, $ttl))
+                    : $this->store->touch($sessionId, $ttl);
                 $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('Session not found');
+                break;
+
+            case SessionProtocol::CMD_MGET:
+                $keys = \is_array($msg['keys'] ?? null) ? $msg['keys'] : [];
+                $result = $this->store->mget($sessionId, $keys);
+                $response = SessionProtocol::encodeSuccess($result);
+                break;
+
+            case SessionProtocol::CMD_MSET:
+                $items = \is_array($data) ? $data : [];
+                $ok = $this->store->mset($sessionId, $items, $ttl);
+                $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('MSet failed');
                 break;
 
             case SessionProtocol::CMD_GC:
