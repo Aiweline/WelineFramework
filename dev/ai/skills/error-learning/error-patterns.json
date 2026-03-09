@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2026-02-14",
+  "lastUpdated": "2026-03-08",
   "patterns": [
     {
       "id": "dependency-injection-missing",
@@ -490,14 +490,69 @@
       ],
       "frequency": 1,
       "severity": "medium"
+    },
+    {
+      "id": "template-block-context-null",
+      "name": "模板中 $block 上下文为空导致 setTitle 调用异常",
+      "category": "framework-convention",
+      "keywords": ["setTitle", "getBackendUrl", "on null", "$block", "com_index.phtml", "com_attack-log.phtml"],
+      "errorSignatures": [
+        "Call to a member function setTitle() on null",
+        "Call to a member function getBackendUrl() on null"
+      ],
+      "rootCause": "模板层直接调用 $block（如 $block->setTitle() / $block->getBackendUrl()），在 WLS + 多模板路径（view/templates 与 view/tpl/com_*）下，$block 上下文并非总是稳定存在",
+      "solution": {
+        "pattern": "controller-title-assignment-and-template-context-guard",
+        "template": "// 控制器层统一设置标题\n$this->assign('title', __('页面标题'));\n\n// 模板层 URL 构建统一使用 $this\n$url = $this->getBackendUrl('*/backend/...');\n\n// 模板层移除 $block->setTitle() 调用\n\n// 框架层在 Template::ob_file() 中保证 block 上下文可用\nif (!($this->getData('block') instanceof self)) {\n    $this->setData('block', $this);\n}"
+      },
+      "relatedSkills": ["error-tracking", "error-learning", "weline-routing"],
+      "cases": [
+        {
+          "date": "2026-03-08",
+          "file": "Template.php, ServerMonitor.php, ServerMonitor/attack-log.phtml",
+          "description": "WLS 后台监控页与攻击日志页间歇性 500，改为控制器统一 assign(title) + 模板移除 setTitle"
+        },
+        {
+          "date": "2026-03-08",
+          "file": "ServerMonitor/attack-log.phtml, ServerMonitor/index.phtml, ServerManager/index.phtml",
+          "description": "WLS 后台页面调用 $block->getBackendUrl() 触发 null，统一替换为 $this->getBackendUrl()"
+        }
+      ],
+      "frequency": 2,
+      "severity": "high"
+    },
+    {
+      "id": "shared-state-token-stale-in-pool",
+      "name": "共享状态连接池 token 缓存陈旧",
+      "category": "process-management",
+      "keywords": ["memory service unavailable", "session service unavailable", "token", "auth", "pool"],
+      "errorSignatures": [
+        "内存服务不可用（进程运行中）",
+        "Session/Memory ping 失败但服务端口正常"
+      ],
+      "rootCause": "PooledConnection 将 token 长期缓存，服务重启后 token 轮换导致重连认证继续使用旧凭证",
+      "solution": {
+        "pattern": "token-mtime-refresh-and-auth-retry",
+        "template": "在连接对象中记录 token 文件 mtime；认证失败时强制 reload token，并重试一次 AUTH。"
+      },
+      "relatedSkills": ["error-tracking", "error-learning", "process-management", "weline-server"],
+      "cases": [
+        {
+          "date": "2026-03-08",
+          "file": "PooledConnection.php",
+          "description": "后台内存服务管理显示不可用，修复 token 轮换后的连接池认证失败"
+        }
+      ],
+      "frequency": 1,
+      "severity": "high"
     }
   ],
   "statistics": {
-    "totalPatterns": 18,
-    "totalCases": 19,
+    "totalPatterns": 20,
+    "totalCases": 22,
     "mostFrequentPattern": "orm-delete-fetch-missing",
     "categoryCounts": {
-      "framework-convention": 1,
+      "framework-convention": 2,
       "request-handling": 1,
       "routing": 1,
       "php-type": 2,
@@ -508,7 +563,7 @@
       "i18n": 2,
       "testing": 1,
       "environment": 1,
-      "process-management": 1
+      "process-management": 2
     },
     "verificationStats": {
     "totalVerifications": 11,

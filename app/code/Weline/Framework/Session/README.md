@@ -133,7 +133,9 @@ $session->logout();
 return [
     'session' => [
         'default' => 'file', // file, redis, wls
-        'lifetime' => 3600,
+        'lifetime' => 3600, // 服务端 Session TTL
+        // 建议与 lifetime/session_ttl 对齐，避免 Cookie 仍有效但 Session 已过期
+        'cookie_lifetime' => 3600,
         'cookie_path' => '/',
         'cookie_secure' => true,
         'cookie_httponly' => true,
@@ -157,6 +159,8 @@ return [
             'wls_server' => [
                 'host' => '127.0.0.1',
                 'port' => 19970,
+                // 建议不小于 session.lifetime
+                'session_ttl' => 3600,
             ],
         ],
     ],

@@ -553,6 +553,7 @@ if (\function_exists('posix_kill')) {
 - 误区2：让 Worker/Dispatcher/Redirect 进程在断连时各自复活 Master。
 - 误区3：仅依赖一次 stop/restart 操作，不做持续状态收敛。
 - 误区4：把重型 orphan sweeper（按前缀 kill）放到主循环高频执行，导致 IPC 轮询被阻塞、`register_timeout` 误判。
+- 误区5：把“PID 索引已删除”等同于“进程已退出”。退出判定必须联合 `processExists/isRunningByPid` 做双确认，避免假退出。
 
 ## 检测流程（必须遵循！）
 

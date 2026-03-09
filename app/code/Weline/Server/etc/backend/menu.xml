@@ -14,7 +14,7 @@
     <menu source="Weline_Server::server" 
           name="server" 
           title="服务器管理" 
-          parent="Weline_Backend::system_service" 
+          parent="Weline_Backend::system_service_group" 
           icon="bi-hdd-rack" 
           order="10">
         
@@ -22,7 +22,7 @@
         <menu source="Weline_Server::server_monitor" 
               name="server_monitor" 
               title="服务器监控" 
-              action="backend/server/server-monitor"
+              action="*/backend/server-monitor"
               icon="bi-speedometer2" 
               order="0"/>
         
@@ -30,48 +30,62 @@
         <menu source="Weline_Server::server_manager" 
               name="server_manager" 
               title="服务器实例" 
-              action="backend/server/server-manager"
+              action="*/backend/server-manager"
               icon="bi-server" 
               order="1"/>
+        
+        <menu source="Weline_Server::session_manager"
+              name="session_manager"
+              title="Session 管理"
+              action="*/backend/server-manager/session"
+              icon="bi-person-check"
+              order="2"/>
+        
+        <menu source="Weline_Server::memory_cache_manager"
+              name="memory_cache_manager"
+              title="内存缓存管理"
+              action="*/backend/server-manager/memory"
+              icon="bi-memory"
+              order="3"/>
         
         <!-- 攻击日志 -->
         <menu source="Weline_Server::attack_log" 
               name="attack_log" 
               title="攻击日志" 
-              action="backend/server/server-monitor/attack-log"
+              action="*/backend/server-monitor/attack-log"
               icon="bi-shield-exclamation" 
-              order="2"/>
+              order="4"/>
         
         <!-- 安全规则 -->
         <menu source="Weline_Server::security_rules" 
               name="security_rules" 
               title="安全规则" 
-              action="backend/server/server-monitor/security-rules"
+              action="*/backend/server-monitor/security-rules"
               icon="bi-shield-check" 
-              order="3"/>
+              order="5"/>
         
         <!-- SSL证书管理 -->
         <menu source="Weline_Server::ssl" 
               name="ssl" 
               title="SSL证书管理" 
-              action="backend/server/ssl-certificate"
+              action="*/backend/ssl-certificate"
               icon="bi-shield-lock" 
-              order="4"/>
+              order="6"/>
         
         <!-- 性能优化指南 -->
         <menu source="Weline_Server::optimization" 
               name="optimization" 
               title="性能优化指南" 
-              action="backend/server/optimization-guide"
+              action="*/backend/optimization-guide"
               icon="bi-lightning-charge" 
-              order="5"/>
+              order="7"/>
         
         <!-- API文档 -->
         <menu source="Weline_Server::api_doc" 
               name="api_doc" 
               title="API文档" 
-              action="backend/server/server-monitor/api-doc"
+              action="*/backend/server-monitor/api-doc"
               icon="bi-book" 
-              order="6"/>
+              order="8"/>
     </menu>
 </menus>

@@ -2127,6 +2127,44 @@ if ($this->canInstallThemeNow($args)) {
 **实际案例（2026-02-13）：**
 `app/design/Weline/test/register.php` 配置 `parent=default`，首次安装时因父主题未先装导致异常，已通过安装器队列+依赖排序修复。
 
+### Q10: AI 组件工坊点击“开始生成”没反应？
+
+**常见原因：**
+
+1. **步骤1字段未完整校验**：名称/描述为空但没有可见反馈。  
+2. **按钮缺少加载态**：请求已发起但用户体感“无响应”。  
+3. **弹层层级冲突**：提示或交互控件被更高层遮挡（modal/fullscreen/backdrop 混用）。
+
+**推荐修复：**
+
+```javascript
+// 1) 提交前统一收集 + 校验
+const params = collectStep1Params();
+if (!params.ok) {
+    BackendToast.warning(params.message);
+    params.firstInvalid?.focus();
+    return;
+}
+
+// 2) 提交时设置加载态，结束后恢复
+setStartButtonLoading(true);
+try {
+    startGenerate(params.data);
+} finally {
+    setStartButtonLoading(false);
+}
+```
+
+```css
+/* 3) 统一弹层 z-index 号段，避免互相遮挡 */
+.ai-workshop-modal { z-index: 200010 !important; }
+body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 200009 !important; }
+.ai-fullscreen-preview-overlay { z-index: 200050; }
+```
+
+**实际案例（2026-03-08）：**
+`GuoLaiRen_PageBuilder` 的 `component_panel.phtml` 已按上述方式修复“开始生成无响应 + 层级错乱”问题。
+
 ---
 
 ## 9. 相关技能

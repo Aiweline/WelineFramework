@@ -272,7 +272,7 @@ function retryInstall(type, name, btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('安装中...') ?>';
 
-    var retryUrl = '<?= $this->getUrl('backend/framework/env-manager/retry-install') ?>';
+    var retryUrl = '<?= $this->getBackendUrl('weline_framework/backend/env-manager/retry-install') ?>';
     var retryOpts = { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: 'type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name) };
     window.Weline.Api.request(retryUrl, retryOpts)
     .then(function(res) {
@@ -294,7 +294,7 @@ function retryInstall(type, name, btn) {
 function resetAllStatuses() {
     if (!confirm('<?= __('确定要重置所有安装记录吗？下次 env:install 将重新尝试所有推荐项。') ?>')) return;
 
-    var resetUrl = '<?= $this->getUrl('backend/framework/env-manager/reset-all') ?>';
+    var resetUrl = '<?= $this->getBackendUrl('weline_framework/backend/env-manager/reset-all') ?>';
     var resetOpts = { method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'} };
     window.Weline.Api.request(resetUrl, resetOpts)
     .then(function(res) {

@@ -90,6 +90,45 @@
              action="pagebuilder/backend/domainManagement/index"
              icon="mdi mdi-dns-outline" 
              order="30"/>
+
+    </menu>
+
+    <!-- 服务器管理（从网站管理内抽出，改为同级并排在其下） -->
+    <menu source="GuoLaiRen_PageBuilder::server_management"
+         name="server_management"
+         title="服务器管理"
+         action=""
+         parent="Weline_Backend::page_builder_group"
+         icon="mdi mdi-server-network"
+         order="55">
+
+        <menu source="GuoLaiRen_PageBuilder::server_manager"
+             name="server_manager"
+             title="服务器实例"
+             action="pagebuilder/backend/server-manager/index"
+             icon="mdi mdi-server"
+             order="10"/>
+
+        <menu source="GuoLaiRen_PageBuilder::server_monitor"
+             name="server_monitor"
+             title="服务器监控"
+             action="pagebuilder/backend/server-manager/monitor"
+             icon="mdi mdi-speedometer"
+             order="20"/>
+
+        <menu source="GuoLaiRen_PageBuilder::server_ssl"
+             name="server_ssl"
+             title="SSL证书管理"
+             action="pagebuilder/backend/server-manager/ssl"
+             icon="mdi mdi-shield-lock"
+             order="30"/>
+
+        <menu source="GuoLaiRen_PageBuilder::server_optimization"
+             name="server_optimization"
+             title="性能优化指南"
+             action="pagebuilder/backend/server-manager/optimization"
+             icon="mdi mdi-lightning-bolt"
+             order="40"/>
     </menu>
     
     <!-- SEO管理 -->

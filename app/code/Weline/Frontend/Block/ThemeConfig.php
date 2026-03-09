@@ -25,20 +25,44 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function __construct(FrontendUserConfig $userConfig, array $data = [])
     {
         parent::__construct($data);
-        $this->userSession = SessionFactory::getInstance()->createFrontendSession();
+        $this->userSession = $this->resolveSession();
         $this->userConfig  = $userConfig;
+    }
+
+    private function resolveSession(): AuthenticatedSessionInterface
+    {
+        return SessionFactory::getInstance()->createFrontendSession();
     }
 
     public function __init()
     {
+        $this->userSession = $this->resolveSession();
         $this->userConfig = $this->userSession->getUserId() ? $this->userConfig->load($this->userSession->getUserId()) : $this->userConfig;
     }
 
     public function getOriginThemeConfig($key = '')
     {
+        $this->userSession = $this->resolveSession();
         $themeConfig = $this->userSession->getData(self::theme_Session_Config);
         if (empty($themeConfig) and $this->userSession->isLoggedIn()) {
             $themeConfig = $this->userConfig->getData(self::theme_Session_Config);
+        }
+        if (\is_string($themeConfig) && $themeConfig !== '') {
+            $decoded = json_decode($themeConfig, true);
+            $themeConfig = \is_array($decoded) ? $decoded : [];
+        }
+        if (!\is_array($themeConfig)) {
+            $themeConfig = [];
+        }
+        $mode = $this->resolveThemeModeFromConfig($themeConfig);
+        if ($mode !== '') {
+            $themeConfig['theme-mode-switch'] = $mode;
+            $themeConfig['dark-mode-switch'] = $mode === 'dark';
+            $themeConfig['light-mode-switch'] = $mode === 'light';
+            $layouts = isset($themeConfig['layouts']) && \is_array($themeConfig['layouts']) ? $themeConfig['layouts'] : [];
+            $layouts['data-theme-mode'] = $mode;
+            $layouts['data-layout-mode'] = $mode;
+            $themeConfig['layouts'] = $layouts;
         }
         return $key ? ($themeConfig[$key] ?? '') : ($themeConfig ?: []);
     }
@@ -68,19 +92,23 @@ class ThemeConfig extends \Weline\Framework\View\Block
             }
         }
         
-        $data = '';
-        if ($this->getThemeConfig('dark-mode-switch')) {
-            $data = 'dark';
-        } elseif ($this->getThemeConfig('rtl-mode-switch')) {
-            $data = 'rtl';
-        } elseif ($this->getThemeConfig('light-mode-switch')) {
-            $data = '';
+        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeMode = $this->resolveThemeModeFromConfig(
+            $this->getThemeConfig(),
+            \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
+        );
+        if ($themeMode !== '') {
+            return $themeMode === 'light' ? '' : $themeMode;
         }
-        return $data;
+        if ($this->getThemeConfig('rtl-mode-switch')) {
+            return 'rtl';
+        }
+        return '';
     }
 
     public function setThemeConfig(string|array $key, mixed $value = ''): static
     {
+        $this->userSession = $this->resolveSession();
         $theme_Config = $this->getOriginThemeConfig();
         if (is_array($key)) {
             $key = array_merge($theme_Config, $key);
@@ -102,9 +130,22 @@ class ThemeConfig extends \Weline\Framework\View\Block
 
     public function getLayouts()
     {
+        $this->userSession = $this->resolveSession();
         $body_attributes = $this->userSession->getData(self::theme_Session_Config)['layouts'] ?? [];
         if (empty($body_attributes)) {
-            $body_attributes = json_decode($this->userConfig->getData(self::theme_Session_Config) ?: '')['layouts'] ?? [];
+            $decoded = json_decode((string)($this->userConfig->getData(self::theme_Session_Config) ?: ''), true);
+            $body_attributes = \is_array($decoded) ? ($decoded['layouts'] ?? []) : [];
+        }
+        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeMode = $this->resolveThemeModeFromConfig(
+            $this->getThemeConfig(),
+            \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
+        );
+        if ($themeMode !== '') {
+            $body_attributes['data-theme-mode'] = $themeMode;
+            $body_attributes['data-layout-mode'] = $themeMode;
+        } else {
+            unset($body_attributes['data-theme-mode'], $body_attributes['data-layout-mode']);
         }
         $body_attributes_str = '';
         foreach ($body_attributes as $attribute => $value) {
@@ -113,5 +154,49 @@ class ThemeConfig extends \Weline\Framework\View\Block
             }
         }
         return $body_attributes_str;
+    }
+
+    private function resolveThemeModeFromConfig(array $themeConfig, string $preferredMode = ''): string
+    {
+        $mode = $preferredMode !== '' ? $preferredMode : ($themeConfig['theme-mode-switch'] ?? '');
+        if (\is_string($mode)) {
+            $mode = trim(strtolower($mode));
+            if ($mode !== '') {
+                return $mode;
+            }
+        }
+        if ($this->resolveBool($themeConfig['dark-mode-switch'] ?? null)) {
+            return 'dark';
+        }
+        if ($this->resolveBool($themeConfig['light-mode-switch'] ?? null)) {
+            return 'light';
+        }
+        $layouts = $themeConfig['layouts'] ?? [];
+        if (\is_array($layouts)) {
+            foreach (['data-theme-mode', 'data-layout-mode'] as $layoutModeKey) {
+                $layoutMode = $layouts[$layoutModeKey] ?? '';
+                if (\is_string($layoutMode)) {
+                    $layoutMode = trim(strtolower($layoutMode));
+                    if ($layoutMode !== '') {
+                        return $layoutMode;
+                    }
+                }
+            }
+        }
+        return '';
+    }
+
+    private function resolveBool(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_numeric($value)) {
+            return (int)$value === 1;
+        }
+        if (\is_string($value)) {
+            return \in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+        }
+        return false;
     }
 }

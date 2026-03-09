@@ -1,97 +1,100 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
-
+$currentQ = $this->getData('current_q') ?? '';
 ?>
 <!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'><?= __('URL管理') ?></h4>
-
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统配置') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('URL管理器') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('URL管理') ?></li>
-                                </ol>
-                            </div>
-
-                        </div>
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'><?= __('URL 管理') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统配置') ?></a></li>
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('URL 管理器') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('URL 管理') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<div class="row">
+    <div class='col-lg-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title mb-2'><?= __('路由列表') ?></h4>
+                <p class='card-title-desc text-muted mb-4'>
+                    <?= __('管理系统中可访问的 URL，可为关键页面设置更友好的自定义地址，提升 SEO 和可读性。') ?>
+                </p>
+                <form method="get" action="@backend-url('url-manager/backend/url/listing')" class="url-listing-search mb-4">
+                    <div class="input-group" style="max-width: 360px;">
+                        <input type="text" class="form-control" name="q" value="<?= htmlspecialchars((string)($currentQ ?? '')) ?>"
+                               placeholder="<?= __('按路径搜索…') ?>">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="ri-search-line"></i> <?= __('搜索') ?>
+                        </button>
                     </div>
-                </div>
-                <!-- end page title -->
-                <div class='row'>
-                    <!--消息-->
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!--end row-->
-                <div class="row">
-                    <div class='col-lg-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>路由表</lang>
-                                </h4>
-                                <p class='card-title-desc'>
-                                    静态路由管理：可定制属于自己的静态url来提升seo。
-                                </p>
-                                <div class='table-responsive'>
-                                    <table class='table mb-0'>
-                                        <thead>
-                                        <tr>
-                                            <th>#ID</th>
-                                            <th>
-                                                <lang>路径</lang>
-                                            </th>
-                                            <th>
-                                                <lang>指纹</lang>
-                                            </th>
-                                            <th>
-                                                <lang>模组ID</lang>
-                                            </th>
-                                            <th>
-                                                <lang>模组</lang>
-                                            </th>
-                                            <th>
-                                                <lang>类型</lang>
-                                            </th>
-                                            <th>
-                                                <lang>创建时间</lang>
-                                            </th>
-                                            <th>
-                                                <lang>更新时间</lang>
-                                            </th>
-                                            <th>
-                                                <lang>操作</lang>
-                                            </th>
-                                        </tr>
-                                        </thead>
-                                        <tbody>
-                                        <foreach name="urls">
-                                            <tr>
-                                                <td scope='row'>{{v.url_id}}</td>
-                                                <td scope='row'>{{v.path}}</td>
-                                                <td scope='row'>{{v.identify}}</td>
-                                                <td scope='row'>{{v.module_id}}</td>
-                                                <td scope='row'>{{v.module_name}}</td>
-                                                <td scope='row'>{{v.type}}</td>
-                                                <td scope='row'>{{v.create_time}}</td>
-                                                <td scope='row'>{{v.update_time}}</td>
-                                                <td scope='row'>
-                                                    <if condition="v.can_rewrite">
-                                                        <a href="@admin-url('url-manager/backend/rewriter/form')?identify={{v.identify}}">重写</a>
-                                                    </if>
-                                                </td>
-                                            </tr>
-                                        </foreach>
-                                        </tbody>
-                                    </table>
-                                    {{pagination}}
-                                </div>
-                            </div>
+                </form>
+                <div class='table-responsive'>
+                    <table class='table table-hover mb-0'>
+                        <thead class="table-light">
+                        <tr>
+                            <th style="width: 60px;">#</th>
+                            <th><?= __('访问路径') ?></th>
+                            <th><?= __('路由标识') ?></th>
+                            <th><?= __('所属模块') ?></th>
+                            <th><?= __('类型') ?></th>
+                            <th><?= __('创建时间') ?></th>
+                            <th><?= __('更新时间') ?></th>
+                            <th style="width: 100px;"><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <foreach name="urls">
+                            <tr>
+                                <td>{{v.url_id}}</td>
+                                <td><code class="text-break" style="font-size: 0.9em;">{{v.path}}</code></td>
+                                <td><span class="text-muted small">{{v.identify}}</span></td>
+                                <td>{{v.module_name}}</td>
+                                <td>
+                                    <if condition="v.type == 'frontend'">
+                                        <span class="badge bg-info"><?= __('前台') ?></span>
+                                    <elseif condition="v.type == 'rewrite'"/>
+                                        <span class="badge bg-success"><?= __('自定义') ?></span>
+                                    <else/>
+                                        <span class="badge bg-secondary">{{v.type}}</span>
+                                    </if>
+                                </td>
+                                <td>{{v.create_time}}</td>
+                                <td>{{v.update_time}}</td>
+                                <td>
+                                    <if condition="v.can_rewrite">
+                                        <a href="@backend-url('url-manager/backend/rewriter/form')?identify={{v.identify}}"
+                                           class="btn btn-sm btn-outline-primary"><?= __('重写') ?></a>
+                                    <else/>
+                                        <span class="text-muted small">—</span>
+                                    </if>
+                                </td>
+                            </tr>
+                        </foreach>
+                        </tbody>
+                    </table>
+                    <if condition="!has_urls">
+                        <div class="text-center py-5 text-muted">
+                            <i class="ri-file-list-3-line" style="font-size: 3rem;"></i>
+                            <p class="mt-2 mb-0"><?= __('暂无路由数据') ?></p>
+                            <p class="small"><?= __('请检查相关模块是否正确注册') ?></p>
                         </div>
-                    </div>
+                    </if>
+                    {{pagination}}
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
 <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
 <link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>

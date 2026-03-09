@@ -72,7 +72,8 @@ class PartialsFetchFileBefore implements ObserverInterface
             // 检查是否有预览主题
             $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
             $previewThemeId = $session->getData('preview_theme_id');
-            if ($previewThemeId) {
+            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+            if ($previewThemeId && $previewThemeArea === $area) {
                 $theme->load($previewThemeId);
             }
 

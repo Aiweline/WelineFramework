@@ -39,6 +39,9 @@ class SslCertificate extends BaseController
      */
     public function getIndex(): string
     {
+        // 框架级收敛：页面加载时自动把本地证书目录同步到数据库，保证“正在使用的证书”可见。
+        $this->sslService->syncCertificatesFromStorage();
+
         // 获取所有证书
         $certificates = $this->certModel->clearQuery()
             ->order(CertModel::schema_fields_DOMAIN)
@@ -91,7 +94,7 @@ class SslCertificate extends BaseController
         $this->assign('stats', $stats);
         $this->assign('title', __('SSL 证书管理'));
         
-        return $this->fetch();
+        return $this->fetch('index');
     }
     
     /**
@@ -99,6 +102,8 @@ class SslCertificate extends BaseController
      */
     public function getList(): string
     {
+        $this->sslService->syncCertificatesFromStorage();
+
         $certificates = $this->certModel->clearQuery()
             ->order(CertModel::schema_fields_DOMAIN)
             ->select()
@@ -186,14 +191,23 @@ class SslCertificate extends BaseController
     }
     
     /**
+     * 本地/回环域名（禁止删除，用于后台访问）
+     */
+    private const PROTECTED_DOMAINS = ['localhost', '127.0.0.1', '::1'];
+
+    /**
      * 删除证书
      */
     public function postDelete(): string
     {
-        $domain = $this->request->getPost('domain');
+        $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
         
-        if (empty($domain)) {
+        if ($domain === '') {
             return $this->fetchJson(['success' => false, 'message' => __('请指定域名')]);
+        }
+
+        if (\in_array($domain, self::PROTECTED_DOMAINS, true)) {
+            return $this->fetchJson(['success' => false, 'message' => __('本地域名证书（localhost/127.0.0.1）不允许删除，用于后台 HTTPS 访问')]);
         }
         
         $cert = $this->certModel->clearQuery()->loadByDomain($domain);

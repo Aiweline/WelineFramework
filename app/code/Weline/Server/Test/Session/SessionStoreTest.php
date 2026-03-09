@@ -155,6 +155,28 @@ class SessionStoreTest extends TestCase
     }
 
     /**
+     * 测试读取触发滑动过期
+     */
+    public function testSlidingExpirationOnRead(): void
+    {
+        $store = new SessionStore([
+            'max_sessions' => 100,
+            'session_ttl' => 1,
+            'persist_path' => $this->testPersistPath,
+        ]);
+        $sessionId = 'test_session_sliding_read';
+
+        $store->set($sessionId, 'key', 'value', 1);
+
+        \usleep(700000);
+        $this->assertSame('value', $store->get($sessionId, 'key'));
+
+        // 第一次读取会刷新 TTL；若无滑动过期，这里将返回 null。
+        \usleep(700000);
+        $this->assertSame('value', $store->get($sessionId, 'key'));
+    }
+
+    /**
      * 测试垃圾回收
      */
     public function testGc(): void

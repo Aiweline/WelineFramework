@@ -183,6 +183,7 @@ class Menus extends BaseController
         
         // type (确保为 menus)
         $mapped[Acl::schema_fields_TYPE] = Acl::type_MENUS;
+        $mapped[Acl::schema_fields_ACL_ORIGIN] = Acl::acl_origin_user;
         
         // acl_id (如果存在)
         if (isset($data['acl_id'])) {
