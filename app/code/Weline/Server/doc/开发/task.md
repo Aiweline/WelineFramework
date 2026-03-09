@@ -114,6 +114,13 @@
   - 已验证：`SessionTest`、`SessionStoreTest` 定向单测通过
   - 已验证：HTTP 级 `/_wls/health`、首页 `/`、后台未登录 `302` 最小回归通过
   - 观测：`/_wls/health` 基本在 `3-4ms`，首页压测均值约 `28ms`，后台未登录 `302` 热身后约 `3-5ms`
-  - 备注：当前 `env.php` 中 `session.wls_managed=false`，本地前端实例未走 WLS Session Server，Session 延迟写优化需切回托管模式后才能在 HTTP 链路中体现
+  - 增量：当前运行态 `env.php` 已切回 `session.wls_managed=true`，后续 Session 链路将实际走 WLS Session Server
+- [x] `wls-windows-event-enable`
+  - 已完成：Windows PHP 8.4 TS x64 下载并启用 `event 3.1.4`
+  - 已验证：`php -m` 与 `php --ri event` 均正常识别扩展
+  - 回归：启用后首页 HTTPS 压测均值由约 `28ms` 降至约 `18ms`
+- [x] `wls-default-config-sync`
+  - 已完成：`env.sample.php` 新增 `session.wls_managed=true` 与 `server.performance` 示例配置
+  - 已完成：`Env::default_SESSION` 同步补齐 `wls_managed/wls_default/wls driver` 默认值
 - [ ] `wls-linux-direct-followup`
   - 备注：直连模式后置；需先设计 Dispatcher 能力下放 Worker 的方案
