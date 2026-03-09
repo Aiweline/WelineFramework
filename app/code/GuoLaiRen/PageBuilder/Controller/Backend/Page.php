@@ -33,8 +33,6 @@ use Weline\SystemConfig\Model\SystemConfig;
 use Weline\UrlManager\Model\UrlRewrite;
 use Weline\Websites\Model\Website as WebsiteModel;
 use Weline\Acl\Model\RoleAccess;
-use Weline\Acl\Cache\AclCache;
-use Weline\Framework\Cache\Contract\CachePoolInterface;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
 class Page extends BackendController
@@ -107,8 +105,7 @@ class Page extends BackendController
         // 使用缓存的权限列表
         $cacheKey = 'user_permissions_' . $userId;
         if (self::$userPermissionsCache === null) {
-            /** @var CachePoolInterface $cache */
-            $cache = ObjectManager::getInstance(AclCache::class . 'Factory');
+            $cache = w_cache('acl');
             $permissions = $cache->get($cacheKey);
             
             if (!$permissions) {

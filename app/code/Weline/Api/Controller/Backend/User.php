@@ -520,9 +520,7 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 $roleAccessModel->commit();
                 
                 // 清理权限缓存
-                /** @var \Weline\Acl\Cache\AclCache $aclCache */
-                $aclCache = ObjectManager::getInstance(\Weline\Acl\Cache\AclCache::class . 'Factory');
-                $aclCache->clear();
+                w_cache('acl')->clear();
                 
                 $this->getMessageManager()->addSuccess(__('权限分配成功！'));
             } catch (\Exception $exception) {
