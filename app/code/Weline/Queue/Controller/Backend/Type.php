@@ -106,6 +106,7 @@ class Type extends \Weline\Framework\App\Controller\BackendController
 
     function show()
     {
+        $this->layoutType = 'default.blank';
         $id = $this->request->getGet('id');
         if (empty($id)) {
             $this->getMessageManager()->addWarning(__('请选择要查看的队列类型'));
