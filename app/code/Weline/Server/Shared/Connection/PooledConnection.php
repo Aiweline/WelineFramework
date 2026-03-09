@@ -33,11 +33,23 @@ class PooledConnection implements PooledConnectionInterface
 
         $errno = 0;
         $errstr = '';
+        // Linux: 使用 context 明确超时，避免 default_socket_timeout 或系统行为导致长时间阻塞
+        $timeoutSec = (float) $this->connectTimeout;
+        if (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux' && $timeoutSec > 2.0) {
+            $timeoutSec = 2.0;
+        }
+        $ctx = @\stream_context_create([
+            'socket' => [
+                'tcp_nodelay' => true,
+            ],
+        ]);
         $socket = @\stream_socket_client(
             "tcp://{$this->host}:{$this->port}",
             $errno,
             $errstr,
-            $this->connectTimeout
+            $timeoutSec,
+            STREAM_CLIENT_CONNECT,
+            $ctx
         );
         if (!$socket) {
             $this->log("Connect failed: {$errstr} ({$errno})");
