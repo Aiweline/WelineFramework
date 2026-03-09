@@ -110,9 +110,6 @@ case "$OS" in
   *)       echo "Unsupported OS: $OS. On Windows use: bin\\install.bat" >&2; exit 1 ;;
 esac
 
-# Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
-[[ "$PLATFORM" == "linux" ]] && ensure_weline_user
-
 # macOS：Homebrew 禁止以 root 运行，必须一开始就退出并提示
 if [[ "$PLATFORM" == "mac" ]] && { [[ "${EUID:-$(id -u)}" -eq 0 ]] || [[ -n "${SUDO_UID:-}" ]]; }; then
   echo "ERROR: 请勿使用 sudo 执行安装。Homebrew 禁止以 root 运行。" >&2
@@ -191,6 +188,9 @@ ensure_weline_user() {
   echo "User $WELINE_USER created."
 }
 
+# Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
+[[ "$PLATFORM" == "linux" ]] && ensure_weline_user
+
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
 ensure_git_installed() {
   if command -v git &>/dev/null; then
@@ -214,7 +214,7 @@ ensure_git_installed() {
         fi
         sleep 10
         waited=$((waited + 10))
-        printf "  已等待 %ds …\r" "$waited"
+        printf "  已等待 %ds …\n" "$waited"
       done
       if ! command -v git &>/dev/null; then
         echo "ERROR: 等待超时，仍未检测到 Git。请完成安装后重新执行本脚本。" >&2
