@@ -12,15 +12,20 @@ $accounts = $accounts ?? [];
 <style>
 .weline-domain-list-filter {
     display: flex;
-    gap: 0.75rem;
+    gap: var(--backend-spacing-sm, 8px);
     flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 1rem;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    padding: var(--backend-spacing-sm, 12px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
 }
 .weline-domain-list-filter .form-control,
 .weline-domain-list-filter .form-select {
     width: auto;
-    min-width: 140px;
+    min-width: 130px;
+    border-color: var(--backend-color-border-default, #dee2e6);
+    background: var(--backend-color-bg-primary, #fff);
 }
 .weline-domain-status-badge {
     font-size: 0.7rem;
@@ -211,44 +216,152 @@ $accounts = $accounts ?? [];
     box-shadow: var(--backend-shadow-sm, 0 1px 3px rgba(0,0,0,0.08));
     white-space: nowrap;
 }
+/* ===== 域名列表操作栏（统一 outline 风格、分组布局） ===== */
+.weline-domain-list-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+}
+.weline-domain-list-title {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: var(--backend-color-text-primary, #212529);
+    flex-shrink: 0;
+}
+.weline-domain-list-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 8px);
+    flex: 1;
+    min-width: 0;
+}
+.weline-domain-list-actions-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--backend-spacing-xs, 4px);
+}
+.weline-domain-list-actions-group--batch {
+    flex: 1;
+    min-width: 280px;
+}
+.weline-domain-list-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border-radius: var(--backend-border-radius, 6px);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--backend-color-text-primary, #212529);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.weline-domain-list-btn i {
+    font-size: 1rem;
+    opacity: 0.9;
+}
+.weline-domain-list-btn:hover {
+    opacity: 0.9;
+}
+.weline-domain-list-btn--primary {
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-primary, #556ee6);
+}
+.weline-domain-list-btn--primary:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+}
+.weline-domain-list-btn--secondary {
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.weline-domain-list-btn--secondary:hover {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-domain-list-btn--success {
+    border-color: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-success, #34c38f);
+}
+.weline-domain-list-btn--success:hover {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+}
+.weline-domain-list-btn--warning {
+    border-color: var(--backend-color-warning, #f1b44c);
+    color: var(--backend-color-warning, #f1b44c);
+}
+.weline-domain-list-btn--warning:hover {
+    background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1));
+}
+.weline-domain-list-btn--danger {
+    border-color: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-danger, #f46a6a);
+}
+.weline-domain-list-btn--danger:hover {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+}
 </style>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h5 class="mb-0"><?= __('域名列表') ?></h5>
-    <div class="d-flex gap-2">
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.refreshServerIp()">
-            <i class="mdi mdi-ip me-1"></i><?= __('刷新服务器IP') ?>
-        </button>
-        <button type="button" class="btn btn-outline-primary btn-sm" onclick="WelineDomainList.showImportModal()">
-            <i class="mdi mdi-import me-1"></i><?= __('导入域名') ?>
-        </button>
-        <button type="button" class="btn btn-outline-success btn-sm" onclick="WelineDomainList.batchTransferToPool()">
-            <i class="mdi mdi-database-export me-1"></i><?= __('批量转存域名池') ?>
-        </button>
-        <button type="button" class="btn btn-success btn-sm" onclick="WelineDomainList.batchTransferToPoolWithIpCheck()" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
-            <i class="mdi mdi-folder-move me-1"></i><?= __('批量转存（检查IP）') ?>
-        </button>
-        <button type="button" class="btn btn-warning btn-sm" onclick="WelineDomainList.batchResolveToLocal()" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
-            <i class="mdi mdi-server me-1"></i><?= __('批量解析到本地') ?>
-        </button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="WelineDomainList.showBatchAddDnsRecordModal()" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
-            <i class="mdi mdi-plus-network me-1"></i><?= __('批量添加记录') ?>
-        </button>
-        <button type="button" class="btn btn-info btn-sm" onclick="WelineDomainList.showBatchChangeNsModal()" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
-            <i class="mdi mdi-swap-horizontal me-1"></i><?= __('批量切换DNS') ?>
-        </button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="WelineDomainList.batchCheckResolve()">
-            <i class="mdi mdi-dns me-1"></i><?= __('批量检测解析') ?>
-        </button>
-        <button type="button" class="btn btn-outline-warning btn-sm" onclick="WelineDomainList.batchDetectDnsProvider()" title="<?= __('检测选中域名的 DNS 服务商') ?>">
-            <i class="mdi mdi-magnify-scan me-1"></i><?= __('检测DNS') ?>
-        </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="WelineDomainList.showBatchSetAccountsModal()" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
-            <i class="mdi mdi-account-cog me-1"></i><?= __('设置账户') ?>
-        </button>
-        <button type="button" class="btn btn-outline-danger btn-sm" onclick="WelineDomainList.cleanupDnsProviderDomains()" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
-            <i class="mdi mdi-broom me-1"></i><?= __('清理DNS域名') ?>
-        </button>
+<!-- 操作栏：统一 outline 风格，分组展示 -->
+<div class="weline-domain-list-header mb-3">
+    <h5 class="weline-domain-list-title"><?= __('域名列表') ?></h5>
+    <div class="weline-domain-list-actions">
+        <div class="weline-domain-list-actions-group">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.refreshServerIp()">
+                <i class="mdi mdi-ip"></i>
+                <span><?= __('刷新服务器IP') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" onclick="WelineDomainList.showImportModal()">
+                <i class="mdi mdi-import"></i>
+                <span><?= __('导入域名') ?></span>
+            </button>
+        </div>
+        <div class="weline-domain-list-actions-group weline-domain-list-actions-group--batch">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" onclick="WelineDomainList.batchTransferToPool()">
+                <i class="mdi mdi-database-export"></i>
+                <span><?= __('批量转存域名池') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--success" onclick="WelineDomainList.batchTransferToPoolWithIpCheck()" title="<?= __('只转存解析到本服务器的域名，跳过IP不匹配的') ?>">
+                <i class="mdi mdi-folder-move"></i>
+                <span><?= __('批量转存（检查IP）') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--warning" onclick="WelineDomainList.batchResolveToLocal()" title="<?= __('将选中域名的 @ 和 www 解析到本服务器公网IP') ?>">
+                <i class="mdi mdi-server"></i>
+                <span><?= __('批量解析到本地') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchAddDnsRecordModal()" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
+                <i class="mdi mdi-plus-network"></i>
+                <span><?= __('批量添加记录') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchChangeNsModal()" title="<?= __('将选中域名的DNS服务器切换到其他服务商') ?>">
+                <i class="mdi mdi-swap-horizontal"></i>
+                <span><?= __('批量切换DNS') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.batchCheckResolve()">
+                <i class="mdi mdi-dns"></i>
+                <span><?= __('批量检测解析') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.batchDetectDnsProvider()" title="<?= __('检测选中域名的 DNS 服务商') ?>">
+                <i class="mdi mdi-magnify-scan"></i>
+                <span><?= __('检测DNS') ?></span>
+            </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showBatchSetAccountsModal()" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
+                <i class="mdi mdi-account-cog"></i>
+                <span><?= __('设置账户') ?></span>
+            </button>
+        </div>
+        <div class="weline-domain-list-actions-group">
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" onclick="WelineDomainList.cleanupDnsProviderDomains()" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
+                <i class="mdi mdi-broom"></i>
+                <span><?= __('清理DNS域名') ?></span>
+            </button>
+        </div>
     </div>
 </div>
 

@@ -944,12 +944,41 @@ class Domain extends BackendController
                 ]);
             }
 
+            try {
+                $queryResult = w_query('websites', 'getDnsRecords', ['domain_id' => $domainId]);
+                if (\is_array($queryResult) && ($queryResult['success'] ?? false)) {
+                    $queryData = \is_array($queryResult['data'] ?? null) ? $queryResult['data'] : [];
+
+                    return $this->fetchJson([
+                        'code' => 200,
+                        'msg' => (string)($queryResult['message'] ?? __('获取成功')),
+                        'data' => [
+                            'domain' => $domain->getData(),
+                            'records' => \is_array($queryData['records'] ?? null) ? $queryData['records'] : [],
+                            'dns_provider' => (string)($queryData['dns_provider'] ?? $domain->getDnsProvider() ?? ''),
+                            'dns_provider_name' => (string)($queryData['dns_provider_name'] ?? $domain->getDnsProvider() ?? ''),
+                            'server_ip' => (string)($queryData['server_ip'] ?? $this->serverIpService->getPublicIpv4()),
+                            'pool_sync' => \is_array($queryData['pool_sync'] ?? null) ? $queryData['pool_sync'] : [],
+                            'sync_error' => (string)($queryData['sync_error'] ?? ''),
+                        ],
+                    ]);
+                }
+            } catch (\Throwable $queryException) {
+                // 查询层不可用时回退到原有逻辑，避免接口整体不可用
+            }
+
+            // 兜底：保留历史逻辑，避免查询器注册/重载前导致接口失效
             $details = $this->resolveService->getDnsDetails($domain);
 
             return $this->fetchJson([
                 'code' => 200,
+                'msg' => __('获取成功（回退模式）'),
                 'data' => [
                     'domain' => $domain->getData(),
+                    'records' => \is_array($details['records'] ?? null) ? $details['records'] : [],
+                    'dns_provider' => (string)($details['dns_provider']['provider'] ?? $domain->getDnsProvider() ?? ''),
+                    'dns_provider_name' => (string)($details['dns_provider']['name'] ?? $domain->getDnsProvider() ?? ''),
+                    'server_ip' => $this->serverIpService->getPublicIpv4(),
                     'dns' => $details,
                 ],
             ]);
