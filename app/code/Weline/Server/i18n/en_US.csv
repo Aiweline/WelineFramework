@@ -318,7 +318,7 @@ P99：%{1},"P99: %{1}"
 "重启 Weline 常驻内存 HTTP 服务器","Restart Weline persistent HTTP server"
 "确保 Weline Server 运行中（已运行则不重启，除非使用 -r）","确保 Weline Server 运行中（已运行则不重启，除非使用 -r）"
 强制重启（先停止再启动）,强制重启（先停止再启动）
-监听地址（默认：127.0.0.1，仅本机；需外网访问时用 -h 0.0.0.0）,"Listen address (default: 127.0.0.1, local only; use -h 0.0.0.0 for public access)"
+监听地址（默认：0.0.0.0）,监听地址（默认：0.0.0.0）
 监听端口（默认：443）,监听端口（默认：443）
 "Worker 进程数（默认：4）","Worker count (default: 4)"
 确保服务器运行,确保服务器运行
@@ -354,8 +354,8 @@ P99：%{1},"P99: %{1}"
 "HTTP 重定向已禁用（--http-redirect-port 0）","HTTP 重定向已禁用（--http-redirect-port 0）"
 "HTTP 重定向已禁用（env.server.http_redirect_port = 0）","HTTP 重定向已禁用（env.server.http_redirect_port = 0）"
 "HTTP 重定向端口无效: %{1}，将使用默认端口 80","HTTP 重定向端口无效: %{1}，将使用默认端口 80"
-"主端口 %{1} 被非框架进程占用","主端口 %{1} 被非框架进程占用"
 "默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}","Default port %{1} occupied (likely by BT Panel/nginx), downgraded to %{2}"
+"主端口 %{1} 被非框架进程占用","主端口 %{1} 被非框架进程占用"
 主端口是业务入口，不会自动切换以避免服务地址变化,主端口是业务入口，不会自动切换以避免服务地址变化
 "1. 手动停止占用端口 %{1} 的进程","1. 手动停止占用端口 %{1} 的进程"
 "2. 或使用 -p 参数显式指定其他端口：","2. 或使用 -p 参数显式指定其他端口："
@@ -517,6 +517,8 @@ env.server,env.server
 后台入口,后台入口
 "后台 REST 接口","后台 REST 接口"
 "前台 REST 接口","前台 REST 接口"
+"代理转发：WLS 默认仅监听 127.0.0.1。外网访问需用 Nginx/Caddy 反向代理：","代理转发：WLS 默认仅监听 127.0.0.1。外网访问需用 Nginx/Caddy 反向代理："
+直连外网时：,直连外网时：
 测试请求,测试请求
 停止服务,停止服务
 压力测试,压力测试
@@ -526,6 +528,7 @@ env.server,env.server
 "使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）","使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）"
 "使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）","使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）"
 显示可用策略信息,显示可用策略信息
+"监听地址（默认：127.0.0.1，仅本机；需外网访问时用 -h 0.0.0.0）","Listen address (default: 127.0.0.1, local only; use -h 0.0.0.0 for public access)"
 "基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）","基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）"
 "Worker 进程数（默认：auto 智能模式）","Worker 进程数（默认：auto 智能模式）"
 前台运行（查看实时日志）,前台运行（查看实时日志）
@@ -1061,6 +1064,11 @@ DDoS攻击,DDoS攻击
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
 服务器已就绪,服务器已就绪
 "服务实例: %{1} 个已就绪","服务实例: %{1} 个已就绪"
+使用说明：,使用说明：
+"WLS 默认仅监听 127.0.0.1，仅本机可访问","WLS 默认仅监听 127.0.0.1，仅本机可访问"
+"外网访问需用 Nginx/Caddy 等反向代理转发到","外网访问需用 Nginx/Caddy 等反向代理转发到"
+"Nginx 示例：","Nginx 示例："
+需直连外网时：,需直连外网时：
 "已通知 %{1} 个 Dispatcher 清空封禁列表","已通知 %{1} 个 Dispatcher 清空封禁列表"
 "已通知 %{1} 个 Dispatcher 解封 IP %{2}","已通知 %{1} 个 Dispatcher 解封 IP %{2}"
 "未指定 ip 或 clear_all","未指定 ip 或 clear_all"
