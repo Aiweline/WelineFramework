@@ -219,6 +219,15 @@ try {
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
     WlsLogger::info_("框架运行时初始化成功");
+    // 预热 Session/Memory 连接池，避免首请求时再建连导致延迟（Linux 下尤为明显）
+    try {
+        $sessionOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => 'session_server.token'];
+        $memoryOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => 'memory_server.token'];
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance('127.0.0.1', 19970, $sessionOpts);
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance('127.0.0.1', 19971, $memoryOpts);
+    } catch (\Throwable $warmupEx) {
+        // 预热失败不阻塞 Worker，首请求时再建连
+    }
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());

@@ -55,6 +55,10 @@ class LinuxDirectStrategy implements ServerStrategyInterface
      */
     public function supports(): bool
     {
+        // 统一透传：Linux 不再使用直连模式，与 Windows 一致走 Dispatcher 透传
+        if (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux') {
+            return false;
+        }
         // Windows 不支持
         if (\defined('IS_WIN') && IS_WIN) {
             return false;
