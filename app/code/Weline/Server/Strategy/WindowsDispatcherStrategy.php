@@ -56,15 +56,18 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     public function supports(): bool
     {
-        // Windows 专用策略
+        // Windows 使用 Dispatcher 透传
         if (\defined('IS_WIN') && IS_WIN) {
             return true;
         }
         if (PHP_OS_FAMILY === 'Windows') {
             return true;
         }
-        
-        // 也可作为 Linux 不支持 SO_REUSEPORT 时的后备方案
+        // 统一透传：Linux 也使用 Dispatcher 透传（与 Windows 一致）
+        if (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux') {
+            return true;
+        }
+        // 不支持 SO_REUSEPORT 时的后备方案（如旧内核）
         if (!\defined('SO_REUSEPORT')) {
             return true;
         }
