@@ -24,11 +24,12 @@ WELINE_USER="${WELINE_USER:-weline}"
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
-  echo "Usage: $0 [--path-only] [--rebuild-php] [-f|--force] [-b BRANCH] [php] [pgsql] [mysql]"
+  echo "Usage: $0 [--path-only] [--rebuild-php] [-f|--force] [-y|--yes] [-b BRANCH] [php] [pgsql] [mysql]"
   echo "  No args: install php and pgsql (default)."
   echo "  --path-only: only add extend/server/*/bin to PATH, do not download/install."
   echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
+  echo "  -y, --yes: when already installed, directly run setup:upgrade without prompting."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
 }
@@ -39,6 +40,7 @@ PATH_ONLY=false
 REBUILD_PHP=false
 BRANCH="master"
 FORCE_INSTALL=false
+AUTO_UPGRADE=false
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +48,7 @@ while [[ $# -gt 0 ]]; do
     --path-only) PATH_ONLY=true; shift ;;
     --rebuild-php) REBUILD_PHP=true; shift ;;
     -f|--force) FORCE_INSTALL=true; shift ;;
+    -y|--yes) AUTO_UPGRADE=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
       if [[ " $VALID_COMPONENTS " == *" $1 "* ]]; then
@@ -1378,6 +1381,7 @@ fix_project_ownership
 echo ""
 RUN_ARGS=""
 [[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
+[[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS="$RUN_ARGS -y"
 # 已通过 root→weline 重执行，此处始终由 weline 执行
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
 echo ""
