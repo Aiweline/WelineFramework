@@ -124,6 +124,11 @@ class DomainPurchaseService
             $resolveToLocal = isset($itemData['resolve_to_local'])
                 ? (($itemData['resolve_to_local'] ?? 'yes') === 'yes')
                 : $autoResolve;
+            $dnsChoice = (string) ($itemData['dns_choice'] ?? 'follow_registrar');
+            $dnsNameservers = \trim((string) ($itemData['dns_nameservers'] ?? ''));
+            $cdnChoice = (string) ($itemData['cdn_choice'] ?? 'follow_registrar');
+            $startLifecycle = !isset($itemData['start_lifecycle'])
+                || !\in_array((string) $itemData['start_lifecycle'], ['0', 'false', 'no'], true);
             $subdomains = $itemData['subdomains'] ?? ['@', 'www'];
             if (!\is_array($subdomains)) {
                 $subdomains = \array_map('trim', \explode(',', (string) $subdomains));
@@ -147,7 +152,11 @@ class DomainPurchaseService
 
             try {
                 // 调用适配器购买域名
-                $purchaseResult = $adapter->purchaseDomain($domain, $years, $credentials);
+                $contactInfo = [];
+                if ($dnsChoice === 'custom_nameservers' && $dnsNameservers !== '') {
+                    $contactInfo['dns'] = $dnsNameservers;
+                }
+                $purchaseResult = $adapter->purchaseDomain($domain, $years, $credentials, $contactInfo);
 
                 if ($purchaseResult['success'] ?? false) {
                     $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_SUCCESS);
@@ -168,15 +177,33 @@ class DomainPurchaseService
                         $this->createAutoResolveTask($domain, $accountId);
                     }
 
+                    if ($startLifecycle) {
+                        $this->startLifecycleTracking($domain, $accountId, [
+                            'years' => $years,
+                            'website_id' => $websiteId,
+                            'auto_create_site' => $autoCreateSite,
+                            'resolve_to_local' => $resolveToLocal,
+                            'subdomains' => $subdomains,
+                            'dns_choice' => $dnsChoice,
+                            'dns_nameservers' => $dnsNameservers,
+                            'cdn_choice' => $cdnChoice,
+                        ]);
+                    }
+
                     // 触发购买成功事件
                     $eventData = [
                         'data' => [
                             'domain' => $domain,
                             'order_id' => $orderId,
+                            'account_id' => $accountId,
                             'website_id' => $websiteId,
                             'auto_create_site' => $autoCreateSite,
                             'resolve_to_local' => $resolveToLocal,
                             'subdomains' => $subdomains,
+                            'dns_choice' => $dnsChoice,
+                            'dns_nameservers' => $dnsNameservers,
+                            'cdn_choice' => $cdnChoice,
+                            'start_lifecycle' => $startLifecycle,
                         ],
                     ];
                     $this->eventsManager->dispatch('Weline_Websites::domain::purchase_success', $eventData);
@@ -343,6 +370,29 @@ class DomainPurchaseService
             DomainAutoResolveTask::createTask($domain, $accountId);
         } catch (\Exception $e) {
             w_log_error(__('创建自动解析任务失败: %{domain}, 错误: %{error}', [
+                'domain' => $domain,
+                'error' => $e->getMessage(),
+            ]));
+        }
+    }
+
+    /**
+     * 购买完成后启动根域级生命周期跟踪。
+     */
+    private function startLifecycleTracking(string $domain, int $accountId, array $options): void
+    {
+        try {
+            $serviceClass = \Weline\Saas\Service\DomainLifecycleOrchestrationService::class;
+            if (!\class_exists($serviceClass)) {
+                return;
+            }
+
+            $service = ObjectManager::getInstance($serviceClass);
+            if (\method_exists($service, 'startPurchasedLifecycle')) {
+                $service->startPurchasedLifecycle($domain, $accountId, $options);
+            }
+        } catch (\Throwable $e) {
+            w_log_warning(__('启动域名生命周期跟踪失败：%{domain}，错误：%{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));

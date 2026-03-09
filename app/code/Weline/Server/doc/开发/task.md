@@ -101,3 +101,16 @@
   - 待补：登录态下的 DataTable/事件回写/主题切换多用户并发回归
 - [x] `wls-plan-task-sync`
   - 本节为执行态同步结果，后续增量回归将继续在本文件追加
+
+## 2026-03-09 请求时延优化（增量）
+
+- [-] `wls-session-deferred-persist`
+  - 目标：`Session` 变更合并到请求末尾统一写入，减少单请求内重复序列化与 RPC
+- [-] `wls-cache-native-batch-ops`
+  - 目标：`exists/touch/mget/mset` 走协议原生命令，去掉 `get()+set()` 模拟
+- [-] `wls-runtime-log-switches`
+  - 目标：增加 `server.performance` 配置，控制性能头、慢请求日志、请求/错误日志
+- [ ] `wls-latency-regression`
+  - 目标：跑定向测试与最小回归，确认 302 / 登录态 / Session / Cache 行为未回退
+- [ ] `wls-linux-direct-followup`
+  - 备注：直连模式后置；需先设计 Dispatcher 能力下放 Worker 的方案

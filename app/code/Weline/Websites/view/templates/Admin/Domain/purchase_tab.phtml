@@ -10,6 +10,7 @@
  */
 $accounts = $accounts ?? [];
 $websites = $websites ?? [];
+$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 
 <div class="row">
@@ -97,6 +98,8 @@ $websites = $websites ?? [];
         </div>
     </div>
 </div>
+
+<script src="<?= $purchaseDialogJsUrl ?>"></script>
 
 <script>
 var checkAvailabilityUrl = '<?= $this->getUrl('*/admin/domain/check-availability') ?>';
@@ -227,28 +230,53 @@ function submitPurchase() {
         return;
     }
 
-    Swal.fire({
-        title: '<?= __('确认购买') ?>',
-        text: '<?= __('即将购买') ?> ' + items.length + ' <?= __('个域名，确认继续？') ?>',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#34c38f',
-        cancelButtonText: '<?= __('取消') ?>',
-        confirmButtonText: '<?= __('确认购买') ?>'
-    }).then(function(result) {
-        if (result.isConfirmed) {
-            executePurchase(accountId, items);
+    if (!window.WelineDomainPurchaseDialog) {
+        showToast('<?= __('购买弹窗组件未加载') ?>', 'error');
+        return;
+    }
+
+    window.WelineDomainPurchaseDialog.open({
+        labels: {
+            title: '<?= __('购买域名') ?>',
+            description: '<?= __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。') ?>',
+            dnsChoice: '<?= __('DNS 策略') ?>',
+            dnsFollowRegistrar: '<?= __('跟随域名商') ?>',
+            dnsCustomNameservers: '<?= __('自定义 Nameserver') ?>',
+            dnsNameservers: '<?= __('Nameserver 列表') ?>',
+            dnsNameserversPlaceholder: '<?= __('ns1.example.com, ns2.example.com') ?>',
+            cdnChoice: '<?= __('CDN 策略') ?>',
+            cdnFollowRegistrar: '<?= __('跟随域名商') ?>',
+            cdnNone: '<?= __('暂不配置 CDN') ?>',
+            resolveToLocal: '<?= __('自动解析到本服务器') ?>',
+            resolveHint: '<?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?>',
+            subdomains: '<?= __('自动解析子域名') ?>',
+            subdomainsPlaceholder: '<?= __('@, www') ?>',
+            startLifecycle: '<?= __('启动全流程状态跟踪') ?>',
+            startLifecycleHint: '<?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?>',
+            confirm: '<?= __('确认购买') ?>',
+            cancel: '<?= __('取消') ?>'
+        },
+        defaults: {
+            dnsChoice: 'follow_registrar',
+            cdnChoice: 'follow_registrar',
+            resolveToLocal: !!(document.getElementById('purchase-auto-resolve') && document.getElementById('purchase-auto-resolve').checked),
+            subdomains: (document.getElementById('purchase-subdomains') || {}).value || '@,www',
+            startLifecycle: true
         }
+    }).then(function(dialogResult) {
+        if (!dialogResult) {
+            return;
+        }
+        executePurchase(accountId, items, dialogResult);
     });
 }
 
-function executePurchase(accountId, items) {
+function executePurchase(accountId, items, dialogResult) {
     showToast('<?= __('正在提交购买请求...') ?>', 'info');
 
-    var autoResolveEl = document.getElementById('purchase-auto-resolve');
-    var autoResolve = (autoResolveEl && autoResolveEl.checked) ? '1' : '0';
-    var resolveToLocal = autoResolve === '1' ? 'yes' : 'no';
-    var subdomainsRaw = (document.getElementById('purchase-subdomains') || {}).value || '@, www';
+    dialogResult = dialogResult || {};
+    var autoResolve = dialogResult.resolve_to_local === 'yes' ? '1' : '0';
+    var subdomainsRaw = dialogResult.subdomains || '@,www';
     var subdomains = subdomainsRaw.split(',').map(function(s) { return (s || '').trim(); }).filter(Boolean);
     if (subdomains.length === 0) subdomains = ['@', 'www'];
 
@@ -256,8 +284,12 @@ function executePurchase(accountId, items) {
     formData.append('account_id', accountId);
     formData.append('items', JSON.stringify(items));
     formData.append('auto_resolve', autoResolve);
-    formData.append('resolve_to_local', resolveToLocal);
+    formData.append('resolve_to_local', dialogResult.resolve_to_local || 'yes');
     formData.append('subdomains', JSON.stringify(subdomains));
+    formData.append('dns_choice', dialogResult.dns_choice || 'follow_registrar');
+    formData.append('dns_nameservers', dialogResult.dns_nameservers || '');
+    formData.append('cdn_choice', dialogResult.cdn_choice || 'follow_registrar');
+    formData.append('start_lifecycle', dialogResult.start_lifecycle || '1');
 
     fetch(purchaseUrl, {
         method: 'POST',
@@ -270,10 +302,18 @@ function executePurchase(accountId, items) {
             if (autoResolve === '1') {
                 msg += ' <?= __('（自动解析任务已创建）') ?>';
             }
+            if (dialogResult.start_lifecycle === '1') {
+                msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
+            }
             showToast(msg, 'success');
             loadOrders();
         } else {
-            showToast(data.msg || '<?= __('购买失败') ?>', 'error');
+            showToast(
+                window.WelineDomainPurchaseDialog
+                    ? window.WelineDomainPurchaseDialog.buildErrorMessage(data.data || data, '<?= __('购买失败') ?>')
+                    : (data.msg || '<?= __('购买失败') ?>'),
+                'error'
+            );
         }
     })
     .catch(function(err) {

@@ -334,6 +334,8 @@ class SessionFactory
      */
     public function resetRequestInstances(): void
     {
+        Session::flushRequestSessions();
+
         if ($this->sessionInstance !== null && \method_exists($this->sessionInstance, 'reset')) {
             $this->sessionInstance->reset();
         }

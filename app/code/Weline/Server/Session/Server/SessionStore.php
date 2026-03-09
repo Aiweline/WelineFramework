@@ -513,6 +513,89 @@ final class SessionStore
     }
 
     /**
+     * 检查 Session 中的指定键是否存在。
+     */
+    public function existsKey(string $sessionId, string $key): bool
+    {
+        if ($key === '' || !isset($this->store[$sessionId])) {
+            return false;
+        }
+
+        $entry = $this->store[$sessionId];
+        if ($entry['expire'] > 0 && $entry['expire'] < \time()) {
+            $this->destroy($sessionId);
+            return false;
+        }
+
+        return \array_key_exists($key, $entry['data']);
+    }
+
+    /**
+     * 批量获取多个键，单次请求仅刷新一次 TTL。
+     *
+     * @param string[] $keys
+     * @return array<string, mixed>
+     */
+    public function mget(string $sessionId, array $keys): array
+    {
+        $result = [];
+        foreach ($keys as $key) {
+            $result[(string)$key] = null;
+        }
+
+        if (!isset($this->store[$sessionId])) {
+            return $result;
+        }
+
+        $entry = $this->store[$sessionId];
+        if ($entry['expire'] > 0 && $entry['expire'] < \time()) {
+            $this->destroy($sessionId);
+            return $result;
+        }
+
+        $this->touch($sessionId);
+        foreach ($keys as $key) {
+            $key = (string)$key;
+            $result[$key] = $entry['data'][$key] ?? null;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 批量设置多个键，单次请求仅更新一次 TTL 并标记一次 dirty。
+     *
+     * @param array<string, mixed> $kv
+     */
+    public function mset(string $sessionId, array $kv, int $ttl = 0): bool
+    {
+        $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        $expire = $ttl > 0 ? \time() + $ttl : 0;
+        $now = \time();
+
+        if (!isset($this->store[$sessionId])) {
+            $this->evictIfNeeded();
+            $this->store[$sessionId] = [
+                'data' => [],
+                'expire' => $expire,
+                'atime' => $now,
+            ];
+            $this->lruOrder[$sessionId] = true;
+        } else {
+            $this->store[$sessionId]['expire'] = $expire;
+            $this->store[$sessionId]['atime'] = $now;
+            $this->touchLru($sessionId);
+        }
+
+        foreach ($kv as $key => $value) {
+            $this->store[$sessionId]['data'][(string)$key] = $value;
+        }
+
+        $this->markDirty();
+        return true;
+    }
+
+    /**
      * 刷新 Session 过期时间（滑动 TTL）
      * 不调用 markDirty()，避免每次 get 都算“写入”导致频繁持久化刷屏。
      */
