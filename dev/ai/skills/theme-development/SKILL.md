@@ -1366,7 +1366,7 @@ fetch(apiUrl, {
 
 ```javascript
 // 后台 theme.js 自动加载 url-backend 模块
-Weline.declare('url-backend', true, 'Weline_Framework::js/url-backend.js');
+Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js');
 
 // 生成后台 URL
 const backendUrl = window.getBackendUrl('theme/backend/theme-editor/save-widget', { theme_id: 5 });
@@ -1392,7 +1392,7 @@ const apiUrl = window.getBackendApiUrl('products', { limit: 10 });
 
 if (Weline.config.theme.isLoggedIn) {
     // 手动加载后台 URL 模块
-    Weline.declare('url-backend', true, 'Weline_Framework::js/url-backend.js');
+    Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js');
     
     Weline.use('url-backend').then(() => {
         // 现在可以生成后台 URL
@@ -1956,7 +1956,7 @@ window.__WelineThemeConfig = {
 // JavaScript 中判断
 if (Weline.config.theme.isLoggedIn) {
     // 手动加载后台 URL 模块
-    Weline.declare('url-backend', true, 'Weline_Framework::js/url-backend.js');
+    Weline.declare('url-backend', true, 'Weline_Backend::js/url-backend.js');
     
     Weline.use('url-backend').then(() => {
         // 现在可以生成后台 URL（仅用于已登录用户的管理功能）
