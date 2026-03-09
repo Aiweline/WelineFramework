@@ -165,6 +165,9 @@
 网络错误,网络错误
 "GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
 空响应,空响应
+域名已在当前账号下,域名已在当前账号下
+域名已在当前账号下，已按成功处理：%{message},域名已在当前账号下，已按成功处理：%{message}
+"GName 购买结果二次确认失败：%{domain}，错误：%{error}","GName 购买结果二次确认失败：%{domain}，错误：%{error}"
 "获取 DNS 记录失败：%{1}（错误码：%{2}）","获取 DNS 记录失败：%{1}（错误码：%{2}）"
 "（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）","（域名 DNS 可能已切换到其他服务商，请到对应服务商处添加解析）"
 （域名可能不存在或已过期）,（域名可能不存在或已过期）
@@ -420,6 +423,10 @@
 "是否自动解析到本地，默认 true","是否自动解析到本地，默认 true"
 "默认 yes/no，对 items 中未指定者生效","默认 yes/no，对 items 中未指定者生效"
 "默认子域名列表，如 [""@"",""www""] 或 ""@,www""","默认子域名列表，如 [""@"",""www""] 或 ""@,www"""
+"DNS 策略：follow_registrar/custom_nameservers","DNS 策略：follow_registrar/custom_nameservers"
+"自定义 Nameserver，逗号分隔","自定义 Nameserver，逗号分隔"
+"CDN 策略：follow_registrar/none","CDN 策略：follow_registrar/none"
+是否启动后续全流程状态跟踪,是否启动后续全流程状态跟踪
 测试注册商账号连接,测试注册商账号连接
 获取注册商的配置字段定义,获取注册商的配置字段定义
 获取注册商完整信息（含配置字段、帮助说明、默认值）,获取注册商完整信息（含配置字段、帮助说明、默认值）
@@ -515,6 +522,7 @@
 "域名入池失败: %{domain}, 错误: %{error}","Failed to add domain to pool: %{domain}, error: %{error}"
 "域名绑站失败: %{domain}, 错误: %{error}","Failed to bind domain to site: %{domain}, error: %{error}"
 "创建自动解析任务失败: %{domain}, 错误: %{error}","创建自动解析任务失败: %{domain}, 错误: %{error}"
+启动域名生命周期跟踪失败：%{domain}，错误：%{error},启动域名生命周期跟踪失败：%{domain}，错误：%{error}
 "从 ExtendsData 扫描域名商适配器失败:","从 ExtendsData 扫描域名商适配器失败:"
 "加载域名商适配器失败: %{file}, 错误: %{error}","Failed to load domain registrar adapter: %{file}, error: %{error}"
 "无法获取服务器公网 IP","无法获取服务器公网 IP"
@@ -816,11 +824,23 @@ DNS管理,DNS管理
 自动新建站点,"Auto-create site"
 个可用域名,"available domains"
 没有可用的域名可以购买,"No available domains to purchase"
+购买弹窗组件未加载,购买弹窗组件未加载
+"确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。","确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。"
+"DNS 策略","DNS 策略"
+跟随域名商,跟随域名商
+"自定义 Nameserver","自定义 Nameserver"
+"ns1.example.com, ns2.example.com","ns1.example.com, ns2.example.com"
+"CDN 策略","CDN 策略"
+"暂不配置 CDN","暂不配置 CDN"
+"默认会解析 @ 和 www，并持续检查域名状态。","默认会解析 @ 和 www，并持续检查域名状态。"
+自动解析子域名,自动解析子域名
+"@, www","@, www"
+启动全流程状态跟踪,启动全流程状态跟踪
+"购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。","购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。"
 确认购买,"Confirm Purchase"
-即将购买,"About to purchase"
-个域名，确认继续？,"domain(s). Continue?"
 正在提交购买请求...,"Submitting purchase request..."
 购买请求已提交,"Purchase request submitted"
+请前往域名状态页搜索当前根域名查看进度。,请前往域名状态页搜索当前根域名查看进度。
 订单号,"Order No."
 数量,Count
 时间,Time
@@ -900,6 +920,8 @@ SEO账户管理请前往：,SEO账户管理请前往：
 维护中,维护中
 关闭维护模式,关闭维护模式
 开启维护模式,开启维护模式
+即将购买,"About to purchase"
+个域名，确认继续？,"domain(s). Continue?"
 "[DomainPoolCertificateRequest] %{1} 证书申请成功","[DomainPoolCertificateRequest] %{1} 证书申请成功"
 任务ID,任务ID
 域名商账户ID,域名商账户ID
