@@ -2187,7 +2187,7 @@ class ServiceOrchestrator
 
         $totalServices = \count($allInstances);
         $mainPort = $this->context?->mainPort ?? 0;
-        $host = $this->context?->host ?? '0.0.0.0';
+        $host = $this->context?->host ?? '127.0.0.1';
         $sslEnabled = $this->context?->sslEnabled ?? false;
         $protocol = $sslEnabled ? 'https' : 'http';
 
@@ -2198,7 +2198,7 @@ class ServiceOrchestrator
         WlsLogger::info_("[Server]   服务实例: {$totalServices} 个");
         WlsLogger::info_('[Server] ========================================');
 
-        // 前台模式输出彩色通知到控制台（含访问地址表，并设为悬浮顶部）
+        // 前台模式：直接输出访问地址表与代理转发说明（不悬浮，日志正常滚动）
         if ($this->context?->frontend) {
             $ctx = $this->context;
             $defaultPort = $sslEnabled ? 443 : 80;
@@ -2212,18 +2212,11 @@ class ServiceOrchestrator
             $colType = 16;
             $colUrl = $tableWidth - $colType - 5;
 
-            // 使用 DECSTBM 设置滚动区域，使地址表悬浮在顶部（约 14 行固定，后续日志在下方滚动）
-            $bannerLines = 14;
-            $scrollStart = $bannerLines + 1;
-            echo "\033[{$scrollStart};9999r"; // 设置滚动区域从第 15 行到底部
-            echo "\033[1;1H";                  // 光标移到左上角
-
             echo "\n" . self::ANSI_GREEN . "  ╔" . \str_repeat('═', $tableWidth) . "╗\n";
             echo "  ║" . \str_pad('   ✓ ' . __('服务器已就绪'), $tableWidth, ' ', STR_PAD_RIGHT) . "║\n";
             echo "  ╠" . \str_repeat('═', $colType) . '╤' . \str_repeat('═', $tableWidth - $colType - 1) . "╣\n";
             $frontendUrl = $baseUrl . '/';
             echo "  ║ " . \str_pad(__('前端'), $colType - 2, ' ') . "│ " . \str_pad($frontendUrl, $colUrl - 1, ' ') . "║\n";
-            // 后端入口 = 密钥路径 + /admin（backend prefix 为随机 key 时）
             $backendUrl = $baseUrl . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
             echo "  ║ " . \str_pad(__('后端'), $colType - 2, ' ') . "│ " . \str_pad($backendUrl, $colUrl - 1, ' ') . "║\n";
             echo "  ╟" . \str_repeat('─', $colType) . "┼" . \str_repeat('─', $tableWidth - $colType - 1) . "╢\n";
@@ -2238,19 +2231,15 @@ class ServiceOrchestrator
             echo "  ╟" . \str_repeat('─', $colType) . "┴" . \str_repeat('─', $tableWidth - $colType - 1) . "╢\n";
             echo "  ║" . \str_pad('   ' . __('服务实例: %{1} 个已就绪', [(string) $totalServices]), $tableWidth, ' ', STR_PAD_RIGHT) . "║\n";
             echo "  ╚" . \str_repeat('═', $tableWidth) . "╝" . self::ANSI_RESET . "\n";
-
-            // 光标移到滚动区域首行，后续日志在此区域滚动
-            echo "\033[{$scrollStart};1H";
+            echo "\n";
+            echo self::ANSI_GREEN . "  " . __('使用说明：') . self::ANSI_RESET . "\n";
+            echo "  • " . __('WLS 默认仅监听 127.0.0.1，仅本机可访问') . "\n";
+            echo "  • " . __('外网访问需用 Nginx/Caddy 等反向代理转发到 ') . "{$host}:{$mainPort}" . "\n";
+            echo "  • " . __('Nginx 示例：') . "proxy_pass {$protocol}://{$host}:{$mainPort};" . "\n";
+            echo "  • " . __('需直连外网时：') . "php bin/w server:start -h 0.0.0.0" . "\n";
+            echo "\n";
             if (\function_exists('flush')) {
                 @\flush();
-            }
-            // 进程退出时重置终端滚动区域，避免留下异常状态
-            static $scrollResetRegistered = false;
-            if (!$scrollResetRegistered) {
-                $scrollResetRegistered = true;
-                \register_shutdown_function(static function (): void {
-                    echo "\033[r"; // 重置 DECSTBM 为默认（全屏滚动）
-                });
             }
         }
     }

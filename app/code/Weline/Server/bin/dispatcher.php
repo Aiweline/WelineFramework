@@ -21,7 +21,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 // ========== 参数解析 ==========
-$host = $argv[1] ?? '0.0.0.0';
+$host = $argv[1] ?? '127.0.0.1';
 $port = (int) ($argv[2] ?? 443);
 $workerBasePort = (int) ($argv[3] ?? 10443);
 $workerCount = (int) ($argv[4] ?? 2);
