@@ -15,6 +15,7 @@ class ConnectorOptionsBuilder
     ): array {
         $startPath = $this->normalizeStartPath($startPath);
         $this->ensureVolumeDirs($rootPath);
+        $this->ensureStartPathDir($rootPath, $startPath);
 
         $accessControl = static function ($attr, $path, $data, $volume, $isDir, $relpath) {
             $base = \is_string($path) && $path !== '' ? \basename($path) : '';
@@ -75,14 +76,36 @@ class ConnectorOptionsBuilder
 
     private function ensureVolumeDirs(string $rootPath): void
     {
+        $root = \rtrim($rootPath, '/\\') . \DIRECTORY_SEPARATOR;
         $dirs = [
-            \rtrim($rootPath, '/\\') . '/.trash/.tmb',
-            \rtrim($rootPath, '/\\') . '/.tmb',
+            $root . '.trash' . \DIRECTORY_SEPARATOR . '.tmb',
+            $root . '.tmb',
         ];
         foreach ($dirs as $dir) {
             if (!\is_dir($dir)) {
                 @\mkdir($dir, 0755, true);
             }
+        }
+    }
+
+    /**
+     * 若 startPath 为 pagebuilder 下目录（如 pagebuilder/pages/{handle}），则确保该目录存在
+     */
+    public function ensureStartPathDir(string $rootPath, ?string $startPath): void
+    {
+        if ($startPath === null || $startPath === '') {
+            return;
+        }
+        $startPath = \trim(\str_replace('\\', '/', $startPath), '/');
+        if ($startPath === '' || \strpos($startPath, '..') !== false) {
+            return;
+        }
+        if (\strpos($startPath, 'pagebuilder/') !== 0) {
+            return;
+        }
+        $full = \rtrim($rootPath, '/\\') . \DIRECTORY_SEPARATOR . \str_replace('/', \DIRECTORY_SEPARATOR, $startPath);
+        if (!\is_dir($full)) {
+            @\mkdir($full, 0755, true);
         }
     }
 }

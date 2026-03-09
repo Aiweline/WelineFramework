@@ -128,10 +128,11 @@ class ErrorResponse
             return (int) $exception->getStatusCode();
         }
         
-        // 检查异常码是否在 HTTP 状态码范围
+        // 检查异常码是否在 HTTP 状态码范围（getCode() 可能为 int|string，如 PDOException 的 SQLSTATE）
         $code = $exception->getCode();
-        if ($code >= 400 && $code < 600) {
-            return $code;
+        $codeInt = is_int($code) ? $code : (int) $code;
+        if ($codeInt >= 400 && $codeInt < 600) {
+            return $codeInt;
         }
         
         // 根据异常类名映射状态码

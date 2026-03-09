@@ -198,12 +198,14 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         </option>
                                     <?php endforeach; ?>
                                 </select>
-                                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement/add') ?>" 
-                                   class="btn btn-outline-primary btn-sm" 
-                                   target="_blank"
-                                   title="<?= __('新建站点') ?>">
+                                <button type="button" 
+                                    class="btn btn-outline-primary btn-sm" 
+                                    title="<?= __('新建站点') ?>"
+                                    data-bs-toggle="offcanvas"
+                                    data-bs-target="#pageFormAddWebsiteOffcanvas"
+                                    aria-controls="pageFormAddWebsiteOffcanvas">
                                     <i class="mdi mdi-plus"></i>
-                                </a>
+                                </button>
                             </div>
                             <div class="invalid-feedback"><?= __('请选择所属站点') ?></div>
                         </div>
@@ -1210,6 +1212,98 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
         </div>
     </div>
 </form>
+
+<!-- 新建站点 Offcanvas（不新开页，侧滑加载添加表单） -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="pageFormAddWebsiteOffcanvas" aria-labelledby="pageFormAddWebsiteOffcanvasLabel" style="width: 600px; max-width: 90vw;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="pageFormAddWebsiteOffcanvasLabel">
+            <i class="mdi mdi-web-plus"></i> <?= __('新建站点') ?>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= __('关闭') ?>"></button>
+    </div>
+    <div class="offcanvas-body p-0 position-relative" style="height: calc(100vh - 60px);">
+        <div id="pageFormAddWebsiteLoading" class="position-absolute top-0 start-0 end-0 bottom-0 align-items-center justify-content-center bg-light" style="z-index: 2; display: none;">
+            <div class="text-center text-muted w-100">
+                <div class="spinner-border mb-2" role="status"></div>
+                <div><?= __('加载中…') ?></div>
+            </div>
+        </div>
+        <div id="pageFormAddWebsiteFail" class="position-absolute top-0 start-0 end-0 bottom-0 align-items-center justify-content-center bg-light" style="z-index: 3; display: none;">
+            <div class="text-center text-muted px-3">
+                <p class="mb-2"><?= __('无法在侧栏中加载，请在新窗口打开') ?></p>
+                <a id="pageFormAddWebsiteOpenNew" href="#" target="_blank" class="btn btn-primary btn-sm"><?= __('在新窗口打开') ?></a>
+            </div>
+        </div>
+        <iframe id="pageFormAddWebsiteIframe" class="w-100 h-100 border-0 position-relative" style="z-index: 1; min-height: 400px;" title="<?= __('新建站点') ?>"></iframe>
+    </div>
+</div>
+<script>
+(function() {
+    'use strict';
+    var addWebsiteOffcanvas = document.getElementById('pageFormAddWebsiteOffcanvas');
+    var addWebsiteIframe = document.getElementById('pageFormAddWebsiteIframe');
+    var addWebsiteLoading = document.getElementById('pageFormAddWebsiteLoading');
+    var addWebsiteFail = document.getElementById('pageFormAddWebsiteFail');
+    var addWebsiteOpenNew = document.getElementById('pageFormAddWebsiteOpenNew');
+    var addWebsiteUrl = <?= json_encode($this->getBackendUrl('*/backend/websiteManagement/add')) ?>;
+    var websitesForSelectUrl = <?= json_encode($this->getBackendUrl('*/backend/page/getWebsitesForSelect')) ?>;
+    function hideLoading() {
+        if (addWebsiteLoading) addWebsiteLoading.style.display = 'none';
+    }
+    function showLoading() {
+        if (addWebsiteLoading) addWebsiteLoading.style.display = 'flex';
+        if (addWebsiteFail) addWebsiteFail.style.display = 'none';
+    }
+    function showFail() {
+        hideLoading();
+        if (addWebsiteFail) addWebsiteFail.style.display = 'flex';
+        if (addWebsiteOpenNew) addWebsiteOpenNew.href = addWebsiteUrl;
+    }
+    if (addWebsiteOffcanvas && addWebsiteIframe) {
+        addWebsiteOffcanvas.addEventListener('shown.bs.offcanvas', function() {
+            showLoading();
+            addWebsiteIframe.src = addWebsiteUrl;
+            window._pageFormAddWebsiteLoadTimeout = window.setTimeout(function() {
+                if (addWebsiteLoading && addWebsiteLoading.style.display === 'flex') {
+                    showFail();
+                }
+            }, 12000);
+        }, { once: false });
+        addWebsiteIframe.addEventListener('load', function() {
+            if (window._pageFormAddWebsiteLoadTimeout) {
+                clearTimeout(window._pageFormAddWebsiteLoadTimeout);
+                window._pageFormAddWebsiteLoadTimeout = null;
+            }
+            hideLoading();
+            if (addWebsiteFail) addWebsiteFail.style.display = 'none';
+        });
+        addWebsiteOffcanvas.addEventListener('hidden.bs.offcanvas', function() {
+            if (window._pageFormAddWebsiteLoadTimeout) {
+                clearTimeout(window._pageFormAddWebsiteLoadTimeout);
+                window._pageFormAddWebsiteLoadTimeout = null;
+            }
+            addWebsiteIframe.src = 'about:blank';
+            showLoading();
+            fetch(websitesForSelectUrl).then(function(r) { return r.json(); }).then(function(res) {
+                if (res.success && res.items && res.items.length) {
+                    var sel = document.getElementById('website_id');
+                    if (!sel) return;
+                    var currentVal = sel.value;
+                    var opts = sel.options;
+                    while (opts.length > 1) opts.remove(1);
+                    res.items.forEach(function(item) {
+                        var o = document.createElement('option');
+                        o.value = item.website_id;
+                        o.textContent = (item.name || '') + ' (' + (item.code || '') + ')';
+                        sel.appendChild(o);
+                    }
+                    if (currentVal) sel.value = currentVal;
+                }
+            }).catch(function() {});
+        });
+    }
+})();
+</script>
 
 <!-- AI生成内容模态框 -->
 <?php if (($ai_enabled ?? '0') === '1'): ?>
