@@ -198,6 +198,8 @@ class MenuCollector
             $module = $db_menus[$source][Acl::schema_fields_MODULE] ?? '';
             $children = [];
             $this->collectChildAclSources($source, $children);
+            // 排除仍在当前 menu.xml 中定义的子项，避免父节点被移除时误删仍有效的子菜单
+            $children = array_values(array_diff($children, $file_sources));
             $all = array_merge([$source], $children);
             if (in_array($module, $disabledModules, true)) {
                 foreach ($all as $s) {
