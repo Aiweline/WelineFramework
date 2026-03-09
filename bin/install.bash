@@ -859,27 +859,18 @@ install_php() {
     echo "(--path-only) PHP not found at $dest; add PATH manually if needed."
     return
   fi
-  # 优先检测系统已有 PHP（含 pdo_pgsql），满足要求则提示：用系统 PHP 还是强制自编译
-  local force_overwrite_system_php=0
+  # 先判断：系统已有 PHP 且版本符合则直接用，不安装
   if [[ "$REBUILD_PHP" != true ]]; then
     local sys_php
     sys_php="$(find_system_php_linux "$PHP_VERSION" 2>/dev/null || true)"
     if [[ -n "$sys_php" ]]; then
-      echo "检测到系统已有 PHP: $sys_php"
-      echo "使用系统 PHP 将创建软链；若选自编译则扩展(exif/fileinfo/xsl 等)一并编译进 PHP，并覆盖 /usr/bin/php 指向项目 PHP。"
-      read -p "是否强制使用项目自编译 PHP？(y/N): " -r
-      if [[ ! "$REPLY" =~ ^[yY] ]]; then
-        echo "使用系统 PHP，创建软链到 extend/server/php/bin ..."
-        mkdir -p "$dest/bin"
-        ln -sf "$sys_php" "$dest/bin/php"
-        [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
-        add_to_path "$dest"
-        add_to_path "$dest/bin"
-        echo "Skipping source compilation."
-        return
-      fi
-      force_overwrite_system_php=1
-      echo "将编译项目自用 PHP 到 extend/server/php，并覆盖 /usr/bin/php ..."
+      echo "检测到系统已有 PHP $PHP_VERSION (含 pdo_pgsql)，直接使用，跳过安装：$sys_php"
+      mkdir -p "$dest/bin"
+      ln -sf "$sys_php" "$dest/bin/php"
+      [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
+      add_to_path "$dest"
+      add_to_path "$dest/bin"
+      return
     fi
   fi
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
@@ -887,11 +878,6 @@ install_php() {
   install_php_from_source "$dest"
   add_to_path "$dest"
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
-  # 强制自编译时覆盖 /usr/bin/php，确保后续执行的 php 指向项目 PHP
-  if [[ "$force_overwrite_system_php" -eq 1 ]] && [[ -x "$dest/bin/php" ]]; then
-    echo "覆盖 /usr/bin/php 指向项目自编译 PHP ..."
-    run_privileged ln -sf "$dest/bin/php" /usr/bin/php
-  fi
 }
 
 # Mac：用 Homebrew 安装 PostgreSQL，并在 extend/server/pgsql 做软链（与 Windows 路径一致，初始化逻辑复用 run.php）
@@ -950,6 +936,35 @@ install_pgsql_linux() {
   local dest="$SERVER_DIR/pgsql"
   local os_id=""
   [[ -f /etc/os-release ]] && . /etc/os-release 2>/dev/null && os_id="${ID:-}"
+
+  # 先判断：系统已有 PostgreSQL 且 5432 可连接则直接用，不安装
+  local pg_port=5432
+  local pg_bin_check=""
+  pg_bin_check=$(command -v psql 2>/dev/null)
+  [[ -z "$pg_bin_check" ]] && [[ -x /usr/bin/psql ]] && pg_bin_check="/usr/bin/psql"
+  if [[ -n "$pg_bin_check" ]] && [[ -x "$pg_bin_check" ]]; then
+    if (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${pg_port}([^0-9]|$)"; then
+      local pg_can_connect=0
+      for try_pass in "" "postgres" "weline"; do
+        if [[ -z "$try_pass" ]]; then
+          "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
+        else
+          PGPASSWORD="$try_pass" "$pg_bin_check" -h 127.0.0.1 -p "$pg_port" -U postgres -d postgres -tAc "SELECT 1" 2>/dev/null | grep -q 1 && { pg_can_connect=1; break; }
+        fi
+      done
+      if [[ "$pg_can_connect" -eq 1 ]]; then
+        echo "检测到系统已有 PostgreSQL（5432 可连接），直接使用，跳过安装：$pg_bin_check"
+        local pg_dir_check
+        pg_dir_check="$(dirname "$pg_bin_check")"
+        mkdir -p "$dest"
+        rm -rf "$dest/bin"
+        ln -sf "$pg_dir_check" "$dest/bin"
+        add_to_path "$dest/bin"
+        return
+      fi
+    fi
+  fi
+
   if [[ -f /etc/debian_version ]]; then
     echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt)..."
     if ! run_apt_update_once; then
