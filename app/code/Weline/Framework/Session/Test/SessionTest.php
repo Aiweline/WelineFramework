@@ -11,6 +11,7 @@ use Weline\Framework\Session\Storage\FileStorage;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 use Weline\Framework\Session\Strategy\FpmStrategy;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 /**
  * Session 单元测试
@@ -41,6 +42,8 @@ class SessionTest extends TestCase
 
     protected function tearDown(): void
     {
+        Session::flushRequestSessions();
+        Session::resetRequestState();
         $this->storage->destroy($this->testSessionId);
     }
 
@@ -149,5 +152,36 @@ class SessionTest extends TestCase
         
         $this->assertFalse($this->session->isStarted());
         $this->assertEquals('', $this->session->getId());
+    }
+
+    public function testWlsSessionDefersPersistUntilSave(): void
+    {
+        $storage = $this->createMock(SessionStorageInterface::class);
+        $storage->method('read')->willReturn([]);
+        $storage->expects($this->once())
+            ->method('write')
+            ->with('wls_session', ['foo' => 'bar'], 3600)
+            ->willReturn(true);
+
+        $session = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+        $session->start('wls_session');
+        $session->set('foo', 'bar');
+        $session->save();
+    }
+
+    public function testFlushRequestSessionsPersistsDirtyWlsSession(): void
+    {
+        $storage = $this->createMock(SessionStorageInterface::class);
+        $storage->method('read')->willReturn([]);
+        $storage->expects($this->once())
+            ->method('write')
+            ->with('flush_session', ['alpha' => 'beta'], 3600)
+            ->willReturn(true);
+
+        $session = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+        $session->start('flush_session');
+        $session->set('alpha', 'beta');
+
+        Session::flushRequestSessions();
     }
 }

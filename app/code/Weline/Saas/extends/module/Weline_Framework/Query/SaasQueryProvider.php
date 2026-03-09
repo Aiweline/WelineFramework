@@ -7,12 +7,14 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Saas\Model\ProvisioningOrder;
 use Weline\Saas\Model\ProvisioningStep;
+use Weline\Saas\Service\DomainLifecycleOrchestrationService;
 use Weline\Saas\Service\DomainProvisioningService;
 
 class SaasQueryProvider implements QueryProviderInterface
 {
     public function __construct(
         private readonly DomainProvisioningService $provisioningService,
+        private readonly DomainLifecycleOrchestrationService $lifecycleService,
         private readonly ProvisioningOrder $orderModel,
         private readonly ProvisioningStep $stepModel
     ) {
@@ -27,9 +29,12 @@ class SaasQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'startProvisioning'   => $this->startProvisioning($params),
+            'startPurchasedLifecycle' => $this->startPurchasedLifecycle($params),
             'getOrder'            => $this->getOrder($params),
             'getOrderByDomain'    => $this->getOrderByDomain($params),
+            'getDomainLifecycleStatus' => $this->getDomainLifecycleStatus($params),
             'getOrders'           => $this->getOrders($params),
+            'processOrder'        => $this->processOrder($params),
             'runStepDns'          => $this->runStepDns($params),
             'runStepCdn'          => $this->runStepCdn($params),
             'runStepSsl'          => $this->runStepSsl($params),
@@ -67,6 +72,20 @@ class SaasQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name'        => 'startPurchasedLifecycle',
+                    'description' => __('为已购买域名启动生命周期编排'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
+                        ['name' => 'registrar_account_id', 'type' => 'int', 'required' => true, 'description' => __('域名商账号 ID')],
+                        ['name' => 'resolve_to_local', 'type' => 'string|bool', 'required' => false, 'description' => __('是否自动解析到本服务器')],
+                        ['name' => 'subdomains', 'type' => 'array|string', 'required' => false, 'description' => __('子域名列表')],
+                        ['name' => 'dns_choice', 'type' => 'string', 'required' => false, 'description' => __('DNS 策略')],
+                        ['name' => 'dns_nameservers', 'type' => 'string', 'required' => false, 'description' => __('自定义 Nameserver')],
+                        ['name' => 'cdn_choice', 'type' => 'string', 'required' => false, 'description' => __('CDN 策略')],
+                        ['name' => 'apply_ssl', 'type' => 'bool', 'required' => false, 'description' => __('是否申请 SSL 证书')],
+                    ],
+                ],
+                [
                     'name'        => 'getOrder',
                     'description' => __('获取配置订单详情'),
                     'params'      => [
@@ -81,12 +100,26 @@ class SaasQueryProvider implements QueryProviderInterface
                     ],
                 ],
                 [
+                    'name'        => 'getDomainLifecycleStatus',
+                    'description' => __('按根域名获取生命周期状态详情'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('根域名')],
+                    ],
+                ],
+                [
                     'name'        => 'getOrders',
                     'description' => __('获取配置订单列表'),
                     'params'      => [
                         ['name' => 'status', 'type' => 'string|null', 'required' => false, 'description' => __('按状态过滤')],
                         ['name' => 'page', 'type' => 'int', 'required' => false, 'description' => __('页码')],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false, 'description' => __('每页数量')],
+                    ],
+                ],
+                [
+                    'name'        => 'processOrder',
+                    'description' => __('推进生命周期订单到下一状态'),
+                    'params'      => [
+                        ['name' => 'order_id', 'type' => 'int', 'required' => true, 'description' => __('订单 ID')],
                     ],
                 ],
                 [
@@ -156,7 +189,18 @@ class SaasQueryProvider implements QueryProviderInterface
             'apply_ssl'       => $params['apply_ssl'] ?? true,
         ];
 
-        return $this->provisioningService->startProvisioning($domain, $registrarAccountId, $options);
+        return $this->lifecycleService->startProvisioning($domain, $registrarAccountId, $options);
+    }
+
+    private function startPurchasedLifecycle(array $params): array
+    {
+        $domain = (string)($params['domain'] ?? '');
+        $registrarAccountId = (int)($params['registrar_account_id'] ?? 0);
+        if ($domain === '' || $registrarAccountId <= 0) {
+            return ['success' => false, 'message' => (string)__('域名和域名商账号 ID 不能为空')];
+        }
+
+        return $this->lifecycleService->startPurchasedLifecycle($domain, $registrarAccountId, $params);
     }
 
     private function getOrder(array $params): ?array
@@ -183,12 +227,22 @@ class SaasQueryProvider implements QueryProviderInterface
             return null;
         }
 
-        $order = $this->provisioningService->getOrderByDomain($domain);
+        $order = $this->lifecycleService->getOrderByDomain($domain);
         if ($order === null) {
             return null;
         }
 
         return $this->formatOrder($order);
+    }
+
+    private function getDomainLifecycleStatus(array $params): array
+    {
+        $domain = (string)($params['domain'] ?? '');
+        if ($domain === '') {
+            return ['success' => false, 'message' => (string)__('域名不能为空')];
+        }
+
+        return $this->lifecycleService->getDomainLifecycleStatus($domain);
     }
 
     private function getOrders(array $params): array
@@ -235,6 +289,16 @@ class SaasQueryProvider implements QueryProviderInterface
         }
 
         return $this->provisioningService->runStepDns($orderId);
+    }
+
+    private function processOrder(array $params): array
+    {
+        $orderId = (int)($params['order_id'] ?? 0);
+        if ($orderId <= 0) {
+            return ['success' => false, 'message' => (string)__('订单 ID 无效')];
+        }
+
+        return $this->lifecycleService->processOrder($orderId);
     }
 
     private function runStepCdn(array $params): array

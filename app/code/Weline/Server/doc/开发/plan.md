@@ -1,9 +1,9 @@
 # Weline_Server 验证测试与问题即修复计划
 
 **状态**：🟡 进行中（status: in_progress）  
-**当前阶段**：阶段 2–5 验证中（2026-03-07）  
+**当前阶段**：阶段 7 请求时延优化（2026-03-09）  
 **完成度**：25%（2.5/10）  
-**最后更新**：2026-03-07
+**最后更新**：2026-03-09
 
 ---
 
@@ -163,3 +163,32 @@
 ## 七、进度跟踪
 
 执行详情与勾选项见：[`task.md`](./task.md)
+
+---
+
+## 八、2026-03-09 请求时延优化增量计划
+
+### 8.1 决策 C：优先做低风险高收益优化，暂缓 Linux 直连模式
+
+| 问题 | 分析 |
+|------|------|
+| 为什么这么做？ | 当前 Linux 下强制走 `Dispatcher` 有规则链路依赖，直接切直连需要把 Dispatcher 能力下放到 Worker，改动面过大。 |
+| 收益 | 先落地 `Session` 延迟写、`Cache` 协议轻量化、`WlsRuntime` 日志开关，可更快看到时延下降。 |
+| 缺陷/风险 | 不能一次解决 Dispatcher 固定成本。 |
+| 影响范围 | `Weline_Framework::Session`、`Weline_Server::Shared/Session/Runtime`。 |
+| 关联模块 | `Weline_Server`、`Weline_Framework`。 |
+| 应对方案 | 将 Linux 直连模式列为后续专项，先在本轮完成协议层和请求末尾写入优化。 |
+| 安全隐患 | Session 必须保证请求末尾强制写入，不能因延迟写导致登录态丢失。 |
+| 命中技能 | `create-plan`、`session-development`、`cache-usage`、`weline-server`、`quality-assurance`。 |
+
+### 8.2 本轮优化范围
+
+1. `Session` 写入从“每次变更立即 RPC”改为“请求结束统一保存”。
+2. `SharedMemoryService` 的 `exists()/touch()/mget()/mset()` 改为协议原生命令，避免 `get()+set()` 放大。
+3. `WlsRuntime` 增加可配置的性能日志/请求日志/错误日志开关，便于量化日志开销。
+4. Linux 直连模式记入后续计划，本轮不实施。
+
+### 8.3 后续专项（暂缓）
+
+1. Linux 直连模式：需要把 Dispatcher 的规则生效能力下放到 Worker，再评估切换路径。
+2. 请求链固定成本拆账：继续分析 `run_before`、`Router::__init()`、`router->start()`、`StateManager::reset()` 的占比并做定点优化。
