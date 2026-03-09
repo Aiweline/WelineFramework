@@ -171,12 +171,12 @@ class ModuleUpgradeExecuteAfterPlugin
 
         $identifies = array_keys($deduplicatedRows);
         // 先删除旧记录，再批量插入新记录，确保 PostgreSQL 下不会触发唯一键冲突
-        $this->urlManager->reset()
+        $this->urlManager->recovery()
             ->where(UrlManager::schema_fields_IDENTIFY, $identifies, 'IN')
             ->delete()
             ->fetch();
 
-        $this->urlManager->reset()
+        $this->urlManager->recovery()
             ->insert(array_values($deduplicatedRows))
             ->fetch();
     }
