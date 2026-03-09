@@ -1124,7 +1124,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 (function() {
     'use strict';
 
-    var purchaseDialogScriptUrl = '<?= $purchaseDialogJsUrl ?>';
+    var purchaseDialogPrimaryScriptUrl = '<?= $purchaseDialogJsUrl ?>';
     var purchaseDialogLoadingPromise = null;
 
     var API = {
@@ -1204,21 +1204,67 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
             return purchaseDialogLoadingPromise;
         }
 
+        function getPurchaseDialogScriptCandidates() {
+            var candidates = [purchaseDialogPrimaryScriptUrl];
+            try {
+                if (window.Weline && window.Weline.staticResourceResolver) {
+                    candidates.push(window.Weline.staticResourceResolver.resolve('Weline_Websites::backend/domain-purchase-dialog.js'));
+                }
+            } catch (e) {}
+            candidates.push('/Weline/Websites/view/statics/backend/domain-purchase-dialog.js');
+            candidates.push('/static/Weline/Websites/backend/domain-purchase-dialog.js');
+            return candidates.filter(function(url, index, arr) {
+                return !!url && arr.indexOf(url) === index;
+            });
+        }
+
+        function loadScript(url) {
+            return new Promise(function(resolve, reject) {
+                var script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                script.dataset.domainPurchaseDialog = '1';
+                var timer = setTimeout(function() {
+                    reject(new Error('dialog-script-timeout:' + url));
+                }, 10000);
+                script.onload = function() {
+                    clearTimeout(timer);
+                    resolve(true);
+                };
+                script.onerror = function() {
+                    clearTimeout(timer);
+                    reject(new Error('dialog-script-load-failed:' + url));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
         purchaseDialogLoadingPromise = new Promise(function(resolve, reject) {
-            var script = document.createElement('script');
-            script.src = purchaseDialogScriptUrl;
-            script.async = true;
-            script.onload = function() {
+            var candidates = getPurchaseDialogScriptCandidates();
+            var index = 0;
+
+            function tryNext(lastError) {
                 if (window.WelineDomainPurchaseDialog) {
                     resolve(true);
-                } else {
-                    reject(new Error('dialog-object-missing'));
+                    return;
                 }
-            };
-            script.onerror = function() {
-                reject(new Error('dialog-script-load-failed'));
-            };
-            document.head.appendChild(script);
+                if (index >= candidates.length) {
+                    reject(lastError || new Error('dialog-script-candidates-exhausted'));
+                    return;
+                }
+                var url = candidates[index++];
+                loadScript(url).then(function() {
+                    if (window.WelineDomainPurchaseDialog) {
+                        resolve(true);
+                    } else {
+                        tryNext(new Error('dialog-object-missing:' + url));
+                    }
+                }).catch(function(error) {
+                    tryNext(error);
+                });
+            }
+
+            tryNext();
         }).catch(function(error) {
             purchaseDialogLoadingPromise = null;
             throw error;
@@ -1256,8 +1302,9 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 labels: getPurchaseDialogLabels(),
                 defaults: defaults || {}
             });
-        }).catch(function() {
-            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>');
+        }).catch(function(error) {
+            var detail = error && error.message ? (' ' + error.message) : '';
+            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
             return null;
         });
     }
@@ -2050,11 +2097,18 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 
         setBtnLoading(btn, true);
 
-        postForm(API.batchResolveToLocal, { domain_ids: JSON.stringify([domainId]) }).then(function(res) {
+        postForm(API.batchResolveToLocal, {
+            domain_ids: JSON.stringify([domainId]),
+            auto_transfer_to_pool: '1',
+            prefixes: JSON.stringify(['@', 'www'])
+        }).then(function(res) {
             setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
             if (res.success) {
                 AdminToast.success(res.msg || ('<?= __('已将') ?> ' + domainName + ' <?= __('的 @、www 解析到本机') ?>'));
                 loadDomainList();
+                if (currentDnsManageDomainId === domainId && document.getElementById('pb-dm-dns-manage-modal')) {
+                    loadDnsRecords();
+                }
             } else {
                 AdminToast.error(res.msg || '<?= __('解析到本地失败') ?>');
             }
@@ -2067,6 +2121,8 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     /* ========== 单条域名DNS记录管理 ========== */
     var currentDnsManageDomainId = 0;
     var currentDnsManageDomainName = '';
+    var currentDnsManageServerIp = '';
+    var currentDnsManageProviderName = '-';
 
     function showDnsManageModal(domainId, domainName) {
         currentDnsManageDomainId = domainId;
@@ -2080,13 +2136,20 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                         <button class="pb-dm-modal-close" onclick="closeDnsManageModal()">&times;</button>\
                     </div>\
                     <div class="pb-dm-modal-body">\
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">\
-                            <div>\
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">\
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">\
+                                <span style="color:var(--backend-color-text-secondary,#6c757d);"><?= __('DNS服务商') ?>:</span>\
+                                <span id="pb-dm-dns-provider-badge" class="pb-dm-badge pb-dm-badge--info">-</span>\
+                                <span style="color:var(--backend-color-text-secondary,#6c757d);"><?= __('本服务器IP') ?>:</span>\
+                                <code id="pb-dm-dns-server-ip-display">-</code>\
+                            </div>\
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">\
                                 <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" onclick="refreshDnsRecords()">\
                                     <i class="mdi mdi-refresh"></i> <?= __('刷新') ?>\
                                 </button>\
-                            </div>\
-                            <div>\
+                                <button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm" onclick="autoResolveDnsForCurrentDomain()">\
+                                    <i class="mdi mdi-auto-fix"></i> <?= __('自动解析到本服务器') ?>\
+                                </button>\
                                 <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" onclick="showAddDnsRecordForm()">\
                                     <i class="mdi mdi-plus"></i> <?= __('添加记录') ?>\
                                 </button>\
@@ -2161,6 +2224,10 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         req.then(function(res) {
                 var res = (res && res.data) !== undefined ? res.data : res;
                 if (res.success) {
+                    var dnsData = res.data || {};
+                    currentDnsManageProviderName = dnsData.dns_provider_name || dnsData.dns_provider || '-';
+                    currentDnsManageServerIp = dnsData.server_ip || '-';
+                    renderDnsManageHeader(currentDnsManageProviderName, currentDnsManageServerIp);
                     renderDnsRecords(res.data.records || []);
                 } else {
                     container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--backend-color-danger);">' + (res.msg || '<?= __('获取失败') ?>') + '</div>';
@@ -2174,6 +2241,41 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     function refreshDnsRecords() {
         loadDnsRecords();
         AdminToast.info('<?= __('已刷新') ?>');
+    }
+
+    function renderDnsManageHeader(providerName, serverIp) {
+        var providerEl = document.getElementById('pb-dm-dns-provider-badge');
+        if (providerEl) {
+            providerEl.textContent = providerName || '-';
+        }
+        var ipEl = document.getElementById('pb-dm-dns-server-ip-display');
+        if (ipEl) {
+            ipEl.textContent = serverIp || '-';
+        }
+    }
+
+    function autoResolveDnsForCurrentDomain() {
+        if (!currentDnsManageDomainId) {
+            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            return;
+        }
+
+        AdminToast.info('<?= __('正在自动解析到本服务器并写入域名池...') ?>');
+        postForm(API.batchResolveToLocal, {
+            domain_ids: JSON.stringify([currentDnsManageDomainId]),
+            auto_transfer_to_pool: '1',
+            prefixes: JSON.stringify(['@', 'www'])
+        }).then(function(res) {
+            if (res.success) {
+                AdminToast.success(res.msg || '<?= __('解析成功') ?>');
+                loadDnsRecords();
+                loadDomainList();
+            } else {
+                AdminToast.error(res.msg || '<?= __('解析失败') ?>');
+            }
+        }).catch(function() {
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
     }
 
     function renderDnsRecords(records) {
