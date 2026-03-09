@@ -192,6 +192,18 @@ final class ConfigurePhpIni
             $content
         );
 
+        // memory_limit：安装阶段 setup:upgrade 等操作较吃内存，统一 512M 避免耗尽
+        $content = preg_replace(
+            '/^\s*;?\s*memory_limit\s*=.*$/m',
+            'memory_limit = 512M',
+            $content,
+            1,
+            $count
+        );
+        if ($count === 0) {
+            $content = preg_replace('/(\[PHP\])/', '$1' . "\nmemory_limit = 512M\n", $content, 1);
+        }
+
         // 日志路径：统一指向 var/log/php/
         $content = $this->configureLogPaths($content);
 
