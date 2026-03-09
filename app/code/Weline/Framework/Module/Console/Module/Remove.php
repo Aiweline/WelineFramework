@@ -229,6 +229,9 @@ class Remove extends CommandAbstract
             // 执行菜单 diff，移除已卸载模块在 weline_acl 中的菜单/ACL 记录
             try {
                 $this->printer->note(__('正在同步菜单与 ACL（移除已卸载模块的菜单项）...'));
+                // 必须先刷新 Env 缓存，否则 Scanner 仍使用旧的模块列表
+                Env::getInstance()->getModuleList(true);
+                Env::getInstance()->getActiveModules(true);
                 /** @var \Weline\Backend\Service\MenuCollector $menuCollector */
                 $menuCollector = ObjectManager::getInstance(\Weline\Backend\Service\MenuCollector::class);
                 $menuCollector->collect([]);

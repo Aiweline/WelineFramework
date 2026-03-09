@@ -44,6 +44,7 @@ class Collect implements CommandInterface
         $diagnostics = $this->menuCollector->collectWithDiagnostics($moduleNames);
         $fileMenuCount = $diagnostics['file_menu_count'];
         $rawConfigCount = $diagnostics['raw_config_count'];
+        $diff = $diagnostics['diff'] ?? [];
 
         if ($fileMenuCount === 0) {
             $msg = __('未从 menu.xml 解析到任何菜单。');
@@ -54,7 +55,43 @@ class Collect implements CommandInterface
             }
             $this->printing->error($msg);
         } else {
-            $this->printing->success(__('菜单收集完成！共解析 %{1} 条菜单', [$fileMenuCount]));
+            $this->printing->success(__('菜单收集完成！共解析 %{1} 条菜单（来自 %{2} 个 menu.xml 文件）', [$fileMenuCount, $rawConfigCount]));
+        }
+        
+        // 输出 diff 结果
+        if (!empty($diff)) {
+            $added = $diff['to_add'] ?? [];
+            $updated = $diff['to_update'] ?? [];
+            $deleted = $diff['to_delete'] ?? [];
+            $disabled = $diff['to_disable'] ?? [];
+            
+            if (!empty($added)) {
+                $this->printing->success(__('  新增 %{1} 条菜单：', [count($added)]));
+                foreach ($added as $source) {
+                    $this->printing->note('    + ' . $source);
+                }
+            }
+            if (!empty($updated)) {
+                $this->printing->note(__('  更新 %{1} 条菜单：', [count($updated)]));
+                foreach (array_keys($updated) as $source) {
+                    $this->printing->note('    ~ ' . $source);
+                }
+            }
+            if (!empty($deleted)) {
+                $this->printing->warning(__('  删除 %{1} 条菜单（模块已移除）：', [count($deleted)]));
+                foreach ($deleted as $source) {
+                    $this->printing->warning('    - ' . $source);
+                }
+            }
+            if (!empty($disabled)) {
+                $this->printing->note(__('  禁用 %{1} 条菜单（模块已禁用）：', [count($disabled)]));
+                foreach ($disabled as $source) {
+                    $this->printing->note('    ○ ' . $source);
+                }
+            }
+            if (empty($added) && empty($updated) && empty($deleted) && empty($disabled)) {
+                $this->printing->success(__('  菜单无变化。'));
+            }
         }
         
         // 清理事件缓存（菜单更新可能触发事件，需要清理事件缓存）
