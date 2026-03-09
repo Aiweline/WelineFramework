@@ -86,9 +86,9 @@ class StatisticsService
         
         // 获取所有有会话的客服ID
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, 0, '>')
-            ->where(ChatSession::schema_fields_created_at, $dateRange['start'], '>=')
-            ->where(ChatSession::schema_fields_created_at, $dateRange['end'], '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, 0, '>')
+            ->where(ChatSession::schema_fields_CREATED_AT, $dateRange['start'], '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $dateRange['end'], '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -96,7 +96,7 @@ class StatisticsService
         // 提取唯一的客服ID
         $agentIds = [];
         foreach ($sessions as $sessionData) {
-            $agentId = (int)$sessionData[ChatSession::schema_fields_agent_id];
+            $agentId = (int)$sessionData[ChatSession::schema_fields_AGENT_ID];
             if ($agentId > 0 && !in_array($agentId, $agentIds)) {
                 $agentIds[] = $agentId;
             }
@@ -125,12 +125,12 @@ class StatisticsService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         $query = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=');
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=');
         
         if ($status !== null) {
-            $query->where(ChatSession::schema_fields_status, $status);
+            $query->where(ChatSession::schema_fields_STATUS, $status);
         }
         
         return (int)$query->count();
@@ -172,9 +172,9 @@ class StatisticsService
         
         // 获取该客服的所有会话ID
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -211,9 +211,9 @@ class StatisticsService
         
         // 获取该客服的所有会话
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -257,9 +257,9 @@ class StatisticsService
         
         // 获取该客服的所有会话
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -358,10 +358,10 @@ class StatisticsService
         
         // 只统计已关闭的会话
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_status, ChatSession::STATUS_CLOSED)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_CLOSED)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -395,10 +395,10 @@ class StatisticsService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_status, ChatSession::STATUS_CLOSED)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_CLOSED)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();
@@ -434,10 +434,10 @@ class StatisticsService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         $sessions = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_status, ChatSession::STATUS_CLOSED)
-            ->where(ChatSession::schema_fields_created_at, $startDate, '>=')
-            ->where(ChatSession::schema_fields_created_at, $endDate, '<=')
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_CLOSED)
+            ->where(ChatSession::schema_fields_CREATED_AT, $startDate, '>=')
+            ->where(ChatSession::schema_fields_CREATED_AT, $endDate, '<=')
             ->select()
             ->fetch()
             ->getItems();

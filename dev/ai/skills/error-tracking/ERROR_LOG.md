@@ -4,6 +4,61 @@
 
 ---
 
+## [2026-03-09] Linux 前台 Ctrl+C 未复用 IPC 停机流程，导致停机阶段输出与 Windows 不一致 ✅ 已修复
+
+**错误类型**: WLS 进程信号处理 / 停机协议分叉
+
+**错误现象**:
+```text
+Windows 前台按 Ctrl+C 时，终端会显示 DRAIN / SHUTDOWN / 校验退出 等完整阶段。
+Linux 前台按 Ctrl+C 时，常见表现是子进程直接退出或输出不完整，看起来不像走了同一套停机逻辑。
+```
+
+**根本原因**:
+1. `MasterProcess::stopWithProgress()` 直接调用 `orchestrator->stopAll()`，而 `server:stop` 则通过 IPC `ACTION_STOP` 进入停机流程，形成两条入口。  
+2. `ServiceOrchestrator::sendStopProgress()` 同时支持 IPC 回传和本地 `echo`，前台信号停机与 CLI 停机走了两套输出方案。  
+3. Linux 前台 `Ctrl+C` 会把 `SIGINT` 发给整个前台进程组；部分子进程只“未注册 SIGINT”，但没有显式 `SIG_IGN`，会在 Master 通过 IPC 编排前先被终端打断。
+
+**解决方案**:
+1. 删除 `ServiceOrchestrator` 内部旧的控制台停机进度直出分支，仅保留 `command_result` IPC 回传。  
+2. 将 `MasterProcess::stopWithProgress()` 改为自连本地控制端口、发送 IPC `STOP` 命令，并读取同一条 `command_result` 进度流。  
+3. 为 `worker.php`、`worker_ssl.php`、`session_server.php`、`http_redirect_worker.php`、`file_watcher.php`、`Dispatcher.php` 显式添加 `pcntl_signal(SIGINT, SIG_IGN)`，确保 Linux 前台 Ctrl+C 只由 Master 捕获并统一编排退出。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/MasterProcess.php
+php -l app/code/Weline/Server/Service/ServiceOrchestrator.php
+php -l app/code/Weline/Server/bin/worker.php
+php -l app/code/Weline/Server/bin/worker_ssl.php
+php -l app/code/Weline/Server/bin/session_server.php
+php -l app/code/Weline/Server/bin/http_redirect_worker.php
+php -l app/code/Weline/Server/bin/file_watcher.php
+php -l app/code/Weline/Server/Dispatcher/Dispatcher.php
+```
+
+**验证结果**: ✅ 成功
+- 所有修改文件 `php -l` 语法检查通过。  
+- IDE lints 无新增错误。  
+- 已确认前台信号停机入口改为“本地 IPC STOP → 复用 `ACTION_STOP` 处理器 → `command_result` 进度回显”。  
+- 未在当前环境直接执行 Linux 前台 `Ctrl+C` 实机回归，避免打断现有运行实例；上线后需补一次前台手动验证。
+
+**预防措施**:
+1. WLS 的“信号停机”和“CLI 停机”必须共用同一个 IPC 命令入口，禁止再维护本地 `echo` 版停机进度。  
+2. 注释写“子进程不处理 SIGINT”时，必须显式 `SIG_IGN`，不能只是不注册处理器。  
+3. 涉及 Master / Worker / Dispatcher 退出链路时，优先检查是否仍然满足 `Single Writer` 原则：只有 Master/Orchestrator 负责编排子进程生命周期。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/MasterProcess.php`
+- `app/code/Weline/Server/Service/ServiceOrchestrator.php`
+- `app/code/Weline/Server/bin/worker.php`
+- `app/code/Weline/Server/bin/worker_ssl.php`
+- `app/code/Weline/Server/bin/session_server.php`
+- `app/code/Weline/Server/bin/http_redirect_worker.php`
+- `app/code/Weline/Server/bin/file_watcher.php`
+- `app/code/Weline/Server/Dispatcher/Dispatcher.php`
+
+---
+
 ## [2026-03-09] w_query 报“未注册的查询器：server”（extends 注册表未重建）✅ 已修复
 
 **错误类型**: QueryProvider 注册/运行时缓存问题
