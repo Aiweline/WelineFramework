@@ -125,15 +125,14 @@ class ErrorCollector
     }
 
     /**
-     * 输出到 stderr
+     * 输出到 stderr（分段着色）
      */
     private static function writeStderr(string $message, string $level): void
     {
-        $color = LogLevel::getColor($level);
-        $reset = LogLevel::getReset();
+        $colored = LogLevel::colorLine($message, $level);
 
         if (\defined('STDERR') && \is_resource(STDERR)) {
-            @\fwrite(STDERR, $color . $message . $reset);
+            @\fwrite(STDERR, $colored);
             @\fflush(STDERR);
         }
     }
