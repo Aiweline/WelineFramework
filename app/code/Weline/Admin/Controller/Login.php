@@ -237,14 +237,18 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
                 $backendUserToken->load($adminUsernameUser->getId());
                 $token = Text::random_string(32);
-                $token_expire_time = strtotime('+1 week');
+                $rememberTtl = 7 * 24 * 60 * 60;
+                $token_expire_time = \time() + $rememberTtl;
                 $backendUserToken
                     ->setData($backendUserToken::schema_fields_ID, $adminUsernameUser->getId())
                     ->setData($backendUserToken::schema_fields_type, 'admin_login_remember_me')
                     ->setData($backendUserToken::schema_fields_token, $token)
                     ->setData($backendUserToken::schema_fields_token_expire_time, $token_expire_time)
                     ->save();
-                Cookie::set('w_ut', $token, $token_expire_time, ['path' => '/' . $this->request->getAreaRouter()]);
+                Cookie::set('w_ut', $token, $rememberTtl, ['path' => '/']);
+                $this->session->set('remember_expire_time', $token_expire_time);
+            } else {
+                $this->session->delete('remember_expire_time');
             }
         } else {
             $adminUsernameUser->setSessionId($this->session->getId())
@@ -403,10 +407,27 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             }
         }
         
+        $userId = $this->session->getUserId();
+        $this->session->logout();
+        if ($userId) {
+            $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
+            $backendUserToken->reset()
+                ->where($backendUserToken::schema_fields_ID, (int)$userId)
+                ->where($backendUserToken::schema_fields_type, 'admin_login_remember_me')
+                ->find()
+                ->fetch();
+            if ($backendUserToken->getId()) {
+                $backendUserToken->setData($backendUserToken::schema_fields_token, '')
+                    ->setData($backendUserToken::schema_fields_token_expire_time, 0)
+                    ->save();
+            }
+        }
+        Cookie::set('w_ut', '', -1, ['path' => '/']);
         Cookie::set('w_ut', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         Cookie::set('w_sandbox', '', -1, ['path' => '/']);
         Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
-        $this->session->logout();
+        $this->session->delete('remember_expire_time');
+        $this->session->getSession()->destroy();
         $this->redirect($this->_url->getBackendUrl('admin/login'));
     }
 

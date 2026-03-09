@@ -10,8 +10,9 @@
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
-use Weline\Frontend\Block\ThemeConfig;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Backend\Block\ThemeConfig as BackendThemeConfig;
+use Weline\Frontend\Block\ThemeConfig as FrontendThemeConfig;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -30,8 +31,10 @@ class ThemeModeResolver
     {
         $area = strtolower($area);
         
-        // 获取Session实例
-        $session = ObjectManager::getInstance(Session::class);
+        // 获取当前区域 Session，避免 WLS 下复用通用 Session 单例导致上下文串请求。
+        $session = $area === 'backend'
+            ? SessionFactory::getInstance()->createBackendSession()
+            : SessionFactory::getInstance()->createFrontendSession();
         $previewThemeId = $session->getData('preview_theme_id');
         
         // 检查是否是预览模式
@@ -49,8 +52,10 @@ class ThemeModeResolver
         }
         
         // 正常模式：使用用户配置的主题颜色模式
-        /** @var ThemeConfig $themeConfig */
-        $themeConfig = ObjectManager::getInstance(ThemeConfig::class);
+        /** @var BackendThemeConfig|FrontendThemeConfig $themeConfig */
+        $themeConfig = $area === 'backend'
+            ? ObjectManager::getInstance(BackendThemeConfig::class)
+            : ObjectManager::getInstance(FrontendThemeConfig::class);
         $welineThemeColorMode = $themeConfig->getThemeModel();
         
         return $welineThemeColorMode ?: 'default';

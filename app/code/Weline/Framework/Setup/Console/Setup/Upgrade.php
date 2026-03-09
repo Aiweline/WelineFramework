@@ -71,6 +71,43 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         self::STAGE_FILE_UPDATE,
     ];
 
+    /** setup:upgrade 支持的参数键（用于严格校验未知参数） */
+    private const SUPPORTED_ARG_KEYS = [
+        'model',
+        'route',
+        'module',
+        'm',
+        'stage',
+        'hot',
+        'h',
+        'skip-env-check',
+        's',
+        'force',
+        'f',
+        'skip-reflection-compile',
+        'skip-reflect',
+        'skip-background-optimize',
+        'sync',
+        'y',
+        'yes',
+        'help',
+    ];
+
+    /** 用于错误提示的参数展示顺序 */
+    private const SUPPORTED_ARGS_DISPLAY = [
+        '--model',
+        '--route',
+        '--module, -m',
+        '--stage',
+        '--hot',
+        '--skip-env-check, -s',
+        '--force, -f',
+        '--skip-reflection-compile, --skip-reflect',
+        '--skip-background-optimize, --sync',
+        '--yes, -y',
+        '--help, -h',
+    ];
+
     /**
      * 记录是否有模块被安装或升级
      * @var bool
@@ -284,6 +321,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        $this->validateSupportedArgs($args);
+
         // 检查是否为热更新模式
         if (isset($args['hot']) || isset($args['h'])) {
             $this->executeHotReload();
@@ -320,6 +359,51 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // ========== 清理阶段 ==========
             $this->cleanupUpgrade($lockHandle, $lockFile, $maintenanceEnabled);
         }
+    }
+
+    /**
+     * 严格校验 setup:upgrade 参数，避免误传参数被静默忽略
+     *
+     * @param array $args
+     * @return void
+     * @throws Exception
+     */
+    private function validateSupportedArgs(array $args): void
+    {
+        $unknownArgs = [];
+        foreach ($args as $key => $value) {
+            // 数字键为位置参数（模块名），不参与选项校验
+            if (is_int($key) || ctype_digit((string) $key)) {
+                continue;
+            }
+            // 控制台框架注入的内部参数，不作为命令选项
+            if ($key === 'command') {
+                continue;
+            }
+            if (!in_array($key, self::SUPPORTED_ARG_KEYS, true)) {
+                $unknownArgs[] = $this->formatArgForDisplay((string) $key);
+            }
+        }
+        if ($unknownArgs === []) {
+            return;
+        }
+        $unknownArgs = array_values(array_unique($unknownArgs));
+        sort($unknownArgs);
+        throw new Exception(__('指定了不存在的参数：%{1}。可用参数：%{2}', [
+            implode(', ', $unknownArgs),
+            implode(', ', self::SUPPORTED_ARGS_DISPLAY),
+        ]));
+    }
+
+    private function formatArgForDisplay(string $argKey): string
+    {
+        if (str_starts_with($argKey, '--') || str_starts_with($argKey, '-')) {
+            return $argKey;
+        }
+        if (strlen($argKey) === 1) {
+            return '-' . $argKey;
+        }
+        return '--' . $argKey;
     }
     
     /**

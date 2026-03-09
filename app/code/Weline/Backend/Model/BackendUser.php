@@ -271,10 +271,11 @@ class BackendUser extends Model implements AuthenticableInterface
 
     /**
      * @inheritDoc
+     * 后台 sess_id 仅用于审计/追踪，不用于“切换用户 session”，故始终返回空，避免 login 时误 destroy 当前 session。
      */
     public function getAuthSessionId(): string
     {
-        return (string)$this->getSessionId();
+        return '';
     }
 
     /**

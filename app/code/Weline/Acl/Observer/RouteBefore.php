@@ -161,7 +161,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 $user = $eventUser;
                 $role = $eventRole;
                 if (!$role && method_exists($user, 'getRoleModel')) {
-                    $role = $user->getRoleModel();
+                    $role = call_user_func([$user, 'getRoleModel']);
                 }
                 $access_sources = $eventAccessSources ?? [];
             } else {
@@ -185,12 +185,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 if ($user) {
                     // 检查用户是否有getRoleModel方法（BackendUser）
                     if (method_exists($user, 'getRoleModel')) {
-                        $role = $user->getRoleModel();
+                        $role = call_user_func([$user, 'getRoleModel']);
                     }
                     // WLS 兼容：按当前用户的 role_id 重新加载 Role，避免 ObjectManager 复用导致拿到上一请求的 role（如 role_id=1）
                     // 否则会出现：首次请求误判为超管放行，刷新后才正确拦截
                     if ($role && method_exists($user, 'getRole')) {
-                        $roleId = (int) ($user->getRole()->getRoleId() ?: 0);
+                        $roleId = (int) (call_user_func([$user, 'getRole'])->getRoleId() ?: 0);
                         if ($roleId > 0) {
                             $role = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false)->load($roleId);
                         }
@@ -200,6 +200,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             
             // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
             if (!$user) {
+                $user = $this->session->getUser();
                 if ($request->isApiBackend()) {
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
@@ -337,7 +338,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $user = $eventUser;
             $role = $eventRole;
             if (!$role && method_exists($user, 'getRoleModel')) {
-                $role = $user->getRoleModel();
+                $role = call_user_func([$user, 'getRoleModel']);
             }
             $access_sources = $eventAccessSources ?? [];
         } else {

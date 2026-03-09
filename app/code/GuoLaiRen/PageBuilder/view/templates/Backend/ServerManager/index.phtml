@@ -1,0 +1,649 @@
+<?php
+$statusUrl = $this->getBackendUrl('*/backend/server-manager/status');
+$startUrl = $this->getBackendUrl('*/backend/server-manager/start');
+$stopUrl = $this->getBackendUrl('*/backend/server-manager/stop');
+$restartUrl = $this->getBackendUrl('*/backend/server-manager/restart');
+$reloadUrl = $this->getBackendUrl('*/backend/server-manager/reload');
+$maintenanceEnableUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-enable');
+$maintenanceDisableUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-disable');
+$sessionListUrl = $this->getBackendUrl('*/backend/server-manager/session-list');
+$sessionDestroyUrl = $this->getBackendUrl('*/backend/server-manager/session-destroy');
+$sessionPersistUrl = $this->getBackendUrl('*/backend/server-manager/session-persist');
+$sessionGcUrl = $this->getBackendUrl('*/backend/server-manager/session-gc');
+$memoryNamespacesUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespaces');
+$memoryNamespaceDetailUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespace-detail');
+$memoryNamespaceClearUrl = $this->getBackendUrl('*/backend/server-manager/memory-namespace-clear');
+$memoryKeyDeleteUrl = $this->getBackendUrl('*/backend/server-manager/memory-key-delete');
+$memoryPersistUrl = $this->getBackendUrl('*/backend/server-manager/memory-persist');
+$memoryGcUrl = $this->getBackendUrl('*/backend/server-manager/memory-gc');
+$operationStreamUrl = $this->getBackendUrl('*/backend/server-manager/operation-stream');
+?>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><?= __('服务器实例管理') ?></h5>
+        <button class="btn btn-sm btn-outline-primary" id="pb-server-refresh-btn"><?= __('刷新状态') ?></button>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                <tr>
+                    <th><?= __('实例') ?></th>
+                    <th><?= __('监听地址') ?></th>
+                    <th><?= __('端口') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th class="text-end"><?= __('操作') ?></th>
+                </tr>
+                </thead>
+                <tbody id="pb-server-instance-body">
+                <tr>
+                    <td colspan="5" class="text-center text-muted"><?= __('正在加载...') ?></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mt-1">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><?= __('会话管理') ?></h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" id="pb-session-refresh-btn"><?= __('刷新') ?></button>
+                    <button class="btn btn-sm btn-outline-info" id="pb-session-persist-btn"><?= __('持久化') ?></button>
+                    <button class="btn btn-sm btn-outline-warning" id="pb-session-gc-btn"><?= __('垃圾回收') ?></button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                        <tr>
+                            <th><?= __('会话ID') ?></th>
+                            <th><?= __('数据量') ?></th>
+                            <th class="text-end"><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody id="pb-session-body">
+                        <tr>
+                            <td colspan="3" class="text-center text-muted"><?= __('正在加载...') ?></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0"><?= __('内存管理') ?></h6>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" id="pb-memory-refresh-btn"><?= __('刷新') ?></button>
+                    <button class="btn btn-sm btn-outline-info" id="pb-memory-persist-btn"><?= __('持久化') ?></button>
+                    <button class="btn btn-sm btn-outline-warning" id="pb-memory-gc-btn"><?= __('垃圾回收') ?></button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table mb-0 align-middle">
+                        <thead>
+                        <tr>
+                            <th><?= __('命名空间') ?></th>
+                            <th><?= __('键数量') ?></th>
+                            <th class="text-end"><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody id="pb-memory-body">
+                        <tr>
+                            <td colspan="3" class="text-center text-muted"><?= __('正在加载...') ?></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="border-top p-2">
+                    <div class="small text-muted mb-1"><?= __('命名空间详情') ?></div>
+                    <div id="pb-memory-detail" class="small text-muted"><?= __('点击“查看键”加载') ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="pb-server-sse-modal" class="pb-server-sse-modal" style="display:none;">
+    <div class="pb-server-sse-modal-backdrop"></div>
+    <div class="pb-server-sse-modal-dialog">
+        <div class="pb-server-sse-modal-header">
+            <h6 class="mb-0"><i class="mdi mdi-console me-1"></i><?= __('实例操作日志') ?></h6>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="pb-server-sse-close">×</button>
+        </div>
+        <div class="pb-server-sse-modal-body">
+            <w:theme:sse-terminal id="pb-server-op-terminal" title="@lang(启动等待过程)" height="300px"/>
+        </div>
+    </div>
+</div>
+
+<style>
+.pb-server-sse-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pb-server-sse-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5));
+}
+.pb-server-sse-modal-dialog {
+    position: relative;
+    width: min(900px, 92vw);
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: 10px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    box-shadow: var(--backend-shadow-lg, 0 8px 30px rgba(0, 0, 0, 0.2));
+    overflow: hidden;
+}
+.pb-server-sse-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+.pb-server-sse-modal-body {
+    padding: 14px;
+}
+</style>
+
+<script>
+(function () {
+    'use strict';
+
+    var statusUrl = '<?= $statusUrl ?>';
+    var startUrl = '<?= $startUrl ?>';
+    var stopUrl = '<?= $stopUrl ?>';
+    var restartUrl = '<?= $restartUrl ?>';
+    var reloadUrl = '<?= $reloadUrl ?>';
+    var maintenanceEnableUrl = '<?= $maintenanceEnableUrl ?>';
+    var maintenanceDisableUrl = '<?= $maintenanceDisableUrl ?>';
+    var sessionListUrl = '<?= $sessionListUrl ?>';
+    var sessionDestroyUrl = '<?= $sessionDestroyUrl ?>';
+    var sessionPersistUrl = '<?= $sessionPersistUrl ?>';
+    var sessionGcUrl = '<?= $sessionGcUrl ?>';
+    var memoryNamespacesUrl = '<?= $memoryNamespacesUrl ?>';
+    var memoryNamespaceDetailUrl = '<?= $memoryNamespaceDetailUrl ?>';
+    var memoryNamespaceClearUrl = '<?= $memoryNamespaceClearUrl ?>';
+    var memoryKeyDeleteUrl = '<?= $memoryKeyDeleteUrl ?>';
+    var memoryPersistUrl = '<?= $memoryPersistUrl ?>';
+    var memoryGcUrl = '<?= $memoryGcUrl ?>';
+    var operationStreamUrl = '<?= $operationStreamUrl ?>';
+    var bodyEl = document.getElementById('pb-server-instance-body');
+    var sessionBodyEl = document.getElementById('pb-session-body');
+    var memoryBodyEl = document.getElementById('pb-memory-body');
+    var memoryDetailEl = document.getElementById('pb-memory-detail');
+    var refreshBtn = document.getElementById('pb-server-refresh-btn');
+    var sessionRefreshBtn = document.getElementById('pb-session-refresh-btn');
+    var sessionPersistBtn = document.getElementById('pb-session-persist-btn');
+    var sessionGcBtn = document.getElementById('pb-session-gc-btn');
+    var memoryRefreshBtn = document.getElementById('pb-memory-refresh-btn');
+    var memoryPersistBtn = document.getElementById('pb-memory-persist-btn');
+    var memoryGcBtn = document.getElementById('pb-memory-gc-btn');
+    var sseModalEl = document.getElementById('pb-server-sse-modal');
+    var sseModalCloseEl = document.getElementById('pb-server-sse-close');
+    var sseTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-server-op-terminal'] : null;
+    var sseHandlerReady = false;
+
+    function encodeBody(payload) {
+        return Object.keys(payload).map(function (key) {
+            return encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]);
+        }).join('&');
+    }
+
+    function truncateText(value, maxLength) {
+        var text = String(value || '');
+        if (text.length <= maxLength) {
+            return text;
+        }
+        return text.substring(0, maxLength) + '...';
+    }
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = String(text || '');
+        return div.innerHTML;
+    }
+
+    function renderRows(servers) {
+        var entries = Object.entries(servers || {});
+        if (!entries.length) {
+            bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><?= __('暂无实例') ?></td></tr>';
+            return;
+        }
+        bodyEl.innerHTML = entries.map(function (item) {
+            var name = item[0];
+            var row = item[1] || {};
+            var host = row.host || '127.0.0.1';
+            var port = row.port || 9981;
+            var running = !!row.running;
+            var statusText = running ? '<?= __('运行中') ?>' : '<?= __('已停止') ?>';
+            var statusClass = running ? 'success' : 'secondary';
+            return '' +
+                '<tr>' +
+                '<td><strong>' + name + '</strong></td>' +
+                '<td><code>' + host + '</code></td>' +
+                '<td><code>' + port + '</code></td>' +
+                '<td><span class="badge bg-' + statusClass + '">' + statusText + '</span></td>' +
+                '<td class="text-end">' +
+                '<button class="btn btn-sm btn-outline-success me-1" data-op="start" data-name="' + name + '"><?= __('启动') ?></button>' +
+                '<button class="btn btn-sm btn-outline-danger me-1" data-op="stop" data-name="' + name + '"><?= __('停止') ?></button>' +
+                '<button class="btn btn-sm btn-outline-warning me-1" data-op="restart" data-name="' + name + '"><?= __('重启') ?></button>' +
+                '<button class="btn btn-sm btn-outline-info me-1" data-op="reload" data-name="' + name + '"><?= __('热重载') ?></button>' +
+                '<button class="btn btn-sm btn-outline-secondary me-1" data-op="m-on" data-name="' + name + '"><?= __('维护开') ?></button>' +
+                '<button class="btn btn-sm btn-outline-secondary" data-op="m-off" data-name="' + name + '"><?= __('维护关') ?></button>' +
+                '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function opUrl(op) {
+        if (op === 'start') return startUrl;
+        if (op === 'stop') return stopUrl;
+        if (op === 'restart') return restartUrl;
+        if (op === 'reload') return reloadUrl;
+        if (op === 'm-on') return maintenanceEnableUrl;
+        return maintenanceDisableUrl;
+    }
+
+    async function sendOp(op, instance) {
+        if (op === 'start' || op === 'reload' || op === 'restart') {
+            runOpWithSse(op, instance);
+            return;
+        }
+        await sendOpFallback(op, instance);
+    }
+
+    async function sendOpFallback(op, instance) {
+        var response = await fetch(opUrl(op), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: encodeBody({instance: instance}),
+            credentials: 'same-origin'
+        });
+        var result = await response.json();
+        if (result.success) {
+            BackendToast.success(result.message || '<?= __('操作成功') ?>');
+        } else {
+            BackendToast.warning(result.message || '<?= __('操作失败') ?>');
+        }
+        await loadStatus();
+    }
+
+    function ensureSseHandlers() {
+        if (sseHandlerReady || !sseModalEl || !sseModalCloseEl || !sseTerminal) {
+            return;
+        }
+        sseHandlerReady = true;
+        var backdrop = sseModalEl.querySelector('.pb-server-sse-modal-backdrop');
+        var closeModal = function () {
+            if (sseTerminal.isRunning()) {
+                BackendConfirm.show('<?= __('任务仍在执行中，确定关闭日志窗口吗？') ?>').then(function (confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+                    sseTerminal.stop();
+                    sseModalEl.style.display = 'none';
+                });
+                return;
+            }
+            sseModalEl.style.display = 'none';
+        };
+        sseModalCloseEl.addEventListener('click', closeModal);
+        if (backdrop) {
+            backdrop.addEventListener('click', closeModal);
+        }
+    }
+
+    function runOpWithSse(op, instance) {
+        if (!sseTerminal || !sseModalEl) {
+            BackendToast.warning('<?= __('SSE组件未就绪，已切换为普通模式执行。') ?>');
+            sendOpFallback(op, instance);
+            return;
+        }
+        ensureSseHandlers();
+        var streamUrl = operationStreamUrl
+            + '?op=' + encodeURIComponent(op)
+            + '&instance=' + encodeURIComponent(instance);
+        sseTerminal.clear();
+        sseTerminal.setUrl(streamUrl);
+        sseTerminal.on('done', function (event) {
+            var message = '<?= __('操作已完成') ?>';
+            try {
+                var data = JSON.parse((event && event.data) ? event.data : '{}');
+                if (data && data.message) {
+                    message = data.message;
+                }
+            } catch (error) {}
+            BackendToast.success(message);
+            loadStatus();
+        });
+        sseTerminal.on('error', function (event) {
+            var message = '<?= __('连接异常，请检查服务状态后重试') ?>';
+            try {
+                var data = JSON.parse((event && event.data) ? event.data : '{}');
+                if (data && data.message) {
+                    message = data.message;
+                }
+            } catch (error) {}
+            BackendToast.warning(message);
+            loadStatus();
+        });
+        sseModalEl.style.display = 'flex';
+        sseTerminal.start();
+    }
+
+    async function loadStatus() {
+        try {
+            var response = await fetch(statusUrl, {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            var result = await response.json();
+            if (!result.success) {
+                bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-danger"><?= __('加载失败') ?></td></tr>';
+                return;
+            }
+            renderRows(result.servers || {});
+            renderSessionOverview(result.session || {});
+            renderMemoryOverview(result.memory || {});
+        } catch (e) {
+            bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-danger"><?= __('加载异常') ?></td></tr>';
+        }
+    }
+
+    function renderSessionOverview(session) {
+        if (!sessionBodyEl) {
+            return;
+        }
+        var stats = session.stats || {};
+        if (!stats.session_count && !stats.client_count) {
+            return;
+        }
+    }
+
+    function renderMemoryOverview(memory) {
+        if (!memoryBodyEl) {
+            return;
+        }
+        var stats = memory.stats || {};
+        if (!stats.session_count && !stats.client_count) {
+            return;
+        }
+    }
+
+    function postRequest(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: encodeBody(payload || {}),
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        });
+    }
+
+    async function loadSessionList() {
+        try {
+            var response = await fetch(sessionListUrl + '?limit=50', {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            var result = await response.json();
+            if (!result.success) {
+                sessionBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-danger"><?= __('加载失败') ?></td></tr>';
+                return;
+            }
+            var rows = Array.isArray(result.data) ? result.data : [];
+            if (!rows.length) {
+                sessionBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-muted"><?= __('暂无Session') ?></td></tr>';
+                return;
+            }
+            sessionBodyEl.innerHTML = rows.map(function (row) {
+                var sessionId = String(row.session_id || '');
+                return '' +
+                    '<tr>' +
+                    '<td><code title="' + escapeHtml(sessionId) + '">' + escapeHtml(truncateText(sessionId, 24)) + '</code></td>' +
+                    '<td>' + Number(row.data_count || 0) + '</td>' +
+                    '<td class="text-end"><button class="btn btn-sm btn-outline-danger" data-op="session-destroy" data-id="' + encodeURIComponent(sessionId) + '"><?= __('销毁') ?></button></td>' +
+                    '</tr>';
+            }).join('');
+        } catch (e) {
+            sessionBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-danger"><?= __('加载异常') ?></td></tr>';
+        }
+    }
+
+    async function loadMemoryNamespaces() {
+        try {
+            var response = await fetch(memoryNamespacesUrl + '?limit=100', {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            var result = await response.json();
+            if (!result.success) {
+                memoryBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-danger"><?= __('加载失败') ?></td></tr>';
+                return;
+            }
+            var rows = Array.isArray(result.data) ? result.data : [];
+            if (!rows.length) {
+                memoryBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-muted"><?= __('暂无命名空间') ?></td></tr>';
+                return;
+            }
+            memoryBodyEl.innerHTML = rows.map(function (row) {
+                var namespace = String(row.namespace || '');
+                return '' +
+                    '<tr>' +
+                    '<td><code>' + escapeHtml(namespace) + '</code></td>' +
+                    '<td>' + Number(row.keys || 0) + '</td>' +
+                    '<td class="text-end">' +
+                    '<button class="btn btn-sm btn-outline-primary me-1" data-op="memory-detail" data-namespace="' + encodeURIComponent(namespace) + '"><?= __('查看键') ?></button>' +
+                    '<button class="btn btn-sm btn-outline-danger" data-op="memory-clear" data-namespace="' + encodeURIComponent(namespace) + '"><?= __('清空') ?></button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        } catch (e) {
+            memoryBodyEl.innerHTML = '<tr><td colspan="3" class="text-center text-danger"><?= __('加载异常') ?></td></tr>';
+        }
+    }
+
+    async function loadMemoryNamespaceDetail(encodedNamespace) {
+        var namespace = decodeURIComponent(encodedNamespace);
+        memoryDetailEl.textContent = '<?= __('加载中...') ?>';
+        try {
+            var response = await fetch(memoryNamespaceDetailUrl + '?namespace=' + encodeURIComponent(namespace) + '&limit=50', {
+                method: 'GET',
+                headers: {'Accept': 'application/json'},
+                credentials: 'same-origin'
+            });
+            var result = await response.json();
+            if (!result.success) {
+                memoryDetailEl.textContent = result.message || '<?= __('加载失败') ?>';
+                return;
+            }
+            var rows = Array.isArray(result.data) ? result.data : [];
+            if (!rows.length) {
+                memoryDetailEl.textContent = '<?= __('该命名空间暂无键') ?>';
+                return;
+            }
+            memoryDetailEl.innerHTML = rows.slice(0, 10).map(function (row) {
+                var key = String(row.key || '');
+                var type = String(row.type || '');
+                return '<div class="d-flex justify-content-between border-bottom py-1">' +
+                    '<div><code>' + escapeHtml(truncateText(key, 40)) + '</code> <span class="text-muted">(' + escapeHtml(type) + ')</span></div>' +
+                    '<button class="btn btn-sm btn-link text-danger p-0" data-op="memory-key-delete" data-namespace="' + encodeURIComponent(namespace) + '" data-key="' + encodeURIComponent(key) + '"><?= __('删除') ?></button>' +
+                    '</div>';
+            }).join('');
+        } catch (e) {
+            memoryDetailEl.textContent = '<?= __('加载异常') ?>';
+        }
+    }
+
+    bodyEl.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        var op = target.getAttribute('data-op');
+        var name = target.getAttribute('data-name');
+        if (!op || !name) return;
+        sendOp(op, name);
+    });
+
+    sessionBodyEl.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+        if (target.getAttribute('data-op') !== 'session-destroy') {
+            return;
+        }
+        var sessionId = decodeURIComponent(target.getAttribute('data-id') || '');
+        BackendConfirm.show('<?= __('确认销毁该 Session 吗？') ?>').then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            postRequest(sessionDestroyUrl, {session_id: sessionId}).then(function (result) {
+                if (result.success) {
+                    BackendToast.success(result.message || '<?= __('销毁成功') ?>');
+                    loadSessionList();
+                } else {
+                    BackendToast.warning(result.message || '<?= __('销毁失败') ?>');
+                }
+            });
+        });
+    });
+
+    memoryBodyEl.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+        var op = target.getAttribute('data-op');
+        var encodedNamespace = target.getAttribute('data-namespace');
+        if (!op || !encodedNamespace) {
+            return;
+        }
+        if (op === 'memory-detail') {
+            loadMemoryNamespaceDetail(encodedNamespace);
+            return;
+        }
+        if (op === 'memory-clear') {
+            BackendConfirm.show('<?= __('确认清空该命名空间吗？') ?>').then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+                postRequest(memoryNamespaceClearUrl, {namespace: decodeURIComponent(encodedNamespace)}).then(function (result) {
+                    if (result.success) {
+                        BackendToast.success(result.message || '<?= __('清空成功') ?>');
+                        loadMemoryNamespaces();
+                        memoryDetailEl.textContent = '<?= __('点击“查看键”加载') ?>';
+                    } else {
+                        BackendToast.warning(result.message || '<?= __('清空失败') ?>');
+                    }
+                });
+            });
+        }
+    });
+
+    memoryDetailEl.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) {
+            return;
+        }
+        if (target.getAttribute('data-op') !== 'memory-key-delete') {
+            return;
+        }
+        var namespace = decodeURIComponent(target.getAttribute('data-namespace') || '');
+        var key = decodeURIComponent(target.getAttribute('data-key') || '');
+        postRequest(memoryKeyDeleteUrl, {namespace: namespace, key: key}).then(function (result) {
+            if (result.success) {
+                BackendToast.success(result.message || '<?= __('删除成功') ?>');
+                loadMemoryNamespaceDetail(encodeURIComponent(namespace));
+                loadMemoryNamespaces();
+            } else {
+                BackendToast.warning(result.message || '<?= __('删除失败') ?>');
+            }
+        });
+    });
+
+    refreshBtn.addEventListener('click', loadStatus);
+    sessionRefreshBtn.addEventListener('click', loadSessionList);
+    sessionPersistBtn.addEventListener('click', function () {
+        postRequest(sessionPersistUrl, {}).then(function (result) {
+            if (result.success) {
+                BackendToast.success(result.message || '<?= __('持久化成功') ?>');
+            } else {
+                BackendToast.warning(result.message || '<?= __('持久化失败') ?>');
+            }
+        });
+    });
+    sessionGcBtn.addEventListener('click', function () {
+        BackendConfirm.showInput({
+            title: '<?= __('会话垃圾回收') ?>',
+            message: '<?= __('请输入最大存活秒数') ?>',
+            placeholder: '3600',
+            defaultValue: '3600'
+        }).then(function (value) {
+            if (value === null) {
+                return;
+            }
+            postRequest(sessionGcUrl, {max_lifetime: Number(value || 3600)}).then(function (result) {
+                if (result.success) {
+                    BackendToast.success(result.message || '<?= __('GC执行成功') ?>');
+                    loadSessionList();
+                } else {
+                    BackendToast.warning(result.message || '<?= __('GC执行失败') ?>');
+                }
+            });
+        });
+    });
+    memoryRefreshBtn.addEventListener('click', loadMemoryNamespaces);
+    memoryPersistBtn.addEventListener('click', function () {
+        postRequest(memoryPersistUrl, {}).then(function (result) {
+            if (result.success) {
+                BackendToast.success(result.message || '<?= __('持久化成功') ?>');
+            } else {
+                BackendToast.warning(result.message || '<?= __('持久化失败') ?>');
+            }
+        });
+    });
+    memoryGcBtn.addEventListener('click', function () {
+        BackendConfirm.showInput({
+            title: '<?= __('内存垃圾回收') ?>',
+            message: '<?= __('请输入最大存活秒数') ?>',
+            placeholder: '3600',
+            defaultValue: '3600'
+        }).then(function (value) {
+            if (value === null) {
+                return;
+            }
+            postRequest(memoryGcUrl, {max_lifetime: Number(value || 3600)}).then(function (result) {
+                if (result.success) {
+                    BackendToast.success(result.message || '<?= __('GC执行成功') ?>');
+                    loadMemoryNamespaces();
+                } else {
+                    BackendToast.warning(result.message || '<?= __('GC执行失败') ?>');
+                }
+            });
+        });
+    });
+    loadStatus();
+    loadSessionList();
+    loadMemoryNamespaces();
+})();
+</script>

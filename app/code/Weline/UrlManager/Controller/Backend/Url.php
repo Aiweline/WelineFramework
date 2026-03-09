@@ -47,6 +47,8 @@ class Url extends \Weline\Framework\App\Controller\BackendController
             $item->setData('can_rewrite', str_ends_with($item['path'], '::GET'));
         }
         $this->assign('urls', $items);
+        $this->assign('has_urls', !empty($items));
+        $this->assign('current_q', $q);
         $this->assign('pagination', $urlManager->getPagination());
         return $this->fetch();
     }
