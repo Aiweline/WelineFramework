@@ -1122,9 +1122,21 @@ class DomainManagement extends BaseController
     public function postBatchResolveToLocal(): string
     {
         $domainIds = $this->request->getPost('domain_ids', []);
+        $autoTransferToPool = $this->request->getPost('auto_transfer_to_pool', '0') === '1';
+        $prefixes = $this->request->getPost('prefixes', ['@', 'www']);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
+        }
+        if (\is_string($prefixes)) {
+            $prefixes = \json_decode($prefixes, true) ?: [];
+        }
+        if (!\is_array($prefixes)) {
+            $prefixes = ['@', 'www'];
+        }
+        $prefixes = \array_values(\array_filter(\array_map(static fn($v) => \trim((string) $v), $prefixes)));
+        if ($prefixes === []) {
+            $prefixes = ['@', 'www'];
         }
 
         $domainIds = \array_map('intval', \array_filter((array) $domainIds));
@@ -1136,6 +1148,7 @@ class DomainManagement extends BaseController
         try {
             $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
             $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+            $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
 
             $serverIp = $serverIpService->getPublicIpv4();
             if ($serverIp === '') {
@@ -1145,6 +1158,8 @@ class DomainManagement extends BaseController
             $success = 0;
             $failed = 0;
             $errors = [];
+            $poolAdded = 0;
+            $poolSkipped = 0;
 
             foreach ($domainIds as $domainId) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -1159,6 +1174,11 @@ class DomainManagement extends BaseController
 
                 if ($result['success']) {
                     $success++;
+                    if ($autoTransferToPool) {
+                        $poolResult = $subdomainGenerator->generateDefaultSubdomains($domain, $prefixes);
+                        $poolAdded += (int) ($poolResult['added'] ?? 0);
+                        $poolSkipped += (int) ($poolResult['skipped'] ?? 0);
+                    }
                 } else {
                     $failed++;
                     $errors[] = $domain->getDomain() . ': ' . \implode('; ', $result['errors'] ?? []);
@@ -1166,6 +1186,9 @@ class DomainManagement extends BaseController
             }
 
             $msg = __('解析完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+            if ($autoTransferToPool) {
+                $msg .= '，' . __('域名池新增 %{1} 个，跳过 %{2} 个', [$poolAdded, $poolSkipped]);
+            }
 
             return $this->fetchJson([
                 'success' => true,
@@ -1175,6 +1198,9 @@ class DomainManagement extends BaseController
                     'failed' => $failed,
                     'errors' => $errors,
                     'server_ip' => $serverIp,
+                    'auto_transfer_to_pool' => $autoTransferToPool,
+                    'pool_added' => $poolAdded,
+                    'pool_skipped' => $poolSkipped,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -1395,6 +1421,8 @@ class DomainManagement extends BaseController
             }
 
             $result = $adapter->getDnsRecords($domain->getDomain(), $account->getCredentials());
+            $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+            $serverIp = $serverIpService->getPublicIpv4();
 
             return $this->fetchJson([
                 'success' => true,
@@ -1404,6 +1432,7 @@ class DomainManagement extends BaseController
                     'records' => \is_array($result) ? $result : [],
                     'dns_provider' => $account->getRegistrarCode(),
                     'dns_provider_name' => $account->getAccountName(),
+                    'server_ip' => $serverIp,
                 ],
             ]);
         } catch (\Throwable $e) {

@@ -588,7 +588,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 (function() {
     'use strict';
 
-    var purchaseDialogScriptUrl = '<?= $purchaseDialogJsUrl ?>';
+    var purchaseDialogPrimaryScriptUrl = '<?= $purchaseDialogJsUrl ?>';
     var purchaseDialogLoadingPromise = null;
 
     var checkUrl = '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>';
@@ -649,21 +649,67 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
             return purchaseDialogLoadingPromise;
         }
 
+        function getPurchaseDialogScriptCandidates() {
+            var candidates = [purchaseDialogPrimaryScriptUrl];
+            try {
+                if (window.Weline && window.Weline.staticResourceResolver) {
+                    candidates.push(window.Weline.staticResourceResolver.resolve('Weline_Websites::backend/domain-purchase-dialog.js'));
+                }
+            } catch (e) {}
+            candidates.push('/Weline/Websites/view/statics/backend/domain-purchase-dialog.js');
+            candidates.push('/static/Weline/Websites/backend/domain-purchase-dialog.js');
+            return candidates.filter(function(url, index, arr) {
+                return !!url && arr.indexOf(url) === index;
+            });
+        }
+
+        function loadScript(url) {
+            return new Promise(function(resolve, reject) {
+                var script = document.createElement('script');
+                script.src = url;
+                script.async = true;
+                script.dataset.domainPurchaseDialog = '1';
+                var timer = setTimeout(function() {
+                    reject(new Error('dialog-script-timeout:' + url));
+                }, 10000);
+                script.onload = function() {
+                    clearTimeout(timer);
+                    resolve(true);
+                };
+                script.onerror = function() {
+                    clearTimeout(timer);
+                    reject(new Error('dialog-script-load-failed:' + url));
+                };
+                document.head.appendChild(script);
+            });
+        }
+
         purchaseDialogLoadingPromise = new Promise(function(resolve, reject) {
-            var script = document.createElement('script');
-            script.src = purchaseDialogScriptUrl;
-            script.async = true;
-            script.onload = function() {
+            var candidates = getPurchaseDialogScriptCandidates();
+            var index = 0;
+
+            function tryNext(lastError) {
                 if (window.WelineDomainPurchaseDialog) {
                     resolve(true);
-                } else {
-                    reject(new Error('dialog-object-missing'));
+                    return;
                 }
-            };
-            script.onerror = function() {
-                reject(new Error('dialog-script-load-failed'));
-            };
-            document.head.appendChild(script);
+                if (index >= candidates.length) {
+                    reject(lastError || new Error('dialog-script-candidates-exhausted'));
+                    return;
+                }
+                var url = candidates[index++];
+                loadScript(url).then(function() {
+                    if (window.WelineDomainPurchaseDialog) {
+                        resolve(true);
+                    } else {
+                        tryNext(new Error('dialog-object-missing:' + url));
+                    }
+                }).catch(function(error) {
+                    tryNext(error);
+                });
+            }
+
+            tryNext();
         }).catch(function(error) {
             purchaseDialogLoadingPromise = null;
             throw error;
@@ -858,8 +904,9 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 btn.disabled = false;
                 btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
             });
-        }).catch(function() {
-            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>');
+        }).catch(function(error) {
+            var detail = error && error.message ? (' ' + error.message) : '';
+            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
         });
     }
 
