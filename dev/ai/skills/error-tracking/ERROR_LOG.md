@@ -2686,3 +2686,42 @@ php -l app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php
 - `app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php`
 
 ---
+
+## [2026-03-09] Session 列表“看起来为空”：服务内有 state 但被默认筛选/空数据跳过 ✅ 已修复
+
+**错误类型**: Session 列表过滤策略不符合“全量查看”需求
+
+**错误现象**:
+```text
+/server/backend/server-manager/session-list 返回 data=[]
+但 /server/backend/server-manager/status 的 session.stats.session_count > 0
+```
+
+**根本原因**:
+1. `SharedStateAdminService::listSessions()` 默认注入 `__domain=session`，属于隐式筛选。  
+2. `SessionServer::listSessions()` 对空 payload 使用 `empty($data)` 直接跳过，导致“存在但空数据”的 state 不展示。  
+
+**解决方案**:
+1. 去掉 `SharedStateAdminService::listSessions()` 的默认 `__domain` 注入，改为调用方显式筛选。  
+2. `SessionServer::listSessions()` 不再跳过空 payload state，按“全量”返回。  
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/Control/SharedStateAdminService.php
+php -l app/code/Weline/Server/Session/Server/SessionServer.php
+php bin/w server:reload
+curl.exe -k "https://127.0.0.1:9981/<backendKey>/CNY/zh_Hans_CN/server/backend/server-manager/session-list?limit=50"
+```
+
+**验证结果**: ✅ `data` 已返回多条记录（不再空数组）。
+
+**预防措施**:
+1. 运维接口若声明“全量列表”，禁止内置隐式 domain 过滤。  
+2. 列表语义应与统计语义一致，避免“stats 有数据但列表为空”。  
+3. “空 payload”是否展示必须由产品需求决定，不能在底层默认丢弃。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Control/SharedStateAdminService.php`
+- `app/code/Weline/Server/Session/Server/SessionServer.php`
+
+---
