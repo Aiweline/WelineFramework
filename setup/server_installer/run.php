@@ -103,32 +103,43 @@ if ($isEnvPhpInstalled($envPhpFile)) {
         }
     }
     
-    // 强制安装模式：二次确认
-    echo "\n";
-    echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
-    echo "║                          ⚠ 强制安装警告 ⚠                                  ║\n";
-    echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
-    echo "║ 检测到 app/etc/env.php 已存在，您正在使用强制安装模式。                      ║\n";
-    echo "║                                                                              ║\n";
-    echo "║ ⚠ 这将重新执行完整安装流程，可能导致：                                      ║\n";
-    echo "║   - 数据库配置被覆盖                                                         ║\n";
-    echo "║   - 现有配置丢失                                                             ║\n";
-    echo "║   - 其他不可预料的数据损失                                                   ║\n";
-    echo "║                                                                              ║\n";
-    echo "║ 请确认您已备份重要数据！                                                     ║\n";
-    echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
-    echo "\n";
-    echo "是否继续？输入 'yes' 确认继续，其他任意键取消：";
-    
-    $handle = fopen('php://stdin', 'r');
-    $input = trim(fgets($handle));
-    fclose($handle);
-    
-    if (strtolower($input) !== 'yes') {
-        echo "已取消安装。\n";
-        exit(0);
+    // 强制安装模式：二次确认（-y 跳过；非 TTY 时提示用 -y）
+    if (!$autoUpgrade) {
+        $isTty = (function_exists('stream_isatty') && stream_isatty(STDIN));
+        if (!$isTty) {
+            echo "\n";
+            echo "非交互式环境（无 TTY），无法输入确认。\n";
+            echo "请使用 -y 跳过确认：php setup/server_installer/run.php -f -y\n";
+            echo "或通过安装脚本：bin/install.sh -f -y\n";
+            exit(1);
+        }
+        echo "\n";
+        echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
+        echo "║                          ⚠ 强制安装警告 ⚠                                  ║\n";
+        echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
+        echo "║ 检测到 app/etc/env.php 已存在，您正在使用强制安装模式。                      ║\n";
+        echo "║                                                                              ║\n";
+        echo "║ ⚠ 这将重新执行完整安装流程，可能导致：                                      ║\n";
+        echo "║   - 数据库配置被覆盖                                                         ║\n";
+        echo "║   - 现有配置丢失                                                             ║\n";
+        echo "║   - 其他不可预料的数据损失                                                   ║\n";
+        echo "║                                                                              ║\n";
+        echo "║ 请确认您已备份重要数据！                                                     ║\n";
+        echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
+        echo "\n";
+        echo "是否继续？输入 'yes' 确认继续，其他任意键取消：";
+        
+        $handle = fopen('php://stdin', 'r');
+        $input = trim((string) fgets($handle));
+        fclose($handle);
+        
+        if (strtolower($input) !== 'yes') {
+            echo "已取消安装。\n";
+            exit(0);
+        }
+    } else {
+        echo "强制安装模式 (-f -y)，跳过二次确认。\n";
     }
-    
     echo "\n继续强制安装...\n\n";
 }
 
