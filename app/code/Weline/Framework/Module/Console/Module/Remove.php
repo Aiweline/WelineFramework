@@ -226,6 +226,17 @@ class Remove extends CommandAbstract
                 $this->printer->warning(__('标签注册表更新时发生错误：%{1}', [$e->getMessage()]));
             }
             
+            // 执行菜单 diff，移除已卸载模块在 weline_acl 中的菜单/ACL 记录
+            try {
+                $this->printer->note(__('正在同步菜单与 ACL（移除已卸载模块的菜单项）...'));
+                /** @var \Weline\Backend\Service\MenuCollector $menuCollector */
+                $menuCollector = ObjectManager::getInstance(\Weline\Backend\Service\MenuCollector::class);
+                $menuCollector->collect([]);
+                $this->printer->success(__('✓ 菜单与 ACL 已同步完成。'));
+            } catch (\Exception $e) {
+                $this->printer->warning(__('菜单同步时发生错误：%{1}，可手动执行：php bin/w menu:collect', [$e->getMessage()]));
+            }
+            
             $this->printer->success(__('模块卸载完成，共卸载 %{1} 个模块。', [$uninstalledCount]));
         }
     }
