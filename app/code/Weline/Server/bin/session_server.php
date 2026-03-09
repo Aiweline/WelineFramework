@@ -168,6 +168,16 @@ if ($controlPort > 0) {
     );
     if ($kernel->connectAndRegister($controlPort)) {
         WlsLogger::info_("Connected to Master IPC on port {$controlPort}");
+        if (\Weline\Server\Log\LogConfig::isDevMode()) {
+            $client = $kernel->getClient();
+            if ($client !== null) {
+                WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($client): void {
+                    if ($client->isConnected()) {
+                        $client->sendLogLine($line, $level, $tag);
+                    }
+                });
+            }
+        }
     } else {
         WlsLogger::warning_("Failed to connect to Master IPC on port {$controlPort}");
         $kernel = null;
