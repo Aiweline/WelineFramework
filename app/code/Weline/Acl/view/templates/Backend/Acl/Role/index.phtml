@@ -179,14 +179,17 @@
         return offcanvas;
     }
     
+    var submitting = false;
     form.addEventListener('submit', function(event) {
         event.preventDefault();
         event.stopPropagation();
         
+        if (submitting) return;
         if (!form.checkValidity()) {
             form.classList.add('was-validated');
             return;
         }
+        submitting = true;
         
         var formData = new FormData(form);
         var data = {};
@@ -230,7 +233,7 @@
             BackendToast.error('<?= __('请求失败：') ?>' + error.message);
         })
         .finally(function() {
-            // 恢复提交按钮
+            submitting = false;
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         });
