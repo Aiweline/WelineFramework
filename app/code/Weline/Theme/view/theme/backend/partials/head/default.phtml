@@ -277,12 +277,6 @@ html {
 (function() {
     'use strict';
     
-    // 设置后端主题标识
-    if (!document.documentElement.getAttribute('data-theme')) {
-        // 如果未设置主题，默认使用backend主题
-        document.documentElement.setAttribute('data-theme', 'backend');
-    }
-    
     // 后端主题配置增强
     if (window.__WelineThemeConfig) {
         // 添加后端主题特定配置
@@ -296,15 +290,7 @@ html {
         };
     }
     
-    // 性能优化：预加载网站根路径（用于后续导航），而非当前页 URL
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() {
-            const link = document.createElement('link');
-            link.rel = 'prefetch';
-            link.href = (window.location.origin || '') + '/';
-            document.head.appendChild(link);
-        });
-    }
+    // 后台不预取站点根路径：根路径为前台首页，后台用户很少从后台跳转到前台首页，预取会徒增每次页面的一个 / 请求
 
     // 监听来自Visual Editor的postMessage (Live Preview支持)
     window.addEventListener('message', function(event) {
