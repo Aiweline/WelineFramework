@@ -83,11 +83,13 @@ class Role extends \Weline\Admin\Controller\BaseController
                 return $this->fetch('form');
             }
             
-            // 检查角色是否已存在（创建新实例避免状态污染，$shared=false）
+            // 检查角色是否已存在（创建新实例避免状态污染，$shared=false；clearQuery 确保无残留条件）
             /** @var \Weline\Acl\Model\Role $checkRole */
             $checkRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
-            $existingRole = $checkRole->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
-            if ($existingRole->getId()) {
+            $checkRole->clearQuery()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
+            $items = $checkRole->getItems();
+            $exists = !empty($items) && ($items[0]->getId() ?? 0);
+            if ($exists) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色已存在！'));
                 }
@@ -119,9 +121,9 @@ class Role extends \Weline\Admin\Controller\BaseController
             } catch (\Exception $exception) {
                 if ($this->request->isAjax()) {
                     $error_msg = $exception->getMessage();
-                    // 检查是否是唯一约束错误
+                    // 唯一约束错误：角色已被创建（可能由并发请求或重复提交导致），视为成功
                     if (str_contains($error_msg, 'duplicate key') || str_contains($error_msg, 'Unique violation')) {
-                        $error_msg = __('角色已存在！');
+                        return $this->jsonResponse(true, __('角色创建成功！'));
                     }
                     return $this->jsonResponse(false, $error_msg);
                 }
