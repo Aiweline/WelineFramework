@@ -1985,12 +1985,14 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
     if ($pos === false) {
         return $response;
     }
-    $response = \substr_replace($response, $headerLine, $pos, 0);
+    // $pos 指向 headers 末尾的 \r\n\r\n 中第一个 \r，+2 跳过该 \r\n，在空行前插入新 header
+    $response = \substr_replace($response, $headerLine, $pos + 2, 0);
+
     // 对 text/html 注入 script 供 dev-tool-panel 读取（需更新 Content-Length）
-    $headersSection = \substr($response, 0, $pos + \strlen($headerLine) + 512);
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    $headersSection = \substr($response, 0, $headerEnd);
     if (\preg_match('/Content-Type:\s*text\/html/i', $headersSection)) {
         $injected = "<script>window.__WLS_PROCESS_TIME_MS={$ms};</script>\n";
-        $clMatch = [];
         if (\preg_match('/Content-Length:\s*(\d+)/i', $response, $clMatch)) {
             $oldLen = (int)$clMatch[1];
             $newLen = $oldLen + \strlen($injected);
