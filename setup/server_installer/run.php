@@ -18,6 +18,7 @@ $argv = $GLOBALS['argv'] ?? [];
 // === 检测系统是否已安装（env.php 存在且非空配置） ===
 $envPhpFile = $projectRoot . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
 $forceInstall = in_array('-f', $argv, true) || in_array('--force', $argv, true);
+$autoUpgrade = in_array('-y', $argv, true) || in_array('--yes', $argv, true);
 
 /** env.php 非空（含 db 等有效配置）才视为已安装 */
 $isEnvPhpInstalled = static function (string $path): bool {
@@ -30,26 +31,76 @@ $isEnvPhpInstalled = static function (string $path): bool {
 
 if ($isEnvPhpInstalled($envPhpFile)) {
     if (!$forceInstall) {
-        // 系统已安装，提示用户
-        echo "\n";
-        echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
-        echo "║                              系统已安装                                      ║\n";
-        echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
-        echo "║ 检测到 app/etc/env.php 已存在，说明系统已完成过安装。                        ║\n";
-        echo "║                                                                              ║\n";
-        echo "║ 建议操作：                                                                   ║\n";
-        echo "║   1. 升级系统：php bin/w setup:upgrade                                       ║\n";
-        echo "║   2. 重装系统：先删除 app/etc/env.php，再执行 php bin/w system:install       ║\n";
-        echo "║                                                                              ║\n";
-        echo "║ 如果确实需要重新执行安装脚本，请使用强制模式：                               ║\n";
-        echo "║   php setup/server_installer/run.php -f                                      ║\n";
-        echo "║   或通过安装脚本：                                                           ║\n";
-        echo "║   bin/install.bat -f (Windows) / ./bin/install.sh -f (Linux/Mac)             ║\n";
-        echo "║                                                                              ║\n";
-        echo "║ ⚠ 警告：强制重装可能导致数据丢失，请先备份重要数据！                        ║\n";
-        echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
-        echo "\n";
-        exit(0);
+        if ($autoUpgrade) {
+            // -y：系统已安装时直接执行 setup:upgrade，不询问、不断开（快捷路径，跳过 composer 等）
+            $env = (new EnvLoader($projectRoot))->load(true);
+            $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
+            $phpBin = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+            $run = function (string $cmd) use ($phpBin): int {
+                $full = $phpBin . ' ' . $cmd;
+                echo "执行命令：$full\n";
+                passthru($full, $code);
+                return (int) $code;
+            };
+            if (is_dir($phpDir)) {
+                try {
+                    $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
+                    $iniCfg->apply($env);
+                } catch (Throwable $e) {
+                    fwrite(STDERR, "WARNING: php.ini config: " . $e->getMessage() . "\n");
+                }
+            }
+            $pgsqlBin = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'pgsql' . DIRECTORY_SEPARATOR . 'bin';
+            if (is_dir($pgsqlBin) && strpos(getenv('PATH') ?: '', $pgsqlBin) === false) {
+                putenv('PATH=' . $pgsqlBin . (DIRECTORY_SEPARATOR === '\\' ? ';' : ':') . getenv('PATH'));
+            }
+            (new EnsurePgsqlData($projectRoot))->ensure();
+            $setupDb = new SetupPgsqlDatabase($projectRoot, $env);
+            if (!$setupDb->run()) {
+                fwrite(STDERR, "ERROR: PostgreSQL 连接失败，无法执行 setup:upgrade。\n");
+                exit(1);
+            }
+            $installModeFlagDir = $projectRoot . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR . 'process';
+            $installModeFlagFile = $installModeFlagDir . DIRECTORY_SEPARATOR . 'command_install_mode.flag';
+            is_dir($installModeFlagDir) || @mkdir($installModeFlagDir, 0755, true);
+            @file_put_contents($installModeFlagFile, date('Y-m-d H:i:s') . ' - install mode enabled');
+            echo "系统已安装，正在执行 setup:upgrade...\n";
+            $code = $run('bin/w setup:upgrade -y');
+            if ($code !== 0) {
+                @unlink($installModeFlagFile);
+                exit(1);
+            }
+            $code = $run('bin/w setup:upgrade -y');
+            @unlink($installModeFlagFile);
+            if ($code !== 0) {
+                exit(1);
+            }
+            $run('bin/w server:stop');
+            $run('bin/w server:start');
+            echo "setup:upgrade 已完成。\n";
+            exit(0);
+        } else {
+            // 系统已安装，提示用户
+            echo "\n";
+            echo "╔══════════════════════════════════════════════════════════════════════════════╗\n";
+            echo "║                              系统已安装                                      ║\n";
+            echo "╠══════════════════════════════════════════════════════════════════════════════╣\n";
+            echo "║ 检测到 app/etc/env.php 已存在，说明系统已完成过安装。                        ║\n";
+            echo "║                                                                              ║\n";
+            echo "║ 建议操作：                                                                   ║\n";
+            echo "║   1. 升级系统：php bin/w setup:upgrade                                       ║\n";
+            echo "║   2. 或使用 -y 直接升级：php setup/server_installer/run.php -y               ║\n";
+            echo "║   3. 重装系统：先删除 app/etc/env.php，再执行 php bin/w system:install       ║\n";
+            echo "║                                                                              ║\n";
+            echo "║ 如果确实需要重新执行安装脚本，请使用强制模式：                               ║\n";
+            echo "║   php setup/server_installer/run.php -f                                      ║\n";
+            echo "║   或通过安装脚本：bin/install.sh -f (Linux/Mac)                               ║\n";
+            echo "║                                                                              ║\n";
+            echo "║ ⚠ 警告：强制重装可能导致数据丢失，请先备份重要数据！                        ║\n";
+            echo "╚══════════════════════════════════════════════════════════════════════════════╝\n";
+            echo "\n";
+            exit(0);
+        }
     }
     
     // 强制安装模式：二次确认
