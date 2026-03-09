@@ -1570,24 +1570,29 @@ class DomainManagement extends BaseController
                 continue;
             }
 
-            // 已存在：仅在“非本机”场景下做标记，避免重复更新已正常本机记录
-            if (!$isLocal && $poolDomain->isLocalServer()) {
-                $poolDomain->setIsLocalServer(false);
-                $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
-                $poolDomain->setResolveCheckedAt($now);
-                $poolDomain->setResolveError('');
-                if ($type === 'A' && $value !== '') {
-                    $poolDomain->setResolvedIp($value);
-                }
-                if ($type === 'AAAA' && $value !== '') {
-                    $poolDomain->setResolvedIpv6($value);
-                }
-                $poolDomain->calculateSiteReady();
-                $poolDomain->save();
-                $markedNonLocal++;
-            } else {
+            if ($value === '') {
                 $skipped++;
+                continue;
             }
+
+            $wasLocal = $poolDomain->isLocalServer();
+            $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+            $poolDomain->setResolveCheckedAt($now);
+            $poolDomain->setResolveError('');
+            if ($type === 'A') {
+                $poolDomain->setResolvedIp($value);
+            }
+            if ($type === 'AAAA') {
+                $poolDomain->setResolvedIpv6($value);
+            }
+            if ($isIpRecord) {
+                $poolDomain->setIsLocalServer($isLocal);
+                if ($wasLocal && !$isLocal) {
+                    $markedNonLocal++;
+                }
+            }
+            $poolDomain->calculateSiteReady();
+            $poolDomain->save();
         }
 
         return [
