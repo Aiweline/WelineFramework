@@ -268,6 +268,11 @@ $sql = "INSERT INTO table (field1, field2) VALUES (?, ?) ON DUPLICATE KEY UPDATE
 $sql = "INSERT INTO table (field1, field2) VALUES (?, ?) ON CONFLICT (field1) DO UPDATE SET ...";
 ```
 
+**批量唯一键写入注意（PostgreSQL）**:
+- 对唯一键（如 `identify`）做批量写入时，先做“批内去重”，避免同一批次重复键直接冲突。
+- 若升级脚本场景出现批量 upsert 路径不稳定，可采用幂等策略：`where(unique_key IN (...))->delete()->fetch()` 后再 `insert(rows)->fetch()`。
+- 升级/同步类任务优先保证“可重复执行不报错”，再优化为更激进的 upsert。
+
 **PostgreSQL 特别注意：**
 - `insert($data, $conflictFields)` / `save(true)` 最终生成的 `ON CONFLICT (...)` 字段，**必须与数据库中真实存在的唯一索引完全一致**
 - 不能把普通业务字段误当成冲突字段，否则 PostgreSQL 会先报 `there is no unique or exclusion constraint matching the ON CONFLICT specification`，随后同事务里的后续 SQL 常表现为 `SQLSTATE[25P02]: current transaction is aborted`
