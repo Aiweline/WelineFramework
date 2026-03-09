@@ -26,6 +26,16 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class MenuCollector
 {
+    /**
+     * 历史父级 source 兼容映射。
+     * 统一在收集阶段归一化，避免旧模块菜单父级失效。
+     *
+     * @var array<string, string>
+     */
+    private const LEGACY_PARENT_SOURCE_MAP = [
+        'Weline_Backend::system_service' => 'Weline_Backend::system_service_group',
+    ];
+
     private Acl $acl;
     private MenuXmlReader $menuReader;
 
@@ -110,7 +120,7 @@ class MenuCollector
             $data = $menus['data'] ?? [];
             foreach ($data as $menu) {
                 $menu['module'] = $module;
-                $menu['parent_source'] = $menu['parent'] ?? '';
+                $menu['parent_source'] = $this->normalizeParentSource((string)($menu['parent'] ?? ''));
                 $menu['route'] = trim($menu['action'] ?? '', '/');
                 unset($menu['parent'], $menu['action']);
 
@@ -127,13 +137,22 @@ class MenuCollector
     }
 
     /**
+     * 归一化父级 source，兼容历史命名。
+     */
+    private function normalizeParentSource(string $parentSource): string
+    {
+        return self::LEGACY_PARENT_SOURCE_MAP[$parentSource] ?? $parentSource;
+    }
+
+    /**
      * 构建数据库端 ACL 菜单状态（source_id => row）
      * 直接从 weline_acl 读取 type=menus 的记录
      */
     private function buildDbAclMenus(array $modulesFilter): array
     {
         $this->acl->reset();
-        $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS);
+        $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml);
         
         if (!empty($modulesFilter)) {
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
@@ -285,6 +304,7 @@ class MenuCollector
             Acl::schema_fields_IS_ENABLE => (int)($file_data['is_enable'] ?? 1),
             Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
             Acl::schema_fields_TYPE => Acl::type_MENUS,
+            Acl::schema_fields_ACL_ORIGIN => Acl::acl_origin_menu_xml,
             Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
         ];
 
@@ -312,6 +332,7 @@ class MenuCollector
             Acl::schema_fields_METHOD => 'GET',
             Acl::schema_fields_REWRITE => '',
             Acl::schema_fields_TYPE => Acl::type_MENUS,
+            Acl::schema_fields_ACL_ORIGIN => Acl::acl_origin_menu_xml,
             Acl::schema_fields_DOCUMENT => ($file_data['is_system'] ?? 0) ? __('系统菜单') : __('用户菜单'),
             Acl::schema_fields_IS_ENABLE => (int)($file_data['is_enable'] ?? 1),
             Acl::schema_fields_IS_BACKEND => (int)($file_data['is_backend'] ?? 1),
@@ -372,6 +393,7 @@ class MenuCollector
         $children = $this->acl->reset()
             ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml)
             ->select()
             ->fetchArray();
         foreach ($children as $child) {

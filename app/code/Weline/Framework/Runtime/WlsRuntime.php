@@ -458,7 +458,7 @@ class WlsRuntime implements RuntimeInterface
             // 回退到当前 $_SERVER（已被 GlobalsEmulator 正确初始化）
             $parse['server'] = [];
         }
-        
+
         $area = $parse['area'] ?? $parse['server']['WELINE_AREA'] ?? '';
         $isBackendArea = ($area === 'backend' || $area === 'rest_backend');
         if (isset($_SERVER['REQUEST_METHOD']) && isset($parse['uri'])) {

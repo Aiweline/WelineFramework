@@ -14,6 +14,7 @@ class PooledConnection implements PooledConnectionInterface
     private string $buffer = '';
     private bool $authenticated = false;
     private ?string $authToken = null;
+    private int $authTokenMtime = 0;
 
     public function __construct(
         private readonly string $host,
@@ -143,31 +144,60 @@ class PooledConnection implements PooledConnectionInterface
             $this->authenticated = true;
             return true;
         }
+        if ($this->tryAuthenticateWithToken($token)) {
+            $this->authenticated = true;
+            return true;
+        }
+
+        // WLS 常驻进程下，服务重启会轮换 token；认证失败时强制刷新 token 后重试一次。
+        $freshToken = $this->loadToken(true);
+        if ($freshToken !== null && $freshToken !== $token && $this->tryAuthenticateWithToken($freshToken)) {
+            $this->authenticated = true;
+            return true;
+        }
+
+        $this->authenticated = false;
+        return false;
+    }
+
+    private function tryAuthenticateWithToken(string $token): bool
+    {
         if (!$this->send(SessionProtocol::buildAuth($token))) {
             return false;
         }
         $response = $this->read();
-        if (!\is_array($response) || !SessionProtocol::isSuccess($response)) {
-            return false;
-        }
-        $this->authenticated = true;
-        return true;
+        return \is_array($response) && SessionProtocol::isSuccess($response);
     }
 
-    private function loadToken(): ?string
+    private function loadToken(bool $forceReload = false): ?string
     {
-        if ($this->authToken !== null) {
+        if (!$forceReload && $this->authToken !== null && !$this->isTokenFileChanged()) {
             return $this->authToken;
         }
         if ($this->tokenFilePath === '' || !\is_file($this->tokenFilePath)) {
+            $this->authToken = null;
+            $this->authTokenMtime = 0;
             return null;
         }
+        $mtime = (int)(@\filemtime($this->tokenFilePath) ?: 0);
         $token = @\file_get_contents($this->tokenFilePath);
         if ($token === false || $token === '') {
+            $this->authToken = null;
+            $this->authTokenMtime = $mtime;
             return null;
         }
         $this->authToken = \trim($token);
+        $this->authTokenMtime = $mtime;
         return $this->authToken;
+    }
+
+    private function isTokenFileChanged(): bool
+    {
+        if ($this->tokenFilePath === '' || !\is_file($this->tokenFilePath)) {
+            return false;
+        }
+        $mtime = (int)(@\filemtime($this->tokenFilePath) ?: 0);
+        return $mtime !== $this->authTokenMtime;
     }
 
     private function log(string $message): void

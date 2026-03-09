@@ -12,7 +12,7 @@
 $this->request->addModule('Weline_Server');
 \Weline\Framework\Phrase\Parser::$loaded = false;
 
-$sslIndexUrl = $this->getUrl('*/backend/server/ssl-certificate');
+$sslIndexUrl = $this->getBackendUrl('*/backend/ssl-certificate');
 ?>
 <div class='tab-pane fade'
      id='domain-certificate'

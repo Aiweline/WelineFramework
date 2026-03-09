@@ -717,11 +717,9 @@ class ServiceOrchestrator
         WlsLogger::info_('[Orchestrator] 阶段6: 关闭 IPC 服务器');
         $this->sendStopProgress('阶段6/6: 关闭 IPC 服务器');
         
-        // 在发送 "即将退出" 消息前，先从索引中删除 Master PID
-        // 这样 CLI 收到消息后第一次检测 processExists 就能快速返回 false
-        $this->cleanupMasterPidIndex();
-        
-        $this->sendStopProgress('所有子进程已完整退出，Master 即将退出');
+        // 不提前移除 Master PID 索引，避免外部将“索引消失”误判为“进程已退出”。
+        // 索引交由 Master 进程最终退出阶段统一清理。
+        $this->sendStopProgress('所有子进程已完整退出，Master 即将结束主循环');
         
         // 先设置状态，再关闭 IPC（关闭后无法再发送消息）
         $this->running = false;

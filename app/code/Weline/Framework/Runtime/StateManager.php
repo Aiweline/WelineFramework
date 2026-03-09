@@ -593,6 +593,13 @@ class StateManager
                 \Weline\Theme\Service\SlotRendererService::class
             );
         });
+
+        // ThemeConfig Block 在模板中常通过 ObjectManager::getInstance() 直接获取。
+        // WLS 下若复用旧实例，会持有上一请求的 Session 引用，出现主题模式偶发回退。
+        self::registerResetCallback('theme_config_blocks', function () {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Backend\Block\ThemeConfig::class);
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Frontend\Block\ThemeConfig::class);
+        });
         
         // Taglib Slot 静态注册表 — 编译期用于重复 slot ID 检测，不能跨请求残留
         self::registerStaticReset(\Weline\Theme\Taglib\Slot::class, 'registeredSlots', []);
@@ -616,6 +623,9 @@ class StateManager
             if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
                 \Weline\Framework\Session\Session::resetRequestState();
             }
+            // Session 实例持有当前请求上下文（session id/cookie/request），
+            // 在 WLS 下必须移除单例，避免下个请求读到上次会话状态。
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Session\Session::class);
         });
         
         // ========== 9. 缓存事件防重复标志 ==========

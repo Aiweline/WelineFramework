@@ -25,18 +25,25 @@ class ThemeConfig extends \Weline\Framework\View\Block
     public function __construct(BackendUserConfig $userConfig, array $data = [])
     {
         parent::__construct($data);
-        $this->userSession = SessionFactory::getInstance()->createBackendSession();
+        $this->userSession = $this->resolveSession();
         $this->userConfig = $userConfig;
+    }
+
+    private function resolveSession(): AuthenticatedSessionInterface
+    {
+        return SessionFactory::getInstance()->createBackendSession();
     }
 
     public function __init()
     {
+        $this->userSession = $this->resolveSession();
         $this->userConfig = $this->userSession->getUserId() ? $this->userConfig->load($this->userSession->getUserId()) : $this->userConfig;
         $this->userConfig->setId($this->userSession->getUserId());
     }
 
     public function getOriginThemeConfig($key = '')
     {
+        $this->userSession = $this->resolveSession();
         $themeConfig = $this->userSession->getData(self::theme_Session_Config);
         if (empty($themeConfig) && $this->userSession->isLoggedIn()) {
             $configValue = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
@@ -49,6 +56,16 @@ class ThemeConfig extends \Weline\Framework\View\Block
         }
         if (!is_array($themeConfig)) {
             $themeConfig = [];
+        }
+        $mode = $this->resolveThemeModeFromConfig($themeConfig);
+        if ($mode !== '') {
+            $themeConfig['theme-mode-switch'] = $mode;
+            $themeConfig['dark-mode-switch'] = $mode === 'dark';
+            $themeConfig['light-mode-switch'] = $mode === 'light';
+            $layouts = isset($themeConfig['layouts']) && \is_array($themeConfig['layouts']) ? $themeConfig['layouts'] : [];
+            $layouts['data-theme-mode'] = $mode;
+            $layouts['data-layout-mode'] = $mode;
+            $themeConfig['layouts'] = $layouts;
         }
         return $key ? ($themeConfig[$key] ?? '') : $themeConfig;
     }
@@ -86,35 +103,29 @@ class ThemeConfig extends \Weline\Framework\View\Block
             }
         }
         
-        $data = '';
-        // 优先检查 theme-mode-switch（新的统一配置方式）
-        $themeMode = $this->getThemeConfig('theme-mode-switch');
-        if (!empty($themeMode)) {
-            // light 模式返回空字符串，用于加载 app.css 而不是 app-light.css
-            // dark 模式返回 'dark'，用于加载 app-dark.css
-            // 其他模式返回对应的值，用于加载 app-{mode}.css
-            if ($themeMode === 'light') {
-                $data = '';
-            } else {
-                $data = $themeMode;
-            }
-        } elseif ($this->getThemeConfig('rtl-mode-switch')) {
-            $data = 'rtl';
+        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeMode = $this->resolveThemeModeFromConfig(
+            $this->getThemeConfig(),
+            \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
+        );
+        if ($themeMode !== '') {
+            return $themeMode === 'light' ? '' : $themeMode;
         }
-        // 兼容旧的配置方式（向后兼容）
-        if (empty($data)) {
-            if ($this->getThemeConfig('dark-mode-switch')) {
-                $data = 'dark';
-            } elseif ($this->getThemeConfig('light-mode-switch')) {
-                $data = '';
-            }
+        if ($this->getThemeConfig('rtl-mode-switch')) {
+            return 'rtl';
         }
-        return $data;
+        return '';
     }
 
     public function setThemeConfig(string|array $key, mixed $value = ''): static
     {
+        $this->userSession = $this->resolveSession();
         if (is_array($key)) {
+            $originConfig = $this->getOriginThemeConfig();
+            if (!\is_array($originConfig)) {
+                $originConfig = [];
+            }
+            $key = \array_merge($originConfig, $key);
             $this->userSession->setData(self::theme_Session_Config, $key);
             if ($this->userSession->isLoggedIn()) {
                 $this->userConfig->setConfig(self::theme_Session_Config, json_encode($key), 'Weline_Backend', '主题设置');
@@ -134,6 +145,7 @@ class ThemeConfig extends \Weline\Framework\View\Block
 
     public function getLayouts()
     {
+        $this->userSession = $this->resolveSession();
         $body_attributes = $this->userSession->getData(self::theme_Session_Config)['layouts'] ?? [];
         if (empty($body_attributes)) {
             $configData = $this->userConfig->getConfig(self::theme_Session_Config, 'Weline_Backend', '主题设置');
@@ -144,22 +156,18 @@ class ThemeConfig extends \Weline\Framework\View\Block
         }
         $body_attributes_str = '';
         $class_value = '';
-        
-        // 自动添加 data-theme-mode 属性
-        // 如果配置中没有明确设置 data-theme-mode，则根据主题色系配置自动设置
-        if (!isset($body_attributes['data-theme-mode'])) {
-            // 从配置中动态获取主题模式
-            $themeConfig = $this->getOriginThemeConfig();
-            $themeMode = $themeConfig['theme-mode-switch'] ?? '';
-            
-            // 如果配置了主题模式，设置 data-theme-mode 属性
-            // 主题模式可以是 'dark'、'light' 或任何其他主题名称
-            if (!empty($themeMode)) {
-                $body_attributes['data-theme-mode'] = $themeMode;
-            }
-            // 如果没有配置主题模式，不添加 data-theme-mode 属性，让浏览器使用默认主题
+        // Always sync rendered theme attributes from current mode to avoid stale layout residue.
+        $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
+        $themeMode = $this->resolveThemeModeFromConfig(
+            $this->getThemeConfig(),
+            \is_string($themeModeFromSwitch) ? $themeModeFromSwitch : ''
+        );
+        if ($themeMode !== '') {
+            $body_attributes['data-theme-mode'] = $themeMode;
+            $body_attributes['data-layout-mode'] = $themeMode;
+        } else {
+            unset($body_attributes['data-theme-mode'], $body_attributes['data-layout-mode']);
         }
-        // 如果配置中已经设置了 data-theme-mode，则使用配置的值（不覆盖）
         
         foreach ($body_attributes as $attribute => $value) {
             // 跳过空字符串值
@@ -185,5 +193,49 @@ class ThemeConfig extends \Weline\Framework\View\Block
         }
         
         return trim($body_attributes_str);
+    }
+
+    private function resolveThemeModeFromConfig(array $themeConfig, string $preferredMode = ''): string
+    {
+        $mode = $preferredMode !== '' ? $preferredMode : ($themeConfig['theme-mode-switch'] ?? '');
+        if (\is_string($mode)) {
+            $mode = trim(strtolower($mode));
+            if ($mode !== '') {
+                return $mode;
+            }
+        }
+        if ($this->resolveBool($themeConfig['dark-mode-switch'] ?? null)) {
+            return 'dark';
+        }
+        if ($this->resolveBool($themeConfig['light-mode-switch'] ?? null)) {
+            return 'light';
+        }
+        $layouts = $themeConfig['layouts'] ?? [];
+        if (\is_array($layouts)) {
+            foreach (['data-theme-mode', 'data-layout-mode'] as $layoutModeKey) {
+                $layoutMode = $layouts[$layoutModeKey] ?? '';
+                if (\is_string($layoutMode)) {
+                    $layoutMode = trim(strtolower($layoutMode));
+                    if ($layoutMode !== '') {
+                        return $layoutMode;
+                    }
+                }
+            }
+        }
+        return '';
+    }
+
+    private function resolveBool(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_numeric($value)) {
+            return (int)$value === 1;
+        }
+        if (\is_string($value)) {
+            return \in_array(strtolower(trim($value)), ['1', 'true', 'on', 'yes'], true);
+        }
+        return false;
     }
 }

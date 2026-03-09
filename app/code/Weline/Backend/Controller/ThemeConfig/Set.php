@@ -59,10 +59,41 @@ class Set extends BackendController
                     }
                 }
             }
+            $data = $this->normalizeThemePayload($data);
             $this->themeConfig->setThemeConfig($data);
             return $this->fetchJson($this->success());
         } catch (\Exception $exception) {
             return $this->fetchJson($this->exception($exception));
         }
+    }
+
+    private function normalizeThemePayload(array $data): array
+    {
+        $mode = null;
+        if (isset($data['theme-mode-switch']) && is_string($data['theme-mode-switch']) && $data['theme-mode-switch'] !== '') {
+            $mode = $data['theme-mode-switch'];
+        } elseif (array_key_exists('dark-mode-switch', $data)) {
+            $mode = (bool)$data['dark-mode-switch'] ? 'dark' : 'light';
+        } elseif (array_key_exists('light-mode-switch', $data)) {
+            $mode = (bool)$data['light-mode-switch'] ? 'light' : 'dark';
+        } elseif (isset($data['layouts']) && is_array($data['layouts'])) {
+            $layoutMode = $data['layouts']['data-theme-mode'] ?? $data['layouts']['data-layout-mode'] ?? null;
+            if (is_string($layoutMode) && $layoutMode !== '') {
+                $mode = $layoutMode;
+            }
+        }
+
+        if ($mode === null) {
+            return $data;
+        }
+
+        $data['theme-mode-switch'] = $mode;
+        $data['dark-mode-switch'] = $mode === 'dark';
+        $data['light-mode-switch'] = $mode === 'light';
+        $layouts = isset($data['layouts']) && is_array($data['layouts']) ? $data['layouts'] : [];
+        $layouts['data-theme-mode'] = $mode;
+        $layouts['data-layout-mode'] = $mode;
+        $data['layouts'] = $layouts;
+        return $data;
     }
 }

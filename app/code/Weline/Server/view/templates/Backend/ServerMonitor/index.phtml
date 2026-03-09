@@ -12,17 +12,16 @@
  * @var array $serverStats
  * @var array $masterApiDocs
  */
-$block->setTitle(__('服务器监控'));
-$statusApiUrl = $block->getUrl('backend/server/server-monitor/status');
-$attacksApiUrl = $block->getUrl('backend/server/server-monitor/attacks');
-$attackLogUrl = $block->getUrl('backend/server/server-monitor/attack-log');
-$apiDocUrl = $block->getUrl('backend/server/server-monitor/api-doc');
-$managerUrl = $block->getUrl('backend/server/server-manager');
-$trafficApiUrl = $block->getUrl('backend/server/server-monitor/traffic');
-$trafficHistoryApiUrl = $block->getUrl('backend/server/server-monitor/traffic-history');
-$benchmarkApiUrl = $block->getUrl('backend/server/server-monitor/benchmark');
-$benchmarksApiUrl = $block->getUrl('backend/server/server-monitor/benchmarks');
-$benchmarkDetailApiUrl = $block->getUrl('backend/server/server-monitor/benchmark-detail');
+$statusApiUrl = $this->getBackendUrl('*/backend/server-monitor/status');
+$attacksApiUrl = $this->getBackendUrl('*/backend/server-monitor/attacks');
+$attackLogUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
+$apiDocUrl = $this->getBackendUrl('*/backend/server-monitor/api-doc');
+$managerUrl = $this->getBackendUrl('*/backend/server-manager');
+$trafficApiUrl = $this->getBackendUrl('*/backend/server-monitor/traffic');
+$trafficHistoryApiUrl = $this->getBackendUrl('*/backend/server-monitor/traffic-history');
+$benchmarkApiUrl = $this->getBackendUrl('*/backend/server-monitor/benchmark');
+$benchmarksApiUrl = $this->getBackendUrl('*/backend/server-monitor/benchmarks');
+$benchmarkDetailApiUrl = $this->getBackendUrl('*/backend/server-monitor/benchmark-detail');
 
 use Weline\Server\Model\AttackLog;
 use Weline\Server\Model\ServerStatusLog;
@@ -184,6 +183,75 @@ use Weline\Server\Model\ServerStatusLog;
                                 <?php endif; ?>
                             <?php endforeach; ?>
                         <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-task me-2"></i><?= __('进程明细（实时）') ?>
+                    </h5>
+                    <small class="text-muted"><?= __('来自 Orchestrator + Worker Health') ?></small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0">
+                            <thead>
+                            <tr>
+                                <th><?= __('角色') ?></th>
+                                <th><?= __('实例') ?></th>
+                                <th><?= __('PID') ?></th>
+                                <th><?= __('端口') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('运行时长') ?></th>
+                                <th><?= __('重启') ?></th>
+                                <th><?= __('连接/活跃') ?></th>
+                                <th><?= __('总请求') ?></th>
+                                <th><?= __('内存') ?></th>
+                                <th><?= __('心跳') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody id="process-detail-body">
+                            <tr>
+                                <td colspan="11" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i><?= __('进程状态记录（最近）') ?>
+                    </h5>
+                    <small class="text-muted"><?= __('日志保留默认 7 天') ?></small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                            <tr>
+                                <th><?= __('时间') ?></th>
+                                <th><?= __('类型') ?></th>
+                                <th><?= __('进程ID') ?></th>
+                                <th><?= __('PID') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('连接') ?></th>
+                                <th><?= __('活跃请求') ?></th>
+                                <th><?= __('总请求') ?></th>
+                                <th><?= __('内存') ?></th>
+                                <th><?= __('最后错误') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody id="process-history-body">
+                            <tr>
+                                <td colspan="10" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
+                            </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -484,11 +552,17 @@ use Weline\Server\Model\ServerStatusLog;
     font-size: 0.65rem;
     padding: 0.2em 0.4em;
 }
+.process-role-badge {
+    font-size: 0.7rem;
+}
+.process-detail-table-memory {
+    white-space: nowrap;
+}
 </style>
 
 <script>
 const STATUS_API_URL = '<?= $statusApiUrl ?>';
-const CLEANUP_API_URL = '<?= $block->getUrl('backend/server/server-monitor/cleanup-logs') ?>';
+const CLEANUP_API_URL = '<?= $this->getBackendUrl('*/backend/server-monitor/cleanup-logs') ?>';
 const TRAFFIC_API_URL = '<?= $trafficApiUrl ?>';
 const TRAFFIC_HISTORY_API_URL = '<?= $trafficHistoryApiUrl ?>';
 const BENCHMARK_API_URL = '<?= $benchmarkApiUrl ?>';
@@ -500,6 +574,7 @@ let refreshTimer = null;
 document.addEventListener('DOMContentLoaded', () => {
     // 每 30 秒自动刷新
     refreshTimer = setInterval(refreshStatus, 30000);
+    refreshStatus();
     refreshTraffic();
 });
 
@@ -519,6 +594,8 @@ async function refreshStatus() {
         if (data.success) {
             updateStats(data.data);
             renderTrafficHosts((data.data.traffic || {}).hosts || []);
+            renderProcessDetails((data.data.status_dto || {}).services || []);
+            renderProcessHistory(data.data.status_logs || []);
         }
     } catch (error) {
         console.error('Failed to refresh status:', error);
@@ -531,6 +608,154 @@ function updateStats(data) {
     document.getElementById('running-workers').textContent = stats.running_workers || 0;
     document.getElementById('total-connections').textContent = stats.total_connections || 0;
     document.getElementById('total-requests').textContent = formatNumber(stats.total_requests || 0);
+}
+
+function renderProcessDetails(services) {
+    const tbody = document.getElementById('process-detail-body');
+    if (!tbody) {
+        return;
+    }
+    if (!Array.isArray(services) || services.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
+        return;
+    }
+    const rows = [];
+    services.forEach((serviceGroup) => {
+        const role = String(serviceGroup.role || '');
+        const instances = Array.isArray(serviceGroup.instances) ? serviceGroup.instances : [];
+        instances.forEach((item) => {
+            const roleBadge = getRoleBadge(role);
+            const stateBadge = getStateBadge(item.state || '');
+            const uptime = formatSeconds(item.uptime || 0);
+            const heartbeat = formatHeartbeat(item.heartbeat || 0);
+            const memory = formatBytes(item.memory_usage || 0);
+            const connections = Number(item.connections || 0);
+            const activeRequests = Number(item.active_requests || 0);
+            const totalRequests = formatNumber(Number(item.total_requests || 0));
+            rows.push(`
+                <tr>
+                    <td><span class="badge process-role-badge ${roleBadge.cls}">${escapeHtml(roleBadge.label)}</span></td>
+                    <td>#${escapeHtml(String(item.instance_id ?? '-'))}</td>
+                    <td>${escapeHtml(String(item.pid || '-'))}</td>
+                    <td>${escapeHtml(String(item.port || '-'))}</td>
+                    <td><span class="badge ${stateBadge.cls}">${escapeHtml(stateBadge.label)}</span></td>
+                    <td>${escapeHtml(uptime)}</td>
+                    <td>${escapeHtml(String(item.restarts || 0))}</td>
+                    <td>${formatNumber(connections)} / ${formatNumber(activeRequests)}</td>
+                    <td>${totalRequests}</td>
+                    <td class="process-detail-table-memory">${escapeHtml(memory)}</td>
+                    <td>${escapeHtml(heartbeat)}</td>
+                </tr>
+            `);
+        });
+    });
+    tbody.innerHTML = rows.length > 0
+        ? rows.join('')
+        : `<tr><td colspan="11" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
+}
+
+function renderProcessHistory(logs) {
+    const tbody = document.getElementById('process-history-body');
+    if (!tbody) {
+        return;
+    }
+    if (!Array.isArray(logs) || logs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-3"><?= __('暂无状态日志') ?></td></tr>`;
+        return;
+    }
+    const rows = logs.slice(0, 30).map((log) => {
+        const type = String(log.process_type || '-');
+        const statusBadge = getStateBadge(log.status || '');
+        const memory = formatBytes(Number(log.memory_usage || 0));
+        const lastError = String(log.last_error || '');
+        return `
+            <tr>
+                <td>${escapeHtml(String(log.created_at || '-'))}</td>
+                <td>${escapeHtml(type)}</td>
+                <td>${escapeHtml(String(log.process_id || '-'))}</td>
+                <td>${escapeHtml(String(log.pid || '-'))}</td>
+                <td><span class="badge ${statusBadge.cls}">${escapeHtml(statusBadge.label)}</span></td>
+                <td>${formatNumber(Number(log.connections || 0))}</td>
+                <td>${formatNumber(Number(log.active_requests || 0))}</td>
+                <td>${formatNumber(Number(log.total_requests || 0))}</td>
+                <td>${escapeHtml(memory)}</td>
+                <td title="${escapeHtml(lastError)}">${escapeHtml(lastError || '-')}</td>
+            </tr>
+        `;
+    });
+    tbody.innerHTML = rows.join('');
+}
+
+function getRoleBadge(role) {
+    const lower = String(role || '').toLowerCase();
+    if (lower === 'master') {
+        return {cls: 'bg-primary', label: 'MASTER'};
+    }
+    if (lower === 'dispatcher') {
+        return {cls: 'bg-info', label: 'DISPATCHER'};
+    }
+    if (lower === 'worker') {
+        return {cls: 'bg-success', label: 'WORKER'};
+    }
+    return {cls: 'bg-secondary', label: role || 'UNKNOWN'};
+}
+
+function getStateBadge(state) {
+    const lower = String(state || '').toLowerCase();
+    if (lower === 'running') {
+        return {cls: 'bg-success', label: 'running'};
+    }
+    if (lower === 'starting') {
+        return {cls: 'bg-warning', label: 'starting'};
+    }
+    if (lower === 'error') {
+        return {cls: 'bg-danger', label: 'error'};
+    }
+    if (lower === 'stopped' || lower === 'down') {
+        return {cls: 'bg-secondary', label: state || 'stopped'};
+    }
+    return {cls: 'bg-dark', label: state || 'unknown'};
+}
+
+function formatSeconds(seconds) {
+    const total = Math.max(0, Math.floor(Number(seconds || 0)));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) {
+        return `${h}h ${m}m ${s}s`;
+    }
+    if (m > 0) {
+        return `${m}m ${s}s`;
+    }
+    return `${s}s`;
+}
+
+function formatHeartbeat(ts) {
+    const value = Number(ts || 0);
+    if (!value) {
+        return '-';
+    }
+    const now = Math.floor(Date.now() / 1000);
+    const delta = now - value;
+    return delta <= 0 ? 'now' : `${delta}s ago`;
+}
+
+function formatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (!value) {
+        return '0 B';
+    }
+    if (value < 1024) {
+        return `${value} B`;
+    }
+    if (value < 1024 * 1024) {
+        return `${(value / 1024).toFixed(1)} KB`;
+    }
+    if (value < 1024 * 1024 * 1024) {
+        return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
 async function refreshTraffic() {

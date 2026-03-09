@@ -1,0 +1,409 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $block
+ */
+$apiUrl = $this->getBackendUrl('*/backend/server-manager/optimization-data');
+?>
+
+<div class="pb-opt-guide" id="pb-opt-guide">
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="mdi mdi-speedometer me-2"></i><?= __('WLS 性能优化指南') ?>
+            </h5>
+            <button class="btn btn-sm btn-outline-primary" id="pb-opt-refresh" type="button">
+                <i class="mdi mdi-refresh me-1"></i><?= __('刷新') ?>
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted mb-0">
+                <?= __('对齐 Weline Server（WLS）优化策略，按“环境检测 → 安装步骤 → 重启验证”闭环执行。') ?>
+            </p>
+        </div>
+    </div>
+
+    <div class="text-center py-5" id="pb-opt-loading">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden"><?= __('加载中...') ?></span>
+        </div>
+        <p class="mt-3 text-muted"><?= __('正在加载优化指南...') ?></p>
+    </div>
+
+    <div class="d-none" id="pb-opt-error">
+        <div class="alert alert-danger mb-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <strong><?= __('加载失败') ?></strong>
+                    <div class="small mt-1" id="pb-opt-error-message"></div>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" id="pb-opt-retry" type="button">
+                    <i class="mdi mdi-refresh me-1"></i><?= __('重试') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-none" id="pb-opt-content"></div>
+</div>
+
+<style>
+.pb-opt-guide .pb-opt-guide-header {
+    background: linear-gradient(135deg, var(--backend-color-card-bg) 0%, var(--backend-color-bg-secondary) 100%);
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius-md);
+    padding: var(--backend-padding-card);
+}
+
+.pb-opt-guide .pb-opt-card {
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius-md);
+    background: var(--backend-color-card-bg);
+    box-shadow: var(--backend-card-shadow);
+}
+
+.pb-opt-guide .pb-opt-card + .pb-opt-card {
+    margin-top: var(--backend-spacing-md);
+}
+
+.pb-opt-guide .pb-opt-copy-target {
+    user-select: all;
+}
+
+.pb-opt-guide .pb-opt-step {
+    background: var(--backend-color-bg-secondary);
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius);
+    padding: var(--backend-spacing-md);
+}
+
+.pb-opt-guide .pb-opt-instance-item {
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius);
+    padding: var(--backend-spacing-sm);
+    background: var(--backend-color-bg-primary);
+}
+</style>
+
+<script>
+(function () {
+    'use strict';
+
+    var apiUrl = '<?= $apiUrl ?>';
+    var refreshBtn = document.getElementById('pb-opt-refresh');
+    var retryBtn = document.getElementById('pb-opt-retry');
+    var loadingEl = document.getElementById('pb-opt-loading');
+    var errorEl = document.getElementById('pb-opt-error');
+    var errorMessageEl = document.getElementById('pb-opt-error-message');
+    var contentEl = document.getElementById('pb-opt-content');
+    var guideRootEl = document.getElementById('pb-opt-guide');
+
+    function showLoading() {
+        loadingEl.classList.remove('d-none');
+        errorEl.classList.add('d-none');
+        contentEl.classList.add('d-none');
+    }
+
+    function showError(message) {
+        loadingEl.classList.add('d-none');
+        errorEl.classList.remove('d-none');
+        contentEl.classList.add('d-none');
+        errorMessageEl.textContent = message || '<?= __('未知错误') ?>';
+    }
+
+    function showContent() {
+        loadingEl.classList.add('d-none');
+        errorEl.classList.add('d-none');
+        contentEl.classList.remove('d-none');
+    }
+
+    function requestGuideData() {
+        if (window.Weline && Weline.Api && typeof Weline.Api.request === 'function') {
+            return Weline.Api.request(apiUrl, {
+                method: 'GET',
+                silent: true,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.data || {};
+            });
+        }
+
+        return fetch(apiUrl, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status + ': ' + response.statusText);
+            }
+            return response.json();
+        });
+    }
+
+    function loadGuideData() {
+        showLoading();
+        requestGuideData().then(function (result) {
+            if (!result || !result.success) {
+                throw new Error((result && result.message) || '<?= __('优化数据获取失败') ?>');
+            }
+            renderGuide(result);
+            showContent();
+        }).catch(function (error) {
+            var message = (error && error.message) || '<?= __('请求异常') ?>';
+            showError(message);
+            if (window.BackendToast) {
+                BackendToast.error(message);
+            }
+        });
+    }
+
+    function renderGuide(payload) {
+        var phpInfo = payload.php_info || {};
+        var summary = payload.summary || {};
+        var optimizations = summary.optimizations || {};
+        var status = payload.server_status || {};
+
+        var html = '';
+        html += renderHeader(phpInfo, payload.timestamp);
+        html += renderOverview(summary);
+        html += renderServerStatus(status);
+        html += renderOptimizationCards(optimizations, phpInfo);
+        html += renderWlsRunbook();
+        contentEl.innerHTML = html;
+    }
+
+    function renderHeader(phpInfo, timestamp) {
+        var timeLabel = timestamp ? new Date(timestamp * 1000).toLocaleString() : new Date().toLocaleString();
+        var osLabel = (phpInfo.os || '-') + ' / ' + (phpInfo.arch || '-');
+        return '' +
+            '<div class="pb-opt-guide-header mb-4">' +
+            '  <h4 class="mb-2"><i class="mdi mdi-lightning-bolt text-warning me-1"></i><?= __('WLS 优化总览（动态环境检测）') ?></h4>' +
+            '  <p class="text-muted mb-3"><?= __('本页实时读取当前实例的 PHP 与扩展状态，步骤可直接复制执行。') ?></p>' +
+            '  <div class="d-flex flex-wrap gap-2">' +
+            '    <span class="badge bg-info"><?= __('生成时间') ?>: ' + escapeHtml(timeLabel) + '</span>' +
+            '    <span class="badge bg-secondary">' + escapeHtml(osLabel) + '</span>' +
+            '    <span class="badge bg-success"><?= __('本地安全访问') ?> ✓</span>' +
+            '  </div>' +
+            '</div>' +
+            '<div class="card mb-4 pb-opt-card">' +
+            '  <div class="card-header"><h6 class="mb-0"><i class="mdi mdi-cog-outline me-1"></i><?= __('当前环境') ?></h6></div>' +
+            '  <div class="card-body">' +
+            '    <div class="row g-3">' +
+            '      <div class="col-md-6"><strong><?= __('PHP 版本') ?>：</strong><code>' + escapeHtml(phpInfo.version || '-') + '</code></div>' +
+            '      <div class="col-md-6"><strong><?= __('线程模式') ?>：</strong>' + renderThreadSafe(phpInfo.thread_safe) + '</div>' +
+            '      <div class="col-md-6"><strong><?= __('PHP 可执行文件') ?>：</strong>' + renderCopyable(phpInfo.binary || '-') + '</div>' +
+            '      <div class="col-md-6"><strong><?= __('php.ini') ?>：</strong>' + renderCopyable(phpInfo.ini_path || '-') + '</div>' +
+            '      <div class="col-md-6"><strong><?= __('扩展目录') ?>：</strong>' + renderCopyable(phpInfo.ext_dir || '-') + '</div>' +
+            '      <div class="col-md-6"><strong><?= __('禁用函数') ?>：</strong><code>' + escapeHtml(phpInfo.disable_functions || '-') + '</code></div>' +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+    }
+
+    function renderOverview(summary) {
+        return '' +
+            '<div class="card mb-4 pb-opt-card">' +
+            '  <div class="card-header"><h6 class="mb-0"><i class="mdi mdi-chart-box-outline me-1"></i><?= __('优化概览') ?></h6></div>' +
+            '  <div class="card-body">' +
+            '    <div class="row text-center g-3">' +
+            '      <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted"><?= __('已优化') ?></div><div class="h4 mb-0">' + escapeHtml(summary.installed || 0) + '</div></div></div>' +
+            '      <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted"><?= __('待优化') ?></div><div class="h4 mb-0">' + escapeHtml(summary.missing || 0) + '</div></div></div>' +
+            '      <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted"><?= __('当前加成') ?></div><div class="h5 mb-0">' + escapeHtml(summary.current_boost || '-') + '</div></div></div>' +
+            '      <div class="col-md-3"><div class="border rounded p-3"><div class="text-muted"><?= __('潜在提升') ?></div><div class="h5 mb-0">' + escapeHtml(summary.potential_boost || '-') + '</div></div></div>' +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+    }
+
+    function renderServerStatus(status) {
+        var names = Object.keys(status || {});
+        var content = '';
+        if (!names.length) {
+            content = '<div class="alert alert-warning mb-0"><?= __('未发现实例状态文件，请先执行 WLS 启动命令。') ?></div>';
+        } else {
+            content += '<div class="row g-3">';
+            names.forEach(function (name) {
+                var item = status[name] || {};
+                var running = !!item.running;
+                content += '' +
+                    '<div class="col-md-6">' +
+                    '  <div class="pb-opt-instance-item">' +
+                    '    <div class="d-flex justify-content-between align-items-center mb-2">' +
+                    '      <strong>' + escapeHtml(name) + '</strong>' +
+                    '      <span class="badge ' + (running ? 'bg-success' : 'bg-secondary') + '">' + (running ? '<?= __('运行中') ?>' : '<?= __('未运行') ?>') + '</span>' +
+                    '    </div>' +
+                    '    <div class="small text-muted"><?= __('地址') ?>: ' + escapeHtml(item.host || '127.0.0.1') + ':' + escapeHtml(item.port || '-') + '</div>' +
+                    '    <div class="small text-muted"><?= __('Worker') ?>: ' + escapeHtml(item.worker_count || item.workers || '-') + '</div>' +
+                    '  </div>' +
+                    '</div>';
+            });
+            content += '</div>';
+        }
+
+        return '' +
+            '<div class="card mb-4 pb-opt-card">' +
+            '  <div class="card-header"><h6 class="mb-0"><i class="mdi mdi-server-network me-1"></i><?= __('WLS 实例状态') ?></h6></div>' +
+            '  <div class="card-body">' + content + '</div>' +
+            '</div>';
+    }
+
+    function renderOptimizationCards(optimizations, phpInfo) {
+        var html = '';
+        Object.keys(optimizations || {}).forEach(function (key) {
+            var opt = optimizations[key] || {};
+            if (opt.priority === 'skip') {
+                return;
+            }
+            var installed = !!opt.installed;
+            var headerClass = installed ? 'bg-success text-white' : 'bg-warning';
+            var icon = installed ? 'mdi-check-circle' : 'mdi-alert-circle';
+            html += '' +
+                '<div class="card pb-opt-card" id="pb-opt-' + escapeHtml(key) + '">' +
+                '  <div class="card-header ' + headerClass + '">' +
+                '    <div class="d-flex justify-content-between align-items-center">' +
+                '      <h6 class="mb-0"><i class="mdi ' + icon + ' me-1"></i>' + escapeHtml(opt.name || key) + '</h6>' +
+                '      <span class="badge bg-light text-dark">' + escapeHtml(opt.impact || '-') + '</span>' +
+                '    </div>' +
+                '  </div>' +
+                '  <div class="card-body">' +
+                '    <p class="mb-3">' + escapeHtml(opt.description || '') + '</p>' +
+                '    <div class="row g-3 mb-3">' +
+                '      <div class="col-md-6"><div class="alert alert-secondary mb-0"><strong><?= __('未优化时') ?>：</strong><br>' + escapeHtml((opt.performance && opt.performance.without) || '-') + '</div></div>' +
+                '      <div class="col-md-6"><div class="alert alert-success mb-0"><strong><?= __('优化后') ?>：</strong><br>' + escapeHtml((opt.performance && opt.performance.with) || '-') + '</div></div>' +
+                '    </div>' +
+                (installed ? '<div class="alert alert-success mb-0"><i class="mdi mdi-check me-1"></i><?= __('该项已就绪') ?></div>' : renderInstallSteps(opt.install && opt.install.steps, phpInfo)) +
+                '  </div>' +
+                '</div>';
+        });
+        return html;
+    }
+
+    function renderInstallSteps(steps) {
+        if (!steps || !steps.length) {
+            return '<div class="alert alert-info mb-0"><?= __('暂无自动步骤，请参考 WLS 文档完成配置。') ?></div>';
+        }
+        var html = '<h6 class="mb-3"><i class="mdi mdi-format-list-numbered me-1"></i><?= __('安装步骤') ?></h6>';
+        steps.forEach(function (step) {
+            html += '<div class="pb-opt-step mb-3">';
+            html += '<div class="fw-semibold text-primary mb-2">' + escapeHtml(step.title || '') + '</div>';
+            if (step.description) {
+                html += '<div class="mb-2">' + escapeHtml(step.description) + '</div>';
+            }
+            if (step.path) {
+                html += '<div class="mb-2"><strong><?= __('文件') ?>：</strong>' + renderCopyable(step.path) + '</div>';
+            }
+            if (step.content) {
+                html += '<div class="mb-2"><strong><?= __('配置内容') ?>：</strong>' +
+                    '<pre class="bg-dark text-light p-2 rounded mb-2 pb-opt-copy-target">' + escapeHtml(step.content) + '</pre>' +
+                    renderCopyButton(step.content) + '</div>';
+            }
+            if (step.command) {
+                html += '<div class="mb-2"><strong><?= __('命令') ?>：</strong>' +
+                    '<pre class="bg-dark text-light p-2 rounded mb-2 pb-opt-copy-target">' + escapeHtml(step.command) + '</pre>' +
+                    renderCopyButton(step.command) + '</div>';
+            }
+            if (step.commands) {
+                html += '<div class="mb-2"><strong><?= __('按系统执行') ?>：</strong>';
+                Object.keys(step.commands).forEach(function (systemName) {
+                    html += '<div class="mt-2"><span class="badge bg-info me-2">' + escapeHtml(systemName) + '</span><code class="pb-opt-copy-target">' + escapeHtml(step.commands[systemName]) + '</code> ' + renderCopyButton(step.commands[systemName]) + '</div>';
+                });
+                html += '</div>';
+            }
+            if (step.url) {
+                html += '<a href="' + escapeHtml(step.url) + '" target="_blank" class="btn btn-sm btn-outline-primary"><i class="mdi mdi-open-in-new me-1"></i><?= __('下载链接') ?></a>';
+            }
+            if (step.note) {
+                html += '<div class="alert alert-info mb-0 mt-2"><i class="mdi mdi-information-outline me-1"></i>' + escapeHtml(step.note) + '</div>';
+            }
+            html += '</div>';
+        });
+        return html;
+    }
+
+    function renderWlsRunbook() {
+        var restartCmd = 'php bin/w server:stop && php bin/w server:start';
+        var benchmarkCmd = 'php bin/w server:benchmark';
+        var statusCmd = 'php bin/w server:status';
+        return '' +
+            '<div class="card mt-4 pb-opt-card">' +
+            '  <div class="card-header bg-primary text-white"><h6 class="mb-0"><i class="mdi mdi-rocket-launch-outline me-1"></i><?= __('WLS 执行闭环（必做）') ?></h6></div>' +
+            '  <div class="card-body">' +
+            '    <ol class="mb-3">' +
+            '      <li><?= __('按上方缺失项完成扩展/配置。') ?></li>' +
+            '      <li><?= __('重启 WLS 使配置生效。') ?></li>' +
+            '      <li><?= __('执行状态与压测，确认收益。') ?></li>' +
+            '    </ol>' +
+            '    <div class="mb-3"><strong><?= __('重启命令') ?>：</strong><pre class="bg-dark text-light p-2 rounded mb-2 pb-opt-copy-target">' + restartCmd + '</pre>' + renderCopyButton(restartCmd) + '</div>' +
+            '    <div class="mb-3"><strong><?= __('状态检查') ?>：</strong><pre class="bg-dark text-light p-2 rounded mb-2 pb-opt-copy-target">' + statusCmd + '</pre>' + renderCopyButton(statusCmd) + '</div>' +
+            '    <div><strong><?= __('性能验证') ?>：</strong><pre class="bg-dark text-light p-2 rounded mb-2 pb-opt-copy-target">' + benchmarkCmd + '</pre>' + renderCopyButton(benchmarkCmd) + '</div>' +
+            '  </div>' +
+            '</div>';
+    }
+
+    function renderThreadSafe(threadSafe) {
+        return threadSafe
+            ? '<span class="badge bg-info">TS</span>'
+            : '<span class="badge bg-success">NTS</span>';
+    }
+
+    function renderCopyable(text) {
+        return '<code class="pb-opt-copy-target">' + escapeHtml(text) + '</code> ' + renderCopyButton(text);
+    }
+
+    function renderCopyButton(text) {
+        return '<button type="button" class="btn btn-sm btn-outline-secondary pb-opt-copy-btn" data-copy-text="' + escapeAttr(text) + '">' +
+            '<i class="mdi mdi-content-copy"></i></button>';
+    }
+
+    function copyText(text) {
+        if (!text) {
+            return;
+        }
+        navigator.clipboard.writeText(text).then(function () {
+            if (window.BackendToast) {
+                BackendToast.success('<?= __('已复制到剪贴板') ?>');
+            }
+        }).catch(function () {
+            var textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            if (window.BackendToast) {
+                BackendToast.success('<?= __('已复制到剪贴板') ?>');
+            }
+        });
+    }
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        var div = document.createElement('div');
+        div.textContent = String(value);
+        return div.innerHTML;
+    }
+
+    function escapeAttr(value) {
+        return escapeHtml(value).replace(/"/g, '&quot;');
+    }
+
+    refreshBtn.addEventListener('click', loadGuideData);
+    retryBtn.addEventListener('click', loadGuideData);
+    guideRootEl.addEventListener('click', function (event) {
+        var target = event.target.closest('.pb-opt-copy-btn');
+        if (!target) {
+            return;
+        }
+        copyText(target.getAttribute('data-copy-text') || '');
+    });
+
+    loadGuideData();
+})();
+</script>

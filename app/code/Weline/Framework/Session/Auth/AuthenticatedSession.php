@@ -63,7 +63,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         $this->session->set($this->areaConfig->getLoginIdKey(), $user->getAuthIdentifier());
         $this->session->set($this->areaConfig->getUserModelKey(), $user::getAuthModelClass());
 
-        $this->session->regenerate(false);
+        $this->session->regenerate(true);
 
         $this->cachedUser = $user;
     }

@@ -113,6 +113,7 @@ strlen($code) > 3 && strlen($code) <= 10
 - **菜单 action 中的 `*`**：`MenuCollector::replaceModuleAction()` 在收集菜单（`s:up`）时，将 `*/backend/控制器/方法` 中的 `*` 替换为**当前菜单所属模块**的路由；替换时使用回退链：
   - 后台菜单：优先 `backend_router`，空则用 `router`，再空则 `strtolower(module_name)`；
   - 前台菜单：优先 `router`，空则 `strtolower(module_name)`。
+- **Hook/模板中的跨模块 URL**：`getBackendUrl('*/backend/...')` 也会按当前模块上下文解析 `*`。若目标接口属于其他模块（如 `server/backend/...`），必须显式写目标模块前缀，避免在 PageBuilder/Theme 等上下文下误命中 404。
 - **自定义路由**：在模块 `etc/env.php` 中显式配置 `router` / `backend_router` 时，以配置为准；配置后需执行 `php bin/w s:up` 与 `php bin/w setup:upgrade --route` 使菜单与路由生效。
 
 ---
@@ -847,6 +848,32 @@ strlen($code) > 3 && strlen($code) <= 10
 // 数据库/缓存验证
 $languageCache->checkLanguage($code);  // 查询语言是否存在
 ```
+
+### Q8: 后台 URL 明明像对的，为什么仍然 404？
+
+**典型场景：**
+```text
+/backend/framework/env-manager  -> 404
+```
+
+**常见根因：**
+1. 把路由段写成了 `backend/{module}/...`，但框架实际顺序是 `/{backend_router}/backend/{controller}`。  
+2. 使用了错误的模块路由前缀（`router/backend_router`），例如 `Weline_Framework` 实际是 `weline_framework`。  
+3. 菜单 action 和模板/JS URL 的写法不一致，导致页面入口与 AJAX 分别命中不同路径。
+
+**快速排查：**
+```bash
+# 1) 先确认模块 backend_router
+ReadFile app/etc/modules.php
+
+# 2) 再确认路由是否注册
+php bin/w route:list | Select-String "env-manager"
+```
+
+**修复建议：**
+- 菜单优先使用 `*/backend/...`（由菜单收集器按模块自动替换），或显式写 `{backend_router}/backend/...`。  
+- 模板/服务中统一使用 `getBackendUrl('{backend_router}/backend/...')`，不要手写 `backend/...`。  
+- 修改控制器/菜单后执行：`php bin/w setup:upgrade --route`。
 
 ---
 

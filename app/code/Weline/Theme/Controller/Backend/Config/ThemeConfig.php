@@ -314,6 +314,8 @@ class ThemeConfig extends BackendController
             $layouts = $themeConfigBlock->getThemeConfig('layouts') ?: [];
             $layouts['data-topbar'] = $mode;
             $layouts['data-sidebar'] = $mode;
+            $layouts['data-theme-mode'] = $mode;
+            $layouts['data-layout-mode'] = $mode;
             
             $themeConfigBlock->setThemeConfig('layouts', $layouts);
 

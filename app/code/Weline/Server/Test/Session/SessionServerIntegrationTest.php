@@ -266,6 +266,31 @@ class SessionServerIntegrationTest extends TestCase
     }
 
     /**
+     * 测试读取触发滑动过期
+     */
+    public function testSlidingExpirationOnGetAll(): void
+    {
+        $sessionId = 'integration_test_session_sliding';
+
+        $this->processServer();
+        if (!$this->client->set($sessionId, 'key', 'value', 1)) {
+            $this->markTestSkipped('Session server write is unavailable in current environment');
+        }
+        $this->processServer();
+
+        \usleep(700000);
+        $all = $this->client->getAll($sessionId);
+        $this->processServer();
+        $this->assertSame('value', $all['key'] ?? null);
+
+        // 如果读取不续期，第二次读取会在初始 1 秒 TTL 后返回空。
+        \usleep(700000);
+        $allAfterSliding = $this->client->getAll($sessionId);
+        $this->processServer();
+        $this->assertSame('value', $allAfterSliding['key'] ?? null);
+    }
+
+    /**
      * 测试复杂数据类型
      */
     public function testComplexData(): void

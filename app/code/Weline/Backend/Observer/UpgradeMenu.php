@@ -31,14 +31,8 @@ class UpgradeMenu implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        // 从事件数据中获取需要更新菜单的模块列表（可选）
-        $modules = $event->getEvenData('modules');
-        if (!is_array($modules)) {
-            $modules = [];
-        }
-        
-        // 委托给菜单收集服务（收集所有模块的菜单，禁用模块的菜单会自动设置为 is_enable=0）
-        $this->collectMenus($modules);
+        // 系统级菜单严格以 menu.xml 为唯一来源，升级后始终全量收集。
+        $this->collectMenus([]);
         // 注意：Observer 的 execute 方法应该返回 void，返回值被忽略
     }
 

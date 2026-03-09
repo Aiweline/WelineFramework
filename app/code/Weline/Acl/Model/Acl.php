@@ -59,8 +59,12 @@ class Acl extends \Weline\Framework\Database\Model
     public const schema_fields_IS_ENABLE = 'is_enable';
     #[Col(type: 'int', nullable: true, default: 1, comment: '是否后台')]
     public const schema_fields_IS_BACKEND = 'is_backend';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'menu_xml', comment: 'ACL来源')]
+    public const schema_fields_ACL_ORIGIN = 'acl_origin';
 
     public const type_MENUS = 'menus';
+    public const acl_origin_menu_xml = 'menu_xml';
+    public const acl_origin_user = 'user';
 
     public array $_unit_primary_keys = [self::schema_fields_SOURCE_ID];
 
@@ -166,6 +170,11 @@ class Acl extends \Weline\Framework\Database\Model
         return $this->setData(self::schema_fields_IS_BACKEND, $is_backend);
     }
 
+    public function setAclOrigin(string $aclOrigin): static
+    {
+        return $this->setData(self::schema_fields_ACL_ORIGIN, $aclOrigin);
+    }
+
     public function getAclId(): int
     {
         return intval($this->getData(self::schema_fields_ACL_ID));
@@ -250,6 +259,11 @@ class Acl extends \Weline\Framework\Database\Model
     public function isBackend(): bool
     {
         return (bool)$this->getData(self::schema_fields_IS_BACKEND);
+    }
+
+    public function getAclOrigin(): string
+    {
+        return (string)($this->getData(self::schema_fields_ACL_ORIGIN) ?? '');
     }
 
 

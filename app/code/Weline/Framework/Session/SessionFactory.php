@@ -120,13 +120,17 @@ class SessionFactory
 
     /**
      * 是否启用 file -> wls 接管策略。
+     * 若 env session.wls_managed=false，强制使用 file 存储（Session Server 不可用时的 fallback）
      */
     private function shouldHijackFileToWls(): bool
     {
+        $wlsManaged = $this->config['wls_managed'] ?? true;
+        if ($wlsManaged === false) {
+            return false;
+        }
         if (\class_exists(\Weline\Server\Service\Runtime\RoutingPolicyRegistry::class)) {
             return \Weline\Server\Service\Runtime\RoutingPolicyRegistry::shouldHijackSessionFile();
         }
-        // Master 策略尚未下发时，使用安全默认值（接管 file）
         return true;
     }
 

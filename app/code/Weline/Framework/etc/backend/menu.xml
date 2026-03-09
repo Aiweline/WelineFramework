@@ -14,7 +14,7 @@
     <menu source="Weline_Framework::env_manager" 
           name="env_manager" 
           title="环境管理" 
-          action="backend/framework/env-manager"
+          action="weline_framework/backend/env-manager"
           parent="Weline_Backend::system_service_group" 
           icon="bi-cpu" 
           order="90"/>

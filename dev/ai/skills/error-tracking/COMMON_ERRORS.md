@@ -16,10 +16,12 @@
 |------|------|----------|
 | `Cannot pass by reference` | 引用参数传了字面量 | 使用变量 |
 | `Type error` | 参数类型不匹配 | 检查类型声明 |
+| `PcController::fetch(): Argument #2 ($data) must be of type array, string given` | 旧代码把布局字符串作为第二参数传给 `fetch('', 'blank')`，而 `fetch()` 第二参数已是 `array $data` | 使用 `$this->layoutType = 'default.blank'; return $this->fetch();`，不要把布局字符串传给 `$data` |
 | `executeConcurrentRequests(): Argument #4 ($headers) must be of type array, string given` | `http:req -H` 传入单字符串头，未先归一化为数组/键值对 | 在命令入口统一做 header 归一化，支持 `"Host: a.com"` 与数组形式 |
 | `server:status` 显示运行中但 PID 不存在 | 仅依赖实例文件 `state` 或端口弱信号，未以 PID 存活为准 | 状态判定改为 PID 优先（`Processer::processExists`），端口仅作无 PID 回退 |
 | `maintenance rolling` 完成后仍显示维护模式启用 | 在滚动标志未清理前调用 disable，被“滚动中”保护拒绝 | 先清 `rollingRestartInProgress`，再执行 `disableMaintenanceMode()` |
 | `cache:clear` 提示 WLS 重载失败（命名实例运行中） | IPC 重载只通知 `default` 实例，忽略命名实例 | 遍历运行中的所有实例发送 IPC reload 通知 |
+| `未注册的查询器：server` | QueryProvider 新增/修改后未重建 extends 注册表，或 WLS 仍在旧内存态 | 执行 `php bin/w extends:rebuild`，随后 `php bin/w server:reload`（必要时 `s:up`） |
 | `pagination(): Argument #1 ($page) must be of type int, string given` | GET/POST 参数为 string | 传参前用 `(int) $this->request->getParam('page', 1)` 等 |
 | `Undefined method` | 方法不存在 | 检查类名和方法名 |
 | `Undefined property` | 属性未声明或未初始化 | 检查属性声明和构造函数赋值 |
@@ -110,6 +112,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | `Call to undefined function stream_socket_recv()`（Worker SSL） | 在 `worker_ssl.php` 里误用不存在的 stream API | 改为 `stream_socket_recvfrom($conn, ..., STREAM_PEEK)`；修改后重启服务并用 HTTP/HTTPS 各回归一次 |
 | WLS 子进程不断累积为孤儿进程 | 1）子进程具备复活 Master 能力导致控制面分散；2）Windows 非阻塞瞬时 PID 不可靠；3）缺少 `epoch + launch_id` 代际隔离 | 收口为 Master 单主控；禁用子进程复活；IPC 增加 `epoch + launch_id` 校验；引入 reconcile + orphan sweeper，旧代际进程统一回收 |
 | WLS 启动后频繁 `register_timeout` + 整组重启风暴 | 1）周期 orphan sweeper 在主循环执行重型 kill 扫描，阻塞 IPC poll；2）`register_timeout` 配置过短（低于启动宽限）导致误判 | 周期扫尾默认改为轻量（仅 stale pid 清理）；重型按前缀 kill 仅在 full restart 后执行；`register_timeout` 至少与 `startupGracePeriod` 一致 |
+| 停机日志显示“Master 已退出”，但进程实际仍在（假退出） | 提前删除 Master PID 索引，`hasExitedFast()` 仅看索引导致误判；前台文案过早使用“已退出” | 停机阶段不提前删 Master 索引；退出判定改为 `hasExitedFast && !processExists` 双确认；前台文案改为“退出流程已完成（进程即将退出）” |
 
 ## 模块升级
 
@@ -170,6 +173,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 |---|---|---|
 | 后台某个未配置 `#[Acl]` 的路由也被权限系统拦截 | ACL 判定逻辑只看“角色是否命中 route”，没有先判断“该 route 是否存在 ACL 定义” | 先查 `weline_acl.route` 是否存在该 route；不存在则按白色 ACL 放行 |
 | 需求是“不在权限内的都属于白色 ACL”，但仍要求登录/角色 | `RouteBefore` 仅检查显式白名单表 `WhiteAclSource`，没有把“未定义 ACL 的 route”视为白名单 | 在拦截前增加 `isRouteProtected()` 判定，未定义 ACL 的 route 直接 return |
+| DevToolPanel 攻击统计 404（命中 `pagebuilder/backend/server-monitor/attack-stats`） | Hook/模板中把跨模块 URL 写成 `*/backend/...`，`*` 在当前模块上下文被替换成错误前缀 | 跨模块调用改为固定路由 `server/backend/server-monitor/attack-stats`（及同类链接） |
 
 ### PostgreSQL ON CONFLICT 字段不匹配
 
@@ -188,6 +192,24 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | 单例类 `??` 操作符不覆盖已有值 | WLS 下单例跨请求保留，`??` 跳过赋值 | 重置单例实例，或改用无条件赋值 |
 | 后台 REST 请求稳定慢 3-4 秒（连 401/404 都慢） | 将 `EventsManager` 观察者缓存按请求清空，导致每请求重建事件观察者/模块状态 | `resetRequestState()` 仅清请求级 `$events`；保留 `observerCache/eventsObservers/moduleStatusCache` 为进程级热缓存 |
 | 登录失败提示越试越多（“登录凭据错误”重复） | 登录场景误用 `MessageManager::error()`（append 语义），连续失败自然累积 | 登录控制器改用 `MessageManager::setSingleError()`；保留 `error()` 给需要多条提示的通用场景 |
+| 后台监控页/攻击日志页 500：`setTitle() on null` | 模板直接调用 `$block->setTitle()`，在 WLS + `view/tpl/com_*` 路径下 `$block` 上下文不稳定 | 控制器统一 `assign('title', ...)`；模板移除 `$block->setTitle()`；`Template::ob_file()` 统一注入 `block` 上下文 |
+| 后台优化页 500：`OptimizationGuide/com_index.phtml setTitle() on null` | 历史 `view/tpl/com_*` 编译模板链路仍依赖 `$block`，仅 data 注入不足以覆盖全部上下文 | `Template::ob_file()` 强制本地 `$block = $this`，并同步 `setData('block', $this)` 双通道注入 |
+| 后台攻击日志页 500：`getBackendUrl() on null` | 模板依赖 `$block->getBackendUrl()`，在 WLS + 历史编译模板上下文下 `$block` 可能为空 | 后台模板 URL 生成统一改为 `$this->getBackendUrl()`，避免运行时依赖 `$block` |
+| 内存服务管理显示“不可用”，但进程实际运行中 | 连接池缓存了旧 token；Memory/Session 服务重启后 token 轮换，重连认证仍用旧凭证 | 在 `PooledConnection` 增加 token 文件 mtime 检测；认证失败时强制刷新 token 并重试一次 |
+| Session/Memory 管理页偶发“不可用”误报 | 探活仅依赖 `ping()`，重连窗口中的瞬时失败会直接标红 | connected 判定改为 `ping || stats成功`，并补一次轻量重试与 probe 诊断信息 |
+| Session/Memory 管理页持续“不可用”，但进程全绿 | `session.server_host` 或 `server.memory_service.host` 配置存在但为空串，探活客户端使用空 host 连接失败 | `SharedStateAdminService` 对 host 做 `trim`，为空时回退 `127.0.0.1` |
+| Session 管理列表始终为空（后台已登录） | 协议层内部过滤键 `__domain` 被误用于聚合 payload 字段匹配，真实会话全部被过滤 | `listSessions()` 先清洗 payload 过滤参数，移除 `__*` 内部键后再做业务匹配 |
+| `w_query('server','sessionList')` 返回空数组（已登录） | 核心 `ServerQueryProvider::sessionList()` 仅透传共享列表，缺少“当前后台会话可见”兜底 | 在查询器层统一补齐当前后台会话可见性，调用方保持透传，避免模块级分叉补丁 |
+| 暗色模式过段时间失效（Session 像被重置） | `SessionStore` 读取仅更新 LRU，不刷新 TTL；读多写少场景下 Session 到点过期被 GC 回收 | 在 `SessionStore::get()` 调用 `touch()` 实现滑动过期；并建议对齐 `session_ttl/lifetime` 与 `cookie_lifetime` |
+| WLS 下记住我登录后仍循环跳登录页/登录页反复警告 | 自动登录分支未显式 `save + writeClose + Set-Cookie`，下一跳 ACL 仍判未登录；同时把 `sess_id` 校验做成硬拒绝，且在 `admin/login/post` 也抢先执行记住我分支 | 保留 token 认证为主：`sess_id` 无效时降级为新会话登录；并强制落盘+回写 `WELINE_SESSID`；对 `admin/login/post` 跳过记住我逻辑，避免干扰真实登录 |
+| 后台 EnvManager 页面 404（`.../backend/framework/env-manager`） | 模块后台路由前缀应为 `weline_framework`，且路径顺序应为 `{backend_router}/backend/{controller}`，手写成了 `backend/framework/...` | 菜单 action 与模板 URL 改为 `weline_framework/backend/env-manager`；执行 `setup:upgrade --route` 刷新路由 |
+
+### 前端交互与层级
+
+| 错误 | 原因 | 解决方案 |
+|---|---|---|
+| AI 组件工坊点击“开始生成”无响应 | 提交前未做稳健的步骤1参数收集与校验反馈；缺少加载态与异常路径恢复 | 增加参数收集函数、必填项 `is-invalid` 高亮、统一通知封装、开始按钮 loading/disabled 状态管理 |
+| 可视化组件弹层层级错乱（按钮/弹窗被遮挡） | modal/backdrop/fullscreen/config 各自写死 z-index，缺少统一号段 | 统一弹层 z-index 体系（工坊、backdrop、全屏、配置弹层分层）并保持同页面内一致 |
 
 ### HTTP 请求测试（查看页面源码）
 

@@ -13,6 +13,7 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Server\Service\ServerInstanceManager;
 /** 服务器状态日志模型 - 定期记录服务器各进程的运行状态 */
 #[Table(comment: '服务器状态日志表')]
 #[Index(name: 'idx_instance', columns: ['instance'])]
@@ -409,6 +410,24 @@ class ServerStatusLog extends Model
             }
         }
         
+        // 框架级兜底：Master 状态不应依赖日志是否被写入
+        // 说明：当前 Worker/Dispatcher 会持续上报日志，但 Master 日志可能因写入链路缺失而为空。
+        // 因此从实例注册信息实时推断，避免后台误显示“Master 已停止”。
+        $instanceInfo = (new ServerInstanceManager())->getInstanceInfo($instance);
+        if ($instanceInfo !== null) {
+            $stats['master_running'] = $stats['master_running'] || $instanceInfo->isMasterRunning();
+            $dispatcher = $instanceInfo->getDispatcher();
+            if ($dispatcher !== null) {
+                $stats['dispatcher_running'] = $stats['dispatcher_running'] || $dispatcher->isRunning();
+            }
+            if ($stats['total_workers'] <= 0) {
+                $stats['total_workers'] = \count($instanceInfo->getWorkers());
+            }
+            if ($stats['running_workers'] <= 0) {
+                $stats['running_workers'] = $instanceInfo->getRunningWorkerCount();
+            }
+        }
+
         $stats['avg_cpu'] = $cpuCount > 0 ? \round($cpuSum / $cpuCount, 2) : 0.0;
         
         return $stats;

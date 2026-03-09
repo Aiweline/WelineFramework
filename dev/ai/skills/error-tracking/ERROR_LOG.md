@@ -4,6 +4,299 @@
 
 ---
 
+## [2026-03-09] w_query 报“未注册的查询器：server”（extends 注册表未重建）✅ 已修复
+
+**错误类型**: QueryProvider 注册/运行时缓存问题
+
+**错误信息**:
+```text
+InvalidArgumentException: 未注册的查询器：server。请通过 extends 注册 QueryProviderInterface 实现。
+请求 URI: /pagebuilder/backend/server-manager/status
+```
+
+**根本原因**:
+1. `Weline_Server` 的 `ServerQueryProvider` 已存在，但 extends 注册表未重建，`FrameworkQueryService` 无法发现 `provider=server`。  
+2. WLS 常驻进程仍在使用旧内存态，重建后未 reload 时也可能继续报同样错误。
+
+**解决方案**:
+1. 执行 `php bin/w extends:rebuild` 重建查询器注册表。  
+2. 执行 `php bin/w server:reload` 让 Worker 载入最新注册表。  
+3. 在 `PageBuilder` 服务器管理页补充 Session/Memory 可视化及对应后端接口（统一经 `w_query('server', ...)`）。
+
+**验证方法**:
+```bash
+php bin/w extends:rebuild
+php bin/w server:reload
+php -l app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php
+php -l app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php
+```
+
+**验证结果**: ✅ 成功
+- `extends:rebuild` 成功生成最新 extends 注册。  
+- `server:reload` 成功完成滚动重启（Worker 重新加载）。  
+- 相关 PHP 文件语法检查通过，IDE lints 无新增错误。  
+- `http:req` 因本地无后台登录 Session 未做接口 200 验证（路由联调需登录态）。
+
+**预防措施**:
+1. 新增/修改 QueryProvider 后，必须固定执行 `extends:rebuild`。  
+2. WLS 场景必须追加 `server:reload`（或重启）避免旧内存态继续运行。  
+3. 后台联调前先确认登录态，避免把认证失败误判为接口故障。
+
+**相关文件**:
+- `app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php`
+- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php`
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/ServerManager/index.phtml`
+
+---
+
+## [2026-03-08] AI 组件工坊“开始生成”点击无响应（前端字段校验与状态反馈缺失）✅ 已修复
+
+**错误类型**: 前端交互/校验反馈 + 弹层层级冲突
+
+**错误现象**:
+```text
+1) AI 组件工坊点击“开始生成”后，用户体感“无响应”；
+2) 可视化界面部分弹层与按钮存在层级错位，交互元素被遮挡。
+```
+
+**根本原因**:
+1. “开始生成”流程对步骤1 DOM 依赖较强，缺少初始化保护与字段高亮反馈。  
+2. 生成中状态未锁定按钮，用户重复点击时无法明确当前阶段。  
+3. 工坊 modal、全屏预览 overlay、配置弹层 z-index 体系不统一，导致层级冲突。
+
+**解决方案**:
+1. 增加步骤1参数收集与必填校验函数：缺字段时返回明确提示，并对无效字段加 `is-invalid`。  
+2. 增加统一通知/确认封装（优先 `BackendToast` / `BackendConfirm`），避免“静默失败”。  
+3. 增加开始按钮加载态控制（禁用 + 旋转图标），在成功/失败/取消路径统一恢复。  
+4. 统一提升并分层管理 z-index：工坊 modal、backdrop、全屏预览、配置弹层互不遮挡。
+
+**验证方法**:
+```bash
+git diff -- app/code/GuoLaiRen/PageBuilder/view/templates/Backend/Page/form_component/component_panel.phtml
+```
+
+**验证结果**:
+- 已确认“开始生成”路径新增了字段校验、加载态、异常恢复逻辑。  
+- 已确认层级相关 z-index 在同一文件中完成统一提升。  
+- IDE lints（该文件）检查通过，无新增 lint 报错。
+
+**预防措施**:
+1. 多步骤弹窗的提交入口必须有：参数收集函数 + 必填高亮 + 加载态。  
+2. 交互型功能禁止“无反馈失败”；优先使用 `BackendToast` 给出可见提示。  
+3. 复杂后台页面统一维护弹层 z-index 号段，避免局部临时值相互覆盖。
+
+**相关文件**:
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/Page/form_component/component_panel.phtml`
+
+---
+
+## [2026-03-08] 后台 EnvManager 路由 404（模块路由前缀写错）✅ 已修复
+
+**错误类型**: 路由配置 / 模块路由前缀不匹配
+
+**错误信息**:
+```text
+https://127.0.0.1:9981/{backend_key}/CNY/zh_Hans_CN/backend/framework/env-manager
+返回 404
+```
+
+**根本原因**:
+1. `Weline_Framework` 的 `backend_router` 实际是 `weline_framework`（见 `app/etc/modules.php`）。  
+2. 菜单与模板将路径写成了 `backend/framework/env-manager`（路径段顺序错误且模块前缀错误）。  
+3. 正确路由应为 `weline_framework/backend/env-manager`，否则 Router 无法命中控制器。
+
+**解决方案**:
+1. 菜单 action 改为 `weline_framework/backend/env-manager`。  
+2. 页面内 AJAX 地址改为 `getBackendUrl('weline_framework/backend/env-manager/...')`。  
+3. 执行 `php bin/w setup:upgrade --route` 刷新路由映射并触发 WLS reload。
+
+**验证方法**:
+```bash
+php bin/w route:list | Select-String "weline_framework/backend/env-manager"
+php bin/w http:req "/admin/CNY/zh_Hans_CN/weline_framework/backend/env-manager"
+```
+
+**验证结果**: ✅ 成功
+- `route:list` 已存在 `weline_framework/backend/env-manager` 及其 `retry-install/reset-all` 路由。  
+- `http:req` 返回 200（未登录场景跳转登录页，说明路由可达，不再是 404）。
+
+**预防措施**:
+1. 后台菜单 action 使用 `*/backend/...` 或显式 `backend_router/backend/...`，避免手写错误顺序。  
+2. 模板/JS 后台地址统一使用 `getBackendUrl()`，不要手写 `backend/...`。  
+3. 遇到 404 先用 `route:list` 核对“模块路由前缀 + controller path”。
+
+**相关文件**:
+- `app/code/Weline/Framework/etc/backend/menu.xml`
+- `app/code/Weline/Framework/View/templates/Backend/EnvManager/index.phtml`
+
+---
+
+## [2026-03-08] Queue 表单页 `fetch('', 'blank')` 触发 TypeError（PcController 参数签名变更）✅ 已修复
+
+**错误类型**: PHP 类型错误 / 控制器调用兼容性
+
+**错误信息**:
+```text
+Weline\Framework\Controller\PcController::fetch(): Argument #2 ($data) must be of type array, string given
+调用点: app/code/Weline/Queue/Controller/Backend/Queue.php:143
+请求: GET /queue/backend/queue/form
+```
+
+**根本原因**:
+1. `PcController::fetch()` 当前签名为 `fetch(string $fileName = '', array $data = [])`。  
+2. `Queue::form()` 仍使用旧调用方式 `fetch('', 'blank')`，将 `'blank'` 误传给了第二个 `array $data` 参数。  
+3. WLS 严格类型下直接抛出 `TypeError` 并返回 500。
+
+**解决方案**:
+1. 将旧调用改为布局属性写法：`$this->layoutType = 'default.blank';`  
+2. 模板渲染改为 `return $this->fetch();`，避免向 `$data` 传递字符串。  
+3. 保持原页面行为（blank 布局）不变。
+
+**验证方法**:
+```bash
+php -l "app/code/Weline/Queue/Controller/Backend/Queue.php"
+php bin/w http:req "/queue/backend/queue/form"
+```
+
+**验证结果**: ✅ 成功（语法检查通过；请求不再出现 `fetch()` 参数类型错误）
+
+**预防措施**:
+1. `fetch()` 第二参数仅允许 `array`，布局模式请通过 `$this->layoutType` 控制。  
+2. 遇到历史代码中的 `fetch('', 'xxx')` 调用时，应迁移为 `layoutType + fetch()` 组合。  
+3. 修改控制器渲染逻辑后，至少执行一次 `http:req` 路由回归。
+
+**相关文件**:
+- `app/code/Weline/Queue/Controller/Backend/Queue.php`
+- `app/code/Weline/Framework/Controller/PcController.php`
+
+---
+
+## [2026-03-08] Session/Memory 管理页持续显示“不可用”（host 为空串导致探活失败）✅ 已修复
+
+**错误类型**: 配置容错 / 运维状态误判
+
+**错误现象**:
+```text
+后台 /server/backend/server-manager 页面中，Session 与 Memory 服务均显示“不可用”。
+进程状态命令显示服务正常运行。
+```
+
+**根本原因**:
+`SharedStateAdminService::getEndpointConfig()` 读取 `Env::get('session.server_host')` 与
+`Env::get('server.memory_service.host')` 时得到空字符串 `""`，未回退到默认主机。
+最终探活客户端使用空 host 连接，`ping/stats` 均失败，UI 误判为不可用。
+
+**解决方案**:
+1. 在 `getEndpointConfig()` 中对 host 执行 `trim()`。  
+2. host 为空字符串时强制回退为 `127.0.0.1`。  
+3. 保留端口兜底逻辑（`<=0` 回退到 19970/19971）。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/Control/SharedStateAdminService.php
+php bin/w server:reload
+curl -k "https://127.0.0.1:9981/<backend-prefix>/CNY/zh_Hans_CN/server/backend/server-manager/status"
+```
+
+**验证结果**: ✅ 成功（`session.connected=true`，`memory.connected=true`，`probe.ping_ok=true`，`probe.stats_ok=true`）
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Control/SharedStateAdminService.php`
+
+---
+
+## [2026-03-08] WLS 后台优化页 `setTitle() on null`（历史编译模板上下文不稳定）✅ 已修复
+
+**错误类型**: 模板上下文注入 / WLS 历史编译模板兼容
+
+**错误信息**:
+```text
+Call to a member function setTitle() on null
+文件：.../view/tpl/zh_Hans_CN/templates/Backend/OptimizationGuide/com_index.phtml:9
+请求：/server/backend/optimization-guide
+```
+
+**根本原因**:
+1. WLS 下会执行 `view/tpl/.../com_*.phtml` 历史编译模板路径。  
+2. 历史编译模板仍可能包含 `$block->setTitle()` 调用。  
+3. `Template::ob_file()` 虽写入了 `data['block']`，但未强制提供本地 `$block` 变量，模板上下文在个别链路下仍可出现空对象。
+
+**解决方案**:
+1. 在框架层 `Template::ob_file()` 强制设置本地变量 `$block = $this`。  
+2. 同步无条件写入 `$this->setData('block', $this)`，确保 data 与局部变量一致。  
+3. 保持标题由控制器 `assign('title', ...)` 设置，模板侧不承担页面标题 setter。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Framework/View/Template.php
+php bin/w cache:flush
+php bin/w server:reload
+php bin/w http:req "/<backendKey>/CNY/zh_Hans_CN/server/backend/optimization-guide"
+```
+
+**验证结果**: ✅ 成功（请求返回 200，不再出现 `setTitle() on null`）
+
+**预防措施**:
+1. `Template::ob_file()` 必须同时保障“局部变量 + data 字典”双通道 `block` 注入。  
+2. 旧模板兼容期内，禁止在模板中使用 `$block->setTitle()`。  
+3. WLS 模式回归测试要覆盖 `view/templates` 与 `view/tpl/com_*` 两类路径。
+
+**相关文件**:
+- `app/code/Weline/Framework/View/Template.php`
+- `app/code/Weline/Server/Controller/Backend/OptimizationGuide.php`
+- `app/code/Weline/Server/view/templates/Backend/OptimizationGuide/index.phtml`
+
+---
+
+## [2026-03-08] WLS 后台模板 `$block->setTitle()` 空对象导致 500 ✅ 已修复
+
+**错误类型**: 模板上下文注入 / 页面标题设置方式不一致
+
+**错误信息**:
+```text
+Call to a member function setTitle() on null
+文件：.../view/tpl/zh_Hans_CN/templates/Backend/ServerMonitor/com_attack-log.phtml:14
+请求：/server/backend/server-monitor/attack-log
+```
+
+**根本原因**:
+1. 后台模板直接调用 `$block->setTitle()`，依赖模板变量 `$block` 必定存在。  
+2. 在 WLS + 多模板路径（`view/templates` 与 `view/tpl/.../com_*`）场景下，`$block` 上下文并不总是稳定可用。  
+3. 标题设置职责放在模板层，导致上下文变化时出现空对象调用。
+
+**解决方案**:
+1. 框架层在 `Template::ob_file()` 中统一注入 `block`（若缺失则注入当前 `Template` 实例）。  
+2. Server 后台控制器统一在控制器层 `assign('title', ...)` 设置页面标题。  
+3. Server 相关模板移除 `$block->setTitle()` 调用，避免模板层依赖可变上下文。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Framework/View/Template.php
+php -l app/code/Weline/Server/Controller/Backend/ServerMonitor.php
+php -l app/code/Weline/Server/view/templates/Backend/ServerMonitor/attack-log.phtml
+php bin/w cache:flush
+php bin/w server:reload
+php bin/w http:req "/<backendKey>/CNY/zh_Hans_CN/server/backend/server-monitor/attack-log"
+```
+
+**验证结果**: ✅ 成功（`attack-log` 页面返回 200，不再出现 `setTitle() on null`）
+
+**预防措施**:
+1. 页面标题优先在控制器层通过 `assign('title', ...)` 设置。  
+2. 模板中避免调用依赖运行时上下文对象的 setter（如 `$block->setTitle()`）。  
+3. 涉及 `view/tpl` 与 `view/templates` 双路径时，统一做模板上下文一致性验证。
+
+**相关文件**:
+- `app/code/Weline/Framework/View/Template.php`
+- `app/code/Weline/Server/Controller/Backend/ServerMonitor.php`
+- `app/code/Weline/Server/Controller/Backend/ServerManager.php`
+- `app/code/Weline/Server/Controller/Backend/OptimizationGuide.php`
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/index.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/attack-log.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/api-doc.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerManager/index.phtml`
+- `app/code/Weline/Server/view/templates/Backend/OptimizationGuide/index.phtml`
+
 ## [2026-03-07] WLS 下登录错误消息跨请求累积（MessageManager 追加语义）✅ 已修复
 
 **错误类型**: WLS 会话消息消费链路 / 业务提示累积
@@ -1966,5 +2259,430 @@ ReadLints(paths=[DomainManagement/index.phtml, QuickBuild/wizard.phtml, WebsiteM
 - `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/DomainManagement/index.phtml`
 - `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/QuickBuild/wizard.phtml`
 - `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/WebsiteManagement/form.phtml`
+
+---
+
+## [2026-03-08] WLS 后台模板 `$block->getBackendUrl()` 空对象导致 500（AttackLog）✅ 已修复
+
+**错误类型**: 模板上下文 / 框架约定（WLS + 历史编译模板链路）
+
+**错误信息**:
+```text
+WLS Runtime Error
+Call to a member function getBackendUrl() on null
+文件: app/code/Weline/Server/view/tpl/zh_Hans_CN/templates/Backend/ServerMonitor/com_attack-log.phtml:16
+URI: /server/backend/server-monitor/attack-log
+```
+
+**根本原因**:
+1. 后台模板（`attack-log.phtml` 等）依赖 `$block->getBackendUrl(...)`。  
+2. 在 WLS 常驻 + `view/tpl/com_*` 编译链路下，历史模板上下文存在 `$block` 为空的场景。  
+3. 这类模板对 `$block` 的强依赖会在运行时触发 `on null` 致命错误。
+
+**解决方案**:
+1. 将 `Weline_Server` 后台模板中的 URL 构建统一改为 `$this->getBackendUrl(...)`，避免依赖 `$block`。  
+2. 批量修复以下模板中的 `$block->getBackendUrl()` 调用：
+   - `Backend/ServerMonitor/attack-log.phtml`
+   - `Backend/ServerMonitor/api-doc.phtml`
+   - `Backend/ServerMonitor/index.phtml`
+   - `Backend/OptimizationGuide/index.phtml`
+   - `Backend/ServerManager/index.phtml`
+
+**验证方法**:
+```bash
+ReadLints(paths=[上述 5 个模板])
+rg "\$block->getBackendUrl\(" app/code/Weline/Server/view/templates/Backend
+```
+
+**验证结果**: ✅ 成功
+- 目标模板无新增语法/lint 问题。  
+- `Weline_Server` 后台模板中已无 `$block->getBackendUrl(...)` 调用。
+
+**预防措施**:
+1. 后台 `.phtml` 中生成 URL 一律使用 `$this->getBackendUrl(...)`。  
+2. `$block` 仅作为兼容上下文，不应作为关键业务调用的唯一依赖。  
+3. WLS 场景下优先采用“模板无状态写法”（`$this` + 控制器 assign）。
+
+**相关文件**:
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/attack-log.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/api-doc.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerMonitor/index.phtml`
+- `app/code/Weline/Server/view/templates/Backend/OptimizationGuide/index.phtml`
+- `app/code/Weline/Server/view/templates/Backend/ServerManager/index.phtml`
+
+---
+
+## [2026-03-08] WLS 内存服务显示“不可用”（Token 轮换后连接池凭证陈旧）✅ 已修复
+
+**错误类型**: WLS 常驻状态 / 连接池认证
+
+**错误现象**:
+```text
+后台“内存服务管理”显示：Memory Service 不可用
+但 `php bin/w server:status` 显示 Memory Service 进程正常运行。
+```
+
+**根本原因**:
+1. `PooledConnection` 将 token 文件内容缓存到内存（`authToken`）。  
+2. Memory/Session 服务重启后 token 会轮换，连接池仍使用旧 token 重连。  
+3. 认证失败后 UI 健康探测（ping/stats）持续失败，从而标记“不可用”。
+
+**解决方案**:
+1. 在 `PooledConnection` 中增加 token 文件变更检测（mtime）。  
+2. `authenticate()` 失败时强制重新读取 token，并重试一次认证。  
+3. token 文件缺失/空内容时同步重置缓存状态，避免旧值污染。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Shared/Connection/PooledConnection.php
+php bin/w server:reload
+```
+
+**验证结果**: ✅ 成功（语法检查通过，WLS 滚动重启完成）
+
+**预防措施**:
+1. 常驻进程中的认证凭证不能永久缓存，需支持文件变化感知。  
+2. 连接池组件在“认证失败”场景必须具备一次强制刷新重试机制。  
+3. Session/Memory 共享连接协议都应复用该刷新策略，避免同类问题重复出现。
+
+**相关文件**:
+- `app/code/Weline/Server/Shared/Connection/PooledConnection.php`
+
+---
+
+## [2026-03-08] Session/Memory 管理页误报“不可用”（探活判定过严）✅ 已修复
+
+**错误类型**: 健康检查误判 / 运维可观测性
+
+**错误现象**:
+```text
+后台 Session/Memory 管理页显示“不可用”，但服务进程正常运行。
+```
+
+**根本原因**:
+`SharedStateAdminService::getOverview()` 仅以 `ping()` 作为 connected 判定；在连接池重连窗口中可能出现短暂 ping 失败，导致 UI 误报不可用。
+
+**解决方案**:
+1. 增加一次轻量 `ping` 重试（20ms）。  
+2. connected 判定改为 `ping_ok || stats_ok`。  
+3. 返回 `probe` 诊断信息（`ping_ok/stats_ok/error`）便于后续前端展示具体失败原因。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/Control/SharedStateAdminService.php
+php bin/w server:reload
+```
+
+**验证结果**: ✅ 成功（语法检查通过，WLS 滚动重启完成）
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Control/SharedStateAdminService.php`
+
+---
+
+## [2026-03-08] 暗色模式“过段时间失效”（Session 固定 TTL 过期）✅ 已修复
+
+**错误类型**: Session 生命周期 / WLS 会话过期策略
+
+**错误现象**:
+```text
+后台切换暗色模式后，过一段时间失效；同时出现“Session 像被重置”的体感。
+```
+
+**根本原因**:
+1. WLS `SessionStore` 的 TTL 只在写入时刷新，读取 `get()/getAll()` 仅更新 LRU，不续期。  
+2. 用户在仅浏览页面（读多写少）场景下，Session 会在固定 TTL 到点后被 GC 回收。  
+3. 浏览器 Cookie 仍有效时，服务端 Session 可能已过期，表现为偏好配置丢失（如暗色模式）。
+
+**解决方案**:
+1. 在 `SessionStore::get()` 中引入滑动过期：读取有效 Session 时调用 `touch()` 刷新 TTL。  
+2. 保留既有过期分支（过期即 `destroy`），避免复活过期会话。  
+3. 补充配置与文档说明：`session_ttl/lifetime` 与 `cookie_lifetime` 建议对齐，减少“Cookie 在但 Session 空”。
+
+**验证方法**:
+```bash
+php vendor/bin/phpunit app/code/Weline/Server/Test/Session/SessionStoreTest.php
+php vendor/bin/phpunit app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php --filter testSlidingExpirationOnGetAll
+```
+
+**验证结果**:
+- `SessionStoreTest` 全量通过（存在 code coverage warning，不影响功能验证）。  
+- 集成测试在当前环境因 Session Server 写入不可用被 skip（已在测试中显式保护），无语法/运行时错误。
+
+**预防措施**:
+1. 任何 Session 存储后端都要明确“固定过期”还是“滑动过期”语义。  
+2. 若产品期望“活跃用户不掉会话”，读取路径必须刷新 TTL。  
+3. 运维配置需避免 `cookie_lifetime > session_ttl` 的长期不一致。
+
+**相关文件**:
+- `app/code/Weline/Server/Session/Server/SessionStore.php`
+- `app/code/Weline/Server/Test/Session/SessionStoreTest.php`
+- `app/code/Weline/Server/Test/Session/SessionServerIntegrationTest.php`
+- `app/etc/env.sample.php`
+- `app/code/Weline/Framework/Session/README.md`
+
+---
+
+## [2026-03-08] WLS 下“记住我”登录后仍被判未登录（后台循环重定向）✅ 已修复
+
+**错误类型**: Session 持久化时序 / 记住我自动登录
+
+**错误现象**:
+```text
+后台 URL 在 /admin 与 /admin/login?no_access_reason=not_logged_in 之间循环重定向。
+FPM 正常，WLS 下复现明显。
+```
+
+**根本原因**:
+1. 记住我分支只调用了 `session->login($adminUser)`，未像手动登录分支那样强制 `save + writeClose + Set-Cookie`。  
+2. WLS 下跳转链路对“登录态是否立即可读”更敏感，导致下一跳 ACL 仍判未登录。  
+3. 记住我缺少对用户 `sess_id` 与底层 Session 存储存在性的前置校验，老旧 token 可能触发无效自动登录。
+
+**解决方案**:
+1. 在记住我分支增加 `sess_id` 严格校验：`sess_id` 为空或存储不存在则拒绝自动登录并要求重新登录。  
+2. 自动登录成功后立即执行 `save()`、`writeClose()`，确保登录态落库（WLS 内存 Session 必须显式保障）。  
+3. 自动登录后通过 `HeaderCollector` 回写 `WELINE_SESSID` Cookie，保证重定向下一跳可携带正确会话。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Admin/Observer/BackendControllerInitAfter.php
+```
+
+**验证结果**: ✅ 语法检查通过。
+
+**预防措施**:
+1. 记住我/自动登录逻辑必须和手动登录保持同等级的 Session 持久化保障。  
+2. WLS 模式下任何“登录后立即跳转”的场景都应检查是否显式落盘与 Cookie 回写。  
+3. Token 自动登录必须校验 `sess_id` 与 Session 存储存在性，避免无效会话造成重定向循环。
+
+**相关文件**:
+- `app/code/Weline/Admin/Observer/BackendControllerInitAfter.php`
+
+---
+
+## [2026-03-09] 记住我被 session_id 硬门槛拦截（token 命中仍无法自动登录）✅ 已修复
+
+**错误类型**: 登录流程设计缺陷 / 兼容性问题
+
+**错误现象**:
+```text
+登录页持续出现“记住登录已失效，请重新登录”，
+且 token 命中用户时仍无法走到 login($adminUser) 自动登录。
+```
+
+**根本原因**:
+记住我逻辑将 `canRememberLoginBySessionId()` 作为硬条件。  
+当用户历史 `sess_id` 过期或被回收时，直接中断自动登录，导致 token 认证能力被废弃。
+
+**解决方案**:
+将 `session_id` 校验从“硬拒绝”改为“降级策略”：  
+1. `sess_id` 无效时清空用户 `sess_id`；  
+2. 继续执行 `login($adminUser)`，让框架生成新会话并落盘；  
+3. 保持后续 `save + writeClose + Set-Cookie`，确保 WLS 下一跳可读。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Admin/Observer/BackendControllerInitAfter.php
+```
+
+**验证结果**: ✅ 语法通过，lints 无新增错误。
+
+**预防措施**:
+1. 记住我应以 token 为主认证凭据，不应被历史 session_id 绑死。  
+2. 历史 session_id 只可作为“优先恢复”线索，失败时必须允许新会话兜底。  
+3. WLS 下自动登录流程必须始终保证会话落盘和 Cookie 回写。
+
+**相关文件**:
+- `app/code/Weline/Admin/Observer/BackendControllerInitAfter.php`
+
+---
+
+## [2026-03-09] 真实登录被记住我分支干扰（登录页重复警告）✅ 已修复
+
+**错误类型**: 登录流程时序冲突 / 记住我优先级
+
+**错误现象**:
+```text
+用户在登录页提交账号密码时，仍反复看到“记住登录已失效，请重新登录”。
+```
+
+**根本原因**:
+`BackendControllerInitAfter` 在后台请求初始化时总是先执行记住我分支；  
+即使当前请求是 `admin/login/post`（真实登录提交），也会先处理无效 `w_ut` 并注入警告，干扰登录体验。
+
+**解决方案**:
+1. 对 `admin/login/post` 路由跳过记住我自动登录逻辑。  
+2. 无效 token 分支不再调用 `logout()`（避免对当前真实登录流程造成副作用）。  
+3. 统一封装 token/cookie 清理方法，降低分支遗漏概率。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Admin/Observer/BackendControllerInitAfter.php
+```
+
+**验证结果**: ✅ 语法通过，lints 无新增错误。
+
+**预防措施**:
+1. 记住我逻辑属于“静默登录”能力，不应介入显式登录提交请求。  
+2. 任何登录前置 Observer 都应按路由白名单控制执行范围。  
+3. 无效 token 处理应“只清理记住我状态”，避免额外会话副作用。
+
+**相关文件**:
+- `app/code/Weline/Admin/Observer/BackendControllerInitAfter.php`
+
+---
+
+## [2026-03-09] WLS 停机“假退出”：日志显示 Master 已退出但进程仍存活 ✅ 已修复
+
+**错误类型**: 进程退出判定竞态 / 假阳性
+
+**错误现象**:
+```text
+停止流程日志出现“校验完成...所有子进程已正常退出”“Master 已退出”，
+但实际仍需再次 Ctrl+C，表现为“假退出”。
+```
+
+**根本原因**:
+1. `ServiceOrchestrator::stopAll()` 在真实退出前提前删除 Master PID 索引。  
+2. `server:stop` 的 `waitForMasterExit()` 以 `hasExitedFast()` 为主判断，索引先删时会误判退出。  
+3. 前台信号路径文案直接输出“Master 已退出”，放大误导。
+
+**解决方案**:
+1. 停机流程不再提前删除 Master PID 索引，改为由 Master 进程最终退出阶段统一清理。  
+2. `waitForMasterExit()` 改为“双确认”：`hasExitedFast && !processExists` 连续两次成立才判定退出。  
+3. 前台文案改为“退出流程已完成（进程即将退出）”，避免将流程完成误写为进程已退出。  
+4. 在 `MasterProcess::run()` 增加 `finally` 清理 Master PID 索引，确保收尾一致。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/ServiceOrchestrator.php
+php -l app/code/Weline/Server/Service/MasterProcess.php
+php -l app/code/Weline/Server/Console/Server/Stop.php
+```
+
+**验证结果**: ✅ 三个文件语法检查通过，且无新增 lints。
+
+**预防措施**:
+1. “索引状态”不能单独作为“进程退出”依据，必须与真实 PID 存活性联合判断。  
+2. 停机流程中避免提前发布“已退出”语义，先用“即将退出/流程完成”。  
+3. Master 索引清理应收口到进程生命周期末端（`finally` / shutdown）。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/ServiceOrchestrator.php`
+- `app/code/Weline/Server/Service/MasterProcess.php`
+- `app/code/Weline/Server/Console/Server/Stop.php`
+
+---
+
+## [2026-03-09] Session 管理列表为空：后台已登录但 `session-list` 返回空数组 ✅ 已修复
+
+**错误类型**: Session 管理筛选逻辑误过滤
+
+**错误现象**:
+```text
+后台 Session 管理页面请求 .../server-manager/session-list?limit=50 成功返回，
+但 data 始终为空；实际后台已有登录会话。
+```
+
+**根本原因**:
+`SharedStateAdminService::listSessions()` 为协议层请求添加了内部过滤键 `__domain=session`，
+在聚合会话展开阶段又把该内部键再次参与 payload 字段匹配，导致每条真实会话都被误判不匹配并过滤掉。
+
+**解决方案**:
+1. 在 `listSessions()` 中新增 payload 过滤清洗：移除 `__*` 内部键后再用于会话 payload 匹配。  
+2. 聚合会话展开时改用清洗后的 `$payloadFilter`，避免内部控制参数污染业务筛选。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/Service/Control/SharedStateAdminService.php
+```
+
+**验证结果**: ✅ 语法检查通过，lints 无新增错误。
+
+**预防措施**:
+1. 协议层控制参数（`__*`）与业务数据筛选参数必须分离。  
+2. 展开聚合 Session payload 时，禁止直接复用“请求过滤参数”做业务字段匹配。  
+3. 涉及双层筛选（传输层 + 业务层）时，先明确每层过滤键的作用域。
+
+**相关文件**:
+- `app/code/Weline/Server/Service/Control/SharedStateAdminService.php`
+
+---
+
+## [2026-03-09] DevToolPanel 攻击统计 404：`pagebuilder/backend/server-monitor/attack-stats` ✅ 已修复
+
+**错误类型**: 路由前缀误解析 / `*` 通配符误用
+
+**错误现象**:
+```text
+请求 URL:
+/.../pagebuilder/backend/server-monitor/attack-stats?days=7
+返回 404 Not Found。
+```
+
+**根本原因**:
+开发工具面板 Hook 模板中使用了：
+`$this->getBackendUrl('*/backend/server-monitor/attack-stats')`。  
+在非 `Weline_Server` 模块上下文（如 PageBuilder）渲染时，`*` 会替换成当前模块路由前缀，导致请求错误地落到 `pagebuilder/backend/server-monitor/attack-stats`。
+
+**解决方案**:
+1. 将 Hook 中 `server-monitor` 相关 URL 从 `*/backend/...` 改为固定模块路由 `server/backend/...`。  
+2. 同步修正 `monitor`、`attack-log`、`attack-stats` 三处 URL，避免同类误跳转。
+
+**验证方法**:
+```bash
+rg "server/backend/server-monitor/attack-stats" app/code/Weline/Server/view/hooks
+rg "\*/backend/server-monitor/attack-stats" app/code
+```
+
+**验证结果**: ✅ 目标 Hook 已使用固定路由，代码库不再存在该通配写法。
+
+**预防措施**:
+1. `*` 仅适用于“当前模块自身路由”；跨模块调用必须显式写目标模块路由前缀。  
+2. Hook/模板中的 API URL 若指向其他模块，统一使用固定 `module/backend/...`。  
+3. 路由 404 排查优先检查 URL 生成处是否误用 `*`。
+
+**相关文件**:
+- `app/code/Weline/Server/view/hooks/Weline_DeveloperWorkspace/backend/partials/dev-tool-panel/search-areas-after.phtml`
+
+---
+
+## [2026-03-09] 查询器 `sessionList` 返回空数组（已登录后台）✅ 已修复
+
+**错误类型**: 核心查询器缺少登录态可观测性兜底
+
+**错误现象**:
+```text
+请求 /pagebuilder/backend/server-manager/session-list?limit=50 返回:
+{ "success": true, "message": "Session 列表加载完成", "data": [] }
+```
+
+**根本原因**:
+`w_query('server', 'sessionList')` 走的是 `ServerQueryProvider::sessionList()`；  
+该核心查询操作仅返回共享 Session 服务列表，未对“当前后台登录会话”做可观测性兜底。  
+因此在共享列表为空或暂不可读时，所有调用方（包括 PageBuilder）都会得到 `data: []`。
+
+**解决方案**:
+1. 在 `ServerQueryProvider::sessionList()` 统一增加 `ensureCurrentBackendSessionVisible()`。  
+2. 调用 `SessionFactory->createBackendSession()` 获取当前请求登录态；若列表缺失当前 `session_id`，补充一条简要记录。  
+3. PageBuilder 控制器回退为纯透传查询器，避免模块级“打补丁”分叉实现。  
+4. 会话预览字段对敏感键（password/token/secret/cookie）做脱敏。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php
+php -l app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php
+```
+
+**验证结果**: ✅ 语法检查通过，lints 无新增错误。
+
+**预防措施**:
+1. 后台 Session 运维页应始终保证“当前登录会话可见”作为最低可观测性。  
+2. 透传查询器结果的控制器，需补齐本地登录态兜底，避免“success=true + data=[]”误导。  
+3. 会话预览输出统一做敏感键脱敏。
+
+**相关文件**:
+- `app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php`
+- `app/code/GuoLaiRen/PageBuilder/Controller/Backend/ServerManager.php`
 
 ---

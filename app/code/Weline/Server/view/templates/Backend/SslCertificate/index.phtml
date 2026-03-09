@@ -122,12 +122,12 @@ $stats = $stats ?? [];
                         <tbody>
                             <?php foreach ($certificates as $cert): ?>
                                 <?php
-                                $domain = $cert[\Weline\Server\Model\SslCertificate::fields_DOMAIN];
-                                $status = $cert[\Weline\Server\Model\SslCertificate::fields_STATUS];
-                                $httpsEnabled = $cert[\Weline\Server\Model\SslCertificate::fields_HTTPS_ENABLED];
-                                $expiresAt = $cert[\Weline\Server\Model\SslCertificate::fields_EXPIRES_AT];
-                                $issuer = $cert[\Weline\Server\Model\SslCertificate::fields_ISSUER];
-                                $autoRenew = $cert[\Weline\Server\Model\SslCertificate::fields_AUTO_RENEW];
+                                $domain = $cert[\Weline\Server\Model\SslCertificate::schema_fields_DOMAIN];
+                                $status = $cert[\Weline\Server\Model\SslCertificate::schema_fields_STATUS];
+                                $httpsEnabled = $cert[\Weline\Server\Model\SslCertificate::schema_fields_HTTPS_ENABLED];
+                                $expiresAt = $cert[\Weline\Server\Model\SslCertificate::schema_fields_EXPIRES_AT];
+                                $issuer = $cert[\Weline\Server\Model\SslCertificate::schema_fields_ISSUER];
+                                $autoRenew = $cert[\Weline\Server\Model\SslCertificate::schema_fields_AUTO_RENEW];
                                 $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
                                 $daysLeft = $cert['_days_left'] ?? null;
                                 
@@ -198,9 +198,14 @@ $stats = $stats ?? [];
                                                     <i class="bi bi-arrow-repeat"></i> <?= __('续签') ?>
                                                 </button>
                                             <?php endif; ?>
-                                            <button type="button" class="btn btn-outline-danger" 
-                                                    onclick="deleteCertificate('<?= htmlspecialchars($domain) ?>')">
-                                                <i class="bi bi-trash"></i>
+                                            <?php
+                                            $isProtectedDomain = \in_array(\strtolower($domain), ['localhost', '127.0.0.1', '::1'], true);
+                                            ?>
+                                            <button type="button" class="btn btn-outline-danger<?= $isProtectedDomain ? ' disabled' : '' ?>" 
+                                                    title="<?= $isProtectedDomain ? __('本地域名证书不允许删除') : __('删除') ?>"
+                                                    <?= $isProtectedDomain ? 'disabled' : '' ?>
+                                                    <?= $isProtectedDomain ? '' : 'onclick="deleteCertificate(\'' . htmlspecialchars($domain, ENT_QUOTES) . '\')"' ?>>
+                                                <i class="bi bi-trash me-1"></i><?= __('删除') ?>
                                             </button>
                                         </div>
                                     </td>
@@ -223,16 +228,16 @@ $stats = $stats ?? [];
                 <div class="col-md-6">
                     <h6><?= __('命令行操作') ?></h6>
                     <pre class="bg-light p-3 rounded"><code># <?= __('查看证书状态') ?>
-php bin/w server:ssl:auto
+php bin/w ssl:auto
 
 # <?= __('申请新证书') ?>
-php bin/w server:ssl:auto request -d example.com -e admin@example.com
+php bin/w ssl:auto request -d localhost -e admin@localhost
 
 # <?= __('续签到期证书') ?>
-php bin/w server:ssl:auto renew
+php bin/w ssl:auto renew
 
 # <?= __('同步网站域名') ?>
-php bin/w server:ssl:auto sync -e admin@example.com</code></pre>
+php bin/w ssl:auto sync -e admin@example.com</code></pre>
                 </div>
                 <div class="col-md-6">
                     <h6><?= __('证书存储位置') ?></h6>
@@ -292,7 +297,7 @@ php bin/w server:ssl:auto sync -e admin@example.com</code></pre>
 </div>
 
 <script>
-const baseUrl = '<?= $this->getUrl('backend/server/ssl-certificate/') ?>';
+const baseUrl = '<?= $this->getBackendUrl('*/backend/ssl-certificate/') ?>';
 
 function getSelectedProvider() {
     const select = document.querySelector('#requestForm select[name="provider"]');

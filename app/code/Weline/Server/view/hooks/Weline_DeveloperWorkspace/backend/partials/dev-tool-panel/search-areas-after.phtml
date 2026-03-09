@@ -16,8 +16,8 @@ if (!Runtime::isWls()) {
 // 快速链接 URL（动态生成，避免 404）
 $wlsDocsUrl = $this->getUrl('dev/tool/docs') . '?search=WLS';
 $serverDocsUrl = $this->getUrl('dev/tool/docs') . '?module=Weline_Server';
-$monitorUrl = $this->getBackendUrl('weline_server/backend/server-monitor');
-$attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attack-log');
+$monitorUrl = $this->getBackendUrl('server/backend/server-monitor');
+$attackLogUrl = $this->getBackendUrl('server/backend/server-monitor/attack-log');
 ?>
 <!-- WLS 扩展：搜索区 -->
 <div id="dev-tool-search-area-wls" style="display: none;">
@@ -257,7 +257,7 @@ $attackLogUrl = $this->getBackendUrl('weline_server/backend/server-monitor/attac
         }
         container.innerHTML = '<p style="font-size: 12px; color: #999;"><i class="fa fa-spinner spinning"></i> 加载中...</p>';
         
-        var url = '<?= $this->getBackendUrl('weline_server/backend/server-monitor/attack-stats', ['days' => 7]) ?>';
+        var url = '<?= $this->getBackendUrl('server/backend/server-monitor/attack-stats', ['days' => 7]) ?>';
         var opts = { method: 'GET', headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', silent: true };
         var req = window.Weline.Api.request(url, opts);
         req.then(function(res) {

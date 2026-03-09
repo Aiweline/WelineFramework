@@ -6,8 +6,7 @@
  * 
  * @var \Weline\Framework\View\Template $block
  */
-$block->setTitle(__('Weline Server 性能优化指南'));
-$apiUrl = $block->getUrl('backend/server/optimization-guide/api-data');
+$apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
 ?>
 
 <div class="optimization-guide" id="optimization-guide-container">

@@ -436,14 +436,20 @@ class Template extends DataObject
     public function ob_file(string $filename, array $dictionary = []): string
     {
         ob_start();
-        try {if ($dictionary) {
+        try {
+            if ($dictionary) {
                 $this->addData($dictionary);
             }
+            // 框架级保障：模板内 $block 永远指向当前 Template 实例。
+            // 兼容历史模板（含 view/tpl 编译产物）中的 $block->setTitle()/getBackendUrl() 调用。
+            $block = $this;
+            $this->setData('block', $this);
             # 将数组存储的变量散列到当前页内存中，使得变量可在页面中暴露出来（可直接使用）
             if ($this->getData()) {
                 extract($this->getData(), EXTR_SKIP);
             }
-            include $filename;} catch (\Exception $exception) {
+            include $filename;
+        } catch (\Exception $exception) {
             ob_end_clean();
             throw $exception;
         }

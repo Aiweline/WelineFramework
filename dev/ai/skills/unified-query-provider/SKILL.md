@@ -118,6 +118,17 @@ php bin/w extends:rebuild   # 重建 extends 注册表
 php bin/w s:up              # 或用 setup:upgrade
 ```
 
+### WLS 场景补充（常见漏项）
+
+在 WLS 常驻模式下，仅重建 extends 还不够，Worker 可能仍持有旧注册表：
+
+```bash
+php bin/w extends:rebuild
+php bin/w server:reload
+```
+
+若遇到 `未注册的查询器：xxx`，优先按以上两步处理，再检查 provider 文件位置与 `getProviderName()` 是否正确。
+
 ---
 
 ## 2. 调用查询器

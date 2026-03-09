@@ -528,18 +528,25 @@ class Stop extends CommandAbstract
         echo "  {$tag} {$waitMsg}";
         
         $deadline = \microtime(true) + self::MASTER_EXIT_TIMEOUT;
+        $confirmed = 0;
         
         while (\microtime(true) < $deadline) {
             \usleep(200000); // 200ms
             echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
-            if (Processer::hasExitedFast($masterPid)) {
+            // 快速路径 + 真实进程校验双确认，避免“索引先删、进程未退”的假退出。
+            if (Processer::hasExitedFast($masterPid) && !Processer::processExists($masterPid)) {
+                $confirmed++;
+            } else {
+                $confirmed = 0;
+            }
+            if ($confirmed >= 2) {
                 echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
                 return true;
             }
         }
         
         // 最后一次检查
-        if (Processer::hasExitedFast($masterPid)) {
+        if (Processer::hasExitedFast($masterPid) && !Processer::processExists($masterPid)) {
             echo $this->printer->colorize(' 完成 ✓', self::IPC_COLOR_SUCCESS) . "\n";
             return true;
         }

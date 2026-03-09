@@ -782,6 +782,32 @@ php bin/w server:start websocket
 
 ---
 
+## 后台模板标题设置（WLS 场景）
+
+- 页面标题应在控制器中统一设置：`$this->assign('title', __('...'))`。
+- 模板层不要调用 `$block->setTitle()`，尤其是在 WLS 常驻与 `view/tpl/com_*` 历史编译模板链路下，`$block` 兼容上下文可能触发空对象错误。
+- 如果需要模板内 URL 构建，统一使用 `$this->getBackendUrl(...)`（不要写 `$block->getBackendUrl(...)`，WLS 历史编译链路下可能出现 `$block` 空对象）。
+
+---
+
+## 控制器模板渲染参数（兼容旧写法）
+
+- `PcController::fetch()` 当前签名：`fetch(string $fileName = '', array $data = [])`，第二参数必须是数组。
+- 禁止历史写法 `fetch('', 'blank')`（会把字符串传给 `$data` 并触发 TypeError）。
+- 需要 blank 布局时，使用：
+  - `$this->layoutType = 'default.blank';`
+  - `return $this->fetch();`
+
+---
+
+## 共享状态管理端点配置（WLS 场景）
+
+- 读取 `session.server_host`、`server.memory_service.host` 时，必须对值做 `trim` 并处理空字符串。
+- host 若为空串，必须回退到 `127.0.0.1`，避免探活客户端连空 host 导致“服务不可用”误判。
+- 端口同样建议做兜底：无效值回退到 Session `19970`、Memory `19971`。
+
+---
+
 ## Related Skills
 
 - `implement-extends` - **实现扩展点**：使用其他模块定义的扩展点
