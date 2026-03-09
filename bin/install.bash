@@ -768,6 +768,7 @@ php_has_required_extensions() {
 }
 
 # Linux: 查找系统 PHP（PATH、/usr/bin/php、/usr/bin/php8.4 等）
+# 排除宝塔 PHP（/www/server/php/），宝塔环境使用项目自编译 PHP
 find_system_php_linux() {
   local want_ver="$1"
   local candidate
@@ -777,6 +778,7 @@ find_system_php_linux() {
     /usr/local/bin/php; do
     [[ -z "$candidate" ]] && continue
     [[ -x "$candidate" ]] || continue
+    [[ "$candidate" == *"/www/server/php/"* ]] && continue
     local ver
     ver=$(get_installed_php_major_minor "$candidate")
     [[ -z "$ver" ]] && continue
