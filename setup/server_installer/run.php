@@ -128,9 +128,14 @@ if (!$fromStep5b && is_dir($phpDir)) {
 // 1. composer install（无论 vendor 是否存在都执行，确保依赖完整）；composer 为独立命令，不能用 php composer 方式调用
 if (!$fromStep5b) {
     $composerPhar = $projectRoot . DIRECTORY_SEPARATOR . 'composer.phar';
+    $composerArgs = ' install -n --no-interaction';
+    if (!extension_loaded('exif') || !extension_loaded('fileinfo')) {
+        $composerArgs .= ' --ignore-platform-req=ext-exif --ignore-platform-req=ext-fileinfo';
+        echo "exif/fileinfo 扩展未安装，composer 将忽略平台要求以继续安装。建议在宝塔面板中安装：软件商店 -> PHP -> 安装扩展 -> exif、fileinfo\n";
+    }
     $code = is_file($composerPhar)
-        ? $run($composerPhar . ' install -n --no-interaction')
-        : $runRaw('composer install -n --no-interaction');
+        ? $run($composerPhar . $composerArgs)
+        : $runRaw('composer' . $composerArgs);
     if ($code !== 0) {
         fwrite(STDERR, "ERROR: composer install failed (exit $code).\n");
         exit(1);
