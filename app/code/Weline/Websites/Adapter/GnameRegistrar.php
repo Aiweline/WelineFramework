@@ -147,59 +147,49 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [
+                'available' => false,
+                'domain' => '',
+                'price' => 0.0,
+                'currency' => 'USD',
+                'premium' => false,
+                'message' => __('域名不能为空'),
+            ];
+        }
+
         $priceMap = $this->fetchTldPriceMap($credentials);
         $tld = $this->extractTld($domain);
         $tldPrice = $priceMap[$tld] ?? null;
+        $estimatedPrice = (float) ($tldPrice['Register'] ?? 0);
 
-        $response = $this->makeRequest('api/domain/reg', [
-            'ym' => $domain,
-        ], $credentials, true);
+        // 安全优先：GName 官方文档中 `api/domain/reg` 是真实注册接口。
+        // 为避免“检查即下单”，可用性检查仅使用无副作用的 DNS 启发式判定。
+        $hasNsRecords = $this->hasDnsRecords($domain, \DNS_NS);
+        $hasAddressRecords = $this->hasDnsRecords($domain, \DNS_A | \DNS_AAAA);
+        $looksRegistered = $hasNsRecords || $hasAddressRecords;
 
-        $code = (int) ($response['code'] ?? 0);
-
-        if ($code === 1) {
-            $price = (float) ($response['data'] ?? $tldPrice['Register'] ?? 0);
-            return [
-                'available' => true,
-                'domain' => $domain,
-                'price' => $price,
-                'currency' => 'USD',
-                'premium' => false,
-                'message' => $response['msg'] ?? __('域名可注册'),
-            ];
-        }
-
-        if ($code === -3) {
-            $premiumPrice = 0.0;
-            if (\is_array($response['data'] ?? null)) {
-                $premiumPrice = (float) ($response['data']['price'] ?? 0);
-            }
-            return [
-                'available' => true,
-                'domain' => $domain,
-                'price' => $premiumPrice,
-                'currency' => 'USD',
-                'premium' => true,
-                'message' => $response['msg'] ?? __('域名为溢价域名'),
-            ];
-        }
-
-        if ($code === -1002 || $code === -1001 || $code === -1003) {
-            $errorMsg = $response['msg'] ?? __('未知错误');
-            throw new \RuntimeException(
-                __('API 权限错误：%{1}（错误码：%{2}）', [$errorMsg, $code])
-            );
-        }
-
-        $errorMsg = $response['msg'] ?? __('域名不可注册');
         return [
-            'available' => false,
+            'available' => !$looksRegistered,
             'domain' => $domain,
-            'price' => (float) ($tldPrice['Register'] ?? 0),
+            'price' => $estimatedPrice,
             'currency' => 'USD',
             'premium' => false,
-            'message' => __('%{1}（错误码：%{2}）', [$errorMsg, $code]),
+            'message' => $looksRegistered
+                ? __('检测到 DNS 记录，域名大概率已注册')
+                : __('未检测到 DNS 记录，域名可能可注册（以下单结果为准）'),
         ];
+    }
+
+    private function hasDnsRecords(string $domain, int $dnsType): bool
+    {
+        try {
+            $records = @\dns_get_record($domain, $dnsType);
+            return \is_array($records) && $records !== [];
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     public function batchCheckAvailability(array $domains, array $credentials): array
@@ -552,6 +542,13 @@ class GnameRegistrar implements DomainRegistrarInterface
      */
     private function makeRequest(string $endpoint, array $data, array $credentials, bool $dryRun = false): array
     {
+        $normalizedEndpoint = \strtolower(\trim($endpoint, '/'));
+        if ($dryRun && $normalizedEndpoint === 'api/domain/reg') {
+            throw new \RuntimeException(
+                __('安全限制：禁止使用注册接口执行可用性检查，以避免误购买')
+            );
+        }
+
         $appId = (string) $credentials['appid'];
         $appKey = (string) $credentials['appkey'];
         $apiHost = \trim((string) ($credentials['api_host'] ?? ''));
