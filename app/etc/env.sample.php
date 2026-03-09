@@ -138,6 +138,8 @@ return [
     // ==================== 会话配置 ====================
     'session' => [
         'default' => 'file',
+        // WLS 模式下默认由 Session Server 托管，保证多 Worker 间会话一致性。
+        'wls_managed' => true,
         'wls_default' => 'wls',
         // Session 服务端 TTL（秒）。建议与 cookie_lifetime 对齐，避免浏览器 Cookie 仍在但服务端 Session 已过期。
         'lifetime' => 86400,
@@ -210,6 +212,26 @@ return [
         'host' => '0.0.0.0',
         'port' => 443,
         'https' => true,
+        'performance' => [
+            // 慢请求阈值（毫秒）
+            'slow_request_threshold_ms' => 500,
+            // 是否输出 X-WLS-Performance-* 头
+            'response_headers_enabled' => true,
+            // 是否写入 var/log/wls_timing.log
+            'file_log_enabled' => true,
+            // 是否写 debug 级性能摘要/明细日志
+            'debug_log_enabled' => true,
+            // 超慢请求分析日志
+            'analysis_log_enabled' => true,
+            // DEV 模式是否记录全部请求
+            'log_all_in_dev' => true,
+            // 请求日志开关；null 表示沿用现有 DEV/frontend 判断
+            'request_log_enabled' => null,
+            // 错误日志开关；null 表示沿用现有 DEV 判断
+            'error_log_enabled' => null,
+            'runtime_log_file' => 'var/log/wls.log',
+            'timing_log_file' => 'var/log/wls_timing.log',
+        ],
         'worker_count' => 'auto',
         'mode' => 'io',
         'max_connections' => 10000,
