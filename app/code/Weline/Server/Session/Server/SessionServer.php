@@ -666,9 +666,6 @@ final class SessionServer
             }
             
             $data = $this->store->getAll($sessionId);
-            if (empty($data)) {
-                continue;
-            }
 
             // 新架构：Session 数据聚合在 sess 命名空间，需要展开为真实 session 列表。
             if ($sessionId === $sessionNamespaceStateId) {
@@ -679,7 +676,7 @@ final class SessionServer
                     if (!\is_string($realSessionId) || $realSessionId === '') {
                         continue;
                     }
-                    if (!\is_array($sessionPayload) || empty($sessionPayload)) {
+                    if (!\is_array($sessionPayload)) {
                         continue;
                     }
                     if (!empty($filter)) {
