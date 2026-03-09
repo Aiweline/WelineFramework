@@ -72,7 +72,7 @@ class WorkerProvider extends AbstractServiceProvider
         $port = $this->getPort($instanceId, $context);
         $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName . '-' . $instanceId;
 
-        $host = $context->host ?: '127.0.0.1';
+        $host = $context->host ?: '0.0.0.0';
 
         $arguments = [
             $host,
