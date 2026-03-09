@@ -1,9 +1,10 @@
 <?php
-/** @var \GuoLaiRen\PageBuilder\Controller\Backend\QuickBuild $this */
+/** @var \Weline\Framework\View\Template $this */
 $services = $this->getData('services') ?? [];
 $accounts = $this->getData('accounts') ?? [];
 $cdnAdapters = $this->getData('cdnAdapters') ?? [];
 $cdnAccounts = $this->getData('cdnAccounts') ?? [];
+$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 <style>
 .pb-qb-container { max-width: 900px; margin: 0 auto; }
@@ -582,6 +583,7 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
     </div>
 </div>
 
+<script src="<?= $purchaseDialogJsUrl ?>"></script>
 <script>
 (function() {
     'use strict';
@@ -745,32 +747,85 @@ $cdnAccounts = $this->getData('cdnAccounts') ?? [];
     function handleBuy() {
         var btn = document.getElementById('pb-qb-buy-btn');
         if (!btn) return;
-        btn.disabled = true;
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('购买中...') ?>';
+        if (!window.WelineDomainPurchaseDialog) {
+            AdminToast.error('<?= __('购买弹窗组件未加载') ?>');
+            return;
+        }
 
-        var autoResolve = document.getElementById('pb-qb-auto-resolve') && document.getElementById('pb-qb-auto-resolve').checked ? '1' : '0';
-        postForm(purchaseUrl, {
-            account_id: selectedAccountId,
-            domain: selectedDomain,
-            years: '1',
-            auto_resolve: autoResolve
-        }).then(function(res) {
-            if (res.success) {
-                AdminToast.success(res.msg || res.message || '<?= __('购买请求已提交') ?>');
-                btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
-                btn.classList.remove('pb-qb-btn-success');
-                btn.classList.add('pb-qb-btn-secondary');
-                domainPurchased = true;
-                updateNextButtonState();
-            } else {
-                AdminToast.error(res.msg || res.message || '<?= __('购买失败') ?>');
+        window.WelineDomainPurchaseDialog.open({
+            labels: {
+                title: '<?= __('购买域名') ?>',
+                description: '<?= __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。') ?>',
+                dnsChoice: '<?= __('DNS 策略') ?>',
+                dnsFollowRegistrar: '<?= __('跟随域名商') ?>',
+                dnsCustomNameservers: '<?= __('自定义 Nameserver') ?>',
+                dnsNameservers: '<?= __('Nameserver 列表') ?>',
+                dnsNameserversPlaceholder: '<?= __('ns1.example.com, ns2.example.com') ?>',
+                cdnChoice: '<?= __('CDN 策略') ?>',
+                cdnFollowRegistrar: '<?= __('跟随域名商') ?>',
+                cdnNone: '<?= __('暂不配置 CDN') ?>',
+                resolveToLocal: '<?= __('自动解析到本服务器') ?>',
+                resolveHint: '<?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?>',
+                subdomains: '<?= __('自动解析子域名') ?>',
+                subdomainsPlaceholder: '<?= __('@, www') ?>',
+                startLifecycle: '<?= __('启动全流程状态跟踪') ?>',
+                startLifecycleHint: '<?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?>',
+                confirm: '<?= __('确认购买') ?>',
+                cancel: '<?= __('取消') ?>'
+            },
+            defaults: {
+                dnsChoice: 'follow_registrar',
+                cdnChoice: 'follow_registrar',
+                resolveToLocal: !!(document.getElementById('pb-qb-auto-resolve') && document.getElementById('pb-qb-auto-resolve').checked),
+                subdomains: '@,www',
+                startLifecycle: true
+            }
+        }).then(function(dialogResult) {
+            if (!dialogResult) {
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('购买中...') ?>';
+
+            var autoResolve = dialogResult.resolve_to_local === 'yes' ? '1' : '0';
+            postForm(purchaseUrl, {
+                account_id: selectedAccountId,
+                domain: selectedDomain,
+                years: '1',
+                auto_resolve: autoResolve,
+                resolve_to_local: dialogResult.resolve_to_local || 'yes',
+                subdomains: dialogResult.subdomains || '@,www',
+                dns_choice: dialogResult.dns_choice || 'follow_registrar',
+                dns_nameservers: dialogResult.dns_nameservers || '',
+                cdn_choice: dialogResult.cdn_choice || 'follow_registrar',
+                start_lifecycle: dialogResult.start_lifecycle || '1'
+            }).then(function(res) {
+                if (res.success) {
+                    var msg = res.msg || res.message || '<?= __('购买请求已提交') ?>';
+                    if (dialogResult.start_lifecycle === '1') {
+                        msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
+                    }
+                    AdminToast.success(msg);
+                    btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
+                    btn.classList.remove('pb-qb-btn-success');
+                    btn.classList.add('pb-qb-btn-secondary');
+                    domainPurchased = true;
+                    updateNextButtonState();
+                } else {
+                    AdminToast.error(
+                        window.WelineDomainPurchaseDialog
+                            ? window.WelineDomainPurchaseDialog.buildErrorMessage(res, '<?= __('购买失败') ?>')
+                            : (res.msg || res.message || '<?= __('购买失败') ?>')
+                    );
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
+                }
+            }).catch(function(e) {
+                AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
                 btn.disabled = false;
                 btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
-            }
-        }).catch(function(e) {
-            AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
-            btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
+            });
         });
     }
 

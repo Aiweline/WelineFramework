@@ -263,6 +263,15 @@ class GnameRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        // GName 有时会在域名已成功进入当前账户时返回“已被注册”类提示。
+        // 对这类歧义响应执行二次确认，避免“已购买却显示失败”。
+        if ($this->shouldConfirmPurchasedDomain($code, $response)) {
+            $confirmedResult = $this->confirmDomainOwnedByCurrentAccount($domain, $credentials, $response);
+            if ($confirmedResult !== null) {
+                return $confirmedResult;
+            }
+        }
+
         $errorMsg = $response['msg'] ?? __('未知错误');
         return [
             'success' => false,
@@ -377,11 +386,17 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        // 注意：官方 API 文档的端点是 /api/domain/dns（不是 xgdns）
-        $response = $this->makeRequest('api/domain/dns', [
+        // 兼容新旧 API：优先官方文档的 xgdns，失败后回退到历史端点。
+        $response = $this->makeRequest('api/domain/xgdns', [
             'ym' => $domain,
             'dns' => $dnsServers,
         ], $credentials);
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/domain/dns', [
+                'ym' => $domain,
+                'dns' => $dnsServers,
+            ], $credentials);
+        }
 
         $code = (int) ($response['code'] ?? 0);
 
@@ -753,6 +768,86 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
+     * 判断是否需要把购买结果再到当前账号中做一次确认。
+     */
+    private function shouldConfirmPurchasedDomain(int $code, array $response): bool
+    {
+        if ($code !== -1) {
+            return false;
+        }
+
+        $message = \mb_strtolower(\trim((string) ($response['msg'] ?? '')));
+        if ($message === '') {
+            return true;
+        }
+
+        $keywords = [
+            '已被注册',
+            'already registered',
+            'already exists',
+            'has been registered',
+        ];
+
+        foreach ($keywords as $keyword) {
+            if (\mb_stripos($message, $keyword) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 若域名已出现在当前账号域名列表中，则视为购买成功。
+     */
+    private function confirmDomainOwnedByCurrentAccount(string $domain, array $credentials, array $response): ?array
+    {
+        try {
+            $domains = $this->getDomainList($credentials);
+            if ($this->domainExistsInList($domain, $domains)) {
+                $price = \is_numeric($response['data'] ?? null) ? (float) $response['data'] : 0.0;
+                $originalMessage = (string) ($response['msg'] ?? __('域名已在当前账号下'));
+
+                return [
+                    'success' => true,
+                    'domain' => $domain,
+                    'price' => $price,
+                    'currency' => 'USD',
+                    'message' => __('域名已在当前账号下，已按成功处理：%{message}', ['message' => $originalMessage]),
+                    'ownership_confirmed' => true,
+                ];
+            }
+        } catch (\Throwable $e) {
+            w_log_warning(
+                __('GName 购买结果二次确认失败：%{domain}，错误：%{error}', [
+                    'domain' => $domain,
+                    'error' => $e->getMessage(),
+                ]),
+                [],
+                'gname_api'
+            );
+        }
+
+        return null;
+    }
+
+    /**
+     * 检查域名是否已出现在账号域名列表中。
+     */
+    private function domainExistsInList(string $domain, array $domains): bool
+    {
+        $expectedDomain = \strtolower(\trim($domain));
+        foreach ($domains as $item) {
+            $currentDomain = \strtolower(\trim((string) ($item['domain'] ?? '')));
+            if ($currentDomain === $expectedDomain) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 将 GName 域名状态标准化
      */
     /**
@@ -810,9 +905,20 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        $response = $this->makeRequest('api/domain/dnslist', [
+        // GName 新版文档使用 /api/resolution/list，保留历史端点兜底。
+        $response = $this->makeRequest('api/resolution/list', [
             'ym' => $domain,
         ], $credentials);
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/jiexi/list', [
+                'ym' => $domain,
+            ], $credentials);
+        }
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/domain/dnslist', [
+                'ym' => $domain,
+            ], $credentials);
+        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code !== 1) {
@@ -831,10 +937,10 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         foreach ($list as $item) {
             $records[] = [
-                'record_id' => (string) ($item['id'] ?? $item['record_id'] ?? ''),
+                'record_id' => (string) ($item['jxid'] ?? $item['id'] ?? $item['record_id'] ?? ''),
                 'type' => \strtoupper((string) ($item['type'] ?? $item['lx'] ?? 'A')),
-                'host' => (string) ($item['host'] ?? $item['zj'] ?? '@'),
-                'value' => (string) ($item['value'] ?? $item['jlz'] ?? ''),
+                'host' => (string) ($item['host'] ?? $item['zj'] ?? $item['zjt'] ?? '@'),
+                'value' => (string) ($item['value'] ?? $item['jlz'] ?? $item['jxz'] ?? ''),
                 'ttl' => (int) ($item['ttl'] ?? 600),
                 'priority' => (int) ($item['priority'] ?? $item['mx'] ?? 0),
             ];
@@ -852,17 +958,27 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $params = [
             'ym' => $domain,
-            'type' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'lx' => \strtoupper((string) ($record['type'] ?? 'A')),
             'zj' => (string) ($record['host'] ?? '@'),
             'jlz' => (string) ($record['value'] ?? ''),
             'ttl' => (string) ($record['ttl'] ?? '600'),
+            'xl' => (string) ($record['line'] ?? '0'),
         ];
 
-        if (!empty($record['priority'])) {
+        if (!empty($record['priority']) || \strtoupper((string) ($record['type'] ?? 'A')) === 'MX') {
             $params['mx'] = (string) $record['priority'];
         }
 
-        $response = $this->makeRequest('api/domain/dnsadd', $params, $credentials);
+        $response = $this->makeRequest('api/resolution/add', $params, $credentials);
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
+        }
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $legacyParams = $params;
+            $legacyParams['type'] = $legacyParams['lx'];
+            unset($legacyParams['lx'], $legacyParams['xl']);
+            $response = $this->makeRequest('api/domain/dnsadd', $legacyParams, $credentials);
+        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {
@@ -902,18 +1018,29 @@ class GnameRegistrar implements DomainRegistrarInterface
 
         $params = [
             'ym' => $domain,
-            'id' => $recordId,
-            'type' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'jxid' => $recordId,
+            'lx' => \strtoupper((string) ($record['type'] ?? 'A')),
             'zj' => (string) ($record['host'] ?? '@'),
             'jlz' => (string) ($record['value'] ?? ''),
             'ttl' => (string) ($record['ttl'] ?? '600'),
+            'xl' => (string) ($record['line'] ?? '0'),
         ];
 
-        if (!empty($record['priority'])) {
+        if (!empty($record['priority']) || \strtoupper((string) ($record['type'] ?? 'A')) === 'MX') {
             $params['mx'] = (string) $record['priority'];
         }
 
-        $response = $this->makeRequest('api/domain/dnsupdate', $params, $credentials);
+        $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/jiexi/edit', $params, $credentials);
+        }
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $legacyParams = $params;
+            $legacyParams['id'] = $legacyParams['jxid'];
+            $legacyParams['type'] = $legacyParams['lx'];
+            unset($legacyParams['jxid'], $legacyParams['lx'], $legacyParams['xl']);
+            $response = $this->makeRequest('api/domain/dnsupdate', $legacyParams, $credentials);
+        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {
@@ -937,10 +1064,22 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        $response = $this->makeRequest('api/domain/dnsdel', [
+        $response = $this->makeRequest('api/resolution/delete', [
             'ym' => $domain,
-            'id' => $recordId,
+            'jxid' => $recordId,
         ], $credentials);
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/jiexi/del', [
+                'ym' => $domain,
+                'jxid' => $recordId,
+            ], $credentials);
+        }
+        if ((int) ($response['code'] ?? 0) !== 1) {
+            $response = $this->makeRequest('api/domain/dnsdel', [
+                'ym' => $domain,
+                'id' => $recordId,
+            ], $credentials);
+        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {

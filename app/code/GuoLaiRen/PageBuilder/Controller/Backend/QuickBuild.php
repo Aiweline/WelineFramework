@@ -87,6 +87,15 @@ class QuickBuild extends BaseController
         $domain = trim($this->request->getPost('domain', '') ?? '');
         $years = max(1, (int) $this->request->getPost('years', 1));
         $websiteId = (int) $this->request->getPost('website_id', 0);
+        $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $options = [
+            'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
+            'subdomains' => $this->request->getPost('subdomains', '@,www'),
+            'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
+            'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
+            'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
+            'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
+        ];
 
         if ($accountId <= 0 || $domain === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('参数不完整')]);
@@ -94,7 +103,7 @@ class QuickBuild extends BaseController
 
         try {
             $items = [['domain' => $domain, 'years' => $years, 'website_id' => $websiteId > 0 ? $websiteId : null]];
-            $result = $this->aggregator->purchaseDomain($accountId, $items);
+            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => $e->getMessage()]);

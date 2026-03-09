@@ -693,6 +693,14 @@ class DomainManagement extends BaseController
         $accountId = (int) $this->request->getPost('account_id', 0);
         $domainsRaw = $this->request->getPost('domains', '');
         $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $options = [
+            'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
+            'subdomains' => $this->request->getPost('subdomains', '@,www'),
+            'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
+            'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
+            'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
+            'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
+        ];
 
         if ($accountId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('请选择域名商账号')]);
@@ -721,7 +729,7 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve);
+            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('购买失败：%{1}', [$e->getMessage()])]);
@@ -737,6 +745,14 @@ class DomainManagement extends BaseController
         $domain = trim($this->request->getPost('domain', '') ?? '');
         $years = (int) $this->request->getPost('years', 1);
         $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $options = [
+            'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
+            'subdomains' => $this->request->getPost('subdomains', '@,www'),
+            'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
+            'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
+            'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
+            'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
+        ];
 
         if ($accountId <= 0 || $domain === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('参数不完整')]);
@@ -744,10 +760,39 @@ class DomainManagement extends BaseController
 
         try {
             $items = [['domain' => $domain, 'years' => max(1, $years)]];
-            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve);
+            $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
         } catch (\Throwable $e) {
             return $this->fetchJson(['success' => false, 'msg' => __('购买失败：%{1}', [$e->getMessage()])]);
+        }
+    }
+
+    /**
+     * AJAX: 查询根域生命周期状态
+     */
+    public function postGetLifecycleStatus(): string
+    {
+        $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
+        if ($domain === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('请输入根域名')]);
+        }
+
+        try {
+            $result = $this->aggregator->getDomainLifecycleStatus($domain);
+            if (($result['success'] ?? false) && !empty($result['data']['order']['order_id'])) {
+                $orderId = (int) ($result['data']['order']['order_id'] ?? 0);
+                if ($orderId > 0) {
+                    $this->aggregator->processLifecycleOrder($orderId);
+                    $result = $this->aggregator->getDomainLifecycleStatus($domain);
+                }
+            }
+
+            return $this->fetchJson($result);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('查询失败：%{1}', [$e->getMessage()]),
+            ]);
         }
     }
     
@@ -1356,15 +1401,19 @@ class DomainManagement extends BaseController
                 'msg' => __('获取成功'),
                 'data' => [
                     'domain' => $domain->getDomain(),
-                    'records' => $result['records'] ?? [],
+                    'records' => \is_array($result) ? $result : [],
                     'dns_provider' => $account->getRegistrarCode(),
                     'dns_provider_name' => $account->getAccountName(),
                 ],
             ]);
         } catch (\Throwable $e) {
+            $error = (string) $e->getMessage();
+            if (\str_starts_with($error, '获取 DNS 记录失败：')) {
+                $error = \trim((string) \mb_substr($error, \mb_strlen('获取 DNS 记录失败：')));
+            }
             return $this->fetchJson([
                 'success' => false,
-                'msg' => __('获取 DNS 记录失败：%{1}', [$e->getMessage()]),
+                'msg' => __('获取 DNS 记录失败：%{1}', [$error]),
             ]);
         }
     }

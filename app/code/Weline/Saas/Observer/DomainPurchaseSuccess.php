@@ -7,10 +7,10 @@ namespace Weline\Saas\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Saas\Service\DomainProvisioningService;
+use Weline\Saas\Service\DomainLifecycleOrchestrationService;
 
 /**
- * 域名购买成功：若存在对应 SaaS 配置订单，则自动推进并执行 DNS 步骤
+ * 域名购买成功：自动启动或推进生命周期编排
  */
 class DomainPurchaseSuccess implements ObserverInterface
 {
@@ -26,15 +26,11 @@ class DomainPurchaseSuccess implements ObserverInterface
         }
 
         try {
-            $service = ObjectManager::getInstance(DomainProvisioningService::class);
-            $order = $service->getOrderByDomain($domain);
-            if ($order === null) {
-                return;
-            }
-            $orderId = $order->getOrderId();
-            $service->runStepDns($orderId);
+            /** @var DomainLifecycleOrchestrationService $service */
+            $service = ObjectManager::getInstance(DomainLifecycleOrchestrationService::class);
+            $service->startPurchasedLifecycle($domain, (int) ($data['account_id'] ?? 0), $data);
         } catch (\Throwable $e) {
-            w_log_error('[Weline_Saas] ' . __('域名购买成功后续 DNS 步骤失败：%{1}', [$e->getMessage()]));
+            w_log_error('[Weline_Saas] ' . __('域名购买成功后续生命周期步骤失败：%{1}', [$e->getMessage()]));
         }
     }
 }

@@ -5,6 +5,7 @@ namespace Weline\Server\Service\Control;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\Storage\WlsSharedStorage;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 
@@ -30,8 +31,13 @@ class SharedStateAdminService
         $limit = $this->normalizeLimit($limit, 200);
         $payloadFilter = $this->sanitizePayloadFilter($filter);
         $storage = SessionFactory::getInstance()->createStorage();
+        $stateFilter = $filter;
+        if ($storage instanceof WlsSharedStorage) {
+            // WLS unified state server carries multiple namespaces; session list must be scoped.
+            $stateFilter['__domain'] = self::ROLE_SESSION;
+        }
         $rawItems = $storage->list([
-            'filter' => $filter,
+            'filter' => $stateFilter,
             'limit' => $limit,
         ]);
 
