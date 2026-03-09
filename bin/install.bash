@@ -197,7 +197,7 @@ if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ "${WELINE_AS_USE
   echo "Switching to user $WELINE_USER for all installation steps..."
   run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$ROOT" 2>/dev/null || true
   [[ -d "$ROOT/.git" ]] && run_privileged sudo -u "$WELINE_USER" git config --global --add safe.directory "$ROOT" 2>/dev/null || true
-  exec run_privileged sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
+  exec sudo -u "$WELINE_USER" env WELINE_AS_USER=1 PATH="$PATH" bash "$SCRIPT_DIR/install.bash" "${ORIG_ARGS[@]}"
 fi
 
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
