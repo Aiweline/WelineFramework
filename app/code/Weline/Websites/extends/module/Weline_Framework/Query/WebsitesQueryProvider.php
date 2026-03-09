@@ -12,8 +12,10 @@ use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
+use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\DomainSyncService;
 
 class WebsitesQueryProvider implements QueryProviderInterface
@@ -59,6 +61,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteList'         => $this->getWebsiteList($params),
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
+            'getDnsRecords'          => $this->getDnsRecords($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -249,6 +252,13 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'params'      => [
                         ['name' => 'status', 'type' => 'int|string|null', 'required' => false],
                         ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getDnsRecords',
+                    'description' => __('获取域名 DNS 记录（查询层自动同步域名池）'),
+                    'params'      => [
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => true],
                     ],
                 ],
             ],
@@ -825,5 +835,213 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ];
         }
         return $list;
+    }
+
+    private function getDnsRecords(array $params): array
+    {
+        $domainId = (int)($params['domain_id'] ?? 0);
+        if ($domainId <= 0) {
+            return ['success' => false, 'message' => (string)__('域名 ID 不能为空')];
+        }
+
+        /** @var Domain $domain */
+        $domain = ObjectManager::getInstance(Domain::class, [], false);
+        $domain->load($domainId);
+        if (!$domain->getDomainId()) {
+            return ['success' => false, 'message' => (string)__('域名不存在')];
+        }
+
+        /** @var DomainResolveService $resolveService */
+        $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+        /** @var ServerIpService $serverIpService */
+        $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+
+        $sync = $resolveService->syncDnsRecords($domain);
+        $details = $resolveService->getDnsDetails($domain);
+
+        $records = \is_array($details['records'] ?? null) ? $details['records'] : [];
+        $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, false);
+
+        // 双保险：再用实时 DNS 查询补写一次池子，防止第三方接口返回不全或失败
+        $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
+        if ($liveRecords !== []) {
+            $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
+            $poolSync['added'] += (int)($liveSync['added'] ?? 0);
+            $poolSync['marked_non_local'] += (int)($liveSync['marked_non_local'] ?? 0);
+            $poolSync['skipped'] += (int)($liveSync['skipped'] ?? 0);
+        }
+
+        $dnsProvider = \is_array($details['dns_provider'] ?? null) ? $details['dns_provider'] : [];
+        $syncError = (string)($sync['error'] ?? '');
+
+        return [
+            'success' => $syncError === '',
+            'message' => $syncError === ''
+                ? (string)__('获取成功')
+                : (string)__('DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%{1}', [$syncError]),
+            'data' => [
+                'domain' => $domain->getDomain(),
+                'records' => $records,
+                'dns_provider' => (string)($dnsProvider['provider'] ?? $domain->getDnsProvider() ?? ''),
+                'dns_provider_name' => (string)($dnsProvider['name'] ?? $domain->getDnsProvider() ?? ''),
+                'server_ip' => $serverIpService->getPublicIpv4(),
+                'pool_sync' => $poolSync,
+                'sync_error' => $syncError,
+            ],
+        ];
+    }
+
+    private function syncDnsRecordsToDomainPool(Domain $rootDomain, array $records, bool $createNonLocal = false): array
+    {
+        $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+        $rootDomainName = \strtolower((string)$rootDomain->getDomain());
+        $parentDomainId = (int)$rootDomain->getDomainId();
+        $now = \date('Y-m-d H:i:s');
+
+        $added = 0;
+        $markedNonLocal = 0;
+        $skipped = 0;
+
+        foreach ($records as $record) {
+            if (!\is_array($record)) {
+                $skipped++;
+                continue;
+            }
+
+            $type = \strtoupper((string)($record['type'] ?? $record['record_type'] ?? ''));
+            $host = \trim((string)($record['host'] ?? $record['name'] ?? '@'));
+            $value = \trim((string)($record['value'] ?? $record['data'] ?? ''));
+
+            $fullDomain = $this->buildFullDomainFromHost($rootDomainName, $host);
+            if ($fullDomain === '') {
+                $skipped++;
+                continue;
+            }
+
+            $isIpRecord = $type === 'A' || $type === 'AAAA';
+            $isLocal = $isIpRecord && $value !== '' && $serverIpService->isLocalServer($value);
+
+            $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
+            $poolDomain->loadByDomain($fullDomain);
+            $exists = $poolDomain->getPoolId() > 0;
+
+            if (!$exists && !$isLocal && !$createNonLocal) {
+                $skipped++;
+                continue;
+            }
+
+            if (!$exists) {
+                $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
+                $poolDomain->setDomain($fullDomain);
+                $poolDomain->setParentDomainId($parentDomainId);
+                $poolDomain->setDescription(__('由查询层 DNS 同步自动写入'));
+                $poolDomain->setStatus(DomainPool::STATUS_ACTIVE);
+                $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+                $poolDomain->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+                $poolDomain->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+                $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
+                $poolDomain->setResolveCheckedAt($now);
+                $poolDomain->setResolveError('');
+                $poolDomain->setIsLocalServer($isLocal);
+                if ($type === 'A') {
+                    $poolDomain->setResolvedIp($value);
+                }
+                if ($type === 'AAAA') {
+                    $poolDomain->setResolvedIpv6($value);
+                }
+                $poolDomain->calculateSiteReady();
+                $poolDomain->save();
+                $added++;
+                continue;
+            }
+
+            if (!$isLocal && $poolDomain->isLocalServer()) {
+                $poolDomain->setIsLocalServer(false);
+                $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+                $poolDomain->setResolveCheckedAt($now);
+                $poolDomain->setResolveError('');
+                if ($type === 'A' && $value !== '') {
+                    $poolDomain->setResolvedIp($value);
+                }
+                if ($type === 'AAAA' && $value !== '') {
+                    $poolDomain->setResolvedIpv6($value);
+                }
+                $poolDomain->calculateSiteReady();
+                $poolDomain->save();
+                $markedNonLocal++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'added' => $added,
+            'marked_non_local' => $markedNonLocal,
+            'skipped' => $skipped,
+        ];
+    }
+
+    private function buildFullDomainFromHost(string $rootDomain, string $host): string
+    {
+        $rootDomain = \strtolower(\trim($rootDomain));
+        $host = \strtolower(\trim($host));
+
+        if ($rootDomain === '') {
+            return '';
+        }
+        if ($host === '' || $host === '@') {
+            return $rootDomain;
+        }
+
+        $host = \rtrim($host, '.');
+        if ($host === $rootDomain) {
+            return $rootDomain;
+        }
+        if (\str_ends_with($host, '.' . $rootDomain)) {
+            return $host;
+        }
+
+        return $host . '.' . $rootDomain;
+    }
+
+    private function collectLiveDnsRecordsForPoolSync(Domain $rootDomain): array
+    {
+        $root = \strtolower(\trim((string)$rootDomain->getDomain()));
+        if ($root === '') {
+            return [];
+        }
+
+        $targets = [
+            ['host' => '@', 'fqdn' => $root],
+            ['host' => 'www', 'fqdn' => 'www.' . $root],
+        ];
+
+        $records = [];
+        foreach ($targets as $target) {
+            $host = $target['host'];
+            $fqdn = $target['fqdn'];
+
+            $aRecords = @\dns_get_record($fqdn, \DNS_A);
+            if (\is_array($aRecords)) {
+                foreach ($aRecords as $aRecord) {
+                    $ip = \trim((string)($aRecord['ip'] ?? ''));
+                    if ($ip !== '') {
+                        $records[] = ['type' => 'A', 'host' => $host, 'value' => $ip];
+                    }
+                }
+            }
+
+            $aaaaRecords = @\dns_get_record($fqdn, \DNS_AAAA);
+            if (\is_array($aaaaRecords)) {
+                foreach ($aaaaRecords as $aaaaRecord) {
+                    $ip6 = \trim((string)($aaaaRecord['ipv6'] ?? ''));
+                    if ($ip6 !== '') {
+                        $records[] = ['type' => 'AAAA', 'host' => $host, 'value' => $ip6];
+                    }
+                }
+            }
+        }
+
+        return $records;
     }
 }
