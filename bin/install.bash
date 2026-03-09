@@ -1110,11 +1110,32 @@ if [[ -z "$PHP_EXE" ]] || ! "$PHP_EXE" -v &>/dev/null; then
   exit 1
 fi
 
+# 尝试在 php.ini 中启用指定扩展（适用于宝塔等非 apt 安装的 PHP）
+enable_php_ext_via_ini() {
+  local -a exts=("$@")
+  [[ ${#exts[@]} -eq 0 ]] && return 0
+  local ini_file
+  ini_file=$("$PHP_EXE" -r "echo php_ini_loaded_file();" 2>/dev/null || true)
+  [[ -z "$ini_file" ]] || [[ ! -f "$ini_file" ]] && return 1
+  local content
+  content=$(run_privileged cat "$ini_file" 2>/dev/null || cat "$ini_file" 2>/dev/null || true)
+  [[ -z "$content" ]] && return 1
+  local changed=0
+  local ext
+  for ext in "${exts[@]}"; do
+    if echo "$content" | grep -qE '^[[:space:]]*extension[[:space:]]*=[[:space:]]*'"$ext"'(\.so)?[[:space:]]*$'; then
+      continue
+    fi
+    run_privileged sh -c "echo 'extension=${ext}' >> \"$ini_file\"" 2>/dev/null && changed=1
+  done
+  [[ "$changed" -eq 1 ]] && echo "Enabled PHP extensions in $ini_file: ${exts[*]}"
+  return 0
+}
+
 # 在首次运行 php（run.php）前，确保 Framework 所需 PHP 扩展已安装
-# 扩展列表与 app/code/Weline/Framework/Env/env/requirements.php 的 extensions 保持一致
-# 若当前 PHP 为 extend/server/php（自编译），apt 安装 php-xml 无效，仅提示 --rebuild-php
+# 扩展列表含 composer.json 与 requirements.php 所需；composer 依赖 exif、fileinfo
 ensure_framework_php_extensions() {
-  local -a needed=(PDO json iconv fileinfo dom libxml simplexml intl mbstring sockets)
+  local -a needed=(PDO json iconv fileinfo exif dom libxml simplexml intl mbstring sockets)
   local -a missing=()
   local ext
   for ext in "${needed[@]}"; do
@@ -1134,6 +1155,12 @@ ensure_framework_php_extensions() {
     return 0
   fi
 
+  # 宝塔等 /www/server/php/ 下的 PHP：apt 无效，尝试在 php.ini 中启用
+  if [[ "$php_exe_abs" == *"/www/server/php/"* ]]; then
+    echo "Detected panel PHP (/www/server/php/). Enabling extensions in php.ini..."
+    enable_php_ext_via_ini exif fileinfo 2>/dev/null || true
+  fi
+
   echo "Framework requires PHP extensions that are missing: ${missing[*]}. Installing..."
   run_apt_update_once
   local php_ver
@@ -1143,29 +1170,42 @@ ensure_framework_php_extensions() {
   fi
   if [[ "$PLATFORM" == "linux" ]]; then
     if [[ -f /etc/debian_version ]]; then
-      # 不吞错误，安装失败时用户可见
-      if ! run_privileged apt-get install -y "php${php_ver}-xml" "php${php_ver}-intl" "php${php_ver}-fileinfo" "php${php_ver}-mbstring" 2>/dev/null; then
-        run_privileged apt-get install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" 2>/dev/null || true
+      if ! run_privileged apt-get install -y "php${php_ver}-xml" "php${php_ver}-intl" "php${php_ver}-fileinfo" "php${php_ver}-exif" "php${php_ver}-mbstring" 2>/dev/null; then
+        run_privileged apt-get install -y "php-xml" "php-intl" "php-fileinfo" "php-exif" "php-mbstring" 2>/dev/null || true
       fi
-      run_privileged phpenmod -v "$php_ver" xml intl fileinfo mbstring 2>/dev/null || true
+      run_privileged phpenmod -v "$php_ver" xml intl fileinfo exif mbstring 2>/dev/null || true
     elif [[ -f /etc/redhat-release ]]; then
       if command -v dnf &>/dev/null; then
-        run_privileged dnf install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" || true
+        run_privileged dnf install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" 2>/dev/null || true
       elif command -v yum &>/dev/null; then
-        run_privileged yum install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" || true
+        run_privileged yum install -y "php-xml" "php-intl" "php-fileinfo" "php-mbstring" 2>/dev/null || true
       fi
     fi
   elif [[ "$PLATFORM" == "mac" ]]; then
-    echo "On macOS ensure Homebrew PHP has xml/intl: brew install php@${php_ver}; brew link --overwrite --force php@${php_ver}"
+    echo "On macOS ensure Homebrew PHP has xml/intl/fileinfo/exif: brew install php@${php_ver}"
   fi
-  # 再次检查，若仍缺则明确提示
+
+  # 若仍缺（如宝塔 PHP），再次尝试 php.ini 启用
   missing=()
   for ext in "${needed[@]}"; do
     "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
   done
   if [[ ${#missing[@]} -gt 0 ]]; then
-    echo "WARNING: These PHP extensions are still missing: ${missing[*]}. run.php may fail. Install them and re-run install." >&2
-    echo "  Debian/Ubuntu/Kali: sudo apt install -y php${php_ver}-xml php${php_ver}-intl php${php_ver}-fileinfo php${php_ver}-mbstring" >&2
+    local ini_exts=()
+    for ext in exif fileinfo; do
+      printf '%s\n' "${missing[@]}" | grep -qxi "^${ext}$" && ini_exts+=("$ext")
+    done
+    [[ ${#ini_exts[@]} -gt 0 ]] && enable_php_ext_via_ini "${ini_exts[@]}" 2>/dev/null || true
+  fi
+
+  missing=()
+  for ext in "${needed[@]}"; do
+    "$PHP_EXE" -m 2>/dev/null | grep -qxi "^${ext}$" || missing+=("$ext")
+  done
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "WARNING: These PHP extensions are still missing: ${missing[*]}. run.php may fail." >&2
+    echo "  Debian/Ubuntu: sudo apt install -y php${php_ver}-xml php${php_ver}-intl php${php_ver}-fileinfo php${php_ver}-exif php${php_ver}-mbstring" >&2
+    echo "  BT Panel: Enable exif, fileinfo in 软件商店 -> PHP -> 安装扩展" >&2
   fi
   return 0
 }
