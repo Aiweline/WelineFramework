@@ -455,19 +455,29 @@ class Start extends CommandAbstract
             }
         }
         
-        // 主端口（Dispatcher 端口）被非框架进程占用时：报错退出，绝不自动切换
-        // 主端口是对外服务的入口，自动切换会导致业务地址变化，影响外部访问
+        // 主端口（Dispatcher 端口）被非框架进程占用时：
+        // - 用户未指定 -p 且端口为 80/443（通用 web 端口，可能被宝塔/nginx 占用）→ 自动降级到 9981
+        // - 用户指定了 -p 或降级端口 9981 也被占用 → 报错退出
         if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
-            $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
-            $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
-            $this->printer->note('');
-            $this->printer->setup(__('解决方案：'));
-            $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$port]));
-            $this->printer->note(__('  2. 或使用 -p 参数显式指定其他端口：'));
-            $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
-            $this->printer->note(__('  3. 查看端口占用：'));
-            $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
-            return;
+            if (!$portExplicit && ($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)) {
+                $this->printer->warning(__('默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}', [$port, self::DEFAULT_PORT_FALLBACK]));
+                $port = self::DEFAULT_PORT_FALLBACK;
+                $config['port'] = $port;
+                $httpRedirectPort = $port - 1;  // 9981 → 9980
+            }
+            // 降级后仍被占用，或用户指定了端口 → 报错
+            if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
+                $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
+                $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
+                $this->printer->note('');
+                $this->printer->setup(__('解决方案：'));
+                $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$port]));
+                $this->printer->note(__('  2. 或使用 -p 参数显式指定其他端口：'));
+                $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
+                $this->printer->note(__('  3. 查看端口占用：'));
+                $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
+                return;
+            }
         }
 
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
