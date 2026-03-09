@@ -211,6 +211,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, $pro
 // 信号处理（仅 Linux/Mac）
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
 if (\function_exists('pcntl_signal')) {
+    \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGTERM, function () use ($gracefulExit) {
         $gracefulExit('收到 SIGTERM 信号');
     });

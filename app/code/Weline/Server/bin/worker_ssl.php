@@ -976,6 +976,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
 // 信号处理（热更新支持，仅 Linux/Mac）
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
 if (\function_exists('pcntl_signal')) {
+    \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGUSR1, function () use (&$shouldExit, &$ipcDraining, &$drainStartTime, &$socket, $logReload) {
         // 收到重载信号，标记优雅退出（Master 会重新启动新进程加载新代码）
         $shouldExit = true;

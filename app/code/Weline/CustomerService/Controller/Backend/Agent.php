@@ -135,10 +135,10 @@ class Agent extends BackendController
                 ->setSupportedLocales($supportedLocales)
                 ->setIsActive((bool)$isActive)
                 ->setMaxSessions($maxSessions)
-                ->setData(ServiceAgent::schema_fields_updated_at, date('Y-m-d H:i:s'));
+                ->setData(ServiceAgent::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
 
             if ($agentId <= 0) {
-                $agent->setData(ServiceAgent::schema_fields_created_at, date('Y-m-d H:i:s'));
+                $agent->setData(ServiceAgent::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
             }
 
             $agent->save();

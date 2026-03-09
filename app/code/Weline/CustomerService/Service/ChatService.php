@@ -50,7 +50,7 @@ class ChatService
 
         // 如果提供了会话令牌，尝试查找现有会话
         if (!empty($sessionToken)) {
-            $session->where(ChatSession::schema_fields_session_token, $sessionToken)
+            $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                 ->find()
                 ->fetch();
             
@@ -62,8 +62,8 @@ class ChatService
         // 如果提供了客户ID，尝试查找该客户的活跃会话
         if ($customerId) {
             $session->reset()
-                ->where(ChatSession::schema_fields_customer_id, $customerId)
-                ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
+                ->where(ChatSession::schema_fields_CUSTOMER_ID, $customerId)
+                ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
                 ->find()
                 ->fetch();
             
@@ -79,8 +79,8 @@ class ChatService
             ->setCustomerLocale($customerLocale)
             ->setAgentLocale('zh_Hans_CN') // 默认客服语言
             ->setStatus(ChatSession::STATUS_WAITING)
-            ->setData(ChatSession::schema_fields_created_at, date('Y-m-d H:i:s'))
-            ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+            ->setData(ChatSession::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
+            ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
 
         // 尝试分配客服
@@ -102,7 +102,7 @@ class ChatService
         $agent = ObjectManager::getInstance(ServiceAgent::class);
         
         $agents = $agent->reset()
-            ->where(ServiceAgent::schema_fields_is_active, 1)
+            ->where(ServiceAgent::schema_fields_IS_ACTIVE, 1)
             ->select()
             ->fetch()
             ->getItems();
@@ -118,7 +118,7 @@ class ChatService
                 $session->setAgentId($agent->getId())
                     ->setAgentLocale($agent->getLocale())
                     ->setStatus(ChatSession::STATUS_ACTIVE)
-                    ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                    ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                     ->save();
                 
                 return true;
@@ -140,8 +140,8 @@ class ChatService
         $session = ObjectManager::getInstance(ChatSession::class);
         
         $count = $session->reset()
-            ->where(ChatSession::schema_fields_agent_id, $agentId)
-            ->where(ChatSession::schema_fields_status, ChatSession::STATUS_ACTIVE)
+            ->where(ChatSession::schema_fields_AGENT_ID, $agentId)
+            ->where(ChatSession::schema_fields_STATUS, ChatSession::STATUS_ACTIVE)
             ->count();
         
         return (int)$count;
@@ -202,7 +202,7 @@ class ChatService
             ->save();
 
         // 更新会话时间
-        $session->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+        $session->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
             ->save();
 
         return $message;
