@@ -230,6 +230,10 @@ class Env extends DataObject
     // Session
     public const default_SESSION = [
         'default' => 'file',
+        'wls_managed' => true,
+        'wls_default' => 'wls',
+        'lifetime' => 86400,
+        'cookie_lifetime' => 604800,
         'drivers' => [
             'file' => [
                 'path' => 'var/session/',
@@ -239,6 +243,11 @@ class Env extends DataObject
             ],
             'redis' => [
                 'tip' => '开发中...',
+            ],
+            'wls' => [
+                'port' => 19970,
+                'session_ttl' => 86400,
+                'max_sessions' => 50000,
             ],
         ],
     ];
