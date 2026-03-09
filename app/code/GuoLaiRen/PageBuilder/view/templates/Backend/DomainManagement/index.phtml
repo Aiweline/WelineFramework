@@ -1124,6 +1124,9 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 (function() {
     'use strict';
 
+    var purchaseDialogScriptUrl = '<?= $purchaseDialogJsUrl ?>';
+    var purchaseDialogLoadingPromise = null;
+
     var API = {
         getRegistrars:    '<backend-url>pagebuilder/backend/domain-management/get-registrars</backend-url>',
         getConfigFields:  '<backend-url>pagebuilder/backend/domain-management/get-config-fields</backend-url>',
@@ -1193,6 +1196,37 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         return req.then(function(res) { return (res && res.data) !== undefined ? res.data : res; });
     }
 
+    function ensurePurchaseDialogLoaded() {
+        if (window.WelineDomainPurchaseDialog) {
+            return Promise.resolve(true);
+        }
+        if (purchaseDialogLoadingPromise) {
+            return purchaseDialogLoadingPromise;
+        }
+
+        purchaseDialogLoadingPromise = new Promise(function(resolve, reject) {
+            var script = document.createElement('script');
+            script.src = purchaseDialogScriptUrl;
+            script.async = true;
+            script.onload = function() {
+                if (window.WelineDomainPurchaseDialog) {
+                    resolve(true);
+                } else {
+                    reject(new Error('dialog-object-missing'));
+                }
+            };
+            script.onerror = function() {
+                reject(new Error('dialog-script-load-failed'));
+            };
+            document.head.appendChild(script);
+        }).catch(function(error) {
+            purchaseDialogLoadingPromise = null;
+            throw error;
+        });
+
+        return purchaseDialogLoadingPromise;
+    }
+
     function getPurchaseDialogLabels() {
         return {
             title: '<?= __('购买域名') ?>',
@@ -1217,14 +1251,14 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     }
 
     function openPurchaseDialog(defaults) {
-        if (!window.WelineDomainPurchaseDialog) {
-            AdminToast.error('<?= __('购买弹窗组件未加载') ?>');
-            return Promise.resolve(null);
-        }
-
-        return window.WelineDomainPurchaseDialog.open({
-            labels: getPurchaseDialogLabels(),
-            defaults: defaults || {}
+        return ensurePurchaseDialogLoaded().then(function() {
+            return window.WelineDomainPurchaseDialog.open({
+                labels: getPurchaseDialogLabels(),
+                defaults: defaults || {}
+            });
+        }).catch(function() {
+            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>');
+            return null;
         });
     }
 
@@ -1708,7 +1742,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                     var checkboxDisabled = '';
 
                     var actions = isPulled
-                        ? '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('检测解析') ?>">' +
+                        ? '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('解析到本地') ?>">' +
                           '<i class="mdi mdi-dns"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-playlist-plus"></i></button>'
@@ -1974,7 +2008,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                         btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
                         btn.setAttribute('data-domain-id', domainId);
                         btn.setAttribute('data-domain', domain);
-                        btn.setAttribute('title', '<?= __('解析DNS') ?>');
+                        btn.setAttribute('title', '<?= __('解析到本地') ?>');
                         btn.innerHTML = '<i class="mdi mdi-dns"></i>';
                         btn.onclick = function(e) {
                             e.stopPropagation();
@@ -2016,12 +2050,13 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 
         setBtnLoading(btn, true);
 
-        postForm(API.checkResolve, { domain_id: domainId }).then(function(res) {
+        postForm(API.batchResolveToLocal, { domain_ids: JSON.stringify([domainId]) }).then(function(res) {
             setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
             if (res.success) {
-                AdminToast.success(res.msg || '<?= __('解析检测完成') ?>');
+                AdminToast.success(res.msg || ('<?= __('已将') ?> ' + domainName + ' <?= __('的 @、www 解析到本机') ?>'));
+                loadDomainList();
             } else {
-                AdminToast.error(res.msg || '<?= __('解析检测失败') ?>');
+                AdminToast.error(res.msg || '<?= __('解析到本地失败') ?>');
             }
         }).catch(function() {
             setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');

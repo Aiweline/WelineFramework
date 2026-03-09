@@ -624,7 +624,7 @@ $model->delete()->select();          // 错误：delete 后不能调用 select
 **实际案例（2026-01-29）：**
 删除主题布局部件时，`deleteWidget()` 方法中使用了 `$this->themeLayout->delete();` 但未调用 `fetch()`，导致删除操作未真正执行。修复后改为 `$this->themeLayout->delete()->fetch();`，问题解决。
 
-参考：[ERROR_LOG.md - ORM delete 操作缺少 fetch() 导致删除失败](../error-tracking/ERROR_LOG.md)
+参考：[开发注意事项（高抽象）](../error-tracking/DEVELOPMENT_NOTES.md)
 
 ---
 
@@ -654,7 +654,7 @@ $page->getQuery()->clearQuery();
 $page->save();
 ```
 
-参考：[ERROR_LOG.md - ORM save() 查询状态叠加](../error-tracking/ERROR_LOG.md)
+参考：[开发注意事项（高抽象）](../error-tracking/DEVELOPMENT_NOTES.md)
 
 ---
 
@@ -688,7 +688,7 @@ if ($backendUser->getId()) {
 1. 种子数据避免硬编码跨表 ID。  
 2. 需要跨表初始化时，先判定存在性或拆分到专门的数据初始化阶段。
 
-参考：[ERROR_LOG.md - 安装阶段外键失败](../error-tracking/ERROR_LOG.md)
+参考：[开发注意事项（高抽象）](../error-tracking/DEVELOPMENT_NOTES.md)
 
 ---
 
@@ -715,7 +715,7 @@ $this->sql = $sql; // 回退 exec() 路径可复用一致状态
 1. `prepare` 与 `exec` 双路径必须共用一套占位符命名。  
 2. 对 SQL/绑定做重命名时，必须确保两者同源一致。
 
-参考：[ERROR_LOG.md - Pgsql 回退 exec 占位符未替换](../error-tracking/ERROR_LOG.md)
+参考：[开发注意事项（高抽象）](../error-tracking/DEVELOPMENT_NOTES.md)
 
 ---
 

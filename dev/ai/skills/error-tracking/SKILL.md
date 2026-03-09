@@ -15,14 +15,14 @@ alwaysApply: false
 
 ## 自动协同
 
-**⚠️ 重要：每次触发此技能时，必须自动调用 `error-learning` 技能进行错误模式学习和知识库更新。**
+**⚠️ 重要：每次触发此技能时，必须自动调用 `error-learning` 技能进行错误模式学习。知识沉淀采用“按价值更新”，非每次必写。**
 
 ```
-错误报告 → error-tracking（记录） + error-learning（学习）
+错误报告 → error-tracking（分析） + error-learning（学习）
     ↓                           ↓
-ERROR_LOG.md            错误模式识别
+价值评估                 错误模式识别
     ↓                           ↓
-COMMON_ERRORS.md        解决方案优化
+开发规则抽象(可选)       解决方案优化
     ↓                           ↓
 相关技能文档更新 ←─────── 技能关联管理
 ```
@@ -37,9 +37,16 @@ COMMON_ERRORS.md        解决方案优化
 2. 定位错误根本原因
 3. 提出解决方案
 
-### 2. 记录错误
+### 2. 价值评估后沉淀
 
-解决错误后，将信息追加到 [ERROR_LOG.md](ERROR_LOG.md)：
+解决错误后，先评估是否值得沉淀；仅在满足“可复用、可执行、非特例”时再更新规则文档：
+
+- 可复用：可迁移到多个模块/场景
+- 可执行：能转化为明确检查项
+- 非特例：不是一次性环境问题
+- 高价值：能显著降低重复错误成本
+
+可沉淀时，归纳到 [DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md)：
 
 ```markdown
 ## [日期] 错误标题
@@ -102,8 +109,7 @@ globs: [适用文件模式]
 ## 快速参考
 
 查看已记录的错误和解决方案：
-- 完整错误日志：[ERROR_LOG.md](ERROR_LOG.md)
-- 常见错误速查：[COMMON_ERRORS.md](COMMON_ERRORS.md)
+- 开发注意事项：[DEVELOPMENT_NOTES.md](DEVELOPMENT_NOTES.md)
 - 错误模式库：查看 `error-learning` 技能
 
 ## 统一异常处理系统（v3.0）⭐
@@ -156,13 +162,13 @@ var/log/{channel}.log      # 指定通道日志
 - **theme-development** - 主题开发
 - **code-generation-standards** - 代码生成标准
 
-## 强制规则
+## 学习机制规则
 
 遵循 `.cursor/rules/auto-update-skills-on-error.mdc` 规则：
 
-- ✅ 每次修复错误后必须更新知识库
+- ✅ 每次修复错误后必须完成“验证 + 根因分析”
 - ✅ 必须调用 error-learning 技能
-- ✅ 必须更新至少 3 个文档（ERROR_LOG.md, COMMON_ERRORS.md, 相关技能）
+- ✅ 仅在“值得沉淀”时更新 DEVELOPMENT_NOTES.md 或相关技能文档
 - ✅ 必须建立技能间交叉引用
 
 ## 示例：记录一个错误
