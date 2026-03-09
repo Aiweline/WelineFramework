@@ -21,6 +21,7 @@
 | `server:status` 显示运行中但 PID 不存在 | 仅依赖实例文件 `state` 或端口弱信号，未以 PID 存活为准 | 状态判定改为 PID 优先（`Processer::processExists`），端口仅作无 PID 回退 |
 | `maintenance rolling` 完成后仍显示维护模式启用 | 在滚动标志未清理前调用 disable，被“滚动中”保护拒绝 | 先清 `rollingRestartInProgress`，再执行 `disableMaintenanceMode()` |
 | `cache:clear` 提示 WLS 重载失败（命名实例运行中） | IPC 重载只通知 `default` 实例，忽略命名实例 | 遍历运行中的所有实例发送 IPC reload 通知 |
+| `获取 DNS 记录失败：...提交修改DNS失败（错误码：-1）`（GName） | DNS 记录接口仍调用历史 `api/domain/dns*`，与当前文档 `api/resolution/*` 不匹配，误命中修改 DNS 错误 | DNS 记录接口切到 `api/resolution/list/add/edit/delete`，并兼容 `api/jiexi/*` + 历史端点兜底 |
 | `未注册的查询器：server` | QueryProvider 新增/修改后未重建 extends 注册表，或 WLS 仍在旧内存态 | 执行 `php bin/w extends:rebuild`，随后 `php bin/w server:reload`（必要时 `s:up`） |
 | Linux 前台 `Ctrl+C` 看不到和 Windows 一样的停机阶段 | 信号停机走了本地直出旧方案，且子进程未显式忽略 `SIGINT`，导致未统一复用 IPC 停机流程 | Master 信号入口统一改为自连控制端口发送 IPC `STOP`；子进程显式 `pcntl_signal(SIGINT, SIG_IGN)` |
 | `pagination(): Argument #1 ($page) must be of type int, string given` | GET/POST 参数为 string | 传参前用 `(int) $this->request->getParam('page', 1)` 等 |
@@ -200,6 +201,7 @@ __('用户 %{name} 有 %{count} 条消息', ['name' => $name, 'count' => $count]
 | Session/Memory 管理页偶发“不可用”误报 | 探活仅依赖 `ping()`，重连窗口中的瞬时失败会直接标红 | connected 判定改为 `ping || stats成功`，并补一次轻量重试与 probe 诊断信息 |
 | Session/Memory 管理页持续“不可用”，但进程全绿 | `session.server_host` 或 `server.memory_service.host` 配置存在但为空串，探活客户端使用空 host 连接失败 | `SharedStateAdminService` 对 host 做 `trim`，为空时回退 `127.0.0.1` |
 | Session 管理列表始终为空（后台已登录） | 协议层内部过滤键 `__domain` 被误用于聚合 payload 字段匹配，真实会话全部被过滤 | `listSessions()` 先清洗 payload 过滤参数，移除 `__*` 内部键后再做业务匹配 |
+| Session 管理列表出现 `__ns__:cache:*`（误以为缓存写入 Session） | WLS 统一状态服务下未限定查询域，Session 列表请求拿到了 cache 命名空间数据 | `SharedStateAdminService::listSessions()` 对 `WlsSharedStorage` 强制注入 `__domain=session` |
 | `w_query('server','sessionList')` 返回空数组（已登录） | 核心 `ServerQueryProvider::sessionList()` 仅透传共享列表，缺少“当前后台会话可见”兜底 | 在查询器层统一补齐当前后台会话可见性，调用方保持透传，避免模块级分叉补丁 |
 | Session 统计有数据但列表返回空数组 | 列表接口存在隐式 domain 过滤，且服务端默认跳过空 payload state | 取消默认 `__domain` 注入；`SessionServer::listSessions()` 按“全量”返回，不再丢弃空 payload |
 | 暗色模式过段时间失效（Session 像被重置） | `SessionStore` 读取仅更新 LRU，不刷新 TTL；读多写少场景下 Session 到点过期被 GC 回收 | 在 `SessionStore::get()` 调用 `touch()` 实现滑动过期；并建议对齐 `session_ttl/lifetime` 与 `cookie_lifetime` |

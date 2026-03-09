@@ -189,6 +189,7 @@ class Customer extends Model implements AuthenticableInterface
 - `SessionFactory` 请求级实例通过 `StateManager` 自动重置
 - 使用 `WlsSharedStorage` 实现跨 Worker 共享
 - 降级模式：Session Server 不可用时自动回退文件存储
+- Session 管理查询在 WLS 统一状态服务下必须显式限定 `__domain=session`，否则会混入 `cache:*` 命名空间，造成“缓存写入 Session”的误判
 - Session 管理列表（聚合会话展开）中，协议层内部参数（如 `__domain`）不得参与业务 payload 匹配，否则会把真实会话误过滤为空
 - 后台 Session 管理接口建议增加“当前登录会话可见”兜底：当远端列表为空时，至少补充当前 `session_id` 与脱敏预览，避免运维误判“无人登录”
 - 会话续期语义需明确：若业务预期“活跃用户不掉会话”，读取路径应采用滑动过期（read touch TTL），避免只读请求导致固定 TTL 到点失效（如主题模式丢失）

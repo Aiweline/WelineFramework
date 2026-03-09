@@ -1,10 +1,11 @@
 <?php
-/** @var \GuoLaiRen\PageBuilder\Controller\Backend\DomainManagement $this */
+/** @var \Weline\Framework\View\Template $this */
 $accounts = $this->getData('accounts') ?? [];
 $registrars = $this->getData('registrars') ?? [];
 $activeAccounts = $this->getData('activeAccounts') ?? [];
 $lastSyncTime = $this->getData('lastSyncTime') ?? '';
 $statusOptions = $this->getData('statusOptions') ?? [];
+$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 <style>
 .pb-dm { max-width: 1400px; margin: 0 auto; }
@@ -178,6 +179,33 @@ $statusOptions = $this->getData('statusOptions') ?? [];
 }
 .pb-dm-badge--error i {
     margin-right: 0.25rem;
+}
+.pb-dm-row--critical {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.08));
+}
+.pb-dm-lifecycle-panel {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    padding: 16px;
+    margin-bottom: 16px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.pb-dm-lifecycle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+.pb-dm-lifecycle-item {
+    padding: 12px;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius, 6px);
+    background: var(--backend-color-card-bg, #fff);
+}
+.pb-dm-lifecycle-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
 }
 .pb-dm-error-detail {
     margin-top: 0.35rem;
@@ -877,6 +905,23 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                 <span class="text-muted" style="font-size:0.8rem;" id="pb-dm-pool-sync-time"></span>
             </div>
 
+            <div class="pb-dm-lifecycle-panel">
+                <div class="pb-dm-row" style="margin-bottom:0;">
+                    <div class="pb-dm-fg" style="min-width:260px;">
+                        <label><lang>根域状态搜索</lang></label>
+                        <input type="text" id="pb-dm-lifecycle-domain" placeholder="<?= __('输入根域名，例如 example.com') ?>">
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:flex-end;">
+                        <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" id="pb-dm-lifecycle-search-btn">
+                            <i class="mdi mdi-radar"></i> <lang>查询状态</lang>
+                        </button>
+                    </div>
+                </div>
+                <div id="pb-dm-lifecycle-result" style="margin-top:12px;color:var(--backend-color-text-secondary,#6c757d);font-size:0.9rem;">
+                    <lang>输入根域名后可查看购买、DNS、解析、访问与 HTTPS 步骤状态。</lang>
+                </div>
+            </div>
+
             <!-- 域名池过滤器 -->
             <div class="pb-dm-row" style="margin-bottom:16px;">
                 <div class="pb-dm-fg" style="min-width:200px;">
@@ -1074,6 +1119,7 @@ $statusOptions = $this->getData('statusOptions') ?? [];
     </div>
 </div>
 
+<script src="<?= $purchaseDialogJsUrl ?>"></script>
 <script>
 (function() {
     'use strict';
@@ -1088,6 +1134,7 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         getDomains:       '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>',
         pullDomains:      '<backend-url>pagebuilder/backend/domain-management/pull-domains</backend-url>',
         batchOperate:     '<backend-url>pagebuilder/backend/domain-management/batch-operate</backend-url>',
+        getLifecycleStatus: '<backend-url>pagebuilder/backend/domain-management/get-lifecycle-status</backend-url>',
         checkAvail:       '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>',
         purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
         batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>',
@@ -1144,6 +1191,48 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         var opts = { method: 'POST', body: fd };
         var req = window.Weline.Api.request(url, opts);
         return req.then(function(res) { return (res && res.data) !== undefined ? res.data : res; });
+    }
+
+    function getPurchaseDialogLabels() {
+        return {
+            title: '<?= __('购买域名') ?>',
+            description: '<?= __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。') ?>',
+            dnsChoice: '<?= __('DNS 策略') ?>',
+            dnsFollowRegistrar: '<?= __('跟随域名商') ?>',
+            dnsCustomNameservers: '<?= __('自定义 Nameserver') ?>',
+            dnsNameservers: '<?= __('Nameserver 列表') ?>',
+            dnsNameserversPlaceholder: '<?= __('ns1.example.com, ns2.example.com') ?>',
+            cdnChoice: '<?= __('CDN 策略') ?>',
+            cdnFollowRegistrar: '<?= __('跟随域名商') ?>',
+            cdnNone: '<?= __('暂不配置 CDN') ?>',
+            resolveToLocal: '<?= __('自动解析到本服务器') ?>',
+            resolveHint: '<?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?>',
+            subdomains: '<?= __('自动解析子域名') ?>',
+            subdomainsPlaceholder: '<?= __('@, www') ?>',
+            startLifecycle: '<?= __('启动全流程状态跟踪') ?>',
+            startLifecycleHint: '<?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?>',
+            confirm: '<?= __('确认购买') ?>',
+            cancel: '<?= __('取消') ?>'
+        };
+    }
+
+    function openPurchaseDialog(defaults) {
+        if (!window.WelineDomainPurchaseDialog) {
+            AdminToast.error('<?= __('购买弹窗组件未加载') ?>');
+            return Promise.resolve(null);
+        }
+
+        return window.WelineDomainPurchaseDialog.open({
+            labels: getPurchaseDialogLabels(),
+            defaults: defaults || {}
+        });
+    }
+
+    function getPurchaseErrorMsg(res) {
+        if (window.WelineDomainPurchaseDialog) {
+            return window.WelineDomainPurchaseDialog.buildErrorMessage(res, '<?= __('购买失败') ?>');
+        }
+        return (res && (res.message || res.msg)) || '<?= __('购买失败') ?>';
     }
 
     function setBtnLoading(btn, loading, originalHtml) {
@@ -3268,26 +3357,42 @@ $statusOptions = $this->getData('statusOptions') ?? [];
             btn.addEventListener('click', function() {
                 var domain = btn.dataset.domain;
                 var acctId = btn.dataset.account;
-                AdminConfirm.show('<?= __('确定购买') ?> ' + domain + ' <?= __('吗？') ?>', {
-                    title: '<?= __('确认购买') ?>',
-                    confirmText: '<?= __('确认') ?>',
-                    cancelText: '<?= __('取消') ?>'
-                }).then(function(ok) {
-                    if (!ok) return;
+                openPurchaseDialog({
+                    dnsChoice: 'follow_registrar',
+                    cdnChoice: 'follow_registrar',
+                    resolveToLocal: !!(document.getElementById('pb-dm-auto-resolve') && document.getElementById('pb-dm-auto-resolve').checked),
+                    subdomains: '@,www',
+                    startLifecycle: true
+                }).then(function(dialogResult) {
+                    if (!dialogResult) return;
                     setBtnLoading(btn, true);
-                    var autoResolve = document.getElementById('pb-dm-auto-resolve').checked ? '1' : '0';
-                    postForm(API.purchase, { account_id: acctId, domain: domain, years: '1', auto_resolve: autoResolve }).then(function(res) {
+                    var autoResolve = dialogResult.resolve_to_local === 'yes' ? '1' : '0';
+                    postForm(API.purchase, {
+                        account_id: acctId,
+                        domain: domain,
+                        years: '1',
+                        auto_resolve: autoResolve,
+                        resolve_to_local: dialogResult.resolve_to_local || 'yes',
+                        subdomains: dialogResult.subdomains || '@,www',
+                        dns_choice: dialogResult.dns_choice || 'follow_registrar',
+                        dns_nameservers: dialogResult.dns_nameservers || '',
+                        cdn_choice: dialogResult.cdn_choice || 'follow_registrar',
+                        start_lifecycle: dialogResult.start_lifecycle || '1'
+                    }).then(function(res) {
                         if (res.success) {
                             var msg = res.message || res.msg || '<?= __('购买成功') ?>';
                             if (autoResolve === '1') {
                                 msg += ' <?= __('（自动解析任务已创建）') ?>';
+                            }
+                            if (dialogResult.start_lifecycle === '1') {
+                                msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                             }
                             AdminToast.success(msg);
                             btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
                             btn.disabled = true;
                         } else {
                             setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
-                            AdminToast.error(res.message || res.msg || '<?= __('购买失败') ?>');
+                            AdminToast.error(getPurchaseErrorMsg(res));
                         }
                     }).catch(function() {
                         setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
@@ -3309,24 +3414,39 @@ $statusOptions = $this->getData('statusOptions') ?? [];
                     AdminToast.warning('<?= __('请勾选要购买的域名') ?>');
                     return;
                 }
-                AdminConfirm.show('<?= __('确定批量购买') ?> ' + selected.length + ' <?= __('个域名吗？') ?>', {
-                    title: '<?= __('批量购买确认') ?>',
-                    confirmText: '<?= __('确认购买') ?>',
-                    cancelText: '<?= __('取消') ?>'
-                }).then(function(ok) {
-                    if (!ok) return;
+                openPurchaseDialog({
+                    dnsChoice: 'follow_registrar',
+                    cdnChoice: 'follow_registrar',
+                    resolveToLocal: !!(document.getElementById('pb-dm-auto-resolve') && document.getElementById('pb-dm-auto-resolve').checked),
+                    subdomains: '@,www',
+                    startLifecycle: true
+                }).then(function(dialogResult) {
+                    if (!dialogResult) return;
                     setBtnLoading(batchBtn, true);
-                    var autoResolve = document.getElementById('pb-dm-auto-resolve').checked ? '1' : '0';
-                    postForm(API.batchPurchase, { account_id: accountId, domains: selected, auto_resolve: autoResolve }).then(function(res) {
+                    var autoResolve = dialogResult.resolve_to_local === 'yes' ? '1' : '0';
+                    postForm(API.batchPurchase, {
+                        account_id: accountId,
+                        domains: selected,
+                        auto_resolve: autoResolve,
+                        resolve_to_local: dialogResult.resolve_to_local || 'yes',
+                        subdomains: dialogResult.subdomains || '@,www',
+                        dns_choice: dialogResult.dns_choice || 'follow_registrar',
+                        dns_nameservers: dialogResult.dns_nameservers || '',
+                        cdn_choice: dialogResult.cdn_choice || 'follow_registrar',
+                        start_lifecycle: dialogResult.start_lifecycle || '1'
+                    }).then(function(res) {
                         setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
                         if (res.success) {
                             var msg = res.message || res.msg || '<?= __('批量购买已提交') ?>';
                             if (autoResolve === '1') {
                                 msg += ' <?= __('（自动解析任务已创建）') ?>';
                             }
+                            if (dialogResult.start_lifecycle === '1') {
+                                msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
+                            }
                             AdminToast.success(msg);
                         } else {
-                            AdminToast.error(res.message || res.msg || '<?= __('购买失败') ?>');
+                            AdminToast.error(getPurchaseErrorMsg(res));
                         }
                     }).catch(function() {
                         setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
@@ -3418,6 +3538,88 @@ $statusOptions = $this->getData('statusOptions') ?? [];
         return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('等待中') ?></span>';
     }
 
+    function renderLifecycleStepBadge(step) {
+        var status = step && step.status ? String(step.status).toLowerCase() : 'pending';
+        var label = step && step.step_name ? String(step.step_name) : 'pending';
+
+        if (status === 'success') {
+            return '<span class="pb-dm-badge pb-dm-badge--ok">' + escapeHtml(label) + '</span>';
+        }
+        if (status === 'failed') {
+            return '<span class="pb-dm-badge pb-dm-badge--error">' + escapeHtml(label) + '</span>';
+        }
+        if (status === 'running') {
+            return '<span class="pb-dm-badge pb-dm-badge--warn">' + escapeHtml(label) + '</span>';
+        }
+        if (status === 'skipped') {
+            return '<span class="pb-dm-badge pb-dm-badge--info">' + escapeHtml(label) + '</span>';
+        }
+        return '<span class="pb-dm-badge">' + escapeHtml(label) + '</span>';
+    }
+
+    function renderLifecycleStatus(data) {
+        var container = document.getElementById('pb-dm-lifecycle-result');
+        if (!data || !data.order) {
+            container.innerHTML = '<div class="pb-dm-empty"><?= __('未找到生命周期数据') ?></div>';
+            return;
+        }
+
+        var steps = {};
+        (data.steps || []).forEach(function(step) {
+            if (!step || !step.step_name || step.step_name === 'lifecycle_options') {
+                return;
+            }
+            steps[step.step_name] = step;
+        });
+
+        var html = '<div class="pb-dm-lifecycle-grid">';
+        html += '<div class="pb-dm-lifecycle-item">' +
+            '<div><strong><?= __('根域') ?>:</strong> ' + escapeHtml(data.order.domain || '') + '</div>' +
+            '<div style="margin-top:6px;"><strong><?= __('当前步骤') ?>:</strong> ' + escapeHtml(data.order.current_step || '-') + '</div>' +
+            '<div style="margin-top:6px;"><strong><?= __('订单状态') ?>:</strong> ' + escapeHtml(data.order.status || '-') + '</div>' +
+            (data.order.error_message ? '<div style="margin-top:6px;color:var(--backend-color-danger,#f46a6a);"><strong><?= __('异常') ?>:</strong> ' + escapeHtml(data.order.error_message) + '</div>' : '') +
+            '</div>';
+
+        (data.pool || []).forEach(function(item) {
+            var fullDomain = item.domain || '';
+            var root = data.order.domain || '';
+            var displayName = fullDomain === root ? '@' : fullDomain.replace('.' + root, '');
+            html += '<div class="pb-dm-lifecycle-item">' +
+                '<div><strong>' + escapeHtml(displayName || fullDomain) + '</strong></div>' +
+                '<div style="margin-top:6px;">' + renderResolveStatusBadge(item) + ' ' + renderHttpsStatusBadge(item) + ' ' + renderSiteReadyBadge(item) + '</div>' +
+                '<div style="margin-top:6px;"><strong><?= __('解析IP') ?>:</strong> ' + escapeHtml(item.resolved_ip || '-') + '</div>' +
+                '</div>';
+        });
+
+        html += '</div>';
+        html += '<div class="pb-dm-lifecycle-steps">';
+        ['purchase', 'dns', 'resolve', 'verify', 'ssl'].forEach(function(stepName) {
+            html += renderLifecycleStepBadge(steps[stepName] || { step_name: stepName, status: 'pending' });
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    function loadLifecycleStatus(domain) {
+        var targetDomain = (domain || (document.getElementById('pb-dm-lifecycle-domain') || {}).value || '').trim().toLowerCase();
+        var container = document.getElementById('pb-dm-lifecycle-result');
+        if (!targetDomain) {
+            AdminToast.warning('<?= __('请输入根域名') ?>');
+            return;
+        }
+
+        container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:1.4rem;"></i><p><?= __('正在查询生命周期状态...') ?></p></div>';
+        postForm(API.getLifecycleStatus, { domain: targetDomain }).then(function(res) {
+            if (!res.success) {
+                container.innerHTML = '<div class="pb-dm-empty" style="color:var(--backend-color-danger,#f46a6a);">' + escapeHtml(res.message || '<?= __('查询失败') ?>') + '</div>';
+                return;
+            }
+            renderLifecycleStatus(res.data || {});
+        }).catch(function(e) {
+            container.innerHTML = '<div class="pb-dm-empty" style="color:var(--backend-color-danger,#f46a6a);"><?= __('查询失败') ?>: ' + escapeHtml(e.message) + '</div>';
+        });
+    }
+
     function renderDomainPool(items) {
         var container = document.getElementById('pb-dm-pool-container');
         if (!items || items.length === 0) {
@@ -3460,8 +3662,9 @@ $statusOptions = $this->getData('statusOptions') ?? [];
             var siteReadyBadge = renderSiteReadyBadge(item);
 
             var typeText = item.subdomain ? '<?= __('子域名') ?>' : '<?= __('根域') ?>';
+            var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
 
-            html += '<tr>' +
+            html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
                 '<td><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
                 '<td>' + typeText + '</td>' +
                 '<td>' + statusBadge + '</td>' +
@@ -3513,6 +3716,16 @@ $statusOptions = $this->getData('statusOptions') ?? [];
 
     document.getElementById('pb-dm-pool-page-size').addEventListener('change', function() {
         loadDomainPool(1);
+    });
+
+    document.getElementById('pb-dm-lifecycle-search-btn').addEventListener('click', function() {
+        loadLifecycleStatus();
+    });
+
+    document.getElementById('pb-dm-lifecycle-domain').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            loadLifecycleStatus();
+        }
     });
 
     document.getElementById('pb-dm-pool-search').addEventListener('keypress', function(e) {

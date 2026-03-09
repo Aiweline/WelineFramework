@@ -51,12 +51,16 @@ class ProvisioningOrder extends Model
     public const STATUS_PENDING = 'pending';
     public const STATUS_STEP_PURCHASE = 'step_purchase';
     public const STATUS_STEP_DNS = 'step_dns';
+    public const STATUS_STEP_RESOLVE = 'step_resolve';
+    public const STATUS_STEP_VERIFY = 'step_verify';
     public const STATUS_STEP_CDN = 'step_cdn';
     public const STATUS_STEP_SSL = 'step_ssl';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_FAILED = 'failed';
     public const STEP_PURCHASE = 'purchase';
     public const STEP_DNS = 'dns';
+    public const STEP_RESOLVE = 'resolve';
+    public const STEP_VERIFY = 'verify';
     public const STEP_CDN = 'cdn';
     public const STEP_SSL = 'ssl';
     public array $_unit_primary_keys = ['provisioning_order_id'];

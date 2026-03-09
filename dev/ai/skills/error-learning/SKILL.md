@@ -635,6 +635,34 @@ if (Weline.config.theme.area === 'backend') {
 
 ---
 
+#### Pattern 13: 第三方 API 路径漂移导致语义错错（错误接口返回“看似相关”的 -1）
+**错误特征：**
+- 接口 A（如“获取 DNS 记录”）返回了接口 B 的错误文案（如“提交修改DNS失败”）
+- 常见错误码为 `-1`，但错误描述与当前操作语义不一致
+
+**根本原因：**
+第三方平台升级了 API 路径/命名（例如 `api/resolution/*` 替代历史 `api/domain/dns*`），
+本地适配器仍请求旧端点，导致命中兼容路由或错误处理分支，返回误导性消息。
+
+**解决模式：**
+```php
+// ✅ 新端点优先 + 别名兜底 + 历史回退
+$response = $this->makeRequest('api/resolution/list', ['ym' => $domain], $credentials);
+if (($response['code'] ?? 0) !== 1) {
+    $response = $this->makeRequest('api/jiexi/list', ['ym' => $domain], $credentials);
+}
+if (($response['code'] ?? 0) !== 1) {
+    $response = $this->makeRequest('api/domain/dnslist', ['ym' => $domain], $credentials);
+}
+```
+
+**相关技能：** `error-tracking`, `framework-method-validation`
+
+**历史案例：**
+- 2026-03-09: GName DNS 记录接口使用历史路径，触发“获取记录却提示修改失败（-1）”
+
+---
+
 ## 学习增强机制
 
 ### 错误模式演化
