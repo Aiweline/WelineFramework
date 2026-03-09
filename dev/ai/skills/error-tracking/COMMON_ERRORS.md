@@ -22,6 +22,7 @@
 | `maintenance rolling` 完成后仍显示维护模式启用 | 在滚动标志未清理前调用 disable，被“滚动中”保护拒绝 | 先清 `rollingRestartInProgress`，再执行 `disableMaintenanceMode()` |
 | `cache:clear` 提示 WLS 重载失败（命名实例运行中） | IPC 重载只通知 `default` 实例，忽略命名实例 | 遍历运行中的所有实例发送 IPC reload 通知 |
 | `未注册的查询器：server` | QueryProvider 新增/修改后未重建 extends 注册表，或 WLS 仍在旧内存态 | 执行 `php bin/w extends:rebuild`，随后 `php bin/w server:reload`（必要时 `s:up`） |
+| Linux 前台 `Ctrl+C` 看不到和 Windows 一样的停机阶段 | 信号停机走了本地直出旧方案，且子进程未显式忽略 `SIGINT`，导致未统一复用 IPC 停机流程 | Master 信号入口统一改为自连控制端口发送 IPC `STOP`；子进程显式 `pcntl_signal(SIGINT, SIG_IGN)` |
 | `pagination(): Argument #1 ($page) must be of type int, string given` | GET/POST 参数为 string | 传参前用 `(int) $this->request->getParam('page', 1)` 等 |
 | `Undefined method` | 方法不存在 | 检查类名和方法名 |
 | `Undefined property` | 属性未声明或未初始化 | 检查属性声明和构造函数赋值 |

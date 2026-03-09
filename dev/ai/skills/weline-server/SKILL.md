@@ -601,3 +601,8 @@ cat var/log/master_health_debug.log
     - 高概率原因：`EventsManager` 观察者缓存被按请求清空，导致每请求重扫事件观察者
     - 快速排查：对同一后台 REST 路径连续 `curl`，若 401/404 也在秒级则优先检查 `StateManager` 对 `EventsManager` 的 reset 策略
     - 修复原则：`EventsManager::resetRequestState()` 仅清请求级 `$events`，不要在每请求中清 `observerCache/eventsObservers/moduleStatusCache`
+12. **Linux 前台 `Ctrl+C` 停机输出与 Windows 不一致**：
+    - 典型特征：Windows 前台可看到 `DRAIN -> SHUTDOWN -> 校验退出` 的完整阶段；Linux 前台 Ctrl+C 时子进程可能先被打断，输出不完整
+    - 根本原因 1：信号停机与 `server:stop` 没有统一复用同一个 IPC `ACTION_STOP` 入口
+    - 根本原因 2：子进程仅“未处理 SIGINT”，但没有显式 `SIG_IGN`，Linux 前台 Ctrl+C 会把 `SIGINT` 发给整个前台进程组
+    - 修复原则：`MasterProcess::stopWithProgress()` 必须自连控制端口发送 IPC `STOP`，禁止再维护本地 `echo` 版停机进度；所有由 Master 编排退出的子进程必须显式 `pcntl_signal(SIGINT, SIG_IGN)`
