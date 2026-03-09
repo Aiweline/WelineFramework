@@ -125,8 +125,12 @@ class DomainPurchaseService
                 ? (($itemData['resolve_to_local'] ?? 'yes') === 'yes')
                 : $autoResolve;
             $dnsChoice = (string) ($itemData['dns_choice'] ?? 'follow_registrar');
+            $dnsProvider = \strtolower(\trim((string) ($itemData['dns_provider'] ?? '')));
+            $dnsAccountId = (int) ($itemData['dns_account_id'] ?? 0);
             $dnsNameservers = \trim((string) ($itemData['dns_nameservers'] ?? ''));
             $cdnChoice = (string) ($itemData['cdn_choice'] ?? 'follow_registrar');
+            $cdnProvider = \strtolower(\trim((string) ($itemData['cdn_provider'] ?? '')));
+            $cdnAccountId = (int) ($itemData['cdn_account_id'] ?? 0);
             $startLifecycle = !isset($itemData['start_lifecycle'])
                 || !\in_array((string) $itemData['start_lifecycle'], ['0', 'false', 'no'], true);
             $subdomains = $itemData['subdomains'] ?? ['@', 'www'];
@@ -166,6 +170,19 @@ class DomainPurchaseService
 
                     // 购买成功后入域名池（含 @、www 等子域）
                     $this->addToDomainPoolWithSubdomains($domain, $accountId, $subdomains);
+                    $this->persistPurchasedDomainDnsMetadata(
+                        $domain,
+                        $accountId,
+                        (string)$registrar->getCode(),
+                        $purchaseResult,
+                        $dnsChoice,
+                        $dnsNameservers,
+                        $dnsProvider,
+                        $dnsAccountId,
+                        $cdnChoice,
+                        $cdnProvider,
+                        $cdnAccountId
+                    );
 
                     // 绑定站点
                     if ($websiteId > 0 || $autoCreateSite === 'yes') {
@@ -185,8 +202,12 @@ class DomainPurchaseService
                             'resolve_to_local' => $resolveToLocal,
                             'subdomains' => $subdomains,
                             'dns_choice' => $dnsChoice,
+                            'dns_provider' => $dnsProvider,
+                            'dns_account_id' => $dnsAccountId,
                             'dns_nameservers' => $dnsNameservers,
                             'cdn_choice' => $cdnChoice,
+                            'cdn_provider' => $cdnProvider,
+                            'cdn_account_id' => $cdnAccountId,
                         ]);
                     }
 
@@ -201,8 +222,12 @@ class DomainPurchaseService
                             'resolve_to_local' => $resolveToLocal,
                             'subdomains' => $subdomains,
                             'dns_choice' => $dnsChoice,
+                            'dns_provider' => $dnsProvider,
+                            'dns_account_id' => $dnsAccountId,
                             'dns_nameservers' => $dnsNameservers,
                             'cdn_choice' => $cdnChoice,
+                            'cdn_provider' => $cdnProvider,
+                            'cdn_account_id' => $cdnAccountId,
                             'start_lifecycle' => $startLifecycle,
                         ],
                     ];
@@ -317,6 +342,77 @@ class DomainPurchaseService
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
+        }
+    }
+
+    private function persistPurchasedDomainDnsMetadata(
+        string $domain,
+        int $accountId,
+        string $registrarCode,
+        array $purchaseResult,
+        string $dnsChoice,
+        string $dnsNameservers,
+        string $selectedDnsProvider,
+        int $selectedDnsAccountId,
+        string $cdnChoice,
+        string $selectedCdnProvider,
+        int $selectedCdnAccountId
+    ): void {
+        try {
+            $domainModel = ObjectManager::getInstance(Domain::class);
+            $rootDomain = clone $domainModel;
+            $rootDomain->loadByDomainAndAccount($domain, $accountId);
+            if (!$rootDomain->getDomainId()) {
+                return;
+            }
+
+            $nameservers = [];
+            if (!empty($purchaseResult['nameservers'])) {
+                $nameservers = \is_array($purchaseResult['nameservers'])
+                    ? $purchaseResult['nameservers']
+                    : \array_map('trim', \explode(',', (string)$purchaseResult['nameservers']));
+            } elseif ($dnsChoice === 'custom_nameservers' && $dnsNameservers !== '') {
+                $nameservers = \array_map('trim', \explode(',', $dnsNameservers));
+            }
+
+            $nameservers = \array_values(\array_filter(\array_map(static function ($ns) {
+                return \rtrim(\strtolower(\trim((string)$ns)), '.');
+            }, $nameservers)));
+
+            $detector = ObjectManager::getInstance(DnsProviderDetector::class);
+            $provider = '';
+            if ($nameservers !== []) {
+                $provider = $detector->detectProvider($nameservers);
+                $rootDomain->setNameservers($nameservers);
+            }
+            if ($provider === '' || $provider === 'unknown') {
+                if ($dnsChoice === 'follow_registrar' && $registrarCode !== '') {
+                    $provider = \strtolower($registrarCode);
+                }
+            }
+            if ($dnsChoice === 'provider_account') {
+                if ($selectedDnsProvider !== '') {
+                    $provider = $selectedDnsProvider;
+                }
+                if ($selectedDnsAccountId > 0) {
+                    $rootDomain->setDnsAccountId($selectedDnsAccountId);
+                }
+            }
+            if ($provider !== '' && $provider !== 'unknown') {
+                $rootDomain->setDnsProvider($provider);
+            }
+
+            if ($cdnChoice === 'provider_account') {
+                if ($selectedCdnProvider !== '') {
+                    $rootDomain->setCdnProvider($selectedCdnProvider);
+                }
+                if ($selectedCdnAccountId > 0) {
+                    $rootDomain->setCdnAccountId($selectedCdnAccountId);
+                }
+            }
+            $rootDomain->save();
+        } catch (\Throwable $e) {
+            w_log_error(__('购买后同步域名 DNS 元数据失败：%{1}', [$e->getMessage()]));
         }
     }
 
