@@ -90,7 +90,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'sync',
         'y',
         'yes',
+        '-y',
+        '--yes',
         'help',
+        '-h',
+        '--help',
     ];
 
     /** 用于错误提示的参数展示顺序 */
