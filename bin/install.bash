@@ -30,6 +30,7 @@ usage() {
   echo "  --rebuild-php: on Linux, remove existing extend/server/php and recompile (e.g. to add missing extensions like xsl)."
   echo "  -f, --force: force reinstall even if env.php exists (will prompt for confirmation)."
   echo "  -y, --yes: when already installed, directly run setup:upgrade without prompting."
+  echo "  --link-system: create symlinks in /usr/local/bin (php, psql) for system-wide use (uses sudo when needed)."
   echo "  -b BRANCH: when run.php is missing, clone this branch (default: master)."
   exit 0
 }
@@ -41,6 +42,7 @@ REBUILD_PHP=false
 BRANCH="master"
 FORCE_INSTALL=false
 AUTO_UPGRADE=false
+LINK_SYSTEM=false
 COMPONENTS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -49,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --rebuild-php) REBUILD_PHP=true; shift ;;
     -f|--force) FORCE_INSTALL=true; shift ;;
     -y|--yes) AUTO_UPGRADE=true; shift ;;
+    --link-system) LINK_SYSTEM=true; shift ;;
     -b) [[ -n "${2:-}" ]] && { BRANCH="$2"; shift 2; } || shift ;;
     php|pgsql|mysql)
       if [[ " $VALID_COMPONENTS " == *" $1 "* ]]; then
@@ -158,6 +161,20 @@ run_privileged() {
   fi
   echo "ERROR: sudo not found and current user is not root. Please install dependencies manually." >&2
   return 1
+}
+
+# 创建软链：无权限时自动用 sudo 重试（适用于目标在 /usr/bin、/usr/local/bin 等需提权的场景）
+# 注意：src 必须为绝对路径；若用相对路径，链接会按“目标所在目录”解析，导致找不到文件
+safe_ln_sf() {
+  local src="$1"
+  local dest="$2"
+  # 若 src 为相对路径，基于当前目录转为绝对路径，避免链到 /usr/bin 等目录时解析错误
+  [[ "$src" != /* ]] && src="$(cd "$(dirname "$src")" 2>/dev/null && pwd)/$(basename "$src")"
+  if ln -sf "$src" "$dest" 2>/dev/null; then
+    return 0
+  fi
+  echo "软链需要更高权限，使用 sudo 重试: ln -sf $src $dest"
+  run_privileged ln -sf "$src" "$dest"
 }
 
 # 以 weline 用户执行（root 时用 sudo -u weline，非 root 则直接执行）
@@ -319,8 +336,8 @@ install_php_via_brew() {
     echo "PHP (brew $formula) added to PATH: $php_prefix/bin"
     # 在 extend/server/php/bin 做软链，便于框架和 run.php 统一从该路径读取
     mkdir -p "$SERVER_DIR/php/bin"
-    ln -sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
-    [[ -x "$php_prefix/bin/php-fpm" ]] && ln -sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
+    safe_ln_sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
+    [[ -x "$php_prefix/bin/php-fpm" ]] && safe_ln_sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
     echo "Symlink: $SERVER_DIR/php/bin/php -> $php_prefix/bin/php"
   else
     echo "WARNING: Could not get brew PHP path. Ensure \`php\` is in your PATH." >&2
@@ -825,8 +842,8 @@ install_php() {
         if [[ -n "$php_prefix" ]] && [[ -d "$php_prefix/bin" ]]; then
           add_to_path "$php_prefix/bin"
           mkdir -p "$SERVER_DIR/php/bin"
-          ln -sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
-          [[ -x "$php_prefix/bin/php-fpm" ]] && ln -sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
+          safe_ln_sf "$php_prefix/bin/php" "$SERVER_DIR/php/bin/php"
+          [[ -x "$php_prefix/bin/php-fpm" ]] && safe_ln_sf "$php_prefix/bin/php-fpm" "$SERVER_DIR/php/bin/php-fpm" 2>/dev/null || true
         fi
         echo "PHP already installed via brew (version $installed). Skipping."
         return
@@ -871,8 +888,8 @@ install_php() {
     if [[ -n "$sys_php" ]]; then
       echo "检测到系统已有 PHP $PHP_VERSION (含 pdo_pgsql)，直接使用，跳过安装：$sys_php"
       mkdir -p "$dest/bin"
-      ln -sf "$sys_php" "$dest/bin/php"
-      [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
+      safe_ln_sf "$sys_php" "$dest/bin/php"
+      [[ -x "$(dirname "$sys_php")/php-fpm" ]] && safe_ln_sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
       add_to_path "$dest"
       add_to_path "$dest/bin"
       return
@@ -900,7 +917,7 @@ install_pgsql_via_brew() {
   fi
   mkdir -p "$SERVER_DIR/pgsql"
   rm -rf "$SERVER_DIR/pgsql/bin"
-  ln -sf "$pg_prefix/bin" "$SERVER_DIR/pgsql/bin"
+  safe_ln_sf "$pg_prefix/bin" "$SERVER_DIR/pgsql/bin"
   add_to_path "$SERVER_DIR/pgsql/bin"
   echo "PostgreSQL (brew $formula) linked at $SERVER_DIR/pgsql/bin -> $pg_prefix/bin"
 }
@@ -963,7 +980,7 @@ install_pgsql_linux() {
         pg_dir_check="$(dirname "$pg_bin_check")"
         mkdir -p "$dest"
         rm -rf "$dest/bin"
-        ln -sf "$pg_dir_check" "$dest/bin"
+        safe_ln_sf "$pg_dir_check" "$dest/bin"
         add_to_path "$dest/bin"
         return
       fi
@@ -1028,7 +1045,7 @@ install_pgsql_linux() {
   fi
   mkdir -p "$dest"
   rm -rf "$dest/bin"
-  ln -sf "$pg_dir" "$dest/bin"
+  safe_ln_sf "$pg_dir" "$dest/bin"
   add_to_path "$dest/bin"
 
   # 数据目录：extend/server/pgsql/data（与 Windows 同目录，var 易被删除不推荐）
@@ -1386,6 +1403,21 @@ RUN_ARGS=""
 (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
 echo ""
 cd "$ROOT"
+
+# --link-system：在 /usr/local/bin 创建 php、psql 软链，便于系统级使用（需提权时自动 sudo）
+if [[ "$LINK_SYSTEM" == true ]]; then
+  if [[ -x "$ROOT/extend/server/php/bin/php" ]]; then
+    safe_ln_sf "$ROOT/extend/server/php/bin/php" "/usr/local/bin/php${PHP_VERSION//./}" 2>/dev/null || true
+    safe_ln_sf "$ROOT/extend/server/php/bin/php" /usr/local/bin/php 2>/dev/null || true
+  fi
+  if [[ -x "$ROOT/extend/server/pgsql/bin/psql" ]] || [[ -x "$SERVER_DIR/pgsql/bin/psql" ]]; then
+    _psql_bin="$ROOT/extend/server/pgsql/bin/psql"
+    [[ -x "$SERVER_DIR/pgsql/bin/psql" ]] && _psql_bin="$SERVER_DIR/pgsql/bin/psql"
+    safe_ln_sf "$_psql_bin" /usr/local/bin/psql 2>/dev/null || true
+  fi
+  echo "已尝试将 php/psql 软链到 /usr/local/bin（未成功则需手动 sudo）。"
+fi
+
 echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
 echo "  Linux: ~/.bashrc, ~/.profile  |  Mac: ~/.zshrc, ~/.zprofile"
 echo "To use in this terminal now:  source ~/.bashrc   (Linux) or source ~/.zshrc   (Mac)"
