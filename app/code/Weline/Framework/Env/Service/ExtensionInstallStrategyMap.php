@@ -255,21 +255,25 @@ class ExtensionInstallStrategyMap
             ];
         }
 
-        // dnf (Fedora/RHEL 新)
-        $list[] = [
-            'cmd'       => 'dnf install -y php-' . $pkgQ,
-            'name'      => 'dnf',
-            'check'     => 'dnf',
-            'platforms' => [self::PLATFORM_LINUX_DNF],
-        ];
+        // dnf (Fedora/RHEL/Amazon Linux)：优先尝试版本化包名 php81-xxx、php82-xxx
+        foreach (['php' . $phpVersion . '-' . $pkg, 'php-' . $pkg] as $pkgName) {
+            $list[] = [
+                'cmd'       => 'dnf install -y ' . escapeshellarg($pkgName),
+                'name'      => 'dnf (' . $pkgName . ')',
+                'check'     => 'dnf',
+                'platforms' => [self::PLATFORM_LINUX_DNF],
+            ];
+        }
 
-        // yum (CentOS/RHEL 旧)
-        $list[] = [
-            'cmd'       => 'yum install -y php-' . $pkgQ,
-            'name'      => 'yum',
-            'check'     => 'yum',
-            'platforms' => [self::PLATFORM_LINUX_YUM],
-        ];
+        // yum (CentOS/RHEL 旧)：优先尝试版本化包名
+        foreach (['php' . $phpVersion . '-' . $pkg, 'php-' . $pkg] as $pkgName) {
+            $list[] = [
+                'cmd'       => 'yum install -y ' . escapeshellarg($pkgName),
+                'name'      => 'yum (' . $pkgName . ')',
+                'check'     => 'yum',
+                'platforms' => [self::PLATFORM_LINUX_YUM],
+            ];
+        }
 
         // apk (Alpine)
         $list[] = [

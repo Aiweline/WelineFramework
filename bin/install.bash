@@ -859,19 +859,27 @@ install_php() {
     echo "(--path-only) PHP not found at $dest; add PATH manually if needed."
     return
   fi
-  # 优先检测系统已有 PHP（含 pdo_pgsql），满足要求则直接使用，无需编译
+  # 优先检测系统已有 PHP（含 pdo_pgsql），满足要求则提示：用系统 PHP 还是强制自编译
+  local force_overwrite_system_php=0
   if [[ "$REBUILD_PHP" != true ]]; then
     local sys_php
     sys_php="$(find_system_php_linux "$PHP_VERSION" 2>/dev/null || true)"
     if [[ -n "$sys_php" ]]; then
-      echo "Using existing system PHP (version $PHP_VERSION, with pdo_pgsql): $sys_php"
-      mkdir -p "$dest/bin"
-      ln -sf "$sys_php" "$dest/bin/php"
-      [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
-      add_to_path "$dest"
-      add_to_path "$dest/bin"
-      echo "Skipping source compilation."
-      return
+      echo "检测到系统已有 PHP: $sys_php"
+      echo "使用系统 PHP 将创建软链；若选自编译则扩展(exif/fileinfo/xsl 等)一并编译进 PHP，并覆盖 /usr/bin/php 指向项目 PHP。"
+      read -p "是否强制使用项目自编译 PHP？(y/N): " -r
+      if [[ ! "$REPLY" =~ ^[yY] ]]; then
+        echo "使用系统 PHP，创建软链到 extend/server/php/bin ..."
+        mkdir -p "$dest/bin"
+        ln -sf "$sys_php" "$dest/bin/php"
+        [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
+        add_to_path "$dest"
+        add_to_path "$dest/bin"
+        echo "Skipping source compilation."
+        return
+      fi
+      force_overwrite_system_php=1
+      echo "将编译项目自用 PHP 到 extend/server/php，并覆盖 /usr/bin/php ..."
     fi
   fi
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
@@ -879,6 +887,11 @@ install_php() {
   install_php_from_source "$dest"
   add_to_path "$dest"
   [[ -d "$dest/bin" ]] && add_to_path "$dest/bin"
+  # 强制自编译时覆盖 /usr/bin/php，确保后续执行的 php 指向项目 PHP
+  if [[ "$force_overwrite_system_php" -eq 1 ]] && [[ -x "$dest/bin/php" ]]; then
+    echo "覆盖 /usr/bin/php 指向项目自编译 PHP ..."
+    run_privileged ln -sf "$dest/bin/php" /usr/bin/php
+  fi
 }
 
 # Mac：用 Homebrew 安装 PostgreSQL，并在 extend/server/pgsql 做软链（与 Windows 路径一致，初始化逻辑复用 run.php）
