@@ -1272,6 +1272,11 @@ fix_project_ownership() {
 }
 fix_project_ownership
 
+# root 安装且项目归属 weline 时：添加 safe.directory，避免 git pull 等报 dubious ownership
+if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]] && [[ -d "$ROOT/.git" ]]; then
+  run_privileged git config --global --add safe.directory "$ROOT" 2>/dev/null || true
+fi
+
 echo ""
 RUN_ARGS=""
 [[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
