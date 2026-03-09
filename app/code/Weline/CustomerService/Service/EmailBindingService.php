@@ -117,13 +117,13 @@ class EmailBindingService
             if ($customerId) {
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
-                $session->where(ChatSession::schema_fields_session_token, $sessionToken)
+                $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                     ->find()
                     ->fetch();
                 
                 if ($session->getId()) {
                     $session->setCustomerId($customerId)
-                        ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                         ->save();
                     
                     // 更新客户语言配置
@@ -146,13 +146,13 @@ class EmailBindingService
                 // 找到客户，绑定到会话
                 /** @var ChatSession $session */
                 $session = ObjectManager::getInstance(ChatSession::class);
-                $session->where(ChatSession::schema_fields_session_token, $sessionToken)
+                $session->where(ChatSession::schema_fields_SESSION_TOKEN, $sessionToken)
                     ->find()
                     ->fetch();
                 
                 if ($session->getId()) {
                     $session->setCustomerId($customer->getId())
-                        ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                        ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                         ->save();
                     
                     // 更新客户语言配置

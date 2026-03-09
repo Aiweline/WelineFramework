@@ -37,7 +37,6 @@ class ServiceOrchestrator
     private bool $running = false;
     private bool $shuttingDown = false;
     private ?int $stopProgressClientId = null;
-    private bool $consoleProgressEnabled = false;
     
     /** ANSI 颜色常量 */
     private const ANSI_RESET = "\033[0m";
@@ -167,14 +166,6 @@ class ServiceOrchestrator
         $this->scanModuleProviders();
 
         WlsLogger::info_('[Orchestrator] 已加载 ' . $this->registry->getProviderCount() . ' 个服务提供者');
-    }
-
-    /**
-     * 启用控制台进度输出（用于 Ctrl+C 前台停止）
-     */
-    public function setConsoleProgressEnabled(bool $enabled): void
-    {
-        $this->consoleProgressEnabled = $enabled;
     }
 
     /**
@@ -738,41 +729,12 @@ class ServiceOrchestrator
     }
     
     /**
-     * 发送停止进度消息给 CLI 客户端（或控制台）
+     * 发送停止进度消息给 CLI 客户端
      */
     private function sendStopProgress(string $message): void
     {
-        // IPC 模式：发送给 CLI 客户端
         if ($this->stopProgressClientId !== null && $this->controlServer !== null) {
             $this->controlServer->sendTo($this->stopProgressClientId, ControlMessage::commandResult(true, [], $message));
-        }
-        
-        // 控制台模式：直接输出到终端（Ctrl+C 前台停止）
-        if ($this->consoleProgressEnabled) {
-            $tag = self::ANSI_BLUE . '[停止]' . self::ANSI_RESET;
-            
-            // 格式化输出，根据消息类型使用不同颜色
-            if (\str_starts_with($message, '✓') || \str_contains($message, '已退出') || \str_contains($message, '已断开') || \str_contains($message, '排水完成')) {
-                // 上报成功：绿色
-                $content = self::ANSI_GREEN . $message . self::ANSI_RESET;
-                echo "    {$content}\n";
-            } elseif (\str_contains($message, 'SHUTDOWN') || \str_contains($message, '通知子进程退出') || \str_contains($message, '强制') || \str_contains($message, 'Master 即将退出')) {
-                // 停止相关：红色
-                $content = self::ANSI_RED . $message . self::ANSI_RESET;
-                echo "  {$tag} {$content}\n";
-            } elseif (\str_contains($message, 'DRAIN') || \str_contains($message, '排水') || \str_contains($message, '等待排水') || \str_contains($message, '阶段')) {
-                // 排水/阶段：黄色
-                $content = self::ANSI_YELLOW . $message . self::ANSI_RESET;
-                echo "  {$tag} {$content}\n";
-            } elseif (\str_contains($message, '待停止')) {
-                // 待停止信息：黄色
-                $content = self::ANSI_YELLOW . $message . self::ANSI_RESET;
-                echo "  {$tag} {$content}\n";
-            } else {
-                // 其他信息：蓝色
-                $content = self::ANSI_BLUE . $message . self::ANSI_RESET;
-                echo "    {$content}\n";
-            }
         }
     }
 

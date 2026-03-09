@@ -324,7 +324,7 @@ class MasterProcess
         if (\function_exists('pcntl_signal')) {
             \pcntl_async_signals(true);
 
-            // SIGTERM / SIGINT: 优雅停止（带控制台输出）
+            // SIGTERM / SIGINT: 优雅停止（统一走 IPC 停机通道）
             \pcntl_signal(SIGTERM, function () {
                 $this->log(__('收到 SIGTERM 信号，开始优雅停止...'));
                 $this->stopWithProgress('SIGTERM');
@@ -376,29 +376,21 @@ class MasterProcess
     }
 
     /**
-     * 停止 Master（带控制台进度输出，用于信号处理）
+     * 停止 Master（用于信号处理，统一走 IPC 停机通道）
      */
     public function stopWithProgress(string $signal): void
     {
         $this->running = false;
-        
-        // 前台模式时输出停止进度
-        if ($this->frontend) {
-            echo "\n";
-            echo "  ╔══════════════════════════════════════════════════════════════╗\n";
-            echo "  ║  收到 {$signal} 信号，开始优雅停止...                          ║\n";
-            echo "  ╚══════════════════════════════════════════════════════════════╝\n";
-            
-            // 设置 Orchestrator 输出到控制台
-            $this->orchestrator?->setConsoleProgressEnabled(true);
+
+        if ($this->stopWithProgressViaIpc($signal)) {
+            return;
         }
-        
+
+        if ($this->frontend) {
+            self::ipcMsg("本地 IPC 停机通道不可用，回退为直接停止流程（signal={$signal}）", 'error');
+        }
+
         $this->orchestrator?->stopAll($signal);
-        $this->orchestrator?->stop();
-        
-        if ($this->frontend) {
-            echo "  ✓ Master 退出流程已完成（进程即将退出）\n";
-        }
     }
 
     /**
@@ -537,6 +529,123 @@ class MasterProcess
         $tag = self::ANSI_BLUE . '[IPC]' . self::ANSI_RESET;
         $content = $color . $message . self::ANSI_RESET;
         echo "  {$tag} {$content}\n";
+    }
+
+    /**
+     * 停机进度消息类型判定。
+     */
+    protected static function classifyStopProgressMessage(string $message): string
+    {
+        if (\str_contains($message, '✓')
+            || \str_contains($message, '已退出')
+            || \str_contains($message, '已断开')
+            || \str_contains($message, '排水完成')) {
+            return 'success';
+        }
+
+        if (\str_contains($message, '失败')
+            || \str_contains($message, '错误')
+            || \str_contains($message, '超时')) {
+            return 'error';
+        }
+
+        if (\str_contains($message, 'SHUTDOWN')
+            || \str_contains($message, '通知子进程退出')
+            || \str_contains($message, '强制')
+            || \str_contains($message, '校验子进程退出')
+            || \str_contains($message, 'Master 即将退出')
+            || \str_contains($message, 'Stopping')) {
+            return 'stop';
+        }
+
+        if (\str_contains($message, 'DRAIN')
+            || \str_contains($message, '排水')
+            || \str_contains($message, '等待排水')
+            || \str_contains($message, '阶段')) {
+            return 'drain';
+        }
+
+        return 'info';
+    }
+
+    /**
+     * 输出统一的 IPC 停机进度。
+     */
+    protected static function renderStopProgress(string $message): void
+    {
+        self::ipcMsg($message, self::classifyStopProgressMessage($message));
+    }
+
+    /**
+     * 信号停止时，自连本地控制端口并复用 IPC 停机流程。
+     */
+    private function stopWithProgressViaIpc(string $signal): bool
+    {
+        $server = $this->orchestrator?->getControlServer();
+        if ($server === null || $this->controlPort <= 0) {
+            return false;
+        }
+
+        $errno = 0;
+        $errstr = '';
+        $conn = @\stream_socket_client("tcp://127.0.0.1:{$this->controlPort}", $errno, $errstr, 3);
+        if (!$conn) {
+            return false;
+        }
+
+        $written = @\fwrite($conn, ControlMessage::command(ControlMessage::ACTION_STOP));
+        if ($written === false || $written === 0) {
+            @\fclose($conn);
+            return false;
+        }
+
+        \stream_set_blocking($conn, false);
+        \stream_set_timeout($conn, 0);
+
+        $deadline = \microtime(true) + 20.0;
+        $buffer = '';
+        $lastProgress = '';
+
+        if ($this->frontend) {
+            self::ipcMsg("收到 {$signal}，已切换到统一 IPC 停机流程", 'stop');
+        }
+
+        while (\microtime(true) < $deadline) {
+            $server->poll(0, 100000);
+
+            $chunk = @\fread($conn, 4096);
+            if ($chunk !== false && $chunk !== '') {
+                $buffer .= $chunk;
+                foreach (ControlMessage::extractMessages($buffer) as $msg) {
+                    if (($msg['type'] ?? '') !== ControlMessage::TYPE_COMMAND_RESULT) {
+                        continue;
+                    }
+
+                    $message = (string) ($msg['message'] ?? '');
+                    if ($message === '' || $message === $lastProgress) {
+                        continue;
+                    }
+
+                    if ($this->frontend) {
+                        self::renderStopProgress($message);
+                    }
+                    $lastProgress = $message;
+                }
+            }
+
+            if (\feof($conn)) {
+                @\fclose($conn);
+                return true;
+            }
+        }
+
+        @\fclose($conn);
+
+        if ($this->frontend) {
+            self::ipcMsg("等待本地 IPC 停机进度超时（signal={$signal}）", 'error');
+        }
+
+        return false;
     }
 
     /**
