@@ -860,12 +860,13 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $details = $resolveService->getDnsDetails($domain);
 
         $records = \is_array($details['records'] ?? null) ? $details['records'] : [];
-        $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, false);
+        // 查询 DNS 时：查到什么就入池；本机/非本机只影响标记，不影响是否入池
+        $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, true);
 
         // 双保险：再用实时 DNS 查询补写一次池子，防止第三方接口返回不全或失败
         $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
         if ($liveRecords !== []) {
-            $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
+            $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, true);
             $poolSync['added'] += (int)($liveSync['added'] ?? 0);
             $poolSync['marked_non_local'] += (int)($liveSync['marked_non_local'] ?? 0);
             $poolSync['skipped'] += (int)($liveSync['skipped'] ?? 0);
