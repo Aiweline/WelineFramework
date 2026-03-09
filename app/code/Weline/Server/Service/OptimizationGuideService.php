@@ -276,10 +276,10 @@ class OptimizationGuideService
                         'title' => __('自动申请证书'),
                         'description' => __("使用 Let's Encrypt 自动申请免费证书"),
                         'commands' => [
-                            __('查看证书状态') => 'php bin/w server:ssl:auto',
-                            __('申请新证书') => 'php bin/w server:ssl:auto request -d example.com -e admin@example.com',
-                            __('同步网站域名') => 'php bin/w server:ssl:auto sync -e admin@example.com',
-                            __('续签到期证书') => 'php bin/w server:ssl:auto renew',
+                            __('查看证书状态') => 'php bin/w ssl:auto',
+                            __('申请新证书') => 'php bin/w ssl:auto request -d localhost -e admin@localhost',
+                            __('同步网站域名') => 'php bin/w ssl:auto sync -e admin@example.com',
+                            __('续签到期证书') => 'php bin/w ssl:auto renew',
                         ],
                     ],
                     'commands' => [
@@ -810,6 +810,6 @@ INI,
      */
     public function getDocumentUrl(): string
     {
-        return "/backend/server/optimization-guide";
+        return "/weline_server/backend/optimization-guide";
     }
 }

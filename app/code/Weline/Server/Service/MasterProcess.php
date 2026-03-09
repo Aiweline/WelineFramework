@@ -219,40 +219,43 @@ class MasterProcess
     public function run(): void
     {
         $this->log(__('启动 Master 进程...'));
-        
-        // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
-        $this->registerMasterPid();
+        try {
+            // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
+            $this->registerMasterPid();
 
-        // 初始化控制端口
-        $this->controlPort = Processer::findAvailablePort(19980);
-        $this->log(__('  控制端口: %{1}', [$this->controlPort]));
+            // 初始化控制端口
+            $this->controlPort = Processer::findAvailablePort(19980);
+            $this->log(__('  控制端口: %{1}', [$this->controlPort]));
 
-        // 构建 ServiceContext
-        $this->context = $this->buildContext();
+            // 构建 ServiceContext
+            $this->context = $this->buildContext();
 
-        // 创建 Orchestrator
-        $this->orchestrator = new ServiceOrchestrator();
-        $this->orchestrator->loadProviders();
+            // 创建 Orchestrator
+            $this->orchestrator = new ServiceOrchestrator();
+            $this->orchestrator->loadProviders();
 
-        // 注册信号处理
-        $this->registerSignalHandlers();
+            // 注册信号处理
+            $this->registerSignalHandlers();
 
-        // 启动所有服务
-        $this->log(__('正在启动子进程...'));
-        $this->orchestrator->startAll($this->context);
-        $this->log(__('子进程启动完成'));
+            // 启动所有服务
+            $this->log(__('正在启动子进程...'));
+            $this->orchestrator->startAll($this->context);
+            $this->log(__('子进程启动完成'));
 
-        // 释放启动锁（允许其他进程检测服务器状态或重新启动）
-        $this->releaseStartupLock();
+            // 释放启动锁（允许其他进程检测服务器状态或重新启动）
+            $this->releaseStartupLock();
 
-        // 保存 Master 信息
-        $this->saveMasterInfo();
+            // 保存 Master 信息
+            $this->saveMasterInfo();
 
-        // 进入主循环
-        $this->log(__('Master 进入主循环，监控子进程...'));
-        $this->orchestrator->runLoop();
+            // 进入主循环
+            $this->log(__('Master 进入主循环，监控子进程...'));
+            $this->orchestrator->runLoop();
 
-        $this->log(__('Master 主循环结束'));
+            $this->log(__('Master 主循环结束'));
+        } finally {
+            $this->unregisterMasterPid();
+        }
     }
     
     /**
@@ -268,6 +271,16 @@ class MasterProcess
         
         Processer::setPid($masterName, $masterPid);
         $this->log(__('Master PID %{1} 已注册到索引', [$masterPid]));
+    }
+
+    /**
+     * 从进程索引移除 Master PID。
+     */
+    private function unregisterMasterPid(): void
+    {
+        $masterName = '--name=' . self::getMasterProcessName($this->instanceName);
+        Processer::removePidFile($masterName);
+        $this->log(__('Master PID 索引已移除'));
     }
 
     /**
@@ -372,7 +385,7 @@ class MasterProcess
         if ($this->frontend) {
             echo "\n";
             echo "  ╔══════════════════════════════════════════════════════════════╗\n";
-            echo "  ║  收到 {$signal} 信号，开始优雅停止...                        ║\n";
+            echo "  ║  收到 {$signal} 信号，开始优雅停止...                          ║\n";
             echo "  ╚══════════════════════════════════════════════════════════════╝\n";
             
             // 设置 Orchestrator 输出到控制台
@@ -383,7 +396,7 @@ class MasterProcess
         $this->orchestrator?->stop();
         
         if ($this->frontend) {
-            echo "  ✓ Master 已退出\n";
+            echo "  ✓ Master 退出流程已完成（进程即将退出）\n";
         }
     }
 

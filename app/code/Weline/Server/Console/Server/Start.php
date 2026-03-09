@@ -239,9 +239,9 @@ class Start extends CommandAbstract
                 $this->printer->error($sslResult['message']);
                 return;
             }
-            $sslCert = $sslResult['cert_path'];
-            $sslKey = $sslResult['key_path'];
-            $sslEnabled = true;
+            $sslCert = $sslResult['cert_path'] ?? '';
+            $sslKey = $sslResult['key_path'] ?? '';
+            $sslEnabled = (bool) ($sslResult['ssl_enabled'] ?? true);
             // 默认 80 且启用 HTTPS 时使用 443
             if ($port === self::DEFAULT_PORT) {
                 $port = self::DEFAULT_PORT_HTTPS;
@@ -1274,6 +1274,7 @@ class Start extends CommandAbstract
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
         $host = $config['host'] ?? '127.0.0.1';
+        $syncDomain = $this->resolveSslDomainForSync($host, (string)($config['ssl_domain'] ?? ''));
         
         // 智能判断是否为本地/内网环境（127.x, 10.x, 172.16-31.x, 192.168.x, localhost, *.local 等）
         $needsLocalCert = $sslService->needsSelfSignedCertificate($host);
@@ -1283,18 +1284,35 @@ class Start extends CommandAbstract
             $certPath = $config['ssl_cert'];
             $keyPath = $config['ssl_key'];
             
-            if (!\is_file($certPath)) {
-                return ['success' => false, 'message' => __('SSL 证书文件不存在：%{1}', [$certPath])];
+            if (!\is_file($certPath) || !\is_file($keyPath)) {
+                // 本地/内网环境：证书文件不存在时尝试自动生成，而不是直接报错
+                if ($needsLocalCert) {
+                    $config['ssl_cert'] = '';
+                    $config['ssl_key'] = '';
+                    // 清除后 fall through 到下方 ensureCertificate 逻辑
+                } else {
+                    if (!\is_file($certPath)) {
+                        return ['success' => false, 'message' => __('SSL 证书文件不存在：%{1}', [$certPath])];
+                    }
+                    if (!\is_file($keyPath)) {
+                        return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}', [$keyPath])];
+                    }
+                }
             }
-            if (!\is_file($keyPath)) {
-                return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}', [$keyPath])];
-            }
-            
-            // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
-            if ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
-                $config['ssl_cert'] = '';
-                $config['ssl_key'] = '';
-            } else {
+            if (\is_file($certPath) && \is_file($keyPath)) {
+                // 本地/内网环境：仅使用适用于当前 host 的证书，否则触发自动签发
+                if ($needsLocalCert && !$sslService->certificateMatchesHost($certPath, $host)) {
+                    $config['ssl_cert'] = '';
+                    $config['ssl_key'] = '';
+                } else {
+                // 框架级同步：正在使用的本地/手动证书也必须入库，确保后台证书管理可见。
+                $sslService->syncCertificateRecordFromFiles(
+                    $syncDomain,
+                    $certPath,
+                    $keyPath,
+                    0,
+                    true
+                );
                 $certInfo = $sslService->parseCertificate($certPath);
                 return [
                     'success' => true,
@@ -1304,6 +1322,7 @@ class Start extends CommandAbstract
                     'expires_at' => $certInfo['expires_at'] ?? '',
                     'is_new' => false,
                 ];
+                }
             }
         }
         
@@ -1327,8 +1346,23 @@ class Start extends CommandAbstract
         $email = Env::get('admin_email', 'admin@' . $domain);
         
         $result = $sslService->ensureCertificate($domain, $webroot, $email);
-        
         return $result;
+    }
+
+    /**
+     * 统一 SSL 入库域名：回环地址固定归一为 localhost，其它按配置域名/host。
+     */
+    protected function resolveSslDomainForSync(string $host, string $configuredDomain = ''): string
+    {
+        $configuredDomain = \strtolower(\trim($configuredDomain));
+        if ($configuredDomain !== '') {
+            return $configuredDomain;
+        }
+        $host = \strtolower(\trim($host));
+        if ($host === '127.0.0.1' || $host === '::1') {
+            return 'localhost';
+        }
+        return $host;
     }
     
     /**

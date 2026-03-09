@@ -1,0 +1,281 @@
+<?php
+$listUrl = $this->getBackendUrl('*/backend/server-manager/ssl-list');
+$domainPoolUrl = $this->getBackendUrl('*/backend/server-manager/ssl-domain-pool');
+$requestUrl = $this->getBackendUrl('*/backend/server-manager/ssl-request');
+$renewUrl = $this->getBackendUrl('*/backend/server-manager/ssl-renew');
+$toggleHttpsUrl = $this->getBackendUrl('*/backend/server-manager/ssl-toggle-https');
+$deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
+?>
+
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><?= __('SSL证书管理') ?></h5>
+        <div>
+            <button class="btn btn-sm btn-outline-secondary" id="pb-ssl-domain-refresh"><?= __('刷新域名池') ?></button>
+            <button class="btn btn-sm btn-outline-primary" id="pb-ssl-refresh"><?= __('刷新证书') ?></button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <select class="form-select" id="pb-ssl-domain">
+                    <option value=""><?= __('请选择域名池中的域名') ?></option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <input class="form-control" id="pb-ssl-email" placeholder="<?= __('联系邮箱') ?>">
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" id="pb-ssl-provider">
+                    <option value="letsencrypt">Let's Encrypt</option>
+                    <option value="litessl">LiteSSL</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-success w-100" id="pb-ssl-request-btn"><?= __('申请证书') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table mb-0 align-middle">
+                <thead>
+                <tr>
+                    <th><?= __('域名') ?></th>
+                    <th><?= __('状态') ?></th>
+                    <th><?= __('HTTPS') ?></th>
+                    <th><?= __('到期时间') ?></th>
+                    <th class="text-end"><?= __('操作') ?></th>
+                </tr>
+                </thead>
+                <tbody id="pb-ssl-body">
+                <tr>
+                    <td colspan="5" class="text-center text-muted"><?= __('正在加载...') ?></td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var listUrl = '<?= $listUrl ?>';
+    var domainPoolUrl = '<?= $domainPoolUrl ?>';
+    var requestUrl = '<?= $requestUrl ?>';
+    var renewUrl = '<?= $renewUrl ?>';
+    var toggleHttpsUrl = '<?= $toggleHttpsUrl ?>';
+    var deleteUrl = '<?= $deleteUrl ?>';
+    var bodyEl = document.getElementById('pb-ssl-body');
+    var refreshBtn = document.getElementById('pb-ssl-refresh');
+    var domainRefreshBtn = document.getElementById('pb-ssl-domain-refresh');
+    var requestBtn = document.getElementById('pb-ssl-request-btn');
+    var domainEl = document.getElementById('pb-ssl-domain');
+    var emailEl = document.getElementById('pb-ssl-email');
+    var providerEl = document.getElementById('pb-ssl-provider');
+
+    function encodeBody(payload) {
+        return Object.keys(payload).map(function (key) {
+            return encodeURIComponent(key) + '=' + encodeURIComponent(payload[key]);
+        }).join('&');
+    }
+
+    function post(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: encodeBody(payload),
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        });
+    }
+
+    function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = String(value || '');
+        return div.innerHTML;
+    }
+
+    function loadDomainPool() {
+        fetch(domainPoolUrl, {
+            method: 'GET',
+            headers: {'Accept': 'application/json'},
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        }).then(function (result) {
+            if (!result.success) {
+                BackendToast.warning(result.message || '<?= __('域名池加载失败') ?>');
+                return;
+            }
+            var rows = Array.isArray(result.data) ? result.data : [];
+            var options = ['<option value=""><?= __('请选择域名池中的域名') ?></option>'];
+            rows.forEach(function (row) {
+                var domain = row.domain || '';
+                if (!domain) {
+                    return;
+                }
+                var rootDomain = row.root_domain || '';
+                var httpsStatus = row.https_status || '';
+                var label = domain;
+                if (rootDomain && rootDomain !== domain) {
+                    label += ' (' + rootDomain + ')';
+                }
+                if (httpsStatus) {
+                    label += ' [' + httpsStatus + ']';
+                }
+                options.push('<option value="' + escapeHtml(domain) + '">' + escapeHtml(label) + '</option>');
+            });
+            domainEl.innerHTML = options.join('');
+        }).catch(function () {
+            BackendToast.error('<?= __('域名池请求失败') ?>');
+        });
+    }
+
+    function renderRows(items) {
+        if (!Array.isArray(items) || !items.length) {
+            bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted"><?= __('暂无证书数据') ?></td></tr>';
+            return;
+        }
+        bodyEl.innerHTML = items.map(function (item) {
+            var domain = item.domain || '-';
+            var status = item.status || '-';
+            var expiresAt = item.expires_at || '-';
+            var checked = item.https_enabled ? 'checked' : '';
+            var normalizedDomain = String(domain).toLowerCase();
+            var isProtectedDomain = normalizedDomain === 'localhost' || normalizedDomain === '127.0.0.1' || normalizedDomain === '::1';
+            var statusLower = String(status).toLowerCase();
+            var statusClass = 'bg-secondary';
+            if (statusLower === 'active') {
+                statusClass = 'bg-success';
+            } else if (statusLower === 'pending') {
+                statusClass = 'bg-warning';
+            } else if (statusLower === 'expired' || statusLower === 'error') {
+                statusClass = 'bg-danger';
+            }
+            var deleteDisabledAttr = isProtectedDomain ? 'disabled title="<?= __('本地域名证书不允许删除') ?>"' : '';
+            var deleteBtnClass = 'btn btn-sm btn-outline-danger' + (isProtectedDomain ? ' disabled' : '');
+            var safeDomain = escapeHtml(domain);
+            var safeStatus = escapeHtml(status);
+            var safeExpiresAt = escapeHtml(expiresAt);
+            return '' +
+                '<tr>' +
+                '<td><strong>' + safeDomain + '</strong></td>' +
+                '<td><span class="badge ' + statusClass + '">' + safeStatus + '</span></td>' +
+                '<td><input type="checkbox" data-op="toggle" data-domain="' + safeDomain + '" ' + checked + '></td>' +
+                '<td>' + safeExpiresAt + '</td>' +
+                '<td class="text-end">' +
+                '<button class="btn btn-sm btn-outline-primary me-1" data-op="renew" data-domain="' + safeDomain + '"><?= __('续签') ?></button>' +
+                '<button class="' + deleteBtnClass + '" data-op="delete" data-domain="' + safeDomain + '" ' + deleteDisabledAttr + '><?= __('删除') ?></button>' +
+                '</td>' +
+                '</tr>';
+        }).join('');
+    }
+
+    function loadList() {
+        fetch(listUrl, {
+            method: 'GET',
+            headers: {'Accept': 'application/json'},
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        }).then(function (result) {
+            if (!result.success) {
+                BackendToast.warning(result.message || '<?= __('证书列表加载失败') ?>');
+                bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-danger"><?= __('加载失败') ?></td></tr>';
+                return;
+            }
+            renderRows(result.data || []);
+        }).catch(function () {
+            BackendToast.error('<?= __('证书列表请求失败') ?>');
+        });
+    }
+
+    function applyRequest() {
+        var domain = (domainEl.value || '').trim();
+        var email = (emailEl.value || '').trim();
+        var provider = providerEl.value || 'letsencrypt';
+        if (!domain || !email) {
+            BackendToast.warning('<?= __('请先从域名池选择域名并填写邮箱') ?>');
+            return;
+        }
+        post(requestUrl, {domain: domain, email: email, provider: provider}).then(function (result) {
+            if (result.success) {
+                BackendToast.success(result.message || '<?= __('申请成功') ?>');
+                loadList();
+            } else {
+                BackendToast.error(result.message || '<?= __('申请失败') ?>');
+            }
+        }).catch(function () {
+            BackendToast.error('<?= __('申请请求失败') ?>');
+        });
+    }
+
+    bodyEl.addEventListener('click', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        var op = target.getAttribute('data-op');
+        var domain = target.getAttribute('data-domain');
+        if (!op || !domain) return;
+        if (op === 'renew') {
+            post(renewUrl, {domain: domain}).then(function (result) {
+                if (result.success) {
+                    BackendToast.success(result.message || '<?= __('续签成功') ?>');
+                    loadList();
+                } else {
+                    BackendToast.warning(result.message || '<?= __('续签失败') ?>');
+                }
+            });
+            return;
+        }
+        if (op === 'delete') {
+            var normalizedDomain = String(domain).toLowerCase();
+            if (normalizedDomain === 'localhost' || normalizedDomain === '127.0.0.1' || normalizedDomain === '::1') {
+                BackendToast.warning('<?= __('本地域名证书不允许删除') ?>');
+                return;
+            }
+            BackendConfirm.show('<?= __('确认删除该证书吗？') ?>').then(function (confirmed) {
+                if (!confirmed) return;
+                post(deleteUrl, {domain: domain}).then(function (result) {
+                    if (result.success) {
+                        BackendToast.success(result.message || '<?= __('删除成功') ?>');
+                        loadList();
+                    } else {
+                        BackendToast.warning(result.message || '<?= __('删除失败') ?>');
+                    }
+                });
+            });
+        }
+    });
+
+    bodyEl.addEventListener('change', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLInputElement)) return;
+        if (target.getAttribute('data-op') !== 'toggle') return;
+        var domain = target.getAttribute('data-domain');
+        if (!domain) return;
+        post(toggleHttpsUrl, {domain: domain, enabled: target.checked ? 1 : 0}).then(function (result) {
+            if (result.success) {
+                BackendToast.success(result.message || '<?= __('HTTPS状态已更新') ?>');
+            } else {
+                BackendToast.warning(result.message || '<?= __('更新失败') ?>');
+                target.checked = !target.checked;
+            }
+        }).catch(function () {
+            target.checked = !target.checked;
+            BackendToast.error('<?= __('请求失败') ?>');
+        });
+    });
+
+    refreshBtn.addEventListener('click', loadList);
+    domainRefreshBtn.addEventListener('click', loadDomainPool);
+    requestBtn.addEventListener('click', applyRequest);
+    loadDomainPool();
+    loadList();
+})();
+</script>

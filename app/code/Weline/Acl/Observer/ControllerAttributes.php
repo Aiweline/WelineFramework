@@ -541,6 +541,13 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
             pp(implode("\n", $errorMessages));
         }
+
+        // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
+        $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
+        if (empty($deduplicatedAcls)) {
+            unset($this->pending_class_level_acls[$module]);
+            return;
+        }
         
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
@@ -692,6 +699,13 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
             pp(implode("\n", $errorMessages));
         }
+
+        // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
+        $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
+        if (empty($deduplicatedAcls)) {
+            unset($this->pending_method_level_acls[$module]);
+            return;
+        }
         
         $this->acl->reset()->clearData();
         $this->acl->beginTransaction();
@@ -733,6 +747,41 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         
         // 清空已保存的方法级别权限
         unset($this->pending_method_level_acls[$module]);
+    }
+
+    /**
+     * 排除来源于 menu.xml 的菜单资源，避免被控制器 ACL 覆盖。
+     *
+     * @param array<int, array<string, mixed>> $acls
+     * @return array<int, array<string, mixed>>
+     */
+    private function excludeMenuXmlSources(array $acls): array
+    {
+        if (empty($acls)) {
+            return $acls;
+        }
+
+        $sourceIds = array_values(array_filter(array_map(static fn(array $acl): string => (string)($acl['source_id'] ?? ''), $acls)));
+        if (empty($sourceIds)) {
+            return $acls;
+        }
+
+        $existingMenuXml = $this->acl->reset()
+            ->where(Acl::schema_fields_SOURCE_ID, $sourceIds, 'in')
+            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
+            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_menu_xml)
+            ->fields(Acl::schema_fields_SOURCE_ID)
+            ->select()
+            ->fetchArray();
+        $excludeSourceIds = array_column($existingMenuXml, Acl::schema_fields_SOURCE_ID);
+        if (empty($excludeSourceIds)) {
+            return $acls;
+        }
+
+        return array_values(array_filter(
+            $acls,
+            static fn(array $acl): bool => !in_array((string)($acl['source_id'] ?? ''), $excludeSourceIds, true)
+        ));
     }
 
     /**

@@ -5,8 +5,7 @@
  * @var \Weline\Framework\View\Template $block
  * @var array $apiDocs
  */
-$block->setTitle(__('WLS API 文档'));
-$monitorUrl = $block->getUrl('backend/server/server-monitor');
+$monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 ?>
 
 <div class="api-doc-page">

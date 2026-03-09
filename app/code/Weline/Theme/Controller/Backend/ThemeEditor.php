@@ -17,6 +17,7 @@ use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
+use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Meta\Model\Meta;
 
@@ -2419,6 +2420,8 @@ HTML;
             
             // 删除 token
             $result = $this->previewTokenService->deleteToken($token);
+            PreviewManager::clearPreviewConfig();
+            $this->session->delete('preview_auto_login');
 
             // 构建编辑器返回 URL
             $editorUrl = $this->_url->getBackendUrl('theme-editor/index');
@@ -2513,6 +2516,8 @@ HTML;
 
             // 3. 删除预览 token
             $this->previewTokenService->deleteToken($token);
+            PreviewManager::clearPreviewConfig();
+            $this->session->delete('preview_auto_login');
 
             // 4. 获取前端首页 URL（非预览模式）
             $frontendUrl = $this->request->getBaseHost() . '/';
