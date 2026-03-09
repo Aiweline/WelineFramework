@@ -10,7 +10,8 @@
  */
 $accounts = $accounts ?? [];
 $websites = $websites ?? [];
-$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
+$purchaseDialogAssetVersion = (string) (@filemtime(\dirname(__DIR__, 3) . '/statics/backend/domain-purchase-dialog.js') ?: \time());
+$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js') . '?v=' . $purchaseDialogAssetVersion;
 $activeAccounts = [];
 foreach ($accounts as $account) {
     if (($account['status'] ?? '') !== 'active') {
@@ -322,6 +323,10 @@ function submitPurchase() {
     }
 
     ensurePurchaseDialogLoaded().then(function() {
+        var currentAccountId = String(accountId || '');
+        var currentAccount = (<?= json_encode($activeAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?> || []).find(function(item) {
+            return String(item.account_id || '') === currentAccountId;
+        }) || null;
         return window.WelineDomainPurchaseDialog.open({
             labels: {
                 title: '<?= __('购买域名') ?>',
@@ -358,6 +363,8 @@ function submitPurchase() {
             defaults: {
                 dnsChoice: 'follow_registrar',
                 cdnChoice: 'follow_registrar',
+                currentAccountId: currentAccount ? String(currentAccount.account_id || '') : '',
+                currentRegistrarCode: currentAccount ? String(currentAccount.registrar_code || '') : '',
                 resolveToLocal: !!(document.getElementById('purchase-auto-resolve') && document.getElementById('purchase-auto-resolve').checked),
                 subdomains: (document.getElementById('purchase-subdomains') || {}).value || '@,www',
                 startLifecycle: true
