@@ -1401,6 +1401,7 @@ class Dispatcher
             return;
         }
         
+        \pcntl_signal(SIGINT, SIG_IGN);
         \pcntl_signal(SIGTERM, function () {
             $this->log('收到 SIGTERM 信号', 'WARN');
             $this->running = false;
