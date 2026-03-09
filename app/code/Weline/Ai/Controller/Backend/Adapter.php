@@ -30,7 +30,7 @@ use Weline\Framework\Acl\Acl;
  * - 适配器状态管理
  * - 适配器扫描和更新
  */
-#[Acl('Weline_Ai::ai_adapter_manager', '场景适配器管理', 'mdi-puzzle', '场景适配器管理', 'Weline_Ai::ai')]
+#[Acl('Weline_Ai::ai_adapter_manager', '场景适配器管理', 'mdi-puzzle', '场景适配器管理', 'Weline_Backend::ai_group')]
 class Adapter extends BackendController
 {
     /**

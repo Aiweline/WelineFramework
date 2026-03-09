@@ -36,7 +36,7 @@ use Weline\Framework\App\Env;
  * - 模型状态管理
  * - 模型收集和更新
  */
-#[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'mdi-robot', 'AI模型管理', 'Weline_Ai::ai')]
+#[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'mdi-robot', 'AI模型管理', 'Weline_Backend::ai_group')]
 class Model extends BackendController
 {
     /**
