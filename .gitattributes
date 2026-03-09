@@ -1,3 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts must use LF (CRLF breaks bash on Linux)
+bin/install.sh text eol=lf
+bin/install.bash text eol=lf
 app/design/WeShop/motor/frontend/assets/statics/fonts/material-symbols-outlined.woff2 filter=lfs diff=lfs merge=lfs -text
