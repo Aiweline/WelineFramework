@@ -87,7 +87,7 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
                     </ul>
                     <?php
                     /**@var \Weline\Acl\Model\Acl $tree */
-                    $getTreeNode = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $tree, array $currentAccesses, callable $getTreeNode, callable $getLiAttr): string
+                    $getTreeNode = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $tree, array $currentAccesses, callable $getTreeNode, callable $getLiAttr): string
                     {
                         $result = '';
                         if ($tree->getSub()) {
@@ -106,7 +106,7 @@ $currentAccesses = $this->getData('current_accesses') ?? [];
                     };
 
                     /**@var \Weline\Acl\Model\Acl $acl */
-                    $getTreeLiAttr = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl $acl, array $currentAccesses): string
+                    $getTreeLiAttr = function(\Weline\Acl\Model\RoleAccess|\Weline\Acl\Model\Acl|\Weline\Acl\Model\AclNode $acl, array $currentAccesses): string
                     {
                         $type = $acl->getType() ? __($acl->getType()) : '';
                         $icon = $acl->getIcon();
