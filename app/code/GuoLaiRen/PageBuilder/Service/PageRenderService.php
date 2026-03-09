@@ -139,8 +139,9 @@ class PageRenderService
         
         // 获取布局配置（通过 LayoutOwnerResolver 统一处理 layout_page_id 和 header/footer 继承）
         // 可视化编辑模式下允许访问草稿状态首页的 header/footer
+        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer，避免页面 DB 为 default 时仍显示 default 头部
         $forBackend = ($mode === self::MODE_VISUAL);
-        $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend);
+        $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
         
         // 获取布局拥有者页面ID（用于可视化编辑时传递给脚本）
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);

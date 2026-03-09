@@ -13,6 +13,15 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '系统通知表')]
 class SystemNotification extends Model
 {
+    public const schema_fields_ID      = 'notification_id';
+    public const schema_fields_title   = 'title';
+    public const schema_fields_is_read = 'is_read';
+    public const schema_fields_content = 'content';
+    public const schema_fields_is_img  = 'is_img';
+    public const schema_fields_is_icon = 'is_icon';
+    public const schema_fields_avatar  = 'avatar';
+
+    /** @deprecated 使用 schema_fields_* */
     public const fields_ID      = 'notification_id';
     public const fields_title   = 'title';
     public const fields_is_read = 'is_read';

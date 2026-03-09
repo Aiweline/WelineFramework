@@ -2202,10 +2202,30 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                             // 执行成功，不需要清空 SQL，让父类处理结果
                         }
                     } catch (\PDOException $e) {
-                        // 如果 prepare 抛出异常（可能是多个命令），回退到 exec()
-                        if (str_contains($e->getMessage(), 'cannot insert multiple commands') || 
-                            str_contains($e->getMessage(), 'multiple commands') ||
-                            ($e->getCode() === '42601')) {
+                        $errorCode = $e->getCode();
+                        $errorMessage = $e->getMessage();
+                        // ON CONFLICT 无匹配约束（42P10）：表可能无联合主键/唯一约束，回退为普通 INSERT
+                        if ($errorCode == '42P10' ||
+                            str_contains($errorMessage, 'there is no unique or exclusion constraint matching the ON CONFLICT specification') ||
+                            str_contains($errorMessage, 'ON CONFLICT specification')) {
+                            $sqlWithoutConflict = preg_replace('/\s+ON CONFLICT\s+\([^)]+\)\s+(?:DO UPDATE SET|DO NOTHING)[^;]*/i', '', $this->sql);
+                            $sqlWithoutConflict = preg_replace('/\s+RETURNING\s+[^;]+/i', '', $sqlWithoutConflict);
+                            $this->sql = trim($sqlWithoutConflict);
+                            $this->PDOStatement = null;
+                            $testStmt = $this->preparePgsql($this->sql);
+                            if ($testStmt === false) {
+                                throw new \PDOException(
+                                    __('无法回退到普通插入：SQL 准备失败'),
+                                    (int)$errorCode,
+                                    $e
+                                );
+                            }
+                            $this->PDOStatement = $testStmt;
+                            $this->PDOStatement->execute($this->bound_values);
+                        } elseif (str_contains($errorMessage, 'cannot insert multiple commands') ||
+                            str_contains($errorMessage, 'multiple commands') ||
+                            ($errorCode === '42601')) {
+                            // 如果 prepare 抛出异常（可能是多个命令），回退到 exec()
                             $sqlWithBounds = $this->getSqlWithBounds($this->sql);
                             $result = $this->execPgsql($sqlWithBounds);
                             if ($result === false) {
