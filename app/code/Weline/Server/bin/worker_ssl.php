@@ -627,10 +627,9 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
     
     WlsLogger::info_("SO_REUSEPORT socket 创建成功，Worker #{$workerId} 监听 {$host}:{$port}");
     
-} elseif ($deferSsl && !$isWindows && \function_exists('socket_create')) {
-    // 方案2b-socket：仅 Linux，延迟 SSL + socket 扩展 + SO_REUSEADDR，避免 Address already in use（含重试）；Windows 不改动
-    // 用于 TCP 透传架构：先监听纯 TCP，accept 后根据首包启用 SSL 或 HTTP 重定向
-    // 与 Windows 一致：不反复重试，避免关闭后重启时长时间等待
+} elseif ($deferSsl && $useReusePort && !$isWindows && \function_exists('socket_create')) {
+    // 方案2b-socket：仅 SO_REUSEPORT 直连模式才用 socket 扩展（socket_export_stream + stream_socket_accept 在 Dispatcher 模式下不可靠）
+    // Dispatcher 模式（$useReusePort=false）直接 fallthrough 到方案2b 的 stream_socket_server，保证 stream_socket_accept 正常工作
     $maxBindRetries = 1;
     $bindRetryDelay = 0;
     $rawSocket = false;
@@ -1244,6 +1243,9 @@ while (true) {
         if ($conn) {
             $connId = \get_resource_id($conn);
             $peerName = @\stream_socket_get_name($conn, true);
+            if ($isDev) {
+                WlsLogger::info_("新连接: {$peerName} (connId: {$connId})");
+            }
             
             // H12: 延迟 SSL 模式下完全非阻塞处理（解决 Windows SSL 握手慢问题）
             if ($deferSsl) {
@@ -1532,9 +1534,8 @@ while (true) {
         
         $requestBuffers[$connId] = ($requestBuffers[$connId] ?? '') . $data;
         
-        // 前端模式：在接收到请求的第一行时立即输出日志
-        if ($isFrontend && !isset($requestLogged[$connId])) {
-            // 尝试从缓冲区中提取请求行（第一行）
+        // 开发模式：在接收到请求的第一行时立即输出路径日志（前台直接输出，后台通过 IPC 汇聚到 Master）
+        if ($isDev && !isset($requestLogged[$connId])) {
             $firstLineEnd = \strpos($requestBuffers[$connId], "\r\n");
             if ($firstLineEnd !== false) {
                 $requestLine = \substr($requestBuffers[$connId], 0, $firstLineEnd);
@@ -1543,12 +1544,6 @@ while (true) {
                     $uri = \parse_url($matches[2], PHP_URL_PATH) ?? '/';
                     $requestCount++;
                     WlsLogger::info_("→ {$method} {$uri}");
-                    // 立即刷新输出缓冲区
-                    if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                        \fflush(STDOUT);
-                    } elseif (\defined('STDERR') && \is_resource(STDERR)) {
-                        \fflush(STDERR);
-                    }
                     $requestLogged[$connId] = true;
                 }
             }
@@ -1567,8 +1562,8 @@ while (true) {
         unset($requestLogged[$connId]); // 清理标记（如果不存在也不会报错）
         $activeRequests++;
         
-        // 解析请求 URI（用于日志，如果前端模式已输出则跳过）
-        if (!$isFrontend) {
+        // 非开发模式：在请求完整后输出路径日志（开发模式已在接收首行时提前输出）
+        if (!$isDev) {
             $uri = '/';
             if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
                 $uri = \parse_url($matches[1], PHP_URL_PATH) ?? '/';
