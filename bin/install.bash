@@ -313,8 +313,9 @@ install_php_system_deps() {
   return 1
 }
 
-# 查找 pg_config（优先 PATH，其次常见发行版路径）
+# 查找 pg_config（优先 PATH，其次常见发行版路径，最后 find 全局搜索）
 find_pg_config_bin() {
+  export PATH="/usr/bin:/usr/local/bin:${PATH:-}"
   if command -v pg_config &>/dev/null; then
     command -v pg_config
     return 0
@@ -332,6 +333,8 @@ find_pg_config_bin() {
   for candidate in /usr/lib/postgresql/*/bin/pg_config /usr/pgsql-*/bin/pg_config; do
     [[ -x "$candidate" ]] && { echo "$candidate"; return 0; }
   done
+  candidate="$(find /usr -name 'pg_config' -type f 2>/dev/null | head -1)"
+  [[ -n "$candidate" && -x "$candidate" ]] && { echo "$candidate"; return 0; }
   return 1
 }
 
@@ -350,23 +353,47 @@ ensure_pgsql_build_env_linux() {
   pg_config_bin="$(find_pg_config_bin || true)"
   if [[ -z "$pg_config_bin" ]]; then
     echo "pg_config not found. Installing PostgreSQL development package for PHP build..."
+    hash -r 2>/dev/null || true
+    local installed=0
     if [[ -f /etc/debian_version ]]; then
+      echo "Detected Debian/Ubuntu. Running: sudo apt-get install -y libpq-dev postgresql-client"
       run_apt_update_once || true
-      run_privileged apt-get install -y libpq-dev postgresql-client || true
-    elif [[ -f /etc/redhat-release ]]; then
-      if command -v dnf &>/dev/null; then
-        run_privileged dnf install -y postgresql-devel postgresql || true
-      elif command -v yum &>/dev/null; then
-        run_privileged yum install -y postgresql-devel postgresql || true
+      if run_privileged apt-get install -y libpq-dev postgresql-client; then
+        installed=1
+      else
+        echo "apt-get install failed (see above). Trying alternative package names..." >&2
+        run_privileged apt-get install -y libpq5-dev 2>/dev/null && installed=1 || true
       fi
+    elif [[ -f /etc/redhat-release ]] || [[ -f /etc/rocky-release ]] || [[ -f /etc/almalinux-release ]] || { [[ -f /etc/os-release ]] && grep -qE '^ID="?(centos|rhel|rocky|almalinux|alibaba|tencentos)' /etc/os-release 2>/dev/null; }; then
+      echo "Detected RHEL/CentOS/Rocky. Running: sudo dnf/yum install -y postgresql-devel postgresql"
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y postgresql-devel postgresql && installed=1 || true
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y postgresql-devel postgresql && installed=1 || true
+      fi
+    elif [[ -f /etc/alpine-release ]]; then
+      echo "Detected Alpine. Running: sudo apk add postgresql-dev postgresql-client"
+      run_privileged apk add --no-cache postgresql-dev postgresql-client && installed=1 || true
+    elif [[ -f /etc/os-release ]] && grep -qE '^ID="?(opensuse|suse)' /etc/os-release 2>/dev/null; then
+      echo "Detected OpenSUSE. Running: sudo zypper install -y postgresql-devel"
+      run_privileged zypper install -y postgresql-devel postgresql-client && installed=1 || true
+    else
+      echo "Unknown Linux distro. Cannot auto-install. Checking /etc/os-release..." >&2
+      [[ -f /etc/os-release ]] && grep -E '^ID=|^VERSION_ID=' /etc/os-release 2>/dev/null | head -5 >&2 || true
     fi
+    hash -r 2>/dev/null || true
     pg_config_bin="$(find_pg_config_bin || true)"
+    if [[ -z "$pg_config_bin" && "$installed" -eq 1 ]]; then
+      echo "Package installed but pg_config still not found. Searching..." >&2
+    fi
   fi
 
   if [[ -z "$pg_config_bin" ]]; then
-    echo "ERROR: pg_config still not found. Install PostgreSQL dev package first." >&2
-    echo "  Debian/Ubuntu: sudo apt-get install -y libpq-dev postgresql-client" >&2
-    echo "  RHEL/CentOS:   sudo dnf install -y postgresql-devel postgresql" >&2
+    echo "ERROR: pg_config still not found after auto-install attempt." >&2
+    echo "  Please run ONE of these commands manually, then re-run: bash bin/install.sh --rebuild-php" >&2
+    echo "    Debian/Ubuntu:  sudo apt-get update && sudo apt-get install -y libpq-dev postgresql-client" >&2
+    echo "    RHEL/CentOS:    sudo dnf install -y postgresql-devel postgresql" >&2
+    echo "    Alpine:         sudo apk add postgresql-dev postgresql-client" >&2
     return 1
   fi
 
@@ -671,6 +698,43 @@ get_installed_php_major_minor() {
   fi
 }
 
+# 检测 PHP 是否包含框架所需扩展（含 pdo_pgsql），避免重复编译
+php_has_required_extensions() {
+  local exe="$1"
+  [[ -z "$exe" ]] || [[ ! -x "$exe" ]] && return 1
+  local modules
+  modules=$("$exe" -m 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)
+  [[ -z "$modules" ]] && return 1
+  local -a required=(pdo pdo_pgsql sockets mbstring json dom fileinfo intl)
+  local ext
+  for ext in "${required[@]}"; do
+    echo "$modules" | grep -qE "^${ext}$" || return 1
+  done
+  return 0
+}
+
+# Linux: 查找系统 PHP（PATH、/usr/bin/php、/usr/bin/php8.4 等）
+find_system_php_linux() {
+  local want_ver="$1"
+  local candidate
+  for candidate in $(command -v php 2>/dev/null) \
+    /usr/bin/php /usr/bin/php-fpm \
+    /usr/bin/php"${want_ver}" /usr/bin/php"${want_ver//./}" \
+    /usr/local/bin/php; do
+    [[ -z "$candidate" ]] && continue
+    [[ -x "$candidate" ]] || continue
+    local ver
+    ver=$(get_installed_php_major_minor "$candidate")
+    [[ -z "$ver" ]] && continue
+    [[ "$ver" == "$want_ver" ]] || continue
+    if php_has_required_extensions "$candidate"; then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # ---- PHP ----（Linux：检测 extend/server/php 或编译安装；Mac：仅用 Homebrew 安装，不自行编译）
 install_php() {
   local dest="$SERVER_DIR/php"
@@ -740,6 +804,21 @@ install_php() {
   if [[ "$PATH_ONLY" == true ]]; then
     echo "(--path-only) PHP not found at $dest; add PATH manually if needed."
     return
+  fi
+  # 优先检测系统已有 PHP（含 pdo_pgsql），满足要求则直接使用，无需编译
+  if [[ "$REBUILD_PHP" != true ]]; then
+    local sys_php
+    sys_php="$(find_system_php_linux "$PHP_VERSION" 2>/dev/null || true)"
+    if [[ -n "$sys_php" ]]; then
+      echo "Using existing system PHP (version $PHP_VERSION, with pdo_pgsql): $sys_php"
+      mkdir -p "$dest/bin"
+      ln -sf "$sys_php" "$dest/bin/php"
+      [[ -x "$(dirname "$sys_php")/php-fpm" ]] && ln -sf "$(dirname "$sys_php")/php-fpm" "$dest/bin/php-fpm" 2>/dev/null || true
+      add_to_path "$dest"
+      add_to_path "$dest/bin"
+      echo "Skipping source compilation."
+      return
+    fi
   fi
   echo "Installing PHP $PHP_VERSION from php-src into $dest ..."
   install_php_system_deps
