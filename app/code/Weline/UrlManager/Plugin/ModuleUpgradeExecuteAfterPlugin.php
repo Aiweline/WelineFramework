@@ -156,8 +156,28 @@ class ModuleUpgradeExecuteAfterPlugin
             return;
         }
 
+        // 同一批次按 identify 去重，后出现的路由覆盖前者，避免批内重复键冲突
+        $deduplicatedRows = [];
+        foreach ($batchRows as $row) {
+            $identify = (string)($row[UrlManager::schema_fields_IDENTIFY] ?? '');
+            if ($identify === '') {
+                continue;
+            }
+            $deduplicatedRows[$identify] = $row;
+        }
+        if ($deduplicatedRows === []) {
+            return;
+        }
+
+        $identifies = array_keys($deduplicatedRows);
+        // 先删除旧记录，再批量插入新记录，确保 PostgreSQL 下不会触发唯一键冲突
         $this->urlManager->reset()
-            ->insert($batchRows, UrlManager::schema_fields_IDENTIFY)
+            ->where(UrlManager::schema_fields_IDENTIFY, $identifies, 'IN')
+            ->delete()
+            ->fetch();
+
+        $this->urlManager->reset()
+            ->insert(array_values($deduplicatedRows))
             ->fetch();
     }
 
