@@ -2578,7 +2578,7 @@ const DevToolPanel = (function() {
         const timing = getPerformanceTiming();
         if (timing) {
             const items = [
-                { label: 'WLS处理耗时', value: (typeof window.__WLS_PROCESS_TIME_MS === 'number' ? window.__WLS_PROCESS_TIME_MS : null), unit: 'ms', optional: true },
+                { label: 'WLS处理耗时', value: (function() { try { var nav = performance.getEntriesByType('navigation')[0]; var st = nav && nav.serverTiming; if (st) { var wls = st.find(function(t) { return t.name === 'wls'; }); if (wls) return wls.duration; } } catch(e) {} return null; })(), unit: 'ms', optional: true },
                 { label: 'DNS查询', value: timing.dns, unit: 'ms' },
                 { label: 'TCP连接', value: timing.tcp, unit: 'ms' },
                 { label: '请求发送', value: timing.request, unit: 'ms' },
