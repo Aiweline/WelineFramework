@@ -1461,10 +1461,11 @@ class DomainManagement extends BaseController
             $details = $resolveService->getDnsDetails($domain);
 
             $records = \is_array($details['records'] ?? null) ? $details['records'] : [];
-            $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, false);
+            // 查询 DNS 时：查到的记录都入池；仅用本机 IP 判定 is_local_server。
+            $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, true);
             $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
             if ($liveRecords !== []) {
-                $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
+                $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, true);
                 $poolSync['added'] += (int)($liveSync['added'] ?? 0);
                 $poolSync['marked_non_local'] += (int)($liveSync['marked_non_local'] ?? 0);
                 $poolSync['skipped'] += (int)($liveSync['skipped'] ?? 0);
