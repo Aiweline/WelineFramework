@@ -6,6 +6,7 @@ namespace Weline\Framework\Session;
 
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 /**
  * Session 实现
@@ -89,6 +90,14 @@ class Session implements SessionInterface
      * 请求结束前统一落盘并关闭，避免 302 等提前结束导致 Session 未写入
      */
     public static function flushOnShutdown(): void
+    {
+        self::flushRequestSessions();
+    }
+
+    /**
+     * 请求结束时统一保存本请求内已启动的 Session。
+     */
+    public static function flushRequestSessions(): void
     {
         foreach (self::$instancesForShutdown as $session) {
             if ($session instanceof self) {
@@ -243,10 +252,18 @@ class Session implements SessionInterface
      */
     private function autoPersist(): void
     {
-        if ($this->dirty && $this->sessionId !== '') {
+        if ($this->dirty && $this->sessionId !== '' && $this->shouldAutoPersist()) {
             $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
             $this->dirty = false;
         }
+    }
+
+    /**
+     * WLS 下延迟到请求结束统一保存，避免一个请求内多次 set/delete 触发多次 RPC。
+     */
+    private function shouldAutoPersist(): bool
+    {
+        return !($this->strategy instanceof WlsStrategy);
     }
 
     /**

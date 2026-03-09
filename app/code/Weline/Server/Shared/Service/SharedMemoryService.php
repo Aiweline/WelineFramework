@@ -70,46 +70,53 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
 
     public function exists(string $ns, string $key): bool
     {
-        $value = $this->get($ns, $key);
-        return $value !== null;
+        $resp = $this->client->request(SessionProtocol::CMD_EXISTS, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'key' => $key,
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp) && SessionProtocol::getData($resp) === true;
     }
 
     public function touch(string $ns, string $key, int $ttl): bool
     {
-        if ($key === '') {
-            $resp = $this->client->request(SessionProtocol::CMD_TOUCH, [
-                'ns' => $ns,
-                'sid' => $this->sid($ns),
-                'ttl' => $this->ttl($ttl),
-            ]);
-            return \is_array($resp) && SessionProtocol::isSuccess($resp);
+        $payload = [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'ttl' => $this->ttl($ttl),
+        ];
+        if ($key !== '') {
+            $payload['key'] = $key;
         }
-
-        $value = $this->get($ns, $key);
-        if ($value === null) {
-            return false;
-        }
-        return $this->set($ns, $key, $value, $ttl);
+        $resp = $this->client->request(SessionProtocol::CMD_TOUCH, $payload);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
     }
 
     public function mget(string $ns, array $keys): array
     {
-        $data = [];
-        foreach ($keys as $key) {
-            $data[$key] = $this->get($ns, (string)$key);
+        $normalizedKeys = \array_map(static fn($key): string => (string)$key, $keys);
+        $resp = $this->client->request(SessionProtocol::CMD_MGET, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'keys' => $normalizedKeys,
+        ]);
+        if (!\is_array($resp) || !SessionProtocol::isSuccess($resp)) {
+            return [];
         }
-        return $data;
+
+        $data = SessionProtocol::getData($resp);
+        return \is_array($data) ? $data : [];
     }
 
     public function mset(string $ns, array $kv, int $ttl = 0): bool
     {
-        $all = true;
-        foreach ($kv as $key => $value) {
-            if (!$this->set($ns, (string)$key, $value, $ttl)) {
-                $all = false;
-            }
-        }
-        return $all;
+        $resp = $this->client->request(SessionProtocol::CMD_MSET, [
+            'ns' => $ns,
+            'sid' => $this->sid($ns),
+            'data' => $kv,
+            'ttl' => $this->ttl($ttl),
+        ]);
+        return \is_array($resp) && SessionProtocol::isSuccess($resp);
     }
 
     public function clearNamespace(string $ns): bool

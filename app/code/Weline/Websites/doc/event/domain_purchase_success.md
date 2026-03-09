@@ -15,8 +15,13 @@ $eventData = [
     'data' => [
         'domain' => 'example.com',          // 购买成功的域名
         'order_id' => 123,                   // 购买订单 ID
+        'account_id' => 10,                  // 域名商账号 ID
         'website_id' => 0,                   // 绑定的站点 ID（0=不绑定）
         'auto_create_site' => 'no',          // 是否自动创建站点（yes/no）
+        'resolve_to_local' => true,          // 是否自动解析到当前服务器
+        'subdomains' => ['@', 'www'],        // 自动跟踪的子域名
+        'dns_choice' => 'follow_registrar',  // DNS 策略
+        'cdn_choice' => 'follow_registrar',  // CDN 策略
     ],
 ];
 ```

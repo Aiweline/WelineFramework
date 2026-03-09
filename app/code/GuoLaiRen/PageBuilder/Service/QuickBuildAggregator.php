@@ -91,6 +91,20 @@ class QuickBuildAggregator
         return $eventData['data']['orders'] ?? [];
     }
 
+    public function getDomainLifecycleStatus(string $domain): array
+    {
+        return $this->queryService->execute('saas', 'getDomainLifecycleStatus', [
+            'domain' => $domain,
+        ]);
+    }
+
+    public function processLifecycleOrder(int $orderId): array
+    {
+        return $this->queryService->execute('saas', 'processOrder', [
+            'order_id' => $orderId,
+        ]);
+    }
+
     // ── 以下全部通过统一查询器 (WebsitesQueryProvider) ──
 
     /**
@@ -151,12 +165,18 @@ class QuickBuildAggregator
     /**
      * 发起域名购买
      */
-    public function purchaseDomain(int $accountId, array $items, bool $autoResolve = false): array
+    public function purchaseDomain(int $accountId, array $items, bool $autoResolve = false, array $options = []): array
     {
         return $this->queryService->execute('websites', 'purchaseDomain', [
             'account_id' => $accountId,
             'items' => $items,
             'auto_resolve' => $autoResolve,
+            'resolve_to_local' => $options['resolve_to_local'] ?? ($autoResolve ? 'yes' : 'no'),
+            'subdomains' => $options['subdomains'] ?? ['@', 'www'],
+            'dns_choice' => $options['dns_choice'] ?? 'follow_registrar',
+            'dns_nameservers' => $options['dns_nameservers'] ?? '',
+            'cdn_choice' => $options['cdn_choice'] ?? 'follow_registrar',
+            'start_lifecycle' => $options['start_lifecycle'] ?? '1',
         ]);
     }
 

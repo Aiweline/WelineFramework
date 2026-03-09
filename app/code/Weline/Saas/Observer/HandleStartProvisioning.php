@@ -6,7 +6,7 @@ namespace Weline\Saas\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Saas\Service\DomainProvisioningService;
+use Weline\Saas\Service\DomainLifecycleOrchestrationService;
 
 /**
  * @DESC | 响应 PageBuilder 一站式配置启动事件
@@ -46,8 +46,8 @@ class HandleStartProvisioning implements ObserverInterface
         }
 
         try {
-            /** @var DomainProvisioningService $service */
-            $service = ObjectManager::getInstance(DomainProvisioningService::class);
+            /** @var DomainLifecycleOrchestrationService $service */
+            $service = ObjectManager::getInstance(DomainLifecycleOrchestrationService::class);
             $result = $service->startProvisioning($domain, $registrarAccountId, $options);
 
             $data['result'] = $result;

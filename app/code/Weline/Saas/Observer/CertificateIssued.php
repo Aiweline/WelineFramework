@@ -7,11 +7,10 @@ namespace Weline\Saas\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Saas\Model\ProvisioningOrder;
-use Weline\Saas\Service\DomainProvisioningService;
+use Weline\Saas\Service\DomainLifecycleOrchestrationService;
 
 /**
- * 证书签发完成：若存在对应 SaaS 配置订单且当前在 SSL 步骤，则标记流程完成
+ * 证书签发完成：若存在对应生命周期订单，则标记流程完成
  */
 class CertificateIssued implements ObserverInterface
 {
@@ -23,18 +22,9 @@ class CertificateIssued implements ObserverInterface
         }
 
         try {
-            $service = ObjectManager::getInstance(DomainProvisioningService::class);
-            $order = $service->getOrderByDomain((string) $domain);
-            if ($order === null) {
-                return;
-            }
-            if ($order->getStatus() !== ProvisioningOrder::STATUS_STEP_SSL) {
-                return;
-            }
-            $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
-            $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
-            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
-            $order->save();
+            /** @var DomainLifecycleOrchestrationService $service */
+            $service = ObjectManager::getInstance(DomainLifecycleOrchestrationService::class);
+            $service->markCertificateIssued((string) $domain);
         } catch (\Throwable $e) {
             w_log_error('[Weline_Saas] ' . __('证书签发后更新配置订单状态失败：%{1}', [$e->getMessage()]));
         }
