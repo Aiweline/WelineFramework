@@ -3,28 +3,22 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     
-    <!-- AI中心主菜单 - 精简后仅保留 AI 管理、场景配置 -->
-    <menu source="Weline_Ai::ai" 
-          name="ai_main" 
-          title="AI 中心" 
+    <!-- AI 中心 - 直接挂载到 ai_group 下，合并原 AI 助手 与 AI 中心 -->
+    <!-- AI 管理：模型 | 适配器 | 供应商账户 聚合页 -->
+    <menu source="Weline_Ai::ai_manager" 
+          name="ai_manager" 
+          title="AI 管理" 
           parent="Weline_Backend::ai_group"
-          icon="mdi mdi-robot-outline"
-          order="10">
-        
-        <!-- AI 管理：模型 | 适配器 | 供应商账户 聚合页 -->
-        <menu source="Weline_Ai::ai_manager" 
-              name="ai_manager" 
-              title="AI 管理" 
-              action="ai/backend/manager" 
-              icon="mdi mdi-cog-outline"
-              order="10"/>
-        
-        <!-- 场景配置（场景适配器） -->
-        <menu source="Weline_Ai::ai_adapter_manager" 
-              name="ai_adapter_manager" 
-              title="场景配置" 
-              action="ai/backend/adapter" 
-              icon="mdi mdi-puzzle-outline"
-              order="20"/>
-    </menu>
+          action="ai/backend/manager" 
+          icon="mdi mdi-cog-outline"
+          order="10"/>
+    
+    <!-- 场景配置（场景适配器） -->
+    <menu source="Weline_Ai::ai_adapter_manager" 
+          name="ai_adapter_manager" 
+          title="场景配置" 
+          parent="Weline_Backend::ai_group"
+          action="ai/backend/adapter" 
+          icon="mdi mdi-puzzle-outline"
+          order="20"/>
 </menus>
