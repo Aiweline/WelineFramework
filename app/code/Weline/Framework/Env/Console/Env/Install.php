@@ -762,6 +762,24 @@ class Install extends CommandAbstract
      */
     private function tryInstallExtensionLinux(string $ext): bool
     {
+        $phpBin = (string) (PHP_BINARY ?? '');
+        // 项目自编译 PHP（extend/server/php）：apt/dnf 对其无效，扩展应在编译时已加入
+        if (str_contains($phpBin, 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php')) {
+            $this->printer->note(__('    当前 PHP 来自项目自编译 (extend/server/php)，apt/dnf 安装无效。若扩展缺失请执行: bash bin/install.sh --rebuild-php php'));
+            if ($this->tryEnableExtensionInIniLinux($ext)) {
+                return true;
+            }
+            return false;
+        }
+        // 宝塔 PHP（/www/server/php/）：apt/dnf 对其无效，需在宝塔面板启用
+        if (str_contains($phpBin, '/www/server/php/')) {
+            $this->printer->note(__('    当前 PHP 来自宝塔面板，apt/dnf 安装无效。请在宝塔 软件商店 → PHP → 安装扩展 中启用 %{ext}', ['ext' => $ext]));
+            if ($this->tryEnableExtensionInIniLinux($ext)) {
+                return true;
+            }
+            return false;
+        }
+
         $phpVersion = PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
         $map = ObjectManager::getInstance(ExtensionInstallStrategyMap::class);
         $platform = $map->getCurrentPlatform();
@@ -804,7 +822,16 @@ class Install extends CommandAbstract
                     if ($this->tryEnableExtensionInIniLinux($ext)) {
                         return true;
                     }
-                    // 未加载到当前 PHP，不返回 true，便于后续尝试重编项目 PHP
+                    // 命令成功但扩展未加载：输出实际输出帮助诊断（如 No package、Nothing to do、宝塔 PHP 等）
+                    $summary = array_slice($output, -8, 8);
+                    if ($summary !== []) {
+                        $summaryStr = implode(' ', array_map(static fn(string $l) => trim($l), $summary));
+                        if (strlen($summaryStr) > 200) {
+                            $summaryStr = substr($summaryStr, 0, 200) . '...';
+                        }
+                        $this->printer->note(__('    命令输出摘要: %{output}', ['output' => $summaryStr]));
+                    }
+                    $this->printer->note(__('    可能原因: 包名与当前 PHP 版本不匹配(RHEL/Amazon 需 php81-exif 等)、当前使用宝塔/自编译 PHP(apt/dnf 对其无效，需在宝塔面板启用)'));
                 } else {
                     // 输出错误信息帮助诊断
                     $errorOutput = implode("\n", array_slice($output, 0, 3));
