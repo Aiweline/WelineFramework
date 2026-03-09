@@ -92,14 +92,14 @@ class ModuleUpgradeExecuteAfterPlugin
         }
 
         # 读取后端REST api存放位置更新到数据库中
-        if (is_file(Env::path_BACKEND_PC_ROUTER_FILE)) {
-            $backend_api_urls = include Env::path_BACKEND_PC_ROUTER_FILE;
+        if (is_file(Env::path_BACKEND_REST_API_ROUTER_FILE)) {
+            $backend_api_urls = include Env::path_BACKEND_REST_API_ROUTER_FILE;
             $type             = 'backend_rest';
             if (is_array($backend_api_urls)) {
                 foreach ($backend_api_urls as $path => $backend_api_url) {
                     $this->module->recovery();
                     $module_id = $this->module->load('name', $backend_api_url['module'])->getId();
-                    if (!$module_id) {
+                    if ($module_id) {
                         $this->urlManager->recovery();
                         $this->urlManager
                             ->setData('module_id', $module_id)

@@ -9,6 +9,7 @@
 
 namespace Weline\Framework\Plugin\Config;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\System\File\Scanner;
@@ -21,6 +22,8 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
      */
     private CachePoolInterface $pluginCache;
 
+    private const RELATIVE_PATH = 'etc' . DIRECTORY_SEPARATOR . 'plugin.xml';
+
     public function __construct(
         Scanner     $scanner,
         Parser      $parser,
@@ -29,6 +32,44 @@ class PluginXmlReader extends \Weline\Framework\Config\Reader\XmlReader
     {
         parent::__construct($scanner, $parser, $path);
         $this->pluginCache = w_cache('plugin');
+    }
+
+    /**
+     * 获取 plugin.xml 文件列表（与 Event XmlReader 一致：只扫描注册模块的 base_path + etc/plugin.xml）
+     * 避免 scanVendorModulesWithFiles 中的 scanDirTree 等重型目录遍历，降低初次安装内存消耗
+     *
+     * @param \Closure|null $callback 保留签名兼容，此处未使用
+     * @return array<string, string> 模块名 => 文件绝对路径
+     */
+    public function getFileList(null|\Closure $callback = null): array
+    {
+        $result = [];
+        $modules = Env::getInstance()->getActiveModules();
+        $order = ['app' => 0, 'framework' => 1, 'system' => 2, 'composer' => 3];
+        uasort($modules, static fn($a, $b) => ($order[$a['position'] ?? 'composer'] ?? 4) <=> ($order[$b['position'] ?? 'composer'] ?? 4));
+        foreach ($modules as $module) {
+            $name = $module['name'] ?? '';
+            $basePath = rtrim($module['base_path'] ?? '', '/\\');
+            if ($name === '' || $basePath === '') {
+                continue;
+            }
+            $filePath = $basePath . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
+            if (is_file($filePath)) {
+                $result[$name] = $filePath;
+            } elseif ($name === 'Weline_Framework') {
+                $subdirs = glob($basePath . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+                if ($subdirs !== false) {
+                    foreach ($subdirs as $subdir) {
+                        $subPath = $subdir . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
+                        if (is_file($subPath)) {
+                            $subName = 'Weline_Framework_' . basename($subdir);
+                            $result[$subName] = $subPath;
+                        }
+                    }
+                }
+            }
+        }
+        return $callback ? $callback($result) : $result;
     }
 
     /**
