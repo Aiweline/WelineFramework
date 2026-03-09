@@ -4,6 +4,45 @@
 
 ---
 
+## [2026-03-09] UrlManager 路由批量导入触发 `idx_identify` 唯一键冲突（Pgsql 23505）✅ 已修复
+
+**错误类型**: 批量写库 / PostgreSQL 唯一约束冲突
+
+**错误信息**:
+```text
+SQLSTATE[23505]: Unique violation: 7 ERROR: duplicate key value violates unique constraint "idx_identify"
+DETAIL: Key (identify)=(...) already exists.
+```
+
+**根本原因**:
+1. 路由批量写入在 PostgreSQL 路径上触发了唯一键冲突，`flushBatchRows()` 直接批量 `insert(...)->fetch()` 未对批内重复 `identify` 做去重。  
+2. 即使业务上预期 upsert，实际执行链路在特定批量 SQL 分支下仍可能落到普通插入，导致冲突直接抛错。  
+3. `url_manager.identify` 是唯一索引，批内重复或库内已存在都会触发 `23505`。
+
+**解决方案**:
+1. 在 `flushBatchRows()` 内先按 `identify` 去重（后者覆盖前者）。  
+2. 改为“先删后插”批处理策略：  
+   - `where(identify IN (...))->delete()->fetch()`  
+   - `insert(deduplicatedRows)->fetch()`  
+3. 保持分块写入，避免单次 SQL 过大。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php
+```
+
+**验证结果**: ✅ 成功（语法检查通过，目标文件 lints 无新增错误）
+
+**预防措施**:
+1. 对唯一键批量写入，必须先做批内去重。  
+2. PostgreSQL 下若 upsert 路径不稳定，优先使用“按唯一键先删后插”保证幂等。  
+3. 升级阶段的数据同步逻辑应设计为可重复执行（idempotent）。
+
+**相关文件**:
+- `app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php`
+
+---
+
 ## [2026-03-09] setup:upgrade 导入路由时内存溢出（UrlManager 路由导入逐条 save 峰值过高）✅ 已修复
 
 **错误类型**: 模块升级 / 路由导入内存峰值
