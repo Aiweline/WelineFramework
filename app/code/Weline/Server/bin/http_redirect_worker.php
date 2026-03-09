@@ -158,7 +158,18 @@ if ($controlPort > 0) {
         'Redirect',
         $isDev
     );
-    if (!$kernel->connectAndRegister($controlPort)) {
+    if ($kernel->connectAndRegister($controlPort)) {
+        if ($isDev) {
+            $client = $kernel->getClient();
+            if ($client !== null) {
+                WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($client): void {
+                    if ($client->isConnected()) {
+                        $client->sendLogLine($line, $level, $tag);
+                    }
+                });
+            }
+        }
+    } else {
         $kernel = null;
     }
 }

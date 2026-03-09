@@ -55,6 +55,12 @@ class WlsLogger
     /** 是否已注册 shutdown 函数 */
     private bool $shutdownRegistered = false;
 
+    /**
+     * 开发模式：日志通过 IPC 发送到 Master 统一输出时的回调
+     * callable(string $line, string $level, string $processTag): void
+     */
+    private $ipcLogSink = null;
+
     private function __construct()
     {
         $this->lastFlushTime = \microtime(true);
@@ -124,6 +130,21 @@ class WlsLogger
     }
 
     /**
+     * 设置 IPC 日志汇聚回调（开发模式：子进程日志统一发往 Master 控制台）
+     * 设置后本进程不再输出到终端，仅通过回调发送；由 Master 统一输出并写文件。
+     *
+     * @param callable|null $sink function(string $line, string $level, string $processTag): void
+     */
+    public function setIpcLogSink(?callable $sink): self
+    {
+        $this->ipcLogSink = $sink;
+        if ($sink !== null && LogConfig::isDevMode()) {
+            $this->stdoutEnabled = false;
+        }
+        return $this;
+    }
+
+    /**
      * 记录日志
      *
      * @param string $level 日志级别
@@ -143,6 +164,14 @@ class WlsLogger
         $timestamp = \date('Y-m-d H:i:s');
         $contextStr = !empty($context) ? ' ' . \json_encode($context, JSON_UNESCAPED_UNICODE) : '';
         $line = "[{$timestamp}] [{$this->processTag}] [{$level}] {$message}{$contextStr}\n";
+
+        // 开发模式且已设置 IPC sink：仅发送到 Master，不写本地终端与文件（由 Master 统一输出并写文件）
+        if (LogConfig::isDevMode() && $this->ipcLogSink !== null) {
+            ($this->ipcLogSink)($line, $level, $this->processTag);
+            // Master 收到后会 echo 并可选写文件；子进程不再重复写
+            $this->ensureShutdownRegistered();
+            return;
+        }
 
         // 输出到终端
         if ($this->stdoutEnabled) {
@@ -359,6 +388,21 @@ class WlsLogger
         }
 
         // 缓冲区满则刷新
+        if ($this->bufferSize >= $this->maxBufferBytes) {
+            $this->flush(true);
+        }
+    }
+
+    /**
+     * Master 收到子进程 IPC 日志时追加到缓冲区（统一写入 wls.log）
+     */
+    public function appendLineForMaster(string $line): void
+    {
+        if ($line === '') {
+            return;
+        }
+        $this->buffer .= $line;
+        $this->bufferSize += \strlen($line);
         if ($this->bufferSize >= $this->maxBufferBytes) {
             $this->flush(true);
         }
