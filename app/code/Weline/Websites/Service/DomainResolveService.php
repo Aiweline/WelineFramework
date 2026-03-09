@@ -395,7 +395,9 @@ class DomainResolveService
     public function getDnsDetails(Domain $domain): array
     {
         $records = $this->dnsRecordModel->getByDomainId($domain->getDomainId());
-        $nameservers = $domain->getNameservers();
+        $storedNameservers = $domain->getNameservers();
+        $liveNameservers = $this->queryLiveNsRecords($domain->getDomain());
+        $nameservers = $liveNameservers !== [] ? $liveNameservers : $storedNameservers;
 
         // 获取注册商代码
         $account = $this->loadAccount($domain->getAccountId());
@@ -403,6 +405,34 @@ class DomainResolveService
 
         // 检测 DNS 服务商
         $dnsInfo = $this->dnsDetector->detect($nameservers, $registrarCode);
+        if ($dnsInfo['provider'] === 'unknown') {
+            $savedProvider = \strtolower(\trim($domain->getDnsProvider()));
+            if ($savedProvider !== '' && $savedProvider !== 'unknown') {
+                $dnsInfo = [
+                    'provider' => $savedProvider,
+                    'name' => $this->dnsDetector->getProviderDisplayName($savedProvider),
+                    'is_original' => $this->dnsDetector->isOriginalProvider($savedProvider, $registrarCode),
+                    'color' => $this->dnsDetector->getProviderColor($savedProvider, $registrarCode),
+                    'original_registrar' => $this->dnsDetector->isOriginalProvider($savedProvider, $registrarCode)
+                        ? ''
+                        : $this->dnsDetector->getProviderDisplayName($registrarCode),
+                ];
+            }
+        }
+
+        $hasNameserverChanges = $liveNameservers !== [] && $liveNameservers !== $storedNameservers;
+        $hasProviderChanges = ($dnsInfo['provider'] ?? 'unknown') !== 'unknown'
+            && $domain->getDnsProvider() !== ($dnsInfo['provider'] ?? '');
+
+        if ($hasNameserverChanges) {
+            $domain->setNameservers($liveNameservers);
+        }
+        if ($hasProviderChanges) {
+            $domain->setDnsProvider((string)$dnsInfo['provider']);
+        }
+        if ($hasNameserverChanges || $hasProviderChanges) {
+            $domain->save();
+        }
 
         // 检查每条记录是否指向本服务器
         $serverIpv4 = $this->serverIpService->getPublicIpv4();
@@ -428,6 +458,30 @@ class DomainResolveService
             'dns_provider' => $dnsInfo,
             'nameservers' => $nameservers,
         ];
+    }
+
+    private function queryLiveNsRecords(string $domain): array
+    {
+        try {
+            $records = @\dns_get_record($domain, \DNS_NS);
+            if ($records === false || $records === []) {
+                return [];
+            }
+
+            $nameservers = [];
+            foreach ($records as $record) {
+                $target = \strtolower(\trim((string)($record['target'] ?? '')));
+                if ($target !== '') {
+                    $nameservers[] = \rtrim($target, '.');
+                }
+            }
+
+            $nameservers = \array_values(\array_unique($nameservers));
+            \sort($nameservers);
+            return $nameservers;
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 
     /**

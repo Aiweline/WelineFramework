@@ -11,6 +11,18 @@
 $accounts = $accounts ?? [];
 $websites = $websites ?? [];
 $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
+$activeAccounts = [];
+foreach ($accounts as $account) {
+    if (($account['status'] ?? '') !== 'active') {
+        continue;
+    }
+    $activeAccounts[] = [
+        'account_id' => (int)($account['account_id'] ?? 0),
+        'account_name' => (string)($account['account_name'] ?? ''),
+        'registrar_code' => (string)($account['registrar_code'] ?? ''),
+        'registrar_name' => (string)($account['registrar_name'] ?? ''),
+    ];
+}
 ?>
 
 <div class="row">
@@ -316,21 +328,33 @@ function submitPurchase() {
                 description: '<?= __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。') ?>',
                 dnsChoice: '<?= __('DNS 策略') ?>',
                 dnsFollowRegistrar: '<?= __('跟随域名商') ?>',
+                dnsSelectProviderAccount: '<?= __('指定供应商账户') ?>',
                 dnsCustomNameservers: '<?= __('自定义 Nameserver') ?>',
+                dnsProvider: '<?= __('DNS 服务商') ?>',
+                dnsAccount: '<?= __('DNS 账户') ?>',
+                dnsProviderPlaceholder: '<?= __('请选择 DNS 服务商') ?>',
+                dnsAccountPlaceholder: '<?= __('请选择 DNS 账户') ?>',
                 dnsNameservers: '<?= __('Nameserver 列表') ?>',
                 dnsNameserversPlaceholder: '<?= __('ns1.example.com, ns2.example.com') ?>',
                 cdnChoice: '<?= __('CDN 策略') ?>',
                 cdnFollowRegistrar: '<?= __('跟随域名商') ?>',
+                cdnSelectProviderAccount: '<?= __('指定供应商账户') ?>',
                 cdnNone: '<?= __('暂不配置 CDN') ?>',
+                cdnProvider: '<?= __('CDN 服务商') ?>',
+                cdnAccount: '<?= __('CDN 账户') ?>',
+                cdnProviderPlaceholder: '<?= __('请选择 CDN 服务商') ?>',
+                cdnAccountPlaceholder: '<?= __('请选择 CDN 账户') ?>',
                 resolveToLocal: '<?= __('自动解析到本服务器') ?>',
                 resolveHint: '<?= __('默认会解析 @ 和 www，并持续检查域名状态。') ?>',
                 subdomains: '<?= __('自动解析子域名') ?>',
                 subdomainsPlaceholder: '<?= __('@, www') ?>',
                 startLifecycle: '<?= __('启动全流程状态跟踪') ?>',
                 startLifecycleHint: '<?= __('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。') ?>',
+                selectAccountRequired: '<?= __('请选择对应的供应商账户') ?>',
                 confirm: '<?= __('确认购买') ?>',
                 cancel: '<?= __('取消') ?>'
             },
+            accounts: <?= json_encode($activeAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
             defaults: {
                 dnsChoice: 'follow_registrar',
                 cdnChoice: 'follow_registrar',
@@ -366,8 +390,12 @@ function executePurchase(accountId, items, dialogResult) {
     formData.append('resolve_to_local', dialogResult.resolve_to_local || 'yes');
     formData.append('subdomains', JSON.stringify(subdomains));
     formData.append('dns_choice', dialogResult.dns_choice || 'follow_registrar');
+    formData.append('dns_provider', dialogResult.dns_provider || '');
+    formData.append('dns_account_id', dialogResult.dns_account_id || '');
     formData.append('dns_nameservers', dialogResult.dns_nameservers || '');
     formData.append('cdn_choice', dialogResult.cdn_choice || 'follow_registrar');
+    formData.append('cdn_provider', dialogResult.cdn_provider || '');
+    formData.append('cdn_account_id', dialogResult.cdn_account_id || '');
     formData.append('start_lifecycle', dialogResult.start_lifecycle || '1');
 
     fetch(purchaseUrl, {
