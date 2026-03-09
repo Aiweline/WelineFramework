@@ -1420,81 +1420,23 @@ class DomainManagement extends BaseController
         }
 
         try {
-            $domain = ObjectManager::getInstance(Domain::class, [], false);
-            $domain->load($domainId);
+            $queryResult = w_query('websites', 'getDnsRecords', [
+                'domain_id' => $domainId,
+            ]);
 
-            if (!$domain->getDomainId()) {
-                return $this->fetchJson(['success' => false, 'msg' => __('域名不存在')]);
-            }
-
-            $accountId = (int) $domain->getAccountId();
-            $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
-            $account->load($accountId);
-
-            if (!$account->getAccountId()) {
-                return $this->fetchJson(['success' => false, 'msg' => __('找不到域名商账户')]);
-            }
-
-            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
-            $adapter = $registrarResolver->getAdapter($account->getRegistrarCode());
-
-            if ($adapter === null || !$adapter->supportsDnsManagement()) {
-                return $this->fetchJson(['success' => false, 'msg' => __('域名商不支持 DNS 管理')]);
-            }
-
-            $result = $adapter->getDnsRecords($domain->getDomain(), $account->getCredentials());
-            $serverIpService = ObjectManager::getInstance(ServerIpService::class);
-            $serverIp = $serverIpService->getPublicIpv4();
-
-            // 查询 DNS 时双保险：
-            // - 池子里没有且指向本机公网 IP 的域名：自动写入池子
-            // - 已存在但当前记录不是本机 IP：标记为非本机域名
-            $poolSync = $this->syncDnsRecordsToDomainPool(
-                $domain,
-                \is_array($result) ? $result : [],
-                false
-            );
-            // 再用实时 DNS 查询再做一次兜底同步（避免第三方返回缺失关键记录）
-            $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
-            if ($liveRecords !== []) {
-                $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
-                $poolSync['added'] += (int) ($liveSync['added'] ?? 0);
-                $poolSync['marked_non_local'] += (int) ($liveSync['marked_non_local'] ?? 0);
-                $poolSync['skipped'] += (int) ($liveSync['skipped'] ?? 0);
+            if (!\is_array($queryResult)) {
+                return $this->fetchJson(['success' => false, 'msg' => __('查询返回格式无效')]);
             }
 
             return $this->fetchJson([
-                'success' => true,
-                'msg' => __('获取成功'),
-                'data' => [
-                    'domain' => $domain->getDomain(),
-                    'records' => \is_array($result) ? $result : [],
-                    'dns_provider' => $account->getRegistrarCode(),
-                    'dns_provider_name' => $account->getAccountName(),
-                    'server_ip' => $serverIp,
-                    'pool_sync' => $poolSync,
-                ],
+                'success' => (bool)($queryResult['success'] ?? false),
+                'msg' => (string)($queryResult['message'] ?? __('获取失败')),
+                'data' => (array)($queryResult['data'] ?? []),
             ]);
         } catch (\Throwable $e) {
-            // 第三方 DNS API 出错时，仍执行一次实时 DNS 兜底同步，保证域名池自动写入不中断
-            try {
-                $domain = ObjectManager::getInstance(Domain::class, [], false);
-                $domain->load($domainId);
-                if ($domain->getDomainId()) {
-                    $fallbackRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
-                    if ($fallbackRecords !== []) {
-                        $this->syncDnsRecordsToDomainPool($domain, $fallbackRecords, false);
-                    }
-                }
-            } catch (\Throwable $ignored) {
-            }
-            $error = (string) $e->getMessage();
-            if (\str_starts_with($error, '获取 DNS 记录失败：')) {
-                $error = \trim((string) \mb_substr($error, \mb_strlen('获取 DNS 记录失败：')));
-            }
             return $this->fetchJson([
                 'success' => false,
-                'msg' => __('获取 DNS 记录失败：%{1}', [$error]),
+                'msg' => __('获取 DNS 记录失败：%{1}', [$e->getMessage()]),
             ]);
         }
     }
