@@ -374,16 +374,6 @@ body {
         };
     }
     
-    // 性能优化：预加载网站根路径（用于后续导航），而非当前页 URL
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(function() {
-            const link = document.createElement('link');
-            link.rel = 'prefetch';
-            link.href = (window.location.origin || '') + '/';
-            document.head.appendChild(link);
-        });
-    }
-
     // 监听来自Visual Editor的postMessage (Live Preview支持)
     window.addEventListener('message', function(event) {
         if (event.data && event.data.type === 'WELINE_THEME_UPDATE') {

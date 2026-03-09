@@ -29,7 +29,7 @@ $meta = $this->getData('meta') ?? [];
 $extraClass = $meta['class'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="backend"<?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
     <w:hook>Weline_Theme::backend::layouts::base::head-before</w:hook>
     <!-- Admin 模块基础 Head（Meta、CSS、jQuery等） -->
