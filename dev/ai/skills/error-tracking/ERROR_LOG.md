@@ -17,14 +17,16 @@ DETAIL: Key (identify)=(...) already exists.
 **根本原因**:
 1. 路由批量写入在 PostgreSQL 路径上触发了唯一键冲突，`flushBatchRows()` 直接批量 `insert(...)->fetch()` 未对批内重复 `identify` 做去重。  
 2. 即使业务上预期 upsert，实际执行链路在特定批量 SQL 分支下仍可能落到普通插入，导致冲突直接抛错。  
-3. `url_manager.identify` 是唯一索引，批内重复或库内已存在都会触发 `23505`。
+3. 删除旧记录时使用了 `reset()`，而模型对象可能残留上一次插入后的 `id`；`QueryDelegator::delete()` 会优先按 `id` 删除，导致 `where identify IN (...)` 实际未生效。  
+4. `url_manager.identify` 是唯一索引，批内重复或库内已存在都会触发 `23505`。
 
 **解决方案**:
 1. 在 `flushBatchRows()` 内先按 `identify` 去重（后者覆盖前者）。  
 2. 改为“先删后插”批处理策略：  
    - `where(identify IN (...))->delete()->fetch()`  
    - `insert(deduplicatedRows)->fetch()`  
-3. 保持分块写入，避免单次 SQL 过大。
+3. 删除/插入前统一使用 `recovery()` 清理模型残留状态（尤其是 `id`），避免删除逻辑被错误降级为“按主键删除单条”。  
+4. 保持分块写入，避免单次 SQL 过大。
 
 **验证方法**:
 ```bash
