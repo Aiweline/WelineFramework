@@ -83,13 +83,11 @@ class Role extends \Weline\Admin\Controller\BaseController
                 return $this->fetch('form');
             }
             
-            // 检查角色是否已存在（创建新实例避免状态污染，$shared=false；clearQuery 确保无残留条件）
+            // 检查角色是否已存在（创建新实例避免状态污染；clearQuery 确保无残留条件导致误判）
             /** @var \Weline\Acl\Model\Role $checkRole */
             $checkRole = ObjectManager::getInstance(\Weline\Acl\Model\Role::class, [], false);
-            $checkRole->clearQuery()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
-            $items = $checkRole->getItems();
-            $exists = !empty($items) && ($items[0]->getId() ?? 0);
-            if ($exists) {
+            $existingRole = $checkRole->clearQuery()->where(\Weline\Acl\Model\Role::schema_fields_ROLE_NAME, $role_name)->find()->fetch();
+            if ($existingRole->getId()) {
                 if ($this->request->isAjax()) {
                     return $this->jsonResponse(false, __('角色已存在！'));
                 }

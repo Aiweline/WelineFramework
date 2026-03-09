@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * @package Weline_Ai
  */
-#[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'mdi-account-key', 'AI供应商账户管理', 'Weline_Ai::ai')]
+#[Acl('Weline_Ai::ai_provider_account', 'AI供应商账户', 'mdi-account-key', 'AI供应商账户管理', 'Weline_Backend::ai_group')]
 class Provider extends BaseController
 {
     /**
