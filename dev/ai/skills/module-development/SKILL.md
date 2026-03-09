@@ -357,6 +357,13 @@ Register::register(
 
 **加字段 / 改表结构**：在对应 Model 上增加或修改 `#[Col]`/`#[Index]`，然后执行 `php bin/w setup:upgrade` 即可。
 
+### 升级阶段批量写入（大路由/大配置导入）⚠️
+
+- 禁止在大数据导入中逐条 `->setData()->save()`，优先使用分块批量 `insert($rows, $conflictFields)->fetch()`。
+- 推荐模式：收集 `N` 条（如 500）后 flush，一次 upsert，循环处理直到完成。
+- 对 `include` 大数组文件场景，建议“局部临时提升 memory_limit -> include -> 立即恢复”，不要长期全局提高。
+- 每段处理后执行 `unset($bigArray, $batchRows)` 并 `gc_collect_cycles()`，减少升级期间峰值内存。
+
 ---
 
 ## Unit Test Template
