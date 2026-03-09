@@ -318,7 +318,7 @@ P99：%{1},"P99: %{1}"
 "重启 Weline 常驻内存 HTTP 服务器","Restart Weline persistent HTTP server"
 "确保 Weline Server 运行中（已运行则不重启，除非使用 -r）","确保 Weline Server 运行中（已运行则不重启，除非使用 -r）"
 强制重启（先停止再启动）,强制重启（先停止再启动）
-监听地址（默认：0.0.0.0）,"Listen address (default: 0.0.0.0)"
+监听地址（默认：127.0.0.1，仅本机；需外网访问时用 -h 0.0.0.0）,"Listen address (default: 127.0.0.1, local only; use -h 0.0.0.0 for public access)"
 监听端口（默认：443）,监听端口（默认：443）
 "Worker 进程数（默认：4）","Worker count (default: 4)"
 确保服务器运行,确保服务器运行

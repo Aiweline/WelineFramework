@@ -84,7 +84,7 @@ class HttpRedirectProvider extends AbstractServiceProvider
         $httpsPort = $context->mainPort;
 
         $arguments = [
-            $context->envConfig['server']['host'] ?? '0.0.0.0',
+            $context->envConfig['server']['host'] ?? '127.0.0.1',
             (string) $httpPort,
             (string) $httpsPort,
             $context->instanceName,
