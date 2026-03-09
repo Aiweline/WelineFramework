@@ -40,14 +40,14 @@ class Session extends BackendController
             $query = $session->reset();
             
             if (!empty($status)) {
-                $query->where(ChatSession::schema_fields_status, $status);
+                $query->where(ChatSession::schema_fields_STATUS, $status);
             }
             
             if ($agentId > 0) {
-                $query->where(ChatSession::schema_fields_agent_id, $agentId);
+                $query->where(ChatSession::schema_fields_AGENT_ID, $agentId);
             }
 
-            $sessions = $query->order(ChatSession::schema_fields_created_at, 'DESC')
+            $sessions = $query->order(ChatSession::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetch()
                 ->getItems();
@@ -152,7 +152,7 @@ class Session extends BackendController
             }
 
             $session->setStatus(ChatSession::STATUS_CLOSED)
-                ->setData(ChatSession::schema_fields_updated_at, date('Y-m-d H:i:s'))
+                ->setData(ChatSession::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
                 ->save();
 
             return $this->jsonResponse(true, __('会话已关闭'));
