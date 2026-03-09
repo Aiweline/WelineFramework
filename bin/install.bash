@@ -313,6 +313,97 @@ install_php_system_deps() {
   return 1
 }
 
+# 查找 pg_config（优先 PATH，其次常见发行版路径）
+find_pg_config_bin() {
+  if command -v pg_config &>/dev/null; then
+    command -v pg_config
+    return 0
+  fi
+  local candidate
+  local -a known_paths=(
+    "/usr/lib/postgresql/${INSTALL_PGSQL_VERSION}/bin/pg_config"
+    "/usr/pgsql-${INSTALL_PGSQL_VERSION}/bin/pg_config"
+    "/usr/local/bin/pg_config"
+    "/usr/bin/pg_config"
+  )
+  for candidate in "${known_paths[@]}"; do
+    [[ -x "$candidate" ]] && { echo "$candidate"; return 0; }
+  done
+  for candidate in /usr/lib/postgresql/*/bin/pg_config /usr/pgsql-*/bin/pg_config; do
+    [[ -x "$candidate" ]] && { echo "$candidate"; return 0; }
+  done
+  return 1
+}
+
+# Linux: 若 PHP 编译包含 pgsql/pdo_pgsql，则自动检测并修复 libpq 构建依赖
+ensure_pgsql_build_env_linux() {
+  [[ "$PLATFORM" == "linux" ]] || return 0
+  local -a configure_args=("$@")
+  local needs_pgsql=0
+  local arg
+  for arg in "${configure_args[@]}"; do
+    [[ "$arg" == "--with-pgsql" || "$arg" == "--with-pdo-pgsql" ]] && { needs_pgsql=1; break; }
+  done
+  [[ "$needs_pgsql" -eq 1 ]] || return 0
+
+  local pg_config_bin=""
+  pg_config_bin="$(find_pg_config_bin || true)"
+  if [[ -z "$pg_config_bin" ]]; then
+    echo "pg_config not found. Installing PostgreSQL development package for PHP build..."
+    if [[ -f /etc/debian_version ]]; then
+      run_apt_update_once || true
+      run_privileged apt-get install -y libpq-dev postgresql-client || true
+    elif [[ -f /etc/redhat-release ]]; then
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y postgresql-devel postgresql || true
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y postgresql-devel postgresql || true
+      fi
+    fi
+    pg_config_bin="$(find_pg_config_bin || true)"
+  fi
+
+  if [[ -z "$pg_config_bin" ]]; then
+    echo "ERROR: pg_config still not found. Install PostgreSQL dev package first." >&2
+    echo "  Debian/Ubuntu: sudo apt-get install -y libpq-dev postgresql-client" >&2
+    echo "  RHEL/CentOS:   sudo dnf install -y postgresql-devel postgresql" >&2
+    return 1
+  fi
+
+  export PATH="$(dirname "$pg_config_bin"):$PATH"
+  local include_dir=""
+  local lib_dir=""
+  include_dir="$("$pg_config_bin" --includedir 2>/dev/null || true)"
+  lib_dir="$("$pg_config_bin" --libdir 2>/dev/null || true)"
+
+  [[ -z "${PGSQL_CFLAGS:-}" && -n "$include_dir" ]] && export PGSQL_CFLAGS="-I$include_dir"
+  [[ -z "${PGSQL_LIBS:-}" && -n "$lib_dir" ]] && export PGSQL_LIBS="-L$lib_dir -lpq"
+
+  local header_ok=0
+  local lib_ok=0
+  [[ -n "$include_dir" && -f "$include_dir/libpq-fe.h" ]] && header_ok=1
+  if [[ -n "$lib_dir" ]]; then
+    [[ -f "$lib_dir/libpq.so" || -f "$lib_dir/libpq.a" || -f "$lib_dir/libpq.dylib" ]] && lib_ok=1
+    if [[ "$lib_ok" -eq 0 ]] && compgen -G "$lib_dir/libpq.so*" >/dev/null 2>&1; then
+      lib_ok=1
+    fi
+  fi
+
+  if [[ "$header_ok" -ne 1 || "$lib_ok" -ne 1 ]]; then
+    echo "ERROR: libpq dev files incomplete for PHP build." >&2
+    echo "  pg_config: $pg_config_bin" >&2
+    echo "  include: ${include_dir:-<empty>}" >&2
+    echo "  lib:     ${lib_dir:-<empty>}" >&2
+    echo "  Please install PostgreSQL development headers/libraries and retry." >&2
+    return 1
+  fi
+
+  echo "Detected PostgreSQL build env: pg_config=$pg_config_bin"
+  echo "  PGSQL_CFLAGS=${PGSQL_CFLAGS:-<empty>}"
+  echo "  PGSQL_LIBS=${PGSQL_LIBS:-<empty>}"
+  return 0
+}
+
 # 校验是否为有效 gzip 压缩包（避免 404 的 HTML 或损坏文件被当缓存使用）
 is_valid_gzip_tarball() {
   local f="$1"
@@ -522,6 +613,14 @@ install_php_from_source() {
       conf+=("--with-zip")
     else
       echo "libzip not found; building PHP without zip extension."
+    fi
+  fi
+
+  if [[ "$PLATFORM" == "linux" ]]; then
+    if ! ensure_pgsql_build_env_linux "${conf[@]}"; then
+      popd >/dev/null
+      rm -rf "$build_root"
+      return 1
     fi
   fi
 
