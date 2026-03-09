@@ -389,13 +389,19 @@ class Start extends CommandAbstract
             $this->printer->note(__('使用 Dispatcher 模式（TCP 透传）'));
         }
         
+        // Linux 统一透传：不论是否传 --direct，Linux 均使用 Dispatcher 透传（与 Windows 一致）
+        $isLinux = (\defined('PHP_OS_FAMILY') && PHP_OS_FAMILY === 'Linux');
+        if ($isLinux && $count > 1 && !$noDispatcher) {
+            $dispatcherEnabled = true;
+        }
+        
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
         
         // 计算 Worker 端口
         // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
-        // - 直连模式（--direct）：所有 Worker 直接监听主端口（SO_REUSEPORT）
+        // - 直连模式（--direct）：所有 Worker 直接监听主端口（SO_REUSEPORT，仅非 Linux）
         // - 独立端口模式（--no-dispatcher）：每个 Worker 使用独立端口，需智能分配
-        $useDirectMode = !$dispatcherEnabled && $supportsReusePort && $directMode;
+        $useDirectMode = !$dispatcherEnabled && $supportsReusePort && $directMode && !$isLinux;
         if ($dispatcherEnabled) {
             // Dispatcher 模式：Worker 使用内网高端口
             $workerPort = $workerBasePort + $port;
