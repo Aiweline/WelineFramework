@@ -268,6 +268,31 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     padding: var(--backend-spacing-xl, 40px);
     color: var(--backend-color-text-tertiary, #adb5bd);
 }
+/* 批量操作栏：统一布局与间距 */
+.pb-dm-batch-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 12px);
+    margin-bottom: var(--backend-spacing-md, 12px);
+    padding: var(--backend-spacing-sm, 12px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+    flex-wrap: wrap;
+}
+.pb-dm-batch-bar__select {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--backend-color-text-primary, #212529);
+}
+.pb-dm-batch-bar__actions {
+    margin-left: auto;
+    display: flex;
+    gap: var(--backend-spacing-xs, 8px);
+    flex-wrap: wrap;
+}
 .pb-dm-empty i { font-size: 2.5rem; opacity: 0.3; display: block; margin-bottom: var(--backend-spacing-sm, 8px); }
 .pb-dm-form-modal {
     display: none;
@@ -312,7 +337,16 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 .pb-dm-actions { display: flex; gap: 8px; }
 .pb-dm-checkbox-row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
 .pb-dm-checkbox-row input[type="checkbox"] { margin: 0; }
-.pb-dm-filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+.pb-dm-filters {
+    display: flex;
+    gap: var(--backend-spacing-md, 12px);
+    align-items: flex-end;
+    flex-wrap: wrap;
+    margin-bottom: var(--backend-spacing-md, 16px);
+    padding: var(--backend-spacing-sm, 12px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+}
 .pb-dm-filters .pb-dm-fg { min-width: 150px; flex: unset; }
 .pb-dm-filters .pb-dm-fg.pb-dm-fg--search { min-width: 220px; }
 .pb-dm-pagination { display: flex; gap: 8px; align-items: center; justify-content: center; margin-top: 16px; }
@@ -843,13 +877,13 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 </div>
             </div>
             <!-- 全选与批量操作栏 -->
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;padding:8px 12px;background:var(--backend-color-bg-secondary,#f8f9fa);border-radius:var(--backend-border-radius,6px);flex-wrap:wrap;">
-                <label style="display:flex;align-items:center;gap:6px;font-weight:500;cursor:pointer;">
+            <div class="pb-dm-batch-bar">
+                <label class="pb-dm-batch-bar__select">
                     <input type="checkbox" id="pb-dm-select-all-domain">
                     <lang>全选当前页</lang>
                 </label>
                 <span class="pb-dm-batch-count"><lang>已选择</lang> <strong id="pb-dm-batch-count-num">0</strong> <lang>个域名</lang></span>
-                <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">
+                <div class="pb-dm-batch-bar__actions">
                     <button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm" id="pb-dm-batch-pull-btn" title="<?= __('拉取未拉取的域名到本地并入域名池') ?>">
                         <i class="mdi mdi-download"></i> <lang>批量拉取</lang>
                     </button>
@@ -865,7 +899,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                     <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-change-dns-btn" title="<?= __('批量切换DNS服务器') ?>">
                         <i class="mdi mdi-server-network"></i> <lang>批量转DNS</lang>
                     </button>
-                    <button class="pb-dm-btn pb-dm-btn-info pb-dm-btn-sm" id="pb-dm-batch-add-dns-btn" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-add-dns-btn" title="<?= __('为选中域名批量添加DNS解析记录') ?>">
                         <i class="mdi mdi-plus-network"></i> <lang>批量添加记录</lang>
                     </button>
                     <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-set-accounts-btn" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
@@ -3620,12 +3654,18 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
             limit: poolState.limit,
             search: poolState.search,
             status: poolState.status,
-            resolve_status: poolState.resolve
+            resolve_status: poolState.resolve,
+            // 域名刚入池时通常还未达到可建站状态，默认先展示全部，避免看起来“空池子”。
+            site_ready_only: 'false'
         }).then(function(res) {
             if (res.success && res.data) {
-                poolState.total = res.data.total || 0;
-                poolState.pages = res.data.pages || 0;
-                renderDomainPool(res.data.items || []);
+                var items = Array.isArray(res.data) ? res.data : (res.data.items || []);
+                var total = (typeof res.total === 'number') ? res.total : (res.data.total || items.length || 0);
+                var pages = (typeof res.pages === 'number') ? res.pages : (res.data.pages || Math.ceil(total / poolState.limit) || 0);
+
+                poolState.total = total;
+                poolState.pages = pages;
+                renderDomainPool(items);
                 updatePoolPagination();
             } else {
                 container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle" style="font-size:2rem;color:var(--backend-color-danger);"></i><p>' + (res.msg || '<?= __('加载失败') ?>') + '</p></div>';

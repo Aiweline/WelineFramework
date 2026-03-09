@@ -103,6 +103,17 @@ $activeTab = $active_tab ?? 'domain_list';
                 <i class="mdi mdi-earth me-1"></i>
                 <span class='d-none d-sm-inline-block'><?= __('域名列表') ?></span>
             </button>
+            <button class='btn domain-tab <?= $activeTab === 'domain_pool' ? 'active' : '' ?>'
+                    type='button'
+                    id='domain-pool-tab'
+                    data-bs-toggle='tab'
+                    data-bs-target='#domain-pool'
+                    role='tab'
+                    aria-controls='domain-pool'
+                    aria-selected='<?= $activeTab === 'domain_pool' ? 'true' : 'false' ?>'>
+                <i class="mdi mdi-database me-1"></i>
+                <span class='d-none d-sm-inline-block'><?= __('域名池') ?></span>
+            </button>
             <button class='btn domain-tab <?= $activeTab === 'registrar' ? 'active' : '' ?>'
                     type='button'
                     id='domain-registrar-tab'
@@ -139,7 +150,15 @@ $activeTab = $active_tab ?? 'domain_list';
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_list_tab.phtml') ?>
             </div>
 
-            <!-- Tab2: 域名商管理 -->
+            <!-- Tab2: 域名池 -->
+            <div class='tab-pane fade <?= $activeTab === 'domain_pool' ? 'show active' : '' ?>'
+                 id='domain-pool'
+                 role='tabpanel'
+                 aria-labelledby='domain-pool-tab'>
+                <?= $this->fetch('Weline_Websites::templates/Admin/Domain/domain_pool_tab.phtml') ?>
+            </div>
+
+            <!-- Tab3: 域名商管理 -->
             <div class='tab-pane fade <?= $activeTab === 'registrar' ? 'show active' : '' ?>'
                  id='domain-registrar'
                  role='tabpanel'
@@ -147,7 +166,7 @@ $activeTab = $active_tab ?? 'domain_list';
                 <?= $this->fetch('Weline_Websites::templates/Admin/Domain/registrar_tab.phtml') ?>
             </div>
 
-            <!-- Tab3: 域名购买 -->
+            <!-- Tab4: 域名购买 -->
             <div class='tab-pane fade <?= $activeTab === 'purchase' ? 'show active' : '' ?>'
                  id='domain-purchase'
                  role='tabpanel'
