@@ -1595,6 +1595,8 @@ while (true) {
             $originTokenHeader,
             $originTokenAllowLocal
         );
+        $handleDurationMs = (\microtime(true) - $handleStartTime) * 1000;
+        $response = injectWlsProcessTimeHeader($response, $handleDurationMs);
         $responseStatus = 200;
         if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
             $responseStatus = (int)$statusMatches[1];
@@ -1970,6 +1972,39 @@ function getHeaderValue(string $rawRequest, string $headerName): ?string
         return $value === '' ? null : $value;
     }
     return null;
+}
+
+/**
+ * 将 WLS 处理耗时注入到响应中（响应头 + 可选 HTML 注入供开发工具读取）
+ */
+function injectWlsProcessTimeHeader(string $response, float $durationMs): string
+{
+    $ms = (int)\round($durationMs);
+    $headerLine = "X-WLS-Process-Time: {$ms}\r\n";
+    $pos = \strpos($response, "\r\n\r\n");
+    if ($pos === false) {
+        return $response;
+    }
+    $response = \substr_replace($response, $headerLine, $pos, 0);
+    // 对 text/html 注入 script 供 dev-tool-panel 读取（需更新 Content-Length）
+    $headersSection = \substr($response, 0, $pos + \strlen($headerLine) + 512);
+    if (\preg_match('/Content-Type:\s*text\/html/i', $headersSection)) {
+        $injected = "<script>window.__WLS_PROCESS_TIME_MS={$ms};</script>\n";
+        $clMatch = [];
+        if (\preg_match('/Content-Length:\s*(\d+)/i', $response, $clMatch)) {
+            $oldLen = (int)$clMatch[1];
+            $newLen = $oldLen + \strlen($injected);
+            $response = \preg_replace('/Content-Length:\s*\d+/i', "Content-Length: {$newLen}", $response, 1);
+            $bodyPos = \strpos($response, "\r\n\r\n") + 4;
+            $body = \substr($response, $bodyPos);
+            $injectPos = \stripos($body, '</body>');
+            if ($injectPos !== false) {
+                $body = \substr_replace($body, $injected, $injectPos, 0);
+                $response = \substr($response, 0, $bodyPos) . $body;
+            }
+        }
+    }
+    return $response;
 }
 
 function handleRequest(

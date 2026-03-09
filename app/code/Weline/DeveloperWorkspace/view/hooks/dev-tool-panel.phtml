@@ -2578,6 +2578,7 @@ const DevToolPanel = (function() {
         const timing = getPerformanceTiming();
         if (timing) {
             const items = [
+                { label: 'WLS处理耗时', value: (typeof window.__WLS_PROCESS_TIME_MS === 'number' ? window.__WLS_PROCESS_TIME_MS : null), unit: 'ms', optional: true },
                 { label: 'DNS查询', value: timing.dns, unit: 'ms' },
                 { label: 'TCP连接', value: timing.tcp, unit: 'ms' },
                 { label: '请求发送', value: timing.request, unit: 'ms' },
@@ -2595,6 +2596,7 @@ const DevToolPanel = (function() {
             }
             
             items.forEach(item => {
+                if (item.optional && (item.value == null || item.value === undefined)) return;
                 const timeClass = getTimeClass(item.value);
                 html += '<div class="performance-item">';
                 html += '<span class="performance-label">' + item.label + '</span>';
