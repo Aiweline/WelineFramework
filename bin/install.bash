@@ -18,6 +18,9 @@ VALID_COMPONENTS="php pgsql mysql"
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
 
+# Linux root 安装时使用的项目用户，项目归属及 initdb 均用此用户
+WELINE_USER="${WELINE_USER:-weline}"
+
 WELINE_REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 
 usage() {
@@ -71,6 +74,7 @@ if [[ -f "$ROOT/weline.env" ]]; then
 fi
 INSTALL_PGSQL_VERSION="${INSTALL_PGSQL_VERSION:-16}"
 INSTALL_MYSQL_VERSION="${INSTALL_MYSQL_VERSION:-8.0}"
+WELINE_USER="${WELINE_USER:-weline}"
 
 # 从 composer.json 解析 PHP 主版本（兼容 GNU/BSD grep 与 bash 3.x）
 get_php_version() {
@@ -106,6 +110,9 @@ case "$OS" in
   *)       echo "Unsupported OS: $OS. On Windows use: bin\\install.bat" >&2; exit 1 ;;
 esac
 
+# Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
+[[ "$PLATFORM" == "linux" ]] && ensure_weline_user
+
 # macOS：Homebrew 禁止以 root 运行，必须一开始就退出并提示
 if [[ "$PLATFORM" == "mac" ]] && { [[ "${EUID:-$(id -u)}" -eq 0 ]] || [[ -n "${SUDO_UID:-}" ]]; }; then
   echo "ERROR: 请勿使用 sudo 执行安装。Homebrew 禁止以 root 运行。" >&2
@@ -138,17 +145,50 @@ add_to_path() {
   done
 }
 
+# 需 root 权限的操作统一通过 sudo 执行（含 root 运行时）
 run_privileged() {
-  if [[ "$(id -u)" -eq 0 ]]; then
-    "$@"
-    return $?
-  fi
   if command -v sudo &>/dev/null; then
     sudo "$@"
     return $?
   fi
+  if [[ "$(id -u)" -eq 0 ]]; then
+    "$@"
+    return $?
+  fi
   echo "ERROR: sudo not found and current user is not root. Please install dependencies manually." >&2
   return 1
+}
+
+# 以 weline 用户执行（root 时用 sudo -u weline，非 root 则直接执行）
+run_as_weline() {
+  if [[ "$PLATFORM" != "linux" ]]; then
+    "$@"
+    return $?
+  fi
+  if [[ "$(id -u)" -eq 0 ]]; then
+    run_privileged sudo -u "$WELINE_USER" env PATH="$PATH" "$@"
+  else
+    "$@"
+  fi
+}
+
+# Linux root 安装时：确保 weline 用户存在并具有 sudo 权限
+ensure_weline_user() {
+  [[ "$PLATFORM" != "linux" ]] && return 0
+  [[ "$(id -u)" -ne 0 ]] && return 0
+  if id "$WELINE_USER" &>/dev/null; then
+    echo "User $WELINE_USER already exists."
+    return 0
+  fi
+  echo "Creating user $WELINE_USER (project owner, with sudo)..."
+  run_privileged useradd -m -s /bin/bash "$WELINE_USER" || return 1
+  if getent group wheel &>/dev/null; then
+    run_privileged usermod -aG wheel "$WELINE_USER" 2>/dev/null || true
+  fi
+  if getent group sudo &>/dev/null; then
+    run_privileged usermod -aG sudo "$WELINE_USER" 2>/dev/null || true
+  fi
+  echo "User $WELINE_USER created."
 }
 
 # 确保 git 已安装（拉取代码时需要）；按平台自动安装
@@ -969,14 +1009,15 @@ install_pgsql_linux() {
 
   pg_ctl_opts=(-o "-k $pgsql_data")
   if [[ -f "$pgsql_data/PG_VERSION" ]]; then
-    if ! PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" status 2>/dev/null | grep -q "running"; then
+    if ! run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" status 2>/dev/null | grep -q "running"; then
       echo "Starting PostgreSQL cluster at $pgsql_data..."
-      PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+      run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
     fi
   else
-    echo "Initializing PostgreSQL data directory at $pgsql_data (当前用户运行)..."
-    PATH="$pg_bindir:$PATH" "$pg_bindir/initdb" -D "$pgsql_data" -E UTF8 -U postgres
-    PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
+    echo "Initializing PostgreSQL data directory at $pgsql_data (run as $WELINE_USER)..."
+    [[ "$(id -u)" -eq 0 ]] && run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$pgsql_data"
+    run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/initdb" -D "$pgsql_data" -E UTF8 -U postgres
+    run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"
   fi
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
@@ -1161,15 +1202,19 @@ fi
 # 在运行 run.php 前必须已安装 Framework 声明的 PHP 扩展（避免 Class \"DOMDocument\" not found 等）
 ensure_framework_php_extensions
 
-# 将项目目录权限设为当前用户（避免后续操作权限问题；每次安装均执行）
+# 将项目目录权限设为 weline（root 时）或当前用户；不允许项目归属 root
 fix_project_ownership() {
-  local current_user
-  current_user="$(whoami)"
-  local current_group
-  current_group="$(id -gn)"
-  echo "Setting project directory ownership to current user ($current_user:$current_group)..."
+  local owner_user owner_group
+  if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
+    owner_user="$WELINE_USER"
+    owner_group="$WELINE_USER"
+  else
+    owner_user="$(whoami)"
+    owner_group="$(id -gn)"
+  fi
+  echo "Setting project directory ownership to $owner_user:$owner_group..."
   if [[ "$PLATFORM" == "linux" ]]; then
-    run_privileged chown -R "$current_user":"$current_group" "$ROOT" 2>/dev/null || true
+    run_privileged chown -R "$owner_user":"$owner_group" "$ROOT" 2>/dev/null || true
   elif [[ "$PLATFORM" == "mac" ]]; then
     # Mac 下需要 sudo 来修改可能由其他用户/root 创建的文件权限
     if sudo -n true 2>/dev/null; then
@@ -1190,7 +1235,11 @@ fix_project_ownership
 echo ""
 RUN_ARGS=""
 [[ "$FORCE_INSTALL" == true ]] && RUN_ARGS="-f"
-(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
+if [[ "$PLATFORM" == "linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
+  run_as_weline bash -c "cd \"$ROOT\" && \"$PHP_EXE\" setup/server_installer/run.php $RUN_ARGS" || exit 1
+else
+  (cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php $RUN_ARGS) || exit 1
+fi
 echo ""
 cd "$ROOT"
 echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
