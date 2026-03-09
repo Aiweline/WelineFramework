@@ -191,9 +191,10 @@ class MasterProcess
         $this->sslEnabled = $sslEnabled;
         $this->frontend = $frontend;
 
-        // 前台模式：启用 Logger 控制台输出
-        if ($frontend) {
+        // 前台模式或开发模式：启用 Logger 控制台输出并保证写入日志文件
+        if ($frontend || \Weline\Server\Log\LogConfig::isDevMode()) {
             $this->logger->setStdoutEnabled(true);
+            $this->logger->setFileEnabled(true);
             $this->logger->setProcessTag('Master');
         }
 
