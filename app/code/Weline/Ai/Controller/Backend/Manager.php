@@ -13,7 +13,7 @@ use Weline\Framework\Acl\Acl;
  *
  * @package Weline_Ai
  */
-#[Acl('Weline_Ai::ai_manager', 'AI管理', 'mdi-robot-outline', 'AI管理中心', 'Weline_Ai::ai')]
+#[Acl('Weline_Ai::ai_manager', 'AI管理', 'mdi-robot-outline', 'AI管理中心', 'Weline_Backend::ai_group')]
 class Manager extends BackendController
 {
     /**
