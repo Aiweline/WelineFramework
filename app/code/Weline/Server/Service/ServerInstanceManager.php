@@ -683,7 +683,7 @@ class ServerInstanceManager
         $data = \array_merge([
             'name' => $name,
             'pid' => 0,
-            'host' => '0.0.0.0',
+            'host' => '127.0.0.1',
             'port' => 8080,
             'count' => 4,
             'daemon' => false,
