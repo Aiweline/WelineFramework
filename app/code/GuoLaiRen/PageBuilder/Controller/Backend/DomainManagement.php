@@ -805,7 +805,7 @@ class DomainManagement extends BaseController
      */
     public function postGetDomainPool(): string
     {
-        $siteReadyOnly = $this->request->getPost('site_ready_only', 'true') === 'true';
+        $siteReadyOnly = $this->request->getPost('site_ready_only', 'false') === 'true';
         $parentDomainId = (int) $this->request->getPost('parent_domain_id', 0);
         $search = \trim($this->request->getPost('search', '') ?? '');
         $page = \max(1, (int) $this->request->getPost('page', 1));
@@ -1425,7 +1425,8 @@ class DomainManagement extends BaseController
             ]);
 
             if (!\is_array($queryResult)) {
-                return $this->fetchJson(['success' => false, 'msg' => __('查询返回格式无效')]);
+                $fallback = $this->queryDnsRecordsFallback($domainId);
+                return $this->fetchJson($fallback);
             }
 
             return $this->fetchJson([
@@ -1434,10 +1435,65 @@ class DomainManagement extends BaseController
                 'data' => (array)($queryResult['data'] ?? []),
             ]);
         } catch (\Throwable $e) {
-            return $this->fetchJson([
+            $fallback = $this->queryDnsRecordsFallback($domainId);
+            $fallbackMsg = (string)($fallback['msg'] ?? '');
+            $prefix = (string)__('查询层异常，已切换本地兜底：%{1}', [$e->getMessage()]);
+            $fallback['msg'] = $fallbackMsg !== '' ? $prefix . '；' . $fallbackMsg : $prefix;
+            return $this->fetchJson($fallback);
+        }
+    }
+
+    /**
+     * DNS 查询兜底：不依赖 QueryProvider 注册状态
+     */
+    private function queryDnsRecordsFallback(int $domainId): array
+    {
+        try {
+            $domain = ObjectManager::getInstance(Domain::class, [], false);
+            $domain->load($domainId);
+            if (!$domain->getDomainId()) {
+                return ['success' => false, 'msg' => __('域名不存在')];
+            }
+
+            /** @var \Weline\Websites\Service\DomainResolveService $resolveService */
+            $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
+            $sync = $resolveService->syncDnsRecords($domain);
+            $details = $resolveService->getDnsDetails($domain);
+
+            $records = \is_array($details['records'] ?? null) ? $details['records'] : [];
+            $poolSync = $this->syncDnsRecordsToDomainPool($domain, $records, false);
+            $liveRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
+            if ($liveRecords !== []) {
+                $liveSync = $this->syncDnsRecordsToDomainPool($domain, $liveRecords, false);
+                $poolSync['added'] += (int)($liveSync['added'] ?? 0);
+                $poolSync['marked_non_local'] += (int)($liveSync['marked_non_local'] ?? 0);
+                $poolSync['skipped'] += (int)($liveSync['skipped'] ?? 0);
+            }
+
+            $dnsProvider = \is_array($details['dns_provider'] ?? null) ? $details['dns_provider'] : [];
+            $syncError = (string)($sync['error'] ?? '');
+            $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+
+            return [
+                'success' => true,
+                'msg' => $syncError === ''
+                    ? __('获取成功（兜底）')
+                    : __('DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%{1}', [$syncError]),
+                'data' => [
+                    'domain' => $domain->getDomain(),
+                    'records' => $records,
+                    'dns_provider' => (string)($dnsProvider['provider'] ?? $domain->getDnsProvider() ?? ''),
+                    'dns_provider_name' => (string)($dnsProvider['name'] ?? $domain->getDnsProvider() ?? ''),
+                    'server_ip' => $serverIpService->getPublicIpv4(),
+                    'pool_sync' => $poolSync,
+                    'sync_error' => $syncError,
+                ],
+            ];
+        } catch (\Throwable $e) {
+            return [
                 'success' => false,
-                'msg' => __('获取 DNS 记录失败：%{1}', [$e->getMessage()]),
-            ]);
+                'msg' => __('获取 DNS 记录失败（兜底）：%{1}', [$e->getMessage()]),
+            ];
         }
     }
 
