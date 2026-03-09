@@ -288,6 +288,17 @@ class ControlClient
     }
 
     /**
+     * 发送日志行到 Master（开发模式统一输出到 Master 控制台）
+     */
+    public function sendLogLine(string $line, string $level, string $processTag): bool
+    {
+        if (!$this->isConnected()) {
+            return false;
+        }
+        return $this->send(ControlMessage::logLine($line, $level, $processTag));
+    }
+
+    /**
      * 发送原始消息
      */
     public function send(string $message): bool

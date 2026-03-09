@@ -879,6 +879,13 @@ if ($controlPort > 0) {
         $ipcClient = $kernel->getClient();
         WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
         WlsLogger::info_("已上报就绪状态");
+        if (\Weline\Server\Log\LogConfig::isDevMode() && $ipcClient !== null) {
+            WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipcClient): void {
+                if ($ipcClient->isConnected()) {
+                    $ipcClient->sendLogLine($line, $level, $tag);
+                }
+            });
+        }
     } else {
         WlsLogger::warning_("IPC 控制通道连接失败 (控制端口: {$controlPort})，继续独立运行");
         $kernel = null;

@@ -333,6 +333,8 @@ class ServiceOrchestrator
             throw new \RuntimeException("无法启动 IPC 控制服务器，端口: {$context->controlPort}");
         }
         WlsLogger::info_("[Orchestrator] IPC 控制服务器已启动，端口: " . $this->controlServer->getPort());
+        // 开发模式下：前台将子进程日志输出到控制台，后台仅写 wls 日志文件
+        $this->controlServer->setLogToConsole($context->frontend);
 
         // 设置 IPC 消息处理器
         $this->controlServer->onMessage([$this, 'handleIpcMessage']);
@@ -525,19 +527,12 @@ class ServiceOrchestrator
         foreach ($preparedInstances as $instanceId => $instance) {
             $pid = $pids[$instanceId] ?? 0;
             
+            // 非阻塞启动时 Windows/Linux 均可能不返回 PID，统一等待子进程通过 IPC register 上报
             if ($pid <= 0) {
-                if (\defined('IS_WIN') && IS_WIN) {
-                    WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（Windows 非阻塞路径），等待 register 确认");
-                } else {
-                    WlsLogger::error_("[Orchestrator] 启动 {$role}#{$instanceId} 失败");
-                    $instance->state = ServiceInstance::STATE_FAILED;
-                    $this->registry->addInstance($instance);
-                    $results[] = null;
-                    continue;
-                }
+                WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
             }
             
-            $instance->pid = $pid;
+            $instance->pid = $pid > 0 ? $pid : 0;
             $instance->state = ServiceInstance::STATE_STARTING;
             $this->registry->addInstance($instance);
             
@@ -587,18 +582,12 @@ class ServiceOrchestrator
 
         // 委托给 Processer 启动进程
         $pid = $this->spawnProcess($command, $instance);
+        // 非阻塞启动时 Windows/Linux 均可能不返回 PID，统一等待子进程通过 IPC register 上报
         if ($pid <= 0) {
-            if (\defined('IS_WIN') && IS_WIN) {
-                WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（Windows 非阻塞路径），等待 register 确认");
-            } else {
-                WlsLogger::error_("[Orchestrator] 启动 {$role}#{$instanceId} 失败");
-                $instance->state = ServiceInstance::STATE_FAILED;
-                $this->registry->addInstance($instance);
-                return null;
-            }
+            WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
         }
 
-        $instance->pid = $pid;
+        $instance->pid = $pid > 0 ? $pid : 0;
         $instance->state = ServiceInstance::STATE_STARTING;
         $this->registry->addInstance($instance);
 

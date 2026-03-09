@@ -61,6 +61,9 @@ class ControlMessage
     /** 子进程 → Master：退出原因（best-effort，Fatal 时可能缺失） */
     public const TYPE_EXIT_REASON = 'exit_reason';
 
+    /** 子进程 → Master：日志行（开发模式统一汇聚到 Master 控制台） */
+    public const TYPE_LOG = 'log';
+
     /** 子进程 → Master：上报运行状态 */
     public const TYPE_STATUS_REPORT = 'status_report';
     /** 子进程 → Master：上报请求遥测事件 */
@@ -560,6 +563,24 @@ class ControlMessage
             'total'             => $total,
             'current_worker_id' => $currentWorkerId,
             'stage'             => $stage,
+        ]);
+    }
+
+    /**
+     * 构建 log 消息（子进程 → Master：单行日志，开发模式汇聚到 Master 控制台）
+     *
+     * @param string $line 已格式化的日志行（含时间戳、进程标识、级别、内容）
+     * @param string $level 级别
+     * @param string $processTag 进程标识
+     * @return string NDJSON 消息
+     */
+    public static function logLine(string $line, string $level, string $processTag): string
+    {
+        return self::encode([
+            'type'        => self::TYPE_LOG,
+            'line'        => $line,
+            'level'       => $level,
+            'process_tag' => $processTag,
         ]);
     }
 }

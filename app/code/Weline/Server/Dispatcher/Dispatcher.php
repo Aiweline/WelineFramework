@@ -449,6 +449,16 @@ class Dispatcher
             $this->orchestratorEpoch,
             $this->orchestratorLaunchId
         );
+        // 开发模式：日志统一汇聚到 Master 控制台
+        if (\Weline\Server\Log\LogConfig::isDevMode() && $this->ipcClient !== null) {
+            $ipc = $this->ipcClient;
+            $this->log('WlsLogger 已接入 IPC 日志汇聚', 'INFO');
+            WlsLogger::getInstance()->setIpcLogSink(static function (string $line, string $level, string $tag) use ($ipc): void {
+                if ($ipc->isConnected()) {
+                    $ipc->sendLogLine($line, $level, $tag);
+                }
+            });
+        }
     }
     
     /**
