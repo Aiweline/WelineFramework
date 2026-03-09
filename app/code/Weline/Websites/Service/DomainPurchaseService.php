@@ -113,6 +113,7 @@ class DomainPurchaseService
         $orderId = $order->getOrderId();
         $successCount = 0;
         $failCount = 0;
+        $lifecycleFailCount = 0;
         $results = [];
 
         // 逐个处理购买条目
@@ -163,6 +164,12 @@ class DomainPurchaseService
                 $purchaseResult = $adapter->purchaseDomain($domain, $years, $credentials, $contactInfo);
 
                 if ($purchaseResult['success'] ?? false) {
+                    $lifecycleResult = [
+                        'attempted' => false,
+                        'success' => true,
+                        'order_id' => 0,
+                        'message' => '',
+                    ];
                     $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_SUCCESS);
                     $item->setData(DomainPurchaseItem::schema_fields_PRICE, $purchaseResult['price'] ?? 0);
                     $item->setData(DomainPurchaseItem::schema_fields_CURRENCY, $purchaseResult['currency'] ?? 'USD');
@@ -195,7 +202,7 @@ class DomainPurchaseService
                     }
 
                     if ($startLifecycle) {
-                        $this->startLifecycleTracking($domain, $accountId, [
+                        $lifecycleResult = $this->startLifecycleTracking($domain, $accountId, [
                             'years' => $years,
                             'website_id' => $websiteId,
                             'auto_create_site' => $autoCreateSite,
@@ -209,6 +216,9 @@ class DomainPurchaseService
                             'cdn_provider' => $cdnProvider,
                             'cdn_account_id' => $cdnAccountId,
                         ]);
+                        if (!($lifecycleResult['success'] ?? false)) {
+                            $lifecycleFailCount++;
+                        }
                     }
 
                     // 触发购买成功事件
@@ -229,9 +239,17 @@ class DomainPurchaseService
                             'cdn_provider' => $cdnProvider,
                             'cdn_account_id' => $cdnAccountId,
                             'start_lifecycle' => $startLifecycle,
+                            'lifecycle_result' => $lifecycleResult,
                         ],
                     ];
                     $this->eventsManager->dispatch('Weline_Websites::domain::purchase_success', $eventData);
+                    if ($startLifecycle && !($lifecycleResult['success'] ?? false)) {
+                        $verifiedLifecycleResult = $this->getLifecycleTrackingStatus($domain);
+                        if ($verifiedLifecycleResult['success']) {
+                            $lifecycleResult = $verifiedLifecycleResult;
+                            $lifecycleFailCount--;
+                        }
+                    }
                 } else {
                     $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
                     $item->setData(DomainPurchaseItem::schema_fields_ERROR_MESSAGE, $purchaseResult['message'] ?? __('购买失败'));
@@ -242,6 +260,12 @@ class DomainPurchaseService
                     'domain' => $domain,
                     'success' => $purchaseResult['success'] ?? false,
                     'message' => $purchaseResult['message'] ?? '',
+                    'lifecycle' => $lifecycleResult ?? [
+                        'attempted' => false,
+                        'success' => false,
+                        'order_id' => 0,
+                        'message' => '',
+                    ],
                 ];
             } catch (\Exception $e) {
                 $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_FAILED);
@@ -272,6 +296,12 @@ class DomainPurchaseService
             'success' => $successCount,
             'fail' => $failCount,
         ]);
+        if ($lifecycleFailCount > 0) {
+            $message = __('%{message}；其中 %{count} 个域名未成功创建生命周期订单，请检查生命周期模块或根据返回结果重试。', [
+                'message' => $message,
+                'count' => $lifecycleFailCount,
+            ]);
+        }
 
         return [
             'success' => $successCount > 0,
@@ -475,23 +505,99 @@ class DomainPurchaseService
     /**
      * 购买完成后启动根域级生命周期跟踪。
      */
-    private function startLifecycleTracking(string $domain, int $accountId, array $options): void
+    private function startLifecycleTracking(string $domain, int $accountId, array $options): array
     {
         try {
             $serviceClass = \Weline\Saas\Service\DomainLifecycleOrchestrationService::class;
             if (!\class_exists($serviceClass)) {
-                return;
+                return [
+                    'attempted' => false,
+                    'success' => false,
+                    'order_id' => 0,
+                    'message' => __('生命周期模块不可用'),
+                ];
             }
 
             $service = ObjectManager::getInstance($serviceClass);
             if (\method_exists($service, 'startPurchasedLifecycle')) {
-                $service->startPurchasedLifecycle($domain, $accountId, $options);
+                $result = $service->startPurchasedLifecycle($domain, $accountId, $options);
+                $orderId = (int) ($result['order_id'] ?? 0);
+                $success = (bool) ($result['success'] ?? false);
+
+                if ($orderId <= 0 && \method_exists($service, 'getOrderByDomain')) {
+                    $order = $service->getOrderByDomain($domain);
+                    if ($order && \method_exists($order, 'getOrderId')) {
+                        $orderId = (int) $order->getOrderId();
+                        $success = $success || $orderId > 0;
+                    }
+                }
+
+                return [
+                    'attempted' => true,
+                    'success' => $success && $orderId > 0,
+                    'order_id' => $orderId,
+                    'message' => (string) ($result['message'] ?? ''),
+                ];
             }
+            return [
+                'attempted' => false,
+                'success' => false,
+                'order_id' => 0,
+                'message' => __('生命周期服务缺少 startPurchasedLifecycle 方法'),
+            ];
         } catch (\Throwable $e) {
             w_log_warning(__('启动域名生命周期跟踪失败：%{domain}，错误：%{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
+            return [
+                'attempted' => true,
+                'success' => false,
+                'order_id' => 0,
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
+    private function getLifecycleTrackingStatus(string $domain): array
+    {
+        try {
+            $serviceClass = \Weline\Saas\Service\DomainLifecycleOrchestrationService::class;
+            if (!\class_exists($serviceClass)) {
+                return [
+                    'attempted' => false,
+                    'success' => false,
+                    'order_id' => 0,
+                    'message' => __('生命周期模块不可用'),
+                ];
+            }
+
+            $service = ObjectManager::getInstance($serviceClass);
+            if (!\method_exists($service, 'getOrderByDomain')) {
+                return [
+                    'attempted' => false,
+                    'success' => false,
+                    'order_id' => 0,
+                    'message' => __('生命周期服务缺少 getOrderByDomain 方法'),
+                ];
+            }
+
+            $order = $service->getOrderByDomain($domain);
+            $orderId = ($order && \method_exists($order, 'getOrderId')) ? (int) $order->getOrderId() : 0;
+
+            return [
+                'attempted' => true,
+                'success' => $orderId > 0,
+                'order_id' => $orderId,
+                'message' => $orderId > 0 ? __('生命周期订单已创建') : __('未找到生命周期订单'),
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'attempted' => true,
+                'success' => false,
+                'order_id' => 0,
+                'message' => $e->getMessage(),
+            ];
         }
     }
 }
