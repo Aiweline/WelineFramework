@@ -361,7 +361,7 @@ id属性不能为空,"The id attribute cannot be empty."
 请稍后重试,请稍后重试
 网络错误，请稍后重试,"Network error, please try again later."
 场景适配器管理,"Scene Adapter Management"
-AI助手,"AI assistant"
+"AI 中心","AI 中心"
 总适配器,总适配器
 已激活,Activated
 扫描适配器,"Scan adapter"
@@ -452,7 +452,6 @@ AI助手,"AI assistant"
 初始化失败：,"Initialization failed:"
 暂无受保护的模型,"No protected models"
 "AI 管理","AI 管理"
-"AI 中心","AI 中心"
 模型,Model
 适配器,Adapter
 复制模型,"Copy model"
@@ -747,6 +746,7 @@ AI聊天助手,"AI Chat Assistant"
 请输入您的消息...,"Please enter your message..."
 确定要清空聊天记录吗？,"Are you sure you want to clear the chat history?"
 错误：,Error:
+AI助手,"AI assistant"
 "场景 ""%{1}"" 未配置默认模型","场景 ""%{1}"" 未配置默认模型"
 加载助手列表失败：%{1},"Failed to load assistant list: %{1}"
 助手不存在,"The assistant does not exist"
