@@ -7,7 +7,7 @@ globs:
 alwaysApply: false
 ---
 
-# 错误修复后自动更新技能（强制）
+# 错误修复后学习机制（按价值沉淀）
 
 ## 触发条件
 
@@ -16,14 +16,18 @@ alwaysApply: false
 ## 必须执行的步骤
 
 1. **验证修复**（优先单元测试/功能测试/HTTP 测试，最多重试 2 次）。验证失败禁止更新知识库。
-2. **调用 `error-learning` 技能**，分析错误类型与根本原因，记录到知识库。
-3. **更新 `error-tracking/ERROR_LOG.md`**（完整条目）与 **`COMMON_ERRORS.md`**（快速参考）。模板与格式见 `error-learning`、`error-tracking` 技能。
-4. **更新至少 1 个相关技能文档**（按错误类型：路由→weline-routing，控制器→module-development，数据库→database-model-standards，事件→create-event，Hook→create-hook/create-extends，通知→friendly-notifications 等），添加 Q&A 与交叉引用。
+2. **调用 `error-learning` 技能**，分析错误类型与根本原因。
+3. **执行“是否值得沉淀”评估**（全部不满足则不更新文档）：
+   - 跨模块可复用，非一次性特例；
+   - 属于框架边界/约定，重复发生概率高；
+   - 能沉淀为可执行检查项/规则；
+   - 影响范围中高（稳定性/安全/数据一致性/性能）。
+4. **仅在“值得沉淀”时**：更新相关技能文档（至少 1 个），必要时更新 `error-tracking/DEVELOPMENT_NOTES.md` 抽象规则。
 
 ## 禁止
 
-- 修复后不更新技能文档
-- 不调用 `error-learning` 即更新 ERROR_LOG
+- 未经价值评估就机械更新知识库
+- 将模块特例、临时问题写入通用规则
 - 验证失败时更新知识库
 
 **详细模板与清单见**：`.cursor/skills/error-learning/SKILL.md`、`.cursor/skills/error-tracking/SKILL.md`

@@ -30,7 +30,7 @@ alwaysApply: false
 
 | 场景 | 必须读取的技能 | 执行内容 |
 |------|----------------|----------|
-| **修复错误/bug 后** | `error-learning`、`error-tracking` | 验证修复 → 更新 ERROR_LOG.md、COMMON_ERRORS.md、相关技能 Q&A；遵循 `.cursor/rules/auto-update-skills-on-error.mdc` |
+| **修复错误/bug 后** | `error-learning`、`error-tracking` | 验证修复 → 执行价值评估 → 仅在值得沉淀时更新 DEVELOPMENT_NOTES.md 或相关技能 Q&A；遵循 `.cursor/rules/auto-update-skills-on-error.mdc` |
 | **完成任务/计划后**（都处理了、做完了、搞定了、完成了） | `post-plan-completion-check` + `create-plan` | 执行校验清单；**更新计划状态**（🔵测试中/🟢已完成）和完成度 |
 | **计划完成后深度审计** ⭐（审计、audit、计划审计、代码对比、缺陷检查） | `plan-code-auditor` | 对比计划与实际代码；生成审计报告；列出缺陷和遗漏；提供修复方案 |
 | **创建计划前** ⭐⭐（创建计划、写计划、做个计划、规划一下） | `pre-plan-analysis` | 先执行缺陷检查和现状分析；生成分析报告；为计划编写提供依据 |

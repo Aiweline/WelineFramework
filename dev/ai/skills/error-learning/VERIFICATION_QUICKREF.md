@@ -157,7 +157,7 @@ php bin/w test:unit Module/Test/Unit/TestClass::testMethod
 
 ### ❌ 验证失败时禁止的操作：
 
-1. ❌ 不要更新知识库（ERROR_LOG.md, COMMON_ERRORS.md等）
+1. ❌ 不要更新知识库（如 DEVELOPMENT_NOTES.md 与相关技能规则）
 2. ❌ 不要标记为"已完成"
 3. ❌ 不要继续下一个任务
 4. ❌ 不要超过 2 次重试

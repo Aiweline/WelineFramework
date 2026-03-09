@@ -167,7 +167,7 @@ $ php test_delete.php
 
 ## 知识库更新（验证成功后）
 
-### 1. ERROR_LOG.md 更新
+### 1. DEVELOPMENT_NOTES.md 更新
 ```markdown
 ## [2026-01-29] ORM delete 操作必须调用 fetch() 才能执行 ✅ 已修正
 
@@ -201,7 +201,7 @@ $model->reset()
 \`\`\`
 ```
 
-### 2. COMMON_ERRORS.md 更新
+### 2. 相关技能文档更新
 ```markdown
 | 错误 | 原因 | 解决方案 | 验证方法 |
 |------|------|----------|---------|
@@ -303,8 +303,8 @@ assert($after === 0, '删除后应该没有记录');
 - **验证脚本**: `test_delete.php`（已清理）
 
 ### 知识库更新
-- ✅ ERROR_LOG.md - 已更新（含验证结果）
-- ✅ COMMON_ERRORS.md - 已更新（含验证方法）
+- ✅ DEVELOPMENT_NOTES.md - 已更新（抽象规则 + 验证结论）
+- ✅ 相关技能文档 - 已更新（可执行检查项）
 - ✅ database-model-standards - 已添加 Q&A 和验证示例
 - ✅ error-patterns.json - 已更新模式数据
 

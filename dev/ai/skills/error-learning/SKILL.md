@@ -216,14 +216,14 @@ $url = $this->url->getBackendUrl('module/controller/action');
 | `json_decode`, `getContent`, POST | `weline-routing` |
 | 前台, 后台, `AdminToast`, URL | `theme-development` |
 | `alert`, `confirm`, 原生弹窗 | `friendly-notifications` |
-| `register.php`, `upgrade()`（已废弃） | 表结构用 #[Col]+setup:upgrade；见 `error-tracking/ERROR_LOG.md`、`database-model-standards` |
+| `register.php`, `upgrade()`（已废弃） | 表结构用 #[Col]+setup:upgrade；见 `error-tracking/DEVELOPMENT_NOTES.md`、`database-model-standards` |
 | 事件, `dispatch`, Observer | `create-event` |
 | 数据库, Model, `install()`（已废弃）, `delete` | `database-model-standards`（#[Col]、Schema diff）、`create-weshop-model` |
 | `delete()->fetch()`, 删除失败 | `database-model-standards`, `error-tracking` |
 
-### 5. 知识库自动更新
+### 5. 知识沉淀（按价值）
 
-错误解决后，**必须先验证**，验证成功后才更新知识库：
+错误解决后，**必须先验证**。验证成功后，先做价值评估，再决定是否更新知识库：
 
 #### 完整流程（含验证）
 
@@ -239,8 +239,8 @@ graph TD
     H --> D
     F -->|失败 & 尝试=2| I[报告失败]
     I --> J[询问用户]
-    G --> K[ERROR_LOG.md]
-    G --> L[COMMON_ERRORS.md]
+    G --> K[DEVELOPMENT_NOTES.md]
+    G --> L[相关技能文档]
     G --> M[相关技能文档]
     G --> N[error-patterns.json]
     M --> O[建立交叉引用]
@@ -271,13 +271,19 @@ graph TD
    - [ ] ❌ 失败 & 第1次：深度分析 → 重新修复
    - [ ] ❌ 失败 & 第2次：报告失败 → 询问用户
 
-#### 知识库更新检查清单
+#### 价值评估检查清单
 
 **仅在验证成功后执行：**
 
-- [ ] ERROR_LOG.md - 添加详细记录（含验证结果）
-- [ ] COMMON_ERRORS.md - 添加快速参考
-- [ ] 相关技能 - 添加 Q&A 和实例
+- [ ] 是否跨模块可复用（非模块特例）
+- [ ] 是否可转化为可执行规则
+- [ ] 是否重复发生概率高
+- [ ] 是否影响稳定性/安全/一致性/性能
+
+**满足 >=2 项再更新：**
+
+- [ ] DEVELOPMENT_NOTES.md - 添加抽象规则（可选）
+- [ ] 相关技能 - 添加 Q&A/检查项（至少 1 个，按需）
 - [ ] error-patterns.json - 更新错误模式库
 - [ ] 交叉引用 - 建立技能间链接
 - [ ] 验证方法 - 记录使用的验证方法
@@ -755,11 +761,9 @@ if (($response['code'] ?? 0) !== 1) {
            ├─ YES → 深度分析 → 重新修复（尝试 2）→ 返回步骤 6
            └─ NO → 报告失败 → 询问用户 → END
    ↓
-9. 知识库更新
-   ├─→ ERROR_LOG.md（含验证结果）
-   ├─→ COMMON_ERRORS.md
-   ├─→ 相关技能文档
-   └─→ error-patterns.json
+9. 价值评估
+   ├─→ 值得沉淀：更新 DEVELOPMENT_NOTES.md/相关技能
+   └─→ 不值得沉淀：仅保留当前修复结论
    ↓
 10. 交叉引用建立
    ↓
@@ -790,8 +794,7 @@ if (($response['code'] ?? 0) !== 1) {
 - **尝试次数**: 1/2（首次成功）或 2/2（第二次成功）
 
 ### 知识库更新
-- ✅ ERROR_LOG.md - 已添加 [日期] 条目
-- ✅ COMMON_ERRORS.md - 已更新 [分类] 表格
+- ✅ DEVELOPMENT_NOTES.md - 已更新抽象规则
 - ✅ [技能名称] - 已添加 Q&A
 - ✅ 交叉引用 - 已建立
 
@@ -953,7 +956,7 @@ database-model-standards ←→ create-weshop-model
 
 **适用场景：**
 - ✅ 用户明确说"写一个文档"、"创建说明文档"、"生成文档"
-- ✅ 框架技能要求（如 error-tracking 的 ERROR_LOG.md）
+- ✅ 框架技能要求（如 error-tracking 的 DEVELOPMENT_NOTES.md）
 - ✅ 复杂功能确实需要文档说明，且用户同意
 
 **禁止场景（❌ 不要创建文档）：**

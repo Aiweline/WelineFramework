@@ -528,7 +528,7 @@ if (\function_exists('posix_kill')) {
 说明：
 - `-$pid` 表示向 PGID 发送信号（与 killpg 语义一致）
 - 失败回退到 `posix_kill($pid, ...)`，避免跨平台 Fatal
-- 相关案例：见 `error-tracking/ERROR_LOG.md` 中 2026-02-12 条目
+- 相关规则：见 `error-tracking/DEVELOPMENT_NOTES.md`
 
 ## 最佳实践
 
