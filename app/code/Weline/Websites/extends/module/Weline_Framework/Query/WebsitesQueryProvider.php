@@ -875,7 +875,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $syncError = (string)($sync['error'] ?? '');
 
         return [
-            'success' => $syncError === '',
+            // 查询层统一返回 success=true，避免上层因第三方适配器波动中断 DNS 管理流程
+            'success' => true,
             'message' => $syncError === ''
                 ? (string)__('获取成功')
                 : (string)__('DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%{1}', [$syncError]),
