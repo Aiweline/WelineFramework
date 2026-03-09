@@ -1278,38 +1278,19 @@ function getHeaderValue(string $rawRequest, string $headerName): ?string
 }
 
 /**
- * 将 WLS 处理耗时注入到响应中（响应头 + 可选 HTML 注入供开发工具读取）
+ * 注入 WLS 处理耗时响应头。
+ * 仅添加 header，不修改 body / Content-Length，避免 Content-Length mismatch 导致浏览器 loading 挂死。
+ * 前端通过 Server-Timing API 读取：performance.getEntriesByType('navigation')[0].serverTiming
  */
 function injectWlsProcessTimeHeader(string $response, float $durationMs): string
 {
-    $ms = (int)\round($durationMs);
-    $headerLine = "X-WLS-Process-Time: {$ms}\r\n";
     $pos = \strpos($response, "\r\n\r\n");
     if ($pos === false) {
         return $response;
     }
-    // $pos 指向 headers 末尾的 \r\n\r\n 中第一个 \r，+2 跳过该 \r\n，在空行前插入新 header
-    $response = \substr_replace($response, $headerLine, $pos + 2, 0);
-
-    // 对 text/html 注入 script 供 dev-tool-panel 读取（需更新 Content-Length）
-    $headerEnd = \strpos($response, "\r\n\r\n");
-    $headersSection = \substr($response, 0, $headerEnd);
-    if (\preg_match('/Content-Type:\s*text\/html/i', $headersSection)) {
-        $injected = "<script>window.__WLS_PROCESS_TIME_MS={$ms};</script>\n";
-        if (\preg_match('/Content-Length:\s*(\d+)/i', $response, $clMatch)) {
-            $oldLen = (int)$clMatch[1];
-            $newLen = $oldLen + \strlen($injected);
-            $response = \preg_replace('/Content-Length:\s*\d+/i', "Content-Length: {$newLen}", $response, 1);
-            $bodyPos = \strpos($response, "\r\n\r\n") + 4;
-            $body = \substr($response, $bodyPos);
-            $injectPos = \stripos($body, '</body>');
-            if ($injectPos !== false) {
-                $body = \substr_replace($body, $injected, $injectPos, 0);
-                $response = \substr($response, 0, $bodyPos) . $body;
-            }
-        }
-    }
-    return $response;
+    $ms = \round($durationMs, 2);
+    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
+    return \substr_replace($response, $headers, $pos + 2, 0);
 }
 
 function handleRequest(
