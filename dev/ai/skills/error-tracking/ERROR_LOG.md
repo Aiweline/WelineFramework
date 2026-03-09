@@ -4,6 +4,44 @@
 
 ---
 
+## [2026-03-09] setup:upgrade 导入路由时内存溢出（UrlManager 插件全量数组驻留）✅ 已修复
+
+**错误类型**: 模块升级 / 路由导入内存峰值
+
+**错误信息**:
+```text
+Fatal error: Allowed memory size of 134217728 bytes exhausted
+in /app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php on line 76
+```
+
+**根本原因**:
+1. `ModuleUpgradeExecuteAfterPlugin::afterExecute()` 在一个方法作用域内顺序 `include` 4 份路由数组（frontend/backend + pc/rest），大数组变量在方法结束前都可能保留引用。  
+2. 升级期间模型循环装载（`Module::load('name', ...)`）重复执行，伴随路由总量增加抬高内存压力。  
+3. 当执行到 `Env::path_BACKEND_PC_ROUTER_FILE` 时，内存峰值突破 `128M` 限制触发 OOM。
+
+**解决方案**:
+1. 将四段重复逻辑统一为 `syncRoutesFromFile($filePath, $type)`，按文件分段处理。  
+2. 每段处理结束后显式 `unset($urls); gc_collect_cycles();`，及时释放大数组。  
+3. 增加模块 ID 缓存 `moduleIdCache`，避免同模块在同一轮导入中重复 `load()`。
+
+**验证方法**:
+```bash
+php -l app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php
+php bin/w setup:upgrade
+```
+
+**验证结果**: ✅ 成功（`setup:upgrade` 全流程完成，未再出现该文件内存溢出）
+
+**预防措施**:
+1. 升级阶段处理大路由/大配置文件时，统一采用“分段处理 + 显式释放”模式。  
+2. 同一轮批处理中的重复查库（如 module name -> id）优先做进程内缓存。  
+3. 对 `include` 返回大数组的场景，避免在同一作用域保留多个大变量到方法末尾。
+
+**相关文件**:
+- `app/code/Weline/UrlManager/Plugin/ModuleUpgradeExecuteAfterPlugin.php`
+
+---
+
 ## [2026-03-09] GName DNS 记录接口路径过时导致 `-1`（误命中“修改 DNS”错误）✅ 已修复
 
 **错误类型**: 第三方 API 对接 / 接口路径漂移
