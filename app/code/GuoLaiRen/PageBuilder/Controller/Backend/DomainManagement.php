@@ -1264,10 +1264,18 @@ class DomainManagement extends BaseController
                 return $this->fetchJson(['success' => false, 'msg' => $result['message'] ?? __('添加 DNS 记录失败')]);
             }
 
+            // 新增 DNS 后立即同步到域名池：
+            // - 本机 IP：自动入池
+            // - 非本机 IP：入池并标记 is_local_server=0
+            $poolSync = $this->syncDnsRecordsToDomainPool($domain, [$record], true);
+
             return $this->fetchJson([
                 'success' => true,
                 'msg' => __('DNS 记录添加成功'),
-                'data' => $result,
+                'data' => [
+                    'dns_result' => $result,
+                    'pool_sync' => $poolSync,
+                ],
             ]);
         } catch (\Throwable $e) {
             return $this->fetchJson([
@@ -1424,6 +1432,15 @@ class DomainManagement extends BaseController
             $serverIpService = ObjectManager::getInstance(ServerIpService::class);
             $serverIp = $serverIpService->getPublicIpv4();
 
+            // 查询 DNS 时双保险：
+            // - 池子里没有且指向本机公网 IP 的域名：自动写入池子
+            // - 已存在但当前记录不是本机 IP：标记为非本机域名
+            $poolSync = $this->syncDnsRecordsToDomainPool(
+                $domain,
+                \is_array($result) ? $result : [],
+                false
+            );
+
             return $this->fetchJson([
                 'success' => true,
                 'msg' => __('获取成功'),
@@ -1433,6 +1450,7 @@ class DomainManagement extends BaseController
                     'dns_provider' => $account->getRegistrarCode(),
                     'dns_provider_name' => $account->getAccountName(),
                     'server_ip' => $serverIp,
+                    'pool_sync' => $poolSync,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -1445,6 +1463,133 @@ class DomainManagement extends BaseController
                 'msg' => __('获取 DNS 记录失败：%{1}', [$error]),
             ]);
         }
+    }
+
+    /**
+     * 将 DNS 记录同步到域名池（双保险）
+     *
+     * @param Domain $rootDomain 根域名模型
+     * @param array $records DNS 记录数组
+     * @param bool $createNonLocal 是否在非本机 IP 时也创建池记录（新增记录场景）
+     * @return array{added:int, marked_non_local:int, skipped:int}
+     */
+    private function syncDnsRecordsToDomainPool(Domain $rootDomain, array $records, bool $createNonLocal = false): array
+    {
+        $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+        $rootDomainName = \strtolower((string) $rootDomain->getDomain());
+        $parentDomainId = (int) $rootDomain->getDomainId();
+        $now = \date('Y-m-d H:i:s');
+
+        $added = 0;
+        $markedNonLocal = 0;
+        $skipped = 0;
+
+        foreach ($records as $record) {
+            if (!\is_array($record)) {
+                $skipped++;
+                continue;
+            }
+
+            $type = \strtoupper((string) ($record['type'] ?? $record['record_type'] ?? ''));
+            $host = \trim((string) ($record['host'] ?? $record['name'] ?? '@'));
+            $value = \trim((string) ($record['value'] ?? $record['data'] ?? ''));
+
+            $fullDomain = $this->buildFullDomainFromHost($rootDomainName, $host);
+            if ($fullDomain === '') {
+                $skipped++;
+                continue;
+            }
+
+            $isIpRecord = $type === 'A' || $type === 'AAAA';
+            $isLocal = $isIpRecord && $value !== '' && $serverIpService->isLocalServer($value);
+
+            $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
+            $poolDomain->loadByDomain($fullDomain);
+            $exists = $poolDomain->getPoolId() > 0;
+
+            if (!$exists && !$isLocal && !$createNonLocal) {
+                $skipped++;
+                continue;
+            }
+
+            if (!$exists) {
+                $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
+                $poolDomain->setDomain($fullDomain);
+                $poolDomain->setParentDomainId($parentDomainId);
+                $poolDomain->setDescription(__('由 DNS 记录自动同步'));
+                $poolDomain->setStatus(DomainPool::STATUS_ACTIVE);
+                $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+                $poolDomain->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+                $poolDomain->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+                $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
+                $poolDomain->setResolveCheckedAt($now);
+                $poolDomain->setResolveError('');
+                $poolDomain->setIsLocalServer($isLocal);
+                if ($type === 'A') {
+                    $poolDomain->setResolvedIp($value);
+                }
+                if ($type === 'AAAA') {
+                    $poolDomain->setResolvedIpv6($value);
+                }
+                $poolDomain->calculateSiteReady();
+                $poolDomain->save();
+                $added++;
+                continue;
+            }
+
+            // 已存在：仅在“非本机”场景下做标记，避免重复更新已正常本机记录
+            if (!$isLocal && $poolDomain->isLocalServer()) {
+                $poolDomain->setIsLocalServer(false);
+                $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVED);
+                $poolDomain->setResolveCheckedAt($now);
+                $poolDomain->setResolveError('');
+                if ($type === 'A' && $value !== '') {
+                    $poolDomain->setResolvedIp($value);
+                }
+                if ($type === 'AAAA' && $value !== '') {
+                    $poolDomain->setResolvedIpv6($value);
+                }
+                $poolDomain->calculateSiteReady();
+                $poolDomain->save();
+                $markedNonLocal++;
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'added' => $added,
+            'marked_non_local' => $markedNonLocal,
+            'skipped' => $skipped,
+        ];
+    }
+
+    /**
+     * 根据 DNS host 生成完整域名
+     */
+    private function buildFullDomainFromHost(string $rootDomain, string $host): string
+    {
+        $rootDomain = \strtolower(\trim($rootDomain));
+        $host = \strtolower(\trim($host));
+
+        if ($rootDomain === '') {
+            return '';
+        }
+
+        if ($host === '' || $host === '@') {
+            return $rootDomain;
+        }
+
+        $host = \rtrim($host, '.');
+        if ($host === $rootDomain) {
+            return $rootDomain;
+        }
+
+        if (\str_ends_with($host, '.' . $rootDomain)) {
+            return $host;
+        }
+
+        return $host . '.' . $rootDomain;
     }
 
     /**
