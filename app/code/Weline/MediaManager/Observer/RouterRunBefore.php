@@ -37,23 +37,29 @@ class RouterRunBefore implements ObserverInterface
         
         # 匹配模块静态资源（开发环境下直接从模块目录加载）
         # 路径格式: /Weline/ModuleName/view/statics/... 或 /Vendor/ModuleName/view/statics/...
-        if (preg_match('#^/([a-z0-9_]+)/([a-z0-9_]+)/view/statics/(.+)$#', $path, $matches)) {
+        # 注意：使用 path_original 保留大小写（Linux 区分），Framework 模块实际为 View/statics
+        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/statics/(.+)$#', $path_original !== false ? $path_original : $path, $matches)) {
             $vendor = $matches[1];
             $module = $matches[2];
             $file = $matches[3];
-            $module_file_path = BP . '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
+            $base = BP . '/app/code/' . $vendor . '/' . $module;
+            $candidates = [
+                $base . '/view/statics/' . $file,
+                $base . '/View/statics/' . $file,  // Framework 模块
+            ];
             if (IS_WIN) {
-                $module_file_path = str_replace('/', '\\', $module_file_path);
-                $module_file_path = str_replace('\\\\', '\\', $module_file_path);
+                $candidates = array_map(static fn ($p) => str_replace(['/', '\\\\'], ['\\', '\\'], $p), $candidates);
             } else {
-                $module_file_path = str_replace('//', '/', $module_file_path);
+                $candidates = array_map(static fn ($p) => str_replace('//', '/', $p), $candidates);
             }
-            if (is_file($module_file_path)) {
-                /**@var Core $core */
-                $core = ObjectManager::getInstance(Core::class);
-                $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
-                $core->StaticFile($static_url, true);
-                exit;
+            foreach ($candidates as $module_file_path) {
+                if (is_file($module_file_path)) {
+                    /**@var Core $core */
+                    $core = ObjectManager::getInstance(Core::class);
+                    $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
+                    $core->StaticFile($static_url, true);
+                    exit;
+                }
             }
         }
         # 匹配主题资源（开发环境下直接从模块 view/theme 目录加载，如 theme:css）
