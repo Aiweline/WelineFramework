@@ -142,7 +142,7 @@ if (!$fromStep5b) {
     }
 }
 
-// 2. env:check；未通过则先 env:install 再重检，仍不通过再退出
+// 2. env:check；未通过则先 env:install 再重检，仍不通过仅警告不退出（继续后续步骤）
 if (!$fromStep5b) {
     $code = $run('bin/w env:check');
     if ($code !== 0) {
@@ -150,18 +150,16 @@ if (!$fromStep5b) {
         $run('bin/w env:install -y');
         $code = $run('bin/w env:check');
         if ($code !== 0) {
-            fwrite(STDERR, "ERROR: env:check failed (exit $code). Fix required dependencies and re-run.\n");
-            exit(1);
+            fwrite(STDERR, "WARNING: env:check 仍未通过 (exit $code)。将继续后续步骤，完成后请运行 php bin/w env:check 验证并手动修复缺失依赖。\n");
         }
     }
 }
 
-// 3. env:install -y（安装/补齐推荐项等）
+// 3. env:install -y（安装/补齐推荐项等）；失败不阻断，仅警告，允许后续步骤继续
 if (!$fromStep5b) {
     $code = $run('bin/w env:install -y');
     if ($code !== 0) {
-        fwrite(STDERR, "ERROR: env:install failed (exit $code).\n");
-        exit(1);
+        fwrite(STDERR, "WARNING: env:install 有项未成功安装 (exit $code)。将继续后续步骤，请稍后运行 php bin/w env:check 验证并手动修复。\n");
     }
 }
 
