@@ -47,11 +47,14 @@ final class SessionStore
     /** 持久化间隔（秒） */
     private int $persistInterval;
 
-    /** 每 N 次写入后持久化 */
+    /** 每 N 次写入后持久化（仅统计 set/delete/destroy 等真实写入，不含 get/touch） */
     private int $persistOnWrites;
 
     /** 上次持久化时间 */
     private int $lastPersistTime = 0;
+
+    /** 最小持久化间隔（秒），防止高并发下重复刷盘 */
+    private int $persistMinInterval = 5;
 
     /** 自上次持久化后的写入次数 */
     private int $writesSinceLastPersist = 0;
@@ -105,6 +108,10 @@ final class SessionStore
             @\mkdir($basePath, 0755, true);
         }
         $this->persistPath = \rtrim($basePath, '/\\') . '/wls_session_store.dat';
+        $this->persistMinInterval = (int)($config['persist_min_interval'] ?? 5);
+        if ($this->persistMinInterval < 1) {
+            $this->persistMinInterval = 1;
+        }
         
         $this->lastPersistTime = \time();
         $this->startTime = \time();
@@ -200,6 +207,7 @@ final class SessionStore
 
     /**
      * 检查是否需要持久化
+     * 节流：两次持久化间隔至少 persistMinInterval 秒，避免高并发下疯狂刷盘。
      */
     public function checkPersist(): bool
     {
@@ -208,13 +216,18 @@ final class SessionStore
         }
 
         $now = \time();
-        $needPersist = false;
+        $elapsed = $now - $this->lastPersistTime;
 
+        // 节流：距上次持久化不足 persistMinInterval 秒则不持久化（避免 get/touch 导致刷屏）
+        if ($elapsed < $this->persistMinInterval) {
+            return false;
+        }
+
+        $needPersist = false;
         if ($this->writesSinceLastPersist >= $this->persistOnWrites) {
             $needPersist = true;
         }
-
-        if ($now - $this->lastPersistTime >= $this->persistInterval) {
+        if ($elapsed >= $this->persistInterval) {
             $needPersist = true;
         }
 
@@ -500,7 +513,8 @@ final class SessionStore
     }
 
     /**
-     * 刷新 Session 过期时间
+     * 刷新 Session 过期时间（滑动 TTL）
+     * 不调用 markDirty()，避免每次 get 都算“写入”导致频繁持久化刷屏。
      */
     public function touch(string $sessionId, int $ttl = 0): bool
     {
@@ -512,7 +526,7 @@ final class SessionStore
         $this->store[$sessionId]['expire'] = $ttl > 0 ? \time() + $ttl : 0;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty();
+        // 不 markDirty：仅刷新内存中的 TTL，定时/按写入次数持久化时会带上最新状态
 
         return true;
     }
