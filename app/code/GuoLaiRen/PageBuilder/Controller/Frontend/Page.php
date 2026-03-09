@@ -120,7 +120,8 @@ class Page extends FrontendController
         
         // 检查是否为预览模式
         $isPreview = $this->request->getGet('preview') == '1';
-        
+        $previewPageId = $isPreview ? (int)$this->request->getGet('page_id') : 0;
+
         // 获取URL中的语言参数
         $requestedLocale = $this->request->getGet('lang', $this->request->getGet('locale'));
         
@@ -136,9 +137,27 @@ class Page extends FrontendController
         $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
         
         $page = null;
+
+        // 真实预览：与可视化预览一致，按 page_id 加载页面并禁止缓存，避免 handle 歧义或缓存导致显示错误模板/数据
+        if ($previewPageId > 0) {
+            $response = $this->request->getResponse();
+            $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
+            $response->setHeader('Pragma', 'no-cache');
+            $response->setHeader('Expires', '0');
+            $response->setHeader('X-Accel-Expires', '0');
+            $page = clone $this->pageModel;
+            $page->clearData();
+            $page->load($previewPageId);
+        } elseif ($isPreview) {
+            // 预览模式但未带 page_id 时也禁止缓存，避免看到旧模板
+            $response = $this->request->getResponse();
+            $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->setHeader('Pragma', 'no-cache');
+            $response->setHeader('Expires', '0');
+        }
         
-        // 如果 handle 为空，尝试加载该站点的首页
-        if (empty($handle) && $websiteId > 0) {
+        // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页
+        if (($page === null || !$page->getId()) && empty($handle) && $websiteId > 0) {
             $page = clone $this->pageModel;
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)

@@ -2298,6 +2298,32 @@ class Page extends BackendController
             ]);
         }
     }
+
+    /**
+     * 获取当前用户可用的站点列表（JSON，用于页面表单站点下拉刷新）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_create', '获取站点列表', '', '获取站点列表用于下拉', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function getWebsitesForSelect()
+    {
+        try {
+            $list = $this->getAvailableWebsitesForCurrentUser();
+            $items = [];
+            foreach ($list as $row) {
+                $wid = (int)($row['website_id'] ?? 0);
+                if ($wid <= 0) {
+                    continue;
+                }
+                $items[] = [
+                    'website_id' => $wid,
+                    'name' => $row['name'] ?? '',
+                    'code' => $row['code'] ?? '',
+                ];
+            }
+            return $this->fetchJson(['success' => true, 'items' => $items]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'items' => [], 'message' => $e->getMessage()]);
+        }
+    }
     
     /**
      * 预览页面（支持指定语言）
@@ -2354,9 +2380,12 @@ class Page extends BackendController
                 $frontendUrl = $baseUrl . '?preview=1';
             }
         } else {
+            $params = ['handle' => $handle, 'locale' => $locale, 'preview' => '1'];
+            // 真实预览带上 page_id，前端据此按 ID 加载页面，与可视化预览数据一致
+            $params['page_id'] = $pageId;
             $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
                 'pagebuilder/frontend/page/view',
-                ['handle' => $handle, 'locale' => $locale, 'preview' => '1']
+                $params
             );
         }
         

@@ -108,13 +108,14 @@ class LayoutOwnerResolver
      * 
      * @param Page $page 当前页面
      * @param bool $forBackend 是否为后台编辑场景（true时不检查首页发布状态）
+     * @param string|null $styleCodeOverride 样式覆盖（预览时 URL 的 style_code，用于“无自定义布局”时按该样式加载默认 header/footer，避免出现 default 样式头部）
      * @return array 完整布局配置
      */
-    public function getFullLayoutConfig(Page $page, bool $forBackend = false): array
+    public function getFullLayoutConfig(Page $page, bool $forBackend = false, ?string $styleCodeOverride = null): array
     {
         $layoutOwnerPageId = $this->resolveLayoutOwnerPageId($page);
         $pageType = $page->getData(Page::schema_fields_TYPE);
-        $styleCode = $page->getData('style') ?: 'default';
+        $styleCode = $styleCodeOverride ?: ($page->getData('style') ?: 'default');
         
         // 虚拟页面（id=0）处理：直接使用默认布局配置，不访问数据库
         if ($layoutOwnerPageId === 0) {
