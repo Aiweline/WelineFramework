@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Control;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 
@@ -27,18 +28,14 @@ class SharedStateAdminService
     public function listSessions(array $filter = [], int $limit = 50): array
     {
         $limit = $this->normalizeLimit($limit, 200);
-        $filter['__domain'] = self::ROLE_SESSION;
         $payloadFilter = $this->sanitizePayloadFilter($filter);
-        $client = $this->buildClient(self::ROLE_SESSION);
-        $response = $client->request(SessionProtocol::CMD_LIST, [
+        $storage = SessionFactory::getInstance()->createStorage();
+        $rawItems = $storage->list([
             'filter' => $filter,
             'limit' => $limit,
         ]);
-        if (!$this->isOk($response)) {
-            return [];
-        }
+
         $rows = [];
-        $rawItems = (array)SessionProtocol::getData((array)$response);
         foreach ($rawItems as $item) {
             if (!\is_array($item)) {
                 continue;
