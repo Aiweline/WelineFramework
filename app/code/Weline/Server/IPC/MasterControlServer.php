@@ -59,6 +59,19 @@ class MasterControlServer
     /** 客户端断开回调：function(int $clientId, array $clientInfo, self $server): void */
     private $disconnectHandler = null;
 
+    /** 开发模式下是否将子进程日志输出到 Master 控制台（前台=true，后台=false 仅写文件） */
+    private bool $logToConsole = true;
+
+    /**
+     * 设置是否将子进程日志输出到控制台（开发模式）
+     * 前台模式：true，子进程日志实时显示在 Master 控制台；
+     * 后台模式：false，子进程日志仅写入 wls 日志文件。
+     */
+    public function setLogToConsole(bool $enable): void
+    {
+        $this->logToConsole = $enable;
+    }
+
     /**
      * 启动控制服务器
      *
@@ -290,7 +303,9 @@ class MasterControlServer
         foreach ($messages as $msg) {
             $type = $msg['type'] ?? 'unknown';
             $tag  = $this->formatClientTag($clientId);
-            $this->ipcVerboseLog("[IPC-Master] RECV <-- {$tag}: type={$type}" . $this->formatMsgPayload($msg));
+            if ($type !== ControlMessage::TYPE_LOG) {
+                $this->ipcVerboseLog("[IPC-Master] RECV <-- {$tag}: type={$type}" . $this->formatMsgPayload($msg));
+            }
 
             // 内部处理 register 消息
             if ($type === ControlMessage::TYPE_REGISTER) {
@@ -311,6 +326,21 @@ class MasterControlServer
             if ($type === ControlMessage::TYPE_EXITED) {
                 $this->ipcLog("[IPC-Master] {$tag} 即将退出");
                 $this->removeClient($clientId);
+            }
+
+            // 开发模式：子进程日志汇聚到 Master；前台输出到控制台，始终写入 wls.log
+            if ($type === ControlMessage::TYPE_LOG) {
+                $line = $msg['line'] ?? '';
+                if ($line !== '') {
+                    if ($this->logToConsole) {
+                        echo $line;
+                        if (\function_exists('flush')) {
+                            @\flush();
+                        }
+                    }
+                    WlsLogger::getInstance()->appendLineForMaster($line);
+                }
+                continue;
             }
 
             // 回调外部处理器
