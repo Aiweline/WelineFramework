@@ -541,8 +541,12 @@ class WebsitesQueryProvider implements QueryProviderInterface
             : $autoResolve;
         $defaultSubdomains = $params['subdomains'] ?? ['@', 'www'];
         $defaultDnsChoice = (string)($params['dns_choice'] ?? 'follow_registrar');
+        $defaultDnsProvider = (string)($params['dns_provider'] ?? '');
+        $defaultDnsAccountId = (int)($params['dns_account_id'] ?? 0);
         $defaultDnsNameservers = (string)($params['dns_nameservers'] ?? '');
         $defaultCdnChoice = (string)($params['cdn_choice'] ?? 'follow_registrar');
+        $defaultCdnProvider = (string)($params['cdn_provider'] ?? '');
+        $defaultCdnAccountId = (int)($params['cdn_account_id'] ?? 0);
         $defaultStartLifecycle = isset($params['start_lifecycle'])
             ? (string) $params['start_lifecycle']
             : '1';
@@ -560,11 +564,23 @@ class WebsitesQueryProvider implements QueryProviderInterface
             if (!isset($item['dns_choice'])) {
                 $item['dns_choice'] = $defaultDnsChoice;
             }
+            if (!isset($item['dns_provider'])) {
+                $item['dns_provider'] = $defaultDnsProvider;
+            }
+            if (!isset($item['dns_account_id'])) {
+                $item['dns_account_id'] = $defaultDnsAccountId;
+            }
             if (!isset($item['dns_nameservers'])) {
                 $item['dns_nameservers'] = $defaultDnsNameservers;
             }
             if (!isset($item['cdn_choice'])) {
                 $item['cdn_choice'] = $defaultCdnChoice;
+            }
+            if (!isset($item['cdn_provider'])) {
+                $item['cdn_provider'] = $defaultCdnProvider;
+            }
+            if (!isset($item['cdn_account_id'])) {
+                $item['cdn_account_id'] = $defaultCdnAccountId;
             }
             if (!isset($item['start_lifecycle'])) {
                 $item['start_lifecycle'] = $defaultStartLifecycle;
