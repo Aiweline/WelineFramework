@@ -67,7 +67,7 @@
     
     <!-- ==================== 5. 应用工具 ==================== -->
     <menu source="Weline_Backend::apps_tools" name="apps_tools" title="应用工具" icon="mdi mdi-puzzle-outline" order="4000">
-        <menu source="Weline_Backend::ai_group" name="ai_group" title="AI 助手" icon="mdi mdi-robot-outline" order="100"/>
+        <menu source="Weline_Backend::ai_group" name="ai_group" title="AI 中心" icon="mdi mdi-robot-outline" order="100"/>
         <menu source="Weline_Backend::seo_group" name="seo_group" title="SEO 管理" icon="mdi mdi-search-web" order="200"/>
         <menu source="Weline_Backend::data_tools_group" name="data_tools_group" title="数据工具" icon="mdi mdi-database-cog-outline" order="300"/>
         <menu source="Weline_Backend::other_tools_group" name="other_tools_group" title="其他工具" icon="mdi mdi-toolbox-outline" order="900"/>

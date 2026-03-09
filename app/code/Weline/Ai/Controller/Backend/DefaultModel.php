@@ -31,7 +31,7 @@ use Weline\Framework\Acl\Acl;
  * - 模型保护状态查看
  * - 默认模型验证
  */
-#[Acl('Weline_Ai::ai_default_model_manager', '默认模型管理', 'mdi-star-settings', '默认模型管理', 'Weline_Ai::ai')]
+#[Acl('Weline_Ai::ai_default_model_manager', '默认模型管理', 'mdi-star-settings', '默认模型管理', 'Weline_Backend::ai_group')]
 class DefaultModel extends BackendController
 {
     /**
