@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Plugin\Theme;
 
 use Weline\Frontend\Block\ThemeConfig;
+use Weline\Framework\Session\SessionFactory;
 use Weline\Server\Service\ThemeModeSharedService;
 
 class FrontendThemeConfigPlugin
@@ -61,12 +62,6 @@ class FrontendThemeConfigPlugin
 
     private function resolveSession(ThemeConfig $subject): mixed
     {
-        $ref = new \ReflectionClass($subject);
-        if (!$ref->hasProperty('userSession')) {
-            return null;
-        }
-        $property = $ref->getProperty('userSession');
-        $property->setAccessible(true);
-        return $property->getValue($subject);
+        return SessionFactory::getInstance()->createFrontendSession();
     }
 }

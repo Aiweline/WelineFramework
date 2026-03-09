@@ -94,12 +94,13 @@ class ServerMonitor extends BackendController
         $this->assign('attackStats', $attackStats);
         $this->assign('statusLogs', $statusLogs);
         $this->assign('serverStats', $serverStats);
+        $this->assign('title', __('服务器监控'));
         
         // Master API 文档
         $this->assign('masterApiDocs', $this->getMasterApiDocs());
         $this->assign('benchmarkList', $this->benchmarkService->list(1, 10));
         
-        return $this->fetch();
+        return $this->fetch('index');
     }
     
     /**
@@ -295,6 +296,7 @@ class ServerMonitor extends BackendController
         $this->assign('total', $total);
         $this->assign('totalPages', \ceil($total / $limit));
         $this->assign('attackStats', $this->attackLog->getStatistics($instance, 7));
+        $this->assign('title', __('攻击日志'));
         
         return $this->fetch('attack-log');
     }
@@ -305,6 +307,7 @@ class ServerMonitor extends BackendController
     public function getApiDoc(): string
     {
         $this->assign('apiDocs', $this->getMasterApiDocs());
+        $this->assign('title', __('WLS API 文档'));
         return $this->fetch('api-doc');
     }
     
@@ -418,6 +421,7 @@ class ServerMonitor extends BackendController
     {
         $rules = AttackDetector::getInstance()->getRules();
         $this->assign('rulesJson', \json_encode($rules, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        $this->assign('title', __('安全规则'));
         return $this->fetch('security-rules');
     }
 

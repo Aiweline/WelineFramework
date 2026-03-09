@@ -246,10 +246,15 @@ class PcController extends Core
         }
         $controller_class_name = $this->request->getRouterData('class/controller_name');
         if ($fileName === '') {
-            if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
+            $methodName = (string)$this->request->getRouterData('class/method');
+            // 框架规则：*Index 方法默认渲染 index 模板，而不是 getIndex/postIndex 模板文件。
+            // 例如 getIndex() -> templates/xxx/index.phtml
+            if (\preg_match('/^(get|post|put|delete|patch)?index$/i', $methodName)) {
+                $fileName = $controller_class_name . DS . 'index';
+            } elseif (in_array(strtoupper($methodName), $this->request::METHODS)) {
                 $fileName = $controller_class_name;
             } else {
-                $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method');
+                $fileName = $controller_class_name . '/' . $methodName;
             }
         } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
             $fileName = $controller_class_name . DS . $fileName;
@@ -273,10 +278,14 @@ class PcController extends Core
         }
         $controller_class_name = $this->request->getRouterData('class/controller_name');
         if ($fileName === '') {
-            if (in_array(strtoupper($this->request->getRouterData('class/method')), $this->request::METHODS)) {
+            $methodName = (string)$this->request->getRouterData('class/method');
+            // 与 fetch() 保持一致：*Index 方法默认渲染 index 模板。
+            if (\preg_match('/^(get|post|put|delete|patch)?index$/i', $methodName)) {
+                $fileName = $controller_class_name . DS . 'index';
+            } elseif (in_array(strtoupper($methodName), $this->request::METHODS)) {
                 $fileName = $controller_class_name;
             } else {
-                $fileName = $controller_class_name . '/' . $this->request->getRouterData('class/method');
+                $fileName = $controller_class_name . '/' . $methodName;
             }
         } elseif (is_bool(strpos($fileName, '/')) || is_bool(strpos($fileName, '\\'))) {
             $fileName = $controller_class_name . DS . $fileName;

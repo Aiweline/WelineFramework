@@ -989,6 +989,7 @@ class Url implements UrlInterface
         if (empty($area)) {
             return $url;
         }
+        
         $has_area = $data['has_area'] ?? false;
         
         // 使用 Env::getAreaByRoutePrefix() 动态识别区域

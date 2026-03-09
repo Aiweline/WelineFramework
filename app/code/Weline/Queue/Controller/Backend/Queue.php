@@ -140,7 +140,8 @@ class Queue extends \Weline\Framework\App\Controller\BackendController
             $this->assign('queueData', $queue->getData());
             $this->assign('module', $module);
             $this->assign('dir', $dir);
-            return $this->fetch('', 'blank');
+            $this->layoutType = 'default.blank';
+            return $this->fetch();
         }
         $json = ['code' => 404, 'msg' => ''];
         $module = $this->request->getGet('module') ?: $this->request->getModuleName();

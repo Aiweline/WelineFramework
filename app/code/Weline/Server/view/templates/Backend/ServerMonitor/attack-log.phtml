@@ -11,12 +11,10 @@
  * @var int $totalPages
  * @var array $attackStats
  */
-$block->setTitle(__('攻击日志'));
-
 use Weline\Server\Model\AttackLog;
 
-$currentUrl = $block->getUrl('backend/server/server-monitor/attack-log');
-$monitorUrl = $block->getUrl('backend/server/server-monitor');
+$currentUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
+$monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 ?>
 
 <div class="attack-log-page">

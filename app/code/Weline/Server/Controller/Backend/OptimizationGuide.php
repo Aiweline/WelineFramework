@@ -47,7 +47,8 @@ class OptimizationGuide extends BackendController
     {
         // 后台控制器自动验证登录
         // 这里只渲染容器页面，实际内容通过 AJAX 加载
-        return $this->fetch();
+        $this->assign('title', __('Weline Server 性能优化指南'));
+        return $this->fetch('index');
     }
     
     /**

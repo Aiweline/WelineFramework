@@ -21,14 +21,15 @@ use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 
 /**
- * server:ssl:auto - 自动申请/续签 SSL 证书
+ * ssl:auto - 自动申请/续签 SSL 证书（含 localhost 自签）
  */
 class Auto extends CommandAbstract
 {
     /**
      * 命令别名
      */
-    public const ALIASES = ['ssl:auto', 'cert:auto'];
+    /** @var string[] 含 server:ssl:auto 以兼容旧文档 */
+    public const ALIASES = ['ssl:auto', 'cert:auto', 'server:ssl:auto'];
     
     /**
      * @var SslCertificateService
@@ -61,8 +62,10 @@ class Auto extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
-        // 解析参数
-        $action = $args[0] ?? 'status';
+        // 解析参数（args[0] 为命令名 ssl:auto，子命令 request/renew/list 等在 args[1]）
+        $possibleAction = $args[1] ?? $args[0] ?? 'status';
+        $actions = ['request', 'apply', 'renew', 'list', 'ls', 'sync', 'enable', 'disable', 'status'];
+        $action = \in_array((string) $possibleAction, $actions, true) ? $possibleAction : 'status';
         $domain = $args['domain'] ?? $args['d'] ?? null;
         $email = $args['email'] ?? $args['e'] ?? $this->getDefaultEmail();
         $webroot = $args['webroot'] ?? $args['w'] ?? BP . 'pub';
@@ -120,7 +123,34 @@ class Auto extends CommandAbstract
             return;
         }
         
-        // no-SSL 环境下申请证书前提示：Windows 需先安装 event 扩展才能启动 HTTPS
+        $this->printer->note(__('正在为 %{1} 申请 SSL 证书...', [$domain]));
+        $this->printer->note(__('联系邮箱：%{1}', [$email]));
+        $this->printer->note(__('Webroot：%{1}', [$webroot]));
+        echo "\n";
+        
+        // 本地域名（localhost、127.0.0.1 等）使用 ensureCertificate 生成自签证书
+        $useEnsure = $this->sslService->isLocalDomain($domain)
+            || $this->sslService->resolvesToLoopback($domain)
+            || $this->sslService->isDevelopmentEnvironment();
+        if ($useEnsure) {
+            $this->printer->note(__('检测到本地/开发环境，将生成自签证书'));
+            $result = $this->sslService->ensureCertificate($domain, $webroot, $email);
+            if ($result['success']) {
+                $this->printer->success(__('✓ 自签证书生成成功！'));
+                echo "\n";
+                $this->printer->note(__('证书路径：%{1}', [$result['cert_path'] ?? '']));
+                $this->printer->note(__('私钥路径：%{1}', [$result['key_path'] ?? '']));
+                $this->printer->note(__('到期时间：%{1}', [$result['expires_at'] ?? '']));
+                echo "\n";
+                $this->printer->setup(__('启用 HTTPS：'));
+                $this->printer->note('  php bin/w ssl:auto enable --domain ' . $domain);
+            } else {
+                $this->printer->error(__('✗ 证书生成失败：%{1}', [$result['message'] ?? '']));
+            }
+            return;
+        }
+        
+        // Let's Encrypt 申请前检查：Windows 需 event 扩展才能后续启动 HTTPS
         $readinessWarning = $this->sslService->getHttpsReadinessWarning();
         if ($readinessWarning !== null) {
             $this->printer->error($readinessWarning);
@@ -128,13 +158,8 @@ class Auto extends CommandAbstract
             return;
         }
         
-        $this->printer->note(__('正在为 %{1} 申请 SSL 证书...', [$domain]));
-        $this->printer->note(__('联系邮箱：%{1}', [$email]));
-        $this->printer->note(__('Webroot：%{1}', [$webroot]));
         $this->printer->note(__('证书提供商：%{1}', [$provider]));
         echo "\n";
-        
-        // 检查 webroot 是否存在
         if (!\is_dir($webroot)) {
             $this->printer->error(__('Webroot 目录不存在：%{1}', [$webroot]));
             return;
@@ -154,7 +179,7 @@ class Auto extends CommandAbstract
             echo "\n";
             
             $this->printer->setup(__('启用 HTTPS：'));
-            $this->printer->note('  php bin/w server:ssl:auto enable --domain ' . $domain);
+            $this->printer->note('  php bin/w ssl:auto enable --domain ' . $domain);
         } else {
             $this->printer->error(__('✗ 证书申请失败：%{1}', [$result['message']]));
         }
@@ -229,7 +254,7 @@ class Auto extends CommandAbstract
         
         if (empty($certificates)) {
             $this->printer->note(__('暂无证书记录'));
-            $this->printer->setup(__('申请证书：php bin/w server:ssl:auto request --domain example.com --email admin@example.com'));
+            $this->printer->setup(__('申请证书：php bin/w ssl:auto request -d example.com -e admin@example.com'));
             return;
         }
         
@@ -301,12 +326,12 @@ class Auto extends CommandAbstract
         
         echo "\n";
         $this->printer->setup(__('可用命令：'));
-        $this->printer->note('  server:ssl:auto list                    ' . __('- 查看证书列表'));
-        $this->printer->note('  server:ssl:auto request -d example.com  ' . __('- 申请新证书'));
-        $this->printer->note('  server:ssl:auto renew                   ' . __('- 续签到期证书'));
-        $this->printer->note('  server:ssl:auto sync                    ' . __('- 同步网站域名'));
-        $this->printer->note('  server:ssl:auto enable -d example.com   ' . __('- 启用 HTTPS'));
-        $this->printer->note('  server:ssl:auto disable -d example.com  ' . __('- 禁用 HTTPS'));
+$this->printer->note('  ssl:auto list                    ' . __('- 查看证书列表'));
+            $this->printer->note('  ssl:auto request -d example.com  ' . __('- 申请新证书（localhost 自动生成自签证书）'));
+            $this->printer->note('  ssl:auto renew                   ' . __('- 续签到期证书'));
+            $this->printer->note('  ssl:auto sync                    ' . __('- 同步网站域名'));
+            $this->printer->note('  ssl:auto enable -d example.com   ' . __('- 启用 HTTPS'));
+            $this->printer->note('  ssl:auto disable -d example.com  ' . __('- 禁用 HTTPS'));
     }
     
     /**
@@ -432,7 +457,7 @@ class Auto extends CommandAbstract
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'server:ssl:auto [action]',
+            'ssl:auto [action]',
             __('使用 Let\'s Encrypt / LiteSSL 自动管理 SSL 证书'),
             [
                 '[action]' => __('操作：status/list/request/renew/sync/enable/disable'),
@@ -453,13 +478,13 @@ class Auto extends CommandAbstract
                 'disable' => __('禁用指定域名的 HTTPS'),
             ],
             [
-                __('查看状态') => 'php bin/w server:ssl:auto',
-                __('列出证书') => 'php bin/w server:ssl:auto list',
-                __('申请证书') => 'php bin/w server:ssl:auto request -d example.com -e admin@example.com',
-                __('续签证书') => 'php bin/w server:ssl:auto renew',
-                __('同步并申请') => 'php bin/w server:ssl:auto sync -e admin@example.com',
-                __('启用 HTTPS') => 'php bin/w server:ssl:auto enable -d example.com',
-                __('禁用 HTTPS') => 'php bin/w server:ssl:auto disable -d example.com',
+                __('查看状态') => 'php bin/w ssl:auto',
+                __('列出证书') => 'php bin/w ssl:auto list',
+                __('申请证书') => 'php bin/w ssl:auto request -d localhost -e admin@localhost',
+                __('续签证书') => 'php bin/w ssl:auto renew',
+                __('同步并申请') => 'php bin/w ssl:auto sync -e admin@example.com',
+                __('启用 HTTPS') => 'php bin/w ssl:auto enable -d example.com',
+                __('禁用 HTTPS') => 'php bin/w ssl:auto disable -d example.com',
             ]
         );
     }

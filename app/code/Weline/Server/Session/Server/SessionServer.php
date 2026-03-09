@@ -426,7 +426,10 @@ final class SessionServer
 
             case SessionProtocol::CMD_GC:
                 $maxLifetime = (int)($msg['max_lifetime'] ?? 3600);
-                $cleaned = $this->store->gc($maxLifetime);
+                $domain = (string)($msg['domain'] ?? '');
+                $cleaned = $domain === 'session'
+                    ? $this->gcSessionDomain($maxLifetime)
+                    : $this->store->gc($maxLifetime);
                 $response = SessionProtocol::encodeSuccess(['cleaned' => $cleaned]);
                 break;
 
@@ -647,17 +650,64 @@ final class SessionServer
         $sessionIds = $this->store->getAllSessionIds();
         $result = [];
         $count = 0;
+        $sessionNamespaceStateId = '__ns__:sess:__kv__:sess';
+        $domain = (string)($filter['__domain'] ?? '');
+        if ($domain !== '') {
+            unset($filter['__domain']);
+        }
         
         foreach ($sessionIds as $sessionId) {
             if ($count >= $limit) {
                 break;
+            }
+
+            if ($domain === 'session' && !$this->isSessionDomainStateId($sessionId, $sessionNamespaceStateId)) {
+                continue;
             }
             
             $data = $this->store->getAll($sessionId);
             if (empty($data)) {
                 continue;
             }
+
+            // 新架构：Session 数据聚合在 sess 命名空间，需要展开为真实 session 列表。
+            if ($sessionId === $sessionNamespaceStateId) {
+                foreach ($data as $realSessionId => $sessionPayload) {
+                    if ($count >= $limit) {
+                        break 2;
+                    }
+                    if (!\is_string($realSessionId) || $realSessionId === '') {
+                        continue;
+                    }
+                    if (!\is_array($sessionPayload) || empty($sessionPayload)) {
+                        continue;
+                    }
+                    if (!empty($filter)) {
+                        $match = true;
+                        foreach ($filter as $key => $value) {
+                            if (($sessionPayload[$key] ?? null) !== $value) {
+                                $match = false;
+                                break;
+                            }
+                        }
+                        if (!$match) {
+                            continue;
+                        }
+                    }
+                    $result[] = [
+                        'session_id' => $realSessionId,
+                        'data' => $sessionPayload,
+                    ];
+                    $count++;
+                }
+                continue;
+            }
             
+            if ($domain === 'session' && \str_starts_with($sessionId, '__ns__:')) {
+                // Session domain view should only expose real session ids, never namespaced internal state ids.
+                continue;
+            }
+
             if (!empty($filter)) {
                 $match = true;
                 foreach ($filter as $key => $value) {
@@ -679,6 +729,30 @@ final class SessionServer
         }
         
         return $result;
+    }
+
+    private function isSessionDomainStateId(string $stateId, string $sessionNamespaceStateId): bool
+    {
+        if ($stateId === $sessionNamespaceStateId) {
+            return true;
+        }
+        if (\str_starts_with($stateId, '__ns__:')) {
+            return false;
+        }
+        return true;
+    }
+
+    private function gcSessionDomain(int $maxLifetime): int
+    {
+        $sessionNamespaceStateId = '__ns__:sess:__kv__:sess';
+        $targetIds = [];
+        foreach ($this->store->getAllSessionIds() as $stateId) {
+            if (!$this->isSessionDomainStateId($stateId, $sessionNamespaceStateId)) {
+                continue;
+            }
+            $targetIds[] = $stateId;
+        }
+        return $this->store->gcBySessionIds($targetIds, $maxLifetime);
     }
     
     /**

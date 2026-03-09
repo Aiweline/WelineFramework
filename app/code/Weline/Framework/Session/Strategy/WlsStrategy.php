@@ -106,7 +106,7 @@ final class WlsStrategy implements SessionStrategyInterface
         }
 
         $data = $this->storage->read($sessionId);
-        
+
         return $sessionId;
     }
 
