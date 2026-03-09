@@ -878,11 +878,13 @@ KALIEOF
   echo "已恢复 Kali 官方源: http.kali.org"
 }
 
-# Linux：用 apt/dnf 安装 PostgreSQL，并软链到 extend/server/pgsql/bin（与 Mac 一致，run.php 复用）
+# Linux：用 apt/dnf/apk/zypper 安装 PostgreSQL，并软链到 extend/server/pgsql/bin（与 Mac 一致，run.php 复用）
 install_pgsql_linux() {
   local dest="$SERVER_DIR/pgsql"
+  local os_id=""
+  [[ -f /etc/os-release ]] && . /etc/os-release 2>/dev/null && os_id="${ID:-}"
   if [[ -f /etc/debian_version ]]; then
-    echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt, 使用官方源)..."
+    echo "Installing PostgreSQL ${INSTALL_PGSQL_VERSION} (apt)..."
     if ! run_apt_update_once; then
       echo "apt-get update 失败，请检查 /etc/apt/sources.list 或恢复发行版官方源后重试。" >&2
       return 1
@@ -891,7 +893,7 @@ install_pgsql_linux() {
       echo "未找到 postgresql-${INSTALL_PGSQL_VERSION}，改为安装发行版默认 PostgreSQL..."
       run_privileged apt-get install -y postgresql postgresql-client || return 1
     fi
-  elif [[ -f /etc/redhat-release ]]; then
+  elif [[ -f /etc/redhat-release ]] || [[ -f /etc/rocky-release ]] || [[ -f /etc/almalinux-release ]] || [[ "$os_id" == "amzn" ]] || [[ "$os_id" == "rhel" ]] || [[ "$os_id" == "centos" ]] || [[ "$os_id" == "ol" ]] || [[ "$os_id" == "rocky" ]] || [[ "$os_id" == "almalinux" ]]; then
     echo "Installing PostgreSQL (dnf/yum)..."
     if command -v dnf &>/dev/null; then
       run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null || \
@@ -903,8 +905,25 @@ install_pgsql_linux() {
       echo "ERROR: dnf or yum required for PostgreSQL install." >&2
       return 1
     fi
+  elif [[ -f /etc/alpine-release ]]; then
+    echo "Installing PostgreSQL (apk)..."
+    run_privileged apk add --no-cache postgresql postgresql-client || return 1
+  elif [[ -n "$os_id" ]] && [[ "$os_id" == "opensuse"* || "$os_id" == "sles" ]]; then
+    echo "Installing PostgreSQL (zypper)..."
+    run_privileged zypper install -y postgresql postgresql-server postgresql-client 2>/dev/null || \
+    run_privileged zypper install -y postgresql postgresql-client || return 1
+  elif command -v dnf &>/dev/null; then
+    echo "Installing PostgreSQL (dnf, detected via package manager)..."
+    run_privileged dnf install -y postgresql-server postgresql || return 1
+  elif command -v yum &>/dev/null; then
+    echo "Installing PostgreSQL (yum, detected via package manager)..."
+    run_privileged yum install -y postgresql-server postgresql || return 1
   else
     echo "ERROR: Unsupported Linux distro for auto PostgreSQL install." >&2
+    echo "  Detected: os-release ID=${os_id:-<empty>}" >&2
+    echo "  Supported: Debian/Ubuntu (apt), RHEL/CentOS/Rocky/Alma/Amazon (dnf/yum), Alpine (apk), OpenSUSE (zypper)" >&2
+    echo "  Manual: sudo apt install -y postgresql postgresql-client   # Debian/Ubuntu" >&2
+    echo "  Manual: sudo dnf install -y postgresql-server postgresql   # RHEL/CentOS" >&2
     return 1
   fi
   local pg_bin
