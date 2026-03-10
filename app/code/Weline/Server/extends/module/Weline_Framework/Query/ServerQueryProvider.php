@@ -86,6 +86,9 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'provider',    'type' => 'string', 'required' => false, 'description' => __('证书提供商 letsencrypt/litessl')],
                         ['name' => 'cert_type',   'type' => 'string', 'required' => false, 'description' => __('证书类型 exact|wildcard')],
                         ['name' => 'cert_strategy', 'type' => 'string', 'required' => false, 'description' => __('策略 single|wildcard_prefer|both')],
+                        ['name' => 'challenge_strategy', 'type' => 'string', 'required' => false, 'description' => __('验证策略 auto|http01|dns01，非80端口时 auto 自动用 dns01')],
+                        ['name' => 'pool_id',     'type' => 'int', 'required' => false, 'description' => __('域名池 ID，DNS-01 时用于解析 DNS 账户')],
+                        ['name' => 'domain_id',   'type' => 'int', 'required' => false, 'description' => __('根域名 ID，DNS-01 时用于解析 DNS 账户')],
                     ],
                 ],
                 ['name' => 'status', 'description' => __('获取服务器状态'), 'params' => []],
@@ -125,6 +128,9 @@ class ServerQueryProvider implements QueryProviderInterface
         $provider = (string) ($params['provider'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT);
         $certType = (string) ($params['cert_type'] ?? 'exact');
         $certStrategy = (string) ($params['cert_strategy'] ?? '');
+        $challengeStrategy = (string) ($params['challenge_strategy'] ?? SslCertificateService::CHALLENGE_AUTO);
+        $poolId = (int) ($params['pool_id'] ?? 0);
+        $domainId = (int) ($params['domain_id'] ?? 0);
 
         $requestedDomain = $domain;
         if ($certType === 'wildcard' || $certStrategy === 'wildcard_prefer' || $certStrategy === 'both') {
@@ -140,7 +146,10 @@ class ServerQueryProvider implements QueryProviderInterface
             $webroot,
             $email,
             $websiteId,
-            $provider
+            $provider,
+            $challengeStrategy,
+            $poolId,
+            $domainId
         );
 
         $cert = $result['cert'] ?? null;
