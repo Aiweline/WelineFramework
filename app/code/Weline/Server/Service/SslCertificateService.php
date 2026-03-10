@@ -1616,19 +1616,23 @@ CNF;
     
     /**
      * 获取 ACME 目录
+     * httpRequest 返回 ['headers' => ..., 'body' => <ACME目录JSON>, 'raw' => ...]
      */
     protected function getAcmeDirectory(): ?array
     {
         if ($this->directoryCache !== null) {
             return $this->directoryCache;
         }
-        
-        $response = $this->httpRequest($this->acmeDirectory);
-        if ($response && isset($response['newAccount'])) {
-            $this->directoryCache = $response;
-            return $response;
+        if (empty($this->acmeDirectory)) {
+            return null;
         }
-        
+
+        $response = $this->httpRequest($this->acmeDirectory);
+        $body = \is_array($response) ? ($response['body'] ?? null) : null;
+        if ($body !== null && isset($body['newAccount'])) {
+            $this->directoryCache = $body;
+            return $body;
+        }
         return null;
     }
     
@@ -1994,19 +1998,31 @@ CNF;
         $ch = \curl_init($url);
         \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         \curl_setopt($ch, CURLOPT_HEADER, true);
-        
+        \curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        \curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        \curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+        \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        \curl_setopt($ch, CURLOPT_USERAGENT, 'Weline-Server/1.0 ACME-Client');
+
         if ($method === 'POST') {
             \curl_setopt($ch, CURLOPT_POST, true);
             \curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
             \curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/jose+json']);
         }
-        
+
         $response = \curl_exec($ch);
-        $headerSize = \curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+        $curlError = $response === false ? \curl_error($ch) : '';
+        $httpCode = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $headerSize = (int) \curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         \curl_close($ch);
-        
-        $headerStr = \substr($response, 0, $headerSize);
-        $bodyStr = \substr($response, $headerSize);
+
+        if ($response === false) {
+            w_log_warning(__('ACME HTTP 请求失败: url=%{1}, error=%{2}', [$url, $curlError]), [], 'ssl_cert');
+            return ['headers' => [], 'body' => null, 'raw' => '', 'error' => $curlError];
+        }
+
+        $headerStr = \substr((string) $response, 0, $headerSize);
+        $bodyStr = \substr((string) $response, $headerSize);
         
         // 解析响应头
         $headers = [];
