@@ -171,7 +171,7 @@ class DomainPurchaseService
                     $successCount++;
 
                     // 购买成功后入域名池（含 @、www 等子域）
-                    $this->addToDomainPoolWithSubdomains($domain, $accountId, $subdomains);
+                    $rootDomain = $this->addToDomainPoolWithSubdomains($domain, $accountId, $subdomains);
                     $this->persistPurchasedDomainDnsMetadata(
                         $domain,
                         $accountId,
@@ -183,7 +183,8 @@ class DomainPurchaseService
                         $dnsAccountId,
                         $cdnChoice,
                         $cdnProvider,
-                        $cdnAccountId
+                        $cdnAccountId,
+                        $rootDomain
                     );
 
                     // 绑定站点
@@ -348,8 +349,9 @@ class DomainPurchaseService
      * @param string $domain 根域名
      * @param int $accountId 域名商账号 ID
      * @param array $prefixes 子域前缀，如 ['@','www']
+     * @return Domain|null 创建/加载到的根域模型，失败时返回 null
      */
-    private function addToDomainPoolWithSubdomains(string $domain, int $accountId, array $prefixes = ['@', 'www']): void
+    private function addToDomainPoolWithSubdomains(string $domain, int $accountId, array $prefixes = ['@', 'www']): ?Domain
     {
         try {
             // 确保 Domain 记录存在（供 SubdomainGenerator 使用）
@@ -366,15 +368,17 @@ class DomainPurchaseService
             if ($rootDomain->getDomainId()) {
                 $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
                 $subdomainGenerator->generateDefaultSubdomains($rootDomain, $prefixes);
-            } else {
-                // 若无法加载 Domain，则仅添加根域到池
-                $this->addToDomainPool($domain);
+                return $rootDomain;
             }
+            // 若无法加载 Domain，则仅添加根域到池
+            $this->addToDomainPool($domain);
+            return null;
         } catch (\Exception $e) {
             w_log_error(__('域名入池失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
+            return null;
         }
     }
 
@@ -416,12 +420,15 @@ class DomainPurchaseService
         int $selectedDnsAccountId,
         string $cdnChoice,
         string $selectedCdnProvider,
-        int $selectedCdnAccountId
+        int $selectedCdnAccountId,
+        ?Domain $rootDomain = null
     ): void {
         try {
-            $domainModel = ObjectManager::getInstance(Domain::class);
-            $rootDomain = clone $domainModel;
-            $rootDomain->loadByDomainAndAccount($domain, $accountId);
+            if ($rootDomain === null || !$rootDomain->getDomainId()) {
+                $domainModel = ObjectManager::getInstance(Domain::class);
+                $rootDomain = clone $domainModel;
+                $rootDomain->loadByDomainAndAccount($domain, $accountId);
+            }
             if (!$rootDomain->getDomainId()) {
                 return;
             }
