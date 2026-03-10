@@ -1093,7 +1093,7 @@ class DomainManagement extends BaseController
                 return $this->fetchJson(['success' => false, 'msg' => __('域名池记录不存在')]);
             }
             $domainName = $pool->getDomain();
-            $pool->delete();
+            $pool->delete()->fetch();
             return $this->fetchJson([
                 'success' => true,
                 'msg' => __('已删除：%{1}', [$domainName]),
@@ -1106,14 +1106,21 @@ class DomainManagement extends BaseController
         }
     }
 
+    private const HTTPS_PROVIDERS = ['letsencrypt', 'litessl'];
+
     /**
      * AJAX: 为域名池记录手动申请 HTTPS 证书
+     * POST: pool_id, provider (可选，默认 letsencrypt)
      */
     public function postRequestHttps(): string
     {
         $poolId = (int) $this->request->getPost('pool_id', 0);
         if ($poolId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('请提供 pool_id')]);
+        }
+        $provider = (string) ($this->request->getPost('provider', '') ?: 'letsencrypt');
+        if (!\in_array($provider, self::HTTPS_PROVIDERS, true)) {
+            $provider = 'letsencrypt';
         }
         try {
             $pool = ObjectManager::getInstance(DomainPool::class, [], false);
@@ -1139,7 +1146,7 @@ class DomainManagement extends BaseController
                 'webroot' => $webroot,
                 'email' => $email,
                 'website_id' => 0,
-                'provider' => 'letsencrypt',
+                'provider' => $provider,
                 'cert_type' => 'exact',
             ]);
 
