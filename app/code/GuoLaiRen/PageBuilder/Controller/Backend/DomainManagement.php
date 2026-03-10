@@ -1111,13 +1111,23 @@ class DomainManagement extends BaseController
 
     /**
      * 获取 WLS 当前监听端口（用于判断 HTTP-01 vs DNS-01）
+     * 优先使用当前请求的 SERVER_PORT（反映实际访问端口），否则回退到 env.server.port
      */
     public function getGetServerPort(): string
     {
-        $config = Env::getInstance()->getConfig('server');
         $port = 80;
-        if (\is_array($config) && isset($config['port'])) {
-            $port = (int) $config['port'];
+        $serverBag = $this->request->getServerBag();
+        if ($serverBag && method_exists($serverBag, 'getPort')) {
+            $reqPort = $serverBag->getPort();
+            if ($reqPort > 0) {
+                $port = $reqPort;
+            }
+        }
+        if ($port === 80) {
+            $config = Env::getInstance()->getConfig('server');
+            if (\is_array($config) && isset($config['port']) && (int) $config['port'] > 0) {
+                $port = (int) $config['port'];
+            }
         }
         return $this->fetchJson(['success' => true, 'port' => $port]);
     }
