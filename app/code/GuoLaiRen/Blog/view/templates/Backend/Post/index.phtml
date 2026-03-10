@@ -400,6 +400,7 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
                 path="blog/backend/post/trigger-ai-publish-sse"
                 title="AI 生成进度"
                 height="400px"
+                events="start,progress,done,error,info,success,article_start,article_done,article_error"
             />
         </div>
         <div class="blog-sse-modal-footer">
@@ -608,6 +609,28 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
             isRunning = false;
             btn.disabled = false;
             btn.innerHTML = origText;
+        });
+        
+        terminal.on('article_start', function(e) {
+            try {
+                var d = JSON.parse(e.data || '{}');
+                var msg = (d.index || 0) + '/' + (d.total || 0) + ': ' + (d.keyword || '');
+                if (terminal.log) terminal.log(msg, 'progress');
+            } catch (err) {}
+        });
+        terminal.on('article_done', function(e) {
+            try {
+                var d = JSON.parse(e.data || '{}');
+                var msg = (d.keyword || '') + ' ✓';
+                if (terminal.log) terminal.log(msg, 'success');
+            } catch (err) {}
+        });
+        terminal.on('article_error', function(e) {
+            try {
+                var d = JSON.parse(e.data || '{}');
+                var msg = (d.keyword || '') + ': ' + (d.error || '');
+                if (terminal.log) terminal.log(msg, 'error');
+            } catch (err) {}
         });
         
         terminal.start();

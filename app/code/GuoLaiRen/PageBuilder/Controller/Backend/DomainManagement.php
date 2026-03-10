@@ -1155,6 +1155,7 @@ class DomainManagement extends BaseController
         }
 
         $sse = new SseWriter();
+        $sse->setRetryInterval(86400000);
         $sse->start();
 
         if ($poolId <= 0 || $domain === '') {
