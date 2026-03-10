@@ -64,6 +64,9 @@ class DomainPoolResolveService
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
+        if (!$resolved && $error === '') {
+            $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
+        }
         $resolveStatus = $resolved ? DomainPool::RESOLVE_STATUS_RESOLVED : DomainPool::RESOLVE_STATUS_ERROR;
 
         if ($error !== '' && !$resolved) {
@@ -134,6 +137,9 @@ class DomainPoolResolveService
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
+        if (!$resolved && $error === '') {
+            $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
+        }
         $resolveStatus = $resolved ? DomainPool::RESOLVE_STATUS_RESOLVED : DomainPool::RESOLVE_STATUS_ERROR;
         if ($error !== '' && !$resolved) {
             $resolveStatus = DomainPool::RESOLVE_STATUS_ERROR;
