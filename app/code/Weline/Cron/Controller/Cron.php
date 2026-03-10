@@ -16,6 +16,7 @@ namespace Weline\Cron\Controller;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Model\CronTask;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Manager\ObjectManager;
 
 class Cron extends \Weline\Framework\App\Controller\BackendController
 {
@@ -33,6 +34,21 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 
     public function listing()
     {
+        $status = $this->request->getGet('status');
+        $search = trim((string) $this->request->getGet('q'));
+
+        if ($status) {
+            $this->cronTask->where($this->cronTask::schema_fields_STATUS, $status);
+        }
+        if ($search !== '') {
+            $this->cronTask->where(
+                'concat(name,execute_name,module,class,tip)',
+                "%{$search}%",
+                'like'
+            );
+        }
+
+        $this->cronTask->order('id', 'ASC');
         $listings = $this->cronTask->pagination()->select()->fetch();
         $tasks = $listings->getOriginData();
         foreach ($tasks as &$task) {
@@ -48,10 +64,42 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
                 }
             }
         }
+        $stats = $this->getCronStats();
         $this->assign('tasks', $tasks);
         $this->assign('pagination', $listings->getPagination());
         $this->assign('total', $listings->getPaginationData()['totalSize']);
+        $this->assign('stats', $stats);
+        $this->assign('status', $status);
+        $this->assign('filterSearch', $search);
         return $this->fetch();
+    }
+
+    private function getCronStats(): array
+    {
+        /** @var CronTask $m */
+        $m = ObjectManager::make(CronTask::class);
+        $allCount = (int) $m->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $pendingCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::PENDING->value)->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $runningCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::RUNNING->value)->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $successCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::SUCCESS->value)->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $blockCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::BLOCK->value)->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $failCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::FAIL->value)->count('id');
+        $m = ObjectManager::make(CronTask::class);
+        $missCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::MISS->value)->count('id');
+        return [
+            'all' => $allCount,
+            'pending' => $pendingCount,
+            'running' => $runningCount,
+            'success' => $successCount,
+            'block' => $blockCount,
+            'fail' => $failCount,
+            'miss' => $missCount,
+        ];
     }
 
     public function lock(): string
@@ -64,9 +112,11 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 //            return $this->fetchJson($this->success(__('锁定任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('锁定任务：%{1}', $task->getData('name')));
             $this->redirect('*/cron/listing');
+            return '';
         } catch (\ReflectionException|Core $e) {
             $this->getMessageManager()->addError(__('锁定任务失败：%{1}', $e->getMessage()));
             $this->redirect('*/cron/listing');
+            return '';
 //            return $this->fetchJson($this->error($e->getMessage()));
         }
     }
@@ -81,10 +131,11 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 //            return $this->fetchJson($this->success(__('解锁任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('解锁任务：%{1}', $task->getData('name')));
             $this->redirect('*/cron/listing');
+            return '';
         } catch (\ReflectionException|Core $e) {
-//            return $this->fetchJson($this->error($e->getMessage()));
             $this->getMessageManager()->addError(__('解锁任务失败：%{1}', $e->getMessage()));
             $this->redirect('*/cron/listing');
+            return '';
         }
     }
 }
