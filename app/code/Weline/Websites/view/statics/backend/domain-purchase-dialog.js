@@ -162,13 +162,8 @@
             subdomains: '@,www',
             startLifecycle: true
         }, options.defaults || {});
-        var providerMap = buildProviderMap(options.accounts || []);
-        var providerOptions = Object.keys(providerMap).map(function (providerCode) {
-            return {
-                value: providerCode,
-                label: providerMap[providerCode].name
-            };
-        });
+        var apiUrls = options.apiUrls || {};
+        var providerMap = buildProviderMap(options.accounts || [});
 
         return new Promise(function (resolve) {
             var overlay = document.createElement('div');
@@ -270,8 +265,49 @@
             var subdomains = dialog.querySelector('[data-role="subdomains"]');
             var startLifecycle = dialog.querySelector('[data-role="start-lifecycle"]');
 
-            dnsProvider.innerHTML = buildOptionsHtml(providerOptions, labels.dnsProviderPlaceholder);
-            cdnProvider.innerHTML = buildOptionsHtml(providerOptions, labels.cdnProviderPlaceholder);
+            function applyProviderOptions() {
+                var providerOptions = Object.keys(providerMap).map(function (providerCode) {
+                    return { value: providerCode, label: providerMap[providerCode].name };
+                });
+                dnsProvider.innerHTML = buildOptionsHtml(providerOptions, labels.dnsProviderPlaceholder);
+                cdnProvider.innerHTML = buildOptionsHtml(providerOptions, labels.cdnProviderPlaceholder);
+                dnsProvider.value = defaults.dnsProvider || '';
+                cdnProvider.value = defaults.cdnProvider || '';
+            }
+            function loadProvidersFromApi(done) {
+                var url = apiUrls.getRegistrarAccounts || '';
+                if (!url || Object.keys(providerMap).length > 0) {
+                    if (typeof done === 'function') done();
+                    return;
+                }
+                dnsProvider.innerHTML = buildOptionsHtml([], labels.dnsProviderPlaceholder);
+                cdnProvider.innerHTML = buildOptionsHtml([], labels.cdnProviderPlaceholder);
+                var u = url.indexOf('?') >= 0 ? url + '&' : url + '?';
+                u += 'active_only=1';
+                fetch(u).then(function (r) { return r.json(); }).then(function (data) {
+                    var inner = (data && data.data) ? data.data : data;
+                    var accounts = (inner && inner.accounts) ? inner.accounts : (Array.isArray(inner) ? inner : []);
+                    accounts.forEach(function (acc) {
+                        var code = String(acc.registrar_code || '').trim();
+                        if (!code) return;
+                        if (!providerMap[code]) {
+                            providerMap[code] = { code: code, name: acc.registrar_name || code, accounts: [] };
+                        }
+                        providerMap[code].accounts.push({
+                            account_id: String(acc.id || acc.account_id || ''),
+                            account_name: acc.account_name || acc.name || '',
+                            registrar_name: acc.registrar_name || code
+                        });
+                    });
+                    applyProviderOptions();
+                    if (typeof done === 'function') done();
+                }).catch(function () {
+                    dnsProvider.innerHTML = buildOptionsHtml([], labels.dnsProviderPlaceholder);
+                    cdnProvider.innerHTML = buildOptionsHtml([], labels.dnsProviderPlaceholder);
+                    if (typeof done === 'function') done();
+                });
+            }
+            applyProviderOptions();
             dnsChoice.value = defaults.dnsChoice;
             cdnChoice.value = defaults.cdnChoice;
             dnsProvider.value = defaults.dnsProvider || '';
@@ -303,15 +339,17 @@
                 dnsAccountField.hidden = !useProviderAccount;
                 dnsNameserversField.hidden = dnsChoice.value !== 'custom_nameservers';
                 if (useProviderAccount) {
-                    if (!dnsProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
-                        dnsProvider.value = defaults.currentRegistrarCode;
-                    }
-                    syncAccountOptions(
-                        dnsProvider,
-                        dnsAccount,
-                        labels.dnsAccountPlaceholder,
-                        defaults.dnsProvider === dnsProvider.value ? (defaults.dnsAccountId || '') : (defaults.currentRegistrarCode === dnsProvider.value ? defaults.currentAccountId : '')
-                    );
+                    loadProvidersFromApi(function () {
+                        if (!dnsProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
+                            dnsProvider.value = defaults.currentRegistrarCode;
+                        }
+                        syncAccountOptions(
+                            dnsProvider,
+                            dnsAccount,
+                            labels.dnsAccountPlaceholder,
+                            defaults.dnsProvider === dnsProvider.value ? (defaults.dnsAccountId || '') : (defaults.currentRegistrarCode === dnsProvider.value ? defaults.currentAccountId : '')
+                        );
+                    });
                 }
             }
 
@@ -320,15 +358,17 @@
                 cdnProviderField.hidden = !useProviderAccount;
                 cdnAccountField.hidden = !useProviderAccount;
                 if (useProviderAccount) {
-                    if (!cdnProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
-                        cdnProvider.value = defaults.currentRegistrarCode;
-                    }
-                    syncAccountOptions(
-                        cdnProvider,
-                        cdnAccount,
-                        labels.cdnAccountPlaceholder,
-                        defaults.cdnProvider === cdnProvider.value ? (defaults.cdnAccountId || '') : (defaults.currentRegistrarCode === cdnProvider.value ? defaults.currentAccountId : '')
-                    );
+                    loadProvidersFromApi(function () {
+                        if (!cdnProvider.value && defaults.currentRegistrarCode && providerMap[defaults.currentRegistrarCode]) {
+                            cdnProvider.value = defaults.currentRegistrarCode;
+                        }
+                        syncAccountOptions(
+                            cdnProvider,
+                            cdnAccount,
+                            labels.cdnAccountPlaceholder,
+                            defaults.cdnProvider === cdnProvider.value ? (defaults.cdnAccountId || '') : (defaults.currentRegistrarCode === cdnProvider.value ? defaults.currentAccountId : '')
+                        );
+                    });
                 }
             }
 
