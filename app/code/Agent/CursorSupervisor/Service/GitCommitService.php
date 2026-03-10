@@ -342,8 +342,8 @@ class GitCommitService
             $diff = $this->getGroupDiff($files);
             $prompt = $this->buildCommitPrompt($module, $files, $analysis, $diff);
             
-            // 15 秒超时，避免长时间卡住；超时后自动用规则生成
-            $result = $cursorAi->chat($prompt, '', [], 15);
+            // 120 秒超时，超时后自动用规则生成
+            $result = $cursorAi->chat($prompt, '', [], 120);
             
             if ($result['success'] && !empty($result['response'])) {
                 return trim($result['response']);
@@ -554,7 +554,7 @@ PROMPT;
             $this->progress("━━━ [{$current}/{$totalGroups}] {$module} ({$fileCount} 文件) ━━━", 'info');
             
             if ($useAi) {
-                $this->progress("🤖 AI 生成提交信息...（最多 15 秒，超时将用规则生成）", 'info');
+                $this->progress("🤖 AI 生成提交信息...（最多 120 秒，超时将用规则生成）", 'info');
             }
             
             $message = $this->generateCommitMessage($group, $useAi);
