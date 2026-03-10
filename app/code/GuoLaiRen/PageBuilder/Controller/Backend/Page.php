@@ -1493,17 +1493,8 @@ class Page extends BackendController
                 $deletedCount++;
             }
             
-            // 清除路由缓存，使新 URL 生效（UrlRewrite 无独立缓存类，清路由池即可）
-            try {
-                $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-                $pool = $cacheManager->pool('router');
-                if (method_exists($pool, 'clear')) {
-                    $pool->clear();
-                }
-            } catch (\Throwable $e) {
-                // 忽略缓存清理错误
-            }
-            \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
+            // 清除路由缓存（仅使用框架 CacheManager，不使用不存在的 UrlRewriteCache）
+            $this->clearRouterAndPageBuilderCache();
             
             return $this->fetchJson([
                 'success' => true,
@@ -1533,6 +1524,25 @@ class Page extends BackendController
         return $pages;
     }
     
+    /**
+     * 清除路由与 PageBuilder 静态缓存（避免依赖不存在的 UrlRewriteCache）
+     */
+    private function clearRouterAndPageBuilderCache(): void
+    {
+        try {
+            if (class_exists(\Weline\Framework\Cache\CacheManager::class)) {
+                $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+                $pool = $cacheManager->pool('router');
+                if (method_exists($pool, 'clear')) {
+                    $pool->clear();
+                }
+            }
+        } catch (\Throwable $e) {
+            // 忽略
+        }
+        \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
+    }
+
     /**
      * 删除页面的URL重写规则
      * 
@@ -1951,19 +1961,7 @@ class Page extends BackendController
                 ];
             }
             
-            // 清除路由缓存，确保新页面立即可访问（UrlRewrite 无独立缓存类，清路由池即可）
-            try {
-                $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-                $pool = $cacheManager->pool('router');
-                if (method_exists($pool, 'clear')) {
-                    $pool->clear();
-                }
-            } catch (\Throwable $e) {
-                // 缓存清理失败不影响返回结果
-            }
-            
-            // 同时清除 PageBuilder Router 的静态缓存
-            \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
+            $this->clearRouterAndPageBuilderCache();
             
             // 绑定 SEO 账户（如果提供了 seo_account_id）
             $seoAccountId = (int)$this->request->getPost('seo_account_id', 0);
