@@ -1213,7 +1213,7 @@ class DomainManagement extends BaseController
             $onProgress = function (string $message, array $extra = []) use ($sse): void {
                 $sse->sendEvent('progress', \array_merge(['message' => $message], $extra));
             };
-            $challengeRaw = $this->request->get('challenge_strategy', '');
+            $challengeRaw = $this->request->getGet('challenge_strategy', '') ?: $this->request->get('challenge_strategy', '');
             $challengeStrategy = \is_array($challengeRaw)
                 ? \trim((string) ($challengeRaw[0] ?? 'auto'))
                 : \trim((string) ($challengeRaw ?: 'auto'));
@@ -1223,6 +1223,7 @@ class DomainManagement extends BaseController
             if (!\in_array($challengeStrategy, ['http01', 'dns01', 'auto'], true)) {
                 $challengeStrategy = 'auto';
             }
+            $sse->sendEvent('progress', ['message' => __('使用验证方式：%{1}', [$challengeStrategy]), 'progress' => 31]);
 
             $domainId = (int) $pool->getParentDomainId();
             $result = w_query('server', 'requestCertificate', [
