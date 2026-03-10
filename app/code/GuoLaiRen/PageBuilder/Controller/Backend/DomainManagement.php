@@ -890,6 +890,10 @@ class DomainManagement extends BaseController
             
             if ($siteReadyOnly) {
                 $model->where(DomainPool::schema_fields_SITE_READY, 1);
+                $model->whereRaw(
+                    '(' . DomainPool::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPool::schema_fields_SITE_CREATED . ' = 0)',
+                    'AND'
+                );
             }
             
             if ($parentDomainId > 0) {

@@ -36,6 +36,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_cdn_status', columns: ['cdn_status'])]
 #[Index(name: 'idx_https_status', columns: ['https_status'])]
 #[Index(name: 'idx_site_ready', columns: ['site_ready'])]
+#[Index(name: 'idx_site_created', columns: ['site_created'])]
 #[Index(name: 'idx_cert', columns: ['cert_id'])]
 class DomainPool extends Model
 {
@@ -80,6 +81,8 @@ class DomainPool extends Model
     public const schema_fields_CERT_ID = 'cert_id';
     #[Col('smallint', 1, nullable: true, default: 0, comment: '是否可建站')]
     public const schema_fields_SITE_READY = 'site_ready';
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '是否已建站（已被网站使用，创建站点时不再展示）')]
+    public const schema_fields_SITE_CREATED = 'site_created';
     #[Col('varchar', 50, nullable: true, default: '', comment: 'DNS服务商代码')]
     public const schema_fields_DNS_PROVIDER = 'dns_provider';
     #[Col('datetime', nullable: true, comment: '创建时间')]
@@ -363,6 +366,51 @@ class DomainPool extends Model
         return (int) $this->getData(self::schema_fields_SITE_READY) === 1;
     }
     
+    public function setSiteCreated(bool $created): self
+    {
+        $this->setData(self::schema_fields_SITE_CREATED, $created ? 1 : 0);
+        return $this;
+    }
+    
+    public function isSiteCreated(): bool
+    {
+        return (int) $this->getData(self::schema_fields_SITE_CREATED) === 1;
+    }
+    
+    /**
+     * 根据 website_domain 表同步所有 pool 的 site_created 状态
+     * 调用时机：saveWebsiteDomains 后、或 Upgrade 时回填
+     */
+    public function syncSiteCreatedFromWebsiteDomainTable(): void
+    {
+        /** @var \Weline\Websites\Model\WebsiteDomain $wdModel */
+        $wdModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Websites\Model\WebsiteDomain::class
+        );
+        $rows = $wdModel->clearQuery()
+            ->fields(WebsiteDomain::schema_fields_POOL_ID)
+            ->where(WebsiteDomain::schema_fields_POOL_ID, 0, '>')
+            ->select()
+            ->fetchArray();
+        $poolIds = array_values(array_unique(array_filter(array_column($rows, WebsiteDomain::schema_fields_POOL_ID))));
+        
+        // 1. 在 website_domain 中有记录的 pool 设为 site_created=1
+        if (!empty($poolIds)) {
+            $this->clearQuery()
+                ->where(self::schema_fields_ID, $poolIds, 'IN')
+                ->setData(self::schema_fields_SITE_CREATED, 1)
+                ->update()
+                ->fetch();
+        }
+        
+        // 2. 不在 website_domain 中的 pool 设为 site_created=0
+        $base = $this->clearQuery();
+        if (!empty($poolIds)) {
+            $base->where(self::schema_fields_ID, $poolIds, 'NOT IN');
+        }
+        $base->setData(self::schema_fields_SITE_CREATED, 0)->update()->fetch();
+    }
+    
     // =============== DNS 服务商 Getter/Setter ===============
     
     public function getDnsProvider(): string
@@ -497,15 +545,42 @@ class DomainPool extends Model
     }
     
     /**
-     * 获取域名选择器数据（用于 UI 选择组件）
-     * 
-     * 返回格式适合前端下拉/标签选择器使用
-     * 
+     * 获取可选的建站域名（用于创建站点时选择）
+     * 条件：site_ready=1 且 site_created=0（未被任何站点使用）
+     *
+     * @return array<string, array>
+     */
+    public function getSelectableForSiteGroupedByRoot(): array
+    {
+        $siteCreatedCondition = '(' . self::schema_fields_SITE_CREATED . ' IS NULL OR ' . self::schema_fields_SITE_CREATED . ' = 0)';
+        $domains = $this->clearQuery()
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_SITE_READY, 1)
+            ->whereRaw($siteCreatedCondition, 'AND')
+            ->order(self::schema_fields_ROOT_DOMAIN, 'ASC')
+            ->order(self::schema_fields_DOMAIN, 'ASC')
+            ->select()
+            ->fetchArray();
+        $grouped = [];
+        foreach ($domains as $domain) {
+            $rootDomain = $domain[self::schema_fields_ROOT_DOMAIN] ?: $domain[self::schema_fields_DOMAIN];
+            if (!isset($grouped[$rootDomain])) {
+                $grouped[$rootDomain] = [];
+            }
+            $grouped[$rootDomain][] = $domain;
+        }
+        return $grouped;
+    }
+
+    /**
+     * 获取域名选择器数据（用于创建站点时选择）
+     * 仅返回可建站且未已被使用的域名
+     *
      * @return array
      */
     public function getSelectOptions(): array
     {
-        $grouped = $this->getDomainsGroupedByRoot();
+        $grouped = $this->getSelectableForSiteGroupedByRoot();
         $options = [];
         
         foreach ($grouped as $rootDomain => $domains) {
