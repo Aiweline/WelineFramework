@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\Framework\Database;
 
 use Weline\Framework\Database\Helper\Tool;
-use Weline\Framework\Database\Schema\Column;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data\Context;
@@ -56,11 +55,9 @@ abstract class Model extends AbstractModel implements ModelInterface
         return $columns;
     }
 
-    public static function count()
+    public function count()
     {
-        /** @var \Weline\Framework\Database\Model $model */
-        $model = ObjectManager::getInstance(static::class);
-        return $model->total();
+        return $this->total();
     }
 
     /**
