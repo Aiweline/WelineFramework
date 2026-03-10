@@ -28,10 +28,11 @@ class QuickBuild extends BaseController
     {
         $services = $this->aggregator->queryServices('all');
         $accounts = $this->aggregator->queryRegistrarAccounts(['status' => 'active']);
-        
-        // CDN 适配器和账户
-        $cdnAdapters = $this->aggregator->queryCdnAdapters();
-        $cdnAccounts = $this->aggregator->queryCdnAccounts(['status' => 'active']);
+
+        // CDN/DNS 服务商与账户（与域名购买逻辑一致，数据来自 websites getDnsCdnAccounts）
+        $dnsCdn = $this->aggregator->queryDnsCdnForWizard();
+        $cdnAdapters = $dnsCdn['cdnAdapters'] ?? [];
+        $cdnAccounts = $dnsCdn['cdnAccounts'] ?? [];
 
         $this->assign('title', __('快速建站'));
         $this->assign('services', $services);

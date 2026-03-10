@@ -4457,7 +4457,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var sseModal = document.getElementById('pb-dm-https-sse-modal');
         if (closeBtn) closeBtn.addEventListener('click', closeHttpsSseModal);
         if (doneBtn) doneBtn.addEventListener('click', function() { closeHttpsSseModal(); loadDomainPool(poolState.page); });
-        if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeHttpsSseModal(); });
+        // SSE 弹窗仅支持通过关闭按钮/X 关闭，点击遮罩不关闭，避免误关
+        // if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeHttpsSseModal(); });
     })();
 
     var rootDnsSwitchState = { domainId: 0, domain: '', accountId: 0 };
@@ -4561,7 +4562,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
         if (closeBtn) closeBtn.addEventListener('click', closeDnsSwitchSseModal);
         if (doneBtn) doneBtn.addEventListener('click', function() { closeDnsSwitchSseModal(); loadDomainList(); });
-        if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeDnsSwitchSseModal(); });
+        // SSE 弹窗仅支持通过关闭按钮/X 关闭，点击遮罩不关闭，避免误关
+        // if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeDnsSwitchSseModal(); });
     })();
 
     document.getElementById('pb-dm-pool-search-btn').addEventListener('click', function() {

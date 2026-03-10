@@ -175,7 +175,18 @@ class WebsiteManagement extends BaseController
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                
+
+                $url = \trim((string) ($data['url'] ?? ''));
+                if ($url !== '') {
+                    $exist = $this->website->clearQuery()
+                        ->where(Website::schema_fields_URL, $url)
+                        ->select()
+                        ->find();
+                    if ($exist->getData(Website::schema_fields_ID)) {
+                        throw new \Exception(__('该网站 URL 已存在，请勿重复添加：%{1}', [$url]));
+                    }
+                }
+
                 $newWebsite = $this->objectManager->getInstance(Website::class);
                 $newWebsite->clearData()->setData($data)->save();
                 $websiteId = $newWebsite->getId();
@@ -211,7 +222,7 @@ class WebsiteManagement extends BaseController
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
-                    'url' => '*/backend/websiteManagement',
+                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '1',
                     'time' => '3',
                 ]);
@@ -219,8 +230,14 @@ class WebsiteManagement extends BaseController
                 if ($e instanceof RedirectException) {
                     throw $e;
                 }
+                $msg = $e->getMessage();
+                if (\str_contains($msg, '23505') || \str_contains($msg, 'Unique violation') || \str_contains($msg, 'duplicate key') || \str_contains($msg, 'uk_url')) {
+                    $msg = __('该网站 URL 已存在，请勿重复添加。若需修改请到网站列表中编辑对应站点。');
+                } else {
+                    $msg = __('网站添加失败: %{1}', [$msg]);
+                }
                 $this->redirect('/component/offcanvas/error', [
-                    'msg' => __('网站添加失败: %{1}', $e->getMessage()),
+                    'msg' => $msg,
                     'url' => '/',
                     'reload' => '0',
                     'time' => '3',
@@ -326,6 +343,18 @@ class WebsiteManagement extends BaseController
                 
                 // 确保 website_id 在数据中
                 $data['website_id'] = $postWebsiteId;
+
+                $url = \trim((string) ($data['url'] ?? ''));
+                if ($url !== '') {
+                    $exist = $this->website->clearQuery()
+                        ->where(Website::schema_fields_URL, $url)
+                        ->where(Website::schema_fields_ID, $postWebsiteId, '<>')
+                        ->select()
+                        ->find();
+                    if ($exist->getData(Website::schema_fields_ID)) {
+                        throw new \Exception(__('该网站 URL 已被其他站点使用，请勿重复：%{1}', [$url]));
+                    }
+                }
                 
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
@@ -364,7 +393,7 @@ class WebsiteManagement extends BaseController
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站更新成功'),
-                    'url' => '*/backend/websiteManagement',
+                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '1',
                     'time' => '3',
                 ]);
@@ -372,8 +401,14 @@ class WebsiteManagement extends BaseController
                 if ($e instanceof RedirectException) {
                     throw $e;
                 }
+                $msg = $e->getMessage();
+                if (\str_contains($msg, '23505') || \str_contains($msg, 'Unique violation') || \str_contains($msg, 'duplicate key') || \str_contains($msg, 'uk_url')) {
+                    $msg = __('该网站 URL 已被其他站点使用，请勿重复。请更换为其他 URL。');
+                } else {
+                    $msg = __('网站更新失败: %{1}', [$msg]);
+                }
                 $this->redirect('/component/offcanvas/error', [
-                    'msg' => $e->getMessage(),
+                    'msg' => $msg,
                     'reload' => '0',
                     'time' => '5',
                 ]);
@@ -446,7 +481,7 @@ class WebsiteManagement extends BaseController
                 'success' => true,
                 'msg' => __('网站删除成功'),
                 'reload' => '1',
-                'url' => '*/backend/websiteManagement',
+                'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                 'time' => '3',
             ]);
         } catch (\Exception $e) {
