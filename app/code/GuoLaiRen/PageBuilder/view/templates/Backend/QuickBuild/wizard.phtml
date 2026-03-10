@@ -656,7 +656,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var devUrl = '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js';
             var prodUrl = '/static/Weline/Websites/backend/domain-purchase-dialog.js';
             var candidates = [purchaseDialogPrimaryScriptUrl];
-            candidates.push(isDev ? prodUrl : devUrl);
+            candidates.push(isDev ? devUrl : prodUrl);
             try {
                 if (window.Weline && window.Weline.staticResourceResolver) {
                     candidates.push(window.Weline.staticResourceResolver.resolve('Weline_Websites::backend/domain-purchase-dialog.js'));
