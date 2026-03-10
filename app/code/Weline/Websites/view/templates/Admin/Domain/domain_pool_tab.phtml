@@ -87,6 +87,8 @@ $total = \count($poolRows);
                     <td>
                         <?php if ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVED): ?>
                             <span class="badge bg-success-subtle text-success"><?= __('已解析') ?></span>
+                        <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVING): ?>
+                            <span class="badge bg-info-subtle text-info"><?= __('解析中') ?></span>
                         <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_ERROR): ?>
                             <span class="badge bg-danger-subtle text-danger"><?= __('异常') ?></span>
                         <?php else: ?>
