@@ -1,0 +1,152 @@
+<?php
+/**
+ * 建站智能体页面
+ *
+ * 根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $accounts 域名商账号列表
+ * @var string $page_title
+ */
+$accounts = $accounts ?? [];
+$triggerPath = 'websites/backend/site-builder-agent/trigger-sse';
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <i class="mdi mdi-robot me-1"></i>
+                <lang>建站智能体</lang>
+            </h4>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card weline-site-agent-card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-rocket-launch-outline me-1"></i>
+                    <lang>一键建站</lang>
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">
+                    <lang>输入站点描述和要购买的域名，智能体将自动完成：购买域名 → DNS 解析 → HTTPS 证书 → 创建站点</lang>
+                </p>
+                <div class="mb-3">
+                    <label class="form-label"><lang>站点描述</lang> <span class="text-muted small">(<lang>用于站点名称</lang>)</span></label>
+                    <input type="text" class="form-control" id="site-agent-description"
+                           placeholder="<?= __('例如：茶叶电商网站') ?>">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>要购买的域名</lang> <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="site-agent-domain" required
+                           placeholder="example.com">
+                </div>
+                <div class="mb-4">
+                    <label class="form-label"><lang>域名商账号</lang> <span class="text-danger">*</span></label>
+                    <select class="form-select" id="site-agent-account">
+                        <option value=""><lang>请选择域名商账号</lang></option>
+                        <?php foreach ($accounts as $acc): ?>
+                            <option value="<?= (int)($acc['account_id'] ?? 0) ?>">
+                                <?= htmlspecialchars(($acc['registrar_name'] ?? '') . ' - ' . ($acc['account_name'] ?? '')) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <button type="button" class="btn btn-primary w-100" id="site-agent-start-btn">
+                    <i class="mdi mdi-play-circle-outline me-1"></i>
+                    <lang>开始建站</lang>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card weline-site-agent-card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-console me-1"></i>
+                    <lang>执行日志</lang>
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <w:theme:sse-terminal
+                    id="site-builder-agent-terminal"
+                    path="<?= $triggerPath ?>"
+                    title="<?= __('建站进度') ?>"
+                    height="320px"
+                    events="start,progress,done,error,warning,info"
+                />
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.weline-site-agent-card {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-card-bg, #fff);
+}
+.weline-site-agent-card .card-header {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-default, #dee2e6);
+    padding: 1rem 1.25rem;
+}
+.weline-site-agent-card .card-title {
+    color: var(--backend-color-text-primary, #212529);
+    font-size: 1rem;
+}
+</style>
+
+<script>
+(function(){
+    'use strict';
+    var startBtn = document.getElementById('site-agent-start-btn');
+    var descInput = document.getElementById('site-agent-description');
+    var domainInput = document.getElementById('site-agent-domain');
+    var accountSelect = document.getElementById('site-agent-account');
+    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['site-builder-agent-terminal'] : null;
+
+    if (!startBtn || !terminal) return;
+
+    startBtn.addEventListener('click', function(){
+        var domain = (domainInput && domainInput.value) ? domainInput.value.trim() : '';
+        var accountId = (accountSelect && accountSelect.value) ? parseInt(accountSelect.value, 10) : 0;
+        var description = (descInput && descInput.value) ? descInput.value.trim() : domain;
+
+        if (!domain) {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning('<?= addslashes(__('请填写要购买的域名')) ?>');
+            }
+            return;
+        }
+        if (!accountId) {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning('<?= addslashes(__('请选择域名商账号')) ?>');
+            }
+            return;
+        }
+
+        var baseUrl = '<?= addslashes((string)$this->getBackendUrl($triggerPath)) ?>';
+        var sep = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+        var url = baseUrl + sep + 'description=' + encodeURIComponent(description)
+            + '&domain=' + encodeURIComponent(domain)
+            + '&account_id=' + accountId;
+
+        terminal.clear();
+        terminal.setUrl(url);
+        startBtn.disabled = true;
+        terminal.start();
+
+        terminal.on('done', function(){
+            startBtn.disabled = false;
+        });
+        terminal.on('error', function(){
+            startBtn.disabled = false;
+        });
+    });
+})();
+</script>
