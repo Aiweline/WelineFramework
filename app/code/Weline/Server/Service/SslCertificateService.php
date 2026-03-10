@@ -1574,6 +1574,9 @@ CNF;
                 if (!($challengeResult['validated'] ?? false)) {
                     $detail = $challengeResult['error'] ?? '';
                     $msg = $detail !== '' ? __('域名验证失败：%{1}', [$detail]) : __('域名验证失败');
+                    if (\str_contains(\strtolower($detail), 'txt record') || \str_contains(\strtolower($detail), 'no txt')) {
+                        $msg .= ' ' . __('（DNS 传播可能需要更长时间，请 2–5 分钟后重试）');
+                    }
                     return ['success' => false, 'message' => $msg];
                 }
             }
@@ -1742,8 +1745,18 @@ CNF;
             return ['validated' => false, 'error' => $addErr];
         }
         $recordId = (string)($addResult['record_id'] ?? '');
+        $dnsWaitSeconds = 30;
         if ($onProgress) {
-            $onProgress((string)__('TXT 记录已添加，正在通知 CA 验证...'), ['step' => 'notify_ca']);
+            $onProgress((string)__('TXT 记录已添加，等待 DNS 传播（%{1} 秒）...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
+        }
+        for ($w = 0; $w < $dnsWaitSeconds; $w += 5) {
+            \sleep(\min(5, $dnsWaitSeconds - $w));
+            if ($onProgress && $w > 0) {
+                $onProgress((string)__('等待 DNS 传播中...（%{1}s）', [$w + 5]), ['progress' => 45]);
+            }
+        }
+        if ($onProgress) {
+            $onProgress((string)__('正在通知 CA 进行验证...'), ['step' => 'notify_ca']);
         }
         $this->notifyChallenge($dnsChallenge['url'] ?? '', $accountUrl);
 
@@ -1771,7 +1784,12 @@ CNF;
 
         if ($recordId !== '') {
             if ($onProgress) {
-                $onProgress((string)__('CA 验证完成，正在清理 TXT 记录...'), ['step' => 'cleanup']);
+                $onProgress(
+                    $validated
+                        ? (string)__('CA 验证完成，正在清理 TXT 记录...')
+                        : (string)__('CA 验证未通过，正在清理临时 TXT 记录...'),
+                    ['step' => 'cleanup']
+                );
             }
             w_query('websites', 'removeAcmeTxtRecord', [
                 'domain' => $domain,
