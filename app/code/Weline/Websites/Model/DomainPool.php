@@ -635,10 +635,11 @@ class DomainPool extends Model
      */
     public function getDomainsNeedResolveCheck(int $limit = 100): array
     {
-        $checkThreshold = \date('Y-m-d H:i:s', \strtotime('-10 minutes'));
+        // 使用数据库函数避免 PHP 日期字符串中的冒号被 PDO 误解析为命名参数（PostgreSQL: time zone "p11:p40" not recognized）
+        $thresholdExpr = "(NOW() - INTERVAL '10 minutes')";
         $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
         $resolveCheckedCondition = '(' . self::schema_fields_RESOLVE_CHECKED_AT . ' IS NULL OR '
-            . self::schema_fields_RESOLVE_CHECKED_AT . " < '{$checkThreshold}')";
+            . self::schema_fields_RESOLVE_CHECKED_AT . ' < ' . $thresholdExpr . ')';
 
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
