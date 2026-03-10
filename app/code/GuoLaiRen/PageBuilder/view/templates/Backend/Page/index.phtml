@@ -821,13 +821,13 @@
                                 <div class="form-text"><?= __('将用于页面标题，如：我的商城 - 首页') ?></div>
                             </div>
                             <div class="col-md-6 mb-3">
-                                <label for="siteHandle" class="form-label"><?= __('URL前缀') ?> <span class="text-danger">*</span></label>
+                                <label for="siteHandle" class="form-label"><?= __('URL前缀') ?></label>
                                 <div class="input-group">
                                     <span class="input-group-text">/</span>
-                                    <input type="text" class="form-control" id="siteHandle" name="site_handle" 
-                                           placeholder="my-site" pattern="[a-z0-9\-]+" required>
+                                    <input type="text" class="form-control" id="siteHandle" name="site_handle"
+                                           placeholder="my-site（可选）" pattern="[a-z0-9\-]*" title="<?= __("仅小写字母、数字、连字符，不填则使用 about、contact 等") ?>">
                                 </div>
-                                <div class="form-text"><?= __('页面URL前缀，如：/my-site（仅小写字母、数字、连字符）') ?></div>
+                                <div class="form-text"><?= __('可选。不填则首页与子页使用简短路径（如 /about）；填写则如 /my-site、/my-site-about') ?></div>
                             </div>
                         </div>
                         
@@ -2015,13 +2015,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const websiteId = document.getElementById('selectedWebsiteId').value;
         const styleCode = document.getElementById('selectedStyleCode').value;
         
-        if (!siteName || !siteHandle) {
-            BackendToast.warning('<?= __("请填写完整信息") ?>');
+        if (!siteName) {
+            BackendToast.warning('<?= __("请填写页面名称前缀") ?>');
             return;
         }
-        
-        // 验证handle格式
-        if (!/^[a-z0-9-]+$/.test(siteHandle)) {
+        if (siteHandle !== '' && !/^[a-z0-9-]+$/.test(siteHandle)) {
             BackendToast.warning('<?= __("URL前缀只能包含小写字母、数字和连字符") ?>');
             return;
         }

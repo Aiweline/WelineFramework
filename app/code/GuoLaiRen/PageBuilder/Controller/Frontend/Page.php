@@ -117,6 +117,11 @@ class Page extends FrontendController
     public function view()
     {
         $handle = $this->request->getGet('handle');
+        if (is_string($handle)) {
+            $handle = trim(rawurldecode($handle));
+        } else {
+            $handle = '';
+        }
         
         // 检查是否为预览模式
         $isPreview = $this->request->getGet('preview') == '1';
