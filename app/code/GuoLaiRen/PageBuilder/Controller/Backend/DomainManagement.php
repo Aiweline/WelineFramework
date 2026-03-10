@@ -5,6 +5,8 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
 use GuoLaiRen\PageBuilder\Service\QuickBuildAggregator;
 use Weline\Admin\Controller\BaseController;
+use Weline\Backend\Model\Config as BackendConfig;
+use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
@@ -21,11 +23,20 @@ use Weline\Websites\Service\SubdomainGeneratorService;
 #[Acl('GuoLaiRen_PageBuilder::domain_management', '域名管理', 'mdi-dns', '域名管理', 'GuoLaiRen_PageBuilder::website_management')]
 class DomainManagement extends BaseController
 {
-    private QuickBuildAggregator $aggregator;
+    private const CRON_MODULE = 'Weline_Cron';
 
-    public function __construct(QuickBuildAggregator $aggregator)
-    {
+    private QuickBuildAggregator $aggregator;
+    private Schedule $schedule;
+    private BackendConfig $backendConfig;
+
+    public function __construct(
+        QuickBuildAggregator $aggregator,
+        Schedule $schedule,
+        BackendConfig $backendConfig
+    ) {
         $this->aggregator = $aggregator;
+        $this->schedule = $schedule;
+        $this->backendConfig = $backendConfig;
     }
 
     #[Acl('GuoLaiRen_PageBuilder::domain_management_index', '域名管理首页', 'mdi-dns', '查看域名管理')]
@@ -40,14 +51,33 @@ class DomainManagement extends BaseController
 
         $statusOptions = $this->aggregator->getDomainStatusOptions();
 
+        $cronInstalled = $this->isCronInstalled();
+
         $this->assign('title', __('域名管理'));
         $this->assign('accounts', $accounts);
         $this->assign('registrars', $registrars);
         $this->assign('activeAccounts', $activeAccounts);
         $this->assign('lastSyncTime', $lastSyncTime);
         $this->assign('statusOptions', $statusOptions);
+        $this->assign('cronInstalled', $cronInstalled);
 
         return $this->fetch();
+    }
+
+    /**
+     * 检测系统定时任务是否已安装（用于域名池解析状态自动检测）
+     */
+    private function isCronInstalled(): bool
+    {
+        try {
+            $cronName = (string) ($this->backendConfig->getConfig(Schedule::cron_config_key, self::CRON_MODULE) ?? '');
+            if ($cronName === '') {
+                $cronName = Schedule::cron_flag . '-' . \md5(self::CRON_MODULE) . '-' . Schedule::cron_flag;
+            }
+            return $this->schedule->exist($cronName);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     /**
