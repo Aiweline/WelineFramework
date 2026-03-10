@@ -942,6 +942,36 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 <span class="text-muted" style="font-size:0.8rem;" id="pb-dm-pool-sync-time"></span>
             </div>
 
+            <!-- 域名池子管理的工作原理指南（手风琴，默认不展开） -->
+            <div class="pb-dm-pool-guide-accordion" style="margin-bottom:var(--backend-spacing-md,16px);">
+                <div style="background:var(--backend-color-card-bg,#fff);border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:var(--backend-border-radius-md,8px);overflow:hidden;">
+                    <div>
+                        <button type="button" class="pb-dm-pool-guide-accordion-btn" data-bs-toggle="collapse" data-bs-target="#pb-dm-pool-guide-collapse" aria-expanded="false" aria-controls="pb-dm-pool-guide-collapse" style="width:100%;padding:10px 16px;background:transparent;border:none;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;color:var(--backend-color-text-secondary,#6c757d);font-size:0.9rem;">
+                            <i class="mdi mdi-chevron-right pb-dm-pool-guide-accordion-icon" style="transition:transform 0.2s;"></i>
+                            <i class="mdi mdi-information-outline" style="color:var(--backend-color-info,#0dcaf0);"></i>
+                            <span><lang>域名池子管理的工作原理指南</lang></span>
+                        </button>
+                    </div>
+                    <div class="collapse" id="pb-dm-pool-guide-collapse">
+                        <div style="padding:16px;border-top:1px solid var(--backend-color-border-light,#e9ecef);background:var(--backend-color-bg-tertiary,#f8f9fa);">
+                            <p style="margin-bottom:12px;color:var(--backend-color-text-primary,#212529);"><lang>域名池用于集中管理可建站的具体域名（如 www.example.com），从购买、解析到 HTTPS 与建站就绪的完整流程如下：</lang></p>
+                            <ol style="margin:0 0 12px 1.25em;color:var(--backend-color-text-primary,#212529);line-height:1.7;">
+                                <li><lang>购买/拉取</lang>：<lang>在根域列表中购买或从注册商拉取域名。</lang></li>
+                                <li><lang>DNS 解析</lang>：<lang>将域名解析到本服务器 IP（可在此处切换 DNS 供应商并推送记录）。</lang></li>
+                                <li><lang>转存到池</lang>：<lang>在根域列表中勾选「解析到本机」的域名，点击「转存到域名池」入池。</lang></li>
+                                <li><lang>定时检测</lang>：<lang>系统定时任务会定期检测池内域名的解析状态、HTTPS 证书与建站就绪状态。</lang></li>
+                                <li><lang>HTTPS 证书</lang>：<lang>可手动为池内域名申请 Let's Encrypt 证书（支持 HTTP-01 / DNS-01）；证书到期前 7 天会收到通知，前 3 天自动续签。</lang></li>
+                                <li><lang>建站就绪</lang>：<lang>当解析正常且 HTTPS 有效时，域名标记为建站就绪，可用于建站或分配。</lang></li>
+                            </ol>
+                            <p style="margin:0;font-size:0.85rem;color:var(--backend-color-text-tertiary,#adb5bd);"><lang>安装定时任务后，池内状态会自动更新；未安装时请执行</lang> <code style="padding:2px 6px;background:var(--backend-color-code-bg,#f4f4f4);border-radius:4px;">php bin/w cron:install</code> <lang>并刷新页面。</lang></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <style>
+            .pb-dm-pool-guide-accordion [data-bs-toggle="collapse"][aria-expanded="true"] .pb-dm-pool-guide-accordion-icon { transform: rotate(90deg); }
+            </style>
+
             <?php if (!$cronInstalled): ?>
             <div class="pb-dm-cron-accordion" style="margin-bottom:var(--backend-spacing-md,16px);">
                 <div style="background:var(--backend-color-warning-bg-subtle,rgba(241,180,76,0.1));border:1px solid var(--backend-color-warning,rgba(241,180,76,0.4));border-radius:var(--backend-border-radius-md,8px);overflow:hidden;">
