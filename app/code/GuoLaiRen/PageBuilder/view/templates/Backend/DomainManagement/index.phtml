@@ -1019,6 +1019,9 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                     <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-pool-reset-btn">
                         <i class="mdi mdi-refresh"></i> <lang>重置</lang>
                     </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-pool-batch-check-btn" title="<?= __('对当前页所有域名执行人工检查解析状态') ?>">
+                        <i class="mdi mdi-dns"></i> <lang>批量检查本页</lang>
+                    </button>
                 </div>
             </div>
 
@@ -1205,12 +1208,15 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         pullDomains:      '<backend-url>pagebuilder/backend/domain-management/pull-domains</backend-url>',
         batchOperate:     '<backend-url>pagebuilder/backend/domain-management/batch-operate</backend-url>',
         getLifecycleStatus: '<backend-url>pagebuilder/backend/domain-management/get-lifecycle-status</backend-url>',
+        repairLifecycleOrder: '<backend-url>pagebuilder/backend/domain-management/repair-lifecycle-order</backend-url>',
         checkAvail:       '<backend-url>pagebuilder/backend/domain-management/check-availability</backend-url>',
         purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
         batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>',
         getDomainPool:    '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>',
         addSubdomain:     '<backend-url>pagebuilder/backend/domain-management/add-subdomain</backend-url>',
         checkResolve:     '<backend-url>pagebuilder/backend/domain-management/check-resolve</backend-url>',
+        deletePoolDomain: '<backend-url>pagebuilder/backend/domain-management/delete-pool-domain</backend-url>',
+        requestHttps:     '<backend-url>pagebuilder/backend/domain-management/request-https</backend-url>',
         generateSubdomains: '<backend-url>pagebuilder/backend/domain-management/generate-subdomains</backend-url>',
         batchTransferToPool: '<backend-url>pagebuilder/backend/domain-management/batch-transfer-to-pool</backend-url>',
         batchResolveToLocal: '<backend-url>pagebuilder/backend/domain-management/batch-resolve-to-local</backend-url>',
@@ -3592,6 +3598,15 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                             }
                             AdminToast.success(msg);
+                            var results = (res.results || []);
+                            var lifecycleFails = results.filter(function(r) {
+                                return r && r.success && r.lifecycle && r.lifecycle.attempted && !r.lifecycle.success;
+                            });
+                            if (lifecycleFails.length > 0) {
+                                AdminToast.warning(
+                                    '<?= __('%{count} 个域名未成功创建生命周期订单，请确认 Weline_Saas 已启用，或前往「域名状态」页使用补建功能。') ?>'.replace('%{count}', lifecycleFails.length)
+                                );
+                            }
                             btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
                             btn.disabled = true;
                         } else {
@@ -3649,6 +3664,15 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                             }
                             AdminToast.success(msg);
+                            var results = (res.results || []);
+                            var lifecycleFails = results.filter(function(r) {
+                                return r && r.success && r.lifecycle && r.lifecycle.attempted && !r.lifecycle.success;
+                            });
+                            if (lifecycleFails.length > 0) {
+                                AdminToast.warning(
+                                    '<?= __('%{count} 个域名未成功创建生命周期订单，请确认 Weline_Saas 已启用，或前往「域名状态」页使用补建功能。') ?>'.replace('%{count}', lifecycleFails.length)
+                                );
+                            }
                         } else {
                             AdminToast.error(getPurchaseErrorMsg(res));
                         }
@@ -3669,7 +3693,8 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         pages: 0,
         search: '',
         status: '',
-        resolve: ''
+        resolve: '',
+        items: []
     };
 
     function loadDomainPool(page) {
@@ -3698,6 +3723,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 
                 poolState.total = total;
                 poolState.pages = pages;
+                poolState.items = items;
                 renderDomainPool(items);
                 updatePoolPagination();
             } else {
@@ -3810,6 +3836,64 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         container.innerHTML = html;
     }
 
+    function renderLifecycleNotFound(container, targetDomain, message) {
+        var html = '<div class="pb-dm-empty" style="color:var(--backend-color-text-secondary,#6c757d);">' +
+            '<p style="margin-bottom:12px;">' + escapeHtml(message) + '</p>' +
+            '<p class="small" style="margin-bottom:12px;"><?= __('若已通过域名购买功能购买，可在此补建生命周期订单以便后续跟踪。') ?></p>' +
+            '<div class="pb-dm-repair-lifecycle-form" style="margin-top:12px;">' +
+            '<label class="form-label small"><?= __('选择购买时使用的域名商账号') ?></label>' +
+            '<select class="form-select form-select-sm pb-dm-repair-account" style="max-width:280px;margin-bottom:8px;">' +
+            '<option value=""><?= __('加载中...') ?></option></select>' +
+            '<button type="button" class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-repair-btn" disabled><i class="mdi mdi-wrench"></i> <?= __('补建生命周期订单') ?></button>' +
+            '</div></div>';
+        container.innerHTML = html;
+        var selectEl = container.querySelector('.pb-dm-repair-account');
+        var btnEl = container.querySelector('.pb-dm-repair-btn');
+        var req = window.Weline && window.Weline.Api ? window.Weline.Api.get(API.getRegistrarAccounts, { silent: true }) : fetch(API.getRegistrarAccounts);
+        var handleAccounts = function(raw) {
+            var inner = (raw && raw.data) !== undefined ? raw.data : raw;
+            var accounts = (inner && inner.accounts) ? inner.accounts : (Array.isArray(inner) ? inner : []);
+            var active = accounts.filter(function(a) { return (a.status || '') !== 'inactive'; });
+            selectEl.innerHTML = '<option value=""><?= __('请选择域名商账号') ?></option>';
+            active.forEach(function(a) {
+                var id = a.account_id || a.id;
+                var label = (a.registrar_name || a.registrarName || '') + ' - ' + (a.account_name || a.name || id);
+                selectEl.innerHTML += '<option value="' + id + '">' + escapeHtml(label) + '</option>';
+            });
+            btnEl.disabled = active.length === 0;
+        };
+        if (req && typeof req.then === 'function') {
+            req.then(function(r) { handleAccounts(r && r.data ? r.data : r); }).catch(function() {
+                selectEl.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+            });
+        } else {
+            handleAccounts([]);
+        }
+        btnEl.addEventListener('click', function() {
+            var acctId = parseInt(selectEl.value, 10);
+            if (!acctId) {
+                AdminToast.warning('<?= __('请选择域名商账号') ?>');
+                return;
+            }
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('补建中...') ?>';
+            postForm(API.repairLifecycleOrder, { domain: targetDomain, account_id: acctId }).then(function(res) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-wrench"></i> <?= __('补建生命周期订单') ?>';
+                if (res.success) {
+                    AdminToast.success('<?= __('补建成功') ?>');
+                    loadLifecycleStatus(targetDomain);
+                } else {
+                    AdminToast.error(res.message || '<?= __('补建失败') ?>');
+                }
+            }).catch(function(e) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-wrench"></i> <?= __('补建生命周期订单') ?>';
+                AdminToast.error('<?= __('补建失败') ?>: ' + (e.message || e));
+            });
+        });
+    }
+
     function loadLifecycleStatus(domain) {
         var targetDomain = (domain || (document.getElementById('pb-dm-lifecycle-domain') || {}).value || '').trim().toLowerCase();
         var container = document.getElementById('pb-dm-lifecycle-result');
@@ -3821,7 +3905,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         container.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:1.4rem;"></i><p><?= __('正在查询生命周期状态...') ?></p></div>';
         postForm(API.getLifecycleStatus, { domain: targetDomain }).then(function(res) {
             if (!res.success) {
-                container.innerHTML = '<div class="pb-dm-empty" style="color:var(--backend-color-danger,#f46a6a);">' + escapeHtml(res.message || '<?= __('查询失败') ?>') + '</div>';
+                renderLifecycleNotFound(container, targetDomain, res.message || '<?= __('查询失败') ?>');
                 return;
             }
             renderLifecycleStatus(res.data || {});
@@ -3852,7 +3936,8 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
             '<th><?= __('HTTPS') ?></th>' +
             '<th><?= __('建站就绪') ?></th>' +
             '<th><?= __('解析IP') ?></th>' +
-            '<th><?= __('分配时间') ?></th>' +
+            '<th><?= __('入池时间') ?></th>' +
+            '<th><?= __('操作') ?></th>' +
             '</tr></thead><tbody>';
 
         items.forEach(function(item) {
@@ -3874,6 +3959,22 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
             var typeText = item.subdomain ? '<?= __('子域名') ?>' : '<?= __('根域') ?>';
             var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
 
+            var poolId = item.pool_id || 0;
+            var resolvedDisplay = (item.resolved_ip || '-');
+            if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
+                resolvedDisplay += ' / ' + item.resolved_ipv6;
+            }
+            var checkBtn = poolId > 0
+                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __('快速查询解析并更新状态') ?>"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
+                : '';
+            var httpsBtn = poolId > 0 && (String(item.https_status || '').toLowerCase() === 'none' || String(item.https_status || '').toLowerCase() === 'error' || String(item.https_status || '').toLowerCase() === 'expired')
+                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('手动申请 HTTPS 证书') ?>"><i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?></button>'
+                : '';
+            var delBtn = poolId > 0
+                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>'
+                : '';
+            var opHtml = [checkBtn, httpsBtn, delBtn].filter(Boolean).join(' ');
+
             html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
                 '<td><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
                 '<td>' + typeText + '</td>' +
@@ -3881,13 +3982,109 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 '<td>' + resolveBadge + '</td>' +
                 '<td>' + httpsBadge + '</td>' +
                 '<td>' + siteReadyBadge + '</td>' +
-                '<td>' + (item.resolved_ip || '-') + '</td>' +
+                '<td>' + resolvedDisplay + '</td>' +
                 '<td>' + (item.allocated_at || '-') + '</td>' +
+                '<td>' + opHtml + '</td>' +
                 '</tr>';
         });
 
         html += '</tbody></table>';
         container.innerHTML = html;
+
+        container.querySelectorAll('.pb-dm-pool-check-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                if (poolId <= 0) return;
+                doPoolCheckResolve(poolId, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-https-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                var domain = this.getAttribute('data-domain') || '';
+                if (poolId <= 0) return;
+                doPoolRequestHttps(poolId, domain, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-delete-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                var domain = this.getAttribute('data-domain') || '';
+                if (poolId <= 0) return;
+                doPoolDelete(poolId, domain, this);
+            });
+        });
+    }
+
+    function doPoolRequestHttps(poolId, domain, btnEl) {
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
+        }
+        postForm(API.requestHttps, { pool_id: poolId }).then(function(res) {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>';
+            }
+            if (res.success) {
+                AdminToast.success(res.msg || '<?= __('证书申请成功') ?>');
+                loadDomainPool(poolState.page);
+            } else {
+                AdminToast.error(res.msg || '<?= __('证书申请失败') ?>');
+            }
+        }).catch(function() {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>';
+            }
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    function doPoolDelete(poolId, domain, btnEl) {
+        BackendConfirm.show('<?= __('确定要从域名池删除 %{1} 吗？删除后需重新转存方可再次入池。') ?>'.replace('%{1}', domain || '')).then(function(confirmed) {
+            if (!confirmed) return;
+            if (btnEl) btnEl.disabled = true;
+            postForm(API.deletePoolDomain, { pool_id: poolId }).then(function(res) {
+                if (res.success) {
+                    AdminToast.success(res.msg || '<?= __('删除成功') ?>');
+                    loadDomainPool(poolState.page);
+                } else {
+                    AdminToast.error(res.msg || '<?= __('删除失败') ?>');
+                    if (btnEl) btnEl.disabled = false;
+                }
+            }).catch(function() {
+                AdminToast.error('<?= __('网络错误') ?>');
+                if (btnEl) btnEl.disabled = false;
+            });
+        });
+    }
+
+    function doPoolCheckResolve(poolId, btnEl) {
+        if (btnEl) {
+            btnEl.disabled = true;
+            btnEl.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('检查中') ?>';
+        }
+        postForm(API.checkResolve, { pool_id: poolId }).then(function(res) {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-dns"></i> <?= __('检查状态') ?>';
+            }
+            if (res.success) {
+                var msg = res.msg || res.message || (res.data && res.data.resolved ? '<?= __('解析正常') ?>' : '<?= __('解析异常') ?>');
+                if (res.data && res.data.ipv4) msg += ' (IP: ' + res.data.ipv4 + ')';
+                AdminToast.success(msg);
+                loadDomainPool(poolState.page);
+            } else {
+                AdminToast.error(res.msg || res.message || '<?= __('检测失败') ?>');
+            }
+        }).catch(function() {
+            if (btnEl) {
+                btnEl.disabled = false;
+                btnEl.innerHTML = '<i class="mdi mdi-dns"></i> <?= __('检查状态') ?>';
+            }
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
     }
 
     function updatePoolPagination() {
@@ -3907,6 +4104,45 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 
     document.getElementById('pb-dm-pool-search-btn').addEventListener('click', function() {
         loadDomainPool(1);
+    });
+
+    document.getElementById('pb-dm-pool-batch-check-btn').addEventListener('click', function() {
+        var items = poolState.items || [];
+        if (items.length === 0) {
+            AdminToast.warning('<?= __('当前页无域名可检查') ?>');
+            return;
+        }
+        var btn = this;
+        btn.disabled = true;
+        var origHtml = btn.innerHTML;
+        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('检查中') ?>';
+        var total = items.length;
+        var done = 0;
+        var ok = 0;
+        var err = 0;
+        items.forEach(function(item) {
+            var poolId = item.pool_id || 0;
+            if (poolId <= 0) { done++; return; }
+            postForm(API.checkResolve, { pool_id: poolId }).then(function(res) {
+                done++;
+                if (res.success && (res.data && res.data.resolved)) ok++; else err++;
+                if (done >= total) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                    AdminToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
+                    loadDomainPool(poolState.page);
+                }
+            }).catch(function() {
+                done++;
+                err++;
+                if (done >= total) {
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                    AdminToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
+                    loadDomainPool(poolState.page);
+                }
+            });
+        });
     });
 
     document.getElementById('pb-dm-pool-reset-btn').addEventListener('click', function() {

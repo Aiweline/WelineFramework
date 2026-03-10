@@ -25,14 +25,47 @@ class SubdomainGeneratorService
     }
 
     /**
+     * 规范化子域前缀，防止 JSON 字符串（如 '["@","www"]'）被错误当作单个前缀导致生成 ["@","www"].example.com
+     *
+     * @param array $prefixes 可能含 JSON 字符串或嵌套数组的原始输入
+     * @return array<string> 扁平化的有效前缀列表
+     */
+    private function normalizePrefixes(array $prefixes): array
+    {
+        $result = [];
+        foreach ($prefixes as $p) {
+            if (\is_array($p)) {
+                $result = \array_merge($result, $this->normalizePrefixes($p));
+                continue;
+            }
+            $s = \trim((string) $p);
+            if ($s === '') {
+                continue;
+            }
+            if (\str_starts_with($s, '[') && \str_ends_with($s, ']')) {
+                $decoded = \json_decode($s, true);
+                if (\is_array($decoded)) {
+                    $result = \array_merge($result, $this->normalizePrefixes($decoded));
+                    continue;
+                }
+            }
+            if ($s === '@' || \preg_match('/^[a-zA-Z0-9][a-zA-Z0-9-]*$/i', $s)) {
+                $result[] = $s === '@' ? '@' : \strtolower($s);
+            }
+        }
+        return \array_values(\array_unique($result));
+    }
+
+    /**
      * 为根域名生成默认子域名并添加到域名池
      *
      * @param Domain $rootDomain 根域名模型
-     * @param array $prefixes 子域名前缀列表，默认 ['@', 'www']
+     * @param array $prefixes 子域名前缀列表，默认 ['@', 'www']，支持 JSON 字符串会被正确解析
      * @return array{added: int, skipped: int, errors: array}
      */
     public function generateDefaultSubdomains(Domain $rootDomain, array $prefixes = []): array
     {
+        $prefixes = $prefixes === [] ? $this->getDefaultPrefixes() : $this->normalizePrefixes($prefixes);
         if ($prefixes === []) {
             $prefixes = $this->getDefaultPrefixes();
         }
