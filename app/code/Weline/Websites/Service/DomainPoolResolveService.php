@@ -87,7 +87,7 @@ class DomainPoolResolveService
 
         $resolveOffLocal = $wasLocalBefore && !$isLocal;
 
-        return $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $siteReady, $error, $resolveOffLocal);
+        return $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $siteReady, $error, $resolveOffLocal, $serverIpv4, $serverIpv6);
     }
 
     /**
@@ -154,23 +154,28 @@ class DomainPoolResolveService
             $poolDomain->save();
         }
 
-        $result = $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $poolDomain->getData(DomainPool::schema_fields_SITE_READY) ?: false, \trim($error, '; '), false);
+        $result = $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $poolDomain->getData(DomainPool::schema_fields_SITE_READY) ?: false, \trim($error, '; '), false, $serverIpv4, $serverIpv6);
         $result['updated'] = $changed;
         return $result;
     }
 
-    private function buildCheckResult(bool $resolved, string $ipv4, string $ipv6, bool $isLocal, $siteReady, string $error, bool $resolveOffLocal): array
+    private function buildCheckResult(bool $resolved, string $ipv4, string $ipv6, bool $isLocal, $siteReady, string $error, bool $resolveOffLocal, string $serverIpv4 = '', string $serverIpv6 = ''): array
     {
         $result = [
             'resolved' => $resolved,
             'ipv4' => $ipv4,
             'ipv6' => $ipv6,
             'is_local' => $isLocal,
+            'is_local_server' => $isLocal,
             'site_ready' => (bool) $siteReady,
             'error' => $error,
         ];
         if ($resolveOffLocal) {
             $result['resolve_off_local'] = true;
+        }
+        if ($serverIpv4 !== '' || $serverIpv6 !== '') {
+            $result['server_ipv4'] = $serverIpv4;
+            $result['server_ipv6'] = $serverIpv6;
         }
         return $result;
     }

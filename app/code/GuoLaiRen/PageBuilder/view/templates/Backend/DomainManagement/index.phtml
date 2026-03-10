@@ -4211,8 +4211,16 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 var p = httpsRequestPending;
                 if (p.poolId <= 0) { closeIt(); return; }
                 postForm(API.checkResolve, { pool_id: p.poolId }).then(function(res) {
-                    if (!res.success || !(res.data && res.data.resolved && res.data.is_local_server)) {
-                        BackendConfirm.show('<?= __('DNS 解析异常，不能进行申请。请等待解析正常后再试。') ?>\n\n<?= __('解析需指向本服务器公网 IP 方可申请证书。') ?>', {
+                    var d = res.data || {};
+                    var ok = res.success && d.resolved && d.is_local;
+                    if (!ok) {
+                        var msg = '<?= __('DNS 解析异常，不能进行申请。请等待解析正常后再试。') ?>\n\n<?= __('解析需指向本服务器公网 IP 方可申请证书。') ?>';
+                        if (d.resolved && d.ipv4 && d.server_ipv4 && d.ipv4 !== d.server_ipv4) {
+                            msg += '\n\n<?= __('域名解析到：%{1}') ?>'.replace('%{1}', d.ipv4);
+                            msg += '\n<?= __('系统检测本机公网 IP：%{1}') ?>'.replace('%{1}', d.server_ipv4);
+                            msg += '\n\n<?= __('如您已确认解析正确，可能是公网 IP 检测不准。可在 env.php 中设置 server.public_ip 为您的服务器公网 IP。') ?>';
+                        }
+                        BackendConfirm.show(msg, {
                             title: '<?= __('无法申请') ?>',
                             type: 'warning',
                             confirmText: '<?= __('我知道了') ?>',
