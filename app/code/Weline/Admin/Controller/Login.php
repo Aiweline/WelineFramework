@@ -52,9 +52,10 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     public function index()
     {
         if ($this->session->isLoggedIn()) {
-            // 有来源网址就跳回来源网址
+            // 优先跳回上次访问的地址，找不到才跳转 admin
             $this->redirectReferer();
-            $this->redirect($this->getBackendUrlSameOrigin('admin'));
+            $targetPath = $this->resolveDefaultRedirectTarget();
+            $this->redirect($this->getBackendUrlSameOrigin($targetPath));
         }
         //        $this->session->delete('backend_disable_login');
         $this->assign('post_url', $this->_url->getBackendUrl('admin/login/post'));
@@ -282,53 +283,89 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 'Lax'
             );
         }
-        // 有来源网址就跳回来源网址
-        $this->redirectReferer();
+        // 优先跳回上次访问的地址，找不到才跳转 admin
+        $this->redirectReferer($adminUsernameUser);
 
-        // 若没有来源网址，尝试根据角色菜单计算默认入口路由
-        $role = $adminUsernameUser->getRoleModel();
-        $defaultRoute = null;
-        if ($role && $role->getId()) {
-            $defaultRoute = $this->menuService->getDefaultEntryRoute((int)$role->getId());
-        }
-        $targetPath = $defaultRoute ?: 'admin';
+        $targetPath = $this->resolveDefaultRedirectTarget($adminUsernameUser);
         // 跳转后台入口（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
         $this->redirect($this->getBackendUrlSameOrigin($targetPath));
     }
 
-    private function redirectReferer(): void
+    /**
+     * 优先跳回上次访问的地址（须验证当前用户对该路由有权限）。
+     *
+     * @param BackendUser|null $user 已登录用户，null 时从 session 加载
+     */
+    private function redirectReferer(?BackendUser $user = null): void
     {
-        $backend_login_referer = Url::removeExtraDoubleSlashes($this->session->get('backend_login_referer'));
-        if ($backend_login_referer) {
-            if ($this->request->getUrlPath($backend_login_referer) !== $this->request->getUrlPath()) {
-                // 验证是否可以作为登录后跳转的有效目标
-                $parsed = \Weline\Framework\Http\Url::parser($backend_login_referer);
-                $refererRoutePath = trim($parsed['uri'] ?? '', '/');
-                if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
-                    $this->session->delete('backend_login_referer');
-                    $this->redirect($this->ensureSameOrigin($backend_login_referer));
-                    return;
-                } else {
-                    // 不是有效跳转目标，清除
-                    $this->session->delete('backend_login_referer');
-                }
+        $user ??= $this->loadCurrentBackendUser();
+        $candidates = [
+            Url::removeExtraDoubleSlashes((string)$this->session->get('backend_login_referer')),
+            Url::removeExtraDoubleSlashes((string)$this->session->get('referer')),
+        ];
+        foreach ($candidates as $refererUrl) {
+            if (!$refererUrl || $this->request->getUrlPath($refererUrl) === $this->request->getUrlPath()) {
+                continue;
             }
+            if (!Url::is_same_site($refererUrl)) {
+                continue;
+            }
+            $parsed = \Weline\Framework\Http\Url::parser($refererUrl);
+            $refererRoutePath = trim($parsed['uri'] ?? '', '/');
+            if (!$refererRoutePath || !MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
+                $this->session->delete('backend_login_referer');
+                $this->session->delete('referer');
+                continue;
+            }
+            // 必须验证当前用户对该路由有权限，否则跳转后会再次提示“无权操作”
+            if (!$user || !$this->userHasRoutePermission($user, $refererRoutePath)) {
+                $this->session->delete('backend_login_referer');
+                $this->session->delete('referer');
+                continue;
+            }
+            $this->session->delete('backend_login_referer');
+            $this->session->delete('referer');
+            $this->redirect($this->ensureSameOrigin($refererUrl));
+            return;
         }
-        $referer = Url::removeExtraDoubleSlashes($this->session->get('referer'));
+    }
 
-        if ($referer) {
-            if (Url::is_same_site($referer) && $referer !== $this->request->getUrlPath()) {
-                // 验证是否可以作为登录后跳转的有效目标
-                $parsed = \Weline\Framework\Http\Url::parser($referer);
-                $refererRoutePath = trim($parsed['uri'] ?? '', '/');
-                if ($refererRoutePath && MenuUrlValidator::isValidLoginRedirectTarget($refererRoutePath)) {
-                    $this->redirect($this->ensureSameOrigin($referer));
-                } else {
-                    // 不是有效跳转目标，清除
-                    $this->session->delete('referer');
+    private function loadCurrentBackendUser(): ?BackendUser
+    {
+        $userId = $this->session->getUserId();
+        if (!$userId) {
+            return null;
+        }
+        $user = clone $this->adminUser;
+        $user->load((int)$userId);
+        return $user->getId() ? $user : null;
+    }
+
+    private function userHasRoutePermission(BackendUser $user, string $routePath): bool
+    {
+        $role = $user->getRoleModel();
+        if (!$role || !$role->getId()) {
+            return (int)$user->getId() === 1; // 超管无角色也放行
+        }
+        return $this->menuService->findMenuNodeByRoute((int)$role->getId(), $routePath) !== null;
+    }
+
+    /**
+     * 获取默认跳转目标：优先使用角色第一个可访问菜单，否则 admin。
+     */
+    private function resolveDefaultRedirectTarget(?BackendUser $user = null): string
+    {
+        $user ??= $this->loadCurrentBackendUser();
+        if ($user) {
+            $role = $user->getRoleModel();
+            if ($role && $role->getId()) {
+                $defaultRoute = $this->menuService->getDefaultEntryRoute((int)$role->getId());
+                if ($defaultRoute !== null && $defaultRoute !== '') {
+                    return $defaultRoute;
                 }
             }
         }
+        return 'admin';
     }
 
     /**
