@@ -1250,7 +1250,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 (function() {
     'use strict';
 
-    var purchaseDialogPrimaryScriptUrl = '<?= $purchaseDialogJsUrl ?>';
     var purchaseDialogLoadingPromise = null;
 
     var API = {
@@ -1334,90 +1333,25 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (purchaseDialogLoadingPromise) {
             return purchaseDialogLoadingPromise;
         }
-
-        function getPurchaseDialogScriptCandidates() {
-            var isDev = <?= (defined('DEV') && DEV) ? 'true' : 'false' ?>;
-            var devUrl = '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js';
-            var prodUrl = '/static/Weline/Websites/backend/domain-purchase-dialog.js';
-            var candidates = [purchaseDialogPrimaryScriptUrl];
-            candidates.push(isDev ? devUrl : devUrl);
-            try {
-                if (window.Weline && window.Weline.staticResourceResolver) {
-                    candidates.push(window.Weline.staticResourceResolver.resolve('Weline_Websites::backend/domain-purchase-dialog.js'));
-                }
-            } catch (e) {}
-            return candidates.filter(function(url, index, arr) {
-                return !!url && arr.indexOf(url) === index;
-            });
-        }
-
-        function loadScript(url) {
-            var urlPath = (url.split('?')[0] || '').replace(/^https?:\/\/[^/]+/, '') || url;
-            var scripts = document.querySelectorAll('script[src*="domain-purchase-dialog.js"]');
-            for (var i = 0; i < scripts.length; i++) {
-                var s = (scripts[i].src || '').split('?')[0];
-                var existingPath = s.replace(/^https?:\/\/[^/]+/, '');
-                if (existingPath && (existingPath === urlPath || existingPath.endsWith(urlPath) || urlPath.endsWith(existingPath))) {
-                    return Promise.resolve(true);
-                }
-            }
-            return new Promise(function(resolve, reject) {
-                var script = document.createElement('script');
-                script.src = url;
-                script.async = true;
-                script.dataset.domainPurchaseDialog = '1';
-                var timer = setTimeout(function() {
-                    reject(new Error('dialog-script-timeout:' + url));
-                }, 10000);
-                script.onload = function() {
-                    clearTimeout(timer);
-                    resolve(true);
-                };
-                script.onerror = function() {
-                    clearTimeout(timer);
-                    reject(new Error('dialog-script-load-failed:' + url));
-                };
-                document.head.appendChild(script);
-            });
-        }
-
         purchaseDialogLoadingPromise = new Promise(function(resolve, reject) {
-            var candidates = getPurchaseDialogScriptCandidates();
-            var index = 0;
-
-            function tryNext(lastError) {
+            var waited = 0;
+            var maxWait = 3000;
+            var step = 50;
+            function check() {
                 if (window.WelineDomainPurchaseDialog) {
                     resolve(true);
                     return;
                 }
-                if (index >= candidates.length) {
-                    reject(lastError || new Error('dialog-script-candidates-exhausted'));
+                if (waited >= maxWait) {
+                    purchaseDialogLoadingPromise = null;
+                    reject(new Error('dialog-script-load-failed:<?= __('购买弹窗脚本未就绪，请刷新页面后重试') ?>'));
                     return;
                 }
-                var url = candidates[index++];
-                loadScript(url).then(function() {
-                    if (window.WelineDomainPurchaseDialog) {
-                        resolve(true);
-                        return;
-                    }
-                    setTimeout(function() {
-                        if (window.WelineDomainPurchaseDialog) {
-                            resolve(true);
-                            return;
-                        }
-                        tryNext(new Error('dialog-object-missing:' + url));
-                    }, 0);
-                }).catch(function(error) {
-                    tryNext(error);
-                });
+                waited += step;
+                setTimeout(check, step);
             }
-
-            tryNext();
-        }).catch(function(error) {
-            purchaseDialogLoadingPromise = null;
-            throw error;
+            check();
         });
-
         return purchaseDialogLoadingPromise;
     }
 
