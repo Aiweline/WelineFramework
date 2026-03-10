@@ -39,9 +39,16 @@ class ServerIpService
 
     /**
      * 获取本服务器的公网 IPv4
+     *
+     * 优先级：1) env.server.public_ip 2) DomainConfig 缓存 3) 外部 API 获取
      */
     public function getPublicIpv4(bool $forceRefresh = false): string
     {
+        $envIp = Env::get('server.public_ip');
+        if ($envIp !== null && $envIp !== '' && $this->isValidIpv4(\trim((string) $envIp))) {
+            return \trim((string) $envIp);
+        }
+
         if (!$forceRefresh) {
             $cached = $this->domainConfig->getServerPublicIp();
             if ($cached !== '' && $this->isValidIpv4($cached)) {
@@ -61,9 +68,16 @@ class ServerIpService
 
     /**
      * 获取本服务器的公网 IPv6
+     *
+     * 优先级：1) env.server.public_ipv6 2) DomainConfig 缓存 3) 外部 API 获取
      */
     public function getPublicIpv6(bool $forceRefresh = false): string
     {
+        $envIp = Env::get('server.public_ipv6');
+        if ($envIp !== null && $envIp !== '' && $this->isValidIpv6(\trim((string) $envIp))) {
+            return \trim((string) $envIp);
+        }
+
         if (!$forceRefresh) {
             $cached = $this->domainConfig->getServerPublicIpv6();
             if ($cached !== '' && $this->isValidIpv6($cached)) {
