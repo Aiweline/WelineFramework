@@ -17,7 +17,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Db\ModelSetup;
 
 #[Table(comment: '页面构建器-页面表')]
-#[Index(name: 'idx_handle_unique', columns: ['handle'], type: 'UNIQUE', comment: '句柄唯一索引（允许多个NULL值）')]
+#[Index(name: 'idx_website_handle_unique', columns: ['website_id', 'handle'], type: 'UNIQUE', comment: '同一站点内句柄唯一，无站点时 website_id=0')]
 #[Index(name: 'idx_type', columns: ['type'], comment: '类型索引')]
 #[Index(name: 'idx_parent_id', columns: ['parent_id'], comment: '父页面索引')]
 #[Index(name: 'idx_website_id', columns: ['website_id'], comment: '站点索引')]

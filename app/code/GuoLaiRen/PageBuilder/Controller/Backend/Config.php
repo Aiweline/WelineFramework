@@ -55,7 +55,7 @@ class Config extends BackendController
     public function save()
     {
         if (!$this->request->isPost()) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
                 'message' => __('仅支持POST请求')
             ]);
@@ -89,27 +89,15 @@ class Config extends BackendController
             $cache = ObjectManager::getInstance(\Weline\Framework\Cache\Console\Cache\Clear::class);
             $cache->execute(['-f']);
 
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('配置保存成功')
             ]);
         } catch (\Exception $e) {
-            return $this->jsonResponse([
+            return $this->fetchJson([
                 'success' => false,
-                'message' => __('保存失败：%{1}', $e->getMessage())
+                'message' => __('保存失败：%{1}', [$e->getMessage()])
             ]);
         }
-    }
-
-    /**
-     * JSON响应
-     * 
-     * @param array $data
-     * @return string
-     */
-    private function jsonResponse(array $data): string
-    {
-        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode($data, JSON_UNESCAPED_UNICODE);
     }
 }
