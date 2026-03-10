@@ -4014,6 +4014,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         return '<span class="pb-dm-badge pb-dm-badge--warn"><?= __('等待中') ?></span>';
     }
 
+    function renderSiteCreatedBadge(item) {
+        var siteCreated = String((item && item.site_created) ? item.site_created : '0') === '1';
+
+        if (siteCreated) {
+            return '<span class="pb-dm-badge pb-dm-badge--info"><?= __('已建站') ?></span>';
+        }
+        return '<span class="pb-dm-badge pb-dm-badge--no"><?= __('未使用') ?></span>';
+    }
+
     function renderLifecycleStepBadge(step) {
         var status = step && step.status ? String(step.status).toLowerCase() : 'pending';
         var label = step && step.step_name ? String(step.step_name) : 'pending';
@@ -4175,6 +4184,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             '<th class="pb-dm-col-resolve"><?= __('解析状态') ?></th>' +
             '<th class="pb-dm-col-https"><?= __('HTTPS') ?></th>' +
             '<th class="pb-dm-col-site-ready"><?= __('建站就绪') ?></th>' +
+            '<th class="pb-dm-col-site-created"><?= __('已建站') ?></th>' +
             '<th class="pb-dm-col-ip"><?= __('解析IP') ?></th>' +
             '<th class="pb-dm-col-time"><?= __('入池时间') ?></th>' +
             '<th class="pb-dm-col-ops"><?= __('操作') ?></th>' +
@@ -4195,6 +4205,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var resolveBadge = renderResolveStatusBadge(item);
             var httpsBadge = renderHttpsStatusBadge(item);
             var siteReadyBadge = renderSiteReadyBadge(item);
+            var siteCreatedBadge = renderSiteCreatedBadge(item);
 
             var typeText = item.subdomain ? '<?= __('子域名') ?>' : '<?= __('根域') ?>';
             var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
@@ -4222,6 +4233,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<td class="pb-dm-col-resolve">' + resolveBadge + '</td>' +
                 '<td class="pb-dm-col-https">' + httpsBadge + '</td>' +
                 '<td class="pb-dm-col-site-ready">' + siteReadyBadge + '</td>' +
+                '<td class="pb-dm-col-site-created">' + siteCreatedBadge + '</td>' +
                 '<td class="pb-dm-col-ip">' + resolvedDisplay + '</td>' +
                 '<td class="pb-dm-col-time">' + (item.allocated_at || '-') + '</td>' +
                 '<td class="pb-dm-col-ops">' + opHtml + '</td>' +
