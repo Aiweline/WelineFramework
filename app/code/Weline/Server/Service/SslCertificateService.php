@@ -201,8 +201,11 @@ class SslCertificateService
     protected function normalizeAcmeProvider(string $provider): string
     {
         $provider = \strtolower(\trim($provider));
+        if ($provider === 'array' || $provider === '') {
+            return self::PROVIDER_LETS_ENCRYPT;
+        }
         return match ($provider) {
-            '', 'letsencrypt', 'let\'s encrypt', 'le' => self::PROVIDER_LETS_ENCRYPT,
+            'letsencrypt', 'let\'s encrypt', 'le' => self::PROVIDER_LETS_ENCRYPT,
             'litessl', 'lite-ssl', 'lite_ssl' => self::PROVIDER_LITESSL,
             'self-signed', 'self_signed', 'selfsigned' => self::PROVIDER_SELF_SIGNED,
             default => $provider,
