@@ -15,6 +15,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Controller\Admin;
 
+use Weline\Backend\Model\Config as BackendConfig;
+use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -31,6 +33,8 @@ use Weline\Websites\Service\ServerIpService;
 #[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理')]
 class Domain extends BackendController
 {
+    private const CRON_MODULE = 'Weline_Cron';
+
     private DomainRegistrar $registrar;
     private DomainRegistrarAccount $registrarAccount;
     private DomainRegistrarResolverService $resolverService;
@@ -39,6 +43,8 @@ class Domain extends BackendController
     private DomainResolveService $resolveService;
     private DomainSyncService $syncService;
     private ServerIpService $serverIpService;
+    private Schedule $schedule;
+    private BackendConfig $backendConfig;
 
     public function __construct(
         DomainRegistrar $registrar,
@@ -48,7 +54,9 @@ class Domain extends BackendController
         DomainConfig $domainConfig,
         DomainResolveService $resolveService,
         DomainSyncService $syncService,
-        ServerIpService $serverIpService
+        ServerIpService $serverIpService,
+        Schedule $schedule,
+        BackendConfig $backendConfig
     ) {
         $this->registrar = $registrar;
         $this->registrarAccount = $registrarAccount;
@@ -58,6 +66,21 @@ class Domain extends BackendController
         $this->resolveService = $resolveService;
         $this->syncService = $syncService;
         $this->serverIpService = $serverIpService;
+        $this->schedule = $schedule;
+        $this->backendConfig = $backendConfig;
+    }
+
+    private function isCronInstalled(): bool
+    {
+        try {
+            $cronName = (string) ($this->backendConfig->getConfig(Schedule::cron_config_key, self::CRON_MODULE) ?? '');
+            if ($cronName === '') {
+                $cronName = Schedule::cron_flag . '-' . \md5(self::CRON_MODULE) . '-' . Schedule::cron_flag;
+            }
+            return $this->schedule->exist($cronName);
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     // ============================================================
@@ -90,6 +113,8 @@ class Domain extends BackendController
 
         // 当前 Tab
         $this->assign('active_tab', $this->request->getGet('tab', 'domain_list'));
+
+        $this->assign('cronInstalled', $this->isCronInstalled());
 
         // 域名列表（初始数据，前端会通过 AJAX 加载分页）
         $domains = $this->domainModel->clearQuery()
