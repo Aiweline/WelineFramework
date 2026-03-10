@@ -223,7 +223,10 @@ class Process
 
             return 0;
         } else {
-            return (int)exec('ps aux | egrep "' . $pname . '" | grep -v grep | tail -n 1 | awk \'{print $2}\'');
+            // 使用 escapeshellarg + grep -F 避免路径/字符串中的 \ 被 grep 误解析（stray \ before G/C/A）
+            $cmd = 'ps aux 2>/dev/null | grep -F -- ' . \escapeshellarg($pname) . ' | grep -v grep | tail -n 1 | awk \'{print $2}\'';
+            $lastLine = \exec($cmd) ?: '';
+            return $lastLine !== '' ? (int)\trim($lastLine) : 0;
         }
     }
 }
