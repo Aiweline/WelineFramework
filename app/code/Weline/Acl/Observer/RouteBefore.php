@@ -407,7 +407,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
                 /** @var MessageManager $message */
                 $message = ObjectManager::getInstance(MessageManager::class);
-                $message->addWarning(__('你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！', [
+                $message->warning(__('你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！', [
                     $request->getMethod(),
                     $request->getUri()
                 ]));
@@ -428,7 +428,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $backendUrl = $request->getUrlBuilder()->getBackendUrl($accessRoute);
             /** @var MessageManager $message */
             $message = ObjectManager::getInstance(MessageManager::class);
-            $message->addWarning(__('你无权进行该操作！已将你带到你可访问的后台页面：%{1}', [$backendUrl]));
+            $message->warning(__('你无权进行该操作！已将你带到你可访问的后台页面：%{1}', [$backendUrl]));
             $request->getResponse()->redirect($backendUrl);
             return;
         }

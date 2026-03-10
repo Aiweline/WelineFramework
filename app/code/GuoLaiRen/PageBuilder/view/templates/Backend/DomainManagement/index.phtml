@@ -5,6 +5,7 @@ $registrars = $this->getData('registrars') ?? [];
 $activeAccounts = $this->getData('activeAccounts') ?? [];
 $lastSyncTime = $this->getData('lastSyncTime') ?? '';
 $statusOptions = $this->getData('statusOptions') ?? [];
+$cronInstalled = $this->getData('cronInstalled') ?? true;
 $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 <style>
@@ -938,6 +939,38 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 <span><i class="mdi mdi-database"></i> <lang>域名池</lang></span>
                 <span class="text-muted" style="font-size:0.8rem;" id="pb-dm-pool-sync-time"></span>
             </div>
+
+            <?php if (!$cronInstalled): ?>
+            <div class="pb-dm-cron-accordion" style="margin-bottom:var(--backend-spacing-md,16px);">
+                <div style="background:var(--backend-color-warning-bg-subtle,rgba(241,180,76,0.1));border:1px solid var(--backend-color-warning,rgba(241,180,76,0.4));border-radius:var(--backend-border-radius-md,8px);overflow:hidden;">
+                    <div>
+                        <button type="button" class="pb-dm-cron-accordion-btn" data-bs-toggle="collapse" data-bs-target="#pb-dm-cron-install-collapse" aria-expanded="false" aria-controls="pb-dm-cron-install-collapse" style="width:100%;padding:12px 16px;background:transparent;border:none;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;color:var(--backend-color-text-primary,#212529);font-size:0.95rem;">
+                            <i class="mdi mdi-chevron-right pb-dm-cron-accordion-icon" style="transition:transform 0.2s;"></i>
+                            <i class="mdi mdi-alert-circle-outline" style="color:var(--backend-color-warning,#f1b44c);"></i>
+                            <span><?= __('cron未安装，无法自动检查域名状态，请点击查看安装指南') ?></span>
+                        </button>
+                    </div>
+                    <div class="collapse" id="pb-dm-cron-install-collapse">
+                        <div style="padding:16px;border-top:1px solid var(--backend-color-border-light,#e9ecef);background:var(--backend-color-card-bg,#fff);">
+                            <p style="margin-bottom:12px;color:var(--backend-color-text-secondary,#6c757d);"><?= __('域名池中的域名需通过定时任务定期检测解析状态、HTTPS 与建站就绪。请按以下步骤安装系统定时任务：') ?></p>
+                            <ol style="margin:0 0 12px 1.25em;color:var(--backend-color-text-primary,#212529);line-height:1.7;">
+                                <li><?= __('在项目根目录执行命令：') ?><code style="padding:2px 6px;background:var(--backend-color-code-bg,#f4f4f4);border-radius:4px;">php bin/w cron:install</code></li>
+                                <li>
+                                    <strong><?= __('Linux / macOS') ?></strong>：<?= __('命令会在 crontab 中添加每分钟执行的任务，自动运行所有定时任务（含域名池解析检测）。') ?>
+                                </li>
+                                <li>
+                                    <strong><?= __('Windows') ?></strong>：<?= __('命令会创建系统计划任务。若遇到权限问题，请以管理员身份运行，或在本地安全策略中赋予当前用户「作为批处理作业登录」权限。') ?>
+                                </li>
+                            </ol>
+                            <p style="margin:0;font-size:0.9rem;color:var(--backend-color-text-tertiary,#adb5bd);"><?= __('安装完成后刷新本页面，将不再显示此提示。') ?></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <style>
+            .pb-dm-cron-accordion [data-bs-toggle="collapse"][aria-expanded="true"] .pb-dm-cron-accordion-icon { transform: rotate(90deg); }
+            </style>
+            <?php endif; ?>
 
             <div class="pb-dm-lifecycle-panel">
                 <div class="pb-dm-row" style="margin-bottom:0;">
