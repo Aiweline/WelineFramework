@@ -13,7 +13,6 @@ $websites = $websites ?? [];
 $purchaseDialogAssetVersion = (string) (@filemtime(\dirname(__DIR__, 3) . '/statics/backend/domain-purchase-dialog.js') ?: \time());
 $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js') . '?v=' . $purchaseDialogAssetVersion;
 $activeAccounts = [];
-$providerAccounts = [];
 foreach ($accounts as $account) {
     if (($account['status'] ?? '') !== 'active') {
         continue;
@@ -26,26 +25,7 @@ foreach ($accounts as $account) {
         'registrar_code' => $providerCode,
         'registrar_name' => $providerName,
     ];
-    if ($providerCode === '') {
-        continue;
-    }
-    if (!isset($providerAccounts[$providerCode])) {
-        $providerAccounts[$providerCode] = [
-            'name' => $providerName,
-            'accounts' => [],
-        ];
-    }
-    $providerAccounts[$providerCode]['accounts'][] = [
-        'id' => (int)($account['account_id'] ?? 0),
-        'name' => (string)($account['account_name'] ?? ''),
-        'registrar_name' => $providerName,
-    ];
 }
-$providerOptions = [];
-foreach ($providerAccounts as $providerCode => $providerData) {
-    $providerOptions[] = $providerCode . ':' . $providerData['name'];
-}
-$providerOptionsStr = \implode(',', $providerOptions);
 ?>
 
 <div class="row">
@@ -160,10 +140,7 @@ $providerOptionsStr = \implode(',', $providerOptions);
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('DNS 服务商') ?></label>
                                         <select class="form-select" id="purchase-dialog-dns-provider">
-                                            <option value=""><?= __('请选择 DNS 服务商') ?></option>
-                                            <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
-                                                <option value="<?= htmlspecialchars($providerCode) ?>"><?= htmlspecialchars($providerData['name']) ?></option>
-                                            <?php endforeach; ?>
+                                            <option value=""><?= __('加载中...') ?></option>
                                         </select>
                                     </div>
                                     <div class="mb-3">
@@ -196,10 +173,7 @@ $providerOptionsStr = \implode(',', $providerOptions);
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('CDN 服务商') ?></label>
                                         <select class="form-select" id="purchase-dialog-cdn-provider">
-                                            <option value=""><?= __('请选择 CDN 服务商') ?></option>
-                                            <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
-                                                <option value="<?= htmlspecialchars($providerCode) ?>"><?= htmlspecialchars($providerData['name']) ?></option>
-                                            <?php endforeach; ?>
+                                            <option value=""><?= __('加载中...') ?></option>
                                         </select>
                                     </div>
                                     <div class="mb-3">
@@ -248,9 +222,10 @@ $providerOptionsStr = \implode(',', $providerOptions);
 var checkAvailabilityUrl = '<?= $this->getUrl('*/admin/domain/check-availability') ?>';
 var purchaseUrl = '<?= $this->getUrl('*/admin/domain/purchase') ?>';
 var ordersUrl = '<?= $this->getUrl('*/admin/domain/orders') ?>';
+var getRegistrarAccountsUrl = '<?= $this->getUrl('*/admin/domain/get-registrar-accounts') ?>?active_only=1';
 var purchaseDialogModal = null;
 var pendingPurchasePayload = null;
-var purchaseProviderAccounts = <?= json_encode($providerAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+var purchaseProviderAccounts = {};
 var purchaseActiveAccounts = <?= json_encode($activeAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
 var availabilityResults = [];
@@ -260,6 +235,44 @@ function getPurchaseDialogCurrentAccount() {
     return purchaseActiveAccounts.find(function(account) {
         return String(account.account_id || '') === currentId;
     }) || null;
+}
+
+function loadPurchaseDialogProviders(callback) {
+    if (Object.keys(purchaseProviderAccounts).length > 0) {
+        if (typeof callback === 'function') callback();
+        return;
+    }
+    var dnsProvider = document.getElementById('purchase-dialog-dns-provider');
+    var cdnProvider = document.getElementById('purchase-dialog-cdn-provider');
+    if (dnsProvider) dnsProvider.innerHTML = '<option value=""><?= __('加载中...') ?></option>';
+    if (cdnProvider) cdnProvider.innerHTML = '<option value=""><?= __('加载中...') ?></option>';
+    fetch(getRegistrarAccountsUrl).then(function(r) { return r.json(); }).then(function(data) {
+        purchaseProviderAccounts = {};
+        var accounts = (data.data && data.data.accounts) ? data.data.accounts : [];
+        accounts.forEach(function(acc) {
+            var code = String(acc.registrar_code || '').trim();
+            if (!code) return;
+            if (!purchaseProviderAccounts[code]) {
+                purchaseProviderAccounts[code] = { name: acc.registrar_name || code, accounts: [] };
+            }
+            purchaseProviderAccounts[code].accounts.push({
+                id: acc.id,
+                name: acc.name || '',
+                registrar_name: acc.registrar_name || code
+            });
+        });
+        var providerOpts = '<option value=""><?= __('请选择 DNS 服务商') ?></option>';
+        Object.keys(purchaseProviderAccounts).forEach(function(code) {
+            providerOpts += '<option value="' + escapeHtml(code) + '">' + escapeHtml(purchaseProviderAccounts[code].name) + '</option>';
+        });
+        if (dnsProvider) dnsProvider.innerHTML = providerOpts;
+        if (cdnProvider) cdnProvider.innerHTML = providerOpts.replace('<?= __('请选择 DNS 服务商') ?>', '<?= __('请选择 CDN 服务商') ?>');
+        if (typeof callback === 'function') callback();
+    }).catch(function() {
+        if (dnsProvider) dnsProvider.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+        if (cdnProvider) cdnProvider.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+        if (typeof callback === 'function') callback();
+    });
 }
 
 function populateAccountSelect(kind, providerCode) {
@@ -293,11 +306,15 @@ function syncPurchaseDialogSections() {
     document.getElementById('purchase-dialog-dns-provider-area').style.display = dnsChoice === 'provider_account' ? '' : 'none';
     document.getElementById('purchase-dialog-dns-ns-area').style.display = dnsChoice === 'custom_nameservers' ? '' : 'none';
     document.getElementById('purchase-dialog-cdn-provider-area').style.display = cdnChoice === 'provider_account' ? '' : 'none';
-    if (dnsChoice === 'provider_account') {
-        populateAccountSelect('dns', document.getElementById('purchase-dialog-dns-provider').value);
-    }
-    if (cdnChoice === 'provider_account') {
-        populateAccountSelect('cdn', document.getElementById('purchase-dialog-cdn-provider').value);
+    if (dnsChoice === 'provider_account' || cdnChoice === 'provider_account') {
+        loadPurchaseDialogProviders(function() {
+            if (dnsChoice === 'provider_account') {
+                populateAccountSelect('dns', document.getElementById('purchase-dialog-dns-provider').value);
+            }
+            if (cdnChoice === 'provider_account') {
+                populateAccountSelect('cdn', document.getElementById('purchase-dialog-cdn-provider').value);
+            }
+        });
     }
 }
 

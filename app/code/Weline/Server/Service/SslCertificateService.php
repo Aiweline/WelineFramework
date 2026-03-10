@@ -1324,6 +1324,7 @@ CNF;
      * @param string $challengeStrategy 验证策略: auto|http01|dns01。auto 时若端口非80则自动用 dns01
      * @param int $poolId 域名池 ID（DNS-01 时用于解析 DNS 账户）
      * @param int $domainId 根域名 ID（DNS-01 时用于解析 DNS 账户）
+     * @param callable|null $onProgress 进度回调 function(string $message, array $extra=[])，用于 SSE 等实时展示
      * @return array ['success' => bool, 'message' => string, 'cert' => SslCertificate|null]
      */
     public function requestCertificate(
@@ -1334,7 +1335,8 @@ CNF;
         string $provider = self::PROVIDER_LETS_ENCRYPT,
         string $challengeStrategy = self::CHALLENGE_AUTO,
         int $poolId = 0,
-        int $domainId = 0
+        int $domainId = 0,
+        ?\Closure $onProgress = null
     ): array
     {
         try {
@@ -1385,7 +1387,7 @@ CNF;
                 ->setChainPath($chainPath);
             
             // 4. 使用 ACME 协议申请证书
-            $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId);
+            $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
             
             if ($result['success']) {
                 // 更新证书信息
@@ -1503,6 +1505,7 @@ CNF;
      * @param string $challengeStrategy auto|http01|dns01
      * @param int $poolId 域名池 ID（DNS-01 用）
      * @param int $domainId 根域名 ID（DNS-01 用）
+     * @param \Closure|null $onProgress 进度回调
      */
     protected function performAcmeChallenge(
         string $domain,
@@ -1511,7 +1514,8 @@ CNF;
         string $certDir,
         string $challengeStrategy = self::CHALLENGE_AUTO,
         int $poolId = 0,
-        int $domainId = 0
+        int $domainId = 0,
+        ?\Closure $onProgress = null
     ): array {
         $strategy = $challengeStrategy;
         if ($strategy === self::CHALLENGE_AUTO) {
@@ -1521,6 +1525,14 @@ CNF;
             } else {
                 $strategy = self::CHALLENGE_HTTP01;
             }
+        }
+        if ($onProgress) {
+            $onProgress(
+                $strategy === self::CHALLENGE_DNS01
+                    ? (string)__('使用 DNS-01 验证（将自动添加 TXT 记录）')
+                    : (string)__('使用 HTTP-01 验证'),
+                ['strategy' => $strategy]
+            );
         }
 
         try {
@@ -1556,7 +1568,7 @@ CNF;
                 }
 
                 if ($strategy === self::CHALLENGE_DNS01) {
-                    $validated = $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId);
+                    $validated = $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress);
                 } else {
                     $validated = $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot);
                 }
@@ -1656,7 +1668,8 @@ CNF;
         string $accountUrl,
         string $domain,
         int $poolId,
-        int $domainId
+        int $domainId,
+        ?\Closure $onProgress = null
     ): bool {
         $dnsChallenge = null;
         foreach ($auth['challenges'] ?? [] as $challenge) {
@@ -1676,22 +1689,38 @@ CNF;
         $digest = \hash('sha256', $keyAuth, true);
         $challengeValue = \str_replace(['+', '/', '='], ['-', '_', ''], \base64_encode($digest));
 
+        if ($onProgress) {
+            $onProgress((string)__('正在通过 DNS 供应商添加 TXT 记录...'), ['step' => 'add_txt']);
+        }
         $addResult = w_query('websites', 'addAcmeTxtRecord', [
             'domain' => $domain,
             'challenge_value' => $challengeValue,
             'pool_id' => $poolId,
             'domain_id' => $domainId,
+            '_on_progress' => $onProgress,
         ]);
         if (!($addResult['success'] ?? false)) {
+            if ($onProgress) {
+                $onProgress((string)__('添加 TXT 记录失败：%{1}', [($addResult['message'] ?? '')]), ['step' => 'add_txt_fail']);
+            }
             return false;
         }
         $recordId = (string)($addResult['record_id'] ?? '');
+        if ($onProgress) {
+            $onProgress((string)__('TXT 记录已添加，正在通知 CA 验证...'), ['step' => 'notify_ca']);
+        }
         $this->notifyChallenge($dnsChallenge['url'] ?? '', $accountUrl);
 
+        if ($onProgress) {
+            $onProgress((string)__('等待 CA 验证 DNS 记录（最多 4 分钟）...'), ['step' => 'wait_validation']);
+        }
         $maxWait = 120;
         $validated = false;
         for ($i = 0; $i < $maxWait; $i++) {
             \sleep(2);
+            if ($onProgress && $i > 0 && $i % 5 === 0) {
+                $onProgress((string)__('等待 CA 验证中...（%{1}s）', [$i * 2]), ['progress' => (int) \min(90, 50 + $i)]);
+            }
             $auth = $this->getResource($authUrl, $accountUrl);
             if ($auth && ($auth['status'] ?? '') === 'valid') {
                 $validated = true;
@@ -1703,6 +1732,9 @@ CNF;
         }
 
         if ($recordId !== '') {
+            if ($onProgress) {
+                $onProgress((string)__('CA 验证完成，正在清理 TXT 记录...'), ['step' => 'cleanup']);
+            }
             w_query('websites', 'removeAcmeTxtRecord', [
                 'domain' => $domain,
                 'record_id' => $recordId,
