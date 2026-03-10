@@ -883,6 +883,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $status = $params['status'] ?? DomainPool::STATUS_ACTIVE;
         $limit = (int)($params['limit'] ?? 500);
+        $excludeSiteCreated = ($params['exclude_site_created'] ?? false);
         if ($limit <= 0) {
             $limit = 500;
         }
@@ -893,6 +894,12 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $pool->clearQuery();
         if ($status !== null && $status !== '') {
             $pool->where(DomainPool::schema_fields_STATUS, (string)$status);
+        }
+        if ($excludeSiteCreated) {
+            $pool->whereRaw(
+                '(' . DomainPool::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPool::schema_fields_SITE_CREATED . ' = 0)',
+                'AND'
+            );
         }
         $rows = $pool->order(DomainPool::schema_fields_DOMAIN, 'ASC')
             ->pagination(1, $limit)

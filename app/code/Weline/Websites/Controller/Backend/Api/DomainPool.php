@@ -53,9 +53,13 @@ class DomainPool extends BaseController
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             
-            // 只返回可建站域名
+            // 只返回可建站且未已建站的域名（创建站点时选择）
             if ($siteReadyOnly) {
                 $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
+                $model->whereRaw(
+                    '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0)',
+                    'AND'
+                );
             }
             
             // 按根域名ID筛选
@@ -136,6 +140,7 @@ class DomainPool extends BaseController
             'https_status' => $domain[DomainPoolModel::schema_fields_HTTPS_STATUS] ?? 'none',
             'https_expires_at' => $domain[DomainPoolModel::schema_fields_HTTPS_EXPIRES_AT] ?? '',
             'site_ready' => (int) ($domain[DomainPoolModel::schema_fields_SITE_READY] ?? 0),
+            'site_created' => (int) ($domain[DomainPoolModel::schema_fields_SITE_CREATED] ?? 0),
             'description' => $domain[DomainPoolModel::schema_fields_DESCRIPTION] ?? '',
         ];
     }
