@@ -221,9 +221,6 @@ class MessageManager
     private static function setSingleMessage(string $msg, string $title, string $class, string $flagKey): void
     {
         $session = self::session();
-        foreach (self::keys as $key) {
-            $session->delete($key);
-        }
         $session->set('system-message', self::process_message($msg, $title, $class));
         $session->set($flagKey, '1');
     }
@@ -252,12 +249,7 @@ class MessageManager
     {
         $session = self::session();
         $content = $session->get('system-message') ?? '';
-        // 读取后立即删除
-        foreach (self::keys as $key) {
-            $session->delete($key);
-        }
-        $session->set('system-message', '');
-        $session->save();
+        $this->clear();
         return "<div class='system message'>{$content}</div>";
     }
 
@@ -284,13 +276,17 @@ class MessageManager
         </div>';
     }
 
-    public function clear()
+    /**
+     * 清空系统消息，并立即落盘。
+     * WLS 下必须显式 save，否则清空只作用于内存，下次请求仍会看到残留消息。
+     */
+    public function clear(): void
     {
-        // 始终使用 self::session()，保证和静态方法写入的是同一个 session
         $session = self::session();
         foreach (self::keys as $key) {
             $session->delete($key);
         }
+        $session->save();
     }
 
     public function __toString(): string
