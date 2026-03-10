@@ -4,7 +4,9 @@ $services = $this->getData('services') ?? [];
 $accounts = $this->getData('accounts') ?? [];
 $cdnAdapters = $this->getData('cdnAdapters') ?? [];
 $cdnAccounts = $this->getData('cdnAccounts') ?? [];
-$purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
+$purchaseDialogJsUrl = (defined('DEV') && DEV)
+    ? '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js'
+    : $this->getViewFileUrl('Weline_Websites::backend/domain-purchase-dialog.js');
 ?>
 <style>
 .pb-qb-container { max-width: 900px; margin: 0 auto; }
@@ -650,14 +652,16 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         }
 
         function getPurchaseDialogScriptCandidates() {
+            var isDev = <?= (defined('DEV') && DEV) ? 'true' : 'false' ?>;
+            var devUrl = '/Weline/Websites/view/statics/backend/domain-purchase-dialog.js';
+            var prodUrl = '/static/Weline/Websites/backend/domain-purchase-dialog.js';
             var candidates = [purchaseDialogPrimaryScriptUrl];
+            candidates.push(isDev ? prodUrl : devUrl);
             try {
                 if (window.Weline && window.Weline.staticResourceResolver) {
                     candidates.push(window.Weline.staticResourceResolver.resolve('Weline_Websites::backend/domain-purchase-dialog.js'));
                 }
             } catch (e) {}
-            candidates.push('/Weline/Websites/view/statics/backend/domain-purchase-dialog.js');
-            candidates.push('/static/Weline/Websites/backend/domain-purchase-dialog.js');
             return candidates.filter(function(url, index, arr) {
                 return !!url && arr.indexOf(url) === index;
             });
