@@ -87,13 +87,87 @@ class DomainPoolResolveService
 
         $resolveOffLocal = $wasLocalBefore && !$isLocal;
 
+        return $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $siteReady, $error, $resolveOffLocal);
+    }
+
+    /**
+     * 检测并仅在 IP/状态变更时更新域名池记录（避免无变化的冗余保存）
+     *
+     * @param DomainPool $poolDomain 域名池模型
+     * @return array{resolved: bool, ipv4: string, ipv6: string, is_local: bool, site_ready: bool, error: string, updated: bool}
+     */
+    public function checkAndUpdateIfChanged(DomainPool $poolDomain): array
+    {
+        $domainName = $poolDomain->getDomain();
+        $now = \date('Y-m-d H:i:s');
+
+        $oldIpv4 = (string) ($poolDomain->getData(DomainPool::schema_fields_RESOLVED_IP) ?? '');
+        $oldIpv6 = (string) ($poolDomain->getData(DomainPool::schema_fields_RESOLVED_IPV6) ?? '');
+        $oldIsLocal = (bool) ($poolDomain->getData(DomainPool::schema_fields_IS_LOCAL_SERVER) ?? false);
+        $oldStatus = (string) ($poolDomain->getData(DomainPool::schema_fields_RESOLVE_STATUS) ?? '');
+
+        $ipv4 = '';
+        $ipv6 = '';
+        $error = '';
+
+        try {
+            $ipv4 = $this->resolveA($domainName);
+        } catch (\Throwable $e) {
+            $error .= 'A: ' . $e->getMessage() . '; ';
+        }
+
+        try {
+            $ipv6 = $this->resolveAAAA($domainName);
+        } catch (\Throwable $e) {
+            // IPv6 失败不视为错误
+        }
+
+        $serverIpv4 = $this->serverIpService->getPublicIpv4();
+        $serverIpv6 = $this->serverIpService->getPublicIpv6();
+
+        $isLocal = false;
+        if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
+            $isLocal = true;
+        }
+        if (!$isLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
+            $isLocal = true;
+        }
+
+        $resolved = $ipv4 !== '' || $ipv6 !== '';
+        $resolveStatus = $resolved ? DomainPool::RESOLVE_STATUS_RESOLVED : DomainPool::RESOLVE_STATUS_ERROR;
+        if ($error !== '' && !$resolved) {
+            $resolveStatus = DomainPool::RESOLVE_STATUS_ERROR;
+        }
+
+        $changed = $oldIpv4 !== $ipv4 || $oldIpv6 !== $ipv6 || $oldIsLocal !== $isLocal || $oldStatus !== $resolveStatus;
+
+        if ($changed) {
+            $poolDomain->setResolvedIp($ipv4);
+            $poolDomain->setResolvedIpv6($ipv6);
+            $poolDomain->setIsLocalServer($isLocal);
+            $poolDomain->setResolveStatus($resolveStatus);
+            $poolDomain->setDnsStatus($resolved ? DomainPool::INFRA_STATUS_READY : DomainPool::INFRA_STATUS_ERROR);
+            $poolDomain->setCdnStatus($resolved ? DomainPool::INFRA_STATUS_READY : DomainPool::INFRA_STATUS_ERROR);
+            $poolDomain->setResolveCheckedAt($now);
+            $poolDomain->setResolveError(\trim($error, '; '));
+            $poolDomain->calculateSiteReady();
+            $poolDomain->save();
+        }
+
+        $result = $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $poolDomain->getData(DomainPool::schema_fields_SITE_READY) ?: false, \trim($error, '; '), false);
+        $result['updated'] = $changed;
+        return $result;
+    }
+
+    private function buildCheckResult(bool $resolved, string $ipv4, string $ipv6, bool $isLocal, $siteReady, string $error, bool $resolveOffLocal): array
+    {
         $result = [
             'resolved' => $resolved,
             'ipv4' => $ipv4,
             'ipv6' => $ipv6,
             'is_local' => $isLocal,
-            'site_ready' => $siteReady,
-            'error' => \trim($error, '; '),
+            'site_ready' => (bool) $siteReady,
+            'error' => $error,
         ];
         if ($resolveOffLocal) {
             $result['resolve_off_local'] = true;
