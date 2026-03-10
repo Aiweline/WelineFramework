@@ -19,6 +19,8 @@ use Weline\Websites\Model\DomainAutoResolveTask;
 use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
@@ -93,6 +95,8 @@ class DomainAutoResolve implements CronTaskInterface
             $failed = 0;
             /** @var array<int, true> 解析成功的账户 ID，用于任务结束后拉取到本地 */
             $successfulAccountIds = [];
+            /** @var array<string, true> 解析成功的根域名，用于任务结束后检查并更新域名池记录 */
+            $successfulDomains = [];
 
             foreach ($tasks as $row) {
                 $task = clone $taskModel;
@@ -111,6 +115,7 @@ class DomainAutoResolve implements CronTaskInterface
                             $task->save();
                             $success++;
                             $successfulAccountIds[$accountId] = true;
+                            $successfulDomains[$domain] = true;
                             continue;
                         }
                     }
@@ -165,6 +170,7 @@ class DomainAutoResolve implements CronTaskInterface
                         $task->save();
                         $success++;
                         $successfulAccountIds[$accountId] = true;
+                        $successfulDomains[$domain] = true;
                     } else {
                         $task->incrementRetryCount();
                         if ($task->canRetry()) {
@@ -214,7 +220,42 @@ class DomainAutoResolve implements CronTaskInterface
                 }
             }
 
-            return \sprintf('购买任务处理: 共%d个, 成功%d, 重试%d, 失败%d', $total, $success, $skipped, $failed);
+            $poolChecked = 0;
+            $poolUpdated = 0;
+            // 解析成功后立即检查对应域名池内的子域名，有则更新记录（IP 变了才更新，无变化则不写库）
+            if ($successfulDomains !== []) {
+                $poolModel = ObjectManager::getInstance(DomainPool::class);
+                $poolResolveService = ObjectManager::getInstance(DomainPoolResolveService::class);
+                foreach (\array_keys($successfulDomains) as $rootDomain) {
+                    try {
+                        $poolRows = $poolModel->clearQuery()
+                            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+                            ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
+                            ->select()
+                            ->fetchArray();
+                        foreach ($poolRows as $poolRow) {
+                            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+                            $pool->setData($poolRow);
+                            $r = $poolResolveService->checkAndUpdateIfChanged($pool);
+                            $poolChecked++;
+                            if ($r['updated'] ?? false) {
+                                $poolUpdated++;
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        w_log_warning(__('域名池解析检查失败: root=%{1}, 错误=%{2}', [
+                            $rootDomain,
+                            $e->getMessage(),
+                        ]), [], 'domain_auto_resolve');
+                    }
+                }
+            }
+
+            $msg = \sprintf('购买任务处理: 共%d个, 成功%d, 重试%d, 失败%d', $total, $success, $skipped, $failed);
+            if ($poolChecked > 0) {
+                $msg .= \sprintf(' | 域名池检查%d条, 更新%d条', $poolChecked, $poolUpdated);
+            }
+            return $msg;
         } catch (\Throwable $e) {
             w_log_error('处理购买任务异常: ' . $e->getMessage(), [], 'domain_auto_resolve');
             return '购买任务异常: ' . $e->getMessage();
