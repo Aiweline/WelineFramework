@@ -120,28 +120,22 @@ class Router implements RouterInterface
     }
     
     /**
-     * 从路径中提取handle
+     * 从路径中提取 handle（先 URL 解码再处理）
      */
     private static function extractHandle(string $path): string
     {
-        // 移除开头和结尾的斜杠
+        $path = rawurldecode($path);
         $handle = trim($path, '/');
         
-        // 空路径不处理
         if (empty($handle)) {
             return '';
         }
         
-        // 移除查询字符串（如果有）
         if (str_contains($handle, '?')) {
             $handle = substr($handle, 0, strpos($handle, '?'));
         }
         
-        // 替换斜杠为连字符（支持多级路径）
-        // 例如：/products/new -> products-new
         $handle = str_replace('/', '-', $handle);
-        
-        // 验证handle格式（只允许字母、数字、连字符、下划线）
         if (!preg_match('/^[a-zA-Z0-9_-]+$/', $handle)) {
             return '';
         }

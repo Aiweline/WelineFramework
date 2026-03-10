@@ -1786,15 +1786,11 @@ class Page extends BackendController
             if (empty($siteName)) {
                 return $this->fetchJson(['success' => false, 'message' => __('请输入站点名称')]);
             }
-            if (empty($siteHandle)) {
-                return $this->fetchJson(['success' => false, 'message' => __('请输入URL前缀')]);
-            }
             if ($websiteId <= 0) {
                 return $this->fetchJson(['success' => false, 'message' => __('请选择所属站点')]);
             }
-            
-            // 验证handle格式
-            if (!preg_match('/^[a-z0-9-]+$/', $siteHandle)) {
+            // URL前缀可选；填写时仅允许小写字母、数字、连字符
+            if ($siteHandle !== '' && !preg_match('/^[a-z0-9-]+$/', $siteHandle)) {
                 return $this->fetchJson(['success' => false, 'message' => __('URL前缀只能包含小写字母、数字和连字符')]);
             }
             
@@ -1803,63 +1799,64 @@ class Page extends BackendController
                 array_unshift($pageTypes, PageModel::TYPE_HOME);
             }
             
-            // 页面类型配置
-            // 首页handle直接使用URL前缀（siteHandle），确保首页可以通过URL前缀访问
+            // 页面类型配置：有 URL 前缀时用 prefix-type，无前缀时用 type（同一 website_id 下 handle 唯一即可）
+            $prefix = $siteHandle !== '' ? $siteHandle : '';
+            $homeHandle = $prefix !== '' ? $prefix : ''; // 空前缀时首页 handle 在下面由 generateSlugFromName 生成
             $pageTypeConfigs = [
                 PageModel::TYPE_HOME => [
                     'name' => $siteName,
-                    'handle' => $siteHandle, // 首页handle直接使用URL前缀
+                    'handle' => $homeHandle,
                     'title' => $siteName,
                     'is_home' => true,
                 ],
                 PageModel::TYPE_ABOUT => [
                     'name' => __('关于我们'),
-                    'handle' => $siteHandle . '-about',
+                    'handle' => $prefix !== '' ? $prefix . '-about' : 'about',
                     'title' => __('关于我们') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_CONTACT => [
                     'name' => __('联系我们'),
-                    'handle' => $siteHandle . '-contact',
+                    'handle' => $prefix !== '' ? $prefix . '-contact' : 'contact',
                     'title' => __('联系我们') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_PRIVACY_POLICY => [
                     'name' => __('隐私政策'),
-                    'handle' => $siteHandle . '-privacy',
+                    'handle' => $prefix !== '' ? $prefix . '-privacy' : 'privacy',
                     'title' => __('隐私政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_TERMS_OF_SERVICE => [
                     'name' => __('服务条款'),
-                    'handle' => $siteHandle . '-terms',
+                    'handle' => $prefix !== '' ? $prefix . '-terms' : 'terms',
                     'title' => __('服务条款') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_REFUND_POLICY => [
                     'name' => __('退款政策'),
-                    'handle' => $siteHandle . '-refund',
+                    'handle' => $prefix !== '' ? $prefix . '-refund' : 'refund',
                     'title' => __('退款政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_SHIPPING_POLICY => [
                     'name' => __('配送政策'),
-                    'handle' => $siteHandle . '-shipping',
+                    'handle' => $prefix !== '' ? $prefix . '-shipping' : 'shipping',
                     'title' => __('配送政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_COOKIE_POLICY => [
                     'name' => __('Cookie政策'),
-                    'handle' => $siteHandle . '-cookies',
+                    'handle' => $prefix !== '' ? $prefix . '-cookies' : 'cookies',
                     'title' => __('Cookie政策') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_LIST => [
                     'name' => __('博客列表'),
-                    'handle' => $siteHandle . '-blog',
+                    'handle' => $prefix !== '' ? $prefix . '-blog' : 'blog',
                     'title' => __('博客列表') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG => [
                     'name' => __('博客文章详情'),
-                    'handle' => $siteHandle . '-post',
+                    'handle' => $prefix !== '' ? $prefix . '-post' : 'post',
                     'title' => __('博客文章详情') . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_CATEGORY => [
                     'name' => __('博客分类'),
-                    'handle' => $siteHandle . '-blog-category',
+                    'handle' => $prefix !== '' ? $prefix . '-blog-category' : 'blog-category',
                     'title' => __('博客分类') . ' - ' . $siteName,
                 ],
             ];
@@ -2152,7 +2149,7 @@ class Page extends BackendController
     public function getCheckHandle()
     {
         try {
-            $handle = trim($this->request->getGet('handle', ''));
+            $handle = trim(rawurldecode((string)$this->request->getGet('handle', '')));
             $pageId = (int)$this->request->getGet('page_id', 0);
             // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
             $websiteId = $this->request->getGet('website_id');
@@ -2237,7 +2234,7 @@ class Page extends BackendController
     public function getPageByHandle()
     {
         try {
-            $handle = trim($this->request->getGet('handle', ''));
+            $handle = trim(rawurldecode((string)$this->request->getGet('handle', '')));
             // 获取 website_id：优先从请求参数获取，否则使用当前请求的网站ID
             $websiteId = $this->request->getGet('website_id');
             if ($websiteId === null || $websiteId === '') {
@@ -2616,7 +2613,7 @@ class Page extends BackendController
     public function listAssets()
     {
         try {
-            $handle = trim((string)($this->request->getParam('handle') ?? ''));
+            $handle = trim(rawurldecode((string)($this->request->getParam('handle') ?? '')));
             $sub = trim((string)($this->request->getParam('sub') ?? ''));
             $websiteId = (int)($this->request->getParam('website_id') ?? 0);
             
@@ -2710,7 +2707,7 @@ class Page extends BackendController
     public function uploadAssetTo()
     {
         try {
-            $handle = trim((string)($this->request->getParam('handle') ?? ''));
+            $handle = trim(rawurldecode((string)($this->request->getParam('handle') ?? '')));
             $sub = trim((string)($this->request->getParam('sub') ?? ''));
             if ($handle === '') {
                 throw new \Exception(__('缺少 handle'));
