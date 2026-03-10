@@ -17,6 +17,7 @@ use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\DomainSyncService;
+use Weline\Websites\Service\DnsProviderDetector;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
@@ -26,7 +27,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
         private readonly DomainRegistrarAccount $accountModel,
         private readonly DomainRegistrar $registrarModel,
         private readonly Website $websiteModel,
-        private readonly WebsiteLanguage $websiteLanguageModel
+        private readonly WebsiteLanguage $websiteLanguageModel,
+        private readonly DnsProviderDetector $dnsProviderDetector
     ) {
     }
 
@@ -64,6 +66,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getDnsRecords'          => $this->getDnsRecords($params),
             'addAcmeTxtRecord'       => $this->addAcmeTxtRecord($params),
             'removeAcmeTxtRecord'    => $this->removeAcmeTxtRecord($params),
+            'getDnsCdnAccounts'      => $this->getDnsCdnAccounts($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -343,6 +346,38 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ];
         }
         return $accounts;
+    }
+
+    /**
+     * 获取可用于 DNS/CDN 管理的账户列表（与域名购买/管理中的逻辑一致）
+     * 返回结构同 DomainManagement::getDnsAccounts，供 QuickBuild 向导等复用。
+     */
+    private function getDnsCdnAccounts(array $params): array
+    {
+        $p = \array_merge(['status' => DomainRegistrarAccount::STATUS_ACTIVE], $params);
+        $all = $this->getRegistrarAccounts($p);
+        $dnsAccounts = [];
+        $cdnAccounts = [];
+        foreach ($all as $record) {
+            $registrarCode = (string) ($record['registrar_code'] ?? '');
+            $accountInfo = [
+                'account_id'     => (int) ($record['account_id'] ?? 0),
+                'name'           => (string) ($record['account_name'] ?? ''),
+                'registrar_code' => $registrarCode,
+                'registrar_name' => (string) ($record['registrar_name'] ?? $registrarCode),
+            ];
+            $adapter = $this->resolver->getAdapter($registrarCode);
+            if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                $dnsAccounts[] = $accountInfo;
+            }
+            if ($this->dnsProviderDetector->isCdnProvider($registrarCode)) {
+                $cdnAccounts[] = $accountInfo;
+            }
+        }
+        return [
+            'dns_accounts' => $dnsAccounts,
+            'cdn_accounts' => $cdnAccounts,
+        ];
     }
 
     private function saveRegistrarAccount(array $params): array

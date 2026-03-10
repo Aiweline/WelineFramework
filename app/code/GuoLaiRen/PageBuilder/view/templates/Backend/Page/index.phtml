@@ -162,8 +162,8 @@
                                                     $website = clone $websiteModel;
                                                     $website->load($websiteId);
                                                     if ($website->getId()) {
-                                                        $websiteName = $website->getData(\Weline\Websites\Model\Website::fields_NAME);
-                                                        $websiteUrl = $website->getData(\Weline\Websites\Model\Website::fields_URL);
+                                                        $websiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
+                                                        $websiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
                                                     }
                                                 } catch (\Exception $e) {
                                                     // 忽略错误
@@ -286,7 +286,7 @@
                                                                 $website = clone $websiteModel;
                                                                 $website->load($websiteId);
                                                                 if ($website->getId()) {
-                                                                    $websiteCode = $website->getData(\Weline\Websites\Model\Website::fields_CODE) ?: 'website_' . $websiteId;
+                                                                    $websiteCode = $website->getData(\Weline\Websites\Model\Website::schema_fields_CODE) ?: 'website_' . $websiteId;
                                                                 }
                                                             } catch (\Exception $e) {
                                                                 $websiteCode = 'website_' . $websiteId;
@@ -452,8 +452,8 @@
                                                                         $website = clone $websiteModel;
                                                                         $website->load($childWebsiteId);
                                                                         if ($website->getId()) {
-                                                                            $childWebsiteName = $website->getData(\Weline\Websites\Model\Website::fields_NAME);
-                                                                            $childWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::fields_URL);
+                                                                            $childWebsiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
+                                                                            $childWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
                                                                         }
                                                                     } catch (\Exception $e) {
                                                                         // 忽略错误
@@ -1290,6 +1290,31 @@ hr {
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // 从快速建站向导跳转：自动打开一键建站弹窗并可选预选站点
+    (function() {
+        var params = new URLSearchParams(window.location.search);
+        var openQuickSite = params.get('open_quick_site') === '1';
+        var websiteId = params.get('website_id') || '';
+        if (!openQuickSite) return;
+        var modalEl = document.getElementById('quickSiteModal');
+        if (!modalEl || typeof bootstrap === 'undefined') return;
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+        modalEl.addEventListener('shown.bs.modal', function onShown() {
+            modalEl.removeEventListener('shown.bs.modal', onShown);
+            if (websiteId) {
+                var item = document.querySelector('.website-item[data-website-id="' + websiteId + '"]');
+                if (item && typeof window.selectWebsite === 'function') {
+                    window.selectWebsite(item);
+                }
+            }
+        }, { once: true });
+        var cleanUrl = window.location.pathname + (websiteId ? '?website_id=' + websiteId : '') + (window.location.hash || '');
+        if (history.replaceState) {
+            history.replaceState(null, '', cleanUrl);
+        }
+    })();
+
     // 拷贝链接功能
     const copyButtons = document.querySelectorAll('.copy-link-btn');
     
