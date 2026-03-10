@@ -1,135 +1,407 @@
 <?php
 /**
- * 计划任务调度管理器（内容模板）
+ * 计划任务调度管理器（美化版，参考队列列表）
  *
  * @var \Weline\Framework\View\Template $this
  */
 ?>
-
+<!-- 页面标题 -->
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('计划任务调度管理器') ?></h4>
+            <h4 class="mb-sm-0">
+                <breadcrumb model="Weline\Backend\Model\Menu" order_field="order" name_field="title"></breadcrumb>
+            </h4>
             <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('计划任务调度管理器') ?></li>
-                </ol>
+                <breadcrumb model='Weline\Backend\Model\Menu' order_field='order' name_field='title'></breadcrumb>
             </div>
         </div>
     </div>
 </div>
 
+<!-- 消息提示 -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row weline-cron-stats">
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')" class="weline-cron-stat-card weline-cron-stat-all">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-format-list-bulleted"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.all}}</div>
+                <div class="weline-cron-stat-label"><lang>全部</lang></div>
+            </div>
+        </a>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')?status=pending" class="weline-cron-stat-card weline-cron-stat-pending">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-clock-outline"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.pending}}</div>
+                <div class="weline-cron-stat-label"><lang>待执行</lang></div>
+            </div>
+        </a>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')?status=running" class="weline-cron-stat-card weline-cron-stat-running">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-play-circle-outline"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.running}}</div>
+                <div class="weline-cron-stat-label"><lang>运行中</lang></div>
+            </div>
+        </a>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')?status=success" class="weline-cron-stat-card weline-cron-stat-success">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-check-circle-outline"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.success}}</div>
+                <div class="weline-cron-stat-label"><lang>成功</lang></div>
+            </div>
+        </a>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')?status=block" class="weline-cron-stat-card weline-cron-stat-block">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-lock-outline"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.block}}</div>
+                <div class="weline-cron-stat-label"><lang>已锁定</lang></div>
+            </div>
+        </a>
+    </div>
+    <div class="col-xl-2 col-md-4 col-6">
+        <a href="@backend-url('*/cron/listing')?status=fail" class="weline-cron-stat-card weline-cron-stat-fail">
+            <div class="weline-cron-stat-icon">
+                <i class="mdi mdi-alert-circle-outline"></i>
+            </div>
+            <div class="weline-cron-stat-content">
+                <div class="weline-cron-stat-number">{{stats.fail}}</div>
+                <div class="weline-cron-stat-label"><lang>失败</lang></div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- 任务列表 -->
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <template>Weline_Component::message.phtml</template>
-                <h4 class="card-title"><?= __('计划任务调度管理器') ?>:
-                    <lang>一共有</lang>
-                    <var>total</var>
-                    <lang>条数据</lang>
-                </h4>
+                <!-- 工具栏 -->
+                <div class="weline-cron-toolbar d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="weline-cron-search">
+                            <block class='Weline\Component\Block\Form\Search' id='cron-search'
+                                   action='*/cron/listing'
+                                   params="status"
+                                   method='get' keyword='q'
+                                   value=''
+                                   placeholder='搜索任务名/模块/类名'></block>
+                        </div>
+                        <select id="weline-cron-status-filter" class="form-select form-select-sm" style="width: auto;">
+                            <option value=""><lang>全部状态</lang></option>
+                            <option value="pending" <?php if (($status ?? '') === 'pending') echo 'selected'; ?>><lang>待执行</lang></option>
+                            <option value="running" <?php if (($status ?? '') === 'running') echo 'selected'; ?>><lang>运行中</lang></option>
+                            <option value="success" <?php if (($status ?? '') === 'success') echo 'selected'; ?>><lang>成功</lang></option>
+                            <option value="block" <?php if (($status ?? '') === 'block') echo 'selected'; ?>><lang>已锁定</lang></option>
+                            <option value="fail" <?php if (($status ?? '') === 'fail') echo 'selected'; ?>><lang>失败</lang></option>
+                            <option value="miss" <?php if (($status ?? '') === 'miss') echo 'selected'; ?>><lang>遗漏</lang></option>
+                        </select>
+                    </div>
+                    <div class="weline-cron-summary text-muted small">
+                        <lang>共</lang> <var>total</var> <lang>条</lang>
+                    </div>
+                </div>
 
-                <div class='table-responsive'>
-                    <table class="table table-editable table-nowrap align-middle table-edits">
+                <!-- 表格 -->
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle weline-cron-table">
                         <thead>
-                        <tr>
-                            <th><lang>ID</lang></th>
-                            <th><lang>调度任务</lang></th>
-                            <th><lang>执行名</lang></th>
-                            <th><lang>进程ID</lang></th>
-                            <th><lang>模组</lang></th>
-                            <th><lang>执行类名</lang></th>
-                            <th><lang>执行频率</lang></th>
-                            <th><lang>调度状态</lang></th>
-                            <th><lang>运行时长</lang></th>
-                            <th><lang>阻塞时长（单位：秒）</lang></th>
-                            <th><lang>阻塞超时解锁时长</lang></th>
-                            <th><lang>阻塞解锁次数</lang></th>
-                            <th><lang>上次运行时间</lang></th>
-                            <th><lang>上次运行日期</lang></th>
-                            <th><lang>预计下次运行日期</lang></th>
-                            <th><lang>上次运行日期</lang></th>
-                            <th><lang>运行次数</lang></th>
-                            <th><lang>任务描述</lang></th>
-                            <th><lang>运行时错误</lang></th>
-                            <th><lang>运行时错误日期</lang></th>
-                            <th><lang>创建时间</lang></th>
-                            <th><lang>更新时间</lang></th>
-                            <th><?= __('操作') ?></th>
-                        </tr>
+                            <tr>
+                                <th style="width: 60px;"><lang>ID</lang></th>
+                                <th><lang>任务信息</lang></th>
+                                <th style="width: 120px;"><lang>执行频率</lang></th>
+                                <th style="width: 100px;"><lang>状态</lang></th>
+                                <th style="width: 140px;"><lang>运行时间</lang></th>
+                                <th style="width: 160px;"><lang>操作</lang></th>
+                            </tr>
                         </thead>
                         <tbody>
                         <foreach name="tasks" item="task">
-                            <tr>
-                                <td>{{task.id}}</td>
-                                <td>{{task.name}}</td>
-                                <td>{{task.execute_name}}</td>
-                                <td>{{task.pid}}</td>
-                                <td>{{task.module}}</td>
-                                <td>{{task.class}}</td>
-                                <td>{{task.cron_time}}</td>
-                                <td style="color: @if{task.status === 'success'=>'green'} @if{task.status ===
-                                'lock'=>'red'} @if{task.status ===
-                                'pending'=>'blue'}">{{task.status}}
-                                </td>
-                                <td>{{task.runtime}}</td>
-                                <td class="@if{task.block_time=>'text-danger'}">
-                                    <php>echo $task['block_time'];</php>
-                                    s
-                                </td>
-                                <td>{{task.block_unlock_timeout}}
-                                    <lang>分钟</lang>
-                                </td>
-                                <td class="@if{task.block_time=>'text-danger'}">{{ task.block_times }}
-                                    <lang>次</lang>
-                                </td>
-                                <td>{{task.run_time}}</td>
-                                <td>{{task.run_date}}</td>
-                                <td>{{task.next_run_date}}</td>
-                                <td>{{task.pre_run_date}}</td>
-                                <td>{{task.run_times}}</td>
-                                <td><span title="{{task.tip}}"><string>task.tip|20</string></span></td>
-                                <td style="color: @if{task.runtime_error=>'red'}">
-                                   <span title="{{task.runtime_error}}">
-                                       <string>task.runtime_error|50</string>
-                                   </span>
-                                    <if condition="task.out_time">
-                                        <lang>任务停止</lang>
-                                            {{task.out_time}}
-                                        <lang>小时</lang>
-                                    </if>
-                                </td>
-                                <td style="color: @if{task.runtime_error_date=>'red'}">{{task.runtime_error_date}}</td>
-                                <td>{{task.create_time}}</td>
-                                <td>{{task.update_time}}</td>
+                            <tr data-task-id="{{task.id}}" data-status="{{task.status}}">
                                 <td>
-                                    <if condition="task.status === 'block'">
-                                        <form action="@backend-url('*/cron/unlock')" method="post">
-                                            <input type="hidden" name="task_id" value="{{task.id}}">
-                                            <button class='btn btn-primary'>
-                                                <lang>解锁</lang>
-                                            </button>
-                                        </form>
-                                        <else/>
-                                        <form action="@backend-url('*/cron/lock')" method='post'>
-                                            <input type='hidden' name='task_id' value='{{task.id}}'>
-                                            <button class='btn btn-primary'>锁定 {{task.block_unlock_timeout}}
-                                                <lang>分钟</lang>
-                                            </button>
-                                        </form>
+                                    <span class="fw-semibold">{{task.id}}</span>
+                                </td>
+                                <td>
+                                    <div class="weline-cron-info">
+                                        <div class="weline-cron-name" title="{{task.name}}">
+                                            <string>task.name|25</string>
+                                        </div>
+                                        <div class="weline-cron-meta">
+                                            <span class="weline-cron-module">{{task.module}}</span>
+                                            <span class="weline-cron-class" title="{{task.class}}"><string>task.class|30</string></span>
+                                        </div>
+                                        <if condition="task.tip">
+                                            <div class="weline-cron-tip text-muted" title="{{task.tip}}">
+                                                <string>task.tip|40</string>
+                                            </div>
+                                        </if>
+                                    </div>
+                                </td>
+                                <td>
+                                    <code class="weline-cron-frequency">{{task.cron_time}}</code>
+                                </td>
+                                <td>
+                                    <?php
+                                    $statusMap = [
+                                        'pending' => ['class' => 'weline-cron-status-pending', 'text' => __('待执行'), 'icon' => 'mdi-clock'],
+                                        'running' => ['class' => 'weline-cron-status-running', 'text' => __('运行中'), 'icon' => 'mdi-play-circle'],
+                                        'success' => ['class' => 'weline-cron-status-success', 'text' => __('成功'), 'icon' => 'mdi-check-circle'],
+                                        'block' => ['class' => 'weline-cron-status-block', 'text' => __('已锁定'), 'icon' => 'mdi-lock'],
+                                        'fail' => ['class' => 'weline-cron-status-fail', 'text' => __('失败'), 'icon' => 'mdi-alert-circle'],
+                                        'miss' => ['class' => 'weline-cron-status-miss', 'text' => __('遗漏'), 'icon' => 'mdi-timer-sand'],
+                                    ];
+                                    $taskStatus = $task['status'] ?? 'pending';
+                                    $st = $statusMap[$taskStatus] ?? $statusMap['pending'];
+                                    ?>
+                                    <span class="weline-cron-status <?= $st['class'] ?>">
+                                        <i class="mdi <?= $st['icon'] ?>"></i>
+                                        <?= $st['text'] ?>
+                                    </span>
+                                    <if condition="task.out_run">
+                                        <span class="weline-cron-outrun-badge" title="@lang{任务超时未执行}">
+                                            <i class="mdi mdi-alert"></i> {{task.out_time}}<lang>h</lang>
+                                        </span>
                                     </if>
+                                </td>
+                                <td>
+                                    <div class="weline-cron-time">
+                                        <if condition="task.run_date">
+                                            <div title="@lang{上次运行}">
+                                                <i class="mdi mdi-calendar-check-outline"></i>
+                                                <span>{{task.run_date}}</span>
+                                            </div>
+                                        </if>
+                                        <if condition="task.next_run_date">
+                                            <div title="@lang{下次运行}">
+                                                <i class="mdi mdi-calendar-clock-outline"></i>
+                                                <span>{{task.next_run_date}}</span>
+                                            </div>
+                                        </if>
+                                        <if condition="!task.run_date && !task.next_run_date">
+                                            <span class="text-muted">-</span>
+                                        </if>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="weline-cron-actions">
+                                        <if condition="task.status === 'block'">
+                                            <form action="@backend-url('*/cron/unlock')" method="post" class="d-inline">
+                                                <csrf/>
+                                                <input type="hidden" name="task_id" value="{{task.id}}">
+                                                <button type="submit" class="btn btn-outline-success weline-cron-action-btn" title="@lang{解锁}">
+                                                    <i class="mdi mdi-lock-open"></i> <lang>解锁</lang>
+                                                </button>
+                                            </form>
+                                        <else/>
+                                            <form action="@backend-url('*/cron/lock')" method="post" class="d-inline">
+                                                <csrf/>
+                                                <input type="hidden" name="task_id" value="{{task.id}}">
+                                                <button type="submit" class="btn btn-outline-warning weline-cron-action-btn" title="@lang{锁定}">
+                                                    <i class="mdi mdi-lock"></i> {{task.block_unlock_timeout}}<lang>分钟</lang>
+                                                </button>
+                                            </form>
+                                        </if>
+                                    </div>
                                 </td>
                             </tr>
                         </foreach>
+                        <empty name="tasks">
+                            <tr>
+                                <td colspan="6" class="text-center py-5">
+                                    <div class="weline-cron-empty">
+                                        <i class="mdi mdi-clock-outline"></i>
+                                        <p><lang>暂无定时任务</lang></p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </empty>
                         </tbody>
                     </table>
-                    <div>
-                        <var>pagination</var>
-                    </div>
                 </div>
+                {{pagination}}
             </div>
         </div>
     </div>
 </div>
+
+<!-- 组件样式 -->
+<style>
+.weline-cron-stats { margin-bottom: var(--backend-spacing-md, 16px); }
+.weline-cron-stat-card {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-sm, 12px);
+    padding: var(--backend-spacing-md, 16px);
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--backend-card-shadow, 0 2px 8px rgba(0,0,0,0.06));
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    margin-bottom: var(--backend-spacing-sm, 12px);
+}
+.weline-cron-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--backend-shadow-md, 0 4px 12px rgba(0,0,0,0.1));
+}
+.weline-cron-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--backend-border-radius, 6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+}
+.weline-cron-stat-number { font-size: 1.5rem; font-weight: 700; line-height: 1; }
+.weline-cron-stat-label { font-size: 0.8rem; margin-top: 2px; }
+
+.weline-cron-stat-all .weline-cron-stat-icon { background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)); color: var(--backend-color-primary, #556ee6); }
+.weline-cron-stat-all .weline-cron-stat-number { color: var(--backend-color-primary, #556ee6); }
+.weline-cron-stat-all .weline-cron-stat-label { color: var(--backend-color-text-secondary, #6c757d); }
+.weline-cron-stat-all:hover { border-color: var(--backend-color-primary, #556ee6); }
+
+.weline-cron-stat-pending .weline-cron-stat-icon { background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1)); color: var(--backend-color-info, #50a5f1); }
+.weline-cron-stat-pending .weline-cron-stat-number { color: var(--backend-color-info, #50a5f1); }
+.weline-cron-stat-pending:hover { border-color: var(--backend-color-info, #50a5f1); }
+
+.weline-cron-stat-running .weline-cron-stat-icon { background: rgba(52, 195, 143, 0.15); color: var(--backend-color-success, #34c38f); }
+.weline-cron-stat-running .weline-cron-stat-number { color: var(--backend-color-success, #34c38f); }
+.weline-cron-stat-running:hover { border-color: var(--backend-color-success, #34c38f); }
+
+.weline-cron-stat-success .weline-cron-stat-icon { background: rgba(85, 110, 230, 0.15); color: var(--backend-color-primary, #556ee6); }
+.weline-cron-stat-success .weline-cron-stat-number { color: var(--backend-color-primary, #556ee6); }
+.weline-cron-stat-success:hover { border-color: var(--backend-color-primary, #556ee6); }
+
+.weline-cron-stat-block .weline-cron-stat-icon { background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1)); color: var(--backend-color-warning, #f1b44c); }
+.weline-cron-stat-block .weline-cron-stat-number { color: var(--backend-color-warning, #f1b44c); }
+.weline-cron-stat-block:hover { border-color: var(--backend-color-warning, #f1b44c); }
+
+.weline-cron-stat-fail .weline-cron-stat-icon { background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1)); color: var(--backend-color-danger, #f46a6a); }
+.weline-cron-stat-fail .weline-cron-stat-number { color: var(--backend-color-danger, #f46a6a); }
+.weline-cron-stat-fail:hover { border-color: var(--backend-color-danger, #f46a6a); }
+
+.weline-cron-toolbar {
+    padding-bottom: var(--backend-spacing-sm, 12px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+.weline-cron-search { min-width: 260px; }
+.weline-cron-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    font-size: 0.85rem;
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+}
+.weline-cron-table td {
+    color: var(--backend-color-text-primary, #212529);
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+.weline-cron-table tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, rgba(0,0,0,0.02));
+}
+.weline-cron-info { display: flex; flex-direction: column; gap: 4px; }
+.weline-cron-name { font-weight: 500; color: var(--backend-color-text-primary, #212529); }
+.weline-cron-meta { font-size: 0.75rem; color: var(--backend-color-text-secondary, #6c757d); }
+.weline-cron-class { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weline-cron-tip { font-size: 0.75rem; }
+.weline-cron-frequency {
+    font-size: 0.8rem;
+    padding: 2px 6px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-sm, 4px);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.weline-cron-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 0.8rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.weline-cron-status-pending { background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1)); color: var(--backend-color-info, #50a5f1); }
+.weline-cron-status-running { background: rgba(52, 195, 143, 0.15); color: var(--backend-color-success, #34c38f); }
+.weline-cron-status-success { background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1)); color: var(--backend-color-primary, #556ee6); }
+.weline-cron-status-block { background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1)); color: var(--backend-color-warning, #f1b44c); }
+.weline-cron-status-fail { background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1)); color: var(--backend-color-danger, #f46a6a); }
+.weline-cron-status-miss { background: var(--backend-color-warning-bg-subtle, rgba(241, 180, 76, 0.1)); color: var(--backend-color-warning, #f1b44c); }
+.weline-cron-outrun-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    font-size: 0.75rem;
+    color: var(--backend-color-danger, #f46a6a);
+}
+.weline-cron-time {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+.weline-cron-time div { display: flex; align-items: center; gap: 4px; }
+.weline-cron-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.weline-cron-action-btn {
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    border-radius: var(--backend-border-radius, 6px);
+    transition: all 0.2s ease;
+}
+.weline-cron-action-btn:hover { transform: translateY(-1px); }
+.weline-cron-empty { color: var(--backend-color-text-tertiary, #adb5bd); }
+.weline-cron-empty i { font-size: 4rem; margin-bottom: var(--backend-spacing-sm, 12px); }
+.weline-cron-empty p { margin: 0; font-size: 1rem; }
+
+@media (max-width: 768px) {
+    .weline-cron-search { min-width: 100%; }
+    .weline-cron-stat-card { padding: var(--backend-spacing-sm, 12px); }
+    .weline-cron-stat-icon { width: 40px; height: 40px; font-size: 1.25rem; }
+    .weline-cron-stat-number { font-size: 1.25rem; }
+}
+</style>
+
+<!-- 组件脚本 -->
+<script>
+(function() {
+    'use strict';
+    var baseUrl = '<?= htmlspecialchars((string)$this->getBackendUrl('*/cron/listing')) ?>';
+    var statusFilter = document.getElementById('weline-cron-status-filter');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', function() {
+            var status = this.value;
+            var url = new URL(baseUrl, window.location.origin);
+            var q = new URLSearchParams(window.location.search).get('q');
+            if (q) url.searchParams.set('q', q);
+            if (status) url.searchParams.set('status', status);
+            window.location.href = url.toString();
+        });
+    }
+})();
+</script>
