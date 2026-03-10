@@ -134,7 +134,10 @@ class ServerQueryProvider implements QueryProviderInterface
         }
         $certType = (string) ($params['cert_type'] ?? 'exact');
         $certStrategy = (string) ($params['cert_strategy'] ?? '');
-        $challengeStrategy = (string) ($params['challenge_strategy'] ?? SslCertificateService::CHALLENGE_AUTO);
+        $challengeStrategy = \trim((string) ($params['challenge_strategy'] ?? SslCertificateService::CHALLENGE_AUTO));
+        if ($challengeStrategy === '') {
+            $challengeStrategy = SslCertificateService::CHALLENGE_AUTO;
+        }
         $poolId = (int) ($params['pool_id'] ?? 0);
         $domainId = (int) ($params['domain_id'] ?? 0);
         $onProgress = $params['_on_progress'] ?? null;
