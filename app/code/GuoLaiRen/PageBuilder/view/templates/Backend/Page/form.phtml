@@ -149,8 +149,18 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                 // 忽略错误
                             }
                         }
-                        // 如果没有站点URL，使用当前请求的基础URL
-                        $baseUrlForDisplay = $pageWebsiteUrl ? rtrim($pageWebsiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                        // 显示用 base：与当前请求同 host 时用当前请求的 base（含端口），否则用站点 URL
+                        $currentBase = rtrim($this->request->getBaseHost(), '/');
+                        $baseUrlForDisplay = $currentBase;
+                        if ($pageWebsiteUrl !== '') {
+                            $siteHost = parse_url($pageWebsiteUrl, PHP_URL_HOST);
+                            $currHost = parse_url($currentBase, PHP_URL_HOST);
+                            if ($siteHost !== false && $currHost !== false && strcasecmp($siteHost, $currHost) === 0) {
+                                $baseUrlForDisplay = $currentBase;
+                            } else {
+                                $baseUrlForDisplay = rtrim($pageWebsiteUrl, '/');
+                            }
+                        }
                         $handleForDisplay = $page ? ($page->getData('handle') ?? '') : '';
                         $pageType = $page ? ($page->getData('type') ?? '') : '';
                         $isHomePage = ($pageType === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME);
@@ -2301,7 +2311,19 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         ?>
         const websiteUrlMap = <?= json_encode($websiteUrlMap) ?>;
-        const defaultBaseUrl = '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+        const defaultBaseUrl = '<?= htmlspecialchars(rtrim($this->request->getBaseHost(), '/'), ENT_QUOTES, 'UTF-8') ?>';
+        
+        // 同 host 时用 defaultBaseUrl（当前请求含端口），否则用站点 URL
+        function getDisplayBaseUrl(websiteId) {
+            if (!websiteId || !websiteUrlMap[websiteId]) return defaultBaseUrl;
+            try {
+                var siteHost = new URL(websiteUrlMap[websiteId]).hostname;
+                var currHost = new URL(defaultBaseUrl).hostname;
+                if (siteHost && currHost && siteHost.toLowerCase() === currHost.toLowerCase())
+                    return defaultBaseUrl;
+            } catch (e) {}
+            return websiteUrlMap[websiteId];
+        }
         
         // 更新访问地址显示的函数
         function updatePageUrlDisplay() {
@@ -2315,8 +2337,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // 获取当前选中的网站ID
             const websiteId = websiteSelect ? parseInt(websiteSelect.value) || 0 : 0;
             
-            // 获取网站基础URL
-            const baseUrl = (websiteId > 0 && websiteUrlMap[websiteId]) ? websiteUrlMap[websiteId] : defaultBaseUrl;
+            // 获取网站基础URL（同 host 时用当前请求 base 以保留端口）
+            const baseUrl = getDisplayBaseUrl(websiteId);
             
             // 获取当前handle
             const handle = handleInputEl ? handleInputEl.value.trim() : '';
@@ -5726,10 +5748,10 @@ window.openFrontendPreview = function() {
     
     // 获取当前选中的网站ID
     const websiteSelect = document.getElementById('website_id');
-    const websiteId = websiteSelect ? websiteSelect.value : '';
+    const websiteId = websiteSelect ? parseInt(websiteSelect.value, 10) || 0 : 0;
     
-    // 获取网站基础URL
-    const baseUrl = websiteUrls[websiteId] || '<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') ?>';
+    // 获取网站基础URL（同 host 时用当前请求 base 以保留端口）
+    const baseUrl = typeof getDisplayBaseUrl === 'function' ? getDisplayBaseUrl(websiteId) : (websiteUrls[websiteId] || '<?= htmlspecialchars(rtrim($this->request->getBaseHost(), '/'), ENT_QUOTES, 'UTF-8') ?>');
     
     // 构建预览URL（使用对应网站的链接，不带 ?preview=1 参数）
     let previewUrl;
