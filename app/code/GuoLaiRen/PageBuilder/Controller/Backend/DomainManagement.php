@@ -9,6 +9,7 @@ use Weline\Backend\Model\Config as BackendConfig;
 use Weline\Cron\Schedule\Schedule;
 use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
@@ -1107,6 +1108,93 @@ class DomainManagement extends BaseController
     }
 
     private const HTTPS_PROVIDERS = ['letsencrypt', 'litessl'];
+
+    /**
+     * 获取 WLS 当前监听端口（用于判断 HTTP-01 vs DNS-01）
+     */
+    public function getGetServerPort(): string
+    {
+        $config = Env::getInstance()->getConfig('server');
+        $port = 80;
+        if (\is_array($config) && isset($config['port'])) {
+            $port = (int) $config['port'];
+        }
+        return $this->fetchJson(['success' => true, 'port' => $port]);
+    }
+
+    /**
+     * SSE 流式输出证书申请过程
+     * GET: pool_id, provider, domain
+     */
+    public function getRequestHttpsStream(): void
+    {
+        $poolId = (int) $this->request->get('pool_id', 0);
+        $provider = (string) ($this->request->get('provider', '') ?: 'letsencrypt');
+        $domain = \trim((string) $this->request->get('domain', ''));
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        if ($poolId <= 0 || $domain === '') {
+            $sse->sendEvent('failed', ['message' => __('参数无效')]);
+            $sse->close();
+            return;
+        }
+
+        $sse->sendEvent('start', ['message' => __('开始申请证书：%{1}', [$domain])]);
+        $sse->sendEvent('info', ['message' => __('正在连接 ACME 服务器...')]);
+
+        try {
+            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+            $email = (string) (Env::getInstance()->getConfig('ssl.contact_email') ?? '');
+            if ($email === '') {
+                $email = 'admin@' . $domain;
+            }
+
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->load($poolId);
+            if (!$pool->getPoolId()) {
+                $sse->sendEvent('failed', ['message' => __('域名池记录不存在')]);
+                $sse->close();
+                return;
+            }
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+            $pool->setHttpsError('');
+            $pool->save();
+
+            $sse->sendEvent('progress', ['message' => __('正在验证域名...'), 'progress' => 30]);
+
+            $result = w_query('server', 'requestCertificate', [
+                'domain' => $domain,
+                'webroot' => $webroot,
+                'email' => $email,
+                'website_id' => 0,
+                'provider' => $provider,
+                'cert_type' => 'exact',
+                'pool_id' => $poolId,
+            ]);
+
+            if ($result['success'] ?? false) {
+                $sse->sendEvent('success', ['message' => __('证书申请成功')]);
+                $sse->sendEvent('done', ['message' => __('申请完成：%{1}', [$domain]), 'success' => true]);
+            } else {
+                $msg = (string) ($result['message'] ?? __('未知错误'));
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+                $pool->setHttpsError($msg);
+                $pool->save();
+                $sse->sendEvent('failed', ['message' => $msg]);
+            }
+        } catch (\Throwable $e) {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            if ($pool->load($poolId)->getPoolId()) {
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+                $pool->setHttpsError($e->getMessage());
+                $pool->save();
+            }
+            $sse->sendEvent('failed', ['message' => $e->getMessage()]);
+        }
+        $sse->close();
+    }
 
     /**
      * AJAX: 为域名池记录手动申请 HTTPS 证书
