@@ -163,7 +163,7 @@
             startLifecycle: true
         }, options.defaults || {});
         var apiUrls = options.apiUrls || {};
-        var providerMap = buildProviderMap(options.accounts || [});
+        var providerMap = buildProviderMap(options.accounts || []);
 
         return new Promise(function (resolve) {
             var overlay = document.createElement('div');
