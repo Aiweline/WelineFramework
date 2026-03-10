@@ -71,7 +71,21 @@ class Router implements RouterInterface
         $websiteId = self::getCurrentWebsiteId();
         $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
-            return;
+            // 兼容：当前无站点ID时，按 handle 反查所属站点并回填，避免 404
+            if ($websiteId === 0) {
+                $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
+                if ($resolvedWebsiteId !== null) {
+                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$resolvedWebsiteId;
+                    if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                        \Weline\Framework\Runtime\RequestContext::websiteId($resolvedWebsiteId);
+                    }
+                    $websiteId = $resolvedWebsiteId;
+                } else {
+                    return;
+                }
+            } else {
+                return;
+            }
         }
         
         // 6. 重写路由到页面查看控制器
@@ -199,6 +213,35 @@ class Router implements RouterInterface
         }
     }
     
+    /**
+     * 按 handle 查找任意站点下的页面，返回其 website_id（用于当前无站点ID时的兼容解析）
+     *
+     * @param string $handle 页面句柄
+     * @param bool $isPreview 是否预览模式
+     * @return int|null 站点ID，未找到返回 null
+     */
+    private static function findWebsiteIdByHandle(string $handle, bool $isPreview = false): ?int
+    {
+        try {
+            /** @var Page $pageModel */
+            $pageModel = ObjectManager::getInstance(Page::class);
+            $page = clone $pageModel;
+            $page->clear()
+                ->where(Page::schema_fields_HANDLE, $handle);
+            if (!$isPreview) {
+                $page->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED);
+            }
+            $page->find()->fetch();
+            if ($page->getId()) {
+                $wid = (int)$page->getData(Page::schema_fields_WEBSITE_ID);
+                return $wid;
+            }
+            return null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
     /**
      * 获取当前站点ID
      * 
