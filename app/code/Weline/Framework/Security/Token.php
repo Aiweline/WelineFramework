@@ -18,16 +18,16 @@ class Token extends Text
     {
         if ($token = self::get($name)) {
             $session = self::session();
-            $session->setData($name . '_expired_time', time() + $lifetime);
+            $session->set($name . '_expired_time', time() + $lifetime);
             return $token;
         }
         $token = Text::random_string($lenght);
         $session = self::session();
-        $session->setData($name, $token);
+        $session->set($name, $token);
         if (0 === $lifetime) {
             $lifetime = $session->getGcMaxLifeTime();
         }
-        $session->setData($name . '_expired_time', time() + $lifetime);
+        $session->set($name . '_expired_time', time() + $lifetime);
         return $token;
     }
 
@@ -36,16 +36,17 @@ class Token extends Text
         return ObjectManager::getInstance(Session::class);
     }
 
-    public static function get(string $name): string|null
+    public static function get(string $name): ?string
     {
         $session = self::session();
-        $name_expired_time = intval($session->getData($name . '_expired_time'));
-        if (!$name_expired_time) {
+        $name_expired_time = (int) $session->get($name . '_expired_time');
+        if ($name_expired_time <= 0) {
             return null;
         }
         if ((time() - $name_expired_time) > 0) {
             return null;
         }
-        return self::session()->getData($name);
+        $value = $session->get($name);
+        return \is_string($value) ? $value : null;
     }
 }
