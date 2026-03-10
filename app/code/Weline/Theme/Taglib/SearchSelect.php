@@ -89,20 +89,7 @@ class SearchSelect implements TaglibInterface
                 }
             }
 
-            // 解析静态选项
-            $staticOptions = [];
-            if ($options) {
-                $pairs = explode(',', $options);
-                foreach ($pairs as $pair) {
-                    $parts = explode(':', trim($pair), 2);
-                    if (count($parts) === 2) {
-                        $staticOptions[] = [
-                            'value' => trim($parts[0]),
-                            'label' => trim($parts[1])
-                        ];
-                    }
-                }
-            }
+            // 静态选项在运行时由 $Taglib__options 解析（支持 PHP 变量和字面量）
 
             // 解析属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
@@ -170,11 +157,14 @@ class SearchSelect implements TaglibInterface
             $html[] = '.w-search-select[data-disabled="true"] .w-search-select-input { cursor: not-allowed; }';
             $html[] = '</style>';
 
+            // 运行时解析 options 属性为 JSON 数组
+            $html[] = '<?php $__ssOpts = []; if (isset($Taglib__options) && $Taglib__options !== \'\') { foreach (explode(\',\', $Taglib__options) as $__ssPair) { $__ssParts = explode(\':\', trim($__ssPair), 2); if (count($__ssParts) === 2) { $__ssOpts[] = [\'value\' => trim($__ssParts[0]), \'label\' => trim($__ssParts[1])]; } } } ?>';
+
             // JavaScript
             $html[] = '<script>(function(){';
             $html[] = 'const id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'const apiUrl = ' . json_encode($apiUrl) . ';';
-            $html[] = 'const staticOptions = ' . json_encode($staticOptions) . ';';
+            $html[] = 'const staticOptions = <?= json_encode($__ssOpts) ?>;';
             $html[] = 'const valueField = ' . json_encode($valueField) . ';';
             $html[] = 'const labelField = ' . json_encode($labelField) . ';';
             $html[] = 'const debounceTime = ' . $debounce . ';';
