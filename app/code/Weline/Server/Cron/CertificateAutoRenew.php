@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 /**
  * Weline Server - 证书自动续签定时任务
- * 
- * 到期前一周自动续签 SSL 证书
- * 
+ *
+ * 到期前 7 天：审查并发送消息通知
+ * 到期前 3 天：自动尝试续签
+ *
  * @author Aiweline
  * @email aiweline@qq.com
  */
@@ -13,25 +14,26 @@ declare(strict_types=1);
 namespace Weline\Server\Cron;
 
 use Weline\Cron\CronTaskInterface;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\SslCertificateService;
 
 /**
  * 证书自动续签定时任务
- * 
+ *
  * 功能：
  * - 每天检查即将到期的证书（7 天内）
- * - 自动为符合条件的证书续签
+ * - 到期前 7 天：发送后台消息通知
+ * - 到期前 3 天：自动续签
  * - 只处理启用了自动续签的证书
- * - 续签后自动同步 HTTPS 状态
  */
 class CertificateAutoRenew implements CronTaskInterface
 {
-    /**
-     * 提前续签天数
-     */
-    protected const RENEW_BEFORE_DAYS = 7;
+    /** 提前多少天内纳入审查（并发送 7 天提醒） */
+    protected const NOTICE_BEFORE_DAYS = 7;
+    /** 提前多少天内自动续签 */
+    protected const RENEW_BEFORE_DAYS = 3;
     
     /**
      * @inheritDoc
@@ -54,7 +56,7 @@ class CertificateAutoRenew implements CronTaskInterface
      */
     public function tip(): string
     {
-        return __('每天检查即将到期的证书（%{1} 天内），自动续签', [self::RENEW_BEFORE_DAYS]);
+        return __('每天检查即将到期的证书：%{1} 天内发送通知，%{2} 天内自动续签', [self::NOTICE_BEFORE_DAYS, self::RENEW_BEFORE_DAYS]);
     }
     
     /**
@@ -87,92 +89,82 @@ class CertificateAutoRenew implements CronTaskInterface
             
             /** @var SslCertificateService $sslService */
             $sslService = ObjectManager::getInstance(SslCertificateService::class);
-            
+
             // 获取即将到期的证书（7 天内）
             $expiringCerts = $this->getExpiringCertificates($certModel);
             $results['checked'] = \count($expiringCerts);
-            
+
             if (empty($expiringCerts)) {
                 return __('没有需要续签的证书');
             }
-            
-            // 默认 webroot 路径
-            $webroot = BP . 'pub';
-            
+
+            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+
             foreach ($expiringCerts as $certData) {
                 $domain = $certData[SslCertificate::schema_fields_DOMAIN];
-                $certId = (int) $certData[SslCertificate::schema_fields_ID];
                 $autoRenew = (bool) $certData[SslCertificate::schema_fields_AUTO_RENEW];
                 $issuer = $certData[SslCertificate::schema_fields_ISSUER] ?? '';
-                
-                // 跳过未启用自动续签的证书
-                if (!$autoRenew) {
-                    $results['skipped']++;
-                    continue;
-                }
-                
-                // 跳过自签证书（自签证书会在服务器启动时自动重新生成）
+                $expiresAt = (string)($certData[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
+                $daysLeft = $expiresAt !== '' ? (int)\floor((\strtotime($expiresAt) - \time()) / 86400) : -1;
+
+                // 跳过自签证书
                 if ($issuer === SslCertificateService::ISSUER_SELF_SIGNED) {
                     $results['skipped']++;
                     continue;
                 }
-                
+
+                // 到期前 7 天内：发送消息通知（仅提醒，不续签）
+                if ($daysLeft >= 0 && $daysLeft <= self::NOTICE_BEFORE_DAYS) {
+                    $results['reminded']++;
+                    w_log_info(\sprintf(
+                        '[CertificateAutoRenew] %s - %s',
+                        $domain,
+                        __('证书将在 %{1} 天后过期', [$daysLeft])
+                    ), [], 'server_ssl');
+                    $this->sendExpiryNotice($domain, $daysLeft, $expiresAt);
+                }
+
+                // 仅当剩余天数 > 3 时跳过续签（剩余 1～3 天或已过期则尝试续签）
+                if ($daysLeft > self::RENEW_BEFORE_DAYS) {
+                    $results['skipped']++;
+                    continue;
+                }
+                if (!$autoRenew) {
+                    $results['skipped']++;
+                    continue;
+                }
+
                 try {
-                    // 加载证书模型
                     $cert = clone $certModel;
                     $cert->setData($certData);
-                    $expiresAt = (string)($certData[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
-                    $daysLeft = $expiresAt !== '' ? (int)\floor((\strtotime($expiresAt) - \time()) / 86400) : -1;
-
-                    if ($daysLeft >= 0 && $daysLeft <= self::RENEW_BEFORE_DAYS) {
-                        $results['reminded']++;
-                        w_log_warning(\sprintf(
-                            '[CertificateAutoRenew] %s - %s',
-                            $domain,
-                            __('证书将在 %{1} 天后过期，已触发续签尝试', [$daysLeft])
-                        ));
-                    }
-                    
-                    // 执行续签
                     $email = $this->getContactEmail($domain);
                     $result = $sslService->renewCertificate($cert, $webroot, $email);
-                    
+
                     if ($result['success']) {
                         $results['renewed']++;
-                        w_log_info(\sprintf(
-                            '[CertificateAutoRenew] %s - %s',
-                            $domain,
-                            __('续签成功')
-                        ));
+                        w_log_info(\sprintf('[CertificateAutoRenew] %s - %s', $domain, __('续签成功')), [], 'server_ssl');
                     } else {
                         $results['failed']++;
-                        $results['errors'][] = [
-                            'domain' => $domain,
-                            'message' => $result['message'] ?? __('未知错误'),
-                        ];
+                        $results['errors'][] = ['domain' => $domain, 'message' => $result['message'] ?? __('未知错误')];
                         w_log_error(\sprintf(
                             '[CertificateAutoRenew] %s - %s: %s',
                             $domain,
                             __('续签失败'),
                             $result['message'] ?? __('未知错误')
-                        ));
+                        ), [], 'server_ssl');
                     }
                 } catch (\Throwable $e) {
                     $results['failed']++;
-                    $results['errors'][] = [
-                        'domain' => $domain,
-                        'message' => $e->getMessage(),
-                    ];
+                    $results['errors'][] = ['domain' => $domain, 'message' => $e->getMessage()];
                     w_log_error(\sprintf(
                         '[CertificateAutoRenew] %s - %s: %s',
                         $domain,
                         __('续签异常'),
                         $e->getMessage()
-                    ));
+                    ), [], 'server_ssl');
                 }
             }
-            
-            // 构建结果消息
+
             $message = \sprintf(
                 __('证书自动续签完成：检查 %{1} 个，提醒 %{2} 个，成功 %{3} 个，失败 %{4} 个，跳过 %{5} 个'),
                 $results['checked'],
@@ -192,23 +184,46 @@ class CertificateAutoRenew implements CronTaskInterface
     }
     
     /**
-     * 获取即将到期的证书
-     * 
-     * @param SslCertificate $certModel
-     * @return array
+     * 获取即将到期的证书（NOTICE_BEFORE_DAYS 天内）
      */
     protected function getExpiringCertificates(SslCertificate $certModel): array
     {
-        $renewBeforeDate = \date('Y-m-d H:i:s', \strtotime('+' . self::RENEW_BEFORE_DAYS . ' days'));
+        $noticeBeforeDate = \date('Y-m-d H:i:s', \strtotime('+' . self::NOTICE_BEFORE_DAYS . ' days'));
         $now = \date('Y-m-d H:i:s');
-        
+
         return $certModel->clearQuery()
             ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
-            ->where(SslCertificate::schema_fields_EXPIRES_AT, $renewBeforeDate, '<=')
+            ->where(SslCertificate::schema_fields_EXPIRES_AT, $noticeBeforeDate, '<=')
             ->where(SslCertificate::schema_fields_EXPIRES_AT, $now, '>')
             ->order(SslCertificate::schema_fields_EXPIRES_AT, 'ASC')
             ->select()
             ->fetchArray();
+    }
+
+    /**
+     * 发送证书即将过期通知（后台系统消息）
+     */
+    protected function sendExpiryNotice(string $domain, int $daysLeft, string $expiresAt): void
+    {
+        try {
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventsManager->dispatch('Weline_Backend::application::system_notification', [
+                'data' => [
+                    'topic' => 'system_warning',
+                    'type' => $daysLeft <= 3 ? 'warning' : 'info',
+                    'title' => __('SSL 证书即将过期'),
+                    'content' => __('域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。', [
+                        $domain,
+                        (string)$daysLeft,
+                        $expiresAt,
+                    ]),
+                    'source_module' => 'Weline_Server',
+                    'metadata' => ['domain' => $domain, 'days_left' => $daysLeft, 'expires_at' => $expiresAt],
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            w_log_warning('[CertificateAutoRenew] 发送过期通知失败: ' . $e->getMessage(), [], 'server_ssl');
+        }
     }
     
     /**
