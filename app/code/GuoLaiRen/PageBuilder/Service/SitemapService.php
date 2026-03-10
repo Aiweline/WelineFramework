@@ -69,8 +69,8 @@ class SitemapService
             return null;
         }
         
-        // 返回可访问的 URL
-        $baseUrl = rtrim($website->getUrl(), '/');
+        // 返回可访问的 URL（80/443 端口不输出）
+        $baseUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeUrlDefaultPort(rtrim($website->getUrl(), '/'));
         return $baseUrl . '/sitemaps/' . $websiteCode . '/sitemap.xml';
     }
     
@@ -124,7 +124,7 @@ class SitemapService
      */
     private function buildSitemapXml(array $website, array $pages): string
     {
-        $baseUrl = rtrim($website['url'] ?? '', '/');
+        $baseUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeUrlDefaultPort(rtrim($website['url'] ?? '', '/'));
         
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
         $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
@@ -246,7 +246,7 @@ class SitemapService
             return null;
         }
 
-        $baseUrl = rtrim($website['url'] ?? '', '/');
+        $baseUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeUrlDefaultPort(rtrim($website['url'] ?? '', '/'));
         return $baseUrl . '/sitemaps/' . $websiteCode . '/sitemap.xml';
     }
 }

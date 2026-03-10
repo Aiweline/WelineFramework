@@ -36,18 +36,27 @@ class Router implements RouterInterface
             return;
         }
         
-        // 3. 处理空路径：如果路径为空，检查当前站点是否有首页页面
+        // 3. 处理空路径：域名根直接显示当前站点首页（不要求带 handle）
         $trimmedPath = trim($path, '/');
         if (empty($trimmedPath)) {
-            // 获取当前站点ID
             $websiteId = self::getCurrentWebsiteId();
-            
+            // 无站点时按请求 host 解析站点，便于直接用域名访问首页
+            if ($websiteId <= 0) {
+                $host = $_SERVER['HTTP_HOST'] ?? '';
+                if ($host !== '') {
+                    $websiteId = self::findWebsiteIdByHost($host) ?? 0;
+                    if ($websiteId > 0) {
+                        $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+                        if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                            \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
+                        }
+                    }
+                }
+            }
             if ($websiteId > 0) {
-                // 查询当前站点的首页页面（handle不为空）
                 $homePageHandle = self::getHomePageHandle($websiteId);
-                
-                if (!empty($homePageHandle)) {
-                    // 如果找到首页handle，重定向到该首页
+                // 有首页即重写（handle 可为空，同站首页用域名即可）
+                if ($homePageHandle !== null) {
                     $path = '/pagebuilder/frontend/page/view';
                     $rule['module'] = 'GuoLaiRen_PageBuilder';
                     $rule['handle'] = $homePageHandle;
@@ -55,8 +64,6 @@ class Router implements RouterInterface
                     return;
                 }
             }
-            
-            // 如果没有找到首页，不处理，让其他路由处理
             return;
         }
         
@@ -67,12 +74,24 @@ class Router implements RouterInterface
             return;
         }
         
-        // 5. 检查当前站点下 handle 是否存在（同一站点内唯一）
+        // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
         $websiteId = self::getCurrentWebsiteId();
         $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
-            // 兼容：当前无站点ID时，按 handle 反查所属站点并回填，避免 404
-            if ($websiteId === 0) {
+            // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
+            if ($websiteId > 0) {
+                $homeHandle = self::getHomePageHandle($websiteId);
+                if ($homeHandle !== null && $homeHandle !== '' && $handle !== $homeHandle) {
+                    $prefixed = $homeHandle . '-' . $handle;
+                    if (self::handleExists($prefixed, $websiteId, $isPreview)) {
+                        $handle = $prefixed;
+                    } else {
+                        return;
+                    }
+                } else {
+                    return;
+                }
+            } else {
                 $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
                 if ($resolvedWebsiteId !== null) {
                     $_SERVER['WELINE_WEBSITE_ID'] = (string)$resolvedWebsiteId;
@@ -83,8 +102,6 @@ class Router implements RouterInterface
                 } else {
                     return;
                 }
-            } else {
-                return;
             }
         }
         
@@ -243,6 +260,32 @@ class Router implements RouterInterface
     }
 
     /**
+     * 按请求 host 解析站点 ID（用于域名根访问首页时无站点上下文的情况）
+     * host 可能带端口，匹配时去掉端口以便与站点 url 对齐
+     */
+    private static function findWebsiteIdByHost(string $host): ?int
+    {
+        if ($host === '') {
+            return null;
+        }
+        $hostNoPort = preg_replace('/:\d+$/', '', $host);
+        try {
+            $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+            $website = clone $websiteModel;
+            $website->clear()
+                ->where(\Weline\Websites\Model\Website::schema_fields_URL, "%{$hostNoPort}%", 'like')
+                ->find()
+                ->fetch();
+            if ($website->getId()) {
+                return (int)$website->getData(\Weline\Websites\Model\Website::schema_fields_ID);
+            }
+            return null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
      * 获取当前站点ID
      * 
      * @return int
@@ -250,30 +293,25 @@ class Router implements RouterInterface
     private static function getCurrentWebsiteId(): int
     {
         try {
-            // 优先从WebsiteData获取
             $websiteData = \Weline\Websites\Data\WebsiteData::getWebsiteId();
             if ($websiteData !== null) {
                 return (int)$websiteData;
             }
-            
-            // 如果WebsiteData没有，尝试从UrlRewrite获取
             $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
             if ($websiteId > 0) {
                 return $websiteId;
             }
-            
-            // 最后尝试从$_SERVER获取
             return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
         } catch (\Exception $e) {
             return 0;
         }
     }
-    
+
     /**
-     * 获取指定站点的首页handle
-     * 
+     * 获取指定站点的首页 handle（可为空，同站首页用域名即可）
+     *
      * @param int $websiteId 站点ID
-     * @return string|null 首页handle，如果不存在或handle为空则返回null
+     * @return string|null 首页 handle，无首页返回 null
      */
     private static function getHomePageHandle(int $websiteId): ?string
     {
@@ -281,42 +319,28 @@ class Router implements RouterInterface
             /** @var Page $pageModel */
             $pageModel = ObjectManager::getInstance(Page::class);
             $page = clone $pageModel;
-            
-            // 查询当前站点的首页页面（已发布状态）
             $page->clear()
                 ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
                 ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
-                ->where(Page::schema_fields_HANDLE, '', '!=')
                 ->find()
                 ->fetch();
-            
-            // 如果找到首页且handle不为空，返回handle
             if ($page->getId()) {
-                $handle = $page->getData(Page::schema_fields_HANDLE);
-                if (!empty($handle)) {
-                    return $handle;
-                }
+                $h = $page->getData(Page::schema_fields_HANDLE);
+                return $h !== null && $h !== '' ? (string)$h : '';
             }
-            
-            // 如果当前站点没有首页，尝试查找全局首页（website_id = 0）
             if ($websiteId !== 0) {
                 $page->clear()
                     ->where(Page::schema_fields_WEBSITE_ID, 0)
                     ->where(Page::schema_fields_TYPE, Page::TYPE_HOME)
                     ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
-                    ->where(Page::schema_fields_HANDLE, '', '!=')
                     ->find()
                     ->fetch();
-                
                 if ($page->getId()) {
-                    $handle = $page->getData(Page::schema_fields_HANDLE);
-                    if (!empty($handle)) {
-                        return $handle;
-                    }
+                    $h = $page->getData(Page::schema_fields_HANDLE);
+                    return $h !== null && $h !== '' ? (string)$h : '';
                 }
             }
-            
             return null;
         } catch (\Exception $e) {
             if (defined('DEV') && DEV) {

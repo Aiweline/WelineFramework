@@ -665,7 +665,7 @@ class Page extends Model
                 return null;
             }
             
-            $baseUrl = rtrim($website->getUrl(), '/');
+            $baseUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeUrlDefaultPort(rtrim($website->getUrl(), '/'));
             
             // 首页
             if ($pageType === self::TYPE_HOME) {
