@@ -551,7 +551,13 @@ class WebsitesQueryProvider implements QueryProviderInterface
             ? (string) $params['start_lifecycle']
             : '1';
         if (!\is_array($defaultSubdomains)) {
-            $defaultSubdomains = \array_map('trim', \explode(',', (string)$defaultSubdomains));
+            $s = \trim((string) $defaultSubdomains);
+            $defaultSubdomains = \str_starts_with($s, '[')
+                ? (\json_decode($s, true) ?: \array_map('trim', \explode(',', $s)))
+                : \array_map('trim', \explode(',', $s));
+        }
+        if (!\is_array($defaultSubdomains)) {
+            $defaultSubdomains = ['@', 'www'];
         }
 
         foreach ($items as &$item) {
