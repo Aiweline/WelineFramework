@@ -1286,6 +1286,57 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     </div>
 </div>
 
+<!-- ==================== 根域名 切换 DNS/CDN 弹窗（表单） ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-root-dns-switch-modal">
+    <div class="pb-dm-form-dialog" style="max-width:560px;">
+        <div class="pb-dm-form-dialog-title">
+            <span><i class="mdi mdi-swap-horizontal"></i> <lang>切换 DNS/CDN</lang></span>
+            <button type="button" class="pb-dm-form-dialog-close" id="pb-dm-root-dns-switch-close">&times;</button>
+        </div>
+        <div class="pb-dm-form-body" style="padding:16px;">
+            <div class="pb-dm-alert pb-dm-alert-danger" style="margin-bottom:16px;border-left-width:4px;">
+                <strong><lang>严重说明</lang></strong><br>
+                <lang>切换 DNS 会导致网站断开服务。整个过程可能需 10 多分钟至 24 小时，具体取决于供应商的解析广播速度，不受我们控制。请确认后再操作。</lang>
+            </div>
+            <p class="pb-dm-text-muted" style="margin-bottom:12px;"><lang>根域名</lang>：<strong id="pb-dm-root-dns-switch-domain"></strong></p>
+            <div class="pb-dm-form-group">
+                <label><lang>目标 DNS 账户</lang> <span class="pb-dm-text-danger">*</span></label>
+                <select id="pb-dm-root-dns-switch-dns-account" class="pb-dm-form-control">
+                    <option value=""><lang>-- 加载中... --</lang></option>
+                </select>
+            </div>
+            <div class="pb-dm-form-group">
+                <label><lang>目标 CDN 账户</lang> <span class="pb-dm-text-muted">(<lang>可选，不选则不切换 CDN</lang>)</span></label>
+                <select id="pb-dm-root-dns-switch-cdn-account" class="pb-dm-form-control">
+                    <option value=""><lang>-- 不切换 CDN --</lang></option>
+                </select>
+            </div>
+        </div>
+        <div style="padding:12px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);">
+            <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-root-dns-switch-cancel"><lang>取消</lang></button>
+            <button type="button" class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-root-dns-switch-confirm"><i class="mdi mdi-swap-horizontal"></i> <lang>确认切换</lang></button>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== DNS 切换进度 SSE 弹窗 ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-dns-switch-sse-modal">
+    <div class="pb-dm-form-dialog" style="max-width:700px;">
+        <div class="pb-dm-form-dialog-title">
+            <span><i class="mdi mdi-swap-horizontal"></i> <lang>DNS/CDN 切换进度</lang></span>
+            <button type="button" class="pb-dm-form-dialog-close" id="pb-dm-dns-switch-sse-close">&times;</button>
+        </div>
+        <div class="pb-dm-form-body" style="padding:16px;">
+            <w:theme:sse-terminal id="pb-dm-dns-switch-sse-terminal" title="@lang(DNS/CDN 切换进度)" height="280px" events="start,progress,done,failed,info,success" />
+        </div>
+        <div style="padding:12px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);">
+            <button type="button" class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-dns-switch-sse-done-btn" style="display:none;">
+                <lang>关闭</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="<?= $purchaseDialogJsUrl ?>"></script>
 <script>
 (function() {
@@ -1328,7 +1379,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         deleteDnsRecord: '<backend-url>pagebuilder/backend/domain-management/delete-dns-record</backend-url>',
         refreshServerIp: '<backend-url>pagebuilder/backend/domain-management/refresh-server-ip</backend-url>',
         batchSetAccounts: '<backend-url>pagebuilder/backend/domain-management/batch-set-accounts</backend-url>',
-        getDnsAccounts: '<backend-url>pagebuilder/backend/domain-management/get-dns-accounts</backend-url>'
+        getDnsAccounts: '<backend-url>pagebuilder/backend/domain-management/get-dns-accounts</backend-url>',
+        dnsSwitchStream: '<backend-url>pagebuilder/backend/domain-management/dns-switch-stream</backend-url>'
     };
 
     var domainListState = {
@@ -1895,7 +1947,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                         ? '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('解析到本地') ?>">' +
                           '<i class="mdi mdi-dns"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
-                          '<i class="mdi mdi-playlist-plus"></i></button>'
+                          '<i class="mdi mdi-playlist-plus"></i></button>' +
+                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
+                          '<i class="mdi mdi-swap-horizontal"></i></button>'
                         : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
                           '<i class="mdi mdi-download"></i></button>';
 
@@ -2125,6 +2179,16 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var domainId = parseInt(btn.dataset.domainId);
                 var domain = btn.dataset.domain;
                 showDnsManageModal(domainId, domain);
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-root-switch-dns-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var domainId = parseInt(btn.dataset.domainId) || 0;
+                var domain = btn.dataset.domain || '';
+                var accountId = parseInt(btn.dataset.accountId) || 0;
+                showRootDnsSwitchModal(domainId, domain, accountId);
             });
         });
     }
@@ -4394,6 +4458,110 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (closeBtn) closeBtn.addEventListener('click', closeHttpsSseModal);
         if (doneBtn) doneBtn.addEventListener('click', function() { closeHttpsSseModal(); loadDomainPool(poolState.page); });
         if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeHttpsSseModal(); });
+    })();
+
+    var rootDnsSwitchState = { domainId: 0, domain: '', accountId: 0 };
+
+    function showRootDnsSwitchModal(domainId, domain, accountId) {
+        rootDnsSwitchState.domainId = domainId;
+        rootDnsSwitchState.domain = domain || '';
+        rootDnsSwitchState.accountId = accountId || 0;
+        var domainEl = document.getElementById('pb-dm-root-dns-switch-domain');
+        if (domainEl) domainEl.textContent = domain || ('ID:' + domainId);
+        var dnsSelect = document.getElementById('pb-dm-root-dns-switch-dns-account');
+        var cdnSelect = document.getElementById('pb-dm-root-dns-switch-cdn-account');
+        if (dnsSelect) dnsSelect.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
+        if (cdnSelect) cdnSelect.innerHTML = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
+        document.getElementById('pb-dm-root-dns-switch-modal').classList.add('pb-dm-form-modal--open');
+
+        var url = API.getRegistrarAccounts + (API.getRegistrarAccounts.indexOf('?') >= 0 ? '&' : '?') + 'active_only=1';
+        (window.Weline && window.Weline.Api ? window.Weline.Api.get(url, { silent: true }) : fetch(url).then(function(r) { return r.json(); }))
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
+                var accounts = (data.data && data.data.accounts) ? data.data.accounts : ((data.accounts) ? data.accounts : []);
+                if (!Array.isArray(accounts)) accounts = [];
+                var dnsOpts = '<option value=""><?= __('-- 请选择目标 DNS 账户 --') ?></option>';
+                var cdnOpts = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
+                accounts.forEach(function(acc) {
+                    var label = (acc.name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
+                    dnsOpts += '<option value="' + (acc.id || '') + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
+                    cdnOpts += '<option value="' + (acc.id || '') + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
+                });
+                if (dnsSelect) dnsSelect.innerHTML = dnsOpts;
+                if (cdnSelect) cdnSelect.innerHTML = cdnOpts;
+            })
+            .catch(function() {
+                if (dnsSelect) dnsSelect.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+            });
+    }
+
+    function closeRootDnsSwitchModal() {
+        document.getElementById('pb-dm-root-dns-switch-modal').classList.remove('pb-dm-form-modal--open');
+    }
+
+    function openDnsSwitchSseModalAndStart(domainId, dnsAccountId, cdnAccountId) {
+        var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
+        var doneBtn = document.getElementById('pb-dm-dns-switch-sse-done-btn');
+        var streamUrl = API.dnsSwitchStream + '?domain_id=' + encodeURIComponent(domainId) + '&dns_account_id=' + encodeURIComponent(dnsAccountId);
+        if (cdnAccountId) streamUrl += '&cdn_account_id=' + encodeURIComponent(cdnAccountId);
+        var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-dns-switch-sse-terminal'];
+        if (!sseModal) return;
+        if (doneBtn) doneBtn.style.display = 'none';
+        sseModal.classList.add('pb-dm-form-modal--open');
+        if (terminal) {
+            terminal.setUrl(streamUrl);
+            terminal.clear && terminal.clear();
+            terminal.on('done', function() {
+                if (doneBtn) { doneBtn.style.display = ''; doneBtn.onclick = function() { closeDnsSwitchSseModal(); loadDomainList(); }; }
+            });
+            terminal.on('failed', function(e) {
+                try {
+                    var d = (e && e.data) ? JSON.parse(e.data) : {};
+                    if (d.message && terminal.log) terminal.log(d.message, 'error');
+                } catch (err) {}
+                if (doneBtn) { doneBtn.style.display = ''; doneBtn.onclick = function() { closeDnsSwitchSseModal(); loadDomainList(); }; }
+            });
+            setTimeout(function() { terminal.start(streamUrl); }, 100);
+        } else {
+            BackendToast.warning('<?= __('SSE 组件未就绪') ?>');
+            closeDnsSwitchSseModal();
+        }
+    }
+
+    function closeDnsSwitchSseModal() {
+        var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
+        var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-dns-switch-sse-terminal'];
+        if (terminal && terminal.stop) terminal.stop();
+        if (sseModal) sseModal.classList.remove('pb-dm-form-modal--open');
+    }
+
+    (function initRootDnsSwitchModal() {
+        var cancelBtn = document.getElementById('pb-dm-root-dns-switch-cancel');
+        var closeBtn = document.getElementById('pb-dm-root-dns-switch-close');
+        var confirmBtn = document.getElementById('pb-dm-root-dns-switch-confirm');
+        var modal = document.getElementById('pb-dm-root-dns-switch-modal');
+        if (cancelBtn) cancelBtn.addEventListener('click', closeRootDnsSwitchModal);
+        if (closeBtn) closeBtn.addEventListener('click', closeRootDnsSwitchModal);
+        if (confirmBtn) confirmBtn.addEventListener('click', function() {
+            var dnsAccountId = document.getElementById('pb-dm-root-dns-switch-dns-account') && document.getElementById('pb-dm-root-dns-switch-dns-account').value;
+            if (!dnsAccountId) {
+                BackendToast.warning('<?= __('请选择目标 DNS 账户') ?>');
+                return;
+            }
+            var cdnAccountId = document.getElementById('pb-dm-root-dns-switch-cdn-account') && document.getElementById('pb-dm-root-dns-switch-cdn-account').value;
+            closeRootDnsSwitchModal();
+            openDnsSwitchSseModalAndStart(rootDnsSwitchState.domainId, dnsAccountId, cdnAccountId || '');
+        });
+        if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeRootDnsSwitchModal(); });
+    })();
+
+    (function initDnsSwitchSseModal() {
+        var closeBtn = document.getElementById('pb-dm-dns-switch-sse-close');
+        var doneBtn = document.getElementById('pb-dm-dns-switch-sse-done-btn');
+        var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
+        if (closeBtn) closeBtn.addEventListener('click', closeDnsSwitchSseModal);
+        if (doneBtn) doneBtn.addEventListener('click', function() { closeDnsSwitchSseModal(); loadDomainList(); });
+        if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeDnsSwitchSseModal(); });
     })();
 
     document.getElementById('pb-dm-pool-search-btn').addEventListener('click', function() {
