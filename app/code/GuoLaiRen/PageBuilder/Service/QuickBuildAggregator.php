@@ -105,6 +105,17 @@ class QuickBuildAggregator
         ]);
     }
 
+    /**
+     * 补建已购买域名的生命周期订单（用于购买时未勾选「启动全流程状态跟踪」的补救）
+     */
+    public function repairLifecycleOrder(string $domain, int $accountId, array $options = []): array
+    {
+        return $this->queryService->execute('saas', 'startPurchasedLifecycle', \array_merge($options, [
+            'domain' => $domain,
+            'registrar_account_id' => $accountId,
+        ]));
+    }
+
     // ── 以下全部通过统一查询器 (WebsitesQueryProvider) ──
 
     /**

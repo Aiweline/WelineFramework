@@ -135,12 +135,7 @@ class DomainPurchaseService
             $startLifecycle = !isset($itemData['start_lifecycle'])
                 || !\in_array((string) $itemData['start_lifecycle'], ['0', 'false', 'no'], true);
             $subdomains = $itemData['subdomains'] ?? ['@', 'www'];
-            if (!\is_array($subdomains)) {
-                $subdomains = \array_map('trim', \explode(',', (string) $subdomains));
-            }
-            if ($subdomains === []) {
-                $subdomains = ['@', 'www'];
-            }
+            $subdomains = $this->normalizeSubdomains($subdomains);
 
             if (empty($domain)) {
                 continue;
@@ -310,6 +305,41 @@ class DomainPurchaseService
             'order_no' => $order->getOrderNo(),
             'results' => $results,
         ];
+    }
+
+    /**
+     * 规范化子域列表，防止 JSON 字符串 '["@","www"]' 被错误处理
+     *
+     * @param array|string $subdomains 子域列表，可能为数组或 JSON 字符串或逗号分隔字符串
+     * @return array<string>
+     */
+    private function normalizeSubdomains(array|string $subdomains): array
+    {
+        if (\is_string($subdomains)) {
+            $s = \trim($subdomains);
+            if (\str_starts_with($s, '[')) {
+                $decoded = \json_decode($s, true);
+                $subdomains = \is_array($decoded) ? $decoded : \array_map('trim', \explode(',', $s));
+            } else {
+                $subdomains = \array_map('trim', \explode(',', $s));
+            }
+        }
+        $result = [];
+        foreach ((array) $subdomains as $p) {
+            if (\is_array($p)) {
+                $result = \array_merge($result, $this->normalizeSubdomains($p));
+                continue;
+            }
+            $s = \trim((string) $p);
+            if ($s === '' || \str_contains($s, '[') || \str_contains($s, ']')) {
+                continue;
+            }
+            if ($s === '@' || \preg_match('/^[a-zA-Z0-9][a-zA-Z0-9-]*$/i', $s)) {
+                $result[] = $s === '@' ? '@' : \strtolower($s);
+            }
+        }
+        $result = \array_values(\array_unique($result));
+        return $result === [] ? ['@', 'www'] : $result;
     }
 
     /**
