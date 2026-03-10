@@ -256,6 +256,7 @@ class MessageManager
         foreach (self::keys as $key) {
             $session->delete($key);
         }
+        $session->set('system-message', '');
         $session->save();
         return "<div class='system message'>{$content}</div>";
     }
