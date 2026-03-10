@@ -1527,12 +1527,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // 执行删除站点
+    // 执行删除站点（错误信息用 BackendToast 展示，支持 HTML）
     function deleteSite(pageId, pageName, button) {
         const originalHtml = button.innerHTML;
         const originalDisabled = button.disabled;
         
-        // 显示loading状态
         button.disabled = true;
         button.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i> <?= __("删除中...") ?>';
         
@@ -1543,21 +1542,26 @@ document.addEventListener('DOMContentLoaded', function() {
             var data = (res && res.data) || res;
             if (data.success) {
                 showToast('success', '<?= __("删除成功") ?>', data.message || ('<?= __("站点") ?> "' + pageName + '" <?= __("已删除") ?>'));
-                // 刷新页面
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                setTimeout(() => { window.location.reload(); }, 1500);
             } else {
                 button.disabled = originalDisabled;
                 button.innerHTML = originalHtml;
-                showToast('error', '<?= __("删除失败") ?>', data.message || '<?= __("未知错误") ?>');
+                if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("删除失败") ?>: ' + (data.message || '<?= __("未知错误") ?>'), { html: true });
+                else showToast('error', '<?= __("删除失败") ?>', data.message || '<?= __("未知错误") ?>');
             }
         })
         .catch(error => {
             console.error('删除站点失败:', error);
             button.disabled = originalDisabled;
             button.innerHTML = originalHtml;
-            showToast('error', '<?= __("删除失败") ?>', '<?= __("网络错误，请重试") ?>');
+            var errMsg = '<?= __("网络错误，请重试") ?>';
+            if (error && error.response) {
+                if (error.response.data && typeof error.response.data.message === 'string') errMsg = error.response.data.message;
+                else if (typeof error.response.data === 'string') errMsg = error.response.data;
+                else if (error.responseText) errMsg = error.responseText;
+            } else if (error && error.message) errMsg = error.message;
+            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("删除失败") ?>: ' + errMsg, { html: true });
+            else showToast('error', '<?= __("删除失败") ?>', errMsg);
         });
     }
     
@@ -2102,6 +2106,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 creationProgress.classList.add('d-none');
                 creationResult.classList.remove('d-none');
+                var msg = data.message || '<?= __("未知错误") ?>';
                 creationResult.innerHTML = `
                     <div class="text-center py-3">
                         <i class="mdi mdi-alert-circle text-danger" style="font-size:64px;"></i>
@@ -2115,7 +2120,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                 `;
                 var errBody = creationResult.querySelector('.quick-site-error-body');
-                if (errBody) errBody.innerHTML = data.message || '<?= __("未知错误") ?>';
+                if (errBody) errBody.innerHTML = msg;
+                if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("创建失败") ?>: ' + msg, { html: true });
             }
         })
         .catch(error => {
@@ -2142,6 +2148,7 @@ document.addEventListener('DOMContentLoaded', function() {
             `;
             var errBody = creationResult.querySelector('.quick-site-error-body');
             if (errBody) errBody.innerHTML = errMsg;
+            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("创建失败") ?>: ' + errMsg, { html: true });
         });
     });
 });
