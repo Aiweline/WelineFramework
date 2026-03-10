@@ -78,19 +78,13 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     {
         /** @var CronTask $m */
         $m = ObjectManager::make(CronTask::class);
-        $allCount = (int) $m->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $pendingCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::PENDING->value)->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $runningCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::RUNNING->value)->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $successCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::SUCCESS->value)->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $blockCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::BLOCK->value)->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $failCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::FAIL->value)->count('id');
-        $m = ObjectManager::make(CronTask::class);
-        $missCount = (int) $m->where(CronTask::schema_fields_STATUS, CronStatus::MISS->value)->count('id');
+        $allCount = (int) $m->reset()->count('id');
+        $pendingCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::PENDING->value)->count('id');
+        $runningCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::RUNNING->value)->count('id');
+        $successCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::SUCCESS->value)->count('id');
+        $blockCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::BLOCK->value)->count('id');
+        $failCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::FAIL->value)->count('id');
+        $missCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::MISS->value)->count('id');
         return [
             'all' => $allCount,
             'pending' => $pendingCount,
