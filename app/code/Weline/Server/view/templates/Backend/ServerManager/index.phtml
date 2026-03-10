@@ -1049,7 +1049,7 @@ async function gcMemoryStore() {
 }
 
 async function startServer(instance) {
-    AdminToast.info('<?= __('正在启动...') ?>');
+    BackendToast.info('<?= __('正在启动...') ?>');
     
     try {
         const response = await fetch(START_API_URL, {
@@ -1063,16 +1063,16 @@ async function startServer(instance) {
         });
         
         const data = await response.json();
-        AdminToast.success(data.message || '<?= __('启动成功') ?>');
+        BackendToast.success(data.message || '<?= __('启动成功') ?>');
         setTimeout(loadServerData, 1000);
         
     } catch (error) {
-        AdminToast.error('<?= __('启动失败') ?>: ' + error.message);
+        BackendToast.error('<?= __('启动失败') ?>: ' + error.message);
     }
 }
 
 async function stopServer(instance) {
-    AdminToast.info('<?= __('正在停止...') ?>');
+    BackendToast.info('<?= __('正在停止...') ?>');
     
     try {
         const response = await fetch(STOP_API_URL, {
@@ -1086,16 +1086,16 @@ async function stopServer(instance) {
         });
         
         const data = await response.json();
-        AdminToast.success(data.message || '<?= __('停止成功') ?>');
+        BackendToast.success(data.message || '<?= __('停止成功') ?>');
         setTimeout(loadServerData, 500);
         
     } catch (error) {
-        AdminToast.error('<?= __('停止失败') ?>: ' + error.message);
+        BackendToast.error('<?= __('停止失败') ?>: ' + error.message);
     }
 }
 
 async function restartServer(instance) {
-    AdminToast.info('<?= __('正在重启...') ?>');
+    BackendToast.info('<?= __('正在重启...') ?>');
     
     try {
         const response = await fetch(RESTART_API_URL, {
@@ -1109,16 +1109,16 @@ async function restartServer(instance) {
         });
         
         const data = await response.json();
-        AdminToast.success(data.message || '<?= __('重启成功') ?>');
+        BackendToast.success(data.message || '<?= __('重启成功') ?>');
         setTimeout(loadServerData, 1500);
         
     } catch (error) {
-        AdminToast.error('<?= __('重启失败') ?>: ' + error.message);
+        BackendToast.error('<?= __('重启失败') ?>: ' + error.message);
     }
 }
 
 async function reloadServer(instance) {
-    AdminToast.info('<?= __('正在热重载...') ?>');
+    BackendToast.info('<?= __('正在热重载...') ?>');
 
     try {
         const response = await fetch(RELOAD_API_URL, {
@@ -1133,13 +1133,13 @@ async function reloadServer(instance) {
 
         const data = await response.json();
         if (data.success) {
-            AdminToast.success(data.message || '<?= __('热重载命令已发送') ?>');
+            BackendToast.success(data.message || '<?= __('热重载命令已发送') ?>');
         } else {
-            AdminToast.warning(data.message || '<?= __('热重载命令发送失败') ?>');
+            BackendToast.warning(data.message || '<?= __('热重载命令发送失败') ?>');
         }
         setTimeout(loadServerData, 1000);
     } catch (error) {
-        AdminToast.error('<?= __('热重载失败：请检查网络连接后重试。') ?> ' + error.message);
+        BackendToast.error('<?= __('热重载失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
@@ -1156,7 +1156,7 @@ async function toggleMaintenance(instance, enabled) {
         return;
     }
 
-    AdminToast.info(actionText + '...');
+    BackendToast.info(actionText + '...');
     try {
         const response = await fetch(apiUrl, {
             method: 'POST',
@@ -1169,13 +1169,13 @@ async function toggleMaintenance(instance, enabled) {
         });
         const data = await response.json();
         if (data.success) {
-            AdminToast.success(data.message || actionText + '<?= __('成功') ?>');
+            BackendToast.success(data.message || actionText + '<?= __('成功') ?>');
         } else {
-            AdminToast.warning(data.message || actionText + '<?= __('失败') ?>');
+            BackendToast.warning(data.message || actionText + '<?= __('失败') ?>');
         }
         setTimeout(loadServerData, 1000);
     } catch (error) {
-        AdminToast.error(actionText + '<?= __('失败：请检查网络连接后重试。') ?> ' + error.message);
+        BackendToast.error(actionText + '<?= __('失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
@@ -1189,7 +1189,7 @@ function startNewServer() {
         if (workers === null) {
             return;
         }
-        AdminToast.info('<?= __('正在启动新实例...') ?>');
+        BackendToast.info('<?= __('正在启动新实例...') ?>');
 
         const body = 'instance=default' + (workers ? '&workers=' + encodeURIComponent(workers) : '');
 
@@ -1205,14 +1205,14 @@ function startNewServer() {
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
-                    AdminToast.success(data.message || '<?= __('启动成功') ?>');
+                    BackendToast.success(data.message || '<?= __('启动成功') ?>');
                 } else {
-                    AdminToast.warning(data.message || '<?= __('启动命令已发送，请稍后刷新状态。') ?>');
+                    BackendToast.warning(data.message || '<?= __('启动命令已发送，请稍后刷新状态。') ?>');
                 }
                 setTimeout(loadServerData, 1000);
             })
             .catch(error => {
-                AdminToast.error('<?= __('启动失败：请检查网络连接后重试。') ?> ' + error.message);
+                BackendToast.error('<?= __('启动失败：请检查网络连接后重试。') ?> ' + error.message);
             });
     });
 }

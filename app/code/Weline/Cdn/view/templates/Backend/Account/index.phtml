@@ -241,7 +241,7 @@ $adapters = $this->getData('adapters') ?: [];
                             showConfirmButton: false
                         }).then(function() { location.reload(); });
                     } else {
-                        AdminToast.success(data.message);
+                        BackendToast.success(data.message);
                         setTimeout(function() { location.reload(); }, 1500);
                     }
                 } else {
@@ -253,7 +253,7 @@ $adapters = $this->getData('adapters') ?: [];
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        AdminToast.error(data.message);
+                        BackendToast.error(data.message);
                     }
                 }
             });

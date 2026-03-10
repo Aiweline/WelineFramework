@@ -209,8 +209,8 @@
             input.select();
             document.execCommand('copy');
             document.body.removeChild(input);
-            if (window.AdminToast) {
-                AdminToast.success('<?= __('复制成功') ?>');
+            if (window.BackendToast) {
+                BackendToast.success('<?= __('复制成功') ?>');
             }
         });
     });

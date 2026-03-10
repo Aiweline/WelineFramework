@@ -33,14 +33,14 @@
          * 刷新系统状态
          */
         async refreshStatus() {
-            AdminToast.info('正在刷新状态...');
+            BackendToast.info('正在刷新状态...');
             const result = await this.request(api.status, null, 'GET');
             if (result.success) {
-                AdminToast.success('状态已刷新');
+                BackendToast.success('状态已刷新');
                 // 重新加载页面以更新状态
                 location.reload();
             } else {
-                AdminToast.error('刷新失败：' + (result.message || ''));
+                BackendToast.error('刷新失败：' + (result.message || ''));
             }
         },
 
@@ -55,13 +55,13 @@
             }).then(async (confirmed) => {
                 if (!confirmed) return;
 
-                AdminToast.info('正在安装 RDP Wrapper，请稍候...', 0);
+                BackendToast.info('正在安装 RDP Wrapper，请稍候...', 0);
                 const result = await this.request(api.install);
                 if (result.success) {
-                    AdminToast.success(result.message);
+                    BackendToast.success(result.message);
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    AdminToast.error(result.message);
+                    BackendToast.error(result.message);
                 }
             });
         },
@@ -77,13 +77,13 @@
             }).then(async (confirmed) => {
                 if (!confirmed) return;
 
-                AdminToast.info('正在启用远程桌面...');
+                BackendToast.info('正在启用远程桌面...');
                 const result = await this.request(api.enableRdp);
                 if (result.success) {
-                    AdminToast.success(result.message);
+                    BackendToast.success(result.message);
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    AdminToast.error(result.message);
+                    BackendToast.error(result.message);
                 }
             });
         },
@@ -102,10 +102,10 @@
 
                 const result = await this.request(api.disableRdp);
                 if (result.success) {
-                    AdminToast.success(result.message);
+                    BackendToast.success(result.message);
                     setTimeout(() => location.reload(), 1500);
                 } else {
-                    AdminToast.error(result.message);
+                    BackendToast.error(result.message);
                 }
             });
         },
@@ -148,17 +148,17 @@
             const password = formData.get('password') || '';
 
             if (!username || !password) {
-                AdminToast.warning('用户名和密码不能为空');
+                BackendToast.warning('用户名和密码不能为空');
                 return;
             }
 
             if (!/^[a-zA-Z][a-zA-Z0-9_]{2,19}$/.test(username)) {
-                AdminToast.warning('用户名格式不正确：3-20位，字母开头，仅允许字母数字下划线');
+                BackendToast.warning('用户名格式不正确：3-20位，字母开头，仅允许字母数字下划线');
                 return;
             }
 
             if (password.length < 8) {
-                AdminToast.warning('密码长度至少为8位');
+                BackendToast.warning('密码长度至少为8位');
                 return;
             }
 
@@ -170,15 +170,15 @@
                 remark: (formData.get('remark') || '').trim()
             };
 
-            AdminToast.info('正在创建用户...');
+            BackendToast.info('正在创建用户...');
             const result = await this.request(api.createUser, data);
 
             if (result.success) {
-                AdminToast.success(result.message);
+                BackendToast.success(result.message);
                 this.closeModal('createUserModal');
                 setTimeout(() => location.reload(), 1000);
             } else {
-                AdminToast.error(result.message);
+                BackendToast.error(result.message);
             }
         },
 
@@ -196,10 +196,10 @@
 
                 const result = await this.request(api.removeUser, {username: username});
                 if (result.success) {
-                    AdminToast.success(result.message);
+                    BackendToast.success(result.message);
                     setTimeout(() => location.reload(), 1000);
                 } else {
-                    AdminToast.error(result.message);
+                    BackendToast.error(result.message);
                 }
             });
         },
@@ -218,10 +218,10 @@
 
                 const result = await this.request(api.toggleUser, {username: username, enable: enable});
                 if (result.success) {
-                    AdminToast.success(result.message);
+                    BackendToast.success(result.message);
                     setTimeout(() => location.reload(), 1000);
                 } else {
-                    AdminToast.error(result.message);
+                    BackendToast.error(result.message);
                 }
             });
         },
@@ -234,16 +234,16 @@
             const password = document.getElementById('resetPasswordInput').value;
 
             if (!password || password.length < 8) {
-                AdminToast.warning('密码长度至少为8位');
+                BackendToast.warning('密码长度至少为8位');
                 return;
             }
 
             const result = await this.request(api.resetPassword, {username: username, password: password});
             if (result.success) {
-                AdminToast.success(result.message);
+                BackendToast.success(result.message);
                 this.closeModal('resetPasswordModal');
             } else {
-                AdminToast.error(result.message);
+                BackendToast.error(result.message);
             }
         },
 

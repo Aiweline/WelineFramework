@@ -199,7 +199,7 @@ $websites = $this->getData('websites') ?: [];
                             showConfirmButton: false
                         }).then(function() { location.reload(); });
                     } else {
-                        AdminToast.success(data.message);
+                        BackendToast.success(data.message);
                         setTimeout(function() { location.reload(); }, 1500);
                     }
                 } else {
@@ -211,7 +211,7 @@ $websites = $this->getData('websites') ?: [];
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        AdminToast.error(data.message);
+                        BackendToast.error(data.message);
                     }
                 }
             });
@@ -258,7 +258,7 @@ $websites = $this->getData('websites') ?: [];
                             showConfirmButton: false
                         });
                     } else {
-                        AdminToast.success(data.message);
+                        BackendToast.success(data.message);
                     }
                 } else {
                     if (typeof Swal !== 'undefined') {
@@ -269,7 +269,7 @@ $websites = $this->getData('websites') ?: [];
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        AdminToast.error(data.message);
+                        BackendToast.error(data.message);
                     }
                 }
             });

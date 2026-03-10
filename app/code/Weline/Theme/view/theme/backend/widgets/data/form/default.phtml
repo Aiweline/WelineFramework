@@ -618,7 +618,7 @@ $renderField = function($field) use ($formData, $layout) {
                 submitBtn.innerHTML = '<i class="ri-loader-4-line ri-spin"></i> <?= __("提交中...") ?>';
             }
             
-            var Toast = typeof BackendToast !== 'undefined' ? BackendToast : (typeof AdminToast !== 'undefined' ? AdminToast : null);
+            var Toast = typeof BackendToast !== 'undefined' ? BackendToast : (typeof BackendToast !== 'undefined' ? BackendToast : null);
             window.Weline.Api.request(form.action, {
                 method: form.method || 'POST',
                 body: formData,

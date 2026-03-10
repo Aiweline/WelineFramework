@@ -137,27 +137,27 @@ $backups = $backups ?? [];
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    AdminToast.success(data.message);
+                    BackendToast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    AdminToast.error(data.message);
+                    BackendToast.error(data.message);
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('创建备份失败') ?>');
+                BackendToast.error('<?= __('创建备份失败') ?>');
             });
         },
         
         downloadBackup: function(filename) {
-            AdminToast.info('<?= __('下载备份：') ?>' + filename);
+            BackendToast.info('<?= __('下载备份：') ?>' + filename);
         },
         
         deleteBackup: function(filename) {
             AdminConfirm.show('<?= __('确定要删除这个备份吗？') ?>').then(function(confirmed) {
                 if (confirmed) {
-                    AdminToast.info('<?= __('删除备份：') ?>' + filename);
+                    BackendToast.info('<?= __('删除备份：') ?>' + filename);
                 }
             });
         }

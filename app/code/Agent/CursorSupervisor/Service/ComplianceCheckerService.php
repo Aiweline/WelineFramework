@@ -183,7 +183,7 @@ class ComplianceCheckerService
                     'severity' => 'error',
                     'message' => "禁止使用原生对话框: {$dialog}",
                     'file' => $filePath,
-                    'fix' => '使用 AdminToast 或 ThemeToast',
+                    'fix' => '使用 BackendToast 或 ThemeToast',
                     'rule' => 'friendly-notifications',
                 ]);
             }

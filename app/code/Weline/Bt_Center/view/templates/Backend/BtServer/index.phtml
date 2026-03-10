@@ -180,22 +180,22 @@ $platformOptions = $platformOptions ?? [];
         .then(function(response) {
             var resp = (response && response.data) || response;
             if (resp.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success(resp.message);
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(resp.message);
                 }
                 setTimeout(function() {
                     window.location.reload();
                 }, 800);
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(resp.message || '<?= __("删除失败") ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(resp.message || '<?= __("删除失败") ?>');
                 }
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.error('<?= __("请求失败") ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __("请求失败") ?>');
             }
         });
     }

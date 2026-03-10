@@ -145,8 +145,8 @@ $saveUrl = $this->getBackendUrl('async/backend/host/save');
                 
                 if (fullPath) {
                     filePathInput.value = fullPath;
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success('<?= __('路径已设置') ?>: ' + fullPath);
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success('<?= __('路径已设置') ?>: ' + fullPath);
                     }
                 }
             }

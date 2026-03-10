@@ -804,10 +804,10 @@ async function runBenchmark() {
     const concurrency = parseInt(document.getElementById('benchmark-concurrency')?.value || '50', 10);
     const requests = parseInt(document.getElementById('benchmark-requests')?.value || '1000', 10);
     if (!target) {
-        AdminToast.warning('<?= __('请先输入压测目标 URL。') ?>');
+        BackendToast.warning('<?= __('请先输入压测目标 URL。') ?>');
         return;
     }
-    AdminToast.info('<?= __('压测执行中，请稍候...') ?>');
+    BackendToast.info('<?= __('压测执行中，请稍候...') ?>');
     try {
         const response = await fetch(BENCHMARK_API_URL, {
             method: 'POST',
@@ -820,15 +820,15 @@ async function runBenchmark() {
         });
         const data = await response.json();
         if (!data.success) {
-            AdminToast.error(data.message || '<?= __('压测失败') ?>');
+            BackendToast.error(data.message || '<?= __('压测失败') ?>');
             return;
         }
         const result = data.data || {};
         const text = `QPS: ${result.qps || 0}, p95: ${result.latency_p95 || 0}ms, error_rate: ${result.error_rate || 0}%`;
         document.getElementById('benchmark-last-result').textContent = text;
-        AdminToast.success('<?= __('压测完成') ?>');
+        BackendToast.success('<?= __('压测完成') ?>');
     } catch (error) {
-        AdminToast.error('<?= __('压测失败：请检查网络连接后重试。') ?> ' + error.message);
+        BackendToast.error('<?= __('压测失败：请检查网络连接后重试。') ?> ' + error.message);
     }
 }
 
@@ -853,7 +853,7 @@ async function cleanupLogs() {
         return;
     }
     
-    AdminToast.info('<?= __('正在清理...') ?>');
+    BackendToast.info('<?= __('正在清理...') ?>');
     
     try {
         const response = await fetch(CLEANUP_API_URL, {
@@ -869,12 +869,12 @@ async function cleanupLogs() {
         const data = await response.json();
         
         if (data.success) {
-            AdminToast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');
+            BackendToast.success(data.message + ' (状态日志: ' + data.data.status_logs_cleaned + ', 攻击日志: ' + data.data.attack_logs_cleaned + ')');
         } else {
-            AdminToast.error(data.message || '<?= __('清理失败') ?>');
+            BackendToast.error(data.message || '<?= __('清理失败') ?>');
         }
     } catch (error) {
-        AdminToast.error('<?= __('清理失败') ?>: ' + error.message);
+        BackendToast.error('<?= __('清理失败') ?>: ' + error.message);
     }
 }
 </script>

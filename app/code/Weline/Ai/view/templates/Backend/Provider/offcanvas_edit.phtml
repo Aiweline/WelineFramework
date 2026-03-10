@@ -173,8 +173,8 @@ $title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
             if (resData && resData.success) {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.success(resData.message || '<?= __('保存成功') ?>');
-                } else if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success(resData.message || '<?= __('保存成功') ?>');
+                } else if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(resData.message || '<?= __('保存成功') ?>');
                 }
                 try {
                     if (window.parent && window.parent !== window) {
@@ -188,8 +188,8 @@ $title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
             } else {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.error(res.message || '<?= __('保存失败') ?>');
-                } else if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(resData.message || '<?= __('保存失败') ?>');
+                } else if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(resData.message || '<?= __('保存失败') ?>');
                 }
             }
         })
@@ -198,8 +198,8 @@ $title = $isEdit ? __('编辑供应商账户') : __('新建供应商账户');
             submitBtn.innerHTML = originalHtml;
             if (typeof BackendToast !== 'undefined') {
                 BackendToast.error('<?= __('保存失败，请重试') ?>');
-            } else if (typeof AdminToast !== 'undefined') {
-                AdminToast.error('<?= __('保存失败，请重试') ?>');
+            } else if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __('保存失败，请重试') ?>');
             }
         });
     });

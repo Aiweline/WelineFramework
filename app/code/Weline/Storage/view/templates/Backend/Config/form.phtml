@@ -165,7 +165,7 @@ $isEdit = !empty($config['config_id']);
 </w:backend:card>
 
 <script type="module">
-import { AdminToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
+import { BackendToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
 
 const driverSelect = document.getElementById('driver-select');
 const driverConfigs = document.querySelectorAll('.driver-config');
@@ -194,15 +194,15 @@ form.addEventListener('submit', async function(e) {
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
-            AdminToast.success(data.msg);
+            BackendToast.success(data.msg);
             setTimeout(() => {
                 location.href = '<?= $this->getUrl('storage/backend/config') ?>';
             }, 1000);
         } else {
-            AdminToast.error(data.msg);
+            BackendToast.error(data.msg);
         }
     } catch (e) {
-        AdminToast.error('<?= __('保存失败') ?>');
+        BackendToast.error('<?= __('保存失败') ?>');
     }
 });
 
@@ -223,12 +223,12 @@ document.getElementById('btn-test').addEventListener('click', async function() {
         var data = (res && res.data) !== undefined ? res.data : res;
         
         if (data.code === 200) {
-            AdminToast.success(data.msg);
+            BackendToast.success(data.msg);
         } else {
-            AdminToast.error(data.msg);
+            BackendToast.error(data.msg);
         }
     } catch (e) {
-        AdminToast.error('<?= __('测试失败') ?>');
+        BackendToast.error('<?= __('测试失败') ?>');
     } finally {
         this.disabled = false;
         this.innerHTML = '<i class="bi bi-plug"></i> <?= __('测试连接') ?>';

@@ -226,7 +226,7 @@ $keyword = $keyword ?? '';
     };
     
     window.editItem = function(id) {
-        AdminToast.info('<?= __('编辑ID：') ?>' + id);
+        BackendToast.info('<?= __('编辑ID：') ?>' + id);
     };
     
     window.saveItem = function(event) {
@@ -244,17 +244,17 @@ $keyword = $keyword ?? '';
         .then(function(response) { return response.json(); })
         .then(function(data) {
             if (data.success) {
-                AdminToast.success(data.message);
+                BackendToast.success(data.message);
                 bootstrap.Modal.getInstance(document.getElementById('ipWhitelistModal')).hide();
                 setTimeout(function() {
                     location.reload();
                 }, 1000);
             } else {
-                AdminToast.error(data.message);
+                BackendToast.error(data.message);
             }
         })
         .catch(function(error) {
-            AdminToast.error('<?= __('操作失败') ?>');
+            BackendToast.error('<?= __('操作失败') ?>');
         });
     };
     
@@ -271,16 +271,16 @@ $keyword = $keyword ?? '';
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    AdminToast.success(data.message);
+                    BackendToast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    AdminToast.error(data.message);
+                    BackendToast.error(data.message);
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('操作失败') ?>');
+                BackendToast.error('<?= __('操作失败') ?>');
             });
         });
     };
@@ -298,16 +298,16 @@ $keyword = $keyword ?? '';
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    AdminToast.success(data.message);
+                    BackendToast.success(data.message);
                     setTimeout(function() {
                         location.reload();
                     }, 1000);
                 } else {
-                    AdminToast.error(data.message);
+                    BackendToast.error(data.message);
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('操作失败') ?>');
+                BackendToast.error('<?= __('操作失败') ?>');
             });
         });
     };

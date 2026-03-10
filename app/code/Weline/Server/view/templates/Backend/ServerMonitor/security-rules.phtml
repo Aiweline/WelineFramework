@@ -231,8 +231,8 @@ if ($rulesJson === '') {
             window.BackendToast.success(message);
             return;
         }
-        if (window.AdminToast && window.AdminToast.success) {
-            window.AdminToast.success(message);
+        if (window.BackendToast && window.BackendToast.success) {
+            window.BackendToast.success(message);
         }
     }
 
@@ -241,8 +241,8 @@ if ($rulesJson === '') {
             window.BackendToast.error(message);
             return;
         }
-        if (window.AdminToast && window.AdminToast.error) {
-            window.AdminToast.error(message);
+        if (window.BackendToast && window.BackendToast.error) {
+            window.BackendToast.error(message);
         }
     }
 

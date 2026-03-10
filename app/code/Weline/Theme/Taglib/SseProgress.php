@@ -444,7 +444,7 @@ if (btnCopy) {
         });
         navigator.clipboard.writeText(text.join('\\n')).then(function() {
             if (typeof BackendToast !== 'undefined') BackendToast.success('$t_copied');
-            else if (typeof AdminToast !== 'undefined') AdminToast.success('$t_copied');
+            else if (typeof BackendToast !== 'undefined') BackendToast.success('$t_copied');
         });
     });
 }

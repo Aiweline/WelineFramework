@@ -186,7 +186,7 @@
             e.preventDefault();
             
             var formData = new FormData(form);
-            var Toast = window.BackendToast || window.AdminToast;
+            var Toast = window.BackendToast || window.BackendToast;
             window.Weline.Api.request(form.action, { method: 'POST', body: formData })
             .then(function(response) {
                 var data = response.data;

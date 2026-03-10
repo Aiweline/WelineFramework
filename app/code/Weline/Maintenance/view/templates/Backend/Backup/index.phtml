@@ -140,14 +140,14 @@ $filters = $filters ?? [];
                 .then(function(res) {
                     var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.success) {
-                        AdminToast.success(data.message);
+                        BackendToast.success(data.message);
                         setTimeout(function() { location.reload(); }, 1000);
                     } else {
-                        AdminToast.error(data.message);
+                        BackendToast.error(data.message);
                     }
                 })
                 .catch(function(error) {
-                    AdminToast.error('<?= __('操作失败') ?>');
+                    BackendToast.error('<?= __('操作失败') ?>');
                 });
             });
         }

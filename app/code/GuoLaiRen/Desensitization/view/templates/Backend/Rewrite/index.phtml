@@ -117,8 +117,8 @@ $models = $this->models ?? [];
     document.getElementById('desens-rewrite-execute-btn').addEventListener('click', function() {
         var content = document.getElementById('desens-rewrite-content').value;
         if (!content) {
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.warning('<?= __('请输入内容') ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning('<?= __('请输入内容') ?>');
             }
             return;
         }

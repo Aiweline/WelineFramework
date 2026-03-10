@@ -384,7 +384,7 @@ function escapeJs(text) {
 
 function copyText(text) {
     navigator.clipboard.writeText(text).then(() => {
-        AdminToast.success('<?= __('已复制到剪贴板') ?>');
+        BackendToast.success('<?= __('已复制到剪贴板') ?>');
     }).catch(() => {
         const textarea = document.createElement('textarea');
         textarea.value = text;
@@ -392,7 +392,7 @@ function copyText(text) {
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
-        AdminToast.success('<?= __('已复制到剪贴板') ?>');
+        BackendToast.success('<?= __('已复制到剪贴板') ?>');
     });
 }
 </script>
