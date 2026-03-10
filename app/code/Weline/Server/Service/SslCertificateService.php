@@ -1567,14 +1567,14 @@ CNF;
                     return ['success' => false, 'message' => __('获取授权详情失败')];
                 }
 
-                if ($strategy === self::CHALLENGE_DNS01) {
-                    $validated = $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress);
-                } else {
-                    $validated = $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot);
-                }
+                $challengeResult = $strategy === self::CHALLENGE_DNS01
+                    ? $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress)
+                    : $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot, $onProgress);
 
-                if (!$validated) {
-                    return ['success' => false, 'message' => __('域名验证失败')];
+                if (!($challengeResult['validated'] ?? false)) {
+                    $detail = $challengeResult['error'] ?? '';
+                    $msg = $detail !== '' ? __('域名验证失败：%{1}', [$detail]) : __('域名验证失败');
+                    return ['success' => false, 'message' => $msg];
                 }
             }
 
@@ -1629,8 +1629,13 @@ CNF;
         }
     }
 
-    protected function performHttp01Challenge(array $auth, string $authUrl, string $accountUrl, string $webroot): bool
-    {
+    protected function performHttp01Challenge(
+        array $auth,
+        string $authUrl,
+        string $accountUrl,
+        string $webroot,
+        ?\Closure $onProgress = null
+    ): array {
         $httpChallenge = null;
         foreach ($auth['challenges'] ?? [] as $challenge) {
             if (($challenge['type'] ?? '') === 'http-01') {
@@ -1639,17 +1644,31 @@ CNF;
             }
         }
         if (!$httpChallenge) {
-            return false;
+            return ['validated' => false, 'error' => __('未找到 HTTP-01 挑战')];
         }
+
+        $onProg = static function (string $msg, array $extra = []) use ($onProgress): void {
+            if ($onProgress instanceof \Closure) {
+                $onProgress($msg, $extra);
+            }
+        };
+
+        $onProg(__('正在创建 HTTP-01 验证文件'), ['progress' => 35]);
         if (!$this->createHttpChallenge($webroot, $httpChallenge['token'], $httpChallenge['token'])) {
-            return false;
+            return ['validated' => false, 'error' => __('创建验证文件失败')];
         }
+
+        $onProg(__('正在通知 CA 服务器进行验证'), ['progress' => 50]);
         $this->notifyChallenge($httpChallenge['url'], $accountUrl);
+
+        $onProg(__('正在等待 CA 验证...'), ['progress' => 60]);
         $maxWait = 60;
         $validated = false;
+        $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
             \sleep(2);
             $auth = $this->getResource($authUrl, $accountUrl);
+            $lastAuth = $auth;
             if ($auth && ($auth['status'] ?? '') === 'valid') {
                 $validated = true;
                 break;
@@ -1657,9 +1676,25 @@ CNF;
             if ($auth && ($auth['status'] ?? '') === 'invalid') {
                 break;
             }
+            if ($i > 0 && $i % 5 === 0) {
+                $onProg(__('等待 CA 验证中… (%1秒)', [$i * 2]), ['progress' => 60 + (int) (20 * $i / $maxWait)]);
+            }
         }
+
+        $onProg(__('正在清理验证文件'), ['progress' => 90]);
         $this->cleanupHttpChallenge($webroot, $httpChallenge['token']);
-        return $validated;
+
+        $error = '';
+        if (!$validated && $lastAuth && ($lastAuth['status'] ?? '') === 'invalid') {
+            foreach ($lastAuth['challenges'] ?? [] as $c) {
+                if (($c['type'] ?? '') === 'http-01' && isset($c['error']['detail'])) {
+                    $error = (string) $c['error']['detail'];
+                    break;
+                }
+            }
+        }
+
+        return ['validated' => $validated, 'error' => $error];
     }
 
     protected function performDns01Challenge(
@@ -1670,7 +1705,7 @@ CNF;
         int $poolId,
         int $domainId,
         ?\Closure $onProgress = null
-    ): bool {
+    ): array {
         $dnsChallenge = null;
         foreach ($auth['challenges'] ?? [] as $challenge) {
             if (($challenge['type'] ?? '') === 'dns-01') {
@@ -1679,11 +1714,11 @@ CNF;
             }
         }
         if (!$dnsChallenge) {
-            return false;
+            return ['validated' => false, 'error' => __('未找到 DNS-01 挑战')];
         }
         $thumbprint = $this->getAccountKeyThumbprint();
         if ($thumbprint === '') {
-            return false;
+            return ['validated' => false, 'error' => __('获取账户指纹失败')];
         }
         $keyAuth = ($dnsChallenge['token'] ?? '') . '.' . $thumbprint;
         $digest = \hash('sha256', $keyAuth, true);
@@ -1700,10 +1735,11 @@ CNF;
             '_on_progress' => $onProgress,
         ]);
         if (!($addResult['success'] ?? false)) {
+            $addErr = (string) ($addResult['message'] ?? __('未知错误'));
             if ($onProgress) {
-                $onProgress((string)__('添加 TXT 记录失败：%{1}', [($addResult['message'] ?? '')]), ['step' => 'add_txt_fail']);
+                $onProgress((string)__('添加 TXT 记录失败：%{1}', [$addErr]), ['step' => 'add_txt_fail']);
             }
-            return false;
+            return ['validated' => false, 'error' => $addErr];
         }
         $recordId = (string)($addResult['record_id'] ?? '');
         if ($onProgress) {
@@ -1716,12 +1752,14 @@ CNF;
         }
         $maxWait = 120;
         $validated = false;
+        $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
             \sleep(2);
             if ($onProgress && $i > 0 && $i % 5 === 0) {
                 $onProgress((string)__('等待 CA 验证中...（%{1}s）', [$i * 2]), ['progress' => (int) \min(90, 50 + $i)]);
             }
             $auth = $this->getResource($authUrl, $accountUrl);
+            $lastAuth = $auth;
             if ($auth && ($auth['status'] ?? '') === 'valid') {
                 $validated = true;
                 break;
@@ -1742,7 +1780,18 @@ CNF;
                 'domain_id' => $domainId,
             ]);
         }
-        return $validated;
+
+        $error = '';
+        if (!$validated && $lastAuth && ($lastAuth['status'] ?? '') === 'invalid') {
+            foreach ($lastAuth['challenges'] ?? [] as $c) {
+                if (($c['type'] ?? '') === 'dns-01' && isset($c['error']['detail'])) {
+                    $error = (string) $c['error']['detail'];
+                    break;
+                }
+            }
+        }
+
+        return ['validated' => $validated, 'error' => $error];
     }
 
     protected function getAccountKeyThumbprint(): string
