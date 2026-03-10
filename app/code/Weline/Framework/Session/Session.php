@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session;
 
+use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
 
@@ -354,9 +355,74 @@ class Session implements SessionInterface
     public function append(string $key, string $value): void
     {
         $this->ensureStarted();
-        
+
         $existing = $this->data[$key] ?? '';
         $this->data[$key] = $existing . $value;
         $this->dirty = true;
+    }
+
+    // ==================== 认证兼容方法（原始 Session 无认证，返回默认值） ====================
+
+    /**
+     * @inheritDoc
+     * 原始 Session 无认证上下文，恒返回 false
+     */
+    public function isLogin(): bool
+    {
+        return false;
+    }
+
+    /**
+     * @inheritDoc
+     * 原始 Session 不支持登录，应使用 AuthenticatedSessionInterface
+     */
+    public function login(AuthenticableInterface $user): void
+    {
+        // 无操作，认证由 AuthenticatedSession 负责
+    }
+
+    /**
+     * @inheritDoc
+     * 原始 Session 恒返回 null
+     */
+    public function getLoginUser(string $model = ''): ?AuthenticableInterface
+    {
+        return null;
+    }
+
+    /**
+     * @inheritDoc
+     * 原始 Session 恒返回 null
+     */
+    public function getLoginUsername(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * @inheritDoc
+     * 原始 Session 恒返回 null
+     */
+    public function getLoginUserID(): int|string|null
+    {
+        return null;
+    }
+
+    /**
+     * @inheritDoc
+     * 原始 Session 无操作
+     */
+    public function logout(): void
+    {
+        // 无操作
+    }
+
+    /**
+     * @inheritDoc
+     * 返回自身（原始 Session 即底层实例）
+     */
+    public function getOriginSession(): SessionInterface
+    {
+        return $this;
     }
 }
