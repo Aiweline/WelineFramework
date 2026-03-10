@@ -729,8 +729,12 @@ class DomainManagement extends BaseController
             'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
             'subdomains' => $this->request->getPost('subdomains', '@,www'),
             'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
+            'dns_provider' => (string) $this->request->getPost('dns_provider', ''),
+            'dns_account_id' => (int) $this->request->getPost('dns_account_id', 0),
             'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
             'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
+            'cdn_provider' => (string) $this->request->getPost('cdn_provider', ''),
+            'cdn_account_id' => (int) $this->request->getPost('cdn_account_id', 0),
             'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
         ];
 
@@ -781,8 +785,12 @@ class DomainManagement extends BaseController
             'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
             'subdomains' => $this->request->getPost('subdomains', '@,www'),
             'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
+            'dns_provider' => (string) $this->request->getPost('dns_provider', ''),
+            'dns_account_id' => (int) $this->request->getPost('dns_account_id', 0),
             'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
             'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
+            'cdn_provider' => (string) $this->request->getPost('cdn_provider', ''),
+            'cdn_account_id' => (int) $this->request->getPost('cdn_account_id', 0),
             'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
         ];
 
@@ -1195,6 +1203,9 @@ class DomainManagement extends BaseController
 
             $sse->sendEvent('progress', ['message' => __('正在验证域名...'), 'progress' => 30]);
 
+            $onProgress = function (string $message, array $extra = []) use ($sse): void {
+                $sse->sendEvent('progress', \array_merge(['message' => $message], $extra));
+            };
             $challengeRaw = $this->request->get('challenge_strategy', '');
             $challengeStrategy = \is_array($challengeRaw)
                 ? \trim((string) ($challengeRaw[0] ?? 'auto'))
@@ -1206,6 +1217,7 @@ class DomainManagement extends BaseController
                 $challengeStrategy = 'auto';
             }
 
+            $domainId = (int) $pool->getParentDomainId();
             $result = w_query('server', 'requestCertificate', [
                 'domain' => $domain,
                 'webroot' => $webroot,
@@ -1214,7 +1226,9 @@ class DomainManagement extends BaseController
                 'provider' => $provider,
                 'cert_type' => 'exact',
                 'pool_id' => $poolId,
+                'domain_id' => $domainId > 0 ? $domainId : 0,
                 'challenge_strategy' => $challengeStrategy,
+                '_on_progress' => $onProgress,
             ]);
 
             if ($result['success'] ?? false) {
@@ -2233,8 +2247,8 @@ class DomainManagement extends BaseController
     }
 
     /**
-     * AJAX: 获取可用的域名商账户列表（用于DNS切换）
-     * 直接查询 DomainRegistrarAccount 模型
+     * AJAX: 获取可用的域名商账户列表（用于DNS切换、购买弹窗等）
+     * 支持 GET 参数 active_only=1 仅返回活跃账号
      */
     public function getGetRegistrarAccounts(): string
     {
@@ -2242,6 +2256,9 @@ class DomainManagement extends BaseController
             $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $accountModel->clearData(true);
             $accountModel->clearQuery();
+            if ($this->request->getGet('active_only', '0') === '1') {
+                $accountModel->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
+            }
             $allAccounts = $accountModel->select()->fetchArray();
 
             $result = [];
@@ -2457,18 +2474,41 @@ class DomainManagement extends BaseController
                 }
 
                 $sourceCredentials = $sourceAccount->getCredentials();
+
+                $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
+                $recordsToPush = $resolveService->getRecordsForPush($domain);
+
                 $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceCredentials);
 
                 if ($updateResult['success'] ?? false) {
                     $success++;
                     $domain->setNameservers($targetNs);
-                    $domain->save();
-                    $autoResult = $this->refreshDomainDnsProviderAndSyncRecords($domain, true);
-                    if (($autoResult['provider_updated'] ?? false) === true) {
-                        $autoSwitchedProvider++;
+                    $targetCode = (string) ($targetAccount->getRegistrarCode() ?? '');
+                    $domain->setDnsProvider($targetCode);
+                    $domain->setDnsAccountId($targetAccount->getAccountId());
+                    if ($targetCode !== '' && ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class)->isCdnProvider($targetCode)) {
+                        $domain->setCdnProvider($targetAccount->getRegistrarCode());
+                        $domain->setCdnAccountId($targetAccount->getAccountId());
                     }
-                    if (($autoResult['sync_error'] ?? '') !== '') {
-                        $autoSyncErrors[] = $domain->getDomain() . ': ' . $autoResult['sync_error'];
+                    $domain->forceCheck(false)->save();
+
+                    $pushResult = $resolveService->pushRecordsToProvider($domain, $targetAccount, $recordsToPush);
+                    if (($pushResult['failed'] ?? 0) > 0 && !empty($pushResult['errors'])) {
+                        $autoSyncErrors[] = $domainName . ': ' . __('记录同步') . ' - ' . \implode('; ', \array_slice($pushResult['errors'], 0, 3));
+                    }
+                    $autoSwitchedProvider++;
+
+                    $sync = $resolveService->syncDnsRecords($domain);
+                    $syncError = (string) ($sync['error'] ?? '');
+                    if ($syncError !== '') {
+                        $autoSyncErrors[] = $domain->getDomain() . ': ' . $syncError;
+                    } else {
+                        $this->syncDnsProviderToPool($domainName, $targetCode, $targetCode);
+                        $dnsDetails = $resolveService->getDnsDetails($domain);
+                        $dnsRecords = \is_array($dnsDetails['records'] ?? null) ? $dnsDetails['records'] : [];
+                        if ($dnsRecords !== []) {
+                            $this->syncDnsRecordsToDomainPool($domain, $dnsRecords, false);
+                        }
                     }
                 } else {
                     $failed++;
