@@ -193,8 +193,15 @@
                                         <!-- 操作按钮 -->
                                         <div class="d-flex gap-1 ms-3 flex-nowrap">
                                             <?php
-                                            // 生成前端访问链接（使用页面关联的网站地址，而不是当前访问的网站地址）
-                                            $baseUrl = $websiteUrl ? rtrim($websiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                                            // 生成前端访问链接：与当前请求同 host 时用当前 base（含端口）
+                                            $currentBase = rtrim($this->request->getBaseHost(), '/');
+                                            $baseUrl = $currentBase;
+                                            if ($websiteUrl !== '') {
+                                                $siteHost = parse_url($websiteUrl, PHP_URL_HOST);
+                                                $currHost = parse_url($currentBase, PHP_URL_HOST);
+                                                $baseUrl = ($siteHost !== false && $currHost !== false && strcasecmp($siteHost, $currHost) === 0)
+                                                    ? $currentBase : rtrim($websiteUrl, '/');
+                                            }
                                             $pageHandle = $page->getData('handle') ?? '';
                                             // 首页类型且没有handle时，直接使用网站地址
                                             if ($isHomePage && empty($pageHandle)) {
@@ -483,8 +490,17 @@
                                                             <!-- 子页面操作 -->
                                                             <div class="d-flex gap-1 ms-3 flex-nowrap">
                                                                 <?php
-                                                                // 生成子页面前端访问链接（使用页面关联的网站地址，而不是当前访问的网站地址）
-                                                                $childBaseUrl = $childWebsiteUrl ? rtrim($childWebsiteUrl, '/') : rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                                                                // 生成子页面前端访问链接：与当前请求同 host 时用当前 base（含端口）
+                                                                $childCurrentBase = rtrim($this->request->getBaseHost(), '/');
+                                                                $childBaseUrl = $childCurrentBase;
+                                                                if ($childWebsiteUrl !== '') {
+                                                                    $childSiteHost = parse_url($childWebsiteUrl, PHP_URL_HOST);
+                                                                    $childCurrHost = parse_url($childCurrentBase, PHP_URL_HOST);
+                                                                    $childBaseUrl = ($childSiteHost !== false && $childCurrHost !== false && strcasecmp($childSiteHost, $childCurrHost) === 0)
+                                                                        ? $childCurrentBase : rtrim($childWebsiteUrl, '/');
+                                                                } else {
+                                                                    $childBaseUrl = $childCurrentBase;
+                                                                }
                                                                 $childFrontendUrl = $childBaseUrl . '/' . ltrim($childPage->getData('handle'), '/');
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
