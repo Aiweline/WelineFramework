@@ -1140,8 +1140,13 @@ class DomainManagement extends BaseController
         }
         if ($port === 80) {
             $config = Env::getInstance()->getConfig('server');
-            if (\is_array($config) && isset($config['port']) && (int) $config['port'] > 0) {
-                $port = (int) $config['port'];
+            if (\is_array($config) && isset($config['port'])) {
+                $portVal = $config['port'];
+                $portVal = \is_array($portVal) ? ($portVal[0] ?? 80) : $portVal;
+                $portInt = (int) $portVal;
+                if ($portInt > 0) {
+                    $port = $portInt;
+                }
             }
         }
         return $this->fetchJson(['success' => true, 'port' => $port]);
@@ -1169,8 +1174,8 @@ class DomainManagement extends BaseController
             $domain = '';
         }
 
-        if ($poolId > 0 && $domain === '') {
-            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        if ($poolId > 0) {
             $pool->load($poolId);
             if ($pool->getPoolId()) {
                 $domain = \trim((string) $pool->getDomain());
@@ -1197,8 +1202,10 @@ class DomainManagement extends BaseController
                 $email = 'admin@' . $domain;
             }
 
-            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
-            $pool->load($poolId);
+            if (!$pool->getPoolId()) {
+                $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+                $pool->load($poolId);
+            }
             if (!$pool->getPoolId()) {
                 $sse->sendEvent('failed', ['message' => __('域名池记录不存在')]);
                 $sse->close();
@@ -1289,6 +1296,231 @@ class DomainManagement extends BaseController
             $sse->sendEvent('failed', ['message' => $e->getMessage()]);
         }
         $sse->close();
+    }
+
+    /**
+     * SSE 流式输出根域名 DNS/CDN 切换过程
+     * GET: domain_id, dns_account_id, cdn_account_id (可选)
+     * 步骤：提交 NS → 等待 NS 生效(每 5s 轮询) → 搬迁 DNS 记录 → 校验所有记录 → 若切换 CDN 则校验 CDN
+     */
+    public function getDnsSwitchStream(): void
+    {
+        $domainId = (int) $this->request->get('domain_id', 0);
+        $dnsAccountId = (int) $this->request->get('dns_account_id', 0);
+        $cdnAccountId = (int) $this->request->get('cdn_account_id', 0);
+
+        $sse = new SseWriter();
+        $sse->setRetryInterval(86400000);
+        $sse->start();
+
+        if ($domainId <= 0 || $dnsAccountId <= 0) {
+            $sse->sendEvent('failed', ['message' => __('参数无效：domain_id 与 dns_account_id 必填')]);
+            $sse->close();
+            return;
+        }
+
+        $sse->sendEvent('start', ['message' => __('开始 DNS/CDN 切换流程')]);
+
+        try {
+            $domain = ObjectManager::getInstance(Domain::class, [], false);
+            $domain->load($domainId);
+            if (!$domain->getDomainId()) {
+                $sse->sendEvent('failed', ['message' => __('域名不存在')]);
+                $sse->close();
+                return;
+            }
+            $domainName = $domain->getDomain();
+
+            $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+            $targetAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $targetAccount->load($dnsAccountId);
+            if (!$targetAccount->getAccountId()) {
+                $sse->sendEvent('failed', ['message' => __('目标 DNS 账户不存在')]);
+                $sse->close();
+                return;
+            }
+            $targetAdapter = $registrarResolver->getAdapter($targetAccount->getRegistrarCode());
+            if ($targetAdapter === null) {
+                $sse->sendEvent('failed', ['message' => __('目标适配器不存在')]);
+                $sse->close();
+                return;
+            }
+
+            $targetCredentials = $targetAccount->getCredentials();
+            $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
+            if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
+                $sse->sendEvent('failed', ['message' => __('无法获取目标 Nameserver：%{1}', [$nsResult['message'] ?? ''])]);
+                $sse->close();
+                return;
+            }
+            $targetNs = $nsResult['nameservers'];
+
+            $sourceAccountId = (int) $domain->getAccountId();
+            $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $sourceAccount->load($sourceAccountId);
+            if (!$sourceAccount->getAccountId()) {
+                $sse->sendEvent('failed', ['message' => __('找不到源域名商账户')]);
+                $sse->close();
+                return;
+            }
+            $sourceAdapter = $registrarResolver->getAdapter($sourceAccount->getRegistrarCode());
+            if ($sourceAdapter === null) {
+                $sse->sendEvent('failed', ['message' => __('源域名商适配器不存在')]);
+                $sse->close();
+                return;
+            }
+            $sourceCredentials = $sourceAccount->getCredentials();
+
+            // Step 1: 提交 NS 切换
+            $sse->sendEvent('progress', ['message' => __('步骤 1/5：正在向注册商提交新 Nameserver…'), 'step' => 1]);
+            $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceCredentials);
+            if (!($updateResult['success'] ?? false)) {
+                $sse->sendEvent('failed', ['message' => __('提交 NS 失败：%{1}', [$updateResult['message'] ?? ''])]);
+                $sse->close();
+                return;
+            }
+            $domain->setNameservers($targetNs);
+            $domain->setDnsProvider((string) ($targetAccount->getRegistrarCode() ?? ''));
+            $domain->setDnsAccountId($targetAccount->getAccountId());
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+            if ($cdnAccountId > 0) {
+                $cdnAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $cdnAccount->load($cdnAccountId);
+                if ($cdnAccount->getAccountId()) {
+                    $domain->setCdnProvider($cdnAccount->getRegistrarCode());
+                    $domain->setCdnAccountId($cdnAccount->getAccountId());
+                }
+            } elseif ($dnsDetector->isCdnProvider($targetAccount->getRegistrarCode())) {
+                $domain->setCdnProvider($targetAccount->getRegistrarCode());
+                $domain->setCdnAccountId($targetAccount->getAccountId());
+            }
+            $domain->forceCheck(false)->save();
+            $sse->sendEvent('progress', ['message' => __('Nameserver 已提交，等待全球解析生效（每 5 秒检测一次）…'), 'step' => 1]);
+
+            // Step 2: 等待 NS 生效，每 5s 检测
+            $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
+            $targetNsNormalized = $this->normalizeNameservers($targetNs);
+            $maxWait = 30 * 60; // 30 分钟
+            $interval = 5;
+            $elapsed = 0;
+            $sse->sendEvent('info', ['message' => __('等待 NS 生效，最多等待 30 分钟…')]);
+            while ($elapsed < $maxWait) {
+                \sleep($interval);
+                $elapsed += $interval;
+                $liveNs = $resolveService->getLiveNameservers($domainName);
+                $liveNormalized = $this->normalizeNameservers($liveNs);
+                $sse->sendEvent('progress', ['message' => __('第 %{1} 秒检测：当前 NS %{2}，目标 NS %{3}', [
+                    $elapsed,
+                    $liveNormalized === [] ? __('(暂无)') : \implode(', ', $liveNormalized),
+                    \implode(', ', $targetNsNormalized),
+                ]), 'step' => 2, 'elapsed' => $elapsed]);
+                if ($liveNormalized === $targetNsNormalized) {
+                    $sse->sendEvent('progress', ['message' => __('NS 已生效'), 'step' => 2]);
+                    break;
+                }
+            }
+            if ($elapsed >= $maxWait) {
+                $sse->sendEvent('failed', ['message' => __('等待 NS 生效超时（30 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录')]);
+                $sse->close();
+                return;
+            }
+
+            // Step 3: 搬迁 DNS 记录到新供应商
+            $sse->sendEvent('progress', ['message' => __('步骤 3/5：正在搬迁 DNS 记录到新供应商…'), 'step' => 3]);
+            $recordsToPush = $resolveService->getRecordsForPush($domain);
+            $pushResult = $resolveService->pushRecordsToProvider($domain, $targetAccount, $recordsToPush);
+            $added = (int) ($pushResult['added'] ?? 0);
+            $failed = (int) ($pushResult['failed'] ?? 0);
+            $sse->sendEvent('progress', ['message' => __('搬迁完成：成功 %{1} 条，失败 %{2} 条', [$added, $failed]), 'step' => 3]);
+            if (!empty($pushResult['errors'] ?? [])) {
+                foreach (\array_slice($pushResult['errors'], 0, 5) as $err) {
+                    $sse->sendEvent('info', ['message' => '  - ' . $err]);
+                }
+            }
+
+            // Step 4: 校验所有记录
+            $sse->sendEvent('progress', ['message' => __('步骤 4/5：正在同步并校验 DNS 记录…'), 'step' => 4]);
+            $sync = $resolveService->syncDnsRecords($domain);
+            $syncError = (string) ($sync['error'] ?? '');
+            if ($syncError !== '') {
+                $sse->sendEvent('failed', ['message' => __('同步/校验记录失败：%{1}', [$syncError])]);
+                $sse->close();
+                return;
+            }
+            $targetCode = (string) $targetAccount->getRegistrarCode();
+            $this->syncDnsProviderToPool($domainName, $targetCode, $targetCode);
+            $dnsDetails = $resolveService->getDnsDetails($domain);
+            $dnsRecords = \is_array($dnsDetails['records'] ?? null) ? $dnsDetails['records'] : [];
+            if ($dnsRecords !== []) {
+                $this->syncDnsRecordsToDomainPool($domain, $dnsRecords, false);
+            }
+            $sse->sendEvent('progress', ['message' => __('校验完成，共 %{1} 条记录', [\count($dnsRecords)]), 'step' => 4]);
+
+            // Step 5: 若切换了 CDN，简单校验 CDN（HEAD 响应头）
+            if ($cdnAccountId > 0 || $dnsDetector->isCdnProvider($targetCode)) {
+                $sse->sendEvent('progress', ['message' => __('步骤 5/5：校验 CDN 响应…'), 'step' => 5]);
+                $cdnOk = $this->verifyCdnByHead($domainName, $targetCode);
+                if ($cdnOk) {
+                    $sse->sendEvent('progress', ['message' => __('CDN 校验通过（响应头符合预期）'), 'step' => 5]);
+                } else {
+                    $sse->sendEvent('info', ['message' => __('CDN 头校验未命中，可能尚未生效或非该 CDN 节点，请稍后自行确认')]);
+                }
+            } else {
+                $sse->sendEvent('progress', ['message' => __('未切换 CDN，跳过 CDN 校验'), 'step' => 5]);
+            }
+
+            $sse->sendEvent('success', ['message' => __('DNS/CDN 切换完成')]);
+            $sse->sendEvent('done', ['message' => __('流程结束：%{1}', [$domainName]), 'success' => true]);
+        } catch (\Throwable $e) {
+            $sse->sendEvent('failed', ['message' => $e->getMessage()]);
+        }
+        $sse->close();
+    }
+
+    /**
+     * 标准化 NS 列表便于比较（小写、去尾点、排序）
+     */
+    private function normalizeNameservers(array $nameservers): array
+    {
+        $out = [];
+        foreach ($nameservers as $ns) {
+            $n = \strtolower(\trim((string) $ns));
+            if ($n !== '') {
+                $out[] = \rtrim($n, '.');
+            }
+        }
+        $out = \array_values(\array_unique($out));
+        \sort($out);
+        return $out;
+    }
+
+    /**
+     * 通过 HEAD 请求检查域名是否由指定 CDN 服务商响应（如 Server: cloudflare）
+     */
+    private function verifyCdnByHead(string $domain, string $providerCode): bool
+    {
+        $url = 'https://' . $domain . '/';
+        $ctx = \stream_context_create([
+            'http' => [
+                'method' => 'HEAD',
+                'timeout' => 10,
+                'ignore_errors' => true,
+            ],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        ]);
+        $headers = @\get_headers($url, false, $ctx);
+        if ($headers === false || $headers === []) {
+            return false;
+        }
+        $headerStr = \implode(' ', $headers);
+        $providerLower = \strtolower($providerCode);
+        if (\strpos($providerLower, 'cloudflare') !== false && \stripos($headerStr, 'server') !== false && \stripos($headerStr, 'cloudflare') !== false) {
+            return true;
+        }
+        if (\strpos($providerLower, 'cdn') !== false && (\stripos($headerStr, 'cf-') !== false || \stripos($headerStr, 'x-cache') !== false)) {
+            return true;
+        }
+        return false;
     }
 
     /**
