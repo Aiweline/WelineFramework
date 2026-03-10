@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainConfig;
+use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainDnsRecord;
 use Weline\Websites\Model\DomainRegistrarAccount;
 
@@ -705,6 +706,82 @@ class DomainResolveService
             return $account;
         }
         
+        return null;
+    }
+
+    /**
+     * 为域名池域名尝试添加 A 记录（当 DNS 解析失败时调用）
+     * 需要根域名已关联 DNS 账户
+     *
+     * @param DomainPool $pool 域名池模型
+     * @param string $serverIp 目标服务器 IP
+     * @return array{success: bool, message: string}
+     */
+    public function tryAddARecordForPoolDomain(DomainPool $pool, string $serverIp): array
+    {
+        $poolDomain = $pool->getDomain();
+        $rootDomain = \strtolower(\trim((string) $pool->getRootDomain()));
+        if ($rootDomain === '') {
+            $rootDomain = $poolDomain;
+        }
+
+        $rootDomainModel = $this->resolveRootDomainForPool($pool);
+        if ($rootDomainModel === null) {
+            return [
+                'success' => false,
+                'message' => (string) __('无法解析根域名的 DNS 管理账户。请确保域名已在「根域名管理」中配置且已关联 DNS 账户。'),
+            ];
+        }
+
+        $dnsResult = $this->getDnsManagementAccount($rootDomainModel, false);
+        if ($dnsResult['error'] !== '' || $dnsResult['adapter'] === null) {
+            return [
+                'success' => false,
+                'message' => $dnsResult['error'] ?: (string) __('未找到 DNS 管理账户'),
+            ];
+        }
+
+        $host = $poolDomain === $rootDomain ? '@' : \explode('.', $poolDomain)[0];
+        $record = [
+            'type' => 'A',
+            'host' => $host,
+            'value' => $serverIp,
+            'ttl' => 600,
+        ];
+
+        try {
+            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
+            if ($result['success'] ?? false) {
+                return ['success' => true, 'message' => (string) __('A 记录添加成功，请等待 DNS 生效后重试')];
+            }
+            return [
+                'success' => false,
+                'message' => (string) ($result['message'] ?? __('添加 A 记录失败')),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    private function resolveRootDomainForPool(DomainPool $pool): ?Domain
+    {
+        $domainModel = ObjectManager::getInstance(Domain::class, [], false);
+        $parentId = (int) $pool->getParentDomainId();
+        $rootDomain = \trim((string) $pool->getRootDomain());
+
+        if ($parentId > 0) {
+            $domainModel->load($parentId);
+            if ($domainModel->getDomainId()) {
+                return $domainModel;
+            }
+        }
+        if ($rootDomain !== '') {
+            $domainModel->clearQuery();
+            $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+            if ($domainModel->getDomainId()) {
+                return $domainModel;
+            }
+        }
         return null;
     }
 }
