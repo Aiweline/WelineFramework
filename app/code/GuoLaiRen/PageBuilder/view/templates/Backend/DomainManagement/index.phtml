@@ -4073,6 +4073,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     }
 
     var httpsRequestPending = { poolId: 0, domain: '', btnEl: null };
+    var httpsRequestPort = 80;
 
     function openHttpsRequestModal(poolId, domain, btnEl) {
         var modal = document.getElementById('pb-dm-https-request-modal');
@@ -4088,6 +4089,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         modal.classList.add('pb-dm-form-modal--open');
         fetch(API.getServerPort).then(function(r) { return r.json(); }).then(function(res) {
             var port = (res.port !== undefined) ? parseInt(res.port, 10) : 80;
+            httpsRequestPort = port;
             if (alertEl && alertText) {
                 if (port !== 80) {
                     alertEl.className = 'pb-dm-alert pb-dm-alert-warning';
@@ -4098,6 +4100,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 }
             }
         }).catch(function() {
+            httpsRequestPort = 80;
             if (alertText) alertText.textContent = '<?= __('请确保域名已正确解析到本服务器') ?>';
         });
     }
@@ -4239,7 +4242,8 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
 
     function openHttpsSseModalAndStart(poolId, domain, provider, btnEl) {
         var sseModal = document.getElementById('pb-dm-https-sse-modal');
-        var streamUrl = API.requestHttpsStream + '?pool_id=' + encodeURIComponent(poolId) + '&provider=' + encodeURIComponent(provider) + '&domain=' + encodeURIComponent(domain);
+        var challenge = (httpsRequestPort === 80) ? 'http01' : 'dns01';
+        var streamUrl = API.requestHttpsStream + '?pool_id=' + encodeURIComponent(poolId) + '&provider=' + encodeURIComponent(provider) + '&domain=' + encodeURIComponent(domain) + '&challenge_strategy=' + encodeURIComponent(challenge);
         var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-https-sse-terminal'];
         var doneBtn = document.getElementById('pb-dm-https-sse-done-btn');
         if (!sseModal) return;
