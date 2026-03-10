@@ -125,8 +125,8 @@ $logs = $this->logs ?? [];
     document.querySelectorAll('.desens-log-view-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var logId = this.getAttribute('data-id');
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.info('<?= __('详情功能待实现') ?>: ' + logId);
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.info('<?= __('详情功能待实现') ?>: ' + logId);
             } else {
                 console.log('详情功能待实现: ' + logId);
             }

@@ -212,7 +212,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
                             window.location.href = data.redirect || indexUrl;
                         });
                     } else {
-                        AdminToast.success(data.message);
+                        BackendToast.success(data.message);
                         setTimeout(function() {
                             window.location.href = data.redirect || indexUrl;
                         }, 1500);
@@ -226,7 +226,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
                             confirmButtonText: '<?= __('确定') ?>'
                         });
                     } else {
-                        AdminToast.error(data.message);
+                        BackendToast.error(data.message);
                     }
                 }
             })
@@ -239,7 +239,7 @@ $originToken = (string)($this->getData('originToken') ?? '');
                         confirmButtonText: '<?= __('确定') ?>'
                     });
                 } else {
-                    AdminToast.error(error.message);
+                    BackendToast.error(error.message);
                 }
             });
         });

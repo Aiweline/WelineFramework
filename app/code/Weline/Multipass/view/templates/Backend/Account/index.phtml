@@ -353,8 +353,8 @@ $userType = $this->getData('user_type') ?? 'backend';
     }
     
     function showMessage(type, message) {
-        if (window.AdminToast) {
-            AdminToast[type === 'success' ? 'success' : 'error'](message);
+        if (window.BackendToast) {
+            BackendToast[type === 'success' ? 'success' : 'error'](message);
         }
     }
     

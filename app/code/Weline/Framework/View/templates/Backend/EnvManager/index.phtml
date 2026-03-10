@@ -278,14 +278,14 @@ function retryInstall(type, name, btn) {
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
         if (data.code === 200) {
-            AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
+            BackendToast ? BackendToast.success(data.msg) : alert(data.msg);
         } else {
-            AdminToast ? AdminToast.warning(data.msg) : alert(data.msg);
+            BackendToast ? BackendToast.warning(data.msg) : alert(data.msg);
         }
         setTimeout(() => location.reload(), 1500);
     })
     .catch(err => {
-        AdminToast ? AdminToast.error('<?= __('请求失败') ?>: ' + err.message) : alert(err.message);
+        BackendToast ? BackendToast.error('<?= __('请求失败') ?>: ' + err.message) : alert(err.message);
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-download"></i> <?= __('尝试安装') ?>';
     });
@@ -299,7 +299,7 @@ function resetAllStatuses() {
     window.Weline.Api.request(resetUrl, resetOpts)
     .then(function(res) {
         var data = (res && res.data) !== undefined ? res.data : res;
-        AdminToast ? AdminToast.success(data.msg) : alert(data.msg);
+        BackendToast ? BackendToast.success(data.msg) : alert(data.msg);
         setTimeout(() => location.reload(), 1000);
     });
 }

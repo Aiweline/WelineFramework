@@ -262,8 +262,8 @@ $rules = $this->rules ?? [];
                     document.getElementById('desensRuleModalLabel').textContent = '<?= __('编辑脱敏规则') ?>';
                     ruleModal.show();
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __('加载规则失败') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(data.message || '<?= __('加载规则失败') ?>');
                     }
                 }
             });
@@ -281,13 +281,13 @@ $rules = $this->rules ?? [];
         .then(function(response) {
             var data = (response && response.data) || response;
             if (data.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success('<?= __('保存成功') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success('<?= __('保存成功') ?>');
                 }
                 location.reload();
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(data.message || '<?= __('保存失败') ?>');
                 }
             }
         });
@@ -310,13 +310,13 @@ $rules = $this->rules ?? [];
         .then(function(response) {
             var data = (response && response.data) || response;
             if (data.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success('<?= __('删除成功') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success('<?= __('删除成功') ?>');
                 }
                 location.reload();
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(data.message || '<?= __('删除失败') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(data.message || '<?= __('删除失败') ?>');
                 }
             }
         });
@@ -330,8 +330,8 @@ $rules = $this->rules ?? [];
                 if (data.success) {
                     location.reload();
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __('操作失败') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(data.message || '<?= __('操作失败') ?>');
                     }
                 }
             });
@@ -348,8 +348,8 @@ $rules = $this->rules ?? [];
     function executeTest() {
         var testContent = document.getElementById('desens-test-content').value;
         if (!testContent) {
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.warning('<?= __('请输入测试内容') ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning('<?= __('请输入测试内容') ?>');
             }
             return;
         }

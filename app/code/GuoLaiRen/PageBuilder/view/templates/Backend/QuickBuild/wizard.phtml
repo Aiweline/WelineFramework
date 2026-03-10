@@ -721,11 +721,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var acctId = document.getElementById('pb-qb-account').value;
         var domain = document.getElementById('pb-qb-domain').value.trim();
         if (!acctId) {
-            AdminToast.warning('<?= __('请选择域名商账号') ?>');
+            BackendToast.warning('<?= __('请选择域名商账号') ?>');
             return;
         }
         if (!domain) {
-            AdminToast.warning('<?= __('请输入域名') ?>');
+            BackendToast.warning('<?= __('请输入域名') ?>');
             return;
         }
         this.disabled = true;
@@ -774,7 +774,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }).catch(function(e) {
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-magnify"></i> <?= __('检查可用性') ?>';
-            AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
+            BackendToast.error('<?= __('网络错误') ?>: ' + e.message);
         });
     });
 
@@ -839,14 +839,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     if (dialogResult.start_lifecycle === '1') {
                         msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                     }
-                    AdminToast.success(msg);
+                    BackendToast.success(msg);
                     btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
                     btn.classList.remove('pb-qb-btn-success');
                     btn.classList.add('pb-qb-btn-secondary');
                     domainPurchased = true;
                     updateNextButtonState();
                 } else {
-                    AdminToast.error(
+                    BackendToast.error(
                         window.WelineDomainPurchaseDialog
                             ? window.WelineDomainPurchaseDialog.buildErrorMessage(res, '<?= __('购买失败') ?>')
                             : (res.msg || res.message || '<?= __('购买失败') ?>')
@@ -855,13 +855,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
                 }
             }).catch(function(e) {
-                AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
+                BackendToast.error('<?= __('网络错误') ?>: ' + e.message);
                 btn.disabled = false;
                 btn.innerHTML = '<i class="mdi mdi-cart"></i> <?= __('购买') ?>';
             });
         }).catch(function(error) {
             var detail = error && error.message ? (' ' + error.message) : '';
-            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
+            BackendToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
         });
     }
 
@@ -869,7 +869,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     document.getElementById('pb-qb-load-domains-btn').addEventListener('click', function() {
         var acctId = document.getElementById('pb-qb-account-existing').value;
         if (!acctId) {
-            AdminToast.warning('<?= __('请选择域名商账号') ?>');
+            BackendToast.warning('<?= __('请选择域名商账号') ?>');
             return;
         }
         var btn = this;
@@ -993,14 +993,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             .catch(function(e) {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="mdi mdi-refresh"></i> <?= __('加载可建站域名') ?>';
-                AdminToast.error('<?= __('网络错误') ?>: ' + e.message);
+                BackendToast.error('<?= __('网络错误') ?>: ' + e.message);
             });
     });
 
     // 步骤导航
     document.getElementById('pb-qb-next1').addEventListener('click', function() {
         if (!selectedDomain) {
-            AdminToast.warning('<?= __('请先选择或购买域名') ?>');
+            BackendToast.warning('<?= __('请先选择或购买域名') ?>');
             return;
         }
         goToStep(2);

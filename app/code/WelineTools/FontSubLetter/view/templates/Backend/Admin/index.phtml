@@ -389,14 +389,14 @@
                 .then(function(res) {
                     var data = (res && res.data) !== undefined ? res.data : res;
                     if (data.code === 200) {
-                        AdminToast.success('<?= __('删除成功') ?>');
+                        BackendToast.success('<?= __('删除成功') ?>');
                         setTimeout(function() { location.reload(); }, 1000);
                     } else {
-                        AdminToast.error(data.msg || '<?= __('删除失败') ?>');
+                        BackendToast.error(data.msg || '<?= __('删除失败') ?>');
                     }
                 })
                 .catch(function(error) {
-                    AdminToast.error('<?= __('删除失败') ?>: ' + error.message);
+                    BackendToast.error('<?= __('删除失败') ?>: ' + error.message);
                 });
             }
         }

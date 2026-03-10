@@ -53,7 +53,7 @@
 
 - [ ] 管理页控制按钮链路验证
 - [ ] 监控页流量与压测展示验证
-- [ ] 提示组件规范验证（BackendConfirm/AdminToast）
+- [ ] 提示组件规范验证（BackendConfirm/BackendToast）
 
 ## 修复任务（执行中动态追加）
 

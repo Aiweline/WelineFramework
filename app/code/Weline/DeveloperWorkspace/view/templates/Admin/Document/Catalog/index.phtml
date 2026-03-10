@@ -1063,8 +1063,8 @@ small.text-muted {
     }
     
     function showNotification(message, type) {
-        if (typeof AdminToast !== 'undefined') {
-            AdminToast[type] ? AdminToast[type](message) : AdminToast.info(message);
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast[type] ? BackendToast[type](message) : BackendToast.info(message);
         } else {
             showPageMessage(message, type);
         }
