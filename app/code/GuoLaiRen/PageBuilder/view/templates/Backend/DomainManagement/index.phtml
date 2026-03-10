@@ -1207,7 +1207,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 <label><lang>域名</lang></label>
                 <input type="text" id="pb-dm-https-domain" readonly class="pb-dm-input" style="background:var(--backend-color-bg-tertiary,#f1f3f5);">
             </div>
-            <div class="pb-dm-fg" style="margin-bottom:0;">
+            <div class="pb-dm-fg" style="margin-bottom:16px;">
                 <label><lang>证书提供商</lang></label>
                 <select id="pb-dm-https-provider" class="pb-dm-select" style="width:100%;">
                     <option value="letsencrypt"><lang>Let's Encrypt</lang></option>
@@ -1215,6 +1215,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 </select>
                 <small style="display:block;color:var(--backend-color-text-tertiary,#adb5bd);font-size:0.8rem;margin-top:4px;">
                     <lang>Let's Encrypt 免费通用；LiteSSL 适用于特定合规场景</lang>
+                </small>
+            </div>
+            <div class="pb-dm-fg" style="margin-bottom:0;">
+                <label><lang>验证方式</lang></label>
+                <select id="pb-dm-https-challenge" class="pb-dm-select" style="width:100%;">
+                    <option value="auto"><lang>自动（80 端口用 HTTP-01，否则用 DNS-01）</lang></option>
+                    <option value="http01"><lang>HTTP-01（需 80 端口可访问）</lang></option>
+                    <option value="dns01"><lang>DNS-01（添加 TXT 记录，需已关联 DNS 账户）</lang></option>
+                </select>
+                <small style="display:block;color:var(--backend-color-text-tertiary,#adb5bd);font-size:0.8rem;margin-top:4px;">
+                    <lang>HTTP-01 需域名 80 端口指向本机；DNS-01 通过 DNS 添加 TXT 记录，适合非 80 端口或 CDN 前置场景</lang>
                 </small>
             </div>
         </div>
@@ -3696,6 +3707,16 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             }
                             btn.innerHTML = '<i class="mdi mdi-check"></i> <?= __('已购买') ?>';
                             btn.disabled = true;
+                            /* 购买成功后自动拉取到本地 */
+                            postForm(API.pullDomains, {
+                                account_id: acctId,
+                                domains: [domain],
+                                auto_resolve: autoResolve
+                            }).then(function(pullRes) {
+                                if (pullRes && pullRes.success) {
+                                    loadDomainList();
+                                }
+                            }).catch(function() {});
                         } else {
                             setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
                             BackendToast.error(getPurchaseErrorMsg(res));
@@ -3763,6 +3784,19 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                                 BackendToast.warning(
                                     '<?= __('%{count} 个域名未成功创建生命周期订单，请确认 Weline_Saas 已启用，或前往「域名状态」页使用补建功能。') ?>'.replace('%{count}', lifecycleFails.length)
                                 );
+                            }
+                            /* 购买成功后自动拉取到本地 */
+                            var successfulDomains = results.filter(function(r) { return r && r.success && r.domain; }).map(function(r) { return r.domain; });
+                            if (successfulDomains.length > 0) {
+                                postForm(API.pullDomains, {
+                                    account_id: accountId,
+                                    domains: successfulDomains,
+                                    auto_resolve: autoResolve
+                                }).then(function(pullRes) {
+                                    if (pullRes && pullRes.success) {
+                                        loadDomainList();
+                                    }
+                                }).catch(function() {});
                             }
                         } else {
                             BackendToast.error(getPurchaseErrorMsg(res));
@@ -4114,12 +4148,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var modal = document.getElementById('pb-dm-https-request-modal');
         var domainInput = document.getElementById('pb-dm-https-domain');
         var providerSelect = document.getElementById('pb-dm-https-provider');
+        var challengeSelect = document.getElementById('pb-dm-https-challenge');
         var alertEl = document.getElementById('pb-dm-https-port-alert');
         var alertText = document.getElementById('pb-dm-https-port-alert-text');
         if (!modal || !domainInput || !providerSelect) return;
         httpsRequestPending = { poolId: poolId, domain: domain, btnEl: btnEl };
         domainInput.value = domain || '';
         providerSelect.value = 'letsencrypt';
+        if (challengeSelect) challengeSelect.value = 'auto';
         if (alertText) alertText.textContent = '<?= __('加载中...') ?>';
         modal.classList.add('pb-dm-form-modal--open');
         fetch(API.getServerPort).then(function(r) { return r.json(); }).then(function(res) {
@@ -4277,7 +4313,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function openHttpsSseModalAndStart(poolId, domain, provider, btnEl) {
         var sseModal = document.getElementById('pb-dm-https-sse-modal');
-        var challenge = (httpsRequestPort === 80) ? 'http01' : 'dns01';
+        var challengeEl = document.getElementById('pb-dm-https-challenge');
+        var strategyRaw = (challengeEl && challengeEl.value) ? challengeEl.value : 'auto';
+        var challenge = (strategyRaw === 'http01' || strategyRaw === 'dns01')
+            ? strategyRaw
+            : ((httpsRequestPort === 80) ? 'http01' : 'dns01');
         var streamUrl = API.requestHttpsStream + '?pool_id=' + encodeURIComponent(poolId) + '&provider=' + encodeURIComponent(provider) + '&domain=' + encodeURIComponent(domain) + '&challenge_strategy=' + encodeURIComponent(challenge);
         var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-https-sse-terminal'];
         var doneBtn = document.getElementById('pb-dm-https-sse-done-btn');
