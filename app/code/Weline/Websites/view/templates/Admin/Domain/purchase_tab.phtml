@@ -159,37 +159,18 @@ $providerOptionsStr = \implode(',', $providerOptions);
                                 <div id="purchase-dialog-dns-provider-area" style="display:none;">
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('DNS 服务商') ?></label>
-                                        <w:theme:search-select
-                                            id="purchase-dialog-dns-provider"
-                                            name="purchase_dialog_dns_provider"
-                                            options="<?= htmlspecialchars($providerOptionsStr) ?>"
-                                            placeholder="<?= __('请选择或搜索 DNS 服务商...') ?>"
-                                            clearable="true"
-                                            class="form-control"
-                                        />
+                                        <select class="form-select" id="purchase-dialog-dns-provider">
+                                            <option value=""><?= __('请选择 DNS 服务商') ?></option>
+                                            <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
+                                                <option value="<?= htmlspecialchars($providerCode) ?>"><?= htmlspecialchars($providerData['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('DNS 子账户') ?></label>
-                                        <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
-                                            <?php
-                                            $accountOptions = [];
-                                            foreach ($providerData['accounts'] as $providerAccount) {
-                                                $accountOptions[] = $providerAccount['id'] . ':' . $providerAccount['name'] . '（' . $providerAccount['registrar_name'] . '）';
-                                            }
-                                            $accountOptionsStr = \implode(',', $accountOptions);
-                                            ?>
-                                            <div class="purchase-provider-account-group" data-kind="dns" data-provider="<?= htmlspecialchars($providerCode) ?>" style="display:none;">
-                                                <w:theme:search-select
-                                                    id="purchase-dialog-dns-account-<?= htmlspecialchars($providerCode) ?>"
-                                                    name="purchase_dialog_dns_account_<?= htmlspecialchars($providerCode) ?>"
-                                                    options="<?= htmlspecialchars($accountOptionsStr) ?>"
-                                                    placeholder="<?= __('请选择或搜索 DNS 子账户...') ?>"
-                                                    clearable="true"
-                                                    class="form-control"
-                                                />
-                                            </div>
-                                        <?php endforeach; ?>
-                                        <div class="text-muted small" id="purchase-dialog-dns-account-empty"><?= __('请先选择 DNS 服务商') ?></div>
+                                        <select class="form-select" id="purchase-dialog-dns-account" disabled>
+                                            <option value=""><?= __('请先选择 DNS 服务商') ?></option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div class="mb-3" id="purchase-dialog-dns-ns-area" style="display:none;">
@@ -214,37 +195,18 @@ $providerOptionsStr = \implode(',', $providerOptions);
                                 <div id="purchase-dialog-cdn-provider-area" style="display:none;">
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('CDN 服务商') ?></label>
-                                        <w:theme:search-select
-                                            id="purchase-dialog-cdn-provider"
-                                            name="purchase_dialog_cdn_provider"
-                                            options="<?= htmlspecialchars($providerOptionsStr) ?>"
-                                            placeholder="<?= __('请选择或搜索 CDN 服务商...') ?>"
-                                            clearable="true"
-                                            class="form-control"
-                                        />
+                                        <select class="form-select" id="purchase-dialog-cdn-provider">
+                                            <option value=""><?= __('请选择 CDN 服务商') ?></option>
+                                            <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
+                                                <option value="<?= htmlspecialchars($providerCode) ?>"><?= htmlspecialchars($providerData['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                     <div class="mb-3">
                                         <label class="form-label"><?= __('CDN 子账户') ?></label>
-                                        <?php foreach ($providerAccounts as $providerCode => $providerData): ?>
-                                            <?php
-                                            $accountOptions = [];
-                                            foreach ($providerData['accounts'] as $providerAccount) {
-                                                $accountOptions[] = $providerAccount['id'] . ':' . $providerAccount['name'] . '（' . $providerAccount['registrar_name'] . '）';
-                                            }
-                                            $accountOptionsStr = \implode(',', $accountOptions);
-                                            ?>
-                                            <div class="purchase-provider-account-group" data-kind="cdn" data-provider="<?= htmlspecialchars($providerCode) ?>" style="display:none;">
-                                                <w:theme:search-select
-                                                    id="purchase-dialog-cdn-account-<?= htmlspecialchars($providerCode) ?>"
-                                                    name="purchase_dialog_cdn_account_<?= htmlspecialchars($providerCode) ?>"
-                                                    options="<?= htmlspecialchars($accountOptionsStr) ?>"
-                                                    placeholder="<?= __('请选择或搜索 CDN 子账户...') ?>"
-                                                    clearable="true"
-                                                    class="form-control"
-                                                />
-                                            </div>
-                                        <?php endforeach; ?>
-                                        <div class="text-muted small" id="purchase-dialog-cdn-account-empty"><?= __('请先选择 CDN 服务商') ?></div>
+                                        <select class="form-select" id="purchase-dialog-cdn-account" disabled>
+                                            <option value=""><?= __('请先选择 CDN 服务商') ?></option>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -291,7 +253,6 @@ var pendingPurchasePayload = null;
 var purchaseProviderAccounts = <?= json_encode($providerAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 var purchaseActiveAccounts = <?= json_encode($activeAccounts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
-// 存储检查结果
 var availabilityResults = [];
 
 function getPurchaseDialogCurrentAccount() {
@@ -301,48 +262,28 @@ function getPurchaseDialogCurrentAccount() {
     }) || null;
 }
 
-function getSearchSelectValue(id) {
-    var element = document.getElementById(id + '_value');
-    return element ? String(element.value || '') : '';
-}
-
-function setSearchSelectValue(id, value, label) {
-    var hidden = document.getElementById(id + '_value');
-    var display = document.getElementById(id + '_display');
-    var container = document.getElementById(id + '_container');
-    if (hidden) {
-        hidden.value = value || '';
-        hidden.dispatchEvent(new Event('change', { bubbles: true }));
+function populateAccountSelect(kind, providerCode) {
+    var accountSelect = document.getElementById('purchase-dialog-' + kind + '-account');
+    if (!accountSelect) return;
+    accountSelect.innerHTML = '';
+    if (!providerCode || !purchaseProviderAccounts[providerCode]) {
+        accountSelect.innerHTML = '<option value=""><?= __('请先选择服务商') ?></option>';
+        accountSelect.disabled = true;
+        return;
     }
-    if (display) {
-        display.textContent = label || '';
-    }
-    if (container) {
-        if (value) {
-            container.classList.add('has-value');
-        } else {
-            container.classList.remove('has-value');
-        }
-    }
-}
-
-function syncPurchaseProviderAccount(kind) {
-    var providerId = kind === 'dns' ? 'purchase-dialog-dns-provider' : 'purchase-dialog-cdn-provider';
-    var provider = getSearchSelectValue(providerId);
-    var currentAccount = getPurchaseDialogCurrentAccount();
-
-    document.querySelectorAll('.purchase-provider-account-group[data-kind="' + kind + '"]').forEach(function(group) {
-        group.style.display = group.getAttribute('data-provider') === provider ? '' : 'none';
+    accountSelect.disabled = false;
+    accountSelect.innerHTML = '<option value=""><?= __('请选择子账户') ?></option>';
+    var accounts = purchaseProviderAccounts[providerCode].accounts || [];
+    accounts.forEach(function(acc) {
+        var opt = document.createElement('option');
+        opt.value = acc.id;
+        opt.textContent = acc.name + '（' + acc.registrar_name + '）';
+        accountSelect.appendChild(opt);
     });
 
-    var emptyHint = document.getElementById('purchase-dialog-' + kind + '-account-empty');
-    if (emptyHint) {
-        emptyHint.style.display = provider ? 'none' : '';
-    }
-
-    if (provider && currentAccount && provider === String(currentAccount.registrar_code || '')) {
-        var selectId = 'purchase-dialog-' + kind + '-account-' + provider;
-        setSearchSelectValue(selectId, String(currentAccount.account_id || ''), (currentAccount.account_name || '') + '（' + (currentAccount.registrar_name || '') + '）');
+    var currentAccount = getPurchaseDialogCurrentAccount();
+    if (currentAccount && providerCode === String(currentAccount.registrar_code || '')) {
+        accountSelect.value = String(currentAccount.account_id || '');
     }
 }
 
@@ -353,10 +294,10 @@ function syncPurchaseDialogSections() {
     document.getElementById('purchase-dialog-dns-ns-area').style.display = dnsChoice === 'custom_nameservers' ? '' : 'none';
     document.getElementById('purchase-dialog-cdn-provider-area').style.display = cdnChoice === 'provider_account' ? '' : 'none';
     if (dnsChoice === 'provider_account') {
-        syncPurchaseProviderAccount('dns');
+        populateAccountSelect('dns', document.getElementById('purchase-dialog-dns-provider').value);
     }
     if (cdnChoice === 'provider_account') {
-        syncPurchaseProviderAccount('cdn');
+        populateAccountSelect('cdn', document.getElementById('purchase-dialog-cdn-provider').value);
     }
 }
 
@@ -373,12 +314,14 @@ function openPurchaseConfigModal(accountId, items) {
     document.getElementById('purchase-dialog-resolve-to-local').checked = !!(document.getElementById('purchase-auto-resolve') && document.getElementById('purchase-auto-resolve').checked);
     document.getElementById('purchase-dialog-subdomains').value = (document.getElementById('purchase-subdomains') || {}).value || '@, www';
     document.getElementById('purchase-dialog-start-lifecycle').checked = true;
-    setSearchSelectValue('purchase-dialog-dns-provider', currentAccount ? String(currentAccount.registrar_code || '') : '', currentAccount ? String(currentAccount.registrar_name || '') : '');
-    setSearchSelectValue('purchase-dialog-cdn-provider', currentAccount ? String(currentAccount.registrar_code || '') : '', currentAccount ? String(currentAccount.registrar_name || '') : '');
-    Object.keys(purchaseProviderAccounts || {}).forEach(function(providerCode) {
-        setSearchSelectValue('purchase-dialog-dns-account-' + providerCode, '', '');
-        setSearchSelectValue('purchase-dialog-cdn-account-' + providerCode, '', '');
-    });
+
+    var dnsProviderSelect = document.getElementById('purchase-dialog-dns-provider');
+    var cdnProviderSelect = document.getElementById('purchase-dialog-cdn-provider');
+    dnsProviderSelect.value = currentAccount ? String(currentAccount.registrar_code || '') : '';
+    cdnProviderSelect.value = currentAccount ? String(currentAccount.registrar_code || '') : '';
+    document.getElementById('purchase-dialog-dns-account').value = '';
+    document.getElementById('purchase-dialog-cdn-account').value = '';
+
     syncPurchaseDialogSections();
     purchaseDialogModal.show();
 }
@@ -386,10 +329,10 @@ function openPurchaseConfigModal(accountId, items) {
 function collectPurchaseDialogResult() {
     var dnsChoice = document.getElementById('purchase-dialog-dns-choice').value || 'follow_registrar';
     var cdnChoice = document.getElementById('purchase-dialog-cdn-choice').value || 'follow_registrar';
-    var dnsProvider = getSearchSelectValue('purchase-dialog-dns-provider');
-    var cdnProvider = getSearchSelectValue('purchase-dialog-cdn-provider');
-    var dnsAccountId = dnsProvider ? getSearchSelectValue('purchase-dialog-dns-account-' + dnsProvider) : '';
-    var cdnAccountId = cdnProvider ? getSearchSelectValue('purchase-dialog-cdn-account-' + cdnProvider) : '';
+    var dnsProvider = document.getElementById('purchase-dialog-dns-provider').value || '';
+    var cdnProvider = document.getElementById('purchase-dialog-cdn-provider').value || '';
+    var dnsAccountId = document.getElementById('purchase-dialog-dns-account').value || '';
+    var cdnAccountId = document.getElementById('purchase-dialog-cdn-account').value || '';
 
     if (dnsChoice === 'provider_account' && (!dnsProvider || !dnsAccountId)) {
         showToast('<?= __('请选择 DNS 服务商和对应子账户') ?>', 'warning');
@@ -623,6 +566,8 @@ function escapeHtml(text) {
 document.addEventListener('DOMContentLoaded', function() {
     var dnsChoice = document.getElementById('purchase-dialog-dns-choice');
     var cdnChoice = document.getElementById('purchase-dialog-cdn-choice');
+    var dnsProvider = document.getElementById('purchase-dialog-dns-provider');
+    var cdnProvider = document.getElementById('purchase-dialog-cdn-provider');
     var confirmBtn = document.getElementById('purchase-dialog-confirm-btn');
     if (dnsChoice) {
         dnsChoice.addEventListener('change', syncPurchaseDialogSections);
@@ -630,14 +575,16 @@ document.addEventListener('DOMContentLoaded', function() {
     if (cdnChoice) {
         cdnChoice.addEventListener('change', syncPurchaseDialogSections);
     }
-    ['purchase-dialog-dns-provider_value', 'purchase-dialog-cdn-provider_value'].forEach(function(id) {
-        var input = document.getElementById(id);
-        if (input) {
-            input.addEventListener('change', function() {
-                syncPurchaseProviderAccount(id.indexOf('dns') !== -1 ? 'dns' : 'cdn');
-            });
-        }
-    });
+    if (dnsProvider) {
+        dnsProvider.addEventListener('change', function() {
+            populateAccountSelect('dns', this.value);
+        });
+    }
+    if (cdnProvider) {
+        cdnProvider.addEventListener('change', function() {
+            populateAccountSelect('cdn', this.value);
+        });
+    }
     if (confirmBtn) {
         confirmBtn.addEventListener('click', function() {
             if (!pendingPurchasePayload) {

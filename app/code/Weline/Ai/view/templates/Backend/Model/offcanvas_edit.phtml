@@ -206,15 +206,16 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                         <?php else:
                                             $providerOptionsStr = $this->getData('providerOptionsStr') ?? '';
                                             $supplierValue = $model ? (string)$model->getData('supplier') : '';
+                                            $supplierPlaceholder = __('请选择或搜索供应商...');
                                         ?>
                                             <div class="d-flex gap-2 align-items-start">
                                                 <div class="flex-grow-1">
                                                     <w:theme:search-select
                                                         id="supplier"
                                                         name="supplier"
-                                                        options="<?= htmlspecialchars($providerOptionsStr) ?>"
-                                                        value="<?= htmlspecialchars($supplierValue) ?>"
-                                                        placeholder="<?= __('请选择或搜索供应商...') ?>"
+                                                        options="providerOptionsStr"
+                                                        value="supplierValue"
+                                                        placeholder="supplierPlaceholder"
                                                         required="true"
                                                         clearable="true"
                                                         class="form-control"
