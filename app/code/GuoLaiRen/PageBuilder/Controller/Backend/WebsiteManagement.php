@@ -20,6 +20,8 @@ use Weline\I18n\Model\Locals;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteLanguage;
+use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Model\DomainPool;
 
 /**
  * PageBuilder 网站管理控制器
@@ -196,6 +198,18 @@ class WebsiteManagement extends BaseController
                     throw new \Exception(__('网站保存失败，未能获取网站ID'));
                 }
                 
+                // 处理域名池选择（pool_id[] 数组）
+                $poolIds = $data['pool_id'] ?? [];
+                if (!is_array($poolIds)) {
+                    $poolIds = array_filter(explode(',', (string)$poolIds));
+                }
+                $poolIds = array_filter(array_map('intval', $poolIds));
+                
+                // 保存网站域名关联
+                if (!empty($poolIds)) {
+                    $this->saveWebsiteDomains((int)$websiteId, $poolIds);
+                }
+                
                 // 保存关联货币
                 $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
                 $websiteCurrency->setWebsiteCurrencies((int)$websiteId, $currencyCodes);
@@ -249,6 +263,7 @@ class WebsiteManagement extends BaseController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
+        $this->assign('selected_pool_ids', []);
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -359,6 +374,16 @@ class WebsiteManagement extends BaseController
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
                 
+                // 处理域名池选择（pool_id[] 数组）
+                $poolIds = $data['pool_id'] ?? [];
+                if (!is_array($poolIds)) {
+                    $poolIds = array_filter(explode(',', (string)$poolIds));
+                }
+                $poolIds = array_filter(array_map('intval', $poolIds));
+                
+                // 保存网站域名关联
+                $this->saveWebsiteDomains($postWebsiteId, $poolIds);
+                
                 // 保存关联货币
                 try {
                     $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
@@ -436,6 +461,22 @@ class WebsiteManagement extends BaseController
         $this->assign('website', $this->website->getData());
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
+        
+        // 获取网站已关联的域名（用于编辑时显示）
+        $selectedPoolIds = [];
+        try {
+            $websiteDomain = $this->objectManager->getInstance(WebsiteDomain::class);
+            $domains = $websiteDomain->getWebsiteDomains($websiteId);
+            foreach ($domains as $domain) {
+                $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
+                if ($poolId > 0) {
+                    $selectedPoolIds[] = $poolId;
+                }
+            }
+        } catch (\Exception $e) {
+            $selectedPoolIds = [];
+        }
+        $this->assign('selected_pool_ids', $selectedPoolIds);
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -582,5 +623,43 @@ class WebsiteManagement extends BaseController
         }
         
         return $locales ?: [];
+    }
+    
+    /**
+     * 保存站点的域名关联（先删后增）
+     * 
+     * @param int $websiteId 网站 ID
+     * @param array $poolIds 域名池 ID 数组
+     */
+    private function saveWebsiteDomains(int $websiteId, array $poolIds): void
+    {
+        /** @var WebsiteDomain $model */
+        $model = $this->objectManager->getInstance(WebsiteDomain::class);
+        $model->clearQuery()
+            ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
+            ->delete()
+            ->fetch();
+        
+        $isFirst = true;
+        foreach ($poolIds as $poolId) {
+            $poolId = (int)$poolId;
+            if ($poolId <= 0) {
+                continue;
+            }
+            
+            /** @var WebsiteDomain $newDomain */
+            $newDomain = $this->objectManager->getInstance(WebsiteDomain::class, [], false);
+            $newDomain->setWebsiteId($websiteId);
+            $newDomain->setPoolId($poolId);
+            $newDomain->syncFromPool();
+            $newDomain->setIsPrimary($isFirst);
+            $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
+            $newDomain->save();
+            $isFirst = false;
+        }
+        
+        // 同步域名池 site_created 状态（已建站的域名创建站点时不再展示）
+        $pool = $this->objectManager->getInstance(DomainPool::class);
+        $pool->syncSiteCreatedFromWebsiteDomainTable();
     }
 }
