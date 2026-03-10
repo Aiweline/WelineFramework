@@ -1493,11 +1493,14 @@ class Page extends BackendController
                 $deletedCount++;
             }
             
-            // 清除缓存
+            // 清除路由缓存，使新 URL 生效（UrlRewrite 无独立缓存类，清路由池即可）
             try {
-                $urlRewriteCache = new \Weline\UrlManager\Cache\UrlRewriteCache();
-                $urlRewriteCache->clear();
-            } catch (\Exception $e) {
+                $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+                $pool = $cacheManager->pool('router');
+                if (method_exists($pool, 'clear')) {
+                    $pool->clear();
+                }
+            } catch (\Throwable $e) {
                 // 忽略缓存清理错误
             }
             \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
@@ -1948,11 +1951,14 @@ class Page extends BackendController
                 ];
             }
             
-            // 清除 URL 重写缓存，确保新页面立即可访问
+            // 清除路由缓存，确保新页面立即可访问（UrlRewrite 无独立缓存类，清路由池即可）
             try {
-                $urlRewriteCache = new \Weline\UrlManager\Cache\UrlRewriteCache();
-                $urlRewriteCache->clear();
-            } catch (\Exception $e) {
+                $cacheManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
+                $pool = $cacheManager->pool('router');
+                if (method_exists($pool, 'clear')) {
+                    $pool->clear();
+                }
+            } catch (\Throwable $e) {
                 // 缓存清理失败不影响返回结果
             }
             
