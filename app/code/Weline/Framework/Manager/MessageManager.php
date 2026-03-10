@@ -36,18 +36,13 @@ class MessageManager
 
     /**
      * 获取当前请求用于存消息的 Session。
-     * 后台/rest_backend 请求使用 SessionFactory::createSession()，与后端控制器同源，避免 WLS 下消息丢失；
-     * 其他场景使用 ObjectManager 的 Session 实例。
+     * 统一使用 SessionFactory，确保与控制器、ACL 同源，避免 WLS/FPM 下读写不同实例导致消息残留。
      */
     public static function session(): Session
     {
-        $area = $_SERVER['WELINE_AREA'] ?? '';
-        if ($area === 'backend' || $area === 'rest_backend') {
-            $s = SessionFactory::getInstance()->createSession();
-            assert($s instanceof Session);
-            return $s;
-        }
-        return ObjectManager::getInstance(Session::class);
+        $s = SessionFactory::getInstance()->createSession();
+        assert($s instanceof Session);
+        return $s;
     }
 
     /**
@@ -261,13 +256,7 @@ class MessageManager
         foreach (self::keys as $key) {
             $session->delete($key);
         }
-        if (method_exists($session, 'save')) {
-            $session->save();
-        }
-        // 立即落盘：确保删除后的 Session 在响应发送前写入存储，避免跨请求残留
-        if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
-            \Weline\Framework\Session\Session::flushRequestSessions();
-        }
+        $session->save();
         return "<div class='system message'>{$content}</div>";
     }
 
