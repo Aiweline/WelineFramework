@@ -387,6 +387,137 @@ class DomainResolveService
     }
 
     /**
+     * 将本地 DNS 记录推送到指定供应商
+     * 用于 DNS 切换时，把当前记录自动同步到目标供应商
+     *
+     * @param Domain $domain 域名模型
+     * @param DomainRegistrarAccount $targetAccount 目标 DNS 管理账户
+     * @param array|null $records 记录数组，null 则从本地 DB 读取
+     * @return array{success: bool, added: int, failed: int, errors: array}
+     */
+    public function pushRecordsToProvider(Domain $domain, DomainRegistrarAccount $targetAccount, ?array $records = null): array
+    {
+        $adapter = $this->registrarResolver->getAdapter($targetAccount->getRegistrarCode());
+        if ($adapter === null || !$adapter->supportsDnsManagement()) {
+            return [
+                'success' => false,
+                'added' => 0,
+                'failed' => 0,
+                'errors' => [__('目标账户不支持 DNS 记录管理')],
+            ];
+        }
+
+        if ($records === null) {
+            $rows = $this->dnsRecordModel->getByDomainId($domain->getDomainId());
+            $records = [];
+            foreach ($rows as $row) {
+                $type = \strtoupper($row[DomainDnsRecord::schema_fields_RECORD_TYPE] ?? 'A');
+                if ($type === 'NS') {
+                    continue;
+                }
+                $value = $row[DomainDnsRecord::schema_fields_VALUE] ?? '';
+                if ($value === '') {
+                    continue;
+                }
+                $records[] = [
+                    'type' => $type,
+                    'host' => $row[DomainDnsRecord::schema_fields_HOST] ?? '@',
+                    'value' => $value,
+                    'ttl' => (int) ($row[DomainDnsRecord::schema_fields_TTL] ?? 600),
+                    'priority' => (int) ($row[DomainDnsRecord::schema_fields_PRIORITY] ?? 0),
+                ];
+            }
+        } else {
+            $records = \array_values(\array_filter($records, static function ($r) {
+                $type = \strtoupper($r['type'] ?? 'A');
+                $value = \trim($r['value'] ?? '');
+                return $type !== 'NS' && $value !== '';
+            }));
+        }
+
+        if ($records === []) {
+            return [
+                'success' => true,
+                'added' => 0,
+                'failed' => 0,
+                'errors' => [],
+            ];
+        }
+
+        $credentials = $targetAccount->getCredentials();
+        $result = $adapter->batchAddDnsRecords($domain->getDomain(), $records, $credentials);
+
+        return [
+            'success' => $result['success'] ?? false,
+            'added' => (int) ($result['added'] ?? 0),
+            'failed' => (int) ($result['failed'] ?? 0),
+            'errors' => (array) ($result['errors'] ?? []),
+        ];
+    }
+
+    /**
+     * 获取可用于推送到目标供应商的记录（本地 DB 或从当前供应商拉取）
+     *
+     * @return array 适配 addDnsRecord 格式的数组
+     */
+    public function getRecordsForPush(Domain $domain): array
+    {
+        $rows = $this->dnsRecordModel->getByDomainId($domain->getDomainId());
+        if ($rows !== []) {
+            $out = [];
+            foreach ($rows as $row) {
+                $type = \strtoupper($row[DomainDnsRecord::schema_fields_RECORD_TYPE] ?? 'A');
+                if ($type === 'NS') {
+                    continue;
+                }
+                $value = $row[DomainDnsRecord::schema_fields_VALUE] ?? '';
+                if ($value === '') {
+                    continue;
+                }
+                $out[] = [
+                    'type' => $type,
+                    'host' => $row[DomainDnsRecord::schema_fields_HOST] ?? '@',
+                    'value' => $value,
+                    'ttl' => (int) ($row[DomainDnsRecord::schema_fields_TTL] ?? 600),
+                    'priority' => (int) ($row[DomainDnsRecord::schema_fields_PRIORITY] ?? 0),
+                ];
+            }
+            return $out;
+        }
+
+        $dnsResult = $this->getDnsManagementAccount($domain, false);
+        if ($dnsResult['error'] !== '' || $dnsResult['adapter'] === null) {
+            return [];
+        }
+
+        try {
+            $remoteRecords = $dnsResult['adapter']->getDnsRecords($domain->getDomain(), $dnsResult['account']->getCredentials());
+        } catch (\Throwable $e) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($remoteRecords as $r) {
+            $type = \strtoupper($r['type'] ?? 'A');
+            if ($type === 'NS') {
+                continue;
+            }
+            $value = \trim($r['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+            $out[] = [
+                'type' => $type,
+                'host' => $r['host'] ?? '@',
+                'value' => $value,
+                'ttl' => (int) ($r['ttl'] ?? 600),
+                'priority' => (int) ($r['priority'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * 获取域名的 DNS 记录详情（包含解析状态）
      *
      * @param Domain $domain 域名模型

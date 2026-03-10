@@ -943,11 +943,16 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $challengeValue = (string)($params['challenge_value'] ?? '');
         $poolId = (int)($params['pool_id'] ?? 0);
         $domainId = (int)($params['domain_id'] ?? 0);
+        $onProgress = $params['_on_progress'] ?? null;
+        $onProgress = $onProgress instanceof \Closure ? $onProgress : null;
 
         if ($domain === '' || $challengeValue === '') {
             return ['success' => false, 'message' => (string)__('domain 和 challenge_value 不能为空'), 'record_id' => ''];
         }
 
+        if ($onProgress) {
+            $onProgress((string)__('解析根域名与 DNS 账户...'), ['step' => 'resolve']);
+        }
         $rootDomainModel = $this->resolveRootDomainForAcme($domain, $poolId, $domainId);
         if ($rootDomainModel === null) {
             return ['success' => false, 'message' => (string)__('无法解析域名的 DNS 管理账户。请确保域名已在系统中配置且已关联 DNS 账户。'), 'record_id' => ''];
@@ -958,6 +963,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $dnsResult = $resolveService->getDnsManagementAccount($rootDomainModel, false);
         if ($dnsResult['error'] !== '') {
             return ['success' => false, 'message' => $dnsResult['error'], 'record_id' => ''];
+        }
+        $providerName = $dnsResult['adapter']->getRegistrarName() ?? (string)__('DNS 供应商');
+        if ($onProgress) {
+            $onProgress((string)__('使用 %{1} 添加 TXT 记录', [$providerName]), ['step' => 'add', 'dns_provider' => $providerName]);
         }
 
         $rootDomain = \strtolower((string)$rootDomainModel->getDomain());
@@ -979,6 +988,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
         try {
             $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
             if ($result['success'] ?? false) {
+                if ($onProgress) {
+                    $onProgress((string)__('TXT 记录已在 %{1} 添加成功', [$providerName]), ['step' => 'add_done']);
+                }
                 return [
                     'success' => true,
                     'message' => (string)__('TXT 记录添加成功'),

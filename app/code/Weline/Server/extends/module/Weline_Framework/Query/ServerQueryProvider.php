@@ -137,6 +137,8 @@ class ServerQueryProvider implements QueryProviderInterface
         $challengeStrategy = (string) ($params['challenge_strategy'] ?? SslCertificateService::CHALLENGE_AUTO);
         $poolId = (int) ($params['pool_id'] ?? 0);
         $domainId = (int) ($params['domain_id'] ?? 0);
+        $onProgress = $params['_on_progress'] ?? null;
+        $onProgress = $onProgress instanceof \Closure ? $onProgress : null;
 
         $requestedDomain = $domain;
         if ($certType === 'wildcard' || $certStrategy === 'wildcard_prefer' || $certStrategy === 'both') {
@@ -155,7 +157,8 @@ class ServerQueryProvider implements QueryProviderInterface
             $provider,
             $challengeStrategy,
             $poolId,
-            $domainId
+            $domainId,
+            $onProgress
         );
 
         $cert = $result['cert'] ?? null;

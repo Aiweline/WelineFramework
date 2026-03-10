@@ -2080,7 +2080,9 @@ class Domain extends BackendController
     }
 
     /**
-     * AJAX: 获取可用的域名商账户列表（用于DNS切换）
+     * AJAX: 获取可用的域名商账户列表（用于DNS切换、购买弹窗等）
+     *
+     * 支持 GET 参数 active_only=1 仅返回活跃账号
      */
     public function getGetRegistrarAccounts(): string
     {
@@ -2088,6 +2090,9 @@ class Domain extends BackendController
             $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $accountModel->clearData(true);
             $accountModel->clearQuery();
+            if ($this->request->getGet('active_only', '0') === '1') {
+                $accountModel->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
+            }
             $allAccounts = $accountModel->select()->fetchArray();
 
             $result = [];
