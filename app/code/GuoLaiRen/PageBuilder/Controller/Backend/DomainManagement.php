@@ -1154,6 +1154,14 @@ class DomainManagement extends BaseController
             $domain = '';
         }
 
+        if ($poolId > 0 && $domain === '') {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->load($poolId);
+            if ($pool->getPoolId()) {
+                $domain = \trim((string) $pool->getDomain());
+            }
+        }
+
         $sse = new SseWriter();
         $sse->setRetryInterval(86400000);
         $sse->start();
