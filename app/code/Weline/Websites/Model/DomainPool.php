@@ -404,7 +404,9 @@ class DomainPool extends Model
         }
         
         // 2. 不在 website_domain 中的 pool 设为 site_created=0
+        // PostgreSQL 要求 UPDATE 必须有条件，所以添加一个永真条件
         $base = $this->clearQuery();
+        $base->where(self::schema_fields_ID, 0, '>');
         if (!empty($poolIds)) {
             $base->where(self::schema_fields_ID, $poolIds, 'NOT IN');
         }
