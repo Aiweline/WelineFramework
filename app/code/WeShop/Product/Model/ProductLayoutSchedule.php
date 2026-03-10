@@ -103,7 +103,7 @@ class ProductLayoutSchedule extends Model
         return $this->reset()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_END_TIME, $now, '<=')
-            ->where(self::schema_fields_END_TIME, null, 'IS NOT NULL')
+            ->whereRaw('"' . self::schema_fields_END_TIME . '" IS NOT NULL')
             ->order(self::schema_fields_END_TIME, 'ASC')
             ->select()
             ->fetchArray();
