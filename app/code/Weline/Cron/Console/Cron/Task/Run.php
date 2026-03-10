@@ -76,7 +76,10 @@ class Run implements CommandInterface
             $class = $task->getData(CronTask::schema_fields_CLASS);
             /**@var CronTaskInterface $instance */
             $instance = ObjectManager::getInstance($class);
-            $instance->execute();
+            $result = $instance->execute();
+            if ($result !== '' && $result !== null) {
+                $this->printing->success((string) $result);
+            }
             $task->setData($task::schema_fields_RUN_TIMES, (int)$task->getData($task::schema_fields_RUN_TIMES) + 1);
             # 设置程序运行数据
             $task->setData($task::schema_fields_BLOCK_TIME, 0);
