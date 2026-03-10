@@ -628,19 +628,21 @@ class DomainPool extends Model
     }
     
     /**
-     * 获取需要检测解析的域名列表
-     * 
+     * 获取需要检测解析的域名列表（仅未建站就绪的域名，就绪后不再检测）
+     *
      * @param int $limit
      * @return array
      */
     public function getDomainsNeedResolveCheck(int $limit = 100): array
     {
         $checkThreshold = \date('Y-m-d H:i:s', \strtotime('-10 minutes'));
-        
+        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
+
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where($siteReadyCondition, null, 'RAW')
             ->where(
-                "(" . self::schema_fields_RESOLVE_CHECKED_AT . " IS NULL OR " . 
+                "(" . self::schema_fields_RESOLVE_CHECKED_AT . " IS NULL OR " .
                 self::schema_fields_RESOLVE_CHECKED_AT . " < '{$checkThreshold}')",
                 null,
                 'RAW'
@@ -652,19 +654,20 @@ class DomainPool extends Model
     }
     
     /**
-     * 获取需要申请证书的域名列表
-     * 
-     * 条件：解析正常 + 指向本服务器 + 没有有效证书
-     * 
+     * 获取需要申请证书的域名列表（仅未建站就绪的域名）
+     *
+     * 条件：解析正常 + 指向本服务器 + 没有有效证书 + 未建站就绪
+     *
      * @param int $limit
      * @return array
      */
     public function getDomainsNeedCertificate(int $limit = 50): array
     {
-        $expiryThreshold = \date('Y-m-d', \strtotime('+30 days'));
-        
+        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
+
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where($siteReadyCondition, null, 'RAW')
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)

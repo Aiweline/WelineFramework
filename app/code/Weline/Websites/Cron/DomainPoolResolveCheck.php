@@ -31,7 +31,7 @@ class DomainPoolResolveCheck implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('定期检测域名池（可建站子域名）的 DNS 解析状态，验证是否指向本服务器，更新建站就绪状态');
+        return __('定期检测域名池中尚未建站就绪的域名的 DNS 解析状态，验证是否指向本服务器；全部就绪后标记可建站并不再检测');
     }
 
     public function cron_time(): string
