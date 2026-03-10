@@ -1429,7 +1429,10 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         return ensurePurchaseDialogLoaded().then(function() {
             return window.WelineDomainPurchaseDialog.open({
                 labels: getPurchaseDialogLabels(),
-                defaults: defaults || {}
+                defaults: defaults || {},
+                apiUrls: {
+                    getRegistrarAccounts: API.getRegistrarAccounts + (API.getRegistrarAccounts.indexOf('?') >= 0 ? '&' : '?') + 'active_only=1'
+                }
             });
         }).catch(function(error) {
             var detail = error && error.message ? (' ' + error.message) : '';
@@ -2282,6 +2285,9 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                                 <button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" onclick="showAddDnsRecordForm()">\
                                     <i class="mdi mdi-plus"></i> <?= __('添加记录') ?>\
                                 </button>\
+                                <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" onclick="showSwitchDnsProviderModal()" title="<?= __('切换DNS供应商并自动提交记录') ?>">\
+                                    <i class="mdi mdi-swap-horizontal"></i> <?= __('切换DNS供应商') ?>\
+                                </button>\
                             </div>\
                         </div>\
                         \
@@ -2479,6 +2485,97 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 AdminToast.error(res.msg || '<?= __('添加失败') ?>');
             }
         }).catch(function() {
+            AdminToast.error('<?= __('网络错误') ?>');
+        });
+    }
+
+    function showSwitchDnsProviderModal() {
+        if (!currentDnsManageDomainId) {
+            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            return;
+        }
+        var inner = '<div class="pb-dm-modal-overlay" id="pb-dm-switch-dns-provider-modal" onclick="if(event.target===this)closeSwitchDnsProviderModal()">' +
+            '<div class="pb-dm-modal pb-dm-modal-sm">' +
+            '<div class="pb-dm-modal-header">' +
+            '<h3><i class="mdi mdi-swap-horizontal"></i> <?= __('切换DNS供应商') ?></h3>' +
+            '<button class="pb-dm-modal-close" onclick="closeSwitchDnsProviderModal()">&times;</button>' +
+            '</div>' +
+            '<div class="pb-dm-modal-body">' +
+            '<div class="pb-dm-alert pb-dm-alert-info" style="margin-bottom:12px;">' +
+            '<i class="mdi mdi-information-outline"></i> ' +
+            '<?= __('切换后，当前域名的 Nameserver 将指向目标账户，并自动将现有 DNS 记录提交到该供应商。') ?>' +
+            '</div>' +
+            '<div class="pb-dm-form-group">' +
+            '<label><?= __('选择目标账户') ?></label>' +
+            '<select id="pb-dm-switch-dns-account">' +
+            '<option value=""><?= __('-- 加载中... --') ?></option>' +
+            '</select>' +
+            '</div>' +
+            '</div>' +
+            '<div class="pb-dm-modal-footer">' +
+            '<button class="pb-dm-btn pb-dm-btn-outline" onclick="closeSwitchDnsProviderModal()"><?= __('取消') ?></button>' +
+            '<button class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-switch-dns-submit" onclick="doSwitchDnsProvider()"><i class="mdi mdi-swap-horizontal"></i> <?= __('确认切换') ?></button>' +
+            '</div></div></div>';
+        var existing = document.getElementById('pb-dm-switch-dns-provider-modal');
+        if (existing) existing.remove();
+        document.body.insertAdjacentHTML('beforeend', inner);
+
+        var select = document.getElementById('pb-dm-switch-dns-account');
+        var url = API.getRegistrarAccounts + (API.getRegistrarAccounts.indexOf('?') >= 0 ? '&' : '?') + 'active_only=1';
+        var req = window.Weline.Api.get(url, { silent: true });
+        req.then(function(res) {
+            var res = (res && res.data) !== undefined ? res.data : res;
+            var accounts = (res.data && res.data.accounts) ? res.data.accounts : [];
+            if ((res.success || res.code === 200) && accounts.length > 0) {
+                var html = '<option value=""><?= __('-- 请选择目标账户 --') ?></option>';
+                accounts.forEach(function(acc) {
+                    html += '<option value="' + acc.id + '">' + escapeHtml(acc.name) + ' (' + escapeHtml(acc.registrar_name || acc.registrar_code) + ')</option>';
+                });
+                select.innerHTML = html;
+            } else {
+                select.innerHTML = '<option value=""><?= __('暂无可用账户') ?></option>';
+            }
+        }).catch(function() {
+            select.innerHTML = '<option value=""><?= __('加载失败') ?></option>';
+        });
+    }
+
+    function closeSwitchDnsProviderModal() {
+        var m = document.getElementById('pb-dm-switch-dns-provider-modal');
+        if (m) m.remove();
+    }
+
+    function doSwitchDnsProvider() {
+        var accountId = document.getElementById('pb-dm-switch-dns-account') && document.getElementById('pb-dm-switch-dns-account').value;
+        if (!accountId) {
+            AdminToast.warning('<?= __('请选择目标账户') ?>');
+            return;
+        }
+        var btn = document.getElementById('pb-dm-switch-dns-submit');
+        if (btn) btn.disabled = true;
+        AdminToast.info('<?= __('正在切换DNS并提交记录...') ?>');
+
+        postForm(API.batchSwitchToAccount, {
+            domain_ids: JSON.stringify([currentDnsManageDomainId]),
+            target_account_id: accountId
+        }).then(function(res) {
+            if (btn) btn.disabled = false;
+            closeSwitchDnsProviderModal();
+            if (res.success) {
+                var errs = (res.data && res.data.auto_sync_errors) ? res.data.auto_sync_errors : [];
+                if (errs.length > 0) {
+                    AdminToast.warning(res.msg + ' ' + errs[0]);
+                } else {
+                    AdminToast.success('<?= __('DNS 切换成功，记录已提交到目标供应商') ?>');
+                }
+                loadDnsRecords();
+                closeDnsManageModal();
+                loadDomainList();
+            } else {
+                AdminToast.error(res.msg || '<?= __('切换失败') ?>');
+            }
+        }).catch(function() {
+            if (btn) btn.disabled = false;
             AdminToast.error('<?= __('网络错误') ?>');
         });
     }
@@ -3641,8 +3738,12 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                         resolve_to_local: dialogResult.resolve_to_local || 'yes',
                         subdomains: dialogResult.subdomains || '@,www',
                         dns_choice: dialogResult.dns_choice || 'follow_registrar',
+                        dns_provider: dialogResult.dns_provider || '',
+                        dns_account_id: dialogResult.dns_account_id || '',
                         dns_nameservers: dialogResult.dns_nameservers || '',
                         cdn_choice: dialogResult.cdn_choice || 'follow_registrar',
+                        cdn_provider: dialogResult.cdn_provider || '',
+                        cdn_account_id: dialogResult.cdn_account_id || '',
                         start_lifecycle: dialogResult.start_lifecycle || '1'
                     }).then(function(res) {
                         if (res.success) {
@@ -3706,8 +3807,12 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                         resolve_to_local: dialogResult.resolve_to_local || 'yes',
                         subdomains: dialogResult.subdomains || '@,www',
                         dns_choice: dialogResult.dns_choice || 'follow_registrar',
+                        dns_provider: dialogResult.dns_provider || '',
+                        dns_account_id: dialogResult.dns_account_id || '',
                         dns_nameservers: dialogResult.dns_nameservers || '',
                         cdn_choice: dialogResult.cdn_choice || 'follow_registrar',
+                        cdn_provider: dialogResult.cdn_provider || '',
+                        cdn_account_id: dialogResult.cdn_account_id || '',
                         start_lifecycle: dialogResult.start_lifecycle || '1'
                     }).then(function(res) {
                         setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
