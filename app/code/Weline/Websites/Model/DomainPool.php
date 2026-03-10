@@ -628,6 +628,24 @@ class DomainPool extends Model
     }
     
     /**
+     * 获取所有未建站就绪的域名（用于全流程处理：DNS 检测 + HTTPS 申请）
+     *
+     * @param int $limit
+     * @return array
+     */
+    public function getDomainsNotSiteReady(int $limit = 100): array
+    {
+        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
+        return $this->clearQuery()
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->whereRaw($siteReadyCondition, 'AND')
+            ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
      * 获取需要检测解析的域名列表（仅未建站就绪的域名，就绪后不再检测）
      *
      * @param int $limit
