@@ -225,10 +225,10 @@ class QuickBuildAggregator
         ]);
     }
 
-    // ── CDN 相关查询 (CdnQueryProvider) ──
+    // ── CDN/DNS 相关（与域名购买/管理逻辑一致，数据来自 WebsitesQueryProvider） ──
 
     /**
-     * 查询可用的 CDN 适配器列表
+     * 查询可用的 CDN 适配器列表（Cdn 模块）
      */
     public function queryCdnAdapters(): array
     {
@@ -236,11 +236,41 @@ class QuickBuildAggregator
     }
 
     /**
-     * 查询 CDN 账户列表
+     * 查询 CDN 账户列表（Cdn 模块）
      */
     public function queryCdnAccounts(array $filter = []): array
     {
         return $this->queryService->execute('cdn', 'getAccounts', $filter);
+    }
+
+    /**
+     * 获取 CDN/DNS 服务商与账户（与域名购买逻辑一致，供 QuickBuild 向导使用）
+     * 返回 cdnAdapters + cdnAccounts，数据来源与 DomainManagement getDnsAccounts 一致。
+     */
+    public function queryDnsCdnForWizard(): array
+    {
+        $data = $this->queryService->execute('websites', 'getDnsCdnAccounts', ['status' => 'active']);
+        $cdnAccounts = $data['cdn_accounts'] ?? [];
+        $seen = [];
+        $adapters = [['code' => '', 'name' => __('跟随域名商（默认）')]];
+        foreach ($cdnAccounts as $acc) {
+            $code = (string) ($acc['registrar_code'] ?? '');
+            $name = (string) ($acc['registrar_name'] ?? $code);
+            if ($code !== '' && !isset($seen[$code])) {
+                $seen[$code] = true;
+                $adapters[] = ['code' => $code, 'name' => $name];
+            }
+        }
+        $accounts = [];
+        foreach ($cdnAccounts as $acc) {
+            $accounts[] = [
+                'account_id' => (int) ($acc['account_id'] ?? 0),
+                'name'       => (string) ($acc['name'] ?? ''),
+                'adapter'    => (string) ($acc['registrar_code'] ?? ''),
+                'is_default' => false,
+            ];
+        }
+        return ['cdnAdapters' => $adapters, 'cdnAccounts' => $accounts];
     }
 
     /**
