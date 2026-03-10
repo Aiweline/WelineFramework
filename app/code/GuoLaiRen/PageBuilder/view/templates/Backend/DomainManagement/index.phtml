@@ -1250,7 +1250,6 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 (function() {
     'use strict';
 
-    var purchaseDialogLoadingPromise = null;
 
     var API = {
         getRegistrars:    '<backend-url>pagebuilder/backend/domain-management/get-registrars</backend-url>',
@@ -1330,29 +1329,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (window.WelineDomainPurchaseDialog) {
             return Promise.resolve(true);
         }
-        if (purchaseDialogLoadingPromise) {
-            return purchaseDialogLoadingPromise;
-        }
-        purchaseDialogLoadingPromise = new Promise(function(resolve, reject) {
-            var waited = 0;
-            var maxWait = 3000;
-            var step = 50;
-            function check() {
-                if (window.WelineDomainPurchaseDialog) {
-                    resolve(true);
-                    return;
-                }
-                if (waited >= maxWait) {
-                    purchaseDialogLoadingPromise = null;
-                    reject(new Error('dialog-script-load-failed:<?= __('购买弹窗脚本未就绪，请刷新页面后重试') ?>'));
-                    return;
-                }
-                waited += step;
-                setTimeout(check, step);
-            }
-            check();
-        });
-        return purchaseDialogLoadingPromise;
+        return Promise.reject(new Error('<?= __('购买弹窗脚本未就绪，请刷新页面后重试') ?>'));
     }
 
     function getPurchaseDialogLabels() {
