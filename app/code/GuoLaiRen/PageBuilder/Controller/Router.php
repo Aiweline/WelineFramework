@@ -67,10 +67,10 @@ class Router implements RouterInterface
             return;
         }
         
-        // 5. 检查handle是否存在（使用缓存避免重复查询）
-        // 检查是否为预览模式
+        // 5. 检查当前站点下 handle 是否存在（同一站点内唯一）
+        $websiteId = self::getCurrentWebsiteId();
         $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
-        if (!self::handleExists($handle, $isPreview)) {
+        if (!self::handleExists($handle, $websiteId, $isPreview)) {
             return;
         }
         
@@ -150,18 +150,17 @@ class Router implements RouterInterface
     }
     
     /**
-     * 检查handle是否存在于数据库
-     * 
+     * 检查当前站点下 handle 是否存在于数据库（同一站点内 handle 唯一，无站点时 website_id=0）
+     *
      * @param string $handle 页面句柄
+     * @param int $websiteId 站点ID，无站点时为 0
      * @param bool $isPreview 是否为预览模式
      * @return bool
      */
-    private static function handleExists(string $handle, bool $isPreview = false): bool
+    private static function handleExists(string $handle, int $websiteId = 0, bool $isPreview = false): bool
     {
-        // 预览模式下，使用不同的缓存键，避免与正常模式冲突
-        $cacheKey = $handle . ($isPreview ? '_preview' : '');
+        $cacheKey = $websiteId . '_' . $handle . ($isPreview ? '_preview' : '');
         
-        // 使用静态缓存避免重复查询
         if (isset(self::$handleCache[$cacheKey])) {
             return self::$handleCache[$cacheKey];
         }
@@ -171,24 +170,23 @@ class Router implements RouterInterface
             $pageModel = ObjectManager::getInstance(Page::class);
             $page = clone $pageModel;
             
-            // 预览模式下，允许访问所有状态的页面
             if ($isPreview) {
                 $page->clear()
+                    ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
                     ->where(Page::schema_fields_HANDLE, $handle)
                     ->find()
                     ->fetch();
             } else {
-                // 非预览模式：允许访问已发布的页面，或者草稿状态的测试页面
-                // 先查询已发布的页面
                 $page->clear()
+                    ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
                     ->where(Page::schema_fields_HANDLE, $handle)
                     ->where(Page::schema_fields_STATUS, Page::STATUS_PUBLISHED)
                     ->find()
                     ->fetch();
                 
-                // 如果没找到已发布的页面，再查询测试页面（允许草稿状态）
                 if (!$page->getId()) {
                     $page->clear()
+                        ->where(Page::schema_fields_WEBSITE_ID, $websiteId)
                         ->where(Page::schema_fields_HANDLE, $handle)
                         ->where(Page::schema_fields_TYPE, 'test_page')
                         ->find()
@@ -197,13 +195,9 @@ class Router implements RouterInterface
             }
             
             $exists = (bool)$page->getId();
-            
-            // 缓存结果
             self::$handleCache[$cacheKey] = $exists;
-            
             return $exists;
         } catch (\Exception $e) {
-            // 如果查询失败，记录日志并返回false
             if (defined('DEV') && DEV) {
                 w_log_error('PageBuilder Router Error: ' . $e->getMessage());
             }
