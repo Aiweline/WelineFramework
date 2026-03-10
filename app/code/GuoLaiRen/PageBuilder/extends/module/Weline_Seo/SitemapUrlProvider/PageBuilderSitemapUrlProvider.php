@@ -84,7 +84,7 @@ class PageBuilderSitemapUrlProvider extends AbstractSitemapUrlProvider
             return [];
         }
 
-        $baseUrl = rtrim($website['url'] ?? '', '/');
+        $baseUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeUrlDefaultPort(rtrim($website['url'] ?? '', '/'));
         
         // 获取该站点的所有已发布页面
         $pages = $this->pageModel->reset()
