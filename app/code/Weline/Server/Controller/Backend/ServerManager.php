@@ -136,6 +136,7 @@ class ServerManager extends BackendController
         $apiActions = [
             'status',
             'session-list',
+            'session-detail',
             'session-destroy',
             'session-persist',
             'session-gc',
@@ -252,6 +253,24 @@ class ServerManager extends BackendController
             'success' => true,
             'message' => (string)__('Session 列表加载完成'),
             'data' => $this->sharedStateAdminService->listSessions([], $limit),
+        ];
+    }
+
+    public function getSessionDetail(): array
+    {
+        $sessionId = (string)$this->request->getGet('session_id', '');
+        if ($sessionId === '') {
+            return [
+                'success' => false,
+                'message' => (string)__('缺少 Session ID 参数'),
+                'data' => [],
+            ];
+        }
+        $rows = $this->sharedStateAdminService->getSessionDetail($sessionId);
+        return [
+            'success' => true,
+            'message' => (string)__('Session 详情加载完成'),
+            'data' => $rows,
         ];
     }
 
