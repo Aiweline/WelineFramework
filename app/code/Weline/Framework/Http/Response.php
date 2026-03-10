@@ -145,6 +145,17 @@ class Response implements ResponseInterface
     }
 
     /**
+     * 终止响应前落盘 Session，确保 MessageManager 等写入的消息在下次请求可见，
+     * 且避免响应发送后 Session 未落盘导致消息残留。
+     */
+    private function flushSessionBeforeTerminate(): void
+    {
+        if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
+            \Weline\Framework\Session\Session::flushRequestSessions();
+        }
+    }
+
+    /**
      * 无路由处理
      * 
      * 始终抛出 NoRouterException，由 Runtime 层统一处理。
@@ -172,7 +183,10 @@ class Response implements ResponseInterface
         $eventData = ['code' => $code, 'msg' => $msg];
         $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before', $eventData);
         $statusCode = \is_int($code) ? $code : (int) $code;
-        
+
+        // 终止前落盘 Session（含 MessageManager 消息），避免跨请求残留
+        $this->flushSessionBeforeTerminate();
+
         // 始终抛出异常，由 Runtime 层统一处理
         throw new NoRouterException($statusCode, $msg);
     }
@@ -217,7 +231,10 @@ class Response implements ResponseInterface
         $this->getEvenManager()->dispatch('Framework_Http::response_redirect_before', $data);
         $url = $data->getData('url');
         $code = (int) $data->getData('code');
-        
+
+        // 重定向前落盘 Session（含 MessageManager 消息），确保下次请求能读到
+        $this->flushSessionBeforeTerminate();
+
         // 始终抛出异常，由 Runtime 层统一处理
         throw new RedirectException($url, $code);
     }
@@ -262,10 +279,13 @@ class Response implements ResponseInterface
     /**
      * 发送响应并终止
      *
+     * 终止前落盘 Session，避免消息等数据跨请求残留。
+     *
      * @throws ResponseTerminateException
      */
     public function sendResponse(): never
     {
+        $this->flushSessionBeforeTerminate();
         throw new ResponseTerminateException(
             $this->getHeaderCollector()->getStatusCode(),
             $this->body,
