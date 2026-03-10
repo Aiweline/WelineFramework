@@ -786,6 +786,9 @@ class Website extends BackendController
             $newDomain->save();
             $isFirst = false;
         }
+        // 同步域名池 site_created 状态（已建站的域名创建站点时不再展示）
+        $pool = ObjectManager::getInstance(DomainPool::class);
+        $pool->syncSiteCreatedFromWebsiteDomainTable();
     }
 
     /**

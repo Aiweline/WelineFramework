@@ -45,6 +45,7 @@ class SseTerminal implements TaglibInterface
             'auto-scroll' => false,  // 是否自动滚动到底部，默认 true
             'show-timestamp' => false, // 是否显示时间戳，默认 true
             'show-toolbar' => false, // 是否显示工具栏，默认 true
+            'allow-html' => false,   // 是否将消息按 HTML 渲染（仅限可信后端内容，有 XSS 风险）
             'class' => false,        // 额外CSS类
             'style' => false,        // 内联样式
         ];
@@ -64,6 +65,7 @@ class SseTerminal implements TaglibInterface
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
+            $allowHtml = isset($attributes['allow-html']) && \in_array(\strtolower((string) $attributes['allow-html']), ['true', '1', 'yes'], true);
             $class = $attributes['class'] ?? '';
             $style = $attributes['style'] ?? '';
 
@@ -172,6 +174,7 @@ class SseTerminal implements TaglibInterface
             $html[] = 'var commonEvents = ' . \json_encode($eventsList) . ';';
             $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
             $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
+            $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
 
             $html[] = <<<JS
 
@@ -224,7 +227,11 @@ function log(text, type) {
     
     var textEl = document.createElement('span');
     textEl.className = 'weline-sse-terminal-text';
-    textEl.textContent = text;
+    if (allowHtml && typeof text === 'string' && text.indexOf('<') >= 0) {
+        textEl.innerHTML = text;
+    } else {
+        textEl.textContent = text;
+    }
     line.appendChild(textEl);
     
     content.appendChild(line);
@@ -443,6 +450,7 @@ JS;
     <li><code>auto-scroll</code>：是否自动滚动到底部，默认 true</li>
     <li><code>show-timestamp</code>：是否显示时间戳，默认 true</li>
     <li><code>show-toolbar</code>：是否显示工具栏，默认 true</li>
+    <li><code>allow-html</code>：是否按 HTML 渲染消息（默认 false，设为 true 时支持富文本，仅限可信后端内容）</li>
     <li><code>class</code>：额外CSS类</li>
     <li><code>style</code>：内联样式</li>
 </ul>
