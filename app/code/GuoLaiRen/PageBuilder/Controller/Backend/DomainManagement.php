@@ -1158,15 +1158,15 @@ class DomainManagement extends BaseController
      */
     public function getRequestHttpsStream(): void
     {
-        $poolId = (int) $this->request->get('pool_id', 0);
-        $providerRaw = $this->request->get('provider', '');
+        $poolId = (int) $this->request->getGet('pool_id', 0);
+        $providerRaw = $this->request->getGet('provider', '');
         $provider = \is_array($providerRaw)
             ? (string) ($providerRaw[0] ?? 'letsencrypt')
             : (string) ($providerRaw ?: 'letsencrypt');
         if ($provider === '' || $provider === 'Array') {
             $provider = 'letsencrypt';
         }
-        $domainRaw = $this->request->get('domain', '');
+        $domainRaw = $this->request->getGet('domain', '');
         $domain = \is_array($domainRaw)
             ? \trim((string) ($domainRaw[0] ?? ''))
             : \trim((string) $domainRaw);
