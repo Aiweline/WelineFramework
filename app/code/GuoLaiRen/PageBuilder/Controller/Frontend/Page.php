@@ -203,24 +203,11 @@ class Page extends FrontendController
             
             $page->find()->fetch();
 
-            // 如果没找到，尝试回退查找：
-            // 1. 如果当前 website_id != 0，尝试 website_id = 0（全局/默认站点）
-            // 2. 如果还是没找到，尝试只按 handle 查找（兼容旧数据或配置错误情况）
+            // 如果没找到，尝试 website_id = 0（全局/默认站点，保持之前使用方式）
             if (!$page->getId() && $websiteId !== 0) {
                 $page = clone $this->pageModel;
                 $page->clear()
                     ->where(PageModel::schema_fields_WEBSITE_ID, 0)
-                    ->where(PageModel::schema_fields_HANDLE, $handle);
-                if (!$isPreview) {
-                    $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
-                }
-                $page->find()->fetch();
-            }
-            
-            if (!$page->getId()) {
-                // 最后尝试：只按 handle 查找，取第一个匹配的已发布页面
-                $page = clone $this->pageModel;
-                $page->clear()
                     ->where(PageModel::schema_fields_HANDLE, $handle);
                 if (!$isPreview) {
                     $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
