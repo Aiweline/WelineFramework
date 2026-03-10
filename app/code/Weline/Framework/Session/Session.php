@@ -6,7 +6,6 @@ namespace Weline\Framework\Session;
 
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
-use Weline\Framework\Session\Strategy\WlsStrategy;
 
 /**
  * Session 实现
@@ -185,8 +184,6 @@ class Session implements SessionInterface
         
         $this->data[$key] = $value;
         $this->dirty = true;
-
-        $this->autoPersist();
     }
 
     /**
@@ -209,7 +206,6 @@ class Session implements SessionInterface
         if (\array_key_exists($key, $this->data)) {
             unset($this->data[$key]);
             $this->dirty = true;
-            $this->autoPersist();
         }
     }
 
@@ -232,7 +228,6 @@ class Session implements SessionInterface
         
         $this->data = [];
         $this->dirty = true;
-        $this->autoPersist();
     }
 
     // ==================== 辅助方法 ====================
@@ -248,26 +243,9 @@ class Session implements SessionInterface
     }
 
     /**
-     * 自动持久化（WLS 模式下每次写入都持久化）
-     */
-    private function autoPersist(): void
-    {
-        if ($this->dirty && $this->sessionId !== '' && $this->shouldAutoPersist()) {
-            $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
-            $this->dirty = false;
-        }
-    }
-
-    /**
-     * WLS 下延迟到请求结束统一保存，避免一个请求内多次 set/delete 触发多次 RPC。
-     */
-    private function shouldAutoPersist(): bool
-    {
-        return !($this->strategy instanceof WlsStrategy);
-    }
-
-    /**
-     * 手动持久化（用于批量操作后统一保存）
+     * 落盘：将 dirty 数据写入 Storage。
+     * 由 Response 终止时（sendResponse/redirect/noRouter）或 shutdown 统一调用，不在每次 set/delete 时调用。
+     * 持久化时机由 Storage 驱动决定，WLS session 服务周期性落盘。
      */
     public function save(): void
     {
@@ -366,7 +344,6 @@ class Session implements SessionInterface
         $existing = $this->data[$name] ?? '';
         $this->data[$name] = $existing . $value;
         $this->dirty = true;
-        $this->autoPersist();
         
         return $this;
     }
@@ -381,6 +358,5 @@ class Session implements SessionInterface
         $existing = $this->data[$key] ?? '';
         $this->data[$key] = $existing . $value;
         $this->dirty = true;
-        $this->autoPersist();
     }
 }
