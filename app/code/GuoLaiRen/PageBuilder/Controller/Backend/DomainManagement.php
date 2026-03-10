@@ -937,6 +937,7 @@ class DomainManagement extends BaseController
                     'https_status' => $domain[DomainPool::schema_fields_HTTPS_STATUS] ?? 'none',
                     'https_expires_at' => $domain[DomainPool::schema_fields_HTTPS_EXPIRES_AT] ?? '',
                     'site_ready' => (int) ($domain[DomainPool::schema_fields_SITE_READY] ?? 0),
+                    'site_created' => (int) ($domain[DomainPool::schema_fields_SITE_CREATED] ?? 0),
                     'description' => $domain[DomainPool::schema_fields_DESCRIPTION] ?? '',
                     'allocated_at' => $domain[DomainPool::schema_fields_CREATED_AT] ?? $domain[DomainPool::schema_fields_UPDATED_AT] ?? '',
                 ];

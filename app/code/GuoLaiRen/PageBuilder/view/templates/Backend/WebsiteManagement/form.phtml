@@ -15,6 +15,7 @@ $timezones = $timezones ?? [];
 $currencies = $currencies ?? [];
 $selected_currencies = $selected_currencies ?? [];
 $selected_languages = $selected_languages ?? [];
+$selected_pool_ids = $selected_pool_ids ?? [];
 $domain_options = $domain_options ?? [];
 $isEdit = isset($website['website_id']) && !empty($website['website_id']);
 ?>
@@ -87,30 +88,35 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                         <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
                     <?php endif; ?>
 
-                    <!-- 域名选择器（新增时显示，使用 Taglib 组件，支持单选/多选） -->
-                    <?php if (!$isEdit): ?>
+                    <!-- 域名选择器（使用 Taglib 组件，支持多选） -->
                     <div class="col-12 mb-3">
                         <label class="form-label">
                             <i class="mdi mdi-domain me-1"></i><lang>选择域名</lang>
                         </label>
+                        <?php
+                        // 计算已选中的域名值和显示文本
+                        $selectedPoolIdsStr = implode(',', $selected_pool_ids);
+                        $displayText = '';
+                        if ($isEdit && !empty($selected_pool_ids)) {
+                            $displayText = __('已选择 %{1} 个域名', [count($selected_pool_ids)]);
+                        } else {
+                            $displayText = __('点击选择域名（可多选）');
+                        }
+                        ?>
                         <w:websites:domain:select
                             id="pagebuilder_domain_select"
                             name="pool_id[]"
-                            value="''"
-                            display="'点击选择域名（单选或多选）'"
+                            value="'<?= htmlspecialchars($selectedPoolIdsStr) ?>'"
+                            display="'<?= htmlspecialchars($displayText) ?>'"
                             class="w-100"
                             multiple="true"
                             value-type="pool_id"
-                            site-ready-only="true"
-                            auto-fill-code="code"
-                            auto-fill-url="url"
-                            auto-fill-name="name"
+                            site-ready-only="false"
                         />
                         <div class="form-text-hint">
-                            <lang>仅显示可建站域名（site_ready=1），并展示解析/HTTPS状态；选择后自动填充网站代码、URL和名称</lang>
+                            <lang>显示所有域名（包括已建站），选择后可修改站点的域名关联</lang>
                         </div>
                     </div>
-                    <?php endif; ?>
 
                     <div class="col-4 mb-3">
                         <label for="name" class="form-label"><lang>网站名称</lang></label>
