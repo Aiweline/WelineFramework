@@ -86,7 +86,7 @@ $statusOptions = $this->getData('statusOptions') ?: [];
 </w:backend:card>
 
 <script type="module">
-import { AdminToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
+import { BackendToast } from '<?= $this->getStaticUrl('Weline_Admin/js/admin-toast.js') ?>';
 
 document.querySelectorAll('.btn-delete').forEach(btn => {
     btn.addEventListener('click', async function() {
@@ -102,13 +102,13 @@ document.querySelectorAll('.btn-delete').forEach(btn => {
             var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
-                AdminToast.success(data.msg);
+                BackendToast.success(data.msg);
                 this.closest('tr').remove();
             } else {
-                AdminToast.error(data.msg);
+                BackendToast.error(data.msg);
             }
         } catch (e) {
-            AdminToast.error('<?= __('操作失败') ?>');
+            BackendToast.error('<?= __('操作失败') ?>');
         }
     });
 });
@@ -123,13 +123,13 @@ document.querySelectorAll('.btn-set-default').forEach(btn => {
             var data = (res && res.data) !== undefined ? res.data : res;
             
             if (data.code === 200) {
-                AdminToast.success(data.msg);
+                BackendToast.success(data.msg);
                 location.reload();
             } else {
-                AdminToast.error(data.msg);
+                BackendToast.error(data.msg);
             }
         } catch (e) {
-            AdminToast.error('<?= __('操作失败') ?>');
+            BackendToast.error('<?= __('操作失败') ?>');
         }
     });
 });

@@ -103,16 +103,16 @@
     }
 
     function showError(msg) {
-        if (window.AdminToast) {
-            window.AdminToast.error(msg);
+        if (window.BackendToast) {
+            window.BackendToast.error(msg);
         } else {
             console.error('[MediaManager]', msg);
         }
     }
 
     function showSuccess(msg) {
-        if (window.AdminToast) {
-            window.AdminToast.success(msg);
+        if (window.BackendToast) {
+            window.BackendToast.success(msg);
         } else {
             console.log('[MediaManager]', msg);
         }

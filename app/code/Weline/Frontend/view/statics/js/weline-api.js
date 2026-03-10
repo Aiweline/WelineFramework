@@ -426,7 +426,7 @@
                 }
                 return;
             }
-            const Toast = window.BackendToast || window.AdminToast || window.FrontendToast;
+            const Toast = window.BackendToast || window.BackendToast || window.FrontendToast;
             if (typeof Toast === 'object' && typeof Toast.error === 'function') {
                 let msg = error.response?.data?.msg || (typeof error.response?.data === 'object' && error.response?.data?.message) || error.message;
                 if (!msg) msg = status === 404 ? '接口或页面不存在，请刷新重试' : status >= 500 ? '服务异常，请稍后重试' : '请求失败';

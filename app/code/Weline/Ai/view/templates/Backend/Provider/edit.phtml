@@ -336,16 +336,16 @@
                 
                 if (!providerCode) {
                     activateCheckbox.checked = false;
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.warning('<?= __('请先选择供应商') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.warning('<?= __('请先选择供应商') ?>');
                     }
                     return;
                 }
                 
                 if (!apiKey) {
                     activateCheckbox.checked = false;
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.warning('<?= __('请先填写API密钥') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.warning('<?= __('请先填写API密钥') ?>');
                     }
                     return;
                 }
@@ -376,15 +376,15 @@
                 submitBtn.disabled = false;
                 
                 if (data.success) {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success(data.message);
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success(data.message);
                     }
                     setTimeout(function() {
                         window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
                     }, 1500);
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(data.message || '<?= __('保存失败') ?>');
                     }
                 }
             })
@@ -392,8 +392,8 @@
                 submitBtn.innerHTML = originalText;
                 submitBtn.disabled = false;
                 console.error('Error:', error);
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error('<?= __('保存失败，请重试') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error('<?= __('保存失败，请重试') ?>');
                 }
             });
         },
@@ -413,13 +413,13 @@
                 btn.disabled = false;
                 
                 if (data.success) {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success(data.message || '<?= __('连接测试成功') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success(data.message || '<?= __('连接测试成功') ?>');
                     }
                     setTimeout(function() { window.location.reload(); }, 1500);
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __('连接测试失败') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(data.message || '<?= __('连接测试失败') ?>');
                     }
                 }
             })
@@ -427,8 +427,8 @@
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
                 console.error('Error:', error);
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error('<?= __('测试失败，请重试') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error('<?= __('测试失败，请重试') ?>');
                 }
             });
         }

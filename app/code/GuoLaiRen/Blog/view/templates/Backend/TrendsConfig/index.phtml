@@ -208,15 +208,15 @@ $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             var msg = data.success ? (data.message || '') : (data.message || 'Error');
-            if (typeof AdminToast !== 'undefined') {
-                if (data.success) AdminToast.success(msg); else AdminToast.error(msg);
+            if (typeof BackendToast !== 'undefined') {
+                if (data.success) BackendToast.success(msg); else BackendToast.error(msg);
             } else {
                 var el = document.getElementById('trends-config-msg');
                 if (el) { el.textContent = msg; el.className = 'alert alert-' + (data.success ? 'success' : 'danger'); el.style.display = 'block'; }
             }
         }).catch(function() {
             var errMsg = '<?= __('保存失败，请重试') ?>';
-            if (typeof AdminToast !== 'undefined') AdminToast.error(errMsg);
+            if (typeof BackendToast !== 'undefined') BackendToast.error(errMsg);
             else {
                 var el = document.getElementById('trends-config-msg');
                 if (el) { el.textContent = errMsg; el.className = 'alert alert-danger'; el.style.display = 'block'; }

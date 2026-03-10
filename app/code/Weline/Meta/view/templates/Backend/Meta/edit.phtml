@@ -236,8 +236,8 @@ $backUrl = $this->getBackendUrl('meta/backend/meta');
             }
             textarea.value = JSON.stringify(JSON.parse(value), null, 2);
         } catch (e) {
-            if (window.AdminToast) {
-                AdminToast.error('JSON 解析失败：' + e.message);
+            if (window.BackendToast) {
+                BackendToast.error('JSON 解析失败：' + e.message);
             } else if (window.Toast) {
                 Toast.error('JSON 解析失败：' + e.message);
             }
@@ -258,14 +258,14 @@ $backUrl = $this->getBackendUrl('meta/backend/meta');
     document.getElementById('validateMetaJson').addEventListener('click', function() {
         try {
             JSON.parse(metaJsonTextarea.value);
-            if (window.AdminToast) {
-                AdminToast.success('<?= __('JSON 校验通过') ?>');
+            if (window.BackendToast) {
+                BackendToast.success('<?= __('JSON 校验通过') ?>');
             } else if (window.Toast) {
                 Toast.success('JSON 校验通过');
             }
         } catch (e) {
-            if (window.AdminToast) {
-                AdminToast.error(e.message);
+            if (window.BackendToast) {
+                BackendToast.error(e.message);
             } else if (window.Toast) {
                 Toast.error(e.message);
             }

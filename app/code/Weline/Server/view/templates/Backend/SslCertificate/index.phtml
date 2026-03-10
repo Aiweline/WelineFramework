@@ -315,17 +315,17 @@ async function toggleHttps(domain, enabled) {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             if (enabled) {
-                AdminToast.warning('<?= __('请重启服务器使配置生效') ?>');
+                BackendToast.warning('<?= __('请重启服务器使配置生效') ?>');
             }
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
             // 恢复开关状态
             document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, '')).checked = !enabled;
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 
@@ -338,7 +338,7 @@ async function requestCertificate(domain) {
     
     const provider = getSelectedProvider();
     
-    AdminToast.info('<?= __('正在申请证书，请稍候...') ?>');
+    BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
     
     try {
         const response = await fetch(baseUrl + 'request', {
@@ -349,13 +349,13 @@ async function requestCertificate(domain) {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             setTimeout(() => location.reload(), 1500);
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 
@@ -363,7 +363,7 @@ async function requestCertificate(domain) {
 async function renewCertificate(domain) {
     if (!confirm('<?= __('确定要续签此证书吗？') ?>')) return;
     
-    AdminToast.info('<?= __('正在续签证书，请稍候...') ?>');
+    BackendToast.info('<?= __('正在续签证书，请稍候...') ?>');
     
     try {
         const response = await fetch(baseUrl + 'renew', {
@@ -374,13 +374,13 @@ async function renewCertificate(domain) {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             setTimeout(() => location.reload(), 1500);
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 
@@ -397,13 +397,13 @@ async function deleteCertificate(domain) {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             setTimeout(() => location.reload(), 1500);
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 
@@ -421,13 +421,13 @@ async function syncDomains() {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             setTimeout(() => location.reload(), 1500);
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 
@@ -436,7 +436,7 @@ async function submitRequest() {
     const form = document.getElementById('requestForm');
     const formData = new FormData(form);
     
-    AdminToast.info('<?= __('正在申请证书，请稍候...') ?>');
+    BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
     
     try {
         const response = await fetch(baseUrl + 'request', {
@@ -446,14 +446,14 @@ async function submitRequest() {
         const result = await response.json();
         
         if (result.success) {
-            AdminToast.success(result.message);
+            BackendToast.success(result.message);
             bootstrap.Modal.getInstance(document.getElementById('requestModal')).hide();
             setTimeout(() => location.reload(), 1500);
         } else {
-            AdminToast.error(result.message);
+            BackendToast.error(result.message);
         }
     } catch (e) {
-        AdminToast.error(e.message);
+        BackendToast.error(e.message);
     }
 }
 </script>

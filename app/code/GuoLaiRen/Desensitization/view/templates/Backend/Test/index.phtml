@@ -137,8 +137,8 @@ $models = $this->models ?? [];
     document.getElementById('desens-test-execute-btn').addEventListener('click', function() {
         var content = document.getElementById('desens-test-content').value;
         if (!content) {
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.warning('<?= __('请输入测试内容') ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning('<?= __('请输入测试内容') ?>');
             }
             return;
         }

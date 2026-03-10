@@ -2692,7 +2692,7 @@ function _workshopGoToStep(step) {
 }
 
 function _workshopNotify(level, message) {
-    const toast = window.BackendToast || window.AdminToast || null;
+    const toast = window.BackendToast || window.BackendToast || null;
     if (toast && typeof toast[level] === 'function') {
         toast[level](message);
         return;
@@ -3603,21 +3603,21 @@ async function _refreshPreviewFromDraft() {
         const cached = (_aiWorkshop?.result?.preview != null) ? (_aiWorkshop.result.preview?.html || _aiWorkshop.result.preview) : '';
         if (iframe && cached) {
             iframe.srcdoc = _ensureComponentInPreviewHtml((String(cached).indexOf('<!DOCTYPE') === 0 || String(cached).indexOf('<!doctype') === 0) ? cached : wrap(cached));
-            if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已使用当前预览刷新') ?>');
+            if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('已使用当前预览刷新') ?>');
         } else {
-            if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('当前无草稿 ID，无法刷新预览') ?>');
+            if (typeof BackendToast !== 'undefined') BackendToast.warning('<?= __('当前无草稿 ID，无法刷新预览') ?>');
         }
         return;
     }
     const payload = draftId ? { draft_id: draftId } : { component_id: componentId };
     const html = await _fetchPreviewById(payload);
     if (!html) {
-        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('预览拉取失败') ?>');
+        if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('预览拉取失败') ?>');
         return;
     }
     if (iframe) iframe.srcdoc = _ensureComponentInPreviewHtml((html.indexOf('<!DOCTYPE') === 0 || html.indexOf('<!doctype') === 0) ? html : wrap(html));
     if (_aiWorkshop?.result) _aiWorkshop.result.preview = html;
-    if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('预览已更新') ?>');
+    if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('预览已更新') ?>');
 }
 if (typeof window !== 'undefined') window._refreshPreviewFromDraft = _refreshPreviewFromDraft;
 
@@ -3625,11 +3625,11 @@ if (typeof window !== 'undefined') window._refreshPreviewFromDraft = _refreshPre
 function _copyDraftContent(btnEl) {
     const pre = document.getElementById('ai-ws-template-file-content');
     if (!pre || !pre.textContent) {
-        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('暂无草稿内容可复制') ?>');
+        if (typeof BackendToast !== 'undefined') BackendToast.warning('<?= __('暂无草稿内容可复制') ?>');
         return;
     }
     navigator.clipboard.writeText(pre.textContent).then(function() {
-        if (typeof AdminToast !== 'undefined') AdminToast.success('<?= __('已复制草稿内容') ?>');
+        if (typeof BackendToast !== 'undefined') BackendToast.success('<?= __('已复制草稿内容') ?>');
         if (btnEl) {
             const icon = btnEl.querySelector('.mdi');
             const orig = btnEl.innerHTML;
@@ -3637,7 +3637,7 @@ function _copyDraftContent(btnEl) {
             setTimeout(function() { btnEl.innerHTML = orig; }, 1500);
         }
     }).catch(function() {
-        if (typeof AdminToast !== 'undefined') AdminToast.error('<?= __('复制失败') ?>');
+        if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('复制失败') ?>');
     });
 }
 
@@ -3705,7 +3705,7 @@ function _refineLogLine(text, color = '#94a3b8') {
 async function _workshopRefine() {
     const input = document.getElementById('ai-refine-input')?.value.trim();
     if (!input) {
-        if (typeof AdminToast !== 'undefined') AdminToast.warning('<?= __('请输入微调描述') ?>');
+        if (typeof BackendToast !== 'undefined') BackendToast.warning('<?= __('请输入微调描述') ?>');
         return;
     }
 

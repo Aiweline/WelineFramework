@@ -123,8 +123,8 @@
             window.BackendToast.error(message);
             return;
         }
-        if (window.AdminToast && typeof window.AdminToast.error === 'function') {
-            window.AdminToast.error(message);
+        if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+            window.BackendToast.error(message);
         }
     }
 
