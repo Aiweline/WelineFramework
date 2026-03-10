@@ -48,57 +48,75 @@ $pages = $this->getData('pages') ?: [];
 <!-- 搜索和筛选 -->
 <div class="row">
     <div class="col-12">
-        <div class="card">
+        <div class="card pagebuilder-filter-card">
             <div class="card-body">
-                <form action="<?= $this->getBackendUrl('*/backend/template/index') ?>" method="get" class="row g-3 align-items-end">
-                    <div class="col-md-5">
-                        <label class="form-label"><?= __('搜索模板') ?></label>
-                        <div class="input-group">
-                            <span class="input-group-text">
-                                <i class="mdi mdi-magnify"></i>
-                            </span>
-                            <input type="text" 
-                                   class="form-control" 
-                                   name="search" 
-                                   id="templateSearchInput"
-                                   value="<?= htmlspecialchars($search ?? '') ?>"
-                                   placeholder="<?= __('搜索模板名称、代码或描述...') ?>"
-                                   autocomplete="off">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
-                            </button>
-                            <?php if ($search): ?>
-                            <a href="<?= $this->getBackendUrl('*/backend/template/index') ?>" class="btn btn-secondary">
-                                <i class="mdi mdi-refresh"></i> <?= __('重置') ?>
-                            </a>
-                            <?php endif; ?>
+                <form action="<?= $this->getBackendUrl('*/backend/template/index') ?>" method="get">
+                    <div class="pagebuilder-filter-row">
+                        <!-- 搜索输入 -->
+                        <div class="pagebuilder-search-group">
+                            <label class="form-label">
+                                <i class="mdi mdi-magnify"></i> <?= __('搜索模板') ?>
+                            </label>
+                            <div class="search-input-wrapper">
+                                <input type="text" 
+                                       class="form-control search-input" 
+                                       name="search" 
+                                       id="templateSearchInput"
+                                       value="<?= htmlspecialchars($search ?? '') ?>"
+                                       placeholder="<?= __('输入模板名称、代码或描述...') ?>"
+                                       autocomplete="off">
+                                <div class="search-actions">
+                                    <button type="submit" class="btn btn-search-primary" title="<?= __('搜索') ?>">
+                                        <i class="mdi mdi-magnify"></i>
+                                    </button>
+                                    <?php if ($search): ?>
+                                    <a href="<?= $this->getBackendUrl('*/backend/template/index') ?>" class="btn btn-search-reset" title="<?= __('清除搜索') ?>">
+                                        <i class="mdi mdi-close"></i>
+                                    </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <div class="col-md-4">
-                        <label class="form-label"><?= __('预览页面选择') ?></label>
-                        <select class="form-select" id="previewPageSelect">
-                            <option value="0"><?= __('使用测试页面') ?></option>
-                            <?php foreach ($pages as $page): ?>
-                                <option value="<?= $page->getId() ?>" <?= ($page->getId() == $testPageId) ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?> (<?= htmlspecialchars((($page->getData('handle') ?? '')) ?? '') ?>)
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                        <small class="form-text text-muted">
-                            <?= __('选择用于配置预览的页面数据') ?>
-                        </small>
-                    </div>
-                    
-                    <div class="col-md-3">
-                        <label class="form-label"><?= __('预览图管理') ?></label>
-                        <div class="btn-group w-100" role="group">
-                            <button type="button" class="btn btn-outline-info" onclick="generateAllPreviews(false)" title="<?= __('为缺少预览图的模板生成预览') ?>">
-                                <i class="mdi mdi-image-plus"></i> <?= __('生成缺失') ?>
-                            </button>
-                            <button type="button" class="btn btn-outline-warning" onclick="generateAllPreviews(true)" title="<?= __('强制刷新所有模板的预览图') ?>">
-                                <i class="mdi mdi-refresh"></i> <?= __('全部刷新') ?>
-                            </button>
+                        
+                        <!-- 预览页面选择 -->
+                        <div class="pagebuilder-select-group">
+                            <label class="form-label">
+                                <i class="mdi mdi-file-document-outline"></i> <?= __('预览页面') ?>
+                            </label>
+                            <select class="form-select preview-select" id="previewPageSelect">
+                                <option value="0"><?= __('测试页面') ?></option>
+                                <?php foreach ($pages as $page): ?>
+                                    <option value="<?= $page->getId() ?>" <?= ($page->getId() == $testPageId) ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <small class="form-text">
+                                <?= __('用于配置预览的页面数据') ?>
+                            </small>
+                        </div>
+                        
+                        <!-- 预览图操作 -->
+                        <div class="pagebuilder-actions-group">
+                            <label class="form-label">
+                                <i class="mdi mdi-image-multiple"></i> <?= __('预览图管理') ?>
+                            </label>
+                            <div class="action-buttons">
+                                <button type="button" 
+                                        class="btn btn-action-generate" 
+                                        onclick="generateAllPreviews(false)" 
+                                        title="<?= __('为缺少预览图的模板生成预览') ?>">
+                                    <i class="mdi mdi-image-plus"></i>
+                                    <span><?= __('生成缺失') ?></span>
+                                </button>
+                                <button type="button" 
+                                        class="btn btn-action-refresh" 
+                                        onclick="generateAllPreviews(true)" 
+                                        title="<?= __('强制刷新所有模板的预览图') ?>">
+                                    <i class="mdi mdi-sync"></i>
+                                    <span><?= __('全部刷新') ?></span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -112,15 +130,21 @@ $pages = $this->getData('pages') ?: [];
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <h4 class="card-title mb-4">
-                    <i class="mdi mdi-palette"></i> <?= __('模板列表') ?>
-                    <span class="badge bg-primary ms-2"><?= count($styles) ?></span>
-                    <?php if ($search): ?>
-                        <span class="badge bg-info ms-2">
-                            <i class="mdi mdi-magnify"></i> <?= __('搜索: %1', htmlspecialchars($search ?? '')) ?>
+                <div class="pagebuilder-list-header">
+                    <h4 class="card-title">
+                        <i class="mdi mdi-palette"></i> <?= __('模板列表') ?>
+                    </h4>
+                    <div class="list-stats">
+                        <span class="stat-badge stat-total">
+                            <i class="mdi mdi-shape"></i> <?= __('共 %1 个模板', count($styles)) ?>
                         </span>
-                    <?php endif; ?>
-                </h4>
+                        <?php if ($search): ?>
+                        <span class="stat-badge stat-search">
+                            <i class="mdi mdi-filter"></i> <?= __('搜索: %1', htmlspecialchars($search)) ?>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
                 
                 <?php if (empty($styles)): ?>
                     <div class="text-center text-muted py-5">
@@ -166,126 +190,131 @@ $pages = $this->getData('pages') ?: [];
                                     $previewImageUrl = ''; // 文件不存在，清空URL
                                 }
                             }
+                            
+                            // 状态指示
+                            $statusClass = 'status-default';
+                            $statusTitle = '';
+                            if (!$isActive) {
+                                $statusClass = 'status-disabled';
+                                $statusTitle = __('已禁用');
+                            } elseif ($isPublished) {
+                                $statusClass = 'status-published';
+                                $statusTitle = __('已发布');
+                            } else {
+                                $statusClass = 'status-unpublished';
+                                $statusTitle = __('未发布');
+                            }
                             ?>
                             
                             <div class="col" data-style-code="<?= $safeStyleCode ?>">
-                                <div class="card style-card">
+                                <div class="pagebuilder-template-card" id="template-card-<?= $safeStyleCode ?>">
+                                    <!-- 状态指示器 -->
+                                    <div class="template-card-status-indicator">
+                                        <div class="status-dot <?= $statusClass ?>" title="<?= $statusTitle ?>"></div>
+                                        <div class="status-text <?= $statusClass ?>"><?= htmlspecialchars($statusTitle) ?></div>
+                                    </div>
+                                    
                                     <!-- 预览区域 -->
-                                    <div class="style-card-preview" id="preview-<?= $safeStyleCode ?>">
+                                    <div class="template-card-preview" id="preview-<?= $safeStyleCode ?>">
                                         <?php if ($previewImageUrl): ?>
                                             <!-- 有预览图，直接显示静态图片 -->
-                                            <div class="style-card-preview-actions">
-                                                <div class="style-card-preview-btn" 
-                                                     onclick="openImagePreview('<?= htmlspecialchars($previewImageUrl) ?>', '<?= $safeStyleName ?>')" 
-                                                     title="<?= __('放大预览图') ?>">
+                                            <div class="template-card-preview-actions">
+                                                <button type="button" 
+                                                        class="btn-action-icon" 
+                                                        onclick="openImagePreview('<?= htmlspecialchars($previewImageUrl) ?>', '<?= $safeStyleName ?>')" 
+                                                        title="<?= __('🔍 放大预览') ?>">
                                                     <i class="mdi mdi-magnify-plus"></i>
-                                                </div>
-                                                <div class="style-card-preview-btn" 
-                                                     onclick="refreshSinglePreview('<?= $safeStyleCode ?>')" 
-                                                     title="<?= __('刷新预览图') ?>">
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn-action-icon" 
+                                                        onclick="refreshSinglePreview('<?= $safeStyleCode ?>')" 
+                                                        title="<?= __('🔄 刷新预览') ?>">
                                                     <i class="mdi mdi-refresh"></i>
-                                                </div>
-                                                <div class="style-card-preview-btn" 
-                                                     onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')" 
-                                                     title="<?= __('在新窗口预览') ?>">
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn-action-icon" 
+                                                        onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')" 
+                                                        title="<?= __('🌐 新窗口预览') ?>">
                                                     <i class="mdi mdi-open-in-new"></i>
-                                                </div>
+                                                </button>
                                             </div>
                                             <img src="<?= htmlspecialchars($previewImageUrl) ?>" 
                                                  alt="<?= $safeStyleName ?>"
-                                                 class="style-preview-img"
-                                                 onerror="handlePreviewImageError(this, '<?= $safeStyleCode ?>')">
+                                                 class="template-preview-img"
+                                                 onerror="handlePreviewImageError(this, '<?= $safeStyleCode ?>')"
+                                                 loading="lazy">
                                         <?php else: ?>
                                             <!-- 没有预览图，显示占位符和生成按钮 -->
-                                            <div class="style-card-preview-actions">
-                                                <div class="style-card-preview-btn" 
-                                                     onclick="refreshSinglePreview('<?= $safeStyleCode ?>')" 
-                                                     title="<?= __('生成预览图') ?>">
-                                                    <i class="mdi mdi-image-plus"></i>
+                                            <div class="template-card-preview-placeholder">
+                                                <div class="placeholder-icon">
+                                                    <i class="mdi mdi-image-outline"></i>
                                                 </div>
-                                                <div class="style-card-preview-btn" 
-                                                     onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')" 
-                                                     title="<?= __('在新窗口预览') ?>">
-                                                    <i class="mdi mdi-open-in-new"></i>
-                                                </div>
-                                            </div>
-                                            <div class="style-card-preview-placeholder">
-                                                <i class="mdi mdi-image-outline"></i>
-                                                <div><?= __('暂无预览图') ?></div>
-                                                <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="refreshSinglePreview('<?= $safeStyleCode ?>')">
+                                                <div class="placeholder-text"><?= __('暂无预览图') ?></div>
+                                                <button type="button" 
+                                                        class="btn-generate-preview" 
+                                                        onclick="refreshSinglePreview('<?= $safeStyleCode ?>')">
                                                     <i class="mdi mdi-image-plus"></i> <?= __('生成预览') ?>
+                                                </button>
+                                                <button type="button" 
+                                                        class="btn-preview-new-window" 
+                                                        onclick="openDefaultPreview('<?= $safeStyleCode ?>', '<?= $safeStyleName ?>')">
+                                                    <i class="mdi mdi-open-in-new"></i> <?= __('新窗口预览') ?>
                                                 </button>
                                             </div>
                                         <?php endif; ?>
                                         
                                         <!-- 加载状态遮罩（默认隐藏） -->
-                                        <div class="style-card-preview-loading" style="display: none;">
-                                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
-                                            <div style="margin-top: 10px; font-size: 12px;"><?= __('正在生成预览...') ?></div>
+                                        <div class="template-card-preview-loading" style="display: none;">
+                                            <div class="spinner-border text-primary" role="status"></div>
+                                            <div class="loading-text"><?= __('正在生成预览...') ?></div>
                                         </div>
-                                        
-                                        <!-- 状态徽章 -->
-                                        <div class="position-absolute top-0 start-0 m-2" style="z-index: 5;">
-                                            <?php if ($isPublished): ?>
-                                                <span class="badge bg-success">
-                                                    <i class="mdi mdi-check-circle"></i> <?= __('已发布') ?>
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="badge bg-warning">
-                                                    <i class="mdi mdi-clock-outline"></i> <?= __('未发布') ?>
-                                                </span>
-                                            <?php endif; ?>
-                                        </div>
-                                        
-                                        <?php if (!$isActive): ?>
-                                        <div class="position-absolute top-0 end-0 m-2" style="z-index: 5;">
-                                            <span class="badge bg-danger">
-                                                <i class="mdi mdi-cancel"></i> <?= __('已禁用') ?>
-                                            </span>
-                                        </div>
-                                        <?php endif; ?>
                                     </div>
                                     
                                     <!-- 卡片内容 -->
-                                    <div class="style-card-body">
-                                        <div class="style-card-title">
-                                            <span><?= $safeStyleName ?></span>
+                                    <div class="template-card-body">
+                                        <div class="template-card-header">
+                                            <h5 class="template-card-title">
+                                                <i class="mdi mdi-palette template-icon"></i>
+                                                <span><?= $safeStyleName ?></span>
+                                            </h5>
+                                            <span class="template-card-code" title="<?= __('模板代码') ?>"><?= $safeStyleCode ?></span>
                                         </div>
                                         
                                         <?php if ($styleDescription): ?>
-                                        <div class="style-card-description">
-                                            <?= htmlspecialchars(mb_substr($styleDescription, 0, 100)) ?>
-                                            <?= mb_strlen($styleDescription) > 100 ? '...' : '' ?>
+                                        <div class="template-card-description">
+                                            <i class="mdi mdi-description template-icon"></i>
+                                            <span><?= htmlspecialchars(mb_substr($styleDescription, 0, 120)) ?>
+                                            <?= mb_strlen($styleDescription) > 120 ? '...' : '' ?></span>
                                         </div>
                                         <?php endif; ?>
                                         
-                                        <div class="style-card-meta">
-                                            <span class="style-card-code"><?= $safeStyleCode ?></span>
-                                            <?php if ($previewImageUrl): ?>
-                                                <i class="mdi mdi-image text-success" title="<?= __('有预览图') ?>"></i>
-                                            <?php else: ?>
-                                                <i class="mdi mdi-image-off text-muted" title="<?= __('无预览图') ?>"></i>
-                                            <?php endif; ?>
-                                        </div>
-                                        
-                                        <!-- 操作按钮 -->
-                                        <div class="mt-3 d-flex gap-2 flex-wrap">
-                                            <!-- 配置预览按钮（已隐藏） -->
-                                            <button type="button" 
-                                                    class="btn btn-sm btn-primary flex-fill d-none" 
-                                                    onclick="openConfigPreview('<?= $safeStyleCode ?>')"
-                                                    title="<?= __('使用选定页面的数据预览并编辑模板配置') ?>">
-                                                <i class="mdi mdi-cog"></i> <?= __('配置预览') ?>
-                                            </button>
+                                        <div class="template-card-footer">
+                                            <div class="template-card-meta">
+                                                <?php if ($previewImageUrl): ?>
+                                                    <span class="meta-item has-preview" title="<?= __('✓ 已有预览图') ?>">
+                                                        <i class="mdi mdi-image-check"></i> <?= __('有预览') ?>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="meta-item no-preview" title="<?= __('✗ 缺少预览图') ?>">
+                                                        <i class="mdi mdi-image-off"></i> <?= __('无预览') ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <span class="meta-item" title="<?= __('ID: %1', $style->getId()) ?>">
+                                                    <i class="mdi mdi-tag"></i> #<?= $style->getId() ?>
+                                                </span>
+                                            </div>
                                             
-                                            <!-- 发布/取消发布按钮 -->
-                                            <button type="button" 
-                                                    class="btn btn-sm <?= $isPublished ? 'btn-warning' : 'btn-success' ?>" 
-                                                    onclick="togglePublish(<?= $style->getId() ?>, <?= $isPublished ? 0 : 1 ?>)"
-                                                    title="<?= $isPublished ? __('取消发布后，新建页面时将无法选择此模板') : __('发布后，新建页面时可以选择此模板') ?>">
-                                                <i class="mdi mdi-<?= $isPublished ? 'cancel' : 'check-circle' ?>"></i> 
-                                                <?= $isPublished ? __('取消发布') : __('发布') ?>
-                                            </button>
+                                            <!-- 操作按钮组 -->
+                                            <div class="template-card-actions">
+                                                <!-- 发布/取消发布按钮 -->
+                                                <button type="button" 
+                                                        class="btn-action <?= $isPublished ? 'btn-action-warning' : 'btn-action-success' ?>" 
+                                                        onclick="togglePublish(<?= $style->getId() ?>, <?= $isPublished ? 0 : 1 ?>)"
+                                                        title="<?= $isPublished ? __('取消发布后，新建页面时将无法选择此模板') : __('发布后，新建页面时可以选择此模板') ?>">
+                                                    <i class="mdi mdi-<?= $isPublished ? 'cancel' : 'check-circle' ?>"></i>
+                                                    <span><?= $isPublished ? __('取消发布') : __('发布') ?></span>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -297,16 +326,14 @@ $pages = $this->getData('pages') ?: [];
         </div>
     </div>
 </div>
-<!-- 复用form.phtml中的样式卡片CSS -->
-<link rel="stylesheet" href="<?= $this->getBackendUrl('*/backend/page/index') ?>" onload="this.onload=null;this.rel='stylesheet'">
 <style>
 /* ============================================
-   组件：PageBuilder Template Manager
+   组件：PageBuilder Template Manager (美化版)
    模块：GuoLaiRen_PageBuilder
-   前缀：style-card-
+   前缀：pagebuilder-template-
    ============================================ */
 
-/* 页面标题适配 */
+/* ========== 页面基础适配 ========== */
 .page-title-box h4 {
     color: var(--backend-color-text-primary, #212529);
 }
@@ -319,7 +346,7 @@ $pages = $this->getData('pages') ?: [];
     color: var(--backend-color-text-secondary, #6c757d);
 }
 
-/* 卡片适配 */
+/* ========== 卡片容器适配 ========== */
 .card {
     background: var(--backend-color-card-bg, #fff);
     border: 1px solid var(--backend-color-border-default, #dee2e6);
@@ -333,21 +360,24 @@ $pages = $this->getData('pages') ?: [];
     color: var(--backend-color-text-primary, #212529);
 }
 
-/* 表单元素适配 */
+/* ========== 表单元素适配 ========== */
 .form-label {
     color: var(--backend-color-text-primary, #212529);
+    font-weight: 500;
 }
 
 .form-control {
     background: var(--backend-color-input-bg, #fff);
     border-color: var(--backend-color-border-default, #dee2e6);
     color: var(--backend-color-text-primary, #212529);
+    transition: all 0.2s ease;
 }
 
 .form-control:focus {
     background: var(--backend-color-input-bg, #fff);
     border-color: var(--backend-color-primary, #556ee6);
     color: var(--backend-color-text-primary, #212529);
+    box-shadow: 0 0 0 3px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.1);
 }
 
 .form-control::placeholder {
@@ -370,121 +400,300 @@ $pages = $this->getData('pages') ?: [];
     color: var(--backend-color-text-secondary, #6c757d);
 }
 
-/* 空状态适配 */
+/* ========== 空状态适配 ========== */
 .text-center.text-muted {
     color: var(--backend-color-text-tertiary, #adb5bd) !important;
 }
 
-/* 样式卡片 */
-.style-card {
+/* ========== 模板卡片容器 ========== */
+.pagebuilder-template-card {
     height: 100%;
-    cursor: default;
-    transition: all 0.3s ease;
-    border: 2px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
     background: var(--backend-color-card-bg, #fff);
-}
-
-.style-card:hover {
-    border-color: var(--backend-color-primary, #556ee6);
-    box-shadow: 0 4px 12px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.2);
-    transform: translateY(-2px);
-}
-
-.style-card-preview {
-    position: relative;
-    width: 100%;
-    height: 200px;
-    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 12px);
     overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+}
+
+.pagebuilder-template-card:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 8px 24px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
+    transform: translateY(-4px);
+}
+
+/* ========== 状态指示器 ========== */
+.template-card-status-indicator {
     display: flex;
     align-items: center;
-    justify-content: center;
-}
-/* 大屏幕下增高预览区，便于看清整张截图 */
-@media (min-width: 992px) {
-    .style-card-preview { height: 380px; }
-}
-@media (min-width: 1200px) {
-    .style-card-preview { height: 520px; }
+    gap: 6px;
+    padding: 8px 12px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
 }
 
-.style-card-preview-actions {
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: pulse 2s infinite;
+}
+
+.status-dot.status-published {
+    background: var(--backend-color-success, #34c38f);
+    box-shadow: 0 0 0 3px rgba(52, 195, 143, 0.2);
+}
+
+.status-dot.status-unpublished {
+    background: var(--backend-color-warning, #f1b44c);
+    box-shadow: 0 0 0 3px rgba(241, 180, 76, 0.2);
+}
+
+.status-dot.status-disabled {
+    background: var(--backend-color-danger, #f46a6a);
+    box-shadow: 0 0 0 3px rgba(244, 106, 106, 0.2);
+    animation: none;
+}
+
+.status-text {
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-text.status-published { color: var(--backend-color-success, #34c38f); }
+.status-text.status-unpublished { color: var(--backend-color-warning, #f1b44c); }
+.status-text.status-disabled { color: var(--backend-color-danger, #f46a6a); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* ========== 预览区域 ========== */
+.template-card-preview {
+    position: relative;
+    width: 100%;
+    height: 160px;
+    background: linear-gradient(135deg, var(--backend-color-bg-secondary, #f8f9fa) 0%, var(--backend-color-bg-tertiary, #e9ecef) 100%);
+    overflow: hidden;
+}
+
+/* 大屏幕下增高预览区 */
+@media (min-width: 992px) {
+    .template-card-preview { height: 240px; }
+}
+@media (min-width: 1400px) {
+    .template-card-preview { height: 320px; }
+}
+
+/* ========== 预览操作按钮 ========== */
+.template-card-preview-actions {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 10px;
+    right: 10px;
     display: flex;
-    gap: 6px;
+    gap: 8px;
     z-index: 20;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transform: translateY(-10px);
+    transition: all 0.25s ease;
 }
 
-.style-card:hover .style-card-preview-actions {
+.pagebuilder-template-card:hover .template-card-preview-actions {
     opacity: 1;
+    transform: translateY(0);
 }
 
-.style-card-preview-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--backend-border-radius-sm, 4px);
+.btn-action-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--backend-border-radius, 6px);
     background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border: none;
     color: var(--backend-color-text-secondary, #6c757d);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: var(--backend-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.1));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
-.style-card-preview-btn:hover {
+.btn-action-icon:hover {
     background: var(--backend-color-primary, #556ee6);
     color: var(--backend-color-text-inverse, #fff);
     transform: scale(1.1);
-    box-shadow: 0 4px 12px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.3);
+    box-shadow: 0 4px 12px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.35);
 }
 
-.style-card-preview-btn i {
-    font-size: 16px;
+.btn-action-icon i {
+    font-size: 18px;
 }
 
-.style-card-preview img {
+/* ========== 预览图片 ========== */
+.template-preview-img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: top center;
+    transition: transform 0.4s ease;
 }
 
-.style-card-preview-placeholder {
-    text-align: center;
+.pagebuilder-template-card:hover .template-preview-img {
+    transform: scale(1.03);
+}
+
+/* ========== 预览占位符 ========== */
+.template-card-preview-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     color: var(--backend-color-text-tertiary, #adb5bd);
+    padding: 16px;
 }
 
-.style-card-preview-placeholder i {
-    font-size: 48px;
-    margin-bottom: 10px;
+.placeholder-icon {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+}
+
+.placeholder-icon i {
+    font-size: 32px;
     opacity: 0.5;
 }
 
-.style-card-body {
+.placeholder-text {
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.btn-generate-preview,
+.btn-preview-new-window {
+    padding: 8px 16px;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+    margin: 4px;
+}
+
+.btn-generate-preview {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-generate-preview:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    transform: scale(1.02);
+}
+
+.btn-preview-new-window {
+    background: transparent;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.btn-preview-new-window:hover {
+    border-color: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-primary, #556ee6);
+}
+
+/* ========== 预览加载遮罩 ========== */
+.template-card-preview-loading {
+    position: absolute;
+    inset: 0;
+    background: var(--backend-color-bg-overlay, rgba(255, 255, 255, 0.95));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 30;
+}
+
+.loading-text {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* ========== 卡片内容区 ========== */
+.template-card-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     padding: 16px;
     background: var(--backend-color-card-bg, #fff);
 }
 
-.style-card-title {
-    font-size: 16px;
-    font-weight: 600;
-    color: var(--backend-color-text-primary, #212529);
+.template-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
     margin-bottom: 8px;
 }
 
-.style-card-description {
+.template-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+.template-icon {
+    color: var(--backend-color-primary, #556ee6);
+    font-size: 18px;
+}
+
+.template-card-code {
+    font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+    font-size: 11px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    padding: 4px 8px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* ========== 卡片描述 ========== */
+.template-card-description {
+    display: flex;
+    gap: 6px;
     font-size: 13px;
     color: var(--backend-color-text-secondary, #6c757d);
     line-height: 1.5;
-    margin-bottom: 12px;
+    margin-bottom: auto;
+    padding-bottom: 12px;
+}
+
+.template-card-description i {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.template-card-description span {
     display: -webkit-box;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -493,50 +702,88 @@ $pages = $this->getData('pages') ?: [];
     text-overflow: ellipsis;
 }
 
-.style-card-meta {
+/* ========== 卡片底部 ========== */
+.template-card-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.template-card-meta {
     display: flex;
-    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.meta-item {
+    display: flex;
     align-items: center;
+    gap: 4px;
     font-size: 12px;
     color: var(--backend-color-text-tertiary, #adb5bd);
 }
 
-.style-card-code {
-    font-family: 'Courier New', monospace;
-    background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-text-secondary, #6c757d);
-    padding: 2px 6px;
-    border-radius: var(--backend-border-radius-sm, 4px);
+.meta-item i {
+    font-size: 14px;
 }
 
-.style-card-preview-loading {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: var(--backend-color-bg-overlay, rgba(255, 255, 255, 0.9));
+.meta-item.has-preview {
+    color: var(--backend-color-success, #34c38f);
+}
+
+.meta-item.no-preview {
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+/* ========== 操作按钮 ========== */
+.template-card-actions {
     display: flex;
-    flex-direction: column;
+    gap: 8px;
+}
+
+.btn-action {
+    flex: 1;
+    display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 10;
-    color: var(--backend-color-text-secondary, #6c757d);
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.style-preview-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top center;
-    transition: transform 0.3s ease;
+.btn-action i {
+    font-size: 16px;
 }
 
-.style-card:hover .style-preview-img {
-    transform: scale(1.02);
+.btn-action-success {
+    background: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
 }
 
-/* Offcanvas 适配 */
+.btn-action-success:hover {
+    background: #2eb781;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 195, 143, 0.35);
+}
+
+.btn-action-warning {
+    background: var(--backend-color-warning, #f1b44c);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-warning:hover {
+    background: #d9a33d;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(241, 180, 76, 0.35);
+}
+
+/* ========== Offcanvas 适配 ========== */
 .offcanvas {
     background: var(--backend-color-card-bg, #fff);
 }
@@ -548,6 +795,276 @@ $pages = $this->getData('pages') ?: [];
 
 .offcanvas-title {
     color: var(--backend-color-text-primary, #212529);
+}
+
+/* ========== 响应式优化 ========== */
+@media (max-width: 767px) {
+    .template-card-preview {
+        height: 140px;
+    }
+    
+    .template-card-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .template-card-code {
+        align-self: flex-start;
+    }
+    
+    .btn-action {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+    
+    .pagebuilder-filter-row {
+        flex-direction: column;
+    }
+    
+    .pagebuilder-search-group,
+    .pagebuilder-select-group,
+    .pagebuilder-actions-group {
+        width: 100%;
+    }
+}
+
+/* ========== 搜索筛选区域 ========== */
+.pagebuilder-filter-card {
+    border: none;
+    box-shadow: var(--backend-shadow-sm, 0 2px 8px rgba(0, 0, 0, 0.06));
+    margin-bottom: var(--backend-spacing-lg, 24px);
+}
+
+.pagebuilder-filter-card .card-body {
+    padding: var(--backend-spacing-lg, 24px);
+}
+
+.pagebuilder-filter-row {
+    display: flex;
+    gap: var(--backend-spacing-lg, 24px);
+    align-items: flex-end;
+}
+
+.pagebuilder-search-group,
+.pagebuilder-select-group,
+.pagebuilder-actions-group {
+    flex: 1;
+}
+
+.pagebuilder-search-group {
+    flex: 2;
+}
+
+.pagebuilder-search-group .form-label,
+.pagebuilder-select-group .form-label,
+.pagebuilder-actions-group .form-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-bottom: 8px;
+}
+
+.pagebuilder-search-group .form-label i,
+.pagebuilder-select-group .form-label i,
+.pagebuilder-actions-group .form-label i {
+    font-size: 16px;
+    color: var(--backend-color-primary, #556ee6);
+}
+
+/* 搜索输入框 */
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input {
+    flex: 1;
+    padding: 12px 16px;
+    padding-right: 90px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    font-size: 14px;
+    transition: all 0.2s ease;
+}
+
+.search-input:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 0 0 4px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.1);
+}
+
+.search-input::placeholder {
+    color: var(--backend-color-text-placeholder, #adb5bd);
+}
+
+.search-actions {
+    position: absolute;
+    right: 8px;
+    display: flex;
+    gap: 6px;
+}
+
+.btn-search-primary,
+.btn-search-reset {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--backend-border-radius, 6px);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.btn-search-primary {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-search-primary:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    transform: scale(1.05);
+}
+
+.btn-search-reset {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.btn-search-reset:hover {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* 下拉选择框 */
+.preview-select {
+    padding: 12px 16px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.preview-select:focus {
+    border-color: var(--backend-color-primary, #556ee6);
+    box-shadow: 0 0 0 4px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.1);
+}
+
+.pagebuilder-select-group .form-text {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+}
+
+/* 操作按钮组 */
+.action-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-action-generate,
+.btn-action-refresh {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: var(--backend-border-radius-lg, 12px);
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-action-generate {
+    background: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-generate:hover {
+    background: #3b93e0;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(80, 165, 241, 0.35);
+}
+
+.btn-action-refresh {
+    background: var(--backend-color-warning, #f1b44c);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-refresh:hover {
+    background: #d9a33d;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(241, 180, 76, 0.35);
+}
+
+/* ========== 列表头部 ========== */
+.pagebuilder-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--backend-spacing-lg, 24px);
+    padding-bottom: var(--backend-spacing-md, 16px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.pagebuilder-list-header .card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 18px;
+}
+
+.pagebuilder-list-header .card-title i {
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.list-stats {
+    display: flex;
+    gap: 10px;
+}
+
+.stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.stat-badge i {
+    font-size: 16px;
+}
+
+.stat-total {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.stat-search {
+    background: var(--backend-color-info-bg-subtle, rgba(80, 165, 241, 0.1));
+    color: var(--backend-color-info, #50a5f1);
+}
+
+/* ========== 空状态优化 ========== */
+.text-center.text-muted {
+    padding: var(--backend-spacing-xl, 48px) var(--backend-spacing-md, 24px) !important;
+}
+
+.text-center.text-muted i {
+    font-size: 80px !important;
+    opacity: 0.3;
+    color: var(--backend-color-text-tertiary, #adb5bd);
 }
 </style>
 
@@ -760,16 +1277,18 @@ function openDefaultPreview(styleCode, styleName) {
  * 处理预览图加载失败
  */
 function handlePreviewImageError(imgEl, styleCode) {
-    const previewContainer = imgEl.closest('.style-card-preview');
+    const previewContainer = imgEl.closest('.template-card-preview');
     if (previewContainer) {
         // 隐藏损坏的图片，显示占位符
         imgEl.style.display = 'none';
         const placeholder = document.createElement('div');
-        placeholder.className = 'style-card-preview-placeholder';
+        placeholder.className = 'template-card-preview-placeholder';
         placeholder.innerHTML = `
-            <i class="mdi mdi-image-broken"></i>
-            <div><?= __('预览图加载失败') ?></div>
-            <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="refreshSinglePreview('${styleCode}')">
+            <div class="placeholder-icon">
+                <i class="mdi mdi-image-broken"></i>
+            </div>
+            <div class="placeholder-text"><?= __('预览图加载失败') ?></div>
+            <button type="button" class="btn-generate-preview" onclick="refreshSinglePreview('${styleCode}')">
                 <i class="mdi mdi-refresh"></i> <?= __('重新生成') ?>
             </button>
         `;
@@ -789,8 +1308,8 @@ async function refreshSinglePreview(styleCode) {
         return;
     }
     
-    const previewContainer = cardEl.querySelector('.style-card-preview');
-    const loadingEl = previewContainer.querySelector('.style-card-preview-loading');
+    const previewContainer = cardEl.querySelector('.template-card-preview');
+    const loadingEl = previewContainer.querySelector('.template-card-preview-loading');
     
     // 显示加载状态
     if (loadingEl) loadingEl.style.display = 'flex';
@@ -869,24 +1388,23 @@ async function refreshSinglePreview(styleCode) {
  * 更新预览图显示
  */
 function updatePreviewImage(previewContainer, imageUrl, styleCode) {
-    // 清除旧内容（保留加载遮罩和徽章）
-    const loading = previewContainer.querySelector('.style-card-preview-loading');
-    const badges = previewContainer.querySelectorAll('.position-absolute');
+    // 清除旧内容（保留加载遮罩）
+    const loading = previewContainer.querySelector('.template-card-preview-loading');
     
     previewContainer.innerHTML = '';
     
     // 添加操作按钮
     const actionsHtml = `
-        <div class="style-card-preview-actions">
-            <div class="style-card-preview-btn" onclick="openImagePreview('${imageUrl}', '')" title="<?= __('放大预览图') ?>">
+        <div class="template-card-preview-actions">
+            <button type="button" class="btn-action-icon" onclick="openImagePreview('${imageUrl}', '')" title="<?= __('放大预览图') ?>">
                 <i class="mdi mdi-magnify-plus"></i>
-            </div>
-            <div class="style-card-preview-btn" onclick="refreshSinglePreview('${styleCode}')" title="<?= __('刷新预览图') ?>">
+            </button>
+            <button type="button" class="btn-action-icon" onclick="refreshSinglePreview('${styleCode}')" title="<?= __('刷新预览图') ?>">
                 <i class="mdi mdi-refresh"></i>
-            </div>
-            <div class="style-card-preview-btn" onclick="openDefaultPreview('${styleCode}', '')" title="<?= __('在新窗口预览') ?>">
+            </button>
+            <button type="button" class="btn-action-icon" onclick="openDefaultPreview('${styleCode}', '')" title="<?= __('在新窗口预览') ?>">
                 <i class="mdi mdi-open-in-new"></i>
-            </div>
+            </button>
         </div>
     `;
     previewContainer.insertAdjacentHTML('beforeend', actionsHtml);
@@ -894,22 +1412,22 @@ function updatePreviewImage(previewContainer, imageUrl, styleCode) {
     // 添加图片
     const img = document.createElement('img');
     img.src = imageUrl;
-    img.className = 'style-preview-img';
+    img.className = 'template-preview-img';
     img.onerror = function() { handlePreviewImageError(this, styleCode); };
     previewContainer.appendChild(img);
     
     // 恢复加载遮罩
     if (loading) previewContainer.appendChild(loading);
     
-    // 恢复徽章
-    badges.forEach(badge => previewContainer.appendChild(badge));
-    
     // 更新元数据图标
-    const cardBody = previewContainer.closest('.style-card').querySelector('.style-card-body');
-    const metaIcon = cardBody.querySelector('.style-card-meta i');
-    if (metaIcon) {
-        metaIcon.className = 'mdi mdi-image text-success';
-        metaIcon.title = '<?= __('有预览图') ?>';
+    const cardEl = previewContainer.closest('.pagebuilder-template-card');
+    if (cardEl) {
+        const metaItem = cardEl.querySelector('.meta-item');
+        if (metaItem) {
+            metaItem.classList.remove('no-preview');
+            metaItem.classList.add('has-preview');
+            metaItem.innerHTML = '<i class="mdi mdi-image-check"></i> <?= __('有预览') ?>';
+        }
     }
 }
 
