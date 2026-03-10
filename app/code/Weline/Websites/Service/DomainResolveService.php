@@ -591,6 +591,14 @@ class DomainResolveService
         ];
     }
 
+    /**
+     * 查询域名当前生效的 NS 记录（用于 DNS 切换后等待传播）
+     */
+    public function getLiveNameservers(string $domain): array
+    {
+        return $this->queryLiveNsRecords($domain);
+    }
+
     private function queryLiveNsRecords(string $domain): array
     {
         try {

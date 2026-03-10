@@ -142,6 +142,7 @@ class Domain extends Model
 
     /**
      * 保存前自动更新时间戳和建站状态
+     * 确保 date 类型字段不为空字符串（PostgreSQL 不接受 ''，必须为 NULL）
      */
     public function save_before(): void
     {
@@ -157,6 +158,14 @@ class Domain extends Model
         $domain = $this->getData(self::schema_fields_DOMAIN);
         if ($domain) {
             $this->setData(self::schema_fields_DOMAIN, \strtolower(\trim($domain)));
+        }
+
+        // PostgreSQL date 类型不接受空字符串，统一转为 null
+        foreach ([self::schema_fields_EXPIRES_AT, self::schema_fields_HTTPS_EXPIRES_AT] as $dateField) {
+            $v = $this->getData($dateField);
+            if ($v === '' || $v === null) {
+                $this->setData($dateField, null);
+            }
         }
 
         // 自动计算建站就绪状态
@@ -219,9 +228,12 @@ class Domain extends Model
         return (string) $this->getData(self::schema_fields_EXPIRES_AT);
     }
 
-    public function setExpiresAt(string $date): self
+    public function setExpiresAt(?string $date): self
     {
-        $this->setData(self::schema_fields_EXPIRES_AT, $date);
+        $this->setData(
+            self::schema_fields_EXPIRES_AT,
+            ($date !== null && $date !== '') ? $date : null
+        );
         return $this;
     }
 
@@ -407,9 +419,12 @@ class Domain extends Model
         return (string) $this->getData(self::schema_fields_HTTPS_EXPIRES_AT);
     }
 
-    public function setHttpsExpiresAt(string $date): self
+    public function setHttpsExpiresAt(?string $date): self
     {
-        $this->setData(self::schema_fields_HTTPS_EXPIRES_AT, $date);
+        $this->setData(
+            self::schema_fields_HTTPS_EXPIRES_AT,
+            ($date !== null && $date !== '') ? $date : null
+        );
         return $this;
     }
 
@@ -569,7 +584,8 @@ class Domain extends Model
             $model->setDomain($domainName);
             $model->setStatus((string) ($domainData['status'] ?? self::STATUS_ACTIVE));
             $model->setRegistrarStatus((string) ($domainData['registrar_status'] ?? ''));
-            $model->setExpiresAt((string) ($domainData['expires_at'] ?? ''));
+            $expiresAt = $domainData['expires_at'] ?? null;
+            $model->setExpiresAt($expiresAt !== null && $expiresAt !== '' ? (string) $expiresAt : null);
 
             if (isset($domainData['nameservers'])) {
                 $ns = \is_array($domainData['nameservers']) ? $domainData['nameservers'] : [];
