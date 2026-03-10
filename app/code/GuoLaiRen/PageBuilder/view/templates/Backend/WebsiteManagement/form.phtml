@@ -62,6 +62,60 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
     .pagebuilder-website-form #pagebuilder-website-timezone-list option {
         padding: 0.5rem;
     }
+    /* 手风琴样式 */
+    .pagebuilder-website-form .accordion-item {
+        border: 1px solid var(--backend-color-border-default, #dee2e6);
+        border-radius: var(--backend-border-radius-md, 0.375rem);
+        margin-bottom: 1rem;
+        background-color: var(--backend-color-card-bg, #fff);
+        overflow: hidden;
+    }
+    .pagebuilder-website-form .accordion-header {
+        padding: 1rem 1.25rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background-color: var(--backend-color-bg-tertiary, #f8f9fa);
+        transition: background-color 0.2s ease;
+        border: none;
+    }
+    .pagebuilder-website-form .accordion-header:hover {
+        background-color: var(--backend-color-bg-secondary, #e9ecef);
+    }
+    .pagebuilder-website-form .accordion-header .accordion-button {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: var(--backend-color-text-primary, #212529);
+        font-weight: 600;
+        font-size: 1rem;
+        width: 100%;
+    }
+    .pagebuilder-website-form .accordion-header .accordion-button:focus {
+        outline: none;
+        box-shadow: none;
+    }
+    .pagebuilder-website-form .accordion-header .accordion-button::after {
+        display: none;
+    }
+    .pagebuilder-website-form .accordion-header .mdi {
+        color: var(--backend-color-primary, #556ee6);
+        font-size: 1.25rem;
+        transition: transform 0.3s ease;
+    }
+    .pagebuilder-website-form .accordion-button:not(.collapsed) .mdi-chevron-down {
+        transform: rotate(180deg);
+    }
+    .pagebuilder-website-form .accordion-body {
+        padding: 1.25rem;
+        border-top: 1px solid var(--backend-color-border-default, #dee2e6);
+        background-color: var(--backend-color-card-bg, #fff);
+    }
 </style>
 
 <!-- 开始 页面 -->
@@ -288,8 +342,10 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                         </div>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
-                <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-secondary"><lang>返回</lang></a>
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                    <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-secondary ms-2"><lang>返回</lang></a>
+                </div>
             </form>
         </div>
     </div>
