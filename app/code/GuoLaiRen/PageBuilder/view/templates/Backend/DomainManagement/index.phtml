@@ -1189,6 +1189,42 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
     </div>
 </div>
 
+<!-- ==================== HTTPS 证书申请弹窗 ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-https-request-modal">
+    <div class="pb-dm-form-dialog pb-dm-modal-md">
+        <div class="pb-dm-form-dialog-title">
+            <span><i class="mdi mdi-certificate"></i> <lang>申请 HTTPS 证书</lang></span>
+            <button type="button" class="pb-dm-form-dialog-close" id="pb-dm-https-request-close">&times;</button>
+        </div>
+        <div class="pb-dm-form-body" style="padding:var(--backend-spacing-lg,24px);">
+            <div class="pb-dm-alert pb-dm-alert-info" style="margin-bottom:16px;">
+                <i class="mdi mdi-information-outline"></i>
+                <span><lang>请确保域名已正确解析到本服务器，申请过程可能需要数分钟</lang></span>
+            </div>
+            <div class="pb-dm-fg" style="margin-bottom:16px;">
+                <label><lang>域名</lang></label>
+                <input type="text" id="pb-dm-https-domain" readonly class="pb-dm-input" style="background:var(--backend-color-bg-tertiary,#f1f3f5);">
+            </div>
+            <div class="pb-dm-fg" style="margin-bottom:0;">
+                <label><lang>证书提供商</lang></label>
+                <select id="pb-dm-https-provider" class="pb-dm-select" style="width:100%;">
+                    <option value="letsencrypt"><lang>Let's Encrypt</lang></option>
+                    <option value="litessl"><lang>LiteSSL (Sectigo DV)</lang></option>
+                </select>
+                <small style="display:block;color:var(--backend-color-text-tertiary,#adb5bd);font-size:0.8rem;margin-top:4px;">
+                    <lang>Let's Encrypt 免费通用；LiteSSL 适用于特定合规场景</lang>
+                </small>
+            </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:16px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);">
+            <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-https-request-cancel"><lang>取消</lang></button>
+            <button type="button" class="pb-dm-btn pb-dm-btn-primary" id="pb-dm-https-request-submit">
+                <i class="mdi mdi-certificate"></i> <lang>申请证书</lang>
+            </button>
+        </div>
+    </div>
+</div>
+
 <script src="<?= $purchaseDialogJsUrl ?>"></script>
 <script>
 (function() {
@@ -4003,7 +4039,7 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
                 var domain = this.getAttribute('data-domain') || '';
                 if (poolId <= 0) return;
-                doPoolRequestHttps(poolId, domain, this);
+                openHttpsRequestModal(poolId, domain, this);
             });
         });
         container.querySelectorAll('.pb-dm-pool-delete-btn').forEach(function(btn) {
@@ -4016,12 +4052,31 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         });
     }
 
-    function doPoolRequestHttps(poolId, domain, btnEl) {
+    var httpsRequestPending = { poolId: 0, domain: '', btnEl: null };
+
+    function openHttpsRequestModal(poolId, domain, btnEl) {
+        var modal = document.getElementById('pb-dm-https-request-modal');
+        var domainInput = document.getElementById('pb-dm-https-domain');
+        var providerSelect = document.getElementById('pb-dm-https-provider');
+        if (!modal || !domainInput || !providerSelect) return;
+        httpsRequestPending = { poolId: poolId, domain: domain, btnEl: btnEl };
+        domainInput.value = domain || '';
+        providerSelect.value = 'letsencrypt';
+        modal.classList.add('pb-dm-form-modal--open');
+    }
+
+    function closeHttpsRequestModal() {
+        var modal = document.getElementById('pb-dm-https-request-modal');
+        if (modal) modal.classList.remove('pb-dm-form-modal--open');
+        httpsRequestPending = { poolId: 0, domain: '', btnEl: null };
+    }
+
+    function doPoolRequestHttps(poolId, domain, provider, btnEl) {
         if (btnEl) {
             btnEl.disabled = true;
             btnEl.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i>';
         }
-        postForm(API.requestHttps, { pool_id: poolId }).then(function(res) {
+        postForm(API.requestHttps, { pool_id: poolId, provider: provider || 'letsencrypt' }).then(function(res) {
             if (btnEl) {
                 btnEl.disabled = false;
                 btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>';
@@ -4101,6 +4156,28 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
         prevBtn.disabled = poolState.page <= 1;
         nextBtn.disabled = poolState.page >= poolState.pages;
     }
+
+    (function initHttpsRequestModal() {
+        var modal = document.getElementById('pb-dm-https-request-modal');
+        var closeBtn = document.getElementById('pb-dm-https-request-close');
+        var cancelBtn = document.getElementById('pb-dm-https-request-cancel');
+        var submitBtn = document.getElementById('pb-dm-https-request-submit');
+        if (!modal) return;
+        function closeIt() { closeHttpsRequestModal(); }
+        if (closeBtn) closeBtn.addEventListener('click', closeIt);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeIt);
+        modal.addEventListener('click', function(e) { if (e.target === modal) closeIt(); });
+        if (submitBtn) {
+            submitBtn.addEventListener('click', function() {
+                var providerEl = document.getElementById('pb-dm-https-provider');
+                var provider = (providerEl && providerEl.value) ? providerEl.value : 'letsencrypt';
+                var p = httpsRequestPending;
+                if (p.poolId <= 0) { closeIt(); return; }
+                closeIt();
+                doPoolRequestHttps(p.poolId, p.domain, provider, p.btnEl);
+            });
+        }
+    })();
 
     document.getElementById('pb-dm-pool-search-btn').addEventListener('click', function() {
         loadDomainPool(1);
