@@ -554,8 +554,8 @@
     window.BackendConfirm = BackendConfirm;
     window.BackendModal = BackendModal;
 
-    // 向后兼容：保留 AdminToast 和 AdminConfirm 别名
-    window.AdminToast = BackendToast;
+    // 向后兼容：保留 BackendToast 和 AdminConfirm 别名
+    window.BackendToast = BackendToast;
     window.AdminConfirm = BackendConfirm;
 
 })(window, document);

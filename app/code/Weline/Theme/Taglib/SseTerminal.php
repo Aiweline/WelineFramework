@@ -384,8 +384,8 @@ if (btnCopy) {
             text.push(line.textContent);
         });
         navigator.clipboard.writeText(text.join('\\n')).then(function() {
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.success('$t_copied');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.success('$t_copied');
             } else {
                 alert('$t_copied');
             }

@@ -177,22 +177,22 @@ $isNew = !$status || !$status->getId();
             .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (data.success) {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.success(data.message || '<?= __('保存成功') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success(data.message || '<?= __('保存成功') ?>');
                     }
                     setTimeout(function() {
                         location.href = '<?= $this->getBackendUrl("order/backend/status/index") ?>';
                     }, 1500);
                 } else {
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error(data.message || '<?= __('保存失败') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(data.message || '<?= __('保存失败') ?>');
                     }
                 }
             })
             .catch(function(error) {
                 console.error('Error:', error);
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error('<?= __('保存失败，请重试') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error('<?= __('保存失败，请重试') ?>');
                 }
             });
         });
