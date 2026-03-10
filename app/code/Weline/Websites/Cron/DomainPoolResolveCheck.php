@@ -114,15 +114,13 @@ class DomainPoolResolveCheck implements CronTaskInterface
             w_log_info($message, [], 'domain_pool_resolve_check');
 
             if ($errors > 0) {
-                $eventData = [
-                    'data' => [
-                        'title' => __('域名池解析检测有 %{1} 个域名失败', [$errors]),
-                        'content' => $message,
-                        'is_icon' => 1,
-                        'avatar' => 'ri-error-warning-line',
-                    ],
-                ];
-                $eventsManager->dispatch('Weline_Admin::msg', $eventData);
+                w_msg(
+                    'domain_pool_resolve_check',
+                    'warning',
+                    __('域名池解析检测有 %{1} 个域名失败', [$errors]),
+                    $message,
+                    ['icon' => 'ri-error-warning-line']
+                );
             }
 
             return $message;
