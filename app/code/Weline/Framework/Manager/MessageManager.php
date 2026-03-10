@@ -248,18 +248,25 @@ class MessageManager
     }
 
     /**
-     * 输出并消费消息：读取后立即删除并持久化，WLS 下必须「读后即删」否则会累计重复显示。
+     * 输出并消费消息：读取后立即删除并持久化。
+     *
+     * WLS 下必须「读后即删 + 立即落盘」，否则消息会跨请求残留、在所有界面重复显示。
+     * 删除后显式 flush 确保响应发送前 Session 已落盘。
      */
     public function render(): string
     {
         $session = self::session();
         $content = $session->get('system-message') ?? '';
-        // 读取后立即删除并持久化，避免 WLS 跨请求残留导致提示累计
+        // 读取后立即删除
         foreach (self::keys as $key) {
             $session->delete($key);
         }
         if (method_exists($session, 'save')) {
             $session->save();
+        }
+        // 立即落盘：确保删除后的 Session 在响应发送前写入存储，避免跨请求残留
+        if (\class_exists(\Weline\Framework\Session\Session::class, false)) {
+            \Weline\Framework\Session\Session::flushRequestSessions();
         }
         return "<div class='system message'>{$content}</div>";
     }
