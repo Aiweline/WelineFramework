@@ -7,6 +7,7 @@ use GuoLaiRen\PageBuilder\Service\QuickBuildAggregator;
 use Weline\Admin\Controller\BaseController;
 use Weline\Backend\Model\Config as BackendConfig;
 use Weline\Cron\Schedule\Schedule;
+use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
@@ -825,7 +826,32 @@ class DomainManagement extends BaseController
             ]);
         }
     }
-    
+
+    /**
+     * AJAX: 补建已购买域名的生命周期订单
+     */
+    public function postRepairLifecycleOrder(): string
+    {
+        $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
+        $accountId = (int) $this->request->getPost('account_id', 0);
+        if ($domain === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('请输入根域名')]);
+        }
+        if ($accountId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('请选择购买时使用的域名商账号')]);
+        }
+
+        try {
+            $result = $this->aggregator->repairLifecycleOrder($domain, $accountId);
+            return $this->fetchJson($result);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('补建失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
     // ============================================================
     // v1.6.0: 域名池相关 API
     // ============================================================
@@ -838,6 +864,7 @@ class DomainManagement extends BaseController
         $siteReadyOnly = $this->request->getPost('site_ready_only', 'false') === 'true';
         $parentDomainId = (int) $this->request->getPost('parent_domain_id', 0);
         $search = \trim($this->request->getPost('search', '') ?? '');
+        $resolveFilter = \trim($this->request->getPost('resolve_status', '') ?? '');
         $page = \max(1, (int) $this->request->getPost('page', 1));
         $limit = \max(1, \min(100, (int) $this->request->getPost('limit', 50)));
         
@@ -853,41 +880,55 @@ class DomainManagement extends BaseController
                 $model->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $parentDomainId);
             }
             
+            if ($resolveFilter === 'resolved') {
+                $model->where(DomainPool::schema_fields_RESOLVE_STATUS, DomainPool::RESOLVE_STATUS_RESOLVED);
+            } elseif ($resolveFilter === 'unresolved') {
+                $model->where(DomainPool::schema_fields_RESOLVE_STATUS, [DomainPool::RESOLVE_STATUS_PENDING, DomainPool::RESOLVE_STATUS_ERROR], 'IN');
+            }
+            
             if ($search !== '') {
                 $model->where(DomainPool::schema_fields_DOMAIN, '%' . $search . '%', 'LIKE');
             }
             
             $model->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
                 ->order(DomainPool::schema_fields_DOMAIN, 'ASC');
-            
-            // 分页
-            $offset = ($page - 1) * $limit;
-            $model->limit($limit, $offset);
-            
+
+            $model->pagination($page, $limit);
             $domains = $model->select()->fetchArray();
+            $pagination = $model->pagination ?? [];
             
             // 格式化数据
             $data = [];
             foreach ($domains as $domain) {
+                $d = $domain[DomainPool::schema_fields_DOMAIN] ?? '';
+                $root = $domain[DomainPool::schema_fields_ROOT_DOMAIN] ?? '';
                 $data[] = [
                     'pool_id' => $domain[DomainPool::schema_fields_ID] ?? 0,
-                    'domain' => $domain[DomainPool::schema_fields_DOMAIN] ?? '',
-                    'root_domain' => $domain[DomainPool::schema_fields_ROOT_DOMAIN] ?? '',
+                    'domain' => $d,
+                    'full_domain' => $d,
+                    'root_domain' => $root,
+                    'subdomain' => $d !== '' && $root !== '' && $d !== $root,
+                    'status' => $domain[DomainPool::schema_fields_STATUS] ?? 'active',
                     'resolve_status' => $domain[DomainPool::schema_fields_RESOLVE_STATUS] ?? 'pending',
+                    'resolved_ip' => $domain[DomainPool::schema_fields_RESOLVED_IP] ?? '',
+                    'resolved_ipv6' => $domain[DomainPool::schema_fields_RESOLVED_IPV6] ?? '',
+                    'resolve_checked_at' => $domain[DomainPool::schema_fields_RESOLVE_CHECKED_AT] ?? '',
                     'is_local_server' => (int) ($domain[DomainPool::schema_fields_IS_LOCAL_SERVER] ?? 0),
                     'https_status' => $domain[DomainPool::schema_fields_HTTPS_STATUS] ?? 'none',
                     'https_expires_at' => $domain[DomainPool::schema_fields_HTTPS_EXPIRES_AT] ?? '',
                     'site_ready' => (int) ($domain[DomainPool::schema_fields_SITE_READY] ?? 0),
                     'description' => $domain[DomainPool::schema_fields_DESCRIPTION] ?? '',
+                    'allocated_at' => $domain[DomainPool::schema_fields_CREATED_AT] ?? $domain[DomainPool::schema_fields_UPDATED_AT] ?? '',
                 ];
             }
             
             return $this->fetchJson([
                 'success' => true,
                 'data' => $data,
-                'page' => $page,
-                'limit' => $limit,
-                'total' => count($data),
+                'page' => (int) ($pagination['page'] ?? $page),
+                'limit' => (int) ($pagination['pageSize'] ?? $limit),
+                'total' => (int) ($pagination['totalSize'] ?? count($data)),
+                'pages' => (int) ($pagination['lastPage'] ?? 1),
             ]);
         } catch (\Throwable $e) {
             return $this->fetchJson([
@@ -1032,6 +1073,100 @@ class DomainManagement extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'msg' => __('检测失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 删除域名池中的子域名
+     */
+    public function postDeletePoolDomain(): string
+    {
+        $poolId = (int) $this->request->getPost('pool_id', 0);
+        if ($poolId <= 0) {
+            return $this->fetchJson(['success' => false, 'msg' => __('请提供 pool_id')]);
+        }
+        try {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->load($poolId);
+            if (!$pool->getPoolId()) {
+                return $this->fetchJson(['success' => false, 'msg' => __('域名池记录不存在')]);
+            }
+            $domainName = $pool->getDomain();
+            $pool->delete();
+            return $this->fetchJson([
+                'success' => true,
+                'msg' => __('已删除：%{1}', [$domainName]),
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'msg' => __('删除失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * AJAX: 为域名池记录手动申请 HTTPS 证书
+     */
+    public function postRequestHttps(): string
+    {
+        $poolId = (int) $this->request->getPost('pool_id', 0);
+        if ($poolId <= 0) {
+            return $this->fetchJson(['success' => false, 'msg' => __('请提供 pool_id')]);
+        }
+        try {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->load($poolId);
+            if (!$pool->getPoolId()) {
+                return $this->fetchJson(['success' => false, 'msg' => __('域名池记录不存在')]);
+            }
+            $domain = $pool->getDomain();
+            if ($domain === '') {
+                return $this->fetchJson(['success' => false, 'msg' => __('域名为空')]);
+            }
+            $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+            $email = (string) (Env::getInstance()->getConfig('ssl.contact_email') ?? '');
+            if ($email === '') {
+                $email = 'admin@' . $domain;
+            }
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
+            $pool->setHttpsError('');
+            $pool->save();
+
+            $result = w_query('server', 'requestCertificate', [
+                'domain' => $domain,
+                'webroot' => $webroot,
+                'email' => $email,
+                'website_id' => 0,
+                'provider' => 'letsencrypt',
+                'cert_type' => 'exact',
+            ]);
+
+            if ($result['success'] ?? false) {
+                return $this->fetchJson([
+                    'success' => true,
+                    'msg' => __('证书申请成功：%{1}', [$domain]),
+                    'data' => $result,
+                ]);
+            }
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+            $pool->setHttpsError((string) ($result['message'] ?? __('未知错误')));
+            $pool->save();
+            return $this->fetchJson([
+                'success' => false,
+                'msg' => __('证书申请失败：%{1}', [$result['message'] ?? __('未知错误')]),
+            ]);
+        } catch (\Throwable $e) {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            if ($pool->load($poolId)->getPoolId()) {
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+                $pool->setHttpsError($e->getMessage());
+                $pool->save();
+            }
+            return $this->fetchJson([
+                'success' => false,
+                'msg' => __('证书申请异常：%{1}', [$e->getMessage()]),
             ]);
         }
     }
