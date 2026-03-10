@@ -1352,6 +1352,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }
 
         function loadScript(url) {
+            var urlPath = (url.split('?')[0] || '').replace(/^https?:\/\/[^/]+/, '') || url;
+            var scripts = document.querySelectorAll('script[src*="domain-purchase-dialog.js"]');
+            for (var i = 0; i < scripts.length; i++) {
+                var s = (scripts[i].src || '').split('?')[0];
+                var existingPath = s.replace(/^https?:\/\/[^/]+/, '');
+                if (existingPath && (existingPath === urlPath || existingPath.endsWith(urlPath) || urlPath.endsWith(existingPath))) {
+                    return Promise.resolve(true);
+                }
+            }
             return new Promise(function(resolve, reject) {
                 var script = document.createElement('script');
                 script.src = url;
