@@ -4252,7 +4252,11 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 if (doneBtn) { doneBtn.style.display = ''; doneBtn.onclick = function() { closeHttpsSseModal(); loadDomainPool(poolState.page); }; }
                 if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>'; }
             });
-            terminal.on('failed', function() {
+            terminal.on('failed', function(e) {
+                try {
+                    var d = (e && e.data) ? JSON.parse(e.data) : {};
+                    if (d.message && terminal.log) terminal.log(d.message, 'error');
+                } catch (err) {}
                 if (doneBtn) { doneBtn.style.display = ''; doneBtn.onclick = function() { closeHttpsSseModal(); loadDomainPool(poolState.page); }; }
                 if (btnEl) { btnEl.disabled = false; btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>'; }
             });
