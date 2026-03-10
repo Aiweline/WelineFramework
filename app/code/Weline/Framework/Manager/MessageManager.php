@@ -16,7 +16,6 @@ use Weline\Framework\Session\SessionFactory;
 
 class MessageManager
 {
-    private Session $session;
 
     public const keys = [
         'has-error',
@@ -27,23 +26,22 @@ class MessageManager
         'system-message',
     ];
 
-    public function __construct(
-        Session $session
-    )
+    private Session $session;
+    public function __construct()
     {
-        $this->session = $session;
+        $this->session = SessionFactory::getInstance()->createSession();
     }
 
-    /**
-     * 获取当前请求用于存消息的 Session。
-     * 统一使用 SessionFactory，确保与控制器、ACL 同源，避免 WLS/FPM 下读写不同实例导致消息残留。
-     */
+    public function getSession(): Session
+    {
+        return $this->session;
+    }
+
     public static function session(): Session
     {
-        $s = SessionFactory::getInstance()->createSession();
-        assert($s instanceof Session);
-        return $s;
+        return ObjectManager::getInstance(self::class)->getSession();
     }
+
 
     /**
      * @param string $msg

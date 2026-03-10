@@ -93,6 +93,31 @@ class SharedStateAdminService
         return $rows;
     }
 
+    /**
+     * 获取 Session 完整详情（所有字段）
+     */
+    public function getSessionDetail(string $sessionId): array
+    {
+        if ($sessionId === '') {
+            return [];
+        }
+        $storage = SessionFactory::getInstance()->createStorage();
+        $data = $storage->read($sessionId);
+        if (!\is_array($data) || empty($data)) {
+            return [];
+        }
+        $rows = [];
+        foreach ($data as $key => $value) {
+            $rows[] = [
+                'key' => (string)$key,
+                'type' => \gettype($value),
+                'preview' => $this->previewValue($value),
+                'preview_detail' => $this->buildPreviewDetail($value),
+            ];
+        }
+        return $rows;
+    }
+
     public function destroySession(string $sessionId): bool
     {
         if ($sessionId === '') {
