@@ -166,11 +166,13 @@ class ServerQueryProvider implements QueryProviderInterface
 
         $cert = $result['cert'] ?? null;
         $certId = $cert?->getCertId();
+        $certPath = $cert !== null && \method_exists($cert, 'getCertPath') ? (string) $cert->getCertPath() : '';
 
         return [
             'success'  => $result['success'] ?? false,
             'message'  => $result['message'] ?? '',
             'cert_id'  => $certId,
+            'cert_path' => $certPath,
             'cert'     => $cert,
             'domain'   => $requestedDomain,
             'requested_domain' => $domain,
