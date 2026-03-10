@@ -97,20 +97,20 @@
         req.then(function(res) {
             var data = (res && res.data) || res;
             if (data.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success('<?= __('状态已切换') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success('<?= __('状态已切换') ?>');
                 }
                 setTimeout(function() { location.reload(); }, 1500);
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(data.message || '<?= __('操作失败') ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(data.message || '<?= __('操作失败') ?>');
                 }
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.error('<?= __('操作失败，请重试') ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __('操作失败，请重试') ?>');
             }
         });
     }

@@ -82,18 +82,18 @@
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
-                AdminToast.success(data.message);
+                BackendToast.success(data.message);
                 setTimeout(function() {
                     location.href = '<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>';
                 }, 1500);
             } else {
-                AdminToast.error(data.message);
+                BackendToast.error(data.message);
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalText;
             }
         })
         .catch(function(error) {
-            AdminToast.error('<?= __('创建备份失败') ?>');
+            BackendToast.error('<?= __('创建备份失败') ?>');
             submitBtn.disabled = false;
             submitBtn.innerHTML = originalText;
         });

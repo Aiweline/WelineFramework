@@ -188,22 +188,22 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
         .then(function(r) {
             var resp = (r && r.data) !== undefined ? r.data : r;
             if (resp.success) {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.success(resp.message);
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.success(resp.message);
                 }
                 setTimeout(function() {
                     window.location.href = '<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>';
                 }, 800);
             } else {
-                if (typeof AdminToast !== 'undefined') {
-                    AdminToast.error(resp.message || '<?= __("保存失败") ?>');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(resp.message || '<?= __("保存失败") ?>');
                 }
             }
         })
         .catch(function(error) {
             console.error('Error:', error);
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.error('<?= __("请求失败") ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __("请求失败") ?>');
             }
         });
     });

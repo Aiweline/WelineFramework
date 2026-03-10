@@ -360,7 +360,7 @@ if ($scope) $baseParams['scope'] = $scope;
             window.Weline.Api.request(saveUrl, { method: 'POST', body: formData })
             .then(function(response) {
                 var data = response.data;
-                var Toast = window.BackendToast || window.AdminToast;
+                var Toast = window.BackendToast || window.BackendToast;
                 if (response.ok && data && data.success) {
                     if (Toast) Toast.success(data.message || '<?= __('保存成功') ?>');
                     location.reload();
@@ -369,7 +369,7 @@ if ($scope) $baseParams['scope'] = $scope;
                 }
             })
             .catch(function(error) {
-                (window.BackendToast || window.AdminToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
+                (window.BackendToast || window.BackendToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
             });
         });
         
@@ -385,7 +385,7 @@ if ($scope) $baseParams['scope'] = $scope;
                     window.Weline.Api.request(deleteUrl, { method: 'POST', body: fd })
                     .then(function(response) {
                         var data = response.data;
-                        var Toast = window.BackendToast || window.AdminToast;
+                        var Toast = window.BackendToast || window.BackendToast;
                         if (response.ok && data && data.success) {
                             var card = self.closest('.subject-card');
                             if (card) card.remove();
@@ -394,7 +394,7 @@ if ($scope) $baseParams['scope'] = $scope;
                         }
                     })
                     .catch(function(error) {
-                        (window.BackendToast || window.AdminToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
+                        (window.BackendToast || window.BackendToast).error(error && error.message ? error.message : '<?= __('请求失败') ?>');
                     });
                 };
                 if (typeof BackendConfirm !== 'undefined') {

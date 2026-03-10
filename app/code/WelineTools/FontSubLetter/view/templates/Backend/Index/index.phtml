@@ -407,12 +407,12 @@
                 showFileInfo(data.data);
                 currentRecordId = data.data.id;
             } else {
-                AdminToast.error(data.msg || '<?= __('上传失败') ?>');
+                BackendToast.error(data.msg || '<?= __('上传失败') ?>');
             }
         })
         .catch(function(error) {
             hideProgress();
-            AdminToast.error('<?= __('上传失败') ?>: ' + error.message);
+            BackendToast.error('<?= __('上传失败') ?>: ' + error.message);
         });
     }
 
@@ -436,7 +436,7 @@
     // 提取字符
     document.getElementById('extractBtn').addEventListener('click', function() {
         if (!currentRecordId) {
-            AdminToast.warning('<?= __('请先上传字体文件') ?>');
+            BackendToast.warning('<?= __('请先上传字体文件') ?>');
             return;
         }
 
@@ -453,22 +453,22 @@
                 if (data.data && data.data.characters && Array.isArray(data.data.characters)) {
                     showCharacterGrid(data.data.characters);
                 } else {
-                    AdminToast.error('<?= __('字符数据格式错误') ?>');
+                    BackendToast.error('<?= __('字符数据格式错误') ?>');
                 }
             } else {
-                AdminToast.error(data.msg || '<?= __('提取失败') ?>');
+                BackendToast.error(data.msg || '<?= __('提取失败') ?>');
             }
         })
         .catch(function(error) {
             hideProgress();
-            AdminToast.error('<?= __('提取失败') ?>: ' + error.message);
+            BackendToast.error('<?= __('提取失败') ?>: ' + error.message);
         });
     });
 
     // 显示字符网格
     function showCharacterGrid(characters) {
         if (!Array.isArray(characters) || characters.length === 0) {
-            AdminToast.warning('<?= __('没有可显示的字符') ?>');
+            BackendToast.warning('<?= __('没有可显示的字符') ?>');
             return;
         }
 
@@ -501,7 +501,7 @@
             document.getElementById('characterCard').style.display = 'block';
             updateSelectedCount();
         } else {
-            AdminToast.warning('<?= __('没有有效的字符可以显示') ?>');
+            BackendToast.warning('<?= __('没有有效的字符可以显示') ?>');
         }
     }
 
@@ -543,7 +543,7 @@
     // 添加到自定义字符
     document.getElementById('addToCustomBtn').addEventListener('click', function() {
         if (selectedCharacters.size === 0) {
-            AdminToast.warning('<?= __('请先选择字符') ?>');
+            BackendToast.warning('<?= __('请先选择字符') ?>');
             return;
         }
 
@@ -622,7 +622,7 @@
     // 生成字体
     document.getElementById('generateBtn').addEventListener('click', function() {
         if (!currentRecordId) {
-            AdminToast.warning('<?= __('请先上传字体文件') ?>');
+            BackendToast.warning('<?= __('请先上传字体文件') ?>');
             return;
         }
 
@@ -630,7 +630,7 @@
         var selectedCharsArray = Array.from(selectedCharacters);
         
         if (selectedCharsArray.length === 0 && !customChars) {
-            AdminToast.warning('<?= __('请选择要包含的字符或输入自定义字符') ?>');
+            BackendToast.warning('<?= __('请选择要包含的字符或输入自定义字符') ?>');
             return;
         }
 
@@ -660,16 +660,16 @@
             var data = (res && res.data) !== undefined ? res.data : res;
             hideProgress();
             if (data.code === 200) {
-                AdminToast.success('<?= __('子集字体生成成功') ?>');
+                BackendToast.success('<?= __('子集字体生成成功') ?>');
                 var downloadUrl = '<?= $this->getUrl("*/backend/download") ?>?record_id=' + currentRecordId;
                 window.open(downloadUrl, '_blank');
             } else {
-                AdminToast.error(data.msg || '<?= __('生成失败') ?>');
+                BackendToast.error(data.msg || '<?= __('生成失败') ?>');
             }
         })
         .catch(function(error) {
             hideProgress();
-            AdminToast.error('<?= __('生成失败') ?>: ' + error.message);
+            BackendToast.error('<?= __('生成失败') ?>: ' + error.message);
         });
     });
 })();

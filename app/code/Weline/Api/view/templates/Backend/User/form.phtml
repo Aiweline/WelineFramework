@@ -208,8 +208,8 @@ $isEdit = !empty($user) && $user->getId();
         copyToClipboard: function(input) {
             input.select();
             document.execCommand('copy');
-            if (typeof AdminToast !== 'undefined') {
-                AdminToast.success('<?= __('已复制到剪贴板') ?>');
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.success('<?= __('已复制到剪贴板') ?>');
             }
         }
     };
