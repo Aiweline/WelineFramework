@@ -1240,21 +1240,35 @@ class DomainManagement extends BaseController
             ]);
 
             if ($result['success'] ?? false) {
-                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
-                $pool->setHttpsError('');
                 $certId = (int) ($result['cert_id'] ?? 0);
+                $certPath = (string) ($result['cert_path'] ?? '');
+                if ($certPath !== '') {
+                    $sse->sendEvent('progress', ['message' => __('证书存储位置：%{1}', [\dirname($certPath)]), 'cert_dir' => \dirname($certPath)]);
+                }
                 if ($certId > 0) {
-                    $pool->setCertId($certId);
+                    $sse->sendEvent('progress', ['message' => __('证书管理记录已保存，cert_id=%{1}', [$certId]), 'cert_id' => $certId]);
+                }
+
+                $sse->sendEvent('progress', ['message' => __('正在更新域名池「%{1}」的 HTTPS 状态…', [$domain]), 'step' => 'update_pool']);
+                $poolToUpdate = ObjectManager::getInstance(DomainPool::class, [], false)->loadByDomain($domain);
+                if (!$poolToUpdate->getPoolId()) {
+                    $poolToUpdate = $pool;
+                }
+                $poolToUpdate->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                $poolToUpdate->setHttpsError('');
+                if ($certId > 0) {
+                    $poolToUpdate->setCertId($certId);
                 }
                 $cert = $result['cert'] ?? null;
                 if ($cert !== null && \method_exists($cert, 'getExpiresAt')) {
                     $expiresAt = $cert->getExpiresAt();
                     if ($expiresAt !== '') {
-                        $pool->setHttpsExpiresAt($expiresAt);
+                        $poolToUpdate->setHttpsExpiresAt($expiresAt);
                     }
                 }
-                $pool->calculateSiteReady();
-                $pool->save();
+                $poolToUpdate->calculateSiteReady();
+                $poolToUpdate->save();
+                $sse->sendEvent('progress', ['message' => __('域名池 HTTPS 状态已更新为有效（pool_id=%{1}）', [$poolToUpdate->getPoolId()]), 'step' => 'pool_updated']);
 
                 $sse->sendEvent('success', ['message' => __('证书申请成功')]);
                 $sse->sendEvent('done', ['message' => __('申请完成：%{1}', [$domain]), 'success' => true]);
@@ -1321,21 +1335,25 @@ class DomainManagement extends BaseController
             ]);
 
             if ($result['success'] ?? false) {
-                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
-                $pool->setHttpsError('');
                 $certId = (int) ($result['cert_id'] ?? 0);
+                $poolToUpdate = ObjectManager::getInstance(DomainPool::class, [], false)->loadByDomain($domain);
+                if (!$poolToUpdate->getPoolId()) {
+                    $poolToUpdate = $pool;
+                }
+                $poolToUpdate->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                $poolToUpdate->setHttpsError('');
                 if ($certId > 0) {
-                    $pool->setCertId($certId);
+                    $poolToUpdate->setCertId($certId);
                 }
                 $cert = $result['cert'] ?? null;
                 if ($cert !== null && \method_exists($cert, 'getExpiresAt')) {
                     $expiresAt = $cert->getExpiresAt();
                     if ($expiresAt !== '') {
-                        $pool->setHttpsExpiresAt($expiresAt);
+                        $poolToUpdate->setHttpsExpiresAt($expiresAt);
                     }
                 }
-                $pool->calculateSiteReady();
-                $pool->save();
+                $poolToUpdate->calculateSiteReady();
+                $poolToUpdate->save();
 
                 return $this->fetchJson([
                     'success' => true,
@@ -1343,9 +1361,13 @@ class DomainManagement extends BaseController
                     'data' => $result,
                 ]);
             }
-            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
-            $pool->setHttpsError((string) ($result['message'] ?? __('未知错误')));
-            $pool->save();
+            $poolToUpdate = ObjectManager::getInstance(DomainPool::class, [], false)->loadByDomain($domain);
+            if (!$poolToUpdate->getPoolId()) {
+                $poolToUpdate = $pool;
+            }
+            $poolToUpdate->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
+            $poolToUpdate->setHttpsError((string) ($result['message'] ?? __('未知错误')));
+            $poolToUpdate->save();
             return $this->fetchJson([
                 'success' => false,
                 'msg' => __('证书申请失败：%{1}', [$result['message'] ?? __('未知错误')]),
