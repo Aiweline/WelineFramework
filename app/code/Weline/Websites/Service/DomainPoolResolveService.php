@@ -36,6 +36,10 @@ class DomainPoolResolveService
 
         $wasLocalBefore = (bool) ($poolDomain->getData(DomainPool::schema_fields_IS_LOCAL_SERVER) ?? false);
 
+        // 解析开始时设置“解析中”状态
+        $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVING);
+        $poolDomain->save();
+
         $ipv4 = '';
         $ipv6 = '';
         $error = '';
@@ -108,6 +112,9 @@ class DomainPoolResolveService
         $oldIpv6 = (string) ($poolDomain->getData(DomainPool::schema_fields_RESOLVED_IPV6) ?? '');
         $oldIsLocal = (bool) ($poolDomain->getData(DomainPool::schema_fields_IS_LOCAL_SERVER) ?? false);
         $oldStatus = (string) ($poolDomain->getData(DomainPool::schema_fields_RESOLVE_STATUS) ?? '');
+
+        $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVING);
+        $poolDomain->save();
 
         $ipv4 = '';
         $ipv6 = '';
