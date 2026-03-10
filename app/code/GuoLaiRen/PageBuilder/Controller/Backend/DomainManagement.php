@@ -429,13 +429,20 @@ class DomainManagement extends BaseController
                             }
                         }
 
-                        // DNS 服务商：优先本地数据，其次从远程 nameservers 检测
+                        // DNS 服务商：优先本地数据，其次从远程 nameservers 检测；本地为空时用注册商表示「跟随注册商」
                         $dnsProvider = '';
                         $cdnProvider = '';
 
                         if ($isLocal) {
                             $dnsProvider = $localData['dns_provider'] ?? '';
                             $cdnProvider = $localData['cdn_provider'] ?? '';
+                            // 本地已拉取但未单独配置 DNS/CDN 的，显示注册商表示跟随注册商
+                            if ($dnsProvider === '' || $dnsProvider === null) {
+                                $dnsProvider = $acctInfo['registrar_code'] ?? '';
+                            }
+                            if ($cdnProvider === '' || $cdnProvider === null) {
+                                $cdnProvider = $acctInfo['registrar_code'] ?? '';
+                            }
                         } elseif (!empty($rd['nameservers'])) {
                             // 远程域名带有 nameservers，实时检测 DNS 服务商
                             $dnsProvider = $dnsDetector->detectProvider($rd['nameservers']);
