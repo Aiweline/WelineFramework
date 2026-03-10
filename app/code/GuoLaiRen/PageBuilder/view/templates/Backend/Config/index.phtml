@@ -257,62 +257,23 @@ $i18nEnabled = $i18n_enabled ?? '0';
         }
         
         var url = '<?= $this->getBackendUrl('pagebuilder/backend/config/save') ?>';
-        var body = new URLSearchParams(data);
-        var req = sendConfigRequest(url, body);
-        req.then(function(res) {
+        var opts = {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: (new URLSearchParams(data)).toString()
+        };
+        window.Weline.Api.request(url, opts).then(function(res) {
             var payload = (res && res.data !== undefined) ? res.data : res;
             var msg = (payload && payload.message) ? payload.message : '';
             if (payload && payload.success) {
                 showPageMessage('success', msg);
-                setTimeout(function() {
-                    window.location.reload();
-                }, 1000);
+                setTimeout(function() { window.location.reload(); }, 1000);
             } else {
                 showPageMessage('error', msg || '<?= __('保存失败') ?>');
             }
-        })
-        .catch(function(error) {
+        }).catch(function(error) {
             console.error('Config save error:', error);
-            var errMsg = (error && error.message) ? error.message : '<?= __('保存失败') ?>';
-            showPageMessage('error', errMsg);
-        });
-    }
-
-    /**
-     * 发送配置保存请求。优先使用 Weline.Api.request；不可用时使用原生 fetch，确保请求一定会发出。
-     */
-    function sendConfigRequest(url, body) {
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body };
-        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
-            return Promise.resolve(window.Weline.Api.request(url, opts)).then(function(res) {
-                return res;
-            });
-        }
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' },
-            body: body,
-            credentials: 'same-origin'
-        }).then(function(r) {
-            var ct = (r.headers.get('content-type') || '').toLowerCase();
-            if (ct.indexOf('application/json') !== -1) {
-                return r.json().then(function(d) {
-                    if (!r.ok) {
-                        return Promise.reject(new Error((d && d.message) ? d.message : (r.statusText || 'HTTP ' + r.status)));
-                    }
-                    return { data: d };
-                });
-            }
-            return r.text().then(function(t) {
-                if (!r.ok) {
-                    return Promise.reject(new Error(t || r.statusText || 'HTTP ' + r.status));
-                }
-                try {
-                    return { data: JSON.parse(t) };
-                } catch (e) {
-                    return { data: { success: false, message: t || '<?= __('保存失败') ?>' } };
-                }
-            });
+            showPageMessage('error', (error && error.message) ? error.message : '<?= __('保存失败') ?>');
         });
     }
     
