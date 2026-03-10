@@ -2704,6 +2704,141 @@ class Domain extends BackendController
     }
 
     /**
+     * AJAX: 切换根域名 DNS 服务账户（同步记录到本地 → 修改 NS → 更新账户并标记待迁移，定时任务将把记录推送到新账户）
+     *
+     * POST: domain_ids[], target_account_id
+     * 相同账户则跳过；不同账户时：先同步当前记录到本地，再在注册商处修改 NS 到目标账户，更新 domain 的 dns_account_id/dns_provider，并设置 dns_migration_pending，由定时任务推送记录到新账户。
+     */
+    #[Acl('Weline_Websites::switch_dns_account', '切换DNS服务账户', 'mdi mdi-swap-horizontal', '为根域名切换 DNS 服务账户并迁移记录')]
+    public function postSwitchDnsAccount(): string
+    {
+        $domainIds = $this->request->getPost('domain_ids', []);
+        $targetAccountId = (int) $this->request->getPost('target_account_id', 0);
+
+        if (\is_string($domainIds)) {
+            $domainIds = \json_decode($domainIds, true) ?: [];
+        }
+        $domainIds = \array_map('intval', \array_filter((array) $domainIds));
+
+        if ($domainIds === []) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择要切换的根域名')]);
+        }
+        if ($targetAccountId <= 0) {
+            return $this->fetchJson(['code' => 400, 'msg' => __('请选择目标 DNS 服务账户')]);
+        }
+
+        try {
+            $targetAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $targetAccount->load($targetAccountId);
+            if (!$targetAccount->getAccountId()) {
+                return $this->fetchJson(['code' => 404, 'msg' => __('目标账户不存在')]);
+            }
+
+            $targetAdapter = $this->resolverService->getAdapter($targetAccount->getRegistrarCode());
+            if ($targetAdapter === null || !$targetAdapter->supportsDnsManagement()) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('目标账户不支持 DNS 管理')]);
+            }
+
+            $targetCode = (string) $targetAccount->getRegistrarCode();
+            $targetCredentials = $targetAccount->getCredentials();
+            $success = 0;
+            $skipped = 0;
+            $failed = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                $domain->load($domainId);
+                if (!$domain->getDomainId()) {
+                    $failed++;
+                    $errors[] = __('域名 ID %{1} 不存在', [$domainId]);
+                    continue;
+                }
+
+                $currentDnsAccountId = (int) $domain->getDnsAccountId();
+                if ($currentDnsAccountId === $targetAccountId) {
+                    $skipped++;
+                    continue;
+                }
+
+                $domainName = $domain->getDomain();
+
+                // 1. 将当前 DNS 记录同步到本地，供后续定时任务推送到新账户
+                $this->resolveService->syncDnsRecords($domain);
+
+                // 2. 在注册商处把 NS 改为目标账户的 NS
+                $registrarAccountId = (int) $domain->getAccountId();
+                if ($registrarAccountId <= 0) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . __('域名未关联注册商账户，无法修改 NS');
+                    continue;
+                }
+
+                $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $sourceAccount->load($registrarAccountId);
+                if (!$sourceAccount->getAccountId()) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . __('找不到注册商账户');
+                    continue;
+                }
+
+                $sourceAdapter = $this->resolverService->getAdapter($sourceAccount->getRegistrarCode());
+                if ($sourceAdapter === null) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . __('注册商适配器不存在');
+                    continue;
+                }
+
+                $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
+                if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . ($nsResult['message'] ?? __('无法获取目标 Nameserver'));
+                    continue;
+                }
+                $targetNs = $nsResult['nameservers'];
+                $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
+
+                if (!($updateResult['success'] ?? false)) {
+                    $failed++;
+                    $errors[] = $domainName . ': ' . ($updateResult['message'] ?? __('NS 切换失败'));
+                    continue;
+                }
+
+                $domain->setNameservers($targetNs);
+                $domain->setDnsAccountId($targetAccountId);
+                $domain->setDnsProvider($targetCode);
+                $domain->setDnsMigrationPending(1);
+                $domain->forceCheck(false)->save();
+                $success++;
+            }
+
+            $msg = __('切换完成：成功 %{1}，跳过（已是该账户）%{2}，失败 %{3}', [$success, $skipped, $failed]);
+            if ($errors !== []) {
+                $msg .= "\n" . \implode("\n", \array_slice($errors, 0, 5));
+                if (\count($errors) > 5) {
+                    $msg .= "\n…";
+                }
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => [
+                    'success' => $success,
+                    'skipped' => $skipped,
+                    'failed' => $failed,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('切换失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
      * AJAX: 获取可用于 DNS/CDN 管理的账户列表
      *
      * 返回支持 DNS 管理的账户（用于下拉选择）

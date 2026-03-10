@@ -1381,20 +1381,40 @@ CNF;
             $certPath = $certDir . 'fullchain.pem';
             $keyPath = $certDir . 'privkey.pem';
             $chainPath = $certDir . 'chain.pem';
-            
+
+            // 3.5 若证书目录已有未过期证书，跳过申请，直接同步记录并返回
+            if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+                if ($onProgress) {
+                    $onProgress((string) __('已存在未过期证书，跳过申请'), ['step' => 'skip_acme']);
+                    $onProgress((string) __('证书存储位置：%{1}', [$certDir]), ['cert_dir' => $certDir]);
+                    $onProgress((string) __('正在同步证书管理记录…'), ['step' => 'sync_record']);
+                }
+                $synced = $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true, $provider);
+                if ($synced !== null) {
+                    if ($onProgress) {
+                        $onProgress((string) __('证书管理记录已同步，cert_id=%{1}', [$synced->getCertId()]), ['cert_id' => $synced->getCertId()]);
+                    }
+                    return ['success' => true, 'message' => __('已存在未过期证书，已跳过申请并更新记录'), 'cert' => $synced];
+                }
+            }
+
             $cert->setCertPath($certPath)
                 ->setKeyPath($keyPath)
                 ->setChainPath($chainPath);
-            
+
             // 4. 使用 ACME 协议申请证书
             $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
-            
+
             if ($result['success']) {
+                if ($onProgress) {
+                    $onProgress((string) __('证书已保存到：%{1}', [$certDir]), ['cert_dir' => $certDir, 'cert_path' => $certPath]);
+                    $onProgress((string) __('正在保存证书管理记录…'), ['step' => 'save_record']);
+                }
                 // 更新证书信息
                 $certInfo = $this->parseCertificate($certPath);
                 $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
                 $issuer = $certInfo['issuer'] ?? "Let's Encrypt";
-                
+
                 $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
                     ->setExpiresAt($expiresAt)
                     ->setIssuer($issuer)
@@ -1402,7 +1422,11 @@ CNF;
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
                     ->setRenewError('')
                     ->save();
-                
+
+                if ($onProgress) {
+                    $onProgress((string) __('证书管理记录已保存，cert_id=%{1}', [$cert->getCertId()]), ['cert_id' => $cert->getCertId()]);
+                }
+
                 // 触发证书签发事件（通过事件解耦模块间依赖）
                 $this->dispatchCertificateIssuedEvent(
                     $domain,
@@ -1413,7 +1437,7 @@ CNF;
                     $expiresAt,
                     $cert->getCertType()
                 );
-                
+
                 return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
             } else {
                 $cert->setStatus(SslCertificate::STATUS_ERROR)
@@ -1640,6 +1664,7 @@ CNF;
             \file_put_contents($fullchainPath, $certPem);
             \copy($domainKeyPath, $privkeyPath);
 
+            $onProg(__('证书已写入：%{1}', [$fullchainPath]), ['step' => 'saved', 'cert_path' => $fullchainPath, 'cert_dir' => $certDir]);
             $onProg(__('证书申请流程已完成'), ['step' => 'done', 'progress' => 100]);
             return ['success' => true, 'message' => __('证书申请成功')];
             
