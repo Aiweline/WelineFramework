@@ -701,9 +701,15 @@ $purchaseDialogJsUrl = $this->getViewFileUrl('Weline_Websites::backend/domain-pu
                 loadScript(url).then(function() {
                     if (window.WelineDomainPurchaseDialog) {
                         resolve(true);
-                    } else {
-                        tryNext(new Error('dialog-object-missing:' + url));
+                        return;
                     }
+                    setTimeout(function() {
+                        if (window.WelineDomainPurchaseDialog) {
+                            resolve(true);
+                            return;
+                        }
+                        tryNext(new Error('dialog-object-missing:' + url));
+                    }, 0);
                 }).catch(function(error) {
                     tryNext(error);
                 });
