@@ -38,5 +38,21 @@
              action="*/backend/backup"
              icon="mdi mdi-backup-restore"
              order="40"/>
+        
+        <menu source="Weline_Websites::site_builder_agent"
+             name="site_builder_agent"
+             title="建站智能体"
+             action="*/backend/site-builder-agent/index"
+             icon="mdi mdi-robot"
+             order="50"/>
     </menu>
+    
+    <!-- 建站智能体 - 同时挂在 page_builder_group 下 -->
+    <menu source="Weline_Websites::site_builder_agent_pagebuilder"
+         name="site_builder_agent_pagebuilder"
+         title="建站智能体"
+         action="*/backend/site-builder-agent/index"
+         parent="Weline_Backend::page_builder_group"
+         icon="mdi mdi-robot"
+         order="15"/>
 </menus>
