@@ -86,6 +86,9 @@ class Domain extends Model
     #[Col('int', 11, nullable: true, default: 0, comment: 'DNS管理账户ID（第三方DNS服务商）')]
     public const schema_fields_DNS_ACCOUNT_ID = 'dns_account_id';
 
+    #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS切换后待推送记录：1=定时任务将把本地记录推送到新账户')]
+    public const schema_fields_DNS_MIGRATION_PENDING = 'dns_migration_pending';
+
     #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
     public const schema_fields_RESOLVE_STATUS = 'resolve_status';
 
@@ -308,6 +311,17 @@ class Domain extends Model
     public function setDnsAccountId(int $accountId): self
     {
         $this->setData(self::schema_fields_DNS_ACCOUNT_ID, $accountId);
+        return $this;
+    }
+
+    public function getDnsMigrationPending(): int
+    {
+        return (int) ($this->getData(self::schema_fields_DNS_MIGRATION_PENDING) ?? 0);
+    }
+
+    public function setDnsMigrationPending(int $value): self
+    {
+        $this->setData(self::schema_fields_DNS_MIGRATION_PENDING, $value);
         return $this;
     }
 

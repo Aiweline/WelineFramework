@@ -355,6 +355,10 @@ $accounts = $accounts ?? [];
                 <i class="mdi mdi-account-cog"></i>
                 <span><?= __('设置账户') ?></span>
             </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--secondary" onclick="WelineDomainList.showSwitchDnsAccountModal()" title="<?= __('为根域名切换 DNS 服务账户，NS 切换后定时任务将把记录推送到新账户') ?>">
+                <i class="mdi mdi-dns"></i>
+                <span><?= __('切换DNS账户') ?></span>
+            </button>
         </div>
         <div class="weline-domain-list-actions-group">
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" onclick="WelineDomainList.cleanupDnsProviderDomains()" title="<?= __('清理误同步的 DNS 服务商域名') ?>">
@@ -785,6 +789,46 @@ $accounts = $accounts ?? [];
     </div>
 </div>
 
+<!-- 切换 DNS 服务账户弹窗（选择供应商 + 账户，同步记录→改 NS→定时任务推送记录） -->
+<div class="modal fade" id="welineSwitchDnsAccountModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-dns me-2"></i><?= __('切换 DNS 服务账户') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= __('将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。') ?>
+                </div>
+                <p class="text-muted small mb-3" id="weline-switch-dns-selected-info"></p>
+
+                <div class="mb-3">
+                    <label class="form-label"><?= __('选择供应商') ?></label>
+                    <select class="form-select" id="weline-switch-dns-provider" onchange="WelineDomainList.onSwitchDnsProviderChange()">
+                        <option value=""><?= __('-- 请先选择 --') ?></option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><?= __('选择账户') ?></label>
+                    <select class="form-select" id="weline-switch-dns-account">
+                        <option value=""><?= __('-- 请先选择供应商 --') ?></option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="weline-switch-dns-submit" onclick="WelineDomainList.doSwitchDnsAccount()">
+                    <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- 批量设置账户弹窗 -->
 <div class="modal fade" id="welineBatchSetAccountsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
@@ -863,7 +907,8 @@ $accounts = $accounts ?? [];
         detectDnsProvider: '<?= $this->getUrl('*/admin/domain/detect-dns-provider') ?>',
         cleanupDnsProviderDomains: '<?= $this->getUrl('*/admin/domain/cleanup-dns-provider-domains') ?>',
         batchSetAccounts: '<?= $this->getUrl('*/admin/domain/batch-set-accounts') ?>',
-        getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>'
+        getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>',
+        switchDnsAccount: '<?= $this->getUrl('*/admin/domain/switch-dns-account') ?>'
     };
 
     var importModal = null;
@@ -2255,7 +2300,10 @@ $accounts = $accounts ?? [];
         batchDetectDnsProvider: batchDetectDnsProvider,
         cleanupDnsProviderDomains: cleanupDnsProviderDomains,
         showBatchSetAccountsModal: showBatchSetAccountsModal,
-        doBatchSetAccounts: doBatchSetAccounts
+        doBatchSetAccounts: doBatchSetAccounts,
+        showSwitchDnsAccountModal: showSwitchDnsAccountModal,
+        onSwitchDnsProviderChange: onSwitchDnsProviderChange,
+        doSwitchDnsAccount: doSwitchDnsAccount
     };
 
     function getSelectedDomainIds() {
@@ -2264,6 +2312,113 @@ $accounts = $accounts ?? [];
             ids.push(cb.value);
         });
         return ids;
+    }
+
+    // ========== 切换 DNS 服务账户（供应商 + 账户） ==========
+    var switchDnsAccountSelectedIds = [];
+    var switchDnsAccountModal = null;
+    var switchDnsAccountCache = []; // { providers: [], accounts: [] }
+
+    function showSwitchDnsAccountModal() {
+        var selected = getSelectedDomainIds();
+        if (selected.length === 0) {
+            toast('<?= __('请先选择要切换 DNS 的根域名') ?>', 'warning');
+            return;
+        }
+        switchDnsAccountSelectedIds = selected;
+        var infoEl = document.getElementById('weline-switch-dns-selected-info');
+        infoEl.textContent = '<?= __('已选择') ?> ' + selected.length + ' <?= __('个根域名') ?>';
+
+        document.getElementById('weline-switch-dns-provider').value = '';
+        document.getElementById('weline-switch-dns-account').innerHTML = '<option value=""><?= __('-- 请先选择供应商 --') ?></option>';
+
+        loadDnsAccountsForSwitch();
+        if (!switchDnsAccountModal) {
+            switchDnsAccountModal = new bootstrap.Modal(document.getElementById('welineSwitchDnsAccountModal'));
+        }
+        switchDnsAccountModal.show();
+    }
+
+    function loadDnsAccountsForSwitch() {
+        fetch(urls.getDnsAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code !== 200 || !data.data || !data.data.dns_accounts) {
+                    return;
+                }
+                var accounts = data.data.dns_accounts;
+                var seen = {};
+                var providers = [];
+                accounts.forEach(function(acc) {
+                    var code = acc.registrar_code || '';
+                    if (code && !seen[code]) {
+                        seen[code] = true;
+                        providers.push({ code: code, name: acc.registrar_name || code });
+                    }
+                });
+                switchDnsAccountCache = { providers: providers, accounts: accounts };
+
+                var sel = document.getElementById('weline-switch-dns-provider');
+                while (sel.options.length > 1) sel.remove(1);
+                providers.forEach(function(p) {
+                    var opt = document.createElement('option');
+                    opt.value = p.code;
+                    opt.textContent = p.name;
+                    sel.appendChild(opt);
+                });
+            })
+            .catch(function() { toast('<?= __('加载账户列表失败') ?>', 'error'); });
+    }
+
+    function onSwitchDnsProviderChange() {
+        var provider = document.getElementById('weline-switch-dns-provider').value;
+        var accountSel = document.getElementById('weline-switch-dns-account');
+        accountSel.innerHTML = '<option value=""><?= __('-- 请选择账户 --') ?></option>';
+        if (!provider || !switchDnsAccountCache.accounts) return;
+        switchDnsAccountCache.accounts.forEach(function(acc) {
+            if ((acc.registrar_code || '') === provider) {
+                var opt = document.createElement('option');
+                opt.value = acc.account_id;
+                opt.textContent = acc.name + ' (' + (acc.registrar_name || '') + ')';
+                accountSel.appendChild(opt);
+            }
+        });
+    }
+
+    function doSwitchDnsAccount() {
+        if (switchDnsAccountSelectedIds.length === 0) {
+            toast('<?= __('请先选择要切换的根域名') ?>', 'warning');
+            return;
+        }
+        var targetAccountId = document.getElementById('weline-switch-dns-account').value;
+        if (!targetAccountId) {
+            toast('<?= __('请选择目标 DNS 服务账户') ?>', 'warning');
+            return;
+        }
+        var submitBtn = document.getElementById('weline-switch-dns-submit');
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(switchDnsAccountSelectedIds));
+        fd.append('target_account_id', targetAccountId);
+
+        toast('<?= __('正在切换 DNS 服务账户…') ?>', 'info');
+        submitBtn.disabled = true;
+
+        fetch(urls.switchDnsAccount, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('切换完成') ?>', 'success');
+                    if (switchDnsAccountModal) switchDnsAccountModal.hide();
+                    loadDomains(currentPage);
+                } else {
+                    toast(data.msg || '<?= __('切换失败') ?>', 'error');
+                }
+            })
+            .catch(function() {
+                submitBtn.disabled = false;
+                toast('<?= __('请求失败') ?>', 'error');
+            });
     }
 
     // ========== 批量设置账户相关函数 ==========
