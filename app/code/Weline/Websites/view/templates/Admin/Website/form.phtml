@@ -21,6 +21,89 @@ $address_lines = $address_lines ?? '';
     <template>Weline_Component::message.phtml</template>
 </div>
 
+<!-- 手风琴样式 -->
+<style>
+.website-form-accordion .accordion-item {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 0.375rem);
+    margin-bottom: 1rem;
+    background-color: var(--backend-color-card-bg, #fff);
+    overflow: hidden;
+}
+.website-form-accordion .accordion-header {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: var(--backend-color-bg-tertiary, #f8f9fa);
+    transition: background-color 0.2s ease;
+    border: none;
+}
+.website-form-accordion .accordion-header:hover {
+    background-color: var(--backend-color-bg-secondary, #e9ecef);
+}
+.website-form-accordion .accordion-header .accordion-button {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    font-size: 1rem;
+    width: 100%;
+}
+.website-form-accordion .accordion-header .accordion-button:focus {
+    outline: none;
+    box-shadow: none;
+}
+.website-form-accordion .accordion-header .accordion-button::after {
+    display: none;
+}
+.website-form-accordion .accordion-header .mdi {
+    color: var(--backend-color-primary, #556ee6);
+    font-size: 1.25rem;
+    transition: transform 0.3s ease;
+}
+.website-form-accordion .accordion-button:not(.collapsed) .mdi-chevron-down {
+    transform: rotate(180deg);
+}
+.website-form-accordion .accordion-body {
+    padding: 1.25rem;
+    border-top: 1px solid var(--backend-color-border-default, #dee2e6);
+    background-color: var(--backend-color-card-bg, #fff);
+}
+.form-select,
+.form-select[multiple] {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+.form-select::-webkit-scrollbar,
+.form-select[multiple]::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.form-select::-webkit-scrollbar-track,
+.form-select[multiple]::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+.form-select::-webkit-scrollbar-thumb,
+.form-select[multiple]::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+}
+.form-select::-webkit-scrollbar-thumb:hover,
+.form-select[multiple]::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+#timezone-search {
+    margin-bottom: 0.5rem;
+}
+</style>
+
 <div class="card" id="WebsitePage">
     <div class="card-body">
         <h4 class="card-title"><?= isset($website['website_id']) ? '编辑网站' : '添加网站' ?></h4>
@@ -34,187 +117,238 @@ $address_lines = $address_lines ?? '';
         ?>
         <form action="<?= $this->getUrl($formAction, $formParams) ?>"
               method="post" class="needs-validation" novalidate>
-            <div class="row">
-                <?php if (isset($website['website_id'])): ?>
-                    <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
-                <?php endif; ?>
+            <!-- 手风琴折叠面板 -->
+            <div class="website-form-accordion" id="websiteFormAccordion">
+                <!-- 基本信息（默认展开） -->
+                <div class="accordion-item">
+                    <div class="accordion-header" id="headingBasic">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBasic" aria-expanded="true" aria-controls="collapseBasic">
+                            <i class="mdi mdiInformation-outline"></i>
+                            <span><lang>基本信息</lang></span>
+                            <i class="mdi mdi-chevron-down ms-auto"></i>
+                        </button>
+                    </div>
+                    <div id="collapseBasic" class="accordion-collapse collapse show" aria-labelledby="headingBasic" data-bs-parent="#websiteFormAccordion">
+                        <div class="accordion-body">
+                            <?php if (isset($website['website_id'])): ?>
+                                <input type="hidden" name="website_id" value="<?= $website['website_id'] ?>">
+                            <?php endif; ?>
 
-                <div class="col-12 mb-3">
-                    <label class="form-label">
-                        <i class="mdi mdi-domain me-1"></i><lang>选择域名</lang>
-                    </label>
-                    <w:websites:domain:select
-                        id="website_domain_select"
-                        name="pool_ids"
-                        value="''"
-                        display="'点击选择域名（可多选）'"
-                        class="w-100"
-                        multiple="true"
-                        value-type="pool_id"
-                        site-ready-only="true"
-                        auto-fill-code="code"
-                        auto-fill-address="address_lines"
-                        auto-fill-name="name"
-                    />
-                    <input type="hidden" name="domain_values" value="">
-                    <div class="form-text-hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站地址将自动填充，可再编辑。同一域名被多站使用时须填写不同子路径。</lang></div>
-                </div>
+                            <div class="row">
+                                <div class="col-4 mb-3">
+                                    <label for="name" class="form-label"><lang>网站名称</lang></label>
+                                    <input type="text" class="form-control" id="name" name="name"
+                                           value="<?= htmlspecialchars($website['name'] ?? '') ?>" required>
+                                    <div class="invalid-feedback"><lang>请输入网站名称</lang></div>
+                                </div>
 
-                <div class="col-4 mb-3">
-                    <label for="name" class="form-label"><lang>网站名称</lang></label>
-                    <input type="text" class="form-control" id="name" name="name"
-                           value="<?= htmlspecialchars($website['name'] ?? '') ?>" required>
-                    <div class="invalid-feedback"><lang>请输入网站名称</lang></div>
-                </div>
+                                <div class="col-4 mb-3">
+                                    <label for="code" class="form-label"><lang>网站代码</lang></label>
+                                    <input type="text" class="form-control" id="code" name="code"
+                                           value="<?= htmlspecialchars($website['code'] ?? '') ?>" required>
+                                    <div class="invalid-feedback"><lang>请输入网站代码</lang></div>
+                                    <div class="form-text-hint"><lang>可由选择域名自动生成（域名转下划线），可修改</lang></div>
+                                </div>
 
-                <div class="col-4 mb-3">
-                    <label for="code" class="form-label"><lang>网站代码</lang></label>
-                    <input type="text" class="form-control" id="code" name="code"
-                           value="<?= htmlspecialchars($website['code'] ?? '') ?>" required>
-                    <div class="invalid-feedback"><lang>请输入网站代码</lang></div>
-                    <div class="form-text-hint"><lang>可由选择域名自动生成（域名转下划线），可修改</lang></div>
-                </div>
+                                <div class="col-4 mb-3">
+                                    <label for="scope" class="form-label"><?= __('业务范围 (Scope)') ?></label>
+                                    <input type="text" 
+                                           class="form-control bg-body-secondary" 
+                                           id="scope" 
+                                           name="scope"
+                                           value="<?= htmlspecialchars($website['scope'] ?? '') ?>"
+                                           placeholder="<?= __('如：page_builder、catalog') ?>"
+                                           readonly
+                                           disabled>
+                                    <div class="form-text-hint">
+                                        <?= __('用于标识站点的业务来源，留空表示通用站点。由系统自动设置。') ?>
+                                    </div>
+                                </div>
 
-                <div class="col-12 mb-3">
-                    <label for="address_lines" class="form-label"><lang>网站地址</lang></label>
-                    <textarea class="form-control" name="address_lines" id="address_lines" rows="5" required placeholder="www.example.com&#10;www.example.com/shop&#10;shop.example.com"><?= htmlspecialchars($address_lines) ?></textarea>
-                    <div class="invalid-feedback"><lang>请至少填写一行地址</lang></div>
-                    <div class="form-text-hint"><lang>每行一个地址：可只填域名，或 域名/子路径（如 /shop）。同一域名被多站使用时子路径不能重复，否则会提示已被某站点使用。</lang></div>
-                </div>
-
-                <div class="col-4 mb-3">
-                    <label for="scope" class="form-label"><?= __('业务范围 (Scope)') ?></label>
-                    <input type="text" 
-                           class="form-control" 
-                           id="scope" 
-                           name="scope"
-                           value="<?= htmlspecialchars($website['scope'] ?? '') ?>"
-                           placeholder="<?= __('如：page_builder、catalog') ?>">
-                    <div class="form-text-hint">
-                        <?= __('用于标识站点的业务来源，留空表示通用站点。由系统自动设置，通常无需手动修改。') ?>
+                                <div class="col-12 mb-3">
+                                    <label for="address_lines" class="form-label"><lang>网站地址</lang></label>
+                                    <textarea class="form-control" name="address_lines" id="address_lines" rows="3" required placeholder="www.example.com&#10;www.example.com/shop"><?= htmlspecialchars($address_lines) ?></textarea>
+                                    <div class="invalid-feedback"><lang>请至少填写一行地址</lang></div>
+                                    <div class="form-text-hint"><lang>每行一个地址：可只填域名，或 域名/子路径（如 /shop）。同一域名被多站使用时子路径不能重复。</lang></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                <div class="col-4 mb-3">
-                    <label for="default_currency" class="form-label">默认货币</label>
-                    <select class="form-select form-control" name="default_currency" id="default_currency">
-                        <option value="">-- 请选择 --</option>
-                        <?php foreach ($currencies as $currency): ?>
-                            <option value="<?= htmlspecialchars($currency['code']) ?>" 
-                                <?= (isset($website['default_currency']) && $website['default_currency'] === $currency['code']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint">不设置则从关联货币中选择第一个作为默认值</div>
+                <!-- 域名选择（默认展开） -->
+                <div class="accordion-item">
+                    <div class="accordion-header" id="headingDomains">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDomains" aria-expanded="true" aria-controls="collapseDomains">
+                            <i class="mdi mdi-domain"></i>
+                            <span><lang>域名管理</lang></span>
+                            <i class="mdi mdi-chevron-down ms-auto"></i>
+                        </button>
+                    </div>
+                    <div id="collapseDomains" class="accordion-collapse collapse show" aria-labelledby="headingDomains" data-bs-parent="#websiteFormAccordion">
+                        <div class="accordion-body">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="mdi mdi-domain me-1"></i><lang>选择域名</lang>
+                                </label>
+                                <w:websites:domain:select
+                                    id="website_domain_select"
+                                    name="pool_ids"
+                                    value="''"
+                                    display="'点击选择域名（可多选）'"
+                                    class="w-100"
+                                    multiple="true"
+                                    value-type="pool_id"
+                                    site-ready-only="true"
+                                    auto-fill-code="code"
+                                    auto-fill-address="address_lines"
+                                    auto-fill-name="name"
+                                />
+                                <input type="hidden" name="domain_values" value="">
+                                <div class="form-text-hint"><lang>从域名池选择已就绪的域名（可多选）；选择后网站代码与网站地址将自动填充。同一域名被多站使用时须填写不同子路径。</lang></div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="col-4 mb-3">
-                    <label for="default_language" class="form-label">默认语言</label>
-                    <select class="form-select form-control" name="default_language" id="default_language">
-                        <option value="">-- 请选择 --</option>
-                        <?php foreach ($locales as $local): ?>
-                            <option value="<?= htmlspecialchars($local['code']) ?>" 
-                                <?= (isset($website['default_language']) && $website['default_language'] === $local['code']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($local['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint">不设置则从关联语言中选择第一个作为默认值</div>
-                </div>
+                <!-- 高级选项（默认折叠） -->
+                <div class="accordion-item">
+                    <div class="accordion-header" id="headingAdvanced">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
+                            <i class="mdi mdi-cog"></i>
+                            <span><lang>高级选项</lang></span>
+                            <i class="mdi mdi-chevron-down ms-auto"></i>
+                        </button>
+                    </div>
+                    <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingAdvanced" data-bs-parent="#websiteFormAccordion">
+                        <div class="accordion-body">
+                            <div class="row">
+                                <div class="col-4 mb-3">
+                                    <label for="default_currency" class="form-label"><lang>默认货币</lang></label>
+                                    <select class="form-select form-control" name="default_currency" id="default_currency">
+                                        <option value="">-- <lang>请选择</lang> --</option>
+                                        <?php foreach ($currencies as $currency): ?>
+                                            <option value="<?= htmlspecialchars($currency['code']) ?>" 
+                                                <?= (isset($website['default_currency']) && $website['default_currency'] === $currency['code']) ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text-hint"><lang>不设置则从关联货币中选择第一个</lang></div>
+                                </div>
 
-                <div class="col-4 mb-3">
-                    <label for="default_timezone" class="form-label">默认时区</label>
-                    <input type="text" 
-                           class="form-control" 
-                           id="timezone-search" 
-                           placeholder="搜索时区..." 
-                           autocomplete="off">
-                    <select class="form-select" name="default_timezone" id="default_timezone" required size="8">
-                        <option value="">-- 请选择 --</option>
-                        <?php foreach ($timezones as $timezone): ?>
-                            <option value="<?= htmlspecialchars($timezone) ?>" 
-                                <?= (isset($website['default_timezone']) && $website['default_timezone'] === $timezone) ? 'selected' : (empty($website) && $timezone === 'Asia/Shanghai' ? 'selected' : '') ?>>
-                                <?= htmlspecialchars($timezone) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint">输入关键词搜索时区，或直接在下拉列表中选择</div>
-                    <div class="invalid-feedback">请输入默认时区</div>
-                </div>
+                                <div class="col-4 mb-3">
+                                    <label for="default_language" class="form-label"><lang>默认语言</lang></label>
+                                    <select class="form-select form-control" name="default_language" id="default_language">
+                                        <option value="">-- <lang>请选择</lang> --</option>
+                                        <?php foreach ($locales as $local): ?>
+                                            <option value="<?= htmlspecialchars($local['code']) ?>" 
+                                                <?= (isset($website['default_language']) && $website['default_language'] === $local['code']) ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($local['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text-hint"><lang>不设置则从关联语言中选择第一个</lang></div>
+                                </div>
 
-                <div class="col-6 mb-3">
-                    <label for="currency_codes" class="form-label">关联货币</label>
-                    <select class="form-select" name="currency_codes[]" id="currency_codes" multiple>
-                        <?php foreach ($currencies as $currency): ?>
-                            <option value="<?= htmlspecialchars($currency['code']) ?>" 
-                                <?= in_array($currency['code'], $selected_currencies) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint">不设置则使用所有启用的货币（按住Ctrl或Cmd键可多选）</div>
-                </div>
+                                <div class="col-4 mb-3">
+                                    <label for="default_timezone" class="form-label"><lang>默认时区</lang></label>
+                                    <input type="text" 
+                                           class="form-control" 
+                                           id="timezone-search" 
+                                           placeholder="<lang>搜索时区...</lang>" 
+                                           autocomplete="off">
+                                    <select class="form-select" name="default_timezone" id="default_timezone" size="6">
+                                        <option value="">-- <lang>请选择</lang> --</option>
+                                        <?php foreach ($timezones as $timezone): ?>
+                                            <option value="<?= htmlspecialchars($timezone) ?>" 
+                                                <?= (isset($website['default_timezone']) && $website['default_timezone'] === $timezone) ? 'selected' : (empty($website) && $timezone === 'Asia/Shanghai' ? 'selected' : '') ?>>
+                                                <?= htmlspecialchars($timezone) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text-hint"><lang>输入关键词搜索时区</lang></div>
+                                </div>
 
-                <div class="col-6 mb-3">
-                    <label for="language_codes" class="form-label">关联语言</label>
-                    <select class="form-select" name="language_codes[]" id="language_codes" multiple>
-                        <?php foreach ($locales as $local): ?>
-                            <option value="<?= htmlspecialchars($local['code']) ?>" 
-                                <?= in_array($local['code'], $selected_languages) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($local['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <div class="form-text-hint">不设置则使用i18n支持的所有语言（按住Ctrl或Cmd键可多选）</div>
-                </div>
+                                <div class="col-6 mb-3">
+                                    <label for="currency_codes" class="form-label"><lang>关联货币</lang></label>
+                                    <select class="form-select" name="currency_codes[]" id="currency_codes" multiple>
+                                        <?php foreach ($currencies as $currency): ?>
+                                            <option value="<?= htmlspecialchars($currency['code']) ?>" 
+                                                <?= in_array($currency['code'], $selected_currencies) ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($currency['code']) ?> - <?= htmlspecialchars($currency['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>
+                                </div>
 
-                <div class="col-6 mb-3">
-                    <label for="seo_account" class="form-label"><?= __('SEO 账户') ?></label>
-                    <?php
-                    $seoAccountId = '';
-                    $seoAccountName = __('未绑定');
-                    if (!empty($website['website_id'])) {
-                        try {
-                            $seoBinding = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
-                            $binding = $seoBinding->getByWebsiteId((int)$website['website_id']);
-                            if ($binding) {
-                                $seoAccountId = $binding->getAccountId();
-                                $seoAccount = ObjectManager::getInstance(\Weline\Seo\Model\SeoAccount::class);
-                                $account = $seoAccount->load($seoAccountId);
-                                if ($account->getId()) {
-                                    $seoAccountName = $account->getData('name') . ' (' . $account->getData('provider') . ')';
-                                }
-                            }
-                        } catch (\Exception $e) {
-                        }
-                    }
-                    ?>
-                    <w:seo:account:select 
-                        id="seo_account"
-                        name="seo_account_id"
-                        value="seoAccountId|''"
-                        display="seoAccountName|'请选择SEO账户'"
-                        class="w-100"
-                    />
-                    <div class="form-text-hint"><?= __('绑定后将自动提交sitemap到该SEO账户的搜索引擎') ?></div>
-                </div>
+                                <div class="col-6 mb-3">
+                                    <label for="language_codes" class="form-label"><lang>关联语言</lang></label>
+                                    <select class="form-select" name="language_codes[]" id="language_codes" multiple>
+                                        <?php foreach ($locales as $local): ?>
+                                            <option value="<?= htmlspecialchars($local['code']) ?>" 
+                                                <?= in_array($local['code'], $selected_languages) ? 'selected' : '' ?>>
+                                                <?= htmlspecialchars($local['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <div class="form-text-hint"><lang>按住Ctrl或Cmd键可多选</lang></div>
+                                </div>
 
-                <div class="col-6 mb-3">
-                    <label class="form-label">&nbsp;</label>
-                    <div class="p-2 bg-body-secondary rounded">
-                        <small class="text-muted">
-                            <i class="mdi mdi-information-outline"></i>
-                            <?= __('SEO账户管理请前往：') ?>
-                            <a href="<?= $this->getBackendUrl('*/weline_seo/backend/account/index') ?>" target="_blank">
-                                <?= __('SEO管理 > 账户管理') ?>
-                            </a>
-                        </small>
+                                <div class="col-6 mb-3">
+                                    <label for="seo_account" class="form-label"><?= __('SEO 账户') ?></label>
+                                    <?php
+                                    $seoAccountId = '';
+                                    $seoAccountName = __('未绑定');
+                                    if (!empty($website['website_id'])) {
+                                        try {
+                                            $seoBinding = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
+                                            $binding = $seoBinding->getByWebsiteId((int)$website['website_id']);
+                                            if ($binding) {
+                                                $seoAccountId = $binding->getAccountId();
+                                                $seoAccount = ObjectManager::getInstance(\Weline\Seo\Model\SeoAccount::class);
+                                                $account = $seoAccount->load($seoAccountId);
+                                                if ($account->getId()) {
+                                                    $seoAccountName = $account->getData('name') . ' (' . $account->getData('provider') . ')';
+                                                }
+                                            }
+                                        } catch (\Exception $e) {
+                                        }
+                                    }
+                                    ?>
+                                    <w:seo:account:select 
+                                        id="seo_account"
+                                        name="seo_account_id"
+                                        value="seoAccountId|''"
+                                        display="seoAccountName|'请选择SEO账户'"
+                                        class="w-100"
+                                    />
+                                    <div class="form-text-hint"><?= __('绑定后将自动提交sitemap到该SEO账户的搜索引擎') ?></div>
+                                </div>
+
+                                <div class="col-6 mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <div class="p-2 bg-body-secondary rounded">
+                                        <small class="text-muted">
+                                            <i class="mdi mdi-information-outline"></i>
+                                            <?= __('SEO账户管理请前往：') ?>
+                                            <a href="<?= $this->getBackendUrl('*/weline_seo/backend/account/index') ?>" target="_blank">
+                                                <?= __('SEO管理 > 账户管理') ?>
+                                            </a>
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <button type="submit" class="btn btn-primary">保存</button>
-            <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-secondary">返回</a>
+
+            <div class="mt-4">
+                <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-secondary ms-2"><lang>返回</lang></a>
+            </div>
         </form>
     </div>
 </div>

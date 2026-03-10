@@ -403,9 +403,6 @@ $platformFeatures = [
                 <div class="card">
                     <div class="card-body">
                         <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
-<?php else: ?>
-                        <form id="seoAccountForm" onsubmit="saveSeoAccount(event)">
-<?php endif; ?>
                             <input type="hidden" name="id" value="<?= $id ?>">
                             <input type="hidden" name="scope" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>">
 
