@@ -1240,6 +1240,22 @@ class DomainManagement extends BaseController
             ]);
 
             if ($result['success'] ?? false) {
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                $pool->setHttpsError('');
+                $certId = (int) ($result['cert_id'] ?? 0);
+                if ($certId > 0) {
+                    $pool->setCertId($certId);
+                }
+                $cert = $result['cert'] ?? null;
+                if ($cert !== null && \method_exists($cert, 'getExpiresAt')) {
+                    $expiresAt = $cert->getExpiresAt();
+                    if ($expiresAt !== '') {
+                        $pool->setHttpsExpiresAt($expiresAt);
+                    }
+                }
+                $pool->calculateSiteReady();
+                $pool->save();
+
                 $sse->sendEvent('success', ['message' => __('证书申请成功')]);
                 $sse->sendEvent('done', ['message' => __('申请完成：%{1}', [$domain]), 'success' => true]);
             } else {
@@ -1305,6 +1321,22 @@ class DomainManagement extends BaseController
             ]);
 
             if ($result['success'] ?? false) {
+                $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                $pool->setHttpsError('');
+                $certId = (int) ($result['cert_id'] ?? 0);
+                if ($certId > 0) {
+                    $pool->setCertId($certId);
+                }
+                $cert = $result['cert'] ?? null;
+                if ($cert !== null && \method_exists($cert, 'getExpiresAt')) {
+                    $expiresAt = $cert->getExpiresAt();
+                    if ($expiresAt !== '') {
+                        $pool->setHttpsExpiresAt($expiresAt);
+                    }
+                }
+                $pool->calculateSiteReady();
+                $pool->save();
+
                 return $this->fetchJson([
                     'success' => true,
                     'msg' => __('证书申请成功：%{1}', [$domain]),

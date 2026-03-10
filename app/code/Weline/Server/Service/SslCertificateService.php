@@ -1535,27 +1535,38 @@ CNF;
             );
         }
 
+        $onProg = static function (string $msg, array $extra = []) use ($onProgress): void {
+            if ($onProgress instanceof \Closure) {
+                $onProgress($msg, $extra);
+            }
+        };
+
         try {
+            $onProg(__('正在获取 ACME 目录...'), ['step' => 'directory']);
             $directory = $this->getAcmeDirectory();
             if (!$directory) {
                 return ['success' => false, 'message' => __('无法获取 ACME 目录')];
             }
 
+            $onProg(__('正在生成域名密钥...'), ['step' => 'domain_key']);
             $domainKeyPath = $certDir . 'domain.key';
             if (!$this->generateDomainKey($domainKeyPath)) {
                 return ['success' => false, 'message' => __('无法生成域名密钥')];
             }
 
+            $onProg(__('正在注册/获取 ACME 账户...'), ['step' => 'account']);
             $accountUrl = $this->registerAccount($directory['newAccount'], $email);
             if (!$accountUrl) {
                 return ['success' => false, 'message' => __('账户注册失败')];
             }
 
+            $onProg(__('正在创建证书订单...'), ['step' => 'order']);
             $orderUrl = $this->createOrder($directory['newOrder'], [$domain], $accountUrl);
             if (!$orderUrl) {
                 return ['success' => false, 'message' => __('创建订单失败')];
             }
 
+            $onProg(__('正在获取授权信息...'), ['step' => 'authorizations']);
             $order = $this->getResource($orderUrl, $accountUrl);
             if (!$order || empty($order['authorizations'])) {
                 return ['success' => false, 'message' => __('获取授权失败')];
@@ -1582,20 +1593,21 @@ CNF;
             }
 
             // 6. 完成订单并获取证书
+            $onProg(__('正在生成 CSR...'), ['step' => 'csr', 'progress' => 92]);
             $csrPath = $certDir . 'csr.pem';
             $csr = $this->generateCsr($domain, $domainKeyPath, $csrPath);
             if (!$csr) {
                 return ['success' => false, 'message' => __('生成 CSR 失败')];
             }
-            
-            // 提交 CSR
+
+            $onProg(__('正在提交 CSR 至 CA...'), ['step' => 'finalize', 'progress' => 94]);
             $order = $this->getResource($orderUrl, $accountUrl);
             $certUrl = $this->finalize($order['finalize'], $csr, $accountUrl);
             if (!$certUrl) {
                 return ['success' => false, 'message' => __('提交 CSR 失败')];
             }
-            
-            // 等待证书颁发
+
+            $onProg(__('等待 CA 颁发证书...'), ['step' => 'wait_cert', 'progress' => 96]);
             $maxWait = 30;
             $certReady = false;
             for ($i = 0; $i < $maxWait; $i++) {
@@ -1606,25 +1618,29 @@ CNF;
                     $certUrl = $order['certificate'];
                     break;
                 }
+                if ($onProgress && $i > 0 && $i % 3 === 0) {
+                    $onProg(__('等待颁发中...（%{1}s）', [$i * 2]), ['progress' => 96]);
+                }
             }
-            
+
             if (!$certReady) {
                 return ['success' => false, 'message' => __('等待证书颁发超时')];
             }
-            
-            // 下载证书
+
+            $onProg(__('正在下载证书...'), ['step' => 'download', 'progress' => 98]);
             $certPem = $this->downloadCertificate($certUrl, $accountUrl);
             if (!$certPem) {
                 return ['success' => false, 'message' => __('下载证书失败')];
             }
-            
-            // 保存证书
+
+            $onProg(__('正在保存证书到本地...'), ['step' => 'save', 'progress' => 99]);
             $fullchainPath = $certDir . 'fullchain.pem';
             $privkeyPath = $certDir . 'privkey.pem';
-            
+
             \file_put_contents($fullchainPath, $certPem);
             \copy($domainKeyPath, $privkeyPath);
-            
+
+            $onProg(__('证书申请流程已完成'), ['step' => 'done', 'progress' => 100]);
             return ['success' => true, 'message' => __('证书申请成功')];
             
         } catch (\Throwable $e) {
