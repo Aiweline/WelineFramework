@@ -29,7 +29,7 @@ Weline.Api 会根据 HTTP 状态码提供可读的错误信息：
 
 1. **请求级回调**：本次请求的 `options.onError` 或 `options.onHttpError(status, error)`，返回 `true` 表示业务已处理，不再执行默认 Toast。
 2. **全局钩子**：`config.onHttpError(status, error, silent)`，用于统一日志、上报或自定义提示。
-3. **默认提示**：未配置或未“接管”时，使用 `BackendToast`/`AdminToast`/`FrontendToast` 展示错误。
+3. **默认提示**：未配置或未“接管”时，使用 `BackendToast`/`BackendToast`/`FrontendToast` 展示错误。
 
 可通过 `silent: true` 完全静默，由调用方在 `catch` 中自行处理。
 
@@ -156,8 +156,8 @@ Weline.Api.request('/backend/example/save', {
     body: JSON.stringify(payload),
     onError: function (status, error) {
         console.warn('保存失败', status, error.response?.data);
-        if (window.AdminToast) {
-            window.AdminToast.warning(error.response?.data?.msg || '保存失败，请重试');
+        if (window.BackendToast) {
+            window.BackendToast.warning(error.response?.data?.msg || '保存失败，请重试');
         }
         return true;  // 已处理，不再执行默认 Toast
     }
@@ -186,7 +186,7 @@ window.__WelineThemeConfig = {
             // 自定义逻辑，如统一日志上报
             console.warn('[API Error]', status, error.message);
             // 若需展示，可调用 BackendToast
-            (window.BackendToast || window.AdminToast).error(error.message);
+            (window.BackendToast || window.BackendToast).error(error.message);
         }
     }
 };
@@ -226,8 +226,8 @@ Weline.Api.request(url, options)
     })
     .catch(function (err) {
         // 非维护模式时，Api 层已展示 Toast，此处做兜底或 UI 恢复
-        if (!err.maintenance && (window.BackendToast || window.AdminToast)) {
-            (window.BackendToast || window.AdminToast).error(err.message || '网络异常');
+        if (!err.maintenance && (window.BackendToast || window.BackendToast)) {
+            (window.BackendToast || window.BackendToast).error(err.message || '网络异常');
         }
     });
 ```

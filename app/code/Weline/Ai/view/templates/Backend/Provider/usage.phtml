@@ -223,15 +223,15 @@
                         self.displayPagination(data.total, data.page, data.limit);
                         self.updateStats(data.stats);
                     } else {
-                        if (typeof AdminToast !== 'undefined') {
-                            AdminToast.error(data.message || '<?= __('加载失败') ?>');
+                        if (typeof BackendToast !== 'undefined') {
+                            BackendToast.error(data.message || '<?= __('加载失败') ?>');
                         }
                     }
                 })
                 .catch(function(error) {
                     console.error('Error:', error);
-                    if (typeof AdminToast !== 'undefined') {
-                        AdminToast.error('<?= __('加载失败，请重试') ?>');
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error('<?= __('加载失败，请重试') ?>');
                     }
                 });
         },

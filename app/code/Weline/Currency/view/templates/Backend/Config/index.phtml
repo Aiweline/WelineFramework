@@ -653,7 +653,7 @@
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    AdminToast.success(data.message || '<?= __('配置保存成功！') ?>');
+                    BackendToast.success(data.message || '<?= __('配置保存成功！') ?>');
                     baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
                     form.dataset.baseCurrencyConfirmed = '';
                     setTimeout(function() { window.location.reload(); }, 1000);
@@ -661,7 +661,7 @@
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    AdminToast.error(data.message || '<?= __('配置保存失败') ?>');
+                    BackendToast.error(data.message || '<?= __('配置保存失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
                 }
             })
@@ -669,7 +669,7 @@
                 if (self.progressModalInstance) {
                     self.progressModalInstance.hide();
                 }
-                AdminToast.error('<?= __('请求失败') ?>');
+                BackendToast.error('<?= __('请求失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
             });
         },
@@ -701,12 +701,12 @@
                     baseCurrencySelect.setAttribute('data-original-value', newBaseCurrency);
                     form.dataset.baseCurrencyConfirmed = '';
                     
-                    AdminToast.success(data.message || '<?= __('货币汇率更新完成') ?>');
+                    BackendToast.success(data.message || '<?= __('货币汇率更新完成') ?>');
                 } else {
                     if (self.progressModalInstance) {
                         self.progressModalInstance.hide();
                     }
-                    AdminToast.error(data.message || '<?= __('货币汇率更新失败') ?>');
+                    BackendToast.error(data.message || '<?= __('货币汇率更新失败') ?>');
                     form.dataset.baseCurrencyConfirmed = '';
                 }
             })
@@ -714,7 +714,7 @@
                 if (self.progressModalInstance) {
                     self.progressModalInstance.hide();
                 }
-                AdminToast.error('<?= __('更新失败') ?>');
+                BackendToast.error('<?= __('更新失败') ?>');
                 form.dataset.baseCurrencyConfirmed = '';
             });
         },
@@ -766,13 +766,13 @@
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    AdminToast.success(data.message || '<?= __('API连接测试成功') ?>');
+                    BackendToast.success(data.message || '<?= __('API连接测试成功') ?>');
                 } else {
-                    AdminToast.error(data.message || '<?= __('API连接测试失败') ?>');
+                    BackendToast.error(data.message || '<?= __('API连接测试失败') ?>');
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('请求失败') ?>');
+                BackendToast.error('<?= __('请求失败') ?>');
             })
             .finally(function() {
                 btn.disabled = false;
@@ -792,16 +792,16 @@
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
                 if (data.success) {
-                    AdminToast.success(data.message || '<?= __('导入成功') ?>');
+                    BackendToast.success(data.message || '<?= __('导入成功') ?>');
                     setTimeout(function() { location.reload(); }, 2000);
                 } else {
-                    AdminToast.error(data.message || '<?= __('导入失败') ?>');
+                    BackendToast.error(data.message || '<?= __('导入失败') ?>');
                     btn.disabled = false;
                     btn.innerHTML = originalText;
                 }
             })
             .catch(function(error) {
-                AdminToast.error('<?= __('请求失败') ?>');
+                BackendToast.error('<?= __('请求失败') ?>');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             });

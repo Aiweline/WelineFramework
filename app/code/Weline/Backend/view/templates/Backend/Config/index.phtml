@@ -174,17 +174,17 @@ $configs = $configs ?? [];
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.success) {
-                AdminToast.success(data.message);
+                BackendToast.success(data.message);
                 setTimeout(() => {
                     window.location.reload();
                 }, 1000);
             } else {
-                AdminToast.error(data.message);
+                BackendToast.error(data.message);
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            AdminToast.error('<?= __('保存失败') ?>');
+            BackendToast.error('<?= __('保存失败') ?>');
         });
     };
 

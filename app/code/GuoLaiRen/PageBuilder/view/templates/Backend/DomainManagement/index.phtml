@@ -1389,7 +1389,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             });
         }).catch(function(error) {
             var detail = error && error.message ? (' ' + error.message) : '';
-            AdminToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
+            BackendToast.error('<?= __('购买弹窗加载失败，请刷新页面后重试。若仍失败，请检查静态资源发布与网络连接。') ?>' + detail);
             return null;
         });
     }
@@ -1577,7 +1577,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var regCode = formRegistrar.value;
         var name = formName.value.trim();
         if (!regCode || !name) {
-            AdminToast.warning('<?= __('请填写域名商类型和账户名称') ?>');
+            BackendToast.warning('<?= __('请填写域名商类型和账户名称') ?>');
             return;
         }
 
@@ -1615,7 +1615,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
         
         if (hasError) {
-            AdminToast.error('<?= __('请填写必填字段') ?>: ' + missingFields.join(', '));
+            BackendToast.error('<?= __('请填写必填字段') ?>: ' + missingFields.join(', '));
             return;
         }
 
@@ -1658,15 +1658,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         postForm(API.saveAccount, data).then(function(res) {
             setBtnLoading(btn, false, '<i class="mdi mdi-check"></i> <?= __('保存') ?>');
             if (res.success) {
-                AdminToast.success(res.message || '<?= __('保存成功') ?>');
+                BackendToast.success(res.message || '<?= __('保存成功') ?>');
                 closeModal();
                 location.reload();
             } else {
-                AdminToast.error(res.message || res.msg || '<?= __('保存失败') ?>');
+                BackendToast.error(res.message || res.msg || '<?= __('保存失败') ?>');
             }
         }).catch(function() {
             setBtnLoading(btn, false, '<i class="mdi mdi-check"></i> <?= __('保存') ?>');
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     });
 
@@ -1711,15 +1711,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 setBtnLoading(btn, true);
                 postForm(API.deleteAccount, { account_id: id }).then(function(res) {
                     if (res.success) {
-                        AdminToast.success(res.message || '<?= __('已删除') ?>');
+                        BackendToast.success(res.message || '<?= __('已删除') ?>');
                         location.reload();
                     } else {
                         setBtnLoading(btn, false, '<i class="mdi mdi-delete"></i> <?= __('删除') ?>');
-                        AdminToast.error(res.message || res.msg || '<?= __('删除失败') ?>');
+                        BackendToast.error(res.message || res.msg || '<?= __('删除失败') ?>');
                     }
                 }).catch(function() {
                     setBtnLoading(btn, false, '<i class="mdi mdi-delete"></i> <?= __('删除') ?>');
-                    AdminToast.error('<?= __('网络错误') ?>');
+                    BackendToast.error('<?= __('网络错误') ?>');
                 });
             });
         });
@@ -1733,13 +1733,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             postForm(API.testConnection, { account_id: id }).then(function(res) {
                 setBtnLoading(btn, false, '<i class="mdi mdi-connection"></i> <?= __('测试') ?>');
                 if (res.success) {
-                    AdminToast.success(res.message || '<?= __('连接成功') ?>');
+                    BackendToast.success(res.message || '<?= __('连接成功') ?>');
                 } else {
-                    AdminToast.error(res.message || res.msg || '<?= __('连接失败') ?>');
+                    BackendToast.error(res.message || res.msg || '<?= __('连接失败') ?>');
                 }
             }).catch(function() {
                 setBtnLoading(btn, false, '<i class="mdi mdi-connection"></i> <?= __('测试') ?>');
-                AdminToast.error('<?= __('网络错误') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
             });
         });
     });
@@ -1771,7 +1771,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
         postForm(API.getDomains, data).then(function(res) {
             if (!res.success) {
-                AdminToast.error(res.msg || '<?= __('加载失败') ?>');
+                BackendToast.error(res.msg || '<?= __('加载失败') ?>');
                 domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle-outline"></i><p>' + (res.msg || '<?= __('加载失败') ?>') + '</p></div>';
                 return;
             }
@@ -1788,7 +1788,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             updatePagination();
             updateBatchBar();
         }).catch(function() {
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
             domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-alert-circle-outline"></i><p><?= __('网络错误') ?></p></div>';
         });
     }
@@ -1973,7 +1973,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
                 var notPulledDomains = group.items.filter(function(d) { return !d.is_pulled; }).map(function(d) { return d.domain; });
                 if (notPulledDomains.length === 0) {
-                    AdminToast.info('<?= __('该账户所有域名都已拉取') ?>');
+                    BackendToast.info('<?= __('该账户所有域名都已拉取') ?>');
                     return;
                 }
 
@@ -1984,14 +1984,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 }).then(function(res) {
                     setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
                     if (res.success) {
-                        AdminToast.success(res.message || '<?= __('拉取成功') ?>');
+                        BackendToast.success(res.message || '<?= __('拉取成功') ?>');
                         loadDomainList();
                     } else {
-                        AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                        BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
                     }
                 }).catch(function() {
                     setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
-                    AdminToast.error('<?= __('网络错误') ?>');
+                    BackendToast.error('<?= __('网络错误') ?>');
                 });
             });
         });
@@ -2113,7 +2113,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function pullDomains(domainList, btn, accountId, autoResolve) {
         if (!domainList || domainList.length === 0) {
-            AdminToast.warning('<?= __('请选择要拉取的域名') ?>');
+            BackendToast.warning('<?= __('请选择要拉取的域名') ?>');
             return;
         }
 
@@ -2132,7 +2132,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (autoResolve && res.auto_resolve_queued) {
                     msg += ' <?= __('（自动解析任务已创建）') ?>';
                 }
-                AdminToast.success(msg);
+                BackendToast.success(msg);
                 if (btn && res.domains && domainList.length === 1) {
                     var domain = domainList[0];
                     var domainId = res.domains[domain] || 0;
@@ -2166,17 +2166,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 }
             } else {
                 if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-                AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
             }
         }).catch(function() {
             if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
     function resolveDns(domainId, domainName, btn) {
         if (domainId <= 0) {
-            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            BackendToast.warning('<?= __('域名 ID 无效') ?>');
             return;
         }
 
@@ -2189,17 +2189,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }).then(function(res) {
             setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
             if (res.success) {
-                AdminToast.success(res.msg || ('<?= __('已将') ?> ' + domainName + ' <?= __('的 @、www 解析到本机') ?>'));
+                BackendToast.success(res.msg || ('<?= __('已将') ?> ' + domainName + ' <?= __('的 @、www 解析到本机') ?>'));
                 loadDomainList();
                 if (currentDnsManageDomainId === domainId && document.getElementById('pb-dm-dns-manage-modal')) {
                     loadDnsRecords();
                 }
             } else {
-                AdminToast.error(res.msg || '<?= __('解析到本地失败') ?>');
+                BackendToast.error(res.msg || '<?= __('解析到本地失败') ?>');
             }
         }).catch(function() {
             setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i>');
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
@@ -2328,7 +2328,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function refreshDnsRecords() {
         loadDnsRecords();
-        AdminToast.info('<?= __('已刷新') ?>');
+        BackendToast.info('<?= __('已刷新') ?>');
     }
 
     function renderDnsManageHeader(providerName, serverIp) {
@@ -2344,25 +2344,25 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function autoResolveDnsForCurrentDomain() {
         if (!currentDnsManageDomainId) {
-            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            BackendToast.warning('<?= __('域名 ID 无效') ?>');
             return;
         }
 
-        AdminToast.info('<?= __('正在自动解析到本服务器并写入域名池...') ?>');
+        BackendToast.info('<?= __('正在自动解析到本服务器并写入域名池...') ?>');
         postForm(API.batchResolveToLocal, {
             domain_ids: JSON.stringify([currentDnsManageDomainId]),
             auto_transfer_to_pool: '1',
             prefixes: JSON.stringify(['@', 'www'])
         }).then(function(res) {
             if (res.success) {
-                AdminToast.success(res.msg || '<?= __('解析成功') ?>');
+                BackendToast.success(res.msg || '<?= __('解析成功') ?>');
                 loadDnsRecords();
                 loadDomainList();
             } else {
-                AdminToast.error(res.msg || '<?= __('解析失败') ?>');
+                BackendToast.error(res.msg || '<?= __('解析失败') ?>');
             }
         }).catch(function() {
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
@@ -2417,11 +2417,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var ttl = document.getElementById('pb-dm-dns-add-ttl').value || 600;
 
         if (!value) {
-            AdminToast.warning('<?= __('请输入记录值') ?>');
+            BackendToast.warning('<?= __('请输入记录值') ?>');
             return;
         }
 
-        AdminToast.info('<?= __('正在添加...') ?>');
+        BackendToast.info('<?= __('正在添加...') ?>');
 
         postForm(API.addDnsRecord, {
             domain_id: currentDnsManageDomainId,
@@ -2431,20 +2431,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             ttl: ttl
         }).then(function(res) {
             if (res.success) {
-                AdminToast.success(res.msg || '<?= __('添加成功') ?>');
+                BackendToast.success(res.msg || '<?= __('添加成功') ?>');
                 hideAddDnsRecordForm();
                 loadDnsRecords();
             } else {
-                AdminToast.error(res.msg || '<?= __('添加失败') ?>');
+                BackendToast.error(res.msg || '<?= __('添加失败') ?>');
             }
         }).catch(function() {
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
     function showSwitchDnsProviderModal() {
         if (!currentDnsManageDomainId) {
-            AdminToast.warning('<?= __('域名 ID 无效') ?>');
+            BackendToast.warning('<?= __('域名 ID 无效') ?>');
             return;
         }
         var inner = '<div class="pb-dm-modal-overlay" id="pb-dm-switch-dns-provider-modal" onclick="if(event.target===this)closeSwitchDnsProviderModal()">' +
@@ -2501,12 +2501,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     function doSwitchDnsProvider() {
         var accountId = document.getElementById('pb-dm-switch-dns-account') && document.getElementById('pb-dm-switch-dns-account').value;
         if (!accountId) {
-            AdminToast.warning('<?= __('请选择目标账户') ?>');
+            BackendToast.warning('<?= __('请选择目标账户') ?>');
             return;
         }
         var btn = document.getElementById('pb-dm-switch-dns-submit');
         if (btn) btn.disabled = true;
-        AdminToast.info('<?= __('正在切换DNS并提交记录...') ?>');
+        BackendToast.info('<?= __('正在切换DNS并提交记录...') ?>');
 
         postForm(API.batchSwitchToAccount, {
             domain_ids: JSON.stringify([currentDnsManageDomainId]),
@@ -2517,25 +2517,25 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             if (res.success) {
                 var errs = (res.data && res.data.auto_sync_errors) ? res.data.auto_sync_errors : [];
                 if (errs.length > 0) {
-                    AdminToast.warning(res.msg + ' ' + errs[0]);
+                    BackendToast.warning(res.msg + ' ' + errs[0]);
                 } else {
-                    AdminToast.success('<?= __('DNS 切换成功，记录已提交到目标供应商') ?>');
+                    BackendToast.success('<?= __('DNS 切换成功，记录已提交到目标供应商') ?>');
                 }
                 loadDnsRecords();
                 closeDnsManageModal();
                 loadDomainList();
             } else {
-                AdminToast.error(res.msg || '<?= __('切换失败') ?>');
+                BackendToast.error(res.msg || '<?= __('切换失败') ?>');
             }
         }).catch(function() {
             if (btn) btn.disabled = false;
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
     function deleteDnsRecord(recordId) {
         if (!recordId) {
-            AdminToast.warning('<?= __('记录ID无效') ?>');
+            BackendToast.warning('<?= __('记录ID无效') ?>');
             return;
         }
 
@@ -2546,20 +2546,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }).then(function(confirmed) {
             if (!confirmed) return;
 
-            AdminToast.info('<?= __('正在删除...') ?>');
+            BackendToast.info('<?= __('正在删除...') ?>');
 
             postForm(API.deleteDnsRecord, {
                 domain_id: currentDnsManageDomainId,
                 record_id: recordId
             }).then(function(res) {
                 if (res.success) {
-                    AdminToast.success(res.msg || '<?= __('删除成功') ?>');
+                    BackendToast.success(res.msg || '<?= __('删除成功') ?>');
                     loadDnsRecords();
                 } else {
-                    AdminToast.error(res.msg || '<?= __('删除失败') ?>');
+                    BackendToast.error(res.msg || '<?= __('删除失败') ?>');
                 }
             }).catch(function() {
-                AdminToast.error('<?= __('网络错误') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
             });
         });
     }
@@ -2626,7 +2626,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择已拉取的域名进行转存') ?>');
+            BackendToast.warning('<?= __('请选择已拉取的域名进行转存') ?>');
             return;
         }
 
@@ -2647,17 +2647,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (res.success) {
                     var msg = res.msg || res.message || '<?= __('转存完成') ?>';
                     if (res.data && res.data.skipped_domains && res.data.skipped_domains.length > 0) {
-                        AdminToast.success(msg);
+                        BackendToast.success(msg);
                         console.log('<?= __('跳过的域名（IP不匹配）') ?>:', res.data.skipped_domains);
                     } else {
-                        AdminToast.success(msg);
+                        BackendToast.success(msg);
                     }
                 } else {
-                    AdminToast.error(res.msg || res.message || '<?= __('转存失败') ?>');
+                    BackendToast.error(res.msg || res.message || '<?= __('转存失败') ?>');
                 }
             }).catch(function(err) {
                 setBtnLoading(btn, false, '<i class="mdi mdi-folder-move"></i> <?= __('批量转存') ?>');
-                AdminToast.error('<?= __('网络错误') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
             });
         });
     });
@@ -2672,7 +2672,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            BackendToast.warning('<?= __('请选择已拉取的域名') ?>');
             return;
         }
 
@@ -2693,17 +2693,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
                 if (res.success) {
                     var msg = res.msg || res.message || '<?= __('解析完成') ?>';
-                    AdminToast.success(msg);
+                    BackendToast.success(msg);
                     if (res.data && res.data.errors && res.data.errors.length > 0) {
                         console.log('<?= __('解析错误') ?>:', res.data.errors);
                     }
                     loadDomainList();
                 } else {
-                    AdminToast.error(res.msg || res.message || '<?= __('解析失败') ?>');
+                    BackendToast.error(res.msg || res.message || '<?= __('解析失败') ?>');
                 }
             }).catch(function(err) {
                 setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
-                AdminToast.error('<?= __('网络错误') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
             });
         });
     });
@@ -2718,7 +2718,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择已拉取的域名进行检测') ?>');
+            BackendToast.warning('<?= __('请选择已拉取的域名进行检测') ?>');
             return;
         }
 
@@ -2735,13 +2735,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (res.success) successCount++;
                 if (processed >= total) {
                     setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i> <?= __('批量解析检测') ?>');
-                    AdminToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
+                    BackendToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
                 }
             }).catch(function() {
                 processed++;
                 if (processed >= total) {
                     setBtnLoading(btn, false, '<i class="mdi mdi-dns"></i> <?= __('批量解析检测') ?>');
-                    AdminToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
+                    BackendToast.success('<?= __('批量检测完成') ?>：' + successCount + '/' + total);
                 }
             });
         });
@@ -2757,7 +2757,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            BackendToast.warning('<?= __('请选择已拉取的域名') ?>');
             return;
         }
 
@@ -2973,7 +2973,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function doBatchChangeNs() {
         if (!pbDmBatchNsSelectedIds || pbDmBatchNsSelectedIds.length === 0) {
-            AdminToast.warning('<?= __('请选择要切换DNS的域名') ?>');
+            BackendToast.warning('<?= __('请选择要切换DNS的域名') ?>');
             return;
         }
 
@@ -2984,11 +2984,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (mode === 'account') {
             var accountId = document.getElementById('pb-dm-batch-ns-account').value;
             if (!accountId) {
-                AdminToast.warning('<?= __('请选择目标账户') ?>');
+                BackendToast.warning('<?= __('请选择目标账户') ?>');
                 return;
             }
 
-            AdminToast.info('<?= __('正在批量切换DNS服务器...') ?>');
+            BackendToast.info('<?= __('正在批量切换DNS服务器...') ?>');
             if (submitBtn) submitBtn.disabled = true;
 
             postForm(API.batchSwitchToAccount, {
@@ -3004,20 +3004,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     var errors = res.data && res.data.errors || [];
                     
                     if (failedCount === 0) {
-                        AdminToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
+                        BackendToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
                     } else if (successCount > 0) {
-                        AdminToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
+                        BackendToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
                         showDnsSwitchErrors(errors);
                     } else {
-                        AdminToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
+                        BackendToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
                         showDnsSwitchErrors(errors);
                     }
                 } else {
-                    AdminToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
+                    BackendToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
                 }
             }).catch(function() {
                 if (submitBtn) submitBtn.disabled = false;
-                AdminToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
+                BackendToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
             });
             return;
         }
@@ -3026,21 +3026,21 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var customNs = document.getElementById('pb-dm-batch-ns-custom').value.trim();
 
         if (!provider) {
-            AdminToast.warning('<?= __('请选择DNS服务商') ?>');
+            BackendToast.warning('<?= __('请选择DNS服务商') ?>');
             return;
         }
 
         if (provider === 'custom' && !customNs) {
-            AdminToast.warning('<?= __('请输入自定义Nameserver') ?>');
+            BackendToast.warning('<?= __('请输入自定义Nameserver') ?>');
             return;
         }
 
         if (provider === 'cloudflare') {
-            AdminToast.warning('<?= __('Cloudflare 需要为每个域名分配独立的 Nameserver，请先在「供应商账户」中添加 Cloudflare 账户，然后使用「选择账户」模式切换。') ?>');
+            BackendToast.warning('<?= __('Cloudflare 需要为每个域名分配独立的 Nameserver，请先在「供应商账户」中添加 Cloudflare 账户，然后使用「选择账户」模式切换。') ?>');
             return;
         }
 
-        AdminToast.info('<?= __('正在批量切换DNS服务器...') ?>');
+        BackendToast.info('<?= __('正在批量切换DNS服务器...') ?>');
         if (submitBtn) submitBtn.disabled = true;
 
         var params = { domain_ids: JSON.stringify(pbDmBatchNsSelectedIds) };
@@ -3060,20 +3060,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var errors = res.data && res.data.errors || [];
                 
                 if (failedCount === 0) {
-                    AdminToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
+                    BackendToast.success('<?= __('DNS 切换成功') ?>：' + successCount + ' <?= __('个域名') ?>');
                 } else if (successCount > 0) {
-                    AdminToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
+                    BackendToast.warning('<?= __('DNS 切换部分完成') ?>：<?= __('成功') ?> ' + successCount + ' <?= __('个') ?>，<?= __('失败') ?> ' + failedCount + ' <?= __('个') ?>');
                     showDnsSwitchErrors(errors);
                 } else {
-                    AdminToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
+                    BackendToast.error('<?= __('DNS 切换失败') ?>：' + failedCount + ' <?= __('个域名') ?>');
                     showDnsSwitchErrors(errors);
                 }
             } else {
-                AdminToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
+                BackendToast.error(res.msg || res.message || '<?= __('切换失败') ?>');
             }
         }).catch(function() {
             if (submitBtn) submitBtn.disabled = false;
-            AdminToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
+            BackendToast.error('<?= __('网络错误，请检查网络连接后重试') ?>');
         });
     }
 
@@ -3090,7 +3090,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择已拉取的域名') ?>');
+            BackendToast.warning('<?= __('请选择已拉取的域名') ?>');
             return;
         }
 
@@ -3199,7 +3199,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     function doBatchAddDnsRecords() {
         if (pbDmBatchAddDnsSelectedIds.length === 0) {
-            AdminToast.warning('<?= __('请选择要添加DNS记录的域名') ?>');
+            BackendToast.warning('<?= __('请选择要添加DNS记录的域名') ?>');
             return;
         }
 
@@ -3216,7 +3216,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         } else {
             var value = document.getElementById('pb-dm-batch-add-dns-value').value.trim();
             if (!value) {
-                AdminToast.warning('<?= __('请输入记录值') ?>');
+                BackendToast.warning('<?= __('请输入记录值') ?>');
                 return;
             }
             params.type = document.getElementById('pb-dm-batch-add-dns-type').value;
@@ -3225,7 +3225,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             params.ttl = document.getElementById('pb-dm-batch-add-dns-ttl').value || 600;
         }
 
-        AdminToast.info('<?= __('正在批量添加DNS记录...') ?>');
+        BackendToast.info('<?= __('正在批量添加DNS记录...') ?>');
         if (submitBtn) submitBtn.disabled = true;
 
         postForm(API.batchAddDnsRecords, params).then(function(res) {
@@ -3236,12 +3236,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var dnsHints = res.data && res.data.dns_provider_hints ? res.data.dns_provider_hints : {};
             
             if (code === 200) {
-                AdminToast.success(msg);
+                BackendToast.success(msg);
                 closeBatchAddDnsModal();
                 loadDomainList();
             } else if (code === 206) {
                 // 部分成功
-                AdminToast.warning(msg);
+                BackendToast.warning(msg);
                 closeBatchAddDnsModal();
                 if (hasErrors) {
                     showBatchAddDnsErrors(res.data.errors, dnsHints);
@@ -3249,7 +3249,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 loadDomainList();
             } else {
                 // 全部失败
-                AdminToast.error(msg);
+                BackendToast.error(msg);
                 closeBatchAddDnsModal();
                 if (hasErrors) {
                     showBatchAddDnsErrors(res.data.errors, dnsHints);
@@ -3257,7 +3257,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             }
         }).catch(function() {
             if (submitBtn) submitBtn.disabled = false;
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
@@ -3359,7 +3359,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     }, 300);
                 } else {
                     // 如果找不到按钮，显示提示
-                    AdminToast.info('<?= __('请点击"添加账户"按钮添加') ?> ' + providerCode.toUpperCase() + ' <?= __('供应商账户') ?>');
+                    BackendToast.info('<?= __('请点击"添加账户"按钮添加') ?> ' + providerCode.toUpperCase() + ' <?= __('供应商账户') ?>');
                 }
             }, 200);
         }
@@ -3411,7 +3411,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     batchSearchExecBtn.addEventListener('click', function() {
         var rawText = batchSearchInput.value.trim();
         if (!rawText) {
-            AdminToast.warning('<?= __('请输入要搜索的域名') ?>');
+            BackendToast.warning('<?= __('请输入要搜索的域名') ?>');
             return;
         }
 
@@ -3419,7 +3419,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         searchDomains = [...new Set(searchDomains)];
 
         if (searchDomains.length === 0) {
-            AdminToast.warning('<?= __('请输入有效的域名') ?>');
+            BackendToast.warning('<?= __('请输入有效的域名') ?>');
             return;
         }
 
@@ -3454,7 +3454,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             }
         }).catch(function(err) {
             setBtnLoading(batchSearchExecBtn, false, '<i class="mdi mdi-magnify"></i> <?= __('搜索') ?>');
-            AdminToast.error(err || '<?= __('网络错误') ?>');
+            BackendToast.error(err || '<?= __('网络错误') ?>');
         });
     });
 
@@ -3554,7 +3554,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selectedDomains.length === 0) {
-            AdminToast.warning('<?= __('请选择要拉取的域名') ?>');
+            BackendToast.warning('<?= __('请选择要拉取的域名') ?>');
             return;
         }
 
@@ -3574,15 +3574,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (autoResolve && res.auto_resolve_queued) {
                     msg += ' <?= __('（自动解析任务已创建）') ?>';
                 }
-                AdminToast.success(msg);
+                BackendToast.success(msg);
                 closeBatchSearchModal();
                 loadDomainList();
             } else {
-                AdminToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
             }
         }).catch(function() {
             setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     });
 
@@ -3594,20 +3594,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var accountId = document.getElementById('pb-dm-reg-acct').value;
         var domainsText = document.getElementById('pb-dm-reg-domains').value.trim();
         if (!accountId || !domainsText) {
-            AdminToast.warning('<?= __('请选择账户并输入域名') ?>');
+            BackendToast.warning('<?= __('请选择账户并输入域名') ?>');
             return;
         }
         setBtnLoading(btn, true);
         postForm(API.checkAvail, { account_id: accountId, domains: domainsText }).then(function(res) {
             setBtnLoading(btn, false, '<i class="mdi mdi-magnify"></i> <?= __('检查可用性') ?>');
             if (!res.success) {
-                AdminToast.error(res.msg || '<?= __('检查失败') ?>');
+                BackendToast.error(res.msg || '<?= __('检查失败') ?>');
                 return;
             }
             renderCheckResults(res.data || [], accountId);
         }).catch(function() {
             setBtnLoading(btn, false, '<i class="mdi mdi-magnify"></i> <?= __('检查可用性') ?>');
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     });
 
@@ -3707,13 +3707,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             if (dialogResult.start_lifecycle === '1') {
                                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                             }
-                            AdminToast.success(msg);
+                            BackendToast.success(msg);
                             var results = (res.results || []);
                             var lifecycleFails = results.filter(function(r) {
                                 return r && r.success && r.lifecycle && r.lifecycle.attempted && !r.lifecycle.success;
                             });
                             if (lifecycleFails.length > 0) {
-                                AdminToast.warning(
+                                BackendToast.warning(
                                     '<?= __('%{count} 个域名未成功创建生命周期订单，请确认 Weline_Saas 已启用，或前往「域名状态」页使用补建功能。') ?>'.replace('%{count}', lifecycleFails.length)
                                 );
                             }
@@ -3721,11 +3721,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             btn.disabled = true;
                         } else {
                             setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
-                            AdminToast.error(getPurchaseErrorMsg(res));
+                            BackendToast.error(getPurchaseErrorMsg(res));
                         }
                     }).catch(function() {
                         setBtnLoading(btn, false, '<i class="mdi mdi-cart"></i> <?= __('购买') ?>');
-                        AdminToast.error('<?= __('网络错误') ?>');
+                        BackendToast.error('<?= __('网络错误') ?>');
                     });
                 });
             });
@@ -3740,7 +3740,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     selected.push({ domain: c.dataset.domain, years: 1 });
                 });
                 if (!selected.length) {
-                    AdminToast.warning('<?= __('请勾选要购买的域名') ?>');
+                    BackendToast.warning('<?= __('请勾选要购买的域名') ?>');
                     return;
                 }
                 openPurchaseDialog({
@@ -3777,22 +3777,22 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             if (dialogResult.start_lifecycle === '1') {
                                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
                             }
-                            AdminToast.success(msg);
+                            BackendToast.success(msg);
                             var results = (res.results || []);
                             var lifecycleFails = results.filter(function(r) {
                                 return r && r.success && r.lifecycle && r.lifecycle.attempted && !r.lifecycle.success;
                             });
                             if (lifecycleFails.length > 0) {
-                                AdminToast.warning(
+                                BackendToast.warning(
                                     '<?= __('%{count} 个域名未成功创建生命周期订单，请确认 Weline_Saas 已启用，或前往「域名状态」页使用补建功能。') ?>'.replace('%{count}', lifecycleFails.length)
                                 );
                             }
                         } else {
-                            AdminToast.error(getPurchaseErrorMsg(res));
+                            BackendToast.error(getPurchaseErrorMsg(res));
                         }
                     }).catch(function() {
                         setBtnLoading(batchBtn, false, '<i class="mdi mdi-cart-arrow-down"></i> <?= __('一键购买全部可用域名') ?>');
-                        AdminToast.error('<?= __('网络错误') ?>');
+                        BackendToast.error('<?= __('网络错误') ?>');
                     });
                 });
             });
@@ -3986,7 +3986,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         btnEl.addEventListener('click', function() {
             var acctId = parseInt(selectEl.value, 10);
             if (!acctId) {
-                AdminToast.warning('<?= __('请选择域名商账号') ?>');
+                BackendToast.warning('<?= __('请选择域名商账号') ?>');
                 return;
             }
             btnEl.disabled = true;
@@ -3995,15 +3995,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 btnEl.disabled = false;
                 btnEl.innerHTML = '<i class="mdi mdi-wrench"></i> <?= __('补建生命周期订单') ?>';
                 if (res.success) {
-                    AdminToast.success('<?= __('补建成功') ?>');
+                    BackendToast.success('<?= __('补建成功') ?>');
                     loadLifecycleStatus(targetDomain);
                 } else {
-                    AdminToast.error(res.message || '<?= __('补建失败') ?>');
+                    BackendToast.error(res.message || '<?= __('补建失败') ?>');
                 }
             }).catch(function(e) {
                 btnEl.disabled = false;
                 btnEl.innerHTML = '<i class="mdi mdi-wrench"></i> <?= __('补建生命周期订单') ?>';
-                AdminToast.error('<?= __('补建失败') ?>: ' + (e.message || e));
+                BackendToast.error('<?= __('补建失败') ?>: ' + (e.message || e));
             });
         });
     }
@@ -4012,7 +4012,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var targetDomain = (domain || (document.getElementById('pb-dm-lifecycle-domain') || {}).value || '').trim().toLowerCase();
         var container = document.getElementById('pb-dm-lifecycle-result');
         if (!targetDomain) {
-            AdminToast.warning('<?= __('请输入根域名') ?>');
+            BackendToast.warning('<?= __('请输入根域名') ?>');
             return;
         }
 
@@ -4180,17 +4180,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>';
             }
             if (res.success) {
-                AdminToast.success(res.msg || '<?= __('证书申请成功') ?>');
+                BackendToast.success(res.msg || '<?= __('证书申请成功') ?>');
                 loadDomainPool(poolState.page);
             } else {
-                AdminToast.error(res.msg || '<?= __('证书申请失败') ?>');
+                BackendToast.error(res.msg || '<?= __('证书申请失败') ?>');
             }
         }).catch(function() {
             if (btnEl) {
                 btnEl.disabled = false;
                 btnEl.innerHTML = '<i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?>';
             }
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
@@ -4200,14 +4200,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             if (btnEl) btnEl.disabled = true;
             postForm(API.deletePoolDomain, { pool_id: poolId }).then(function(res) {
                 if (res.success) {
-                    AdminToast.success(res.msg || '<?= __('删除成功') ?>');
+                    BackendToast.success(res.msg || '<?= __('删除成功') ?>');
                     loadDomainPool(poolState.page);
                 } else {
-                    AdminToast.error(res.msg || '<?= __('删除失败') ?>');
+                    BackendToast.error(res.msg || '<?= __('删除失败') ?>');
                     if (btnEl) btnEl.disabled = false;
                 }
             }).catch(function() {
-                AdminToast.error('<?= __('网络错误') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
                 if (btnEl) btnEl.disabled = false;
             });
         });
@@ -4226,17 +4226,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             if (res.success) {
                 var msg = res.msg || res.message || (res.data && res.data.resolved ? '<?= __('解析正常') ?>' : '<?= __('解析异常') ?>');
                 if (res.data && res.data.ipv4) msg += ' (IP: ' + res.data.ipv4 + ')';
-                AdminToast.success(msg);
+                BackendToast.success(msg);
                 loadDomainPool(poolState.page);
             } else {
-                AdminToast.error(res.msg || res.message || '<?= __('检测失败') ?>');
+                BackendToast.error(res.msg || res.message || '<?= __('检测失败') ?>');
             }
         }).catch(function() {
             if (btnEl) {
                 btnEl.disabled = false;
                 btnEl.innerHTML = '<i class="mdi mdi-dns"></i> <?= __('检查状态') ?>';
             }
-            AdminToast.error('<?= __('网络错误') ?>');
+            BackendToast.error('<?= __('网络错误') ?>');
         });
     }
 
@@ -4353,7 +4353,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     document.getElementById('pb-dm-pool-batch-check-btn').addEventListener('click', function() {
         var items = poolState.items || [];
         if (items.length === 0) {
-            AdminToast.warning('<?= __('当前页无域名可检查') ?>');
+            BackendToast.warning('<?= __('当前页无域名可检查') ?>');
             return;
         }
         var btn = this;
@@ -4373,7 +4373,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (done >= total) {
                     btn.disabled = false;
                     btn.innerHTML = origHtml;
-                    AdminToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
+                    BackendToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
                     loadDomainPool(poolState.page);
                 }
             }).catch(function() {
@@ -4382,7 +4382,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 if (done >= total) {
                     btn.disabled = false;
                     btn.innerHTML = origHtml;
-                    AdminToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
+                    BackendToast.success('<?= __('批量检查完成') ?>：<?= __('解析正常') ?> ' + ok + '，<?= __('异常') ?> ' + err + ' / ' + total);
                     loadDomainPool(poolState.page);
                 }
             });
@@ -4515,7 +4515,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
 
         if (selected.length === 0) {
-            AdminToast.warning('<?= __('请选择要设置的已拉取域名') ?>');
+            BackendToast.warning('<?= __('请选择要设置的已拉取域名') ?>');
             return;
         }
 
@@ -4603,13 +4603,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 }
             })
             .catch(function() {
-                AdminToast.error('<?= __('加载账户列表失败') ?>');
+                BackendToast.error('<?= __('加载账户列表失败') ?>');
             });
     }
 
     function doBatchSetAccounts() {
         if (pbDmBatchSetAccountsSelectedIds.length === 0) {
-            AdminToast.warning('<?= __('请选择要设置的域名') ?>');
+            BackendToast.warning('<?= __('请选择要设置的域名') ?>');
             return;
         }
 
@@ -4617,7 +4617,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var cdnAccountId = document.getElementById('pb-dm-batch-set-cdn-account').value;
 
         if (dnsAccountId === '' && cdnAccountId === '') {
-            AdminToast.warning('<?= __('请至少选择一个账户进行设置') ?>');
+            BackendToast.warning('<?= __('请至少选择一个账户进行设置') ?>');
             return;
         }
 
@@ -4626,21 +4626,21 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (dnsAccountId !== '') params.dns_account_id = dnsAccountId;
         if (cdnAccountId !== '') params.cdn_account_id = cdnAccountId;
 
-        AdminToast.info('<?= __('正在设置账户...') ?>');
+        BackendToast.info('<?= __('正在设置账户...') ?>');
         if (submitBtn) submitBtn.disabled = true;
 
         postForm(API.batchSetAccounts, params).then(function(res) {
             if (submitBtn) submitBtn.disabled = false;
             if (res.success) {
-                AdminToast.success(res.msg || '<?= __('设置成功') ?>');
+                BackendToast.success(res.msg || '<?= __('设置成功') ?>');
                 closeBatchSetAccountsModal();
                 loadDomainList();
             } else {
-                AdminToast.error(res.msg || '<?= __('设置失败') ?>');
+                BackendToast.error(res.msg || '<?= __('设置失败') ?>');
             }
         }).catch(function() {
             if (submitBtn) submitBtn.disabled = false;
-            AdminToast.error('<?= __('请求失败') ?>');
+            BackendToast.error('<?= __('请求失败') ?>');
         });
     }
 
