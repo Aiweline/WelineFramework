@@ -1195,21 +1195,16 @@ class DomainManagement extends BaseController
 
             $sse->sendEvent('progress', ['message' => __('正在验证域名...'), 'progress' => 30]);
 
-            $port = 80;
-            $serverBag = $this->request->getServerBag();
-            if ($serverBag && \method_exists($serverBag, 'getPort')) {
-                $reqPort = $serverBag->getPort();
-                if ($reqPort > 0) {
-                    $port = $reqPort;
-                }
+            $challengeRaw = $this->request->get('challenge_strategy', '');
+            $challengeStrategy = \is_array($challengeRaw)
+                ? \trim((string) ($challengeRaw[0] ?? 'auto'))
+                : \trim((string) ($challengeRaw ?: 'auto'));
+            if ($challengeStrategy === '' || $challengeStrategy === 'Array') {
+                $challengeStrategy = 'auto';
             }
-            if ($port === 80) {
-                $config = Env::getInstance()->getConfig('server');
-                if (\is_array($config) && isset($config['port']) && (int) $config['port'] > 0) {
-                    $port = (int) $config['port'];
-                }
+            if (!\in_array($challengeStrategy, ['http01', 'dns01', 'auto'], true)) {
+                $challengeStrategy = 'auto';
             }
-            $challengeStrategy = ($port === 80) ? 'http01' : 'dns01';
 
             $result = w_query('server', 'requestCertificate', [
                 'domain' => $domain,
