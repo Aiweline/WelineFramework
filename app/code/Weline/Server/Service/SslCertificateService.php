@@ -1306,13 +1306,21 @@ CNF;
         return (bool)@\copy($source, $target);
     }
     
+    public const CHALLENGE_HTTP01 = 'http01';
+    public const CHALLENGE_DNS01 = 'dns01';
+    public const CHALLENGE_AUTO = 'auto';
+
     /**
      * 为域名申请证书
-     * 
+     *
      * @param string $domain 域名
      * @param string $webroot Webroot 路径（用于 HTTP-01 验证）
      * @param string $email 联系邮箱
      * @param int $websiteId 关联的网站 ID
+     * @param string $provider 证书提供商
+     * @param string $challengeStrategy 验证策略: auto|http01|dns01。auto 时若端口非80则自动用 dns01
+     * @param int $poolId 域名池 ID（DNS-01 时用于解析 DNS 账户）
+     * @param int $domainId 根域名 ID（DNS-01 时用于解析 DNS 账户）
      * @return array ['success' => bool, 'message' => string, 'cert' => SslCertificate|null]
      */
     public function requestCertificate(
@@ -1320,7 +1328,10 @@ CNF;
         string $webroot,
         string $email,
         int $websiteId = 0,
-        string $provider = self::PROVIDER_LETS_ENCRYPT
+        string $provider = self::PROVIDER_LETS_ENCRYPT,
+        string $challengeStrategy = self::CHALLENGE_AUTO,
+        int $poolId = 0,
+        int $domainId = 0
     ): array
     {
         try {
@@ -1371,7 +1382,7 @@ CNF;
                 ->setChainPath($chainPath);
             
             // 4. 使用 ACME 协议申请证书
-            $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir);
+            $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId);
             
             if ($result['success']) {
                 // 更新证书信息
@@ -1474,95 +1485,84 @@ CNF;
         return (bool) \file_put_contents($this->accountKeyPath, $privateKey);
     }
     
+    protected function getServerPort(): int
+    {
+        $config = Env::getInstance()->getConfig('server');
+        if (\is_array($config)) {
+            return (int)($config['port'] ?? 80);
+        }
+        return 80;
+    }
+
     /**
      * 执行 ACME 验证并获取证书
+     *
+     * @param string $challengeStrategy auto|http01|dns01
+     * @param int $poolId 域名池 ID（DNS-01 用）
+     * @param int $domainId 根域名 ID（DNS-01 用）
      */
-    protected function performAcmeChallenge(string $domain, string $webroot, string $email, string $certDir): array
-    {
-        // 这里实现简化版的 ACME 协议
-        // 生产环境建议使用成熟的 ACME 库如 kelunik/acme
-        
+    protected function performAcmeChallenge(
+        string $domain,
+        string $webroot,
+        string $email,
+        string $certDir,
+        string $challengeStrategy = self::CHALLENGE_AUTO,
+        int $poolId = 0,
+        int $domainId = 0
+    ): array {
+        $strategy = $challengeStrategy;
+        if ($strategy === self::CHALLENGE_AUTO) {
+            $port = $this->getServerPort();
+            if ($port !== 80) {
+                $strategy = self::CHALLENGE_DNS01;
+            } else {
+                $strategy = self::CHALLENGE_HTTP01;
+            }
+        }
+
         try {
-            // 1. 获取 ACME 目录
             $directory = $this->getAcmeDirectory();
             if (!$directory) {
                 return ['success' => false, 'message' => __('无法获取 ACME 目录')];
             }
-            
-            // 2. 生成域名密钥
+
             $domainKeyPath = $certDir . 'domain.key';
             if (!$this->generateDomainKey($domainKeyPath)) {
                 return ['success' => false, 'message' => __('无法生成域名密钥')];
             }
-            
-            // 3. 注册/获取账户
+
             $accountUrl = $this->registerAccount($directory['newAccount'], $email);
             if (!$accountUrl) {
                 return ['success' => false, 'message' => __('账户注册失败')];
             }
-            
-            // 4. 创建订单
+
             $orderUrl = $this->createOrder($directory['newOrder'], [$domain], $accountUrl);
             if (!$orderUrl) {
                 return ['success' => false, 'message' => __('创建订单失败')];
             }
-            
-            // 5. 获取授权并完成验证
+
             $order = $this->getResource($orderUrl, $accountUrl);
             if (!$order || empty($order['authorizations'])) {
                 return ['success' => false, 'message' => __('获取授权失败')];
             }
-            
+
             foreach ($order['authorizations'] as $authUrl) {
                 $auth = $this->getResource($authUrl, $accountUrl);
                 if (!$auth) {
                     return ['success' => false, 'message' => __('获取授权详情失败')];
                 }
-                
-                // 查找 HTTP-01 验证
-                $httpChallenge = null;
-                foreach ($auth['challenges'] as $challenge) {
-                    if ($challenge['type'] === 'http-01') {
-                        $httpChallenge = $challenge;
-                        break;
-                    }
+
+                if ($strategy === self::CHALLENGE_DNS01) {
+                    $validated = $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId);
+                } else {
+                    $validated = $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot);
                 }
-                
-                if (!$httpChallenge) {
-                    return ['success' => false, 'message' => __('未找到 HTTP-01 验证方式')];
-                }
-                
-                // 创建验证文件
-                if (!$this->createHttpChallenge($webroot, $httpChallenge['token'], $httpChallenge['token'])) {
-                    return ['success' => false, 'message' => __('创建验证文件失败')];
-                }
-                
-                // 通知 CA 开始验证
-                $this->notifyChallenge($httpChallenge['url'], $accountUrl);
-                
-                // 等待验证完成
-                $maxWait = 60;
-                $validated = false;
-                for ($i = 0; $i < $maxWait; $i++) {
-                    \sleep(2);
-                    $auth = $this->getResource($authUrl, $accountUrl);
-                    if ($auth && $auth['status'] === 'valid') {
-                        $validated = true;
-                        break;
-                    }
-                    if ($auth && $auth['status'] === 'invalid') {
-                        break;
-                    }
-                }
-                
-                // 清理验证文件
-                $this->cleanupHttpChallenge($webroot, $httpChallenge['token']);
-                
+
                 if (!$validated) {
                     return ['success' => false, 'message' => __('域名验证失败')];
                 }
             }
-            
+
             // 6. 完成订单并获取证书
             $csrPath = $certDir . 'csr.pem';
             $csr = $this->generateCsr($domain, $domainKeyPath, $csrPath);
@@ -1613,7 +1613,122 @@ CNF;
             return ['success' => false, 'message' => $e->getMessage()];
         }
     }
-    
+
+    protected function performHttp01Challenge(array $auth, string $authUrl, string $accountUrl, string $webroot): bool
+    {
+        $httpChallenge = null;
+        foreach ($auth['challenges'] ?? [] as $challenge) {
+            if (($challenge['type'] ?? '') === 'http-01') {
+                $httpChallenge = $challenge;
+                break;
+            }
+        }
+        if (!$httpChallenge) {
+            return false;
+        }
+        if (!$this->createHttpChallenge($webroot, $httpChallenge['token'], $httpChallenge['token'])) {
+            return false;
+        }
+        $this->notifyChallenge($httpChallenge['url'], $accountUrl);
+        $maxWait = 60;
+        $validated = false;
+        for ($i = 0; $i < $maxWait; $i++) {
+            \sleep(2);
+            $auth = $this->getResource($authUrl, $accountUrl);
+            if ($auth && ($auth['status'] ?? '') === 'valid') {
+                $validated = true;
+                break;
+            }
+            if ($auth && ($auth['status'] ?? '') === 'invalid') {
+                break;
+            }
+        }
+        $this->cleanupHttpChallenge($webroot, $httpChallenge['token']);
+        return $validated;
+    }
+
+    protected function performDns01Challenge(
+        array $auth,
+        string $authUrl,
+        string $accountUrl,
+        string $domain,
+        int $poolId,
+        int $domainId
+    ): bool {
+        $dnsChallenge = null;
+        foreach ($auth['challenges'] ?? [] as $challenge) {
+            if (($challenge['type'] ?? '') === 'dns-01') {
+                $dnsChallenge = $challenge;
+                break;
+            }
+        }
+        if (!$dnsChallenge) {
+            return false;
+        }
+        $thumbprint = $this->getAccountKeyThumbprint();
+        if ($thumbprint === '') {
+            return false;
+        }
+        $keyAuth = ($dnsChallenge['token'] ?? '') . '.' . $thumbprint;
+        $digest = \hash('sha256', $keyAuth, true);
+        $challengeValue = \str_replace(['+', '/', '='], ['-', '_', ''], \base64_encode($digest));
+
+        $addResult = w_query('websites', 'addAcmeTxtRecord', [
+            'domain' => $domain,
+            'challenge_value' => $challengeValue,
+            'pool_id' => $poolId,
+            'domain_id' => $domainId,
+        ]);
+        if (!($addResult['success'] ?? false)) {
+            return false;
+        }
+        $recordId = (string)($addResult['record_id'] ?? '');
+        $this->notifyChallenge($dnsChallenge['url'] ?? '', $accountUrl);
+
+        $maxWait = 120;
+        $validated = false;
+        for ($i = 0; $i < $maxWait; $i++) {
+            \sleep(2);
+            $auth = $this->getResource($authUrl, $accountUrl);
+            if ($auth && ($auth['status'] ?? '') === 'valid') {
+                $validated = true;
+                break;
+            }
+            if ($auth && ($auth['status'] ?? '') === 'invalid') {
+                break;
+            }
+        }
+
+        if ($recordId !== '') {
+            w_query('websites', 'removeAcmeTxtRecord', [
+                'domain' => $domain,
+                'record_id' => $recordId,
+                'pool_id' => $poolId,
+                'domain_id' => $domainId,
+            ]);
+        }
+        return $validated;
+    }
+
+    protected function getAccountKeyThumbprint(): string
+    {
+        $key = \openssl_pkey_get_private(\file_get_contents($this->accountKeyPath));
+        if (!$key) {
+            return '';
+        }
+        $details = \openssl_pkey_get_details($key);
+        if (!$details || !isset($details['rsa']['n'])) {
+            return '';
+        }
+        $jwk = [
+            'e' => $this->base64UrlEncode($details['rsa']['e']),
+            'kty' => 'RSA',
+            'n' => $this->base64UrlEncode($details['rsa']['n']),
+        ];
+        $thumbprint = \hash('sha256', \json_encode($jwk, \JSON_UNESCAPED_SLASHES), true);
+        return \str_replace(['+', '/', '='], ['-', '_', ''], \base64_encode($thumbprint));
+    }
+
     /**
      * 获取 ACME 目录
      * httpRequest 返回 ['headers' => ..., 'body' => <ACME目录JSON>, 'raw' => ...]

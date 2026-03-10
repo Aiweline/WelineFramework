@@ -140,6 +140,7 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 'provider' => 'letsencrypt',
                 'cert_type' => $isWildcard ? 'wildcard' : 'exact',
                 'cert_strategy' => $strategy,
+                'pool_id' => $poolId,
             ]);
 
             if ($result['success'] ?? false) {

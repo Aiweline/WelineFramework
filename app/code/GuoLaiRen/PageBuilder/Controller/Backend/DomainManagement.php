@@ -1148,6 +1148,7 @@ class DomainManagement extends BaseController
                 'website_id' => 0,
                 'provider' => $provider,
                 'cert_type' => 'exact',
+                'pool_id' => $poolId,
             ]);
 
             if ($result['success'] ?? false) {
