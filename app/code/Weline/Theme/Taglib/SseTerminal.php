@@ -150,7 +150,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-line.success { color: var(--backend-color-success, #a6e3a1); }';
             $html[] = '.weline-sse-terminal-line.warning { color: var(--backend-color-warning, #f9e2af); }';
             $html[] = '.weline-sse-terminal-line.error { color: var(--backend-color-danger, #f38ba8); }';
-            $html[] = '.weline-sse-terminal-line.progress { color: var(--backend-color-info, #89dceb); }';
+            $html[] = '.weline-sse-terminal-line.progress { color: var(--backend-color-info, #89dceb); height: auto !important; }';
             $html[] = '.weline-sse-terminal-line.debug { color: var(--backend-color-text-muted, #6c7086); font-style: italic; }';
             $html[] = '.weline-sse-terminal-line.start { color: var(--backend-color-primary, #89b4fa); font-weight: 500; }';
             $html[] = '.weline-sse-terminal-line.done { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';

@@ -1220,7 +1220,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             <div class="pb-dm-fg" style="margin-bottom:0;">
                 <label><lang>验证方式</lang></label>
                 <select id="pb-dm-https-challenge" class="pb-dm-select" style="width:100%;">
-                    <option value="auto"><lang>自动（80 端口用 HTTP-01，否则用 DNS-01）</lang></option>
+                    <option value="auto"><lang>自动（默认 DNS-01，无需 80 端口）</lang></option>
                     <option value="http01"><lang>HTTP-01（需 80 端口可访问）</lang></option>
                     <option value="dns01"><lang>DNS-01（添加 TXT 记录，需已关联 DNS 账户）</lang></option>
                 </select>
@@ -4315,9 +4315,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var sseModal = document.getElementById('pb-dm-https-sse-modal');
         var challengeEl = document.getElementById('pb-dm-https-challenge');
         var strategyRaw = (challengeEl && challengeEl.value) ? challengeEl.value : 'auto';
-        var challenge = (strategyRaw === 'http01' || strategyRaw === 'dns01')
-            ? strategyRaw
-            : ((httpsRequestPort === 80) ? 'http01' : 'dns01');
+        var challenge;
+        if (strategyRaw === 'http01' || strategyRaw === 'dns01') {
+            challenge = strategyRaw;
+        } else {
+            challenge = 'dns01';
+        }
         var streamUrl = API.requestHttpsStream + '?pool_id=' + encodeURIComponent(poolId) + '&provider=' + encodeURIComponent(provider) + '&domain=' + encodeURIComponent(domain) + '&challenge_strategy=' + encodeURIComponent(challenge);
         var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-https-sse-terminal'];
         var doneBtn = document.getElementById('pb-dm-https-sse-done-btn');
