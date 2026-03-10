@@ -34,7 +34,7 @@ class DomainPoolCertificateRequest implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('定期为域名池内解析已生效且指向本服务器的域名自动申请 Let\'s Encrypt 证书');
+        return __('定期为域名池中尚未建站就绪、且解析已指向本服务器的域名自动申请 Let\'s Encrypt 证书；就绪后不再申请');
     }
 
     public function cron_time(): string
@@ -131,6 +131,10 @@ class DomainPoolCertificateRequest implements CronTaskInterface
 
         $counter['requested']++;
         $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
+        $domainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
+        $onProgress = function (string $message, array $extra = []) use ($requestDomain): void {
+            w_log_info('[DomainPoolCertificateRequest] ' . $requestDomain . ' - ' . $message, $extra, 'domain_pool_cert');
+        };
         try {
             $result = w_query('server', 'requestCertificate', [
                 'domain' => $requestDomain,
@@ -141,6 +145,9 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 'cert_type' => $isWildcard ? 'wildcard' : 'exact',
                 'cert_strategy' => $strategy,
                 'pool_id' => $poolId,
+                'domain_id' => $domainId > 0 ? $domainId : 0,
+                'challenge_strategy' => 'dns01',
+                '_on_progress' => $onProgress,
             ]);
 
             if ($result['success'] ?? false) {
