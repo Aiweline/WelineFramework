@@ -118,28 +118,31 @@ class DomainAutoResolveTask extends Model
 
     /**
      * 创建自动解析任务
+     * 新任务使用新实例插入，避免主键 task_id 残留导致唯一约束冲突
      */
     public static function createTask(string $domain, int $accountId): self
     {
+        $existing = new self();
+        $existing->loadByDomain($domain);
+
+        if ($existing->getTaskId() && $existing->getStatus() !== self::STATUS_SUCCESS) {
+            $existing->setStatus(self::STATUS_PENDING);
+            $existing->setData(self::schema_fields_RETRY_COUNT, 0);
+            $existing->setLastError('');
+            $existing->save();
+            return $existing;
+        }
+
+        if ($existing->getTaskId()) {
+            return $existing;
+        }
+
+        // 使用新实例插入，确保不带主键，由数据库序列生成 task_id，避免 duplicate key
         $task = new self();
-        $task->loadByDomain($domain);
-
-        if ($task->getTaskId() && $task->getStatus() !== self::STATUS_SUCCESS) {
-            $task->setStatus(self::STATUS_PENDING);
-            $task->setData(self::schema_fields_RETRY_COUNT, 0);
-            $task->setLastError('');
-            $task->save();
-            return $task;
-        }
-
-        if ($task->getTaskId()) {
-            return $task;
-        }
-
-        $task->clearData();
         $task->setDomain($domain);
         $task->setAccountId($accountId);
         $task->setStatus(self::STATUS_PENDING);
+        $task->setData(self::schema_fields_ID, null);
         $task->save();
 
         return $task;
