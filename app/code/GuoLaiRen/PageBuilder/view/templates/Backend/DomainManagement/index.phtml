@@ -152,12 +152,33 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 .pb-dm-table tr:hover td {
     background: var(--backend-color-table-bg-hover, #f8f9fa);
 }
+/* 多语言兼容：域名池表格列宽与对齐，避免长短文案错位 */
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-domain { min-width: 10em; word-break: break-all; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-type { min-width: 5em; white-space: nowrap; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-status,
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-https { min-width: 4.5em; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-resolve,
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-site-ready { min-width: 6em; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-ip { min-width: 8em; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-time { min-width: 10em; white-space: nowrap; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-ops { min-width: 12em; }
+.pb-dm-table#pb-dm-pool-table { direction: inherit; }
+.pb-dm-pool-ops {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+.pb-dm-pool-ops .pb-dm-btn { flex-shrink: 0; }
 .pb-dm-badge {
     display: inline-block;
     padding: 2px 10px;
     border-radius: var(--backend-border-radius-pill, 50rem);
     font-size: 0.78rem;
     font-weight: 500;
+    min-width: 2.5em;
+    text-align: center;
+    white-space: nowrap;
 }
 .pb-dm-badge--ok {
     background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
@@ -4147,16 +4168,16 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             return;
         }
 
-        var html = '<table class="pb-dm-table"><thead><tr>' +
-            '<th><?= __('域名') ?></th>' +
-            '<th><?= __('类型') ?></th>' +
-            '<th><?= __('状态') ?></th>' +
-            '<th><?= __('解析状态') ?></th>' +
-            '<th><?= __('HTTPS') ?></th>' +
-            '<th><?= __('建站就绪') ?></th>' +
-            '<th><?= __('解析IP') ?></th>' +
-            '<th><?= __('入池时间') ?></th>' +
-            '<th><?= __('操作') ?></th>' +
+        var html = '<table class="pb-dm-table" id="pb-dm-pool-table"><thead><tr>' +
+            '<th class="pb-dm-col-domain"><?= __('域名') ?></th>' +
+            '<th class="pb-dm-col-type"><?= __('类型') ?></th>' +
+            '<th class="pb-dm-col-status"><?= __('状态') ?></th>' +
+            '<th class="pb-dm-col-resolve"><?= __('解析状态') ?></th>' +
+            '<th class="pb-dm-col-https"><?= __('HTTPS') ?></th>' +
+            '<th class="pb-dm-col-site-ready"><?= __('建站就绪') ?></th>' +
+            '<th class="pb-dm-col-ip"><?= __('解析IP') ?></th>' +
+            '<th class="pb-dm-col-time"><?= __('入池时间') ?></th>' +
+            '<th class="pb-dm-col-ops"><?= __('操作') ?></th>' +
             '</tr></thead><tbody>';
 
         items.forEach(function(item) {
@@ -4192,18 +4213,18 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var delBtn = poolId > 0
                 ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>'
                 : '';
-            var opHtml = [checkBtn, httpsBtn, delBtn].filter(Boolean).join(' ');
+            var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
 
             html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
-                '<td><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
-                '<td>' + typeText + '</td>' +
-                '<td>' + statusBadge + '</td>' +
-                '<td>' + resolveBadge + '</td>' +
-                '<td>' + httpsBadge + '</td>' +
-                '<td>' + siteReadyBadge + '</td>' +
-                '<td>' + resolvedDisplay + '</td>' +
-                '<td>' + (item.allocated_at || '-') + '</td>' +
-                '<td>' + opHtml + '</td>' +
+                '<td class="pb-dm-col-domain"><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
+                '<td class="pb-dm-col-type">' + typeText + '</td>' +
+                '<td class="pb-dm-col-status">' + statusBadge + '</td>' +
+                '<td class="pb-dm-col-resolve">' + resolveBadge + '</td>' +
+                '<td class="pb-dm-col-https">' + httpsBadge + '</td>' +
+                '<td class="pb-dm-col-site-ready">' + siteReadyBadge + '</td>' +
+                '<td class="pb-dm-col-ip">' + resolvedDisplay + '</td>' +
+                '<td class="pb-dm-col-time">' + (item.allocated_at || '-') + '</td>' +
+                '<td class="pb-dm-col-ops">' + opHtml + '</td>' +
                 '</tr>';
         });
 
