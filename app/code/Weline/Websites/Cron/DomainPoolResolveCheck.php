@@ -54,10 +54,12 @@ class DomainPoolResolveCheck implements CronTaskInterface
             $local = 0;
             $ready = 0;
             $errors = 0;
+            $errorDetails = [];
 
             foreach ($domains as $row) {
                 $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
                 $poolDomain->setData($row);
+                $domainName = $row[DomainPool::schema_fields_DOMAIN] ?? '';
 
                 try {
                     $result = $resolveService->checkResolve($poolDomain);
@@ -66,6 +68,8 @@ class DomainPoolResolveCheck implements CronTaskInterface
                         $resolved++;
                     } else {
                         $errors++;
+                        $errMsg = $result['error'] ?? __('DNS 解析失败');
+                        $errorDetails[] = $domainName . ': ' . $errMsg;
                     }
 
                     if ($result['is_local']) {
@@ -89,7 +93,9 @@ class DomainPoolResolveCheck implements CronTaskInterface
                     }
                 } catch (\Throwable $e) {
                     $errors++;
-                    w_log_warning("域名 {$row[DomainPool::schema_fields_DOMAIN]} 检测失败: {$e->getMessage()}", [], 'domain_pool_resolve_check');
+                    $errMsg = $e->getMessage();
+                    $errorDetails[] = $domainName . ': ' . $errMsg;
+                    w_log_warning("域名 {$domainName} 检测失败: {$errMsg}", [], 'domain_pool_resolve_check');
                 }
             }
 
@@ -101,8 +107,23 @@ class DomainPoolResolveCheck implements CronTaskInterface
                 $ready,
                 $errors
             );
+            if ($errorDetails !== []) {
+                $message .= "\n" . __('错误详情:') . "\n  - " . \implode("\n  - ", $errorDetails);
+            }
 
             w_log_info($message, [], 'domain_pool_resolve_check');
+
+            if ($errors > 0) {
+                $eventData = [
+                    'data' => [
+                        'title' => __('域名池解析检测有 %{1} 个域名失败', [$errors]),
+                        'content' => $message,
+                        'is_icon' => 1,
+                        'avatar' => 'ri-error-warning-line',
+                    ],
+                ];
+                $eventsManager->dispatch('Weline_Admin::msg', $eventData);
+            }
 
             return $message;
         } catch (\Throwable $e) {
