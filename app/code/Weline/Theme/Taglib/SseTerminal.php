@@ -38,9 +38,10 @@ class SseTerminal implements TaglibInterface
         return [
             'id' => true,            // 组件唯一ID（必填）
             'url' => false,          // SSE 端点 URL（可通过 JS 设置）
-            'path' => false,         // 后台路由 path（如 blog/backend/post/trigger-sse），优先于 url，自动解析为 getBackendUrl）
+            'path' => false,         // 后台路由 path（如 blog/backend/post/trigger-sse），优先于 url
             'title' => false,        // 终端标题
             'height' => false,       // 终端高度，默认 300px
+            'events' => false,       // 监听的事件名，逗号分隔，如 start,progress,done,failed
             'auto-scroll' => false,  // 是否自动滚动到底部，默认 true
             'show-timestamp' => false, // 是否显示时间戳，默认 true
             'show-toolbar' => false, // 是否显示工具栏，默认 true
@@ -56,6 +57,10 @@ class SseTerminal implements TaglibInterface
             $url = $attributes['url'] ?? '';
             $title = $attributes['title'] ?? __('终端输出');
             $height = $attributes['height'] ?? '300px';
+            $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
+            $eventsList = $eventsAttr !== ''
+                ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
+                : ['start', 'progress', 'done', 'error', 'info', 'warning', 'success', 'debug'];
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
@@ -164,6 +169,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '"use strict";';
             $html[] = 'var id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'var initialUrl = <?= json_encode($Taglib__url ?? \'\') ?>;';
+            $html[] = 'var commonEvents = ' . \json_encode($eventsList) . ';';
             $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
             $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
 
@@ -308,41 +314,31 @@ function start(url) {
         if (eventCallbacks.message) eventCallbacks.message(e);
     };
     
-    // 常用事件类型
-    var commonEvents = ['start', 'progress', 'done', 'error', 'info', 'warning', 'success', 'debug', 'article_start', 'article_done', 'article_error'];
     commonEvents.forEach(function(eventName) {
         eventSource.addEventListener(eventName, function(e) {
             try {
                 var data = JSON.parse(e.data || '{}');
-                var msg = data.message || data.result || data.keyword || JSON.stringify(data);
-                var type = eventName;
+                var msg = data.message || data.result || data.keyword || data.msg;
+                if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
+                var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
                 
-                // 映射事件类型到显示类型
-                if (eventName === 'article_start') {
-                    msg = (data.index || 0) + '/' + (data.total || 0) + ': ' + (data.keyword || '');
-                    type = 'progress';
-                } else if (eventName === 'article_done') {
-                    msg = (data.keyword || '') + ' ✓';
-                    type = 'success';
-                } else if (eventName === 'article_error') {
-                    msg = (data.keyword || '') + ': ' + (data.error || '');
-                    type = 'error';
+                if (eventCallbacks[eventName]) {
+                    eventCallbacks[eventName](e);
+                } else {
+                    log(msg, type);
                 }
-                
-                log(msg, type);
                 
                 if (data.progress !== undefined) {
                     setProgress(data.progress);
                 }
                 
-                if (eventName === 'done') {
+                if (eventName === 'done' || eventName === 'failed') {
                     stop();
                 }
             } catch (err) {
                 log(e.data || eventName, eventName);
+                if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
             }
-            
-            if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
         });
     });
 }
