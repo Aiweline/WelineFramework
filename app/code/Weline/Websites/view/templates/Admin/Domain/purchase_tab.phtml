@@ -520,6 +520,16 @@ function executePurchase(accountId, items, dialogResult) {
                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
             }
             showToast(msg, 'success');
+            var results = (data.data && data.data.results) || [];
+            var lifecycleFails = results.filter(function(r) {
+                return r && r.success && r.lifecycle && r.lifecycle.attempted && !r.lifecycle.success;
+            });
+            if (lifecycleFails.length > 0) {
+                showToast(
+                    '<?= __('%{count} 个域名购买成功，但未成功创建生命周期跟踪订单，请确认 Weline_Saas 模块已启用，或前往域名状态页使用「补建生命周期订单」补救。') ?>'.replace('%{count}', lifecycleFails.length),
+                    'warning'
+                );
+            }
             loadOrders();
         } else {
             showToast(
