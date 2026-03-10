@@ -93,6 +93,7 @@ class DomainPool extends Model
     
     // 解析状态常量
     public const RESOLVE_STATUS_PENDING = 'pending';
+    public const RESOLVE_STATUS_RESOLVING = 'resolving';  // 解析中
     public const RESOLVE_STATUS_RESOLVED = 'resolved';
     public const RESOLVE_STATUS_ERROR = 'error';
 
