@@ -14,6 +14,7 @@ $reloadApiUrl = $this->getBackendUrl('*/backend/server-manager/reload');
 $maintenanceEnableApiUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-enable');
 $maintenanceDisableApiUrl = $this->getBackendUrl('*/backend/server-manager/maintenance-disable');
 $sessionListApiUrl = $this->getBackendUrl('*/backend/server-manager/session-list');
+$sessionDetailApiUrl = $this->getBackendUrl('*/backend/server-manager/session-detail');
 $sessionDestroyApiUrl = $this->getBackendUrl('*/backend/server-manager/session-destroy');
 $sessionPersistApiUrl = $this->getBackendUrl('*/backend/server-manager/session-persist');
 $sessionGcApiUrl = $this->getBackendUrl('*/backend/server-manager/session-gc');
@@ -49,6 +50,38 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
     
     <!-- 内容容器 -->
     <div id="content-container" class="d-none"></div>
+
+    <!-- Session 详情 Offcanvas -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="sessionDetailOffcanvas" aria-labelledby="sessionDetailOffcanvasLabel" style="max-width: 600px;">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title" id="sessionDetailOffcanvasLabel"><?= __('Session 全部字段') ?></h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="<?= __('关闭') ?>"></button>
+        </div>
+        <div class="offcanvas-body p-0">
+            <div id="session-detail-loading" class="text-center py-5 text-muted d-none">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span class="ms-2"><?= __('加载中...') ?></span>
+            </div>
+            <div id="session-detail-content" class="d-none">
+                <div class="p-3 border-bottom bg-body-tertiary">
+                    <code id="session-detail-id" class="small text-break"></code>
+                </div>
+                <div class="table-responsive" style="max-height: 70vh; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th><?= __('字段') ?></th>
+                                <th><?= __('类型') ?></th>
+                                <th><?= __('值') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody id="session-detail-body"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div id="session-detail-empty" class="text-center py-5 text-muted d-none"><?= __('该 Session 暂无数据或已过期') ?></div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -108,6 +141,7 @@ const RELOAD_API_URL = '<?= $reloadApiUrl ?>';
 const MAINTENANCE_ENABLE_API_URL = '<?= $maintenanceEnableApiUrl ?>';
 const MAINTENANCE_DISABLE_API_URL = '<?= $maintenanceDisableApiUrl ?>';
 const SESSION_LIST_API_URL = '<?= $sessionListApiUrl ?>';
+const SESSION_DETAIL_API_URL = '<?= $sessionDetailApiUrl ?>';
 const SESSION_DESTROY_API_URL = '<?= $sessionDestroyApiUrl ?>';
 const SESSION_PERSIST_API_URL = '<?= $sessionPersistApiUrl ?>';
 const SESSION_GC_API_URL = '<?= $sessionGcApiUrl ?>';
@@ -499,6 +533,7 @@ function renderSharedStateManagement(data, mode = 'all') {
                                             <th><?= __('操作') ?></th>
                                         </tr>
                                     </thead>
+                                    <caption class="text-start small text-muted"><?= __('点击「查看详情」可查看该 Session 的全部字段信息') ?></caption>
                                     <tbody id="session-list-body">
                                         <tr><td colspan="4" class="text-muted text-center"><?= __('点击“刷新列表”加载 Session 数据') ?></td></tr>
                                     </tbody>
@@ -620,6 +655,9 @@ async function loadSessionList() {
                     <td><span class="badge bg-secondary">${Number(row.data_count || 0)}</span></td>
                     <td class="weline-session-preview-cell">${previewHtml}</td>
                     <td>
+                        <button class="btn btn-sm btn-outline-primary me-1" onclick="showSessionDetail('${encodeURIComponent(sessionId)}')" title="<?= __('查看全部字段') ?>">
+                            <i class="bi bi-card-list"></i> <?= __('查看详情') ?>
+                        </button>
                         <button class="btn btn-sm btn-outline-danger" onclick="destroySession('${encodeURIComponent(sessionId)}')">
                             <i class="bi bi-trash"></i> <?= __('销毁') ?>
                         </button>
@@ -630,6 +668,64 @@ async function loadSessionList() {
     } catch (error) {
         body.innerHTML = `<tr><td colspan="4" class="text-danger text-center">${escapeHtml(error.message || '<?= __('加载失败') ?>')}</td></tr>`;
     }
+}
+
+async function showSessionDetail(encodedSessionId) {
+    const sessionId = decodeURIComponent(encodedSessionId);
+    const offcanvasEl = document.getElementById('sessionDetailOffcanvas');
+    const loadingEl = document.getElementById('session-detail-loading');
+    const contentEl = document.getElementById('session-detail-content');
+    const emptyEl = document.getElementById('session-detail-empty');
+    const idEl = document.getElementById('session-detail-id');
+    const bodyEl = document.getElementById('session-detail-body');
+    if (!offcanvasEl || !bodyEl) return;
+
+    const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+    bsOffcanvas.show();
+    loadingEl.classList.remove('d-none');
+    contentEl.classList.add('d-none');
+    emptyEl.classList.add('d-none');
+    idEl.textContent = sessionId;
+
+    try {
+        const response = await fetch(SESSION_DETAIL_API_URL + '?session_id=' + encodeURIComponent(sessionId), {
+            method: 'GET',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        });
+        const data = await response.json();
+        loadingEl.classList.add('d-none');
+        if (!data.success || !Array.isArray(data.data) || !data.data.length) {
+            emptyEl.classList.remove('d-none');
+            return;
+        }
+        bodyEl.innerHTML = data.data.map(row => {
+            const key = escapeHtml(String(row.key || ''));
+            const type = escapeHtml(String(row.type || ''));
+            const valueHtml = renderSessionDetailValue(row);
+            return `<tr><td><code class="small">${key}</code></td><td><span class="badge bg-secondary">${type}</span></td><td class="small">${valueHtml}</td></tr>`;
+        }).join('');
+        contentEl.classList.remove('d-none');
+    } catch (error) {
+        loadingEl.classList.add('d-none');
+        emptyEl.textContent = '<?= __('加载失败：') ?>' + escapeHtml(error.message);
+        emptyEl.classList.remove('d-none');
+    }
+}
+
+function renderSessionDetailValue(row) {
+    const detail = row && row.preview_detail && typeof row.preview_detail === 'object' ? row.preview_detail : null;
+    const fallback = escapeHtml(row && row.preview ? String(row.preview) : '-');
+    if (!detail) return `<span class="text-muted">${fallback}</span>`;
+    const kind = String(detail.kind || '');
+    const display = escapeHtml(detail.display || row.preview || '');
+    const size = Number(detail.size || 0);
+    const json = typeof detail.json === 'string' ? detail.json.trim() : '';
+    if ((kind === 'array' || kind === 'object') && json) {
+        return `<details class="mt-1"><summary><span class="badge bg-info">${display}</span><span class="text-muted ms-1">(${Number.isFinite(size) ? size : 0} <?= __('项') ?>)</span></summary><pre class="small mb-0 mt-2 p-2 border rounded bg-body-tertiary" style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(json)}</pre></details>`;
+    }
+    if (kind === 'null') return '<span class="badge bg-secondary">null</span>';
+    return `<span class="text-break">${display}</span>`;
 }
 
 async function destroySession(encodedSessionId) {
