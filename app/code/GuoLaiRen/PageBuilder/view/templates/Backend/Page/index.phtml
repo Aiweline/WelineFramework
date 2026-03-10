@@ -1826,6 +1826,9 @@ document.addEventListener('DOMContentLoaded', function() {
         item.querySelector('.website-check').className = 'mdi mdi-checkbox-marked-circle me-2 website-check text-success';
         document.getElementById('selectedWebsiteId').value = item.dataset.websiteId;
         selectedWebsiteName = item.querySelector('.fw-bold').textContent;
+        // 页面名称前缀默认用网站名，可改
+        var siteNameEl = document.getElementById('siteName');
+        if (siteNameEl) siteNameEl.value = selectedWebsiteName || '';
     };
     
     // 选择模板
@@ -1906,7 +1909,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 document.getElementById('selectedWebsiteId').value = data.website.website_id;
                 selectedWebsiteName = name;
-                
+                var siteNameEl = document.getElementById('siteName');
+                if (siteNameEl) siteNameEl.value = name;
+
                 hideQuickWebsiteForm();
                 showToast('success', '<?= __("站点创建成功") ?>', '');
             } else {
@@ -1947,10 +1952,12 @@ document.addEventListener('DOMContentLoaded', function() {
             btnCreate.classList.add('d-none');
         }
         
-        // 第2步时更新显示信息
+        // 第2步时更新显示信息，页面名称前缀默认用网站名（可改）
         if (step === 2) {
             document.getElementById('selectedWebsiteDisplay').textContent = selectedWebsiteName || '-';
             document.getElementById('selectedTemplateDisplay').textContent = selectedTemplateName || '-';
+            var siteNameEl = document.getElementById('siteName');
+            if (siteNameEl && selectedWebsiteName) siteNameEl.value = selectedWebsiteName;
         }
     }
     
