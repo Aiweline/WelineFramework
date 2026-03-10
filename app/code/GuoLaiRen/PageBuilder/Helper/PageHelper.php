@@ -283,5 +283,33 @@ class PageHelper
         
         return $availableLocales;
     }
+
+    /**
+     * 规范化 URL：端口为 80（http）或 443（https）时不带端口，其它端口保留
+     * 生成链接时调用，使输出与当前访问习惯一致
+     *
+     * @param string $url 原始 URL（如 https://example.com:443/about 或 https://example.com:9981/）
+     * @return string 规范化后的 URL
+     */
+    public static function normalizeUrlDefaultPort(string $url): string
+    {
+        if ($url === '') {
+            return $url;
+        }
+        $p = parse_url($url);
+        if (!is_array($p) || !isset($p['port'])) {
+            return $url;
+        }
+        $port = (int)$p['port'];
+        $scheme = $p['scheme'] ?? 'http';
+        if (($scheme === 'http' && $port === 80) || ($scheme === 'https' && $port === 443)) {
+            $host = $p['host'] ?? '';
+            $path = $p['path'] ?? '/';
+            $query = isset($p['query']) && $p['query'] !== '' ? '?' . $p['query'] : '';
+            $fragment = isset($p['fragment']) && $p['fragment'] !== '' ? '#' . $p['fragment'] : '';
+            return $scheme . '://' . $host . $path . $query . $fragment;
+        }
+        return $url;
+    }
 }
 
