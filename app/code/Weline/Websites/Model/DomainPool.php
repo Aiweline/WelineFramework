@@ -637,16 +637,13 @@ class DomainPool extends Model
     {
         $checkThreshold = \date('Y-m-d H:i:s', \strtotime('-10 minutes'));
         $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
+        $resolveCheckedCondition = '(' . self::schema_fields_RESOLVE_CHECKED_AT . ' IS NULL OR '
+            . self::schema_fields_RESOLVE_CHECKED_AT . " < '{$checkThreshold}')";
 
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->where($siteReadyCondition, null, 'RAW')
-            ->where(
-                "(" . self::schema_fields_RESOLVE_CHECKED_AT . " IS NULL OR " .
-                self::schema_fields_RESOLVE_CHECKED_AT . " < '{$checkThreshold}')",
-                null,
-                'RAW'
-            )
+            ->whereRaw($siteReadyCondition, 'AND')
+            ->whereRaw($resolveCheckedCondition, 'AND')
             ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
             ->limit($limit)
             ->select()
@@ -667,7 +664,7 @@ class DomainPool extends Model
 
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->where($siteReadyCondition, null, 'RAW')
+            ->whereRaw($siteReadyCondition, 'AND')
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)
