@@ -1875,16 +1875,16 @@ class Page extends BackendController
                 
                 $config = $pageTypeConfigs[$pageType];
                 
-                // 检查handle是否已存在（只有当handle不为空时才检查）
+                // 检查当前站点下 handle 是否已存在（同一站点内唯一）
                 if (!empty($config['handle'])) {
                     $existingPage = clone $this->pageModel;
                     $existingPage->clear()
+                        ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
                         ->where(PageModel::schema_fields_HANDLE, $config['handle'])
                         ->find()
                         ->fetch();
                     
                     if ($existingPage->getId()) {
-                        // 如果已存在，跳过或添加数字后缀
                         $config['handle'] = $config['handle'] . '-' . time();
                     }
                 }
