@@ -62,6 +62,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
+            'addAcmeTxtRecord'       => $this->addAcmeTxtRecord($params),
+            'removeAcmeTxtRecord'    => $this->removeAcmeTxtRecord($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
             ),
@@ -259,6 +261,26 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('获取域名 DNS 记录（查询层自动同步域名池）'),
                     'params'      => [
                         ['name' => 'domain_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name'        => 'addAcmeTxtRecord',
+                    'description' => __('添加 ACME DNS-01 验证 TXT 记录'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true],
+                        ['name' => 'challenge_value', 'type' => 'string', 'required' => true],
+                        ['name' => 'pool_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'removeAcmeTxtRecord',
+                    'description' => __('删除 ACME DNS-01 验证 TXT 记录'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true],
+                        ['name' => 'record_id', 'type' => 'string', 'required' => true],
+                        ['name' => 'pool_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
             ],
@@ -898,7 +920,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $syncError = (string)($sync['error'] ?? '');
 
         return [
-            // 查询层统一返回 success=true，避免上层因第三方适配器波动中断 DNS 管理流程
+            // 查询层统一返回 success，避免上层因第三方适配器波动中断 DNS 管理流程
             'success' => true,
             'message' => $syncError === ''
                 ? (string)__('获取成功')
@@ -913,6 +935,140 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 'sync_error' => $syncError,
             ],
         ];
+    }
+
+    private function addAcmeTxtRecord(array $params): array
+    {
+        $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
+        $challengeValue = (string)($params['challenge_value'] ?? '');
+        $poolId = (int)($params['pool_id'] ?? 0);
+        $domainId = (int)($params['domain_id'] ?? 0);
+
+        if ($domain === '' || $challengeValue === '') {
+            return ['success' => false, 'message' => (string)__('domain 和 challenge_value 不能为空'), 'record_id' => ''];
+        }
+
+        $rootDomainModel = $this->resolveRootDomainForAcme($domain, $poolId, $domainId);
+        if ($rootDomainModel === null) {
+            return ['success' => false, 'message' => (string)__('无法解析域名的 DNS 管理账户。请确保域名已在系统中配置且已关联 DNS 账户。'), 'record_id' => ''];
+        }
+
+        /** @var DomainResolveService $resolveService */
+        $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+        $dnsResult = $resolveService->getDnsManagementAccount($rootDomainModel, false);
+        if ($dnsResult['error'] !== '') {
+            return ['success' => false, 'message' => $dnsResult['error'], 'record_id' => ''];
+        }
+
+        $rootDomain = \strtolower((string)$rootDomainModel->getDomain());
+        $domain = \strtolower($domain);
+        if ($domain === $rootDomain || \str_starts_with($domain, '*.')) {
+            $host = '_acme-challenge';
+        } else {
+            $prefix = \explode('.', $domain)[0];
+            $host = '_acme-challenge.' . $prefix;
+        }
+
+        $record = [
+            'type' => 'TXT',
+            'host' => $host,
+            'value' => $challengeValue,
+            'ttl' => 60,
+        ];
+
+        try {
+            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
+            if ($result['success'] ?? false) {
+                return [
+                    'success' => true,
+                    'message' => (string)__('TXT 记录添加成功'),
+                    'record_id' => (string)($result['record_id'] ?? ''),
+                ];
+            }
+            return [
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('添加 TXT 记录失败')),
+                'record_id' => '',
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage(), 'record_id' => ''];
+        }
+    }
+
+    private function removeAcmeTxtRecord(array $params): array
+    {
+        $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
+        $recordId = (string)($params['record_id'] ?? '');
+        $poolId = (int)($params['pool_id'] ?? 0);
+        $domainId = (int)($params['domain_id'] ?? 0);
+
+        if ($domain === '' || $recordId === '') {
+            return ['success' => false, 'message' => (string)__('domain 和 record_id 不能为空')];
+        }
+
+        $rootDomainModel = $this->resolveRootDomainForAcme($domain, $poolId, $domainId);
+        if ($rootDomainModel === null) {
+            return ['success' => false, 'message' => (string)__('无法解析域名的 DNS 管理账户')];
+        }
+
+        /** @var DomainResolveService $resolveService */
+        $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+        $dnsResult = $resolveService->getDnsManagementAccount($rootDomainModel, false);
+        if ($dnsResult['error'] !== '') {
+            return ['success' => false, 'message' => $dnsResult['error']];
+        }
+
+        try {
+            $result = $dnsResult['adapter']->deleteDnsRecord(
+                $rootDomainModel->getDomain(),
+                $recordId,
+                $dnsResult['account']->getCredentials()
+            );
+            return [
+                'success' => (bool)($result['success'] ?? false),
+                'message' => (string)($result['message'] ?? ''),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    private function resolveRootDomainForAcme(string $domain, int $poolId, int $domainId): ?Domain
+    {
+        $domainModel = ObjectManager::getInstance(Domain::class, [], false);
+
+        if ($domainId > 0) {
+            $domainModel->load($domainId);
+            if ($domainModel->getDomainId()) {
+                return $domainModel;
+            }
+        }
+
+        if ($poolId > 0) {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->load($poolId);
+            $parentId = (int)$pool->getParentDomainId();
+            $rootDomain = \trim((string)$pool->getRootDomain());
+            if ($parentId > 0) {
+                $domainModel->load($parentId);
+                if ($domainModel->getDomainId()) {
+                    return $domainModel;
+                }
+            }
+            if ($rootDomain !== '') {
+                $domainModel->clearQuery();
+                $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+                if ($domainModel->getDomainId()) {
+                    return $domainModel;
+                }
+            }
+        }
+
+        $parts = \explode('.', $domain);
+        $rootDomain = \count($parts) >= 2 ? $parts[\count($parts) - 2] . '.' . $parts[\count($parts) - 1] : $domain;
+        $domainModel->clearQuery();
+        $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+        return $domainModel->getDomainId() ? $domainModel : null;
     }
 
     private function syncDnsRecordsToDomainPool(Domain $rootDomain, array $records, bool $createNonLocal = false): array
