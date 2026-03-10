@@ -125,7 +125,13 @@ class ServerQueryProvider implements QueryProviderInterface
         }
 
         $websiteId = (int) ($params['website_id'] ?? 0);
-        $provider = (string) ($params['provider'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT);
+        $providerRaw = $params['provider'] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT;
+        $provider = \is_array($providerRaw)
+            ? (string) ($providerRaw[0] ?? SslCertificateService::PROVIDER_LETS_ENCRYPT)
+            : (string) $providerRaw;
+        if ($provider === '' || $provider === 'Array') {
+            $provider = SslCertificateService::PROVIDER_LETS_ENCRYPT;
+        }
         $certType = (string) ($params['cert_type'] ?? 'exact');
         $certStrategy = (string) ($params['cert_strategy'] ?? '');
         $challengeStrategy = (string) ($params['challenge_strategy'] ?? SslCertificateService::CHALLENGE_AUTO);
