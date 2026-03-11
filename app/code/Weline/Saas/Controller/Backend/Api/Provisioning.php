@@ -249,6 +249,14 @@ class Provisioning extends BaseController
                 ]);
             }
 
+            // 更新订单状态为已完成
+            $order = $this->orderModel->load($orderId);
+            if ($order->getOrderId() > 0) {
+                $order->setData(\Weline\Saas\Model\ProvisioningOrder::schema_fields_STATUS, \Weline\Saas\Model\ProvisioningOrder::STATUS_COMPLETED);
+                $order->setData(\Weline\Saas\Model\ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
+                $order->save();
+            }
+
             // 完成
             $sse->sendEvent('done', [
                 'message' => __('一站式配置完成！'),
