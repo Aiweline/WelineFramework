@@ -299,6 +299,14 @@ class WlsRuntime implements RuntimeInterface
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：转换为重定向响应
             Session::flushRequestSessions();
+            if ($this->isSseRequest()) {
+                $redirectUrl = $redirectEx->getRedirectUrl();
+                $statusCode = str_contains(strtolower($redirectUrl), 'admin/login') ? 401 : 403;
+                $message = $statusCode === 401
+                    ? __('SSE 会话已失效，请重新登录后重试。')
+                    : __('当前账号无权限执行该 SSE 操作。');
+                return $this->buildSseFailedResponse($statusCode, $message, ['redirect' => $redirectUrl]);
+            }
             // 记录重定向信息
             $redirectCount = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
             $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
@@ -341,6 +349,12 @@ class WlsRuntime implements RuntimeInterface
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
             // 无路由异常：转换为 404/403 响应
+            if ($this->isSseRequest()) {
+                return $this->buildSseFailedResponse(
+                    $noRouterEx->getStatusCode(),
+                    $noRouterEx->getErrorMessage()
+                );
+            }
             
             // 尝试加载错误页面模板
             $errorFile = BP . 'pub/errors/' . $noRouterEx->getStatusCode() . '.php';
@@ -363,6 +377,16 @@ class WlsRuntime implements RuntimeInterface
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $terminateEx) {
             // 通用响应终止异常：使用异常的 toHttpString() 方法
+            if ($this->isSseRequest()) {
+                $headers = $terminateEx->getHeaders();
+                $contentType = strtolower((string)($headers['Content-Type'] ?? $headers['content-type'] ?? ''));
+                if (str_contains($contentType, 'text/event-stream')) {
+                    return $terminateEx->toHttpString();
+                }
+                $code = $terminateEx->getStatusCode();
+                $message = $this->extractSseErrorMessage($terminateEx);
+                return $this->buildSseFailedResponse($code > 0 ? $code : 500, $message);
+            }
             return $terminateEx->toHttpString();
             
         } catch (\Throwable $e) {
@@ -375,6 +399,12 @@ class WlsRuntime implements RuntimeInterface
             }
             
             // 返回错误响应
+            if ($this->isSseRequest()) {
+                $message = (\defined('DEV') && DEV)
+                    ? $e->getMessage()
+                    : __('SSE 请求处理失败，请稍后重试。');
+                return $this->buildSseFailedResponse(500, $message);
+            }
             return $this->handleException($e);
             
         } finally {
@@ -828,6 +858,61 @@ class WlsRuntime implements RuntimeInterface
         }
 
         @\file_put_contents($logFile, \json_encode($data, $flags) . "\n", \FILE_APPEND);
+    }
+
+    /**
+     * SSE 协议请求（EventSource）统一识别。
+     */
+    private function isSseRequest(): bool
+    {
+        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        return str_contains($accept, 'text/event-stream');
+    }
+
+    /**
+     * WLS 下统一将 SSE 异常转换为 failed 事件响应。
+     */
+    private function buildSseFailedResponse(int $statusCode, string $message, array $extra = []): string
+    {
+        $statusCode = $statusCode > 0 ? $statusCode : 500;
+        $payload = 'event: failed' . "\n";
+        $data = array_merge([
+            'code' => $statusCode,
+            'message' => $message,
+        ], $extra);
+        $payload .= 'data: ' . \json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
+
+        $response = \Weline\Framework\Http\WlsResponse::fromContent($payload, $statusCode, 'text/event-stream; charset=utf-8');
+        $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('X-Accel-Buffering', 'no');
+        return $response->toHttpString(false);
+    }
+
+    /**
+     * 从通用终止异常中提取可用于 SSE 的友好错误文本。
+     */
+    private function extractSseErrorMessage(\Weline\Framework\Http\ResponseTerminateException $terminateEx): string
+    {
+        $body = trim((string)$terminateEx->getBody());
+        if ($body === '') {
+            return __('SSE 请求被终止。');
+        }
+
+        $decoded = json_decode($body, true);
+        if (is_array($decoded)) {
+            $msg = (string)($decoded['msg'] ?? $decoded['message'] ?? '');
+            if ($msg !== '') {
+                return $msg;
+            }
+        }
+
+        $plain = trim(strip_tags($body));
+        if ($plain !== '') {
+            return mb_substr($plain, 0, 300);
+        }
+
+        return __('SSE 请求失败。');
     }
     
     /**
