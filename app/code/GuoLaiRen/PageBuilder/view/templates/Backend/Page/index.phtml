@@ -773,47 +773,21 @@
                                                 <i class="mdi mdi-plus"></i> <?= __('快速新建站点') ?>
                                             </button>
                                         </div>
-                                        <!-- 快速新建站点表单：从域名池选择域名（与 Website 建站逻辑一致） -->
+                                        <!-- 统一建站：使用 Websites 建站标签，与网站管理添加/编辑流程一致 -->
                                         <div id="quickWebsiteForm" class="d-none mt-2 p-2 bg-body-secondary rounded">
-                                            <div class="mb-2">
-                                                <label class="form-label small mb-1"><i class="mdi mdi-domain me-1"></i><?= __('从域名池选择域名') ?> <span class="text-warning">*</span></label>
-                                                <w:websites:domain:select
-                                                    id="quick_site_domain_select"
-                                                    name="quick_site_domain"
-                                                    value="''"
-                                                    display="@lang{点击选择域名}"
-                                                    class="w-100"
-                                                    site-ready-only="true"
-                                                    value-type="domain"
-                                                    auto-fill-name="newWebsiteName"
-                                                    auto-fill-code="newWebsiteCode"
-                                                    auto-fill-url="newWebsiteUrl"
-                                                />
-                                                <div class="form-text small"><?= __('仅显示可建站的域名池域名，选择后将自动填充下方信息') ?></div>
-                                            </div>
-                                            <div class="mb-2">
-                                                <label class="form-label small mb-1"><?= __('站点名称') ?></label>
-                                                <input type="text" class="form-control form-control-sm" id="newWebsiteName" 
-                                                       placeholder="<?= __('由域名自动生成，可修改') ?>">
-                                            </div>
-                                            <div class="mb-2">
-                                                <label class="form-label small mb-1"><?= __('站点代码') ?></label>
-                                                <input type="text" class="form-control form-control-sm" id="newWebsiteCode" 
-                                                       placeholder="<?= __('如：my_site，由域名自动生成') ?>">
-                                            </div>
-                                            <div class="mb-2">
-                                                <label class="form-label small mb-1"><?= __('站点URL') ?></label>
-                                                <input type="text" class="form-control form-control-sm" id="newWebsiteUrl" 
-                                                       placeholder="<?= __('如：https://www.example.com') ?>">
-                                            </div>
-                                            <div class="d-flex gap-1">
-                                                <button type="button" class="btn btn-success btn-sm flex-grow-1" onclick="createQuickWebsite()">
-                                                    <i class="mdi mdi-check"></i> <?= __('创建') ?>
-                                                </button>
-                                                <button type="button" class="btn btn-secondary btn-sm" onclick="hideQuickWebsiteForm()">
-                                                    <i class="mdi mdi-close"></i>
-                                                </button>
-                                            </div>
+                                            <p class="small text-muted mb-2"><?= __('使用统一建站流程在侧边栏中完成添加网站，URL 将根据所选域名生成。') ?></p>
+                                            <w:websites:website:build
+                                                id="pagebuilder_quick_build"
+                                                mode="add"
+                                                action="*/backend/websiteManagement/add"
+                                                title="添加网站"
+                                                target-button-text="添加网站（统一建站）"
+                                                icon="mdi mdi-plus"
+                                                target-button-class="btn btn-primary btn-sm w-100"
+                                            />
+                                            <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="hideQuickWebsiteForm()">
+                                                <i class="mdi mdi-close"></i> <?= __('关闭') ?>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
