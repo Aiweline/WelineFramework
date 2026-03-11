@@ -634,7 +634,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev4" style="display:none;">
                 <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
             </button>
-            <span id="pb-qb-step4-running-hint" style="color:var(--backend-color-text-secondary,#6c757d);">
+            <span id="pb-qb-step4-running-hint" style="display:none;color:var(--backend-color-text-secondary,#6c757d);">
                 <i class="mdi mdi-loading mdi-spin"></i> <lang>正在执行，请稍候...</lang>
             </span>
         </div>
@@ -713,6 +713,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var selectedAccountId = 0;
     var domainPurchased = false;
     var domainOwned = false;
+    var isProvisionRunning = false;
     var restoreStatePending = null;
 
     function setScopeState(name, value) {
@@ -862,6 +863,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 stepEl.classList.toggle('active', i === step);
                 stepEl.classList.toggle('completed', i < step);
             }
+        }
+        // 仅在真正执行中显示“正在执行”提示，避免误导
+        var runningHint = document.getElementById('pb-qb-step4-running-hint');
+        if (runningHint) {
+            runningHint.style.display = (step === 4 && isProvisionRunning) ? '' : 'none';
         }
     }
 
@@ -1477,6 +1483,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     
     // 返回按钮
     document.getElementById('pb-qb-prev4').addEventListener('click', function() { 
+        isProvisionRunning = false;
         goToStep(3); 
         // 重置进度组件
         var progress = window.WelineSseProgress && window.WelineSseProgress['pb-qb-provision-progress'];
@@ -1513,6 +1520,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
         // 跳转到进度页面
         goToStep(4);
+        isProvisionRunning = true;
         var step4Hint = document.getElementById('pb-qb-step4-running-hint');
         if (step4Hint) step4Hint.style.display = '';
         
@@ -1547,6 +1555,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         // 监听完成事件
         progress.on('done', function(e) {
+            isProvisionRunning = false;
             var step4HintDone = document.getElementById('pb-qb-step4-running-hint');
             if (step4HintDone) step4HintDone.style.display = 'none';
             try {
@@ -1563,6 +1572,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         // 监听失败事件
         progress.on('failed', function(e) {
+            isProvisionRunning = false;
             var step4HintFailed = document.getElementById('pb-qb-step4-running-hint');
             if (step4HintFailed) step4HintFailed.style.display = 'none';
             try {
@@ -1578,9 +1588,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         // 监听连接错误
         progress.on('error', function() {
+            isProvisionRunning = false;
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
             document.getElementById('pb-qb-prev4').style.display = '';
+            var step4HintError = document.getElementById('pb-qb-step4-running-hint');
+            if (step4HintError) step4HintError.style.display = 'none';
         });
         
         // 启动 SSE 连接
