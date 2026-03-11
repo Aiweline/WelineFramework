@@ -70,8 +70,10 @@ class BuildSite implements TaglibInterface
             if ($action === '') {
                 $action = $mode === 'edit' ? '*/admin/website/edit' : '*/admin/website/add';
             }
-            $title = $attributes['title'] ?? ($mode === 'edit' ? __('编辑网站') : __('添加网站'));
-            $targetButtonText = $attributes['target-button-text'] ?? ($mode === 'edit' ? __('编辑') : __('添加网站'));
+            $rawTitle = $attributes['title'] ?? ($mode === 'edit' ? __('编辑网站') : __('新建站点'));
+            $rawTargetText = $attributes['target-button-text'] ?? ($mode === 'edit' ? __('编辑') : __('新建站点'));
+            $title = __($rawTitle);
+            $targetButtonText = __($rawTargetText);
             $targetButtonClass = $attributes['target-button-class'] ?? ($mode === 'edit' ? 'btn btn-sm btn-outline-info' : 'btn btn-primary');
             $icon = $attributes['icon'] ?? ($mode === 'edit' ? 'mdi mdi-pencil' : 'mdi mdi-plus');
             $direction = $attributes['direction'] ?? 'right';

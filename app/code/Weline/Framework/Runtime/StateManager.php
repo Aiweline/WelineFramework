@@ -442,6 +442,9 @@ class StateManager
         // Taglib::$compileDepth — 嵌套编译深度，异常中断可能残留非零值
         self::registerStaticReset(\Weline\Framework\View\Taglib::class, 'compileDepth', 0);
         
+        // ResultManager::$result — 控制器 success/error/info 结果，请求级，redirect 后消费
+        \Weline\Framework\Manager\ResultManager::registerStateResets();
+        
         // ========== 3. 请求上下文 ==========
         
         // RequestContext — 请求 ID、区域、语言、货币等请求级上下文

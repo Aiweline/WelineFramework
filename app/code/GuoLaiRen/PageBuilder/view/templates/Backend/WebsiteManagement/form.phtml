@@ -126,7 +126,7 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
     </div> <!-- end message -->
     <div class="card">
         <div class="card-body">
-            <h4 class="card-title"><?= isset($website['website_id']) ? __('编辑网站') : __('添加网站') ?></h4>
+            <h4 class="card-title"><?= isset($website['website_id']) ? __('编辑网站') : ($title ?? __('新建站点')) ?></h4>
 
             <?php
             $formAction = '*/backend/websiteManagement/' . (isset($website['website_id']) ? 'edit' : 'add');
