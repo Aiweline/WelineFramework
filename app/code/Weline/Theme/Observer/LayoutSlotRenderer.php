@@ -603,7 +603,7 @@ HTML;
     left: auto !important;
     top: auto !important;
     z-index: 2147483647 !important;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background: linear-gradient(135deg, var(--backend-color-gradient-start, #667eea) 0%, var(--backend-color-gradient-end, #764ba2) 100%) !important;
     border-radius: 12px !important;
     box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4) !important;
     padding: 12px 16px !important;
