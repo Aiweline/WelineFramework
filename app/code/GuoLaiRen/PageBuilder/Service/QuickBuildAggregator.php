@@ -268,7 +268,7 @@ class QuickBuildAggregator
                 'account_id' => (int) ($acc['account_id'] ?? 0),
                 'name'       => (string) ($acc['name'] ?? ''),
                 'adapter'    => (string) ($acc['registrar_code'] ?? ''),
-                'is_default' => false,
+                'is_default' => !empty($acc['is_default']),
             ];
         }
         return ['cdnAdapters' => $adapters, 'cdnAccounts' => $accounts];
