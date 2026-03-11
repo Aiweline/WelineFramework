@@ -11,20 +11,17 @@ namespace Weline\Acl\Observer;
 
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
-use Weline\Framework\App\Env;
+use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
+use Weline\Backend\Config\MenuXmlReader;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 路由收集后执行 ACL diff：删除已卸载模块的 type=pc（控制器/方法权限）及对应 role_access。
- * 与菜单 diff（MenuCollector）对称，菜单在 before_route_collection 做 diff，ACL 在路由收集阶段收集，故在此做 diff。
+ * 路由收集后执行 ACL 孤儿 diff：删除不在「收集到的菜单 ∪ 收集到的 ACL」中的记录（acl_origin != user）。
  */
 class AfterRouteCollectionAclDiff implements ObserverInterface
 {
-    /** 控制器/方法 ACL 的类型（路由阶段收集） */
-    private const TYPE_PC = 'pc';
-
     public function __construct(
         private Acl $acl
     ) {
@@ -35,27 +32,22 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        $installedModules = array_keys(Env::getInstance()->getModuleList());
-        if (empty($installedModules)) {
-            return;
-        }
+        $validMenuSourceIds = $this->getCollectedMenuSourceIds();
+        $validAclSourceIds = CollectedAclSourceIdsRegistry::getAll();
+        $validSourceIds = array_flip(array_merge($validMenuSourceIds, $validAclSourceIds));
 
-        // 路由阶段只写入 type=pc，只清理 type=pc 中 module 不在已安装列表的
-        $orphanRows = $this->acl->reset()
-            ->where(Acl::schema_fields_TYPE, self::TYPE_PC)
+        $allRows = $this->acl->reset()
             ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=')
-            ->where(Acl::schema_fields_MODULE, $installedModules, 'not in')
             ->select()
             ->fetchArray();
 
-        if (empty($orphanRows)) {
-            return;
+        $orphanSourceIds = [];
+        foreach ($allRows as $row) {
+            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+            if ($sourceId !== '' && !isset($validSourceIds[$sourceId])) {
+                $orphanSourceIds[] = $sourceId;
+            }
         }
-
-        $orphanSourceIds = array_values(array_filter(array_map(
-            static fn(array $row): string => (string)($row[Acl::schema_fields_SOURCE_ID] ?? ''),
-            $orphanRows
-        )));
 
         if (empty($orphanSourceIds)) {
             return;
@@ -72,5 +64,28 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
             ->where(Acl::schema_fields_SOURCE_ID, $orphanSourceIds, 'in')
             ->delete()
             ->fetch();
+    }
+
+    /**
+     * 从 menu.xml 收集到的菜单 source_id 列表
+     *
+     * @return string[]
+     */
+    private function getCollectedMenuSourceIds(): array
+    {
+        /** @var MenuXmlReader $menuReader */
+        $menuReader = ObjectManager::getInstance(MenuXmlReader::class);
+        $moduleMenus = $menuReader->read();
+        $sources = [];
+        foreach ($moduleMenus as $menus) {
+            $data = $menus['data'] ?? [];
+            foreach ($data as $menu) {
+                $source = $menu['source'] ?? '';
+                if ($source !== '') {
+                    $sources[] = $source;
+                }
+            }
+        }
+        return $sources;
     }
 }
