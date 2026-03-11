@@ -12,7 +12,7 @@ use Weline\Saas\Model\ProvisioningOrder;
 /**
  * 一站式配置 SSE 实时进度 API
  */
-#[Acl('Weline_Saas::provisioning_api', '配置API', 'mdi-api', '一站式配置API', 'Weline_Saas::menu')]
+#[Acl('GuoLaiRen_PageBuilder::quick_build', '配置API', 'mdi-api', '一站式配置API', 'GuoLaiRen_PageBuilder::menu_page_management')]
 class Provisioning extends BaseController
 {
     private DomainProvisioningService $provisioningService;
@@ -32,7 +32,7 @@ class Provisioning extends BaseController
      * URL: /saas/backend/api/provisioning/stream
      * 参数: domain, registrar_account_id, cdn_vendor, cdn_account_id, apply_ssl, skip_purchase
      */
-    #[Acl('Weline_Saas::provisioning_stream', '配置进度流', 'mdi-progress-clock')]
+    #[Acl('GuoLaiRen_PageBuilder::quick_build_wizard', '配置进度流', 'mdi-progress-clock')]
     public function stream(): string
     {
         $domain = trim($this->request->getGet('domain', '') ?? '');
