@@ -2109,8 +2109,10 @@ var AutoLeadAgentTaskRunner = (function () {
                             title: '浏览器不兼容',
                             message: '自动寻客任务需要在 Chrome 浏览器中运行，请使用 Chrome 打开本页面后再启动任务。'
                         });
-                    } else {
-                        alert(msgChrome);
+                    } else if (typeof BackendToast !== 'undefined' && BackendToast.error) {
+                        BackendToast.error(msgChrome, 15000);
+                    } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils.safeToast) {
+                        ConfigUtils.safeToast('error', msgChrome);
                     }
                     return false;
                 }
@@ -2125,14 +2127,14 @@ var AutoLeadAgentTaskRunner = (function () {
             var msgNoModel = '未检测到端侧推理模型配置。请先在“配置管理”中选择 Hugging Face 模型并启用后再启动任务。';
             console.error('[TaskRunner]', msgNoModel, 'config:', agentConfig);
             emitLog('inference', '错误: ' + msgNoModel);
-            alert(msgNoModel);
+            showTaskError(msgNoModel);
             return false;
         }
         if (!agentConfig.hf_model_enabled) {
             var msgModelDisabled = '已配置端侧模型（' + agentConfig.hf_model_id + '），但当前处于未启用状态。请在“配置管理”中启用模型后再启动任务。';
             console.error('[TaskRunner]', msgModelDisabled);
             emitLog('inference', '错误: ' + msgModelDisabled);
-            alert(msgModelDisabled);
+            showTaskError(msgModelDisabled);
             return false;
         }
 
