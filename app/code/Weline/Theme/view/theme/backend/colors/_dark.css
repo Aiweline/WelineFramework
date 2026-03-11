@@ -108,4 +108,22 @@
     --backend-scrollbar-thumb: #5a6577;
     --backend-scrollbar-thumb-hover: #7a8597;
     --backend-scrollbar-track: transparent;
+
+    /* Alert 提示框（暗色下深色背景 + 浅色字，保证可读） */
+    --backend-color-alert-warning-bg: rgba(241, 180, 76, 0.2);
+    --backend-color-alert-warning-text: #f1b44c;
+    --backend-color-alert-warning-border: rgba(241, 180, 76, 0.4);
+    --backend-color-alert-success-bg: rgba(52, 195, 143, 0.2);
+    --backend-color-alert-success-text: #34c38f;
+    --backend-color-alert-success-border: rgba(52, 195, 143, 0.4);
+    --backend-color-alert-danger-bg: rgba(244, 106, 106, 0.2);
+    --backend-color-alert-danger-text: #f46a6a;
+    --backend-color-alert-danger-border: rgba(244, 106, 106, 0.4);
+    --backend-color-alert-info-bg: rgba(80, 165, 241, 0.2);
+    --backend-color-alert-info-text: #50a5f1;
+    --backend-color-alert-info-border: rgba(80, 165, 241, 0.4);
+
+    /* 主渐变（暗色下略深，不刺眼） */
+    --backend-color-gradient-start: #5a67d8;
+    --backend-color-gradient-end: #6b4190;
 }

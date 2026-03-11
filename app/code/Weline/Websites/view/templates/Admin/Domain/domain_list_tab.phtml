@@ -409,13 +409,14 @@ $accounts = $accounts ?? [];
                 <th><?= __('解析状态') ?></th>
                 <th><?= __('解析IP') ?></th>
                 <th><?= __('HTTPS') ?></th>
-                <th><?= __('建站就绪') ?></th>
+                <th><?= __('可建站') ?></th>
+                <th><?= __('已建站') ?></th>
                 <th class="text-end"><?= __('操作') ?></th>
             </tr>
         </thead>
         <tbody id="weline-domain-list-body">
             <tr>
-                <td colspan="8" class="weline-domain-empty">
+                <td colspan="9" class="weline-domain-empty">
                     <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i>
                     <p class="mt-2 mb-0"><?= __('加载中...') ?></p>
                 </td>
@@ -947,7 +948,7 @@ $accounts = $accounts ?? [];
         });
 
         var tbody = document.getElementById('weline-domain-list-body');
-        tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
 
         fetch(urls.domainList + '?' + params.toString())
             .then(function(r) { return r.json(); })
@@ -963,12 +964,12 @@ $accounts = $accounts ?? [];
                     renderPagination(pagination);
                 } else {
                     toast(data.msg || '<?= __('加载失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
                 }
             })
             .catch(function(err) {
                 toast('<?= __('请求失败') ?>', 'error');
-                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
             });
     }
 
@@ -985,7 +986,7 @@ $accounts = $accounts ?? [];
         
         if (accounts.length === 0) {
             var tbody = document.getElementById('weline-domain-list-body');
-            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+            tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty">' +
                 '<i class="mdi mdi-account-off-outline" style="font-size:2rem;"></i>' +
                 '<p class="mt-2 mb-0"><?= __('请先添加域名商账户') ?></p></td></tr>';
             return;
@@ -1074,7 +1075,7 @@ $accounts = $accounts ?? [];
             var emptyMsg = (providerErrors && providerErrors.length > 0)
                 ? '<?= __('无法获取域名，请检查上方的错误信息') ?>'
                 : '<?= __('域名商账户下暂无域名') ?>';
-            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+            tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty">' +
                 '<i class="mdi mdi-earth-off" style="font-size:2rem;"></i>' +
                 '<p class="mt-2 mb-0">' + emptyMsg + '</p></td></tr>';
             renderPagination({});
@@ -1224,7 +1225,7 @@ $accounts = $accounts ?? [];
         if (!items.length) {
             // 如果有筛选条件且没有数据，提示用户切换到全部状态
             if (hasFilters) {
-                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty">' +
                     '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
                     '<p class="mt-2 mb-1"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
                     '<p class="text-muted small mb-2"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
@@ -1235,13 +1236,13 @@ $accounts = $accounts ?? [];
             // 如果本地没有域名且允许自动拉取，则自动获取远程域名
             if (autoFetchRemote && !autoFetchTriggered) {
                 autoFetchTriggered = true;
-                tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty">' +
+                tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty">' +
                     '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
                     '<p class="mt-2 mb-0"><?= __('本地暂无已拉取的域名，正在从域名商获取...') ?></p></td></tr>';
                 loadRemoteDomainsForDisplay();
                 return;
             }
-            tbody.innerHTML = '<tr><td colspan="8" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
             return;
         }
         autoFetchTriggered = false;
@@ -1276,7 +1277,8 @@ $accounts = $accounts ?? [];
             }
 
             var localBadge = item.is_local_server ? '<span class="weline-domain-local-badge ms-1"><?= __('本机') ?></span>' : '';
-            var siteReady = item.site_ready ? '<i class="mdi mdi-check-circle text-success"></i>' : '<i class="mdi mdi-close-circle text-muted"></i>';
+            var siteReady = item.site_ready ? '<i class="mdi mdi-check-circle text-success" title="' + (typeof __ !== 'undefined' ? __('可建站') : '可建站') + '"></i>' : '<i class="mdi mdi-close-circle text-muted"></i>';
+            var siteCreated = (item.site_created === 1 || item.site_created === true) ? '<i class="mdi mdi-earth text-info" title="' + (typeof __ !== 'undefined' ? __('已建站') : '已建站') + '"></i>' : '<i class="mdi mdi-earth-off-outline text-muted"></i>';
 
             // 构建服务商列（三行：注册商、DNS、CDN）
             var registrarName = item.registrar_name || item.account_name || '-';
@@ -1310,6 +1312,7 @@ $accounts = $accounts ?? [];
                 '<td>' + (item.resolved_ip || '-') + localBadge + '</td>' +
                 '<td><span class="weline-domain-status-badge ' + httpsClass + '">' + httpsText + '</span></td>' +
                 '<td>' + siteReady + '</td>' +
+                '<td>' + siteCreated + '</td>' +
                 '<td class="text-end weline-domain-actions">' +
                     '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" onclick="WelineDomainList.transferToPool(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-database-export"></i></button> ' +
                     '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" onclick="WelineDomainList.showDnsModal(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-dns"></i></button> ' +

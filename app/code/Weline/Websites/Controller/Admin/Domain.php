@@ -22,6 +22,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain as DomainModel;
 use Weline\Websites\Model\DomainConfig;
+use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainDnsRecord;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -122,6 +123,66 @@ class Domain extends BackendController
             ->select()
             ->fetchArray();
         $this->assign('domains', \array_slice($domains, 0, 20));
+
+        // 域名池列表（含服务商、已建站，供 Tab 使用）
+        $poolModel = ObjectManager::getInstance(DomainPool::class);
+        $poolRows = $poolModel->clearQuery()
+            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+            ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
+            ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
+            ->pagination(1, 300)
+            ->select()
+            ->fetchArray();
+        $parentIds = array_unique(array_filter(array_column($poolRows, DomainPool::schema_fields_PARENT_DOMAIN_ID)));
+        $parentDomainMap = [];
+        if ($parentIds !== []) {
+            $parentDomains = $this->domainModel->clearQuery()
+                ->where(DomainModel::schema_fields_ID, $parentIds, 'IN')
+                ->select()
+                ->fetchArray();
+            foreach ($parentDomains as $d) {
+                $parentDomainMap[(int) ($d[DomainModel::schema_fields_ID] ?? 0)] = $d;
+            }
+        }
+        $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+        $accountCache = [];
+        foreach ($poolRows as &$poolRow) {
+            $pid = (int) ($poolRow[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
+            $parent = $parentDomainMap[$pid] ?? null;
+            $poolRow['_registrar_name'] = '-';
+            $poolRow['_dns_provider_name'] = '-';
+            $poolRow['_cdn_provider_name'] = '-';
+            if ($parent) {
+                $accId = (int) ($parent[DomainModel::schema_fields_ACCOUNT_ID] ?? 0);
+                if ($accId > 0) {
+                    if (!isset($accountCache[$accId])) {
+                        $acc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                        $acc->load($accId);
+                        $accountCache[$accId] = [
+                            'registrar_code' => $acc->getRegistrarCode() ?: '',
+                            'registrar_name' => '',
+                        ];
+                        if ($accountCache[$accId]['registrar_code']) {
+                            $adapter = $this->resolverService->getAdapter($accountCache[$accId]['registrar_code']);
+                            $accountCache[$accId]['registrar_name'] = $adapter ? $adapter->getRegistrarName() : $accountCache[$accId]['registrar_code'];
+                        }
+                    }
+                    $poolRow['_registrar_name'] = $accountCache[$accId]['registrar_name'] ?: '-';
+                }
+                $dnsCode = $parent[DomainModel::schema_fields_DNS_PROVIDER] ?? $poolRow[DomainPool::schema_fields_DNS_PROVIDER] ?? '';
+                $cdnCode = $parent[DomainModel::schema_fields_CDN_PROVIDER] ?? '';
+                if ($dnsCode) {
+                    $info = $dnsDetector->getProviderInfo($dnsCode);
+                    $poolRow['_dns_provider_name'] = $info['name'] ?? $dnsCode;
+                }
+                if ($cdnCode) {
+                    $info = $dnsDetector->getProviderInfo($cdnCode);
+                    $poolRow['_cdn_provider_name'] = $info['name'] ?? $cdnCode;
+                }
+            }
+        }
+        unset($poolRow);
+        $this->assign('domain_pool_rows', $poolRows);
 
         return $this->fetch();
     }
@@ -760,6 +821,22 @@ class Domain extends BackendController
                 }
             }
             unset($item);
+
+            // 补充「已建站」：根域下是否有池域名已被站点使用
+            $domainIds = array_filter(array_column($result['items'], 'domain_id'));
+            $parentIdsWithSiteCreated = [];
+            if ($domainIds !== []) {
+                $poolModel = ObjectManager::getInstance(DomainPool::class);
+                $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainIds, 'IN')
+                    ->where(DomainPool::schema_fields_SITE_CREATED, 1);
+                $rows = $poolModel->fields(DomainPool::schema_fields_PARENT_DOMAIN_ID)->select()->fetchArray();
+                $parentIdsWithSiteCreated = array_unique(array_column($rows, DomainPool::schema_fields_PARENT_DOMAIN_ID));
+            }
+            foreach ($result['items'] as &$it) {
+                $it['site_created'] = in_array((int) ($it['domain_id'] ?? 0), $parentIdsWithSiteCreated, true) ? 1 : 0;
+            }
+            unset($it);
 
             return $this->fetchJson([
                 'code' => 200,
@@ -2639,7 +2716,7 @@ class Domain extends BackendController
                 $cdnAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
                 $cdnAccount->load((int) $cdnAccountId);
                 if (!$cdnAccount->getAccountId()) {
-                    return $this->fetchJson(['code' => 404, 'msg' => __('CDN 账户不存在')]);
+                    return $this->fetchJson(['code' => 404, 'msg' => __('CDN 账户不存在（请确认所选账户仍存在且已启用，或在「域名商账户」中添加 CDN 服务商账户）')]);
                 }
             }
 
