@@ -274,9 +274,10 @@ class DomainProvisioningService
         }
         if ($accountInfo === null) {
             $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_FAILED);
-            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, __('CDN 账户不存在'));
+            $msg = __('CDN 账户不存在。请先在「CDN 管理」中添加 %{vendor} 账户并设为默认，或指定正确的 cdn_account_id（CDN 模块的账户 ID）', ['vendor' => $vendor ?: '对应供应商']);
+            $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, $msg);
             $order->save();
-            return ['success' => false, 'message' => __('CDN 账户不存在')];
+            return ['success' => false, 'message' => $msg];
         }
 
         $this->recordStep($orderId, ProvisioningOrder::STEP_CDN, 'running', $vendor, $accountId, []);

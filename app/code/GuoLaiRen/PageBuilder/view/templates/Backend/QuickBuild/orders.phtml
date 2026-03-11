@@ -81,6 +81,7 @@ $statusColors = [
 }
 .pb-orders-empty i { font-size: 3rem; opacity: 0.3; display: block; margin-bottom: var(--backend-spacing-md, 16px); }
 .pb-orders-actions { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--backend-spacing-lg, 24px); }
+.pb-orders-error-cell { word-break: break-word; }
 </style>
 
 <div class="pb-orders-container">
@@ -125,7 +126,7 @@ $statusColors = [
                         <td><span class="pb-orders-badge pb-orders-badge-<?= $colorClass ?>"><?= $label ?></span></td>
                         <td><?= htmlspecialchars($order['current_step'] ?? '-', ENT_QUOTES) ?></td>
                         <td><?= htmlspecialchars($order['created_at'] ?? '-', ENT_QUOTES) ?></td>
-                        <td style="color:var(--backend-color-danger, #f46a6a);"><?= htmlspecialchars($order['error_message'] ?? '', ENT_QUOTES) ?></td>
+                        <td class="pb-orders-error-cell" style="color:var(--backend-color-danger, #f46a6a); max-width:280px;"><?= htmlspecialchars(trim($order['error_message'] ?? '') ?: '-', ENT_QUOTES) ?></td>
                     </tr>
                     <?php endforeach; ?>
                 </tbody>
