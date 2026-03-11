@@ -70,6 +70,7 @@ SSL,SSL
 根域名,根域名
 获取配置订单列表,获取配置订单列表
 按状态过滤,按状态过滤
+按域名模糊过滤,按域名模糊过滤
 页码,页码
 每页数量,每页数量
 推进生命周期订单到下一状态,推进生命周期订单到下一状态
@@ -109,7 +110,7 @@ SSL,SSL
 "DNS 步骤已记录，可由 Terraform 等模块执行","DNS step recorded; Terraform or other modules may execute it"
 "请指定 CDN 供应商与账户，或先在订单中配置 cdn_vendor/cdn_account_id","Specify CDN vendor and account, or set cdn_vendor/cdn_account_id on the order"
 "CDN 适配器不存在：%{1}","CDN adapter not found: %{1}"
-"CDN 账户不存在","CDN account not found"
+"CDN 账户不存在。请先在「CDN 管理」中添加 %{vendor} 账户并设为默认，或指定正确的 cdn_account_id（CDN 模块的账户 ID）","CDN 账户不存在。请先在「CDN 管理」中添加 %{vendor} 账户并设为默认，或指定正确的 cdn_account_id（CDN 模块的账户 ID）"
 "ensureZone 失败","ensureZone 失败"
 "ensureZone 未返回 zone_id","ensureZone did not return zone_id"
 "已跳过 SSL，流程完成","SSL skipped; flow completed"
@@ -130,6 +131,7 @@ SSL,SSL
 创建时间,创建时间
 暂无数据,"No data"
 "共 %{total} 条","Total %{total} records"
+"CDN 账户不存在","CDN account not found"
 未找到该域名的生命周期订单,未找到该域名的生命周期订单
 "域名购买成功后续 DNS 步骤失败：%{1}","DNS step after domain purchase failed: %{1}"
 "SaaS 配置订单表","SaaS provisioning order table"

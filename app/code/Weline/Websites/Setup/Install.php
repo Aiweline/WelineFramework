@@ -20,14 +20,14 @@ class Install implements InstallInterface
         /** @var Website $website */
         $website = ObjectManager::getInstance(Website::class);
         $existing = clone $website;
-        $existing->clearQuery()->where(Website::schema_fields_CODE, 'default')->find()->fetch();
+        $existing->clearQuery()->where(Website::schema_fields_CODE, Website::CODE_DEFAULT)->find()->fetch();
         if ($existing->getWebsiteId()) {
             return;
         }
         $website->clearData(true)
             ->setWebsiteId(1)
             ->setName('默认网站')
-            ->setCode('default')
+            ->setCode(Website::CODE_DEFAULT)
             ->setUrl('http://localhost')
             ->setDefaultCurrency('CNY')
             ->setDefaultLanguage('zh_Hans_CN')
