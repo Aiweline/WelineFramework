@@ -242,6 +242,7 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
+                // 使用后端 offcanvas 路由（Weline_Component Backend Offcanvas），同一套模板
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
@@ -435,6 +436,7 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
+                // 使用后端 offcanvas 路由，同一套模板
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站更新成功'),
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
@@ -453,6 +455,7 @@ class WebsiteManagement extends BaseController
                 }
                 $this->redirect('/component/offcanvas/error', [
                     'msg' => $msg,
+                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '0',
                     'time' => '5',
                 ]);
