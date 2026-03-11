@@ -456,43 +456,82 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         <!-- CDN/DNS 服务商选择 -->
         <div class="pb-qb-provider-section" style="background: var(--backend-color-bg-secondary, #f8f9fa); border-radius: var(--backend-border-radius-md, 8px); padding: var(--backend-spacing-lg, 24px); margin-bottom: var(--backend-spacing-lg, 24px);">
             <h5 style="color: var(--backend-color-text-primary, #212529); margin: 0 0 16px 0; font-size: 1rem;">
-                <i class="mdi mdi-shield-check"></i> <lang>CDN/DNS 服务商</lang>
+                <i class="mdi mdi-shield-check"></i> <lang>DNS/CDN 服务商</lang>
             </h5>
             <p style="color: var(--backend-color-text-secondary, #6c757d); margin-bottom: var(--backend-spacing-md, 16px); font-size: 0.875rem;">
                 <lang>选择用于管理域名 DNS 和 CDN 加速的服务商，默认使用域名购买时的服务商</lang>
             </p>
             
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--backend-spacing-md, 16px);">
-                <div class="pb-qb-field" style="margin-bottom: 0;">
-                    <label><lang>CDN 服务商</lang></label>
-                    <select id="pb-qb-cdn-vendor">
-                        <option value=""><lang>跟随域名商（默认）</lang></option>
-                        <?php foreach ($cdnAdapters as $adapter): ?>
-                        <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
-                            <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+            <!-- DNS 服务商选择 -->
+            <div style="margin-bottom: var(--backend-spacing-lg, 24px); padding-bottom: var(--backend-spacing-lg, 24px); border-bottom: 1px dashed var(--backend-color-border-light, #e9ecef);">
+                <h6 style="color: var(--backend-color-text-primary, #212529); margin: 0 0 12px 0; font-size: 0.9rem;">
+                    <i class="mdi mdi-dns"></i> <lang>DNS 服务商</lang>
+                </h6>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--backend-spacing-md, 16px);">
+                    <div class="pb-qb-field" style="margin-bottom: 0;">
+                        <label><lang>DNS 服务商</lang></label>
+                        <select id="pb-qb-dns-vendor">
+                            <option value=""><lang>跟随域名商（默认）</lang></option>
+                            <?php foreach ($cdnAdapters as $adapter): ?>
+                            <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
+                                <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="pb-qb-field" style="margin-bottom: 0;">
+                        <label><lang>DNS 账户</lang></label>
+                        <select id="pb-qb-dns-account">
+                            <option value="0"><lang>使用默认账户</lang></option>
+                            <?php foreach ($cdnAccounts as $account): ?>
+                            <option value="<?= (int)($account['account_id'] ?? 0) ?>"
+                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>">
+                                <?= htmlspecialchars(($account['name'] ?? '') . ' (' . ($account['adapter'] ?? '') . ')', ENT_QUOTES) ?>
+                                <?= !empty($account['is_default']) ? ' ★' : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
-                <div class="pb-qb-field" style="margin-bottom: 0;">
-                    <label><lang>CDN 账户</lang></label>
-                    <select id="pb-qb-cdn-account">
-                        <option value="0"><lang>使用默认账户</lang></option>
-                        <?php foreach ($cdnAccounts as $account): ?>
-                        <option value="<?= (int)($account['account_id'] ?? 0) ?>"
-                                data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>">
-                            <?= htmlspecialchars(($account['name'] ?? '') . ' (' . ($account['adapter'] ?? '') . ')', ENT_QUOTES) ?>
-                            <?= !empty($account['is_default']) ? ' ★' : '' ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+            </div>
+            
+            <!-- CDN 服务商选择 -->
+            <div>
+                <h6 style="color: var(--backend-color-text-primary, #212529); margin: 0 0 12px 0; font-size: 0.9rem;">
+                    <i class="mdi mdi-cloud-outline"></i> <lang>CDN 服务商</lang>
+                </h6>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--backend-spacing-md, 16px);">
+                    <div class="pb-qb-field" style="margin-bottom: 0;">
+                        <label><lang>CDN 服务商</lang></label>
+                        <select id="pb-qb-cdn-vendor">
+                            <option value=""><lang>跟随域名商（默认）</lang></option>
+                            <?php foreach ($cdnAdapters as $adapter): ?>
+                            <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
+                                <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="pb-qb-field" style="margin-bottom: 0;">
+                        <label><lang>CDN 账户</lang></label>
+                        <select id="pb-qb-cdn-account">
+                            <option value="0"><lang>使用默认账户</lang></option>
+                            <?php foreach ($cdnAccounts as $account): ?>
+                            <option value="<?= (int)($account['account_id'] ?? 0) ?>"
+                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>">
+                                <?= htmlspecialchars(($account['name'] ?? '') . ' (' . ($account['adapter'] ?? '') . ')', ENT_QUOTES) ?>
+                                <?= !empty($account['is_default']) ? ' ★' : '' ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
                 </div>
             </div>
             
             <div style="margin-top: var(--backend-spacing-sm, 8px);">
                 <small style="color: var(--backend-color-text-tertiary, #adb5bd);">
                     <i class="mdi mdi-information-outline"></i>
-                    <lang>如选择不同的 CDN 服务商，系统会自动将域名 NS 切换到该服务商</lang>
+                    <lang>如选择不同的 DNS/CDN 服务商，系统会自动将域名 NS 切换到该服务商</lang>
                 </small>
             </div>
         </div>
@@ -1015,14 +1054,20 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     document.getElementById('pb-qb-next2').addEventListener('click', function() {
         var applySsl = document.getElementById('pb-qb-apply-ssl').checked;
         var autoResolve = document.getElementById('pb-qb-auto-resolve').checked;
+        var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
+        var dnsAccountId = document.getElementById('pb-qb-dns-account').value;
         var cdnVendor = document.getElementById('pb-qb-cdn-vendor').value;
         var cdnAccountId = document.getElementById('pb-qb-cdn-account').value;
+        var dnsVendorText = document.getElementById('pb-qb-dns-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
+        var dnsAccountText = document.getElementById('pb-qb-dns-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
         var cdnVendorText = document.getElementById('pb-qb-cdn-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
         var cdnAccountText = document.getElementById('pb-qb-cdn-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
         
         var html = '<div class="pb-qb-summary-item"><strong><?= __('域名') ?>:</strong><span>' + escapeHtml(selectedDomain) + '</span></div>' +
             '<div class="pb-qb-summary-item"><strong><?= __('域名商账号ID') ?>:</strong><span>#' + selectedAccountId + '</span></div>' +
             '<div class="pb-qb-summary-item"><strong><?= __('域名状态') ?>:</strong><span>' + (domainPurchased ? '<?= __('新购买') ?>' : (domainOwned ? '<?= __('已有域名') ?>' : '<?= __('待购买') ?>')) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('DNS 服务商') ?>:</strong><span>' + escapeHtml(dnsVendorText) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('DNS 账户') ?>:</strong><span>' + escapeHtml(dnsAccountText) + '</span></div>' +
             '<div class="pb-qb-summary-item"><strong><?= __('CDN 服务商') ?>:</strong><span>' + escapeHtml(cdnVendorText) + '</span></div>' +
             '<div class="pb-qb-summary-item"><strong><?= __('CDN 账户') ?>:</strong><span>' + escapeHtml(cdnAccountText) + '</span></div>' +
             '<div class="pb-qb-summary-item"><strong><?= __('SSL证书') ?>:</strong><span>' + (applySsl ? '<?= __('自动申请') ?>' : '<?= __('不申请') ?>') + '</span></div>' +
@@ -1032,6 +1077,31 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             '<?= __('DNS配置 → CDN加速 → IP解析 → SSL证书') ?></span></div>';
         document.getElementById('pb-qb-summary').innerHTML = html;
         goToStep(3);
+    });
+    
+    // DNS 服务商变化时，过滤账户列表
+    document.getElementById('pb-qb-dns-vendor').addEventListener('change', function() {
+        var vendor = this.value;
+        var accountSelect = document.getElementById('pb-qb-dns-account');
+        var options = accountSelect.querySelectorAll('option');
+        
+        options.forEach(function(opt) {
+            if (opt.value === '0') {
+                return;
+            }
+            var optAdapter = opt.getAttribute('data-adapter') || '';
+            if (vendor === '' || optAdapter === vendor) {
+                opt.style.display = '';
+            } else {
+                opt.style.display = 'none';
+            }
+        });
+        
+        // 如果当前选中的账户被隐藏了，重置为默认
+        var currentOpt = accountSelect.selectedOptions[0];
+        if (currentOpt && currentOpt.style.display === 'none') {
+            accountSelect.value = '0';
+        }
     });
     
     // CDN 服务商变化时，过滤账户列表
@@ -1082,6 +1152,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('启动中...') ?>';
 
+        var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
+        var dnsAccountId = document.getElementById('pb-qb-dns-account').value;
         var cdnVendor = document.getElementById('pb-qb-cdn-vendor').value;
         var cdnAccountId = document.getElementById('pb-qb-cdn-account').value;
         var applySsl = document.getElementById('pb-qb-apply-ssl').checked ? '1' : '0';
@@ -1096,6 +1168,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var params = new URLSearchParams({
             domain: selectedDomain,
             registrar_account_id: selectedAccountId,
+            dns_vendor: dnsVendor,
+            dns_account_id: dnsAccountId,
             cdn_vendor: cdnVendor,
             cdn_account_id: cdnAccountId,
             apply_ssl: applySsl,
