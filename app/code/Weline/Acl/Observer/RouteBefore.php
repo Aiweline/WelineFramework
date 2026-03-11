@@ -22,7 +22,6 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -206,10 +205,6 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
                 } else {
-                    if ($this->isSseRequest($request)) {
-                        $this->returnSseError(401, __('请先登录后再启动配置流。'));
-                        return;
-                    }
                     /**@var EventsManager $eventsManager */
                     $eventsManager = ObjectManager::getInstance(EventsManager::class);
                     $noAccessData = ['data' => ['reason' => 'not_logged_in']];
@@ -237,10 +232,6 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $this->returnApiError(403, __('用户没有分配角色'), $request);
                     return;
                 } else {
-                    if ($this->isSseRequest($request)) {
-                        $this->returnSseError(403, __('当前账号未分配角色，无法启动配置流，请联系管理员分配权限。'));
-                        return;
-                    }
                     $this->session->logout();
                     /**@var EventsManager $eventsManager */
                     $eventsManager = ObjectManager::getInstance(EventsManager::class);
@@ -261,10 +252,6 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                         $this->returnApiError(403, __('你没有任何权限！请联系管理员！'), $request);
                         return;
                     }
-                    if ($this->isSseRequest($request)) {
-                        $this->returnSseError(403, __('你没有任何后台权限，无法启动配置流，请联系管理员授权。'));
-                        return;
-                    }
                     $this->session->logout();
                     /** @var MessageManager $message */
                     $message = ObjectManager::getInstance(MessageManager::class);
@@ -283,10 +270,6 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     // 无权限访问当前路由的处理逻辑维持原有分支语义：返回错误或尝试寻找可跳转入口
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
-                        return;
-                    }
-                    if ($this->isSseRequest($request)) {
-                        $this->returnSseError(403, __('你没有“配置进度流”权限，无法启动该 SSE 任务。'));
                         return;
                     }
 
@@ -396,37 +379,11 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private function returnApiError(int $code, string $message, Request $request): void
     {
-        throw new ResponseTerminateException(
+        throw new \Weline\Framework\Http\ResponseTerminateException(
             $code,
             \json_encode(['code' => $code, 'msg' => $message, 'data' => null], JSON_UNESCAPED_UNICODE),
             ['Content-Type' => 'application/json; charset=utf-8']
         );
-    }
-
-    /**
-     * SSE 请求在 ACL 失败时不做 302 跳转，直接返回可读的 failed 事件。
-     */
-    private function returnSseError(int $code, string $message): void
-    {
-        $payload = 'event: failed' . "\n";
-        $payload .= 'data: ' . \json_encode(['code' => $code, 'message' => $message], JSON_UNESCAPED_UNICODE) . "\n\n";
-        throw new ResponseTerminateException(
-            $code,
-            $payload,
-            [
-                'Content-Type' => 'text/event-stream; charset=utf-8',
-                'Cache-Control' => 'no-cache, no-store, must-revalidate',
-                'Pragma' => 'no-cache',
-                'X-Accel-Buffering' => 'no',
-                'Connection' => 'keep-alive',
-            ]
-        );
-    }
-
-    private function isSseRequest(Request $request): bool
-    {
-        $accept = (string)($request->getHeader('accept') ?? '');
-        return str_contains(strtolower($accept), 'text/event-stream');
     }
 
     private function findAccessUrlRouteToRedirect(Request &$request, array &$access_sources)
