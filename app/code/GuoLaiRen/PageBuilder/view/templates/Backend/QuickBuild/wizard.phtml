@@ -332,10 +332,14 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 }
 </style>
 
-<div class="pb-qb-container">
+<div class="pb-qb-container" id="pb-qb-container">
     <h4 style="color: var(--backend-color-text-primary, #212529); margin-bottom: var(--backend-spacing-lg, 24px);">
         <i class="mdi mdi-rocket-launch"></i> <lang>快速建站向导</lang>
     </h4>
+    <input type="hidden" id="pb-qb-state-step" scope="pagebuilder_quick_build_wizard" name="step" value="1">
+    <input type="hidden" id="pb-qb-state-mode" scope="pagebuilder_quick_build_wizard" name="mode" value="new">
+    <input type="hidden" id="pb-qb-state-selected-domain" scope="pagebuilder_quick_build_wizard" name="selected_domain" value="">
+    <input type="hidden" id="pb-qb-state-selected-account-id" scope="pagebuilder_quick_build_wizard" name="selected_account_id" value="0">
 
     <!-- 建站描述（默认收起） -->
     <div class="pb-qb-desc" id="pb-qb-desc">
@@ -396,7 +400,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         <div class="pb-qb-mode-panel active" id="pb-qb-mode-new">
             <div class="pb-qb-field">
                 <label><lang>域名商账号</lang> <span style="color:var(--backend-color-danger,#f46a6a)">*</span></label>
-                <select id="pb-qb-account">
+                <select id="pb-qb-account" scope="pagebuilder_quick_build_wizard" name="registrar_account_id_new">
                     <option value=""><lang>请选择域名商账号</lang></option>
                     <?php foreach ($accounts as $account): ?>
                     <option value="<?= (int)($account['account_id'] ?? 0) ?>"
@@ -408,7 +412,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             </div>
             <div class="pb-qb-field">
                 <label><lang>输入要购买的域名</lang> <span style="color:var(--backend-color-danger,#f46a6a)">*</span></label>
-                <input type="text" id="pb-qb-domain" placeholder="example.com">
+                <input type="text" id="pb-qb-domain" scope="pagebuilder_quick_build_wizard" name="domain_input" placeholder="example.com">
             </div>
             <div>
                 <button class="pb-qb-btn pb-qb-btn-primary" id="pb-qb-check-btn">
@@ -422,7 +426,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         <div class="pb-qb-mode-panel" id="pb-qb-mode-existing">
             <div class="pb-qb-field">
                 <label><lang>域名商账号</lang> <span style="color:var(--backend-color-danger,#f46a6a)">*</span></label>
-                <select id="pb-qb-account-existing">
+                <select id="pb-qb-account-existing" scope="pagebuilder_quick_build_wizard" name="registrar_account_id_existing">
                     <option value=""><lang>请选择域名商账号</lang></option>
                     <?php foreach ($accounts as $account): ?>
                     <option value="<?= (int)($account['account_id'] ?? 0) ?>"
@@ -470,7 +474,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--backend-spacing-md, 16px);">
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>DNS 服务商</lang></label>
-                        <select id="pb-qb-dns-vendor">
+                        <select id="pb-qb-dns-vendor" scope="pagebuilder_quick_build_wizard" name="dns_vendor">
                             <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
                             <?php if (empty($adapter['code']) || ($adapter['code'] ?? '') === 'follow_registrar') continue; ?>
@@ -482,7 +486,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     </div>
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>DNS 账户</lang></label>
-                        <select id="pb-qb-dns-account">
+                        <select id="pb-qb-dns-account" scope="pagebuilder_quick_build_wizard" name="dns_account_id">
                             <?php foreach ($cdnAccounts as $account): ?>
                             <option value="<?= (int)($account['account_id'] ?? 0) ?>"
                                     data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>"
@@ -510,7 +514,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--backend-spacing-md, 16px);">
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>CDN 服务商</lang></label>
-                        <select id="pb-qb-cdn-vendor">
+                        <select id="pb-qb-cdn-vendor" scope="pagebuilder_quick_build_wizard" name="cdn_vendor">
                             <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
                             <?php if (empty($adapter['code']) || ($adapter['code'] ?? '') === 'follow_registrar') continue; ?>
@@ -522,7 +526,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     </div>
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>CDN 账户</lang></label>
-                        <select id="pb-qb-cdn-account">
+                        <select id="pb-qb-cdn-account" scope="pagebuilder_quick_build_wizard" name="cdn_account_id">
                             <?php foreach ($cdnAccounts as $account): ?>
                             <option value="<?= (int)($account['account_id'] ?? 0) ?>"
                                     data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>"
@@ -579,12 +583,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         </div>
         <div class="pb-qb-field" style="margin-top: var(--backend-spacing-lg, 24px);">
             <label class="pb-qb-checkbox">
-                <input type="checkbox" id="pb-qb-apply-ssl" checked> <lang>自动申请 SSL 证书</lang>
+                <input type="checkbox" id="pb-qb-apply-ssl" scope="pagebuilder_quick_build_wizard" name="apply_ssl" value="1" checked> <lang>自动申请 SSL 证书</lang>
             </label>
         </div>
         <div class="pb-qb-field">
             <label class="pb-qb-checkbox">
-                <input type="checkbox" id="pb-qb-auto-resolve" checked> <lang>自动解析到本服务器</lang>
+                <input type="checkbox" id="pb-qb-auto-resolve" scope="pagebuilder_quick_build_wizard" name="auto_resolve" value="1" checked> <lang>自动解析到本服务器</lang>
             </label>
         </div>
         <div class="pb-qb-actions">
@@ -681,8 +685,16 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var domainPurchased = false;
     var domainOwned = false;
 
+    function setScopeState(name, value) {
+        var el = document.querySelector('input[scope="pagebuilder_quick_build_wizard"][name="' + name + '"]');
+        if (!el) return;
+        el.value = value == null ? '' : String(value);
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
     function goToStep(step) {
         currentStep = step;
+        setScopeState('step', step);
         for (var i = 1; i <= 4; i++) {
             var panel = document.getElementById('pb-qb-step' + i);
             var stepEl = document.querySelector('.pb-qb-step[data-step="' + i + '"]');
@@ -817,6 +829,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         tab.addEventListener('click', function() {
             var mode = this.getAttribute('data-mode');
             currentMode = mode;
+            setScopeState('mode', mode);
             document.querySelectorAll('.pb-qb-mode-tab').forEach(function(t) { t.classList.remove('active'); });
             document.querySelectorAll('.pb-qb-mode-panel').forEach(function(p) { p.classList.remove('active'); });
             this.classList.add('active');
@@ -824,6 +837,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             
             selectedDomain = '';
             selectedAccountId = 0;
+            setScopeState('selected_domain', '');
+            setScopeState('selected_account_id', '0');
             domainPurchased = false;
             domainOwned = false;
             updateFollowRegistrarLabels();
@@ -873,6 +888,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     '</div>';
                 selectedDomain = item.domain;
                 selectedAccountId = acctId;
+                setScopeState('selected_domain', selectedDomain);
+                setScopeState('selected_account_id', selectedAccountId);
                 domainOwned = false;
                 document.getElementById('pb-qb-buy-btn').addEventListener('click', handleBuy);
                 updateFollowRegistrarLabels();
@@ -1067,6 +1084,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             this.querySelector('input[type="radio"]').checked = true;
                             selectedDomain = this.getAttribute('data-domain');
                             selectedAccountId = acctId;
+                            setScopeState('selected_domain', selectedDomain);
+                            setScopeState('selected_account_id', selectedAccountId);
                             domainOwned = true;
                             domainPurchased = false;
                             updateFollowRegistrarLabels();
@@ -1239,6 +1258,42 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
     syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
 
+    // 从 scope 恢复已保存步骤与关键字段
+    function restoreWizardState() {
+        var modeInput = document.getElementById('pb-qb-state-mode');
+        var stepInput = document.getElementById('pb-qb-state-step');
+        var domainInput = document.getElementById('pb-qb-state-selected-domain');
+        var accountInput = document.getElementById('pb-qb-state-selected-account-id');
+        var mode = modeInput ? (modeInput.value || 'new') : 'new';
+        var step = stepInput ? parseInt(stepInput.value || '1', 10) : 1;
+        var savedDomain = domainInput ? (domainInput.value || '') : '';
+        var savedAccount = accountInput ? parseInt(accountInput.value || '0', 10) : 0;
+
+        if (mode !== currentMode) {
+            var modeTab = document.querySelector('.pb-qb-mode-tab[data-mode="' + mode + '"]');
+            if (modeTab) {
+                modeTab.click();
+            }
+        }
+        if (savedDomain) {
+            selectedDomain = savedDomain;
+        }
+        if (savedAccount > 0) {
+            selectedAccountId = savedAccount;
+        }
+        updateFollowRegistrarLabels();
+        syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
+        syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
+        updateNextButtonState();
+        if (step >= 1 && step <= 4) {
+            goToStep(step);
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(restoreWizardState, 300);
+    });
+
     document.getElementById('pb-qb-prev3').addEventListener('click', function() { goToStep(2); });
     
     // 返回按钮
@@ -1369,3 +1424,4 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     }
 })();
 </script>
+<w:scope url="@backend-url('backend/user-data')" container-id="pb-qb-container" event="input change click"/>
