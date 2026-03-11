@@ -1,6 +1,9 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 
+if (!isset($themeConfig) || $themeConfig === null) {
+    $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+}
 $themeMode = $themeConfig->getThemeModel();
 $countries = $this->getData('countries') ?? [];
 $stats = $this->getData('stats') ?? [];
