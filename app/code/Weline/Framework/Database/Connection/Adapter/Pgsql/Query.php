@@ -1622,9 +1622,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 return $field;
             }
             // 如果没有空格，也没有等于符号【单纯字段】直接加上双引号
+            // PostgreSQL 需对 order、user、key 等保留字加引号，否则 syntax error
             if (!str_contains($field, ' ') && !str_contains($field, '=')) {
                 if (str_contains($field, '.')) {
                     $field = '"' . str_replace('.', '"."', $field) . '"';
+                } elseif ($field !== '*' && !str_starts_with($field, '"') && !str_starts_with($field, "'")) {
+                    $field = '"' . $field . '"';
                 }
                 if (str_contains($field, '""')) {
                     $field = str_replace('""', '"', $field);
