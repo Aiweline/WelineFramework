@@ -613,8 +613,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev3">
                 <i class="mdi mdi-arrow-left"></i> <lang>上一步</lang>
             </button>
-            <button class="pb-qb-btn pb-qb-btn-success" id="pb-qb-start-btn">
-                <i class="mdi mdi-rocket-launch"></i> <lang>启动一站式配置</lang>
+            <button class="pb-qb-btn pb-qb-btn-primary" id="pb-qb-next3">
+                <lang>下一步</lang> <i class="mdi mdi-arrow-right"></i>
             </button>
         </div>
     </div>
@@ -631,12 +631,18 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         />
 
         <div class="pb-qb-actions">
-            <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev4" style="display:none;">
-                <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
+            <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev4">
+                <i class="mdi mdi-arrow-left"></i> <lang>上一步</lang>
+            </button>
+            <button class="pb-qb-btn pb-qb-btn-success" id="pb-qb-start-btn">
+                <i class="mdi mdi-rocket-launch"></i> <lang>启动SSE配置</lang>
             </button>
             <span id="pb-qb-step4-running-hint" style="display:none;color:var(--backend-color-text-secondary,#6c757d);">
                 <i class="mdi mdi-loading mdi-spin"></i> <lang>正在执行，请稍候...</lang>
             </span>
+            <button class="pb-qb-btn pb-qb-btn-primary" id="pb-qb-next4" disabled>
+                <lang>下一步</lang> <i class="mdi mdi-arrow-right"></i>
+            </button>
         </div>
     </div>
 
@@ -714,6 +720,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var domainPurchased = false;
     var domainOwned = false;
     var isProvisionRunning = false;
+    var isProvisionFinished = false;
     var restoreStatePending = null;
 
     function setScopeState(name, value) {
@@ -1480,6 +1487,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     loadWizardState();
 
     document.getElementById('pb-qb-prev3').addEventListener('click', function() { goToStep(2); });
+    document.getElementById('pb-qb-next3').addEventListener('click', function() { goToStep(4); });
     
     // 返回按钮
     document.getElementById('pb-qb-prev4').addEventListener('click', function() { 
@@ -1494,7 +1502,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         document.getElementById('pb-qb-view-orders').style.display = 'none';
         var gotoBind = document.getElementById('pb-qb-goto-bind-template');
         if (gotoBind) gotoBind.style.display = 'none';
-        document.getElementById('pb-qb-prev4').style.display = 'none';
+        var step4HintBack = document.getElementById('pb-qb-step4-running-hint');
+        if (step4HintBack) step4HintBack.style.display = 'none';
+    });
+    document.getElementById('pb-qb-next4').addEventListener('click', function() {
+        if (!isProvisionFinished) {
+            BackendToast.warning('<?= __('请先完成SSE配置执行') ?>');
+            return;
+        }
+        goToStep(5);
     });
     document.getElementById('pb-qb-prev5').addEventListener('click', function() {
         goToStep(4);
@@ -1503,6 +1519,10 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     // 启动一站式配置（使用 SSE 实时进度）
     document.getElementById('pb-qb-start-btn').addEventListener('click', function() {
         var btn = this;
+        if (isProvisionRunning) {
+            BackendToast.info('<?= __('当前正在执行，请稍候') ?>');
+            return;
+        }
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('启动中...') ?>';
         var core = getEffectiveCoreState();
@@ -1521,6 +1541,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         // 跳转到进度页面
         goToStep(4);
         isProvisionRunning = true;
+        isProvisionFinished = false;
+        var next4Btn = document.getElementById('pb-qb-next4');
+        if (next4Btn) next4Btn.disabled = true;
         var step4Hint = document.getElementById('pb-qb-step4-running-hint');
         if (step4Hint) step4Hint.style.display = '';
         
@@ -1556,8 +1579,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         // 监听完成事件
         progress.on('done', function(e) {
             isProvisionRunning = false;
+            isProvisionFinished = true;
             var step4HintDone = document.getElementById('pb-qb-step4-running-hint');
             if (step4HintDone) step4HintDone.style.display = 'none';
+            var next4Done = document.getElementById('pb-qb-next4');
+            if (next4Done) next4Done.disabled = false;
             try {
                 var data = JSON.parse(e.data || '{}');
                 var websiteId = (data.website_id != null && data.website_id !== '') ? (data.website_id | 0) : 0;
@@ -1565,35 +1591,38 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             } catch (err) {
                 showResult(true, '<?= __('配置完成！') ?>', undefined, 0);
             }
-            goToStep(5);
             btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
+            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('重新执行SSE配置') ?>';
         });
         
         // 监听失败事件
         progress.on('failed', function(e) {
             isProvisionRunning = false;
+            isProvisionFinished = true;
             var step4HintFailed = document.getElementById('pb-qb-step4-running-hint');
             if (step4HintFailed) step4HintFailed.style.display = 'none';
+            var next4Failed = document.getElementById('pb-qb-next4');
+            if (next4Failed) next4Failed.disabled = false;
             try {
                 var data = JSON.parse(e.data || '{}');
                 showResult(false, data.message || '<?= __('配置失败') ?>');
             } catch (err) {
                 showResult(false, '<?= __('配置失败') ?>');
             }
-            goToStep(5);
             btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
+            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('重新执行SSE配置') ?>';
         });
         
         // 监听连接错误
         progress.on('error', function() {
             isProvisionRunning = false;
+            isProvisionFinished = false;
             btn.disabled = false;
-            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
-            document.getElementById('pb-qb-prev4').style.display = '';
+            btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动SSE配置') ?>';
             var step4HintError = document.getElementById('pb-qb-step4-running-hint');
             if (step4HintError) step4HintError.style.display = 'none';
+            var next4Error = document.getElementById('pb-qb-next4');
+            if (next4Error) next4Error.disabled = true;
         });
         
         // 启动 SSE 连接
