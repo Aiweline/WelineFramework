@@ -109,8 +109,9 @@ class BuildSite implements TaglibInterface
                 $blockData['action-params'] = $actionParams;
             }
 
+            // 仅传一个命名参数 data，避免 PHP 8 将 $blockData 的键（如 cache）当作构造函数命名参数
             /** @var OffCanvas $block */
-            $block = ObjectManager::getInstance(OffCanvas::class, [$blockData]);
+            $block = ObjectManager::getInstance(OffCanvas::class, ['data' => $blockData]);
             $block->__init();
             return $block->render();
         };
