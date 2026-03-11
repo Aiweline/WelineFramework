@@ -242,7 +242,7 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
-                $this->redirect($this->_url->getFrontendUrl('/component/offcanvas/success'), [
+                $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '1',
@@ -258,7 +258,7 @@ class WebsiteManagement extends BaseController
                 } else {
                     $msg = __('网站添加失败: %{1}', [$msg]);
                 }
-                $this->redirect($this->_url->getFrontendUrl('/component/offcanvas/error'), [
+                $this->redirect('/component/offcanvas/error', [
                     'msg' => $msg,
                     'url' => '/',
                     'reload' => '0',
