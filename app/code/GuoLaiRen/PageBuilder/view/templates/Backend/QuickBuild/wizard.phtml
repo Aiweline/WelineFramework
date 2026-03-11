@@ -813,6 +813,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var step = parseInt(state.step, 10);
             if (step >= 1 && step <= 4) {
                 goToStep(step);
+                if (step >= 3) {
+                    renderStep3Summary();
+                }
             }
         }
     }
@@ -887,6 +890,59 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     function updateNextButtonState() {
         var btn = document.getElementById('pb-qb-next1');
         btn.disabled = !selectedDomain || !selectedAccountId;
+    }
+
+    function getEffectiveCoreState() {
+        var stateDomainInput = document.getElementById('pb-qb-state-selected-domain');
+        var stateAccountInput = document.getElementById('pb-qb-state-selected-account-id');
+        var domainInput = document.getElementById('pb-qb-domain');
+        var accountNew = document.getElementById('pb-qb-account');
+        var accountExisting = document.getElementById('pb-qb-account-existing');
+
+        var domain = selectedDomain || '';
+        if (!domain && stateDomainInput && stateDomainInput.value) {
+            domain = stateDomainInput.value;
+        }
+        if (!domain && domainInput && domainInput.value) {
+            domain = domainInput.value.trim();
+        }
+
+        var accountId = selectedAccountId || 0;
+        if (!accountId && stateAccountInput && stateAccountInput.value) {
+            accountId = parseInt(stateAccountInput.value || '0', 10) || 0;
+        }
+        if (!accountId && accountNew && accountNew.value) {
+            accountId = parseInt(accountNew.value || '0', 10) || 0;
+        }
+        if (!accountId && accountExisting && accountExisting.value) {
+            accountId = parseInt(accountExisting.value || '0', 10) || 0;
+        }
+
+        return { domain: domain, accountId: accountId };
+    }
+
+    function renderStep3Summary() {
+        var core = getEffectiveCoreState();
+        var applySsl = document.getElementById('pb-qb-apply-ssl').checked;
+        var autoResolve = document.getElementById('pb-qb-auto-resolve').checked;
+        var dnsVendorText = document.getElementById('pb-qb-dns-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
+        var dnsAccountText = document.getElementById('pb-qb-dns-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
+        var cdnVendorText = document.getElementById('pb-qb-cdn-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
+        var cdnAccountText = document.getElementById('pb-qb-cdn-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
+
+        var html = '<div class="pb-qb-summary-item"><strong><?= __('域名') ?>:</strong><span>' + escapeHtml(core.domain || '<?= __('未选择') ?>') + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('域名商账号ID') ?>:</strong><span>' + (core.accountId ? ('#' + core.accountId) : '<?= __('未选择') ?>') + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('域名状态') ?>:</strong><span>' + (domainPurchased ? '<?= __('新购买') ?>' : (domainOwned ? '<?= __('已有域名') ?>' : '<?= __('待购买') ?>')) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('DNS 服务商') ?>:</strong><span>' + escapeHtml(dnsVendorText) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('DNS 账户') ?>:</strong><span>' + escapeHtml(dnsAccountText) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('CDN 服务商') ?>:</strong><span>' + escapeHtml(cdnVendorText) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('CDN 账户') ?>:</strong><span>' + escapeHtml(cdnAccountText) + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('SSL证书') ?>:</strong><span>' + (applySsl ? '<?= __('自动申请') ?>' : '<?= __('不申请') ?>') + '</span></div>' +
+            '<div class="pb-qb-summary-item"><strong><?= __('自动解析') ?>:</strong><span>' + (autoResolve ? '<?= __('是') ?>' : '<?= __('否') ?>') + '</span></div>' +
+            '<div class="pb-qb-summary-item" style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--backend-color-border-light,#e9ecef);">' +
+            '<strong><?= __('执行流程') ?>:</strong><span style="display:block;margin-top:4px;color:var(--backend-color-text-secondary,#6c757d);">' +
+            '<?= __('DNS配置 → CDN加速 → IP解析 → SSL证书') ?></span></div>';
+        document.getElementById('pb-qb-summary').innerHTML = html;
     }
 
     function resolveCurrentRegistrarCode() {
@@ -1305,32 +1361,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     document.getElementById('pb-qb-prev2').addEventListener('click', function() { goToStep(1); });
     document.getElementById('pb-qb-next2').addEventListener('click', function() {
-        var applySsl = document.getElementById('pb-qb-apply-ssl').checked;
-        var autoResolve = document.getElementById('pb-qb-auto-resolve').checked;
-        var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
-        var dnsAccountIdRaw = document.getElementById('pb-qb-dns-account').value;
-        var dnsAccountId = dnsAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : dnsAccountIdRaw;
-        var cdnVendor = document.getElementById('pb-qb-cdn-vendor').value;
-        var cdnAccountIdRaw = document.getElementById('pb-qb-cdn-account').value;
-        var cdnAccountId = cdnAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : cdnAccountIdRaw;
-        var dnsVendorText = document.getElementById('pb-qb-dns-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
-        var dnsAccountText = document.getElementById('pb-qb-dns-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
-        var cdnVendorText = document.getElementById('pb-qb-cdn-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
-        var cdnAccountText = document.getElementById('pb-qb-cdn-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
-        
-        var html = '<div class="pb-qb-summary-item"><strong><?= __('域名') ?>:</strong><span>' + escapeHtml(selectedDomain) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('域名商账号ID') ?>:</strong><span>#' + selectedAccountId + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('域名状态') ?>:</strong><span>' + (domainPurchased ? '<?= __('新购买') ?>' : (domainOwned ? '<?= __('已有域名') ?>' : '<?= __('待购买') ?>')) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('DNS 服务商') ?>:</strong><span>' + escapeHtml(dnsVendorText) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('DNS 账户') ?>:</strong><span>' + escapeHtml(dnsAccountText) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('CDN 服务商') ?>:</strong><span>' + escapeHtml(cdnVendorText) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('CDN 账户') ?>:</strong><span>' + escapeHtml(cdnAccountText) + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('SSL证书') ?>:</strong><span>' + (applySsl ? '<?= __('自动申请') ?>' : '<?= __('不申请') ?>') + '</span></div>' +
-            '<div class="pb-qb-summary-item"><strong><?= __('自动解析') ?>:</strong><span>' + (autoResolve ? '<?= __('是') ?>' : '<?= __('否') ?>') + '</span></div>' +
-            '<div class="pb-qb-summary-item" style="margin-top:16px;padding-top:12px;border-top:1px dashed var(--backend-color-border-light,#e9ecef);">' +
-            '<strong><?= __('执行流程') ?>:</strong><span style="display:block;margin-top:4px;color:var(--backend-color-text-secondary,#6c757d);">' +
-            '<?= __('DNS配置 → CDN加速 → IP解析 → SSL证书') ?></span></div>';
-        document.getElementById('pb-qb-summary').innerHTML = html;
+        renderStep3Summary();
         goToStep(3);
     });
     
@@ -1449,6 +1480,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var btn = this;
         btn.disabled = true;
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('启动中...') ?>';
+        var core = getEffectiveCoreState();
+        selectedDomain = core.domain || selectedDomain;
+        selectedAccountId = core.accountId || selectedAccountId;
 
         var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
         var dnsAccountIdRaw = document.getElementById('pb-qb-dns-account').value;
@@ -1462,9 +1496,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         // 跳转到进度页面
         goToStep(4);
         
-        // 构建 SSE URL：与当前页同源（用 backend base + stream 路径），避免 302
-        var backendBase = (document.querySelector('meta[name="pb-qb-backend-base"]') || {}).getAttribute('content') || '';
-        var sseBaseUrl = backendBase ? (backendBase + '/saas/backend/api/provisioning/stream') : '<?= addslashes($this->getBackendUrl('saas/backend/api/provisioning/stream')) ?>';
+        // 使用框架生成的完整后台 URL，避免“当前路由路径拼接”导致 404
+        var sseBaseUrl = '<?= addslashes($this->getBackendUrl('saas/backend/api/provisioning/stream')) ?>';
         var params = new URLSearchParams({
             domain: selectedDomain,
             registrar_account_id: selectedAccountId,
