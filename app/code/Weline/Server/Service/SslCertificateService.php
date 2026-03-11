@@ -1105,7 +1105,8 @@ CNF;
     }
 
     /**
-     * 避免 uk_domain 冲突：若已有其他行占用当前 domain，将当前数据合并到该行并返回该行供 save；否则返回原 cert
+     * 避免 uk_domain 冲突：若已有其他行占用当前 domain，将当前数据合并到该行并返回该行供 save；否则返回原 cert。
+     * 合并后显式设置 domain 等必填字段，避免 _model_fields_data 未含 domain 导致 INSERT 违反 NOT NULL。
      */
     private function resolveDuplicateDomainCert(SslCertificate $cert): SslCertificate
     {
@@ -1119,6 +1120,11 @@ CNF;
         if ($existingId > 0 && $existingId !== $currentId) {
             $existing->setData($cert->getData());
             $existing->setData(SslCertificate::schema_fields_ID, $existingId);
+            $existing->setDomain($cert->getDomain());
+            $existing->setCertType($cert->getCertType());
+            $existing->setProvider($cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT);
+            $existing->setStatus($cert->getStatus());
+            $existing->setWebsiteId($cert->getWebsiteId());
             return $existing;
         }
         return $cert;
@@ -1445,6 +1451,7 @@ CNF;
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
                     ->setRenewError('');
                 $cert = $this->resolveDuplicateDomainCert($cert);
+                $cert->setDomain($domain);
                 $cert->save();
 
                 if ($onProgress) {
@@ -1467,6 +1474,7 @@ CNF;
                 $cert->setStatus(SslCertificate::STATUS_ERROR)
                     ->setRenewError($result['message']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
+                $cert->setDomain($domain);
                 $cert->save();
                 return ['success' => false, 'message' => $result['message'], 'cert' => $cert];
             }
