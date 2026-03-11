@@ -142,4 +142,22 @@
     --backend-color-btn-primary-hover: var(--backend-color-primary-hover);
     --backend-color-btn-secondary: var(--backend-color-text-secondary);
     --backend-color-btn-secondary-hover: var(--backend-color-text-tertiary);
+
+    /* Alert 提示框（适配亮/暗色主题，保证文字可读） */
+    --backend-color-alert-warning-bg: #fff3cd;
+    --backend-color-alert-warning-text: #664d03;
+    --backend-color-alert-warning-border: #ffecb5;
+    --backend-color-alert-success-bg: #d1e7dd;
+    --backend-color-alert-success-text: #0f5132;
+    --backend-color-alert-success-border: #badbcc;
+    --backend-color-alert-danger-bg: #f8d7da;
+    --backend-color-alert-danger-text: #842029;
+    --backend-color-alert-danger-border: #f5c2c7;
+    --backend-color-alert-info-bg: #cff4fc;
+    --backend-color-alert-info-text: #055160;
+    --backend-color-alert-info-border: #b6effb;
+
+    /* 主渐变（135deg 紫蓝渐变，用于头部/卡片/按钮等） */
+    --backend-color-gradient-start: #667eea;
+    --backend-color-gradient-end: #764ba2;
 }

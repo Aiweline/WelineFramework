@@ -150,6 +150,7 @@
                                             <string>task.name|25</string>
                                         </div>
                                         <div class="weline-cron-meta">
+                                            <span class="weline-cron-code" title="@lang{执行名}"><code>{{task.execute_name}}</code></span>
                                             <span class="weline-cron-module">{{task.module}}</span>
                                             <span class="weline-cron-class" title="{{task.class}}"><string>task.class|30</string></span>
                                         </div>
@@ -326,7 +327,8 @@
 }
 .weline-cron-info { display: flex; flex-direction: column; gap: 4px; }
 .weline-cron-name { font-weight: 500; color: var(--backend-color-text-primary, #212529); }
-.weline-cron-meta { font-size: 0.75rem; color: var(--backend-color-text-secondary, #6c757d); }
+.weline-cron-meta { font-size: 0.75rem; color: var(--backend-color-text-secondary, #6c757d); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.weline-cron-code code { font-size: 0.7rem; padding: 1px 5px; background: var(--backend-color-bg-secondary, #f8f9fa); border-radius: var(--backend-border-radius-sm, 4px); color: var(--backend-color-text-secondary, #6c757d); }
 .weline-cron-class { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .weline-cron-tip { font-size: 0.75rem; }
 .weline-cron-frequency {
