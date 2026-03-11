@@ -10,7 +10,7 @@ use Weline\Framework\Acl\Acl;
 /**
  * @DESC | 快速建站向导控制器
  */
-#[Acl('GuoLaiRen_PageBuilder::quick_build', '快速建站', 'mdi-rocket-launch', '快速建站向导', 'GuoLaiRen_PageBuilder::menu_page_management')]
+#[Acl('GuoLaiRen_PageBuilder::quick_build', '快速建站', 'mdi-rocket-launch', '快速建站向导', 'Weline_Backend::page_builder_group')]
 class QuickBuild extends BaseController
 {
     private QuickBuildAggregator $aggregator;

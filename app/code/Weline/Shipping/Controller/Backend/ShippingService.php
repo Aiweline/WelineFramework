@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\ShippingService as ShippingServiceModel;
 
-#[Acl('Weline_Shipping::shipping_service', '配送服务管理', 'mdi-truck-fast', '配送服务管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::shipping_service', '配送服务管理', 'mdi-truck-fast', '配送服务管理', 'Weline_Backend::shipping_group')]
 class ShippingService extends BackendController
 {
     private ShippingServiceModel $service;

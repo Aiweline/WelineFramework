@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::user_contact', '联系人管理', 'mdi-account-box', '管理用户联系人', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::user_contact', '联系人管理', 'mdi-account-box', '管理用户联系人', 'Weline_Backend::notification_settings')]
 class UserContact extends BackendController
 {
     private UserContactService $contactService;

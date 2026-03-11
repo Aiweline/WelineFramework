@@ -26,7 +26,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Queue\Model\Queue\Type\Attributes;
 use Weline\Queue\QueueInterface;
 
-#[Acl('Weline_Queue:listing_manager', '队列管理', 'mdi-human-queue', '管理队列信息', 'Weline_Queue:listing')]
+#[Acl('Weline_Queue::listing_manager', '队列管理', 'mdi-human-queue', '管理队列信息', 'Weline_Queue::listing')]
 class Queue extends \Weline\Framework\App\Controller\BackendController
 {
     private \Weline\Queue\Model\Queue $queue;

@@ -21,7 +21,7 @@ use Weline\Order\Service\OrderStateMachine;
 /**
  * 订单管理控制器
  */
-#[Acl('Weline_Order::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Order::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::order_group')]
 class Order extends BackendController
 {
     private OrderService $orderService;

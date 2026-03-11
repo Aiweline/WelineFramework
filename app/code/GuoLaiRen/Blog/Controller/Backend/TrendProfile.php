@@ -14,7 +14,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
-#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_profile', '关键词画像', 'mdi mdi-tag-multiple-outline', '趋势关键词画像管理', 'GuoLaiRen_Blog::blog_menu')]
+#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_profile', '关键词画像', 'mdi mdi-tag-multiple-outline', '趋势关键词画像管理', 'Weline_Backend::blog_group')]
 class TrendProfile extends BackendController
 {
     private TrendProfileModel $profileModel;

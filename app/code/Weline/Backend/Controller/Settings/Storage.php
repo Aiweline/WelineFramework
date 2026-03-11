@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理文件存储配置
  */
-#[Acl('Weline_Backend::storage_settings', '存储设置', 'mdi-folder', '存储设置', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::storage_settings', '存储设置', 'mdi-folder', '存储设置', 'Weline_Backend::system_config_group')]
 class Storage extends BackendController
 {
     /**
