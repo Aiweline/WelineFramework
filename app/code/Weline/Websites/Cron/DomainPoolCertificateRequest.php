@@ -109,11 +109,17 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         } catch (\Throwable $e) {
             $err = __('域名池证书申请任务异常：%{1}', [$e->getMessage()]);
             w_log_error('[DomainPoolCertificateRequest] ' . $err, [], 'domain_pool_cert');
+            if ($processLogs !== []) {
+                return \implode("\n", $processLogs) . "\n---\n" . $err;
+            }
             return $err;
         }
     }
 
-    private function requestByRow(array $row, string $webroot, string $email, string $strategy, bool $isWildcard): array
+    /**
+     * @param array<string> $processLogs 过程日志，会追加本域名的每条进度与结果
+     */
+    private function requestByRow(array $row, string $webroot, string $email, string $strategy, bool $isWildcard, array &$processLogs = []): array
     {
         $counter = [
             'requested' => 0,
@@ -127,6 +133,7 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
         if ($domain === '' || $poolId <= 0) {
             $counter['skipped']++;
+            $processLogs[] = "[{$domain}] " . __('跳过: domain 或 pool_id 为空');
             return $counter;
         }
 
@@ -137,15 +144,18 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         $poolDomain->setHttpsError('');
         $poolDomain->save();
 
+        $counter['requested']++;
+        $processLogs[] = "[{$requestDomain}] " . __('开始向 CA 申请证书（%{1}），阻塞直至申请完成', [$isWildcard ? '泛域' : '单域']);
         w_log_info('[DomainPoolCertificateRequest] ' . __('开始同步申请证书：%{1}，阻塞直至申请完成', [$requestDomain]), [], 'domain_pool_cert');
 
-        $counter['requested']++;
         $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
         $domainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
-        $onProgress = function (string $message, array $extra = []) use ($requestDomain): void {
+        $onProgress = function (string $message, array $extra = []) use ($requestDomain, &$processLogs): void {
+            $processLogs[] = "[{$requestDomain}] " . $message;
             w_log_info('[DomainPoolCertificateRequest] ' . $requestDomain . ' - ' . $message, $extra, 'domain_pool_cert');
         };
         try {
+            $processLogs[] = "[{$requestDomain}] " . __('调用 requestCertificate，等待 CA 响应…');
             $result = w_query('server', 'requestCertificate', [
                 'domain' => $requestDomain,
                 'webroot' => $webroot,
@@ -160,35 +170,43 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 '_on_progress' => $onProgress,
             ]);
 
-            if ($result['success'] ?? false) {
+            $success = (bool) ($result['success'] ?? false);
+            $resultMessage = (string) ($result['message'] ?? '');
+
+            if ($success) {
                 if (!$isWildcard && !$this->validateHttpsAccess($domain)) {
                     $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
                     $poolDomain->setHttpsError((string)__('证书已签发，HTTPS 连通性校验未通过，等待下次检测'));
                     $poolDomain->setSiteReady(false);
                     $poolDomain->save();
+                    $processLogs[] = "[{$requestDomain}] " . __('CA 返回成功，但 HTTPS 连通性校验未通过，已标记待下次检测');
                     w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功但 HTTPS 校验未通过，保持待检测', [$requestDomain]), [], 'domain_pool_cert');
                 } else {
                     $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
                     $poolDomain->setHttpsError('');
                     $poolDomain->calculateSiteReady();
                     $poolDomain->save();
+                    $processLogs[] = "[{$requestDomain}] " . __('证书申请成功，已更新 HTTPS 状态与可建站');
                     w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功，已更新为可建站', [$requestDomain]), [], 'domain_pool_cert');
                 }
                 $counter['success']++;
             } else {
                 $counter['failed']++;
-                $msg = $result['message'] ?? __('未知错误');
+                $msg = $resultMessage ?: (string) __('未知错误');
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
                 $poolDomain->setHttpsError($msg);
                 $poolDomain->save();
+                $processLogs[] = "[{$requestDomain}] " . __('证书申请失败: %{1}', [$msg]);
                 w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，失败: %{2}', [$requestDomain, $msg]), [], 'domain_pool_cert');
             }
         } catch (\Throwable $e) {
             $counter['failed']++;
+            $errMsg = $e->getMessage();
             $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
-            $poolDomain->setHttpsError($e->getMessage());
+            $poolDomain->setHttpsError($errMsg);
             $poolDomain->save();
-            w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}', [$requestDomain, $e->getMessage()]), [], 'domain_pool_cert');
+            $processLogs[] = "[{$requestDomain}] " . __('证书申请异常: %{1}', [$errMsg]);
+            w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}', [$requestDomain, $errMsg]), [], 'domain_pool_cert');
         }
 
         return $counter;
