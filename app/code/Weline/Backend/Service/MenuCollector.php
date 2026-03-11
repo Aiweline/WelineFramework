@@ -12,7 +12,6 @@ declare(strict_types=1);
 namespace Weline\Backend\Service;
 
 use Weline\Acl\Model\Acl;
-use Weline\Acl\Model\RoleAccess;
 use Weline\Backend\Config\MenuXmlReader;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
@@ -100,11 +99,6 @@ class MenuCollector
         $diff = $this->computeDiff($file_menus, $db_menus, $disabledModules);
 
         $this->executeBatch($diff, $file_menus, $db_menus);
-
-        // 全量收集时，清理已卸载模块的 ACL（菜单 type=menus + 控制器 type=pc 等）及 role_access 孤儿授权
-        if (empty($modulesFilter)) {
-            $this->removeOrphanedModuleAcls();
-        }
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
     }
@@ -418,54 +412,6 @@ class MenuCollector
             $queue = $next;
         }
         return $result;
-    }
-
-    /**
-     * 清理已卸载模块的菜单 ACL（type=menus）及 weline_role_access 中的孤儿授权。
-     * type=pc 由路由收集后 AfterRouteCollectionAclDiff 做 diff，此处仅处理菜单。
-     * 仅删除 acl_origin != 'user' 的记录，保留用户自定义 ACL。
-     */
-    private function removeOrphanedModuleAcls(): void
-    {
-        $installedModules = array_keys(Env::getInstance()->getModuleList());
-        if (empty($installedModules)) {
-            return;
-        }
-
-        // 仅查询 type=menus：菜单在 before_route_collection 做 diff；type=pc 在 after_route_collection 做 diff
-        $orphanRows = $this->acl->reset()
-            ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=')
-            ->where(Acl::schema_fields_MODULE, $installedModules, 'not in')
-            ->select()
-            ->fetchArray();
-
-        if (empty($orphanRows)) {
-            return;
-        }
-
-        $orphanSourceIds = array_values(array_filter(array_map(
-            static fn(array $row): string => (string)($row[Acl::schema_fields_SOURCE_ID] ?? ''),
-            $orphanRows
-        )));
-
-        if (empty($orphanSourceIds)) {
-            return;
-        }
-
-        // 先删除 weline_role_access 中的孤儿授权
-        /** @var RoleAccess $roleAccess */
-        $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-        $roleAccess->reset()
-            ->where(RoleAccess::schema_fields_SOURCE_ID, $orphanSourceIds, 'in')
-            ->delete()
-            ->fetch();
-
-        // 再删除 weline_acl 中的孤儿记录
-        $this->acl->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $orphanSourceIds, 'in')
-            ->delete()
-            ->fetch();
     }
 
     /**

@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Acl\Observer;
 
 use Weline\Acl\Model\Acl;
+use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 use function PHPUnit\Framework\throwException;
@@ -621,6 +622,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             $this->acl->reset()->clearData();
             $this->acl->getQuery()->insert($deduplicatedAcls, 'source_id', '')->fetch();
             $this->acl->commit();
+            CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
         } catch (\Exception $exception) {
             $this->acl->rollBack();
             if (DEV) {
@@ -777,6 +779,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             $this->acl->reset()->clearData();
             $this->acl->getQuery()->insert($deduplicatedAcls, ['source_id'], '')->fetch();
             $this->acl->commit();
+            CollectedAclSourceIdsRegistry::add(...array_column($deduplicatedAcls, 'source_id'));
         } catch (\Exception $exception) {
             $this->acl->rollBack();
             if (DEV) {
