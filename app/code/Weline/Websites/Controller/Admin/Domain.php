@@ -822,9 +822,10 @@ class Domain extends BackendController
             }
             unset($item);
 
-            // 补充「已建站」：根域下是否有池域名已被站点使用
+            // 补充「已建站」与「可建站」：根域下池子域名状态
             $domainIds = array_filter(array_column($result['items'], 'domain_id'));
             $parentIdsWithSiteCreated = [];
+            $parentIdsWithSiteReady = [];
             if ($domainIds !== []) {
                 $poolModel = ObjectManager::getInstance(DomainPool::class);
                 $poolModel->clearQuery()
@@ -832,9 +833,18 @@ class Domain extends BackendController
                     ->where(DomainPool::schema_fields_SITE_CREATED, 1);
                 $rows = $poolModel->fields(DomainPool::schema_fields_PARENT_DOMAIN_ID)->select()->fetchArray();
                 $parentIdsWithSiteCreated = array_unique(array_column($rows, DomainPool::schema_fields_PARENT_DOMAIN_ID));
+
+                $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainIds, 'IN')
+                    ->where(DomainPool::schema_fields_SITE_READY, 1);
+                $rowsReady = $poolModel->fields(DomainPool::schema_fields_PARENT_DOMAIN_ID)->select()->fetchArray();
+                $parentIdsWithSiteReady = array_unique(array_column($rowsReady, DomainPool::schema_fields_PARENT_DOMAIN_ID));
             }
             foreach ($result['items'] as &$it) {
-                $it['site_created'] = in_array((int) ($it['domain_id'] ?? 0), $parentIdsWithSiteCreated, true) ? 1 : 0;
+                $rootId = (int) ($it['domain_id'] ?? 0);
+                $it['site_created'] = in_array($rootId, $parentIdsWithSiteCreated, true) ? 1 : 0;
+                // 根域可建站：自身 site_ready 或 至少一个池子域名可建站
+                $it['site_ready'] = (int) ($it['site_ready'] ?? 0) || (in_array($rootId, $parentIdsWithSiteReady, true) ? 1 : 0);
             }
             unset($it);
 
