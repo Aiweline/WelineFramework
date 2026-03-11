@@ -42,8 +42,9 @@ class DomainResolveCheck implements CronTaskInterface
             $domainModel = ObjectManager::getInstance(Domain::class);
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
 
+            // 仅检测“需要处理”的域名：未建站就绪（site_ready != 1）。
             $domains = $domainModel->clearQuery()
-                ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
+                ->where(Domain::schema_fields_SITE_READY, 0)
                 ->select()
                 ->fetchArray();
 
