@@ -1059,6 +1059,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             BackendToast.warning('<?= __('请先选择或购买域名') ?>');
             return;
         }
+        // 进入步骤2前，同步默认供应商账户（跟随域名商）
+        syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
+        syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
         goToStep(2);
     });
 
@@ -1091,79 +1094,71 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         goToStep(3);
     });
     
-    // DNS 服务商变化时，过滤账户列表并自动选择对应账户
+    function syncProviderAccountSelection(vendorSelectId, accountSelectId) {
+        var vendorSelect = document.getElementById(vendorSelectId);
+        var accountSelect = document.getElementById(accountSelectId);
+        if (!vendorSelect || !accountSelect) return;
+
+        var vendor = vendorSelect.value;
+        var options = Array.prototype.slice.call(accountSelect.querySelectorAll('option'));
+        var preferredRegistrarAccountId = selectedAccountId ? String(selectedAccountId) : '';
+        var visibleOptions = [];
+
+        options.forEach(function(opt) {
+            var optAdapter = opt.getAttribute('data-adapter') || '';
+            var visible = (vendor === 'follow_registrar') ? true : (optAdapter === vendor);
+            opt.style.display = visible ? '' : 'none';
+            if (visible) {
+                visibleOptions.push(opt);
+            }
+        });
+
+        if (!visibleOptions.length) {
+            return;
+        }
+
+        var current = accountSelect.selectedOptions && accountSelect.selectedOptions[0] ? accountSelect.selectedOptions[0] : null;
+        var currentVisible = current && current.style.display !== 'none';
+        var target = null;
+
+        if (vendor === 'follow_registrar') {
+            if (preferredRegistrarAccountId) {
+                target = visibleOptions.find(function(opt) { return String(opt.value) === preferredRegistrarAccountId; }) || null;
+            }
+            if (!target) {
+                target = visibleOptions.find(function(opt) { return opt.getAttribute('data-is-default') === '1'; }) || null;
+            }
+            if (!target) {
+                target = visibleOptions[0];
+            }
+        } else {
+            if (currentVisible) {
+                target = current;
+            }
+            if (!target) {
+                target = visibleOptions.find(function(opt) { return opt.getAttribute('data-is-default') === '1'; }) || null;
+            }
+            if (!target) {
+                target = visibleOptions[0];
+            }
+        }
+
+        if (target) {
+            target.selected = true;
+        }
+    }
+
     document.getElementById('pb-qb-dns-vendor').addEventListener('change', function() {
-        var vendor = this.value;
-        var accountSelect = document.getElementById('pb-qb-dns-account');
-        var options = accountSelect.querySelectorAll('option');
-        var selectedOption = null;
-        
-        // 遍历所有选项，找到匹配的账户
-        options.forEach(function(opt) {
-            var optAdapter = opt.getAttribute('data-adapter') || '';
-            var isDefault = opt.getAttribute('data-is-default') === '1';
-            
-            if (vendor === 'follow_registrar') {
-                // 选择"跟随域名商"时，优先选择默认账户
-                if (isDefault) {
-                    selectedOption = opt;
-                }
-            } else if (optAdapter === vendor) {
-                // 选择具体服务商时，显示该服务商的账户，优先选默认的
-                opt.style.display = '';
-                if (isDefault) {
-                    selectedOption = opt;
-                } else if (!selectedOption) {
-                    selectedOption = opt;
-                }
-            } else {
-                // 不是该服务商的账户，隐藏
-                opt.style.display = 'none';
-            }
-        });
-        
-        // 选择匹配的账户
-        if (selectedOption) {
-            selectedOption.selected = true;
-        }
+        syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
     });
-    
-    // CDN 服务商变化时，过滤账户列表并自动选择对应账户
+
     document.getElementById('pb-qb-cdn-vendor').addEventListener('change', function() {
-        var vendor = this.value;
-        var accountSelect = document.getElementById('pb-qb-cdn-account');
-        var options = accountSelect.querySelectorAll('option');
-        var selectedOption = null;
-        
-        // 遍历所有选项，找到匹配的账户
-        options.forEach(function(opt) {
-            var optAdapter = opt.getAttribute('data-adapter') || '';
-            var isDefault = opt.getAttribute('data-is-default') === '1';
-            
-            if (vendor === 'follow_registrar') {
-                // 选择"跟随域名商"时，优先选择默认账户
-                if (isDefault) {
-                    selectedOption = opt;
-                }
-            } else if (optAdapter === vendor) {
-                // 选择具体服务商时，显示该服务商的账户，优先选默认的
-                opt.style.display = '';
-                if (isDefault) {
-                    selectedOption = opt;
-                } else if (!selectedOption) {
-                    selectedOption = opt;
-                }
-            } else {
-                // 不是该服务商的账户，隐藏
-                opt.style.display = 'none';
-            }
-        });
-        
-        // 选择匹配的账户
-        if (selectedOption) {
-            selectedOption.selected = true;
-        }
+        syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
     });
+
+    // 页面初始化：两组默认按“跟随域名商”选择默认供应商账户
+    syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
+    syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
 
     document.getElementById('pb-qb-prev3').addEventListener('click', function() { goToStep(2); });
     
