@@ -18,7 +18,8 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 路由收集后执行 ACL 孤儿 diff：删除不在「收集到的菜单 ∪ 收集到的 ACL」中的记录（acl_origin != user）。
+ * 路由收集后执行 ACL 孤儿 diff：删除不在「收集到的菜单 ∪ 收集到的 ACL」中的记录。
+ * 仅处理非用户创建的（acl_origin 为 NULL、空或 != 'user'），用户创建的不删除。
  */
 class AfterRouteCollectionAclDiff implements ObserverInterface
 {
@@ -36,8 +37,9 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
         $validAclSourceIds = CollectedAclSourceIdsRegistry::getAll();
         $validSourceIds = array_flip(array_merge($validMenuSourceIds, $validAclSourceIds));
 
+        $field = Acl::schema_fields_ACL_ORIGIN;
         $allRows = $this->acl->reset()
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=')
+            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')")
             ->select()
             ->fetchArray();
 
