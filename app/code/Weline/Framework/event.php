@@ -35,6 +35,11 @@ return [
         'description' => __('在收集路由之前触发，允许其他模块在路由收集前执行操作（如菜单收集，确保 ControllerAttributes 断言时 ACL 已有 type=menus 节点）。'),
         'doc' => 'setup/路由收集前.md',
     ],
+    'Weline_Framework_Setup::after_route_collection' => [
+        'name' => __('路由收集后'),
+        'description' => __('在路由收集完成后触发，用于 ACL 等与路由阶段收集的数据做 diff（如清理已卸载模块的 type=pc 权限）。'),
+        'doc' => 'setup/路由收集后.md',
+    ],
     'Weline_Framework_System::system_update_after' => [
         'name' => __('系统更新后'),
         'description' => __('系统更新完成后触发，允许其他模块执行更新后的操作。'),
