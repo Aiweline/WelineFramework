@@ -20,7 +20,7 @@ use Weline\Seo\Service\SitemapRegistryService;
  * - 支持分割（超过50000条URL时分割）
  * - 生成sitemap索引文件
  */
-#[Acl('Weline_Seo::sitemap_management', 'Sitemap管理', 'mdi-sitemap', 'Sitemap管理', 'Weline_Seo::seo_management')]
+#[Acl('Weline_Seo::sitemap_management', 'Sitemap管理', 'mdi-sitemap', 'Sitemap管理', 'Weline_Backend::seo_group')]
 class Sitemap extends BackendController
 {
     const MAX_URLS_PER_SITEMAP = 50000;

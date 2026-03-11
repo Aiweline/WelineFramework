@@ -24,12 +24,13 @@
 - [x] 任务启动前 Chrome / 模型 / MCP 三项检查
 - [x] 页面加载时非 Chrome 浏览器弹窗提示
 - [x] 任务错误提示改用 BackendToast（移除 alert）
+- [x] MODEL_LOAD_PROGRESS payload 字段映射（currentFile/downloadedSize/totalSize 等）
 
 ---
 
 ## 进行中 🔄
 
-- [ ] 模型下载进度与 MODEL_LOAD_PROGRESS 消息格式对齐（扩展与前端）
+- （无）
 
 ---
 

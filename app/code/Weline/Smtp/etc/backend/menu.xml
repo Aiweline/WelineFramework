@@ -3,7 +3,7 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--Smtp邮件服务-->
-    <menu source="Weline_Smtp::system_smtp" name="system_smtp" title="Smtp邮件服务" action="" parent="Weline_Backend::system_service"
+    <menu source="Weline_Smtp::system_smtp" name="system_smtp" title="Smtp邮件服务" action="" parent="Weline_Backend::system_service_group"
          icon="mdi mdi-email-send-outline" order="30400">
         <menu source="Weline_Smtp::system_smtp_config" name="system_smtp_config" title="Smtp配置" action="smtp/backend/config"
              icon="mdi mdi-setting" order="1"/>

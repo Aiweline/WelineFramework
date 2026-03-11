@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\FreeShippingRule as FreeShippingRuleModel;
 
-#[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'mdi-gift', '免邮规则管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'mdi-gift', '免邮规则管理', 'Weline_Backend::shipping_group')]
 class FreeShippingRule extends BackendController
 {
     private FreeShippingRuleModel $rule;

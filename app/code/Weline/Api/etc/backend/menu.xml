@@ -6,7 +6,7 @@
          name="api_integration"
          title="API集成"
          action="api/backend/integration/index"
-         parent="Weline_Backend::system_service"
+         parent="Weline_Backend::system_service_group"
          icon="mdi mdi-api"
          order="30550">
         <menu source="Weline_Api::api_user_management"

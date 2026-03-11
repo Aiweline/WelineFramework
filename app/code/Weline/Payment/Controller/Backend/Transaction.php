@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Model\PaymentTransaction;
 
-#[Acl('Weline_Payment::payment_transaction', '支付交易管理', 'mdi-cash-multiple', '支付交易记录管理', 'Weline_Backend::system_service')]
+#[Acl('Weline_Payment::payment_transaction', '支付交易管理', 'mdi-cash-multiple', '支付交易记录管理', 'Weline_Backend::payment_group')]
 class Transaction extends BackendController
 {
     /**

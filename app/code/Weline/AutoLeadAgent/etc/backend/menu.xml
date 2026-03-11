@@ -8,7 +8,7 @@
          name="auto_lead_agent" 
          title="自动寻客" 
          action=""
-         parent="Weline_Backend::system_menu"
+         parent="Weline_Backend::system_management"
          icon="mdi mdi-account-search" 
          order="20100">
         

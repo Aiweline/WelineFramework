@@ -42,6 +42,8 @@ ACL违规,ACL违规
 在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。
 不能删除超级管理员！,不能删除超级管理员！
 "资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}","资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}"
+"框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}","框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}"
+(空),(空)
 "【ACL 重复检测】模块: %{1}","【ACL 重复检测】模块: %{1}"
 "发现以下重复的 source_id：","发现以下重复的 source_id："
 "重复的 source_id: %{1}","重复的 source_id: %{1}"
