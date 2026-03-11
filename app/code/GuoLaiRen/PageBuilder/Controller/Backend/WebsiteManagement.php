@@ -271,7 +271,18 @@ class WebsiteManagement extends BaseController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
-        $this->assign('selected_pool_ids', []);
+        // 支持 URL 传入 pool_id 或 pool_ids，创建站点时预选域名并会在保存时自动绑定
+        $poolIdParam = $this->request->getParam('pool_id');
+        $poolIdsParam = $this->request->getParam('pool_ids');
+        $selectedPoolIds = [];
+        if ($poolIdParam !== null && $poolIdParam !== '') {
+            $selectedPoolIds = array_filter(array_map('intval', (array) $poolIdParam));
+        } elseif ($poolIdsParam !== null && $poolIdsParam !== '') {
+            $selectedPoolIds = is_array($poolIdsParam)
+                ? array_filter(array_map('intval', $poolIdsParam))
+                : array_filter(array_map('intval', explode(',', (string) $poolIdsParam)));
+        }
+        $this->assign('selected_pool_ids', $selectedPoolIds);
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -523,6 +534,16 @@ class WebsiteManagement extends BaseController
                     'msg' => __('默认网站不允许删除'),
                 ]);
             }
+            
+            $websiteId = (int) $websiteModel->getData('website_id');
+            // 删除站点前解绑域名：删除该站点下所有 website_domain 并同步域名池 site_created
+            $websiteDomainModel = $this->objectManager->getInstance(WebsiteDomain::class);
+            $websiteDomainModel->clearQuery()
+                ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
+                ->delete()
+                ->fetch();
+            $domainPool = $this->objectManager->getInstance(DomainPool::class);
+            $domainPool->syncSiteCreatedFromWebsiteDomainTable();
             
             $websiteModel->delete()->fetch();
             return $this->fetchJson([
