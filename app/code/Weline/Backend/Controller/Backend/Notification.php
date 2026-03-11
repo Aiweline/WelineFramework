@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification', '通知中心', 'ri-notification-3-line', '查看系统通知', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::notification', '通知中心', 'ri-notification-3-line', '查看系统通知', 'Weline_Backend::notification_settings')]
 class Notification extends BackendController
 {
     private NotificationService $notificationService;

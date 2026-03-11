@@ -6,7 +6,7 @@
          name="customer_service" 
          title="客服服务" 
          action=""
-         parent="Weline_Backend::system_service"
+         parent="Weline_Backend::system_service_group"
          icon="mdi mdi-headset"
          order="100">
         <menu source="Weline_CustomerService::config" 

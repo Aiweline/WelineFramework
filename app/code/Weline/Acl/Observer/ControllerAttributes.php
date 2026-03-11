@@ -178,7 +178,6 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                         $acl->setParentSource($existingRecord['parent_source']);
                     }
                 }
-
                 $this->assertClassAclAttachedToMenu($acl);
                 
                 // 收集到批量保存数组，不立即保存

@@ -11,7 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Frontend\Model\FrontendUser;
 use Weline\Frontend\Model\FrontendUserToken;
 
-#[Acl('Weline_Customer::customer', '前端客户', 'mdi-account-group', '前端客户', 'Weline_Backend::business_module')]
+#[Acl('Weline_Customer::customer', '前端客户', 'mdi-account-group', '前端客户', 'Weline_Backend::customer_group')]
 class Customer extends BackendController
 {
     #[Acl('Weline_Customer::customer_index', '查看前端客户', 'mdi-account', '查看前端客户')]

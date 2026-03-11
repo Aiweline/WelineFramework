@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Tracking as TrackingModel;
 
-#[Acl('Weline_Shipping::tracking', '物流跟踪管理', 'mdi-map-search', '物流跟踪管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::tracking', '物流跟踪管理', 'mdi-map-search', '物流跟踪管理', 'Weline_Backend::shipping_group')]
 class Tracking extends BackendController
 {
     private TrackingModel $tracking;
