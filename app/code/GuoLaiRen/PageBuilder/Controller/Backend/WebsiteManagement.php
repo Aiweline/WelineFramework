@@ -96,6 +96,7 @@ class WebsiteManagement extends BaseController
         }
         
         $this->assign('title', __('PageBuilder网站管理'));
+        $this->assign('add_site_label', __('新建站点'));
         $this->assign('websites', $items);
         $this->assign('pagination', $websites->getPagination());
         $this->assign('search', $search);
@@ -164,7 +165,7 @@ class WebsiteManagement extends BaseController
     /**
      * 添加网站（使用空白布局，适用于 offcanvas）
      */
-    #[Acl('GuoLaiRen_PageBuilder::website_listing_add', '添加网站', 'mdi mdi-plus', '网站列表管理')]
+    #[Acl('GuoLaiRen_PageBuilder::website_listing_add', '新建站点', 'mdi mdi-plus', '网站列表管理')]
     public function add(): string
     {
         // 使用空白布局（适用于 offcanvas/弹窗）
@@ -252,14 +253,8 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
-                // 后端 offcanvas 实际路由为 component/backend/offcanvas/getSuccess，用 getBackendUrl 生成完整 URL 再跳转
-                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getSuccess', [
-                    'msg' => __('网站添加成功'),
-                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
-                    'reload' => '1',
-                    'time' => '3',
-                ]);
-                $this->redirect($url);
+                $this->resultSuccess(__('网站添加成功'), true);
+                $this->redirect($this->_url->getBackendUrl('*/backend/websiteManagement'));
             } catch (\Exception $e) {
                 if ($e instanceof RedirectException) {
                     throw $e;
@@ -270,17 +265,13 @@ class WebsiteManagement extends BaseController
                 } else {
                     $msg = __('网站添加失败: %{1}', [$msg]);
                 }
-                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
-                    'msg' => $msg,
-                    'url' => '/',
-                    'reload' => '0',
-                    'time' => '3',
-                ]);
-                $this->redirect($url);
+                $this->resultError($msg, false);
+                $this->redirect($this->_url->getBackendUrl('*/backend/websiteManagement'));
             }
         }
         
-        // 初始化空网站数据
+        // 初始化空网站数据，并设置页面标题为「新建站点」
+        $this->assign('title', __('新建站点'));
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);

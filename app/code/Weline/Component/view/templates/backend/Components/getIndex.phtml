@@ -426,12 +426,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // 显示组件详情
                     showComponentDetail(data.component);
                 } else {
-                    alert(data.message || '<?= __('加载详情失败') ?>');
+                    (window.parent&&window.parent.BackendToast?window.parent.BackendToast.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'):console.error(data.message||'<?= addslashes(__('加载详情失败')) ?>'));
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('<?= __('加载详情失败') ?>');
+                (window.parent&&window.parent.BackendToast?window.parent.BackendToast.error('<?= addslashes(__('加载详情失败')) ?>'):console.error('<?= addslashes(__('加载详情失败')) ?>'));
             });
         });
     });
