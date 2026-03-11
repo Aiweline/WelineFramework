@@ -1717,6 +1717,13 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     throw new Exception(__('模块 %{1} 路由注册失败：%{2}', [$module_name, $exception->getMessage()]));
                 }
             }
+            // 路由收集完成后做 ACL diff（清理已卸载模块的 type=pc 等）
+            try {
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', []);
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('路由收集后 ACL 同步失败：%{1}', [$e->getMessage()]));
+            }
         }
         
         // ========== 准备所有阶段 ==========
