@@ -7,9 +7,9 @@ declare(strict_types=1);
  *
  * 提供添加/编辑网站的统一 OffCanvas 入口，所有建站入口使用本标签以标准化流程。
  * 使用示例：
- * 添加：<w:websites:website:build id="add_website" mode="add" />
- * 编辑：<w:websites:website:build id="edit_website" mode="edit" vars="website" action-params="{id:website.website_id}" />
- * PageBuilder 添加：<w:websites:website:build id="pb_add" mode="add" action="*/backend/websiteManagement/add" />
+ * 添加：id="add_website" mode="add"
+ * 编辑：mode="edit" vars="website" action-params="{id:website.website_id}"
+ * PageBuilder 添加：mode="add" action 传 *\/backend/websiteManagement/add
  */
 
 namespace Weline\Websites\Taglib;

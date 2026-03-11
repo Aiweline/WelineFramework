@@ -360,9 +360,10 @@ class DomainManagement extends BaseController
                 }
             }
 
-            // 已建站：根域下是否有池域名已被站点使用
+            // 已建站 / 可建站：根域下池子域名状态
             $localDomainIds = array_filter(array_unique(array_column($localDomains, 'domain_id')));
             $parentIdsWithSiteCreated = [];
+            $parentIdsWithSiteReady = [];
             if ($localDomainIds !== []) {
                 $poolModel = ObjectManager::getInstance(DomainPool::class);
                 $poolModel->clearQuery()
@@ -370,6 +371,12 @@ class DomainManagement extends BaseController
                     ->where(DomainPool::schema_fields_SITE_CREATED, 1);
                 $poolRows = $poolModel->fields(DomainPool::schema_fields_PARENT_DOMAIN_ID)->select()->fetchArray();
                 $parentIdsWithSiteCreated = array_unique(array_column($poolRows, DomainPool::schema_fields_PARENT_DOMAIN_ID));
+
+                $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $localDomainIds, 'IN')
+                    ->where(DomainPool::schema_fields_SITE_READY, 1);
+                $poolRowsReady = $poolModel->fields(DomainPool::schema_fields_PARENT_DOMAIN_ID)->select()->fetchArray();
+                $parentIdsWithSiteReady = array_unique(array_column($poolRowsReady, DomainPool::schema_fields_PARENT_DOMAIN_ID));
             }
 
             foreach ($accountIds as $acctId) {
@@ -472,6 +479,11 @@ class DomainManagement extends BaseController
                         $cdnProviderName = $cdnProvider ? $dnsDetector->getProviderInfo($cdnProvider)['name'] : '-';
 
                         $domainId = $isLocal ? (int) ($localData['domain_id'] ?? 0) : 0;
+                        // 根域可建站：自身 site_ready 或 至少一个池子域名可建站
+                        $siteReady = 0;
+                        if ($isLocal && $domainId > 0) {
+                            $siteReady = (int) ($localData['site_ready'] ?? 0) ?: (\in_array($domainId, $parentIdsWithSiteReady, true) ? 1 : 0);
+                        }
                         $item = [
                             'domain' => $domainName,
                             'domain_id' => $domainId,
@@ -486,7 +498,7 @@ class DomainManagement extends BaseController
                             'dns_provider_name' => $dnsProviderName,
                             'cdn_provider' => $cdnProvider,
                             'cdn_provider_name' => $cdnProviderName,
-                            'site_ready' => $isLocal ? (int) ($localData['site_ready'] ?? 0) : 0,
+                            'site_ready' => $siteReady,
                             'site_created' => ($isLocal && $domainId > 0 && \in_array($domainId, $parentIdsWithSiteCreated, true)) ? 1 : 0,
                         ];
                         $groupItems[] = $item;
