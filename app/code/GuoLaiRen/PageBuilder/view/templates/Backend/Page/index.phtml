@@ -40,40 +40,48 @@
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
+        <div class="card pagebuilder-page-card">
             <div class="card-body">
-                <h4 class="card-title">
-                    <lang>页面管理</lang>
-                </h4>
-                
-                <div class="card-title-desc">
-                    <div class='row'>
-                        <div class='col-6'>
-                            <div class="col-md-8">
-                                <form action="<?= $this->getBackendUrl('*/backend/page/index') ?>" method="get">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" name="search" 
-                                               value="<?= htmlspecialchars($this->request->getGet('search', '')) ?>"
-                                               placeholder="<?= __('搜索页面名称、句柄...') ?>">
-                                        <button class="btn btn-primary" type="submit">
-                                            <i class="mdi mdi-magnify"></i> <?= __('搜索') ?>
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                        <div class='col-6 text-end'>
-                            <acl source="GuoLaiRen_PageBuilder::page_builder_create">
-                                <button type="button" class="btn btn-success mt-1 mb-1 me-2" 
-                                        data-bs-toggle="modal" data-bs-target="#quickSiteModal">
-                                    <i class="mdi mdi-rocket-launch"></i> <lang>一键建站</lang>
-                                </button>
-                                <a class='btn btn-primary mt-1 mb-1'
-                                   href="<?= $this->getBackendUrl('*/backend/page/create') ?>">
-                                    <i class="mdi mdi-plus"></i> <lang>新建页面</lang>
+                <!-- 页面管理头部 -->
+                <div class="pagebuilder-page-header">
+                    <div class="header-title">
+                        <h4 class="card-title">
+                            <i class="mdi mdi-file-document-multiple"></i>
+                            <lang>页面管理</lang>
+                        </h4>
+                    </div>
+                    
+                    <div class="header-actions">
+                        <!-- 搜索框 -->
+                        <form action="<?= $this->getBackendUrl('*/backend/page/index') ?>" method="get" class="pagebuilder-search-form">
+                            <div class="search-input-group">
+                                <i class="mdi mdi-magnify search-icon"></i>
+                                <input type="text" 
+                                       class="form-control search-input" 
+                                       name="search" 
+                                       value="<?= htmlspecialchars($this->request->getGet('search', '')) ?>"
+                                       placeholder="<?= __('搜索页面名称、句柄...') ?>">
+                                <?php if ($this->request->getGet('search', '')): ?>
+                                <a href="<?= $this->getBackendUrl('*/backend/page/index') ?>" class="search-clear" title="<?= __('清除搜索') ?>">
+                                    <i class="mdi mdi-close"></i>
                                 </a>
-                            </acl>
-                        </div>
+                                <?php endif; ?>
+                            </div>
+                        </form>
+                        
+                        <!-- 操作按钮 -->
+                        <acl source="GuoLaiRen_PageBuilder::page_builder_create">
+                            <button type="button" class="btn btn-action-rocket" 
+                                    data-bs-toggle="modal" data-bs-target="#quickSiteModal">
+                                <i class="mdi mdi-rocket-launch"></i>
+                                <span><lang>一键建站</lang></span>
+                            </button>
+                            <a class="btn btn-action-create"
+                               href="<?= $this->getBackendUrl('*/backend/page/create') ?>">
+                                <i class="mdi mdi-plus"></i>
+                                <span><lang>新建页面</lang></span>
+                            </a>
+                        </acl>
                     </div>
                 </div>
 
@@ -91,109 +99,118 @@
                     </div>
                 <?php else: ?>
                     <!-- 树形手风琴列表 -->
-                    <div class="accordion accordion-flush" id="pageAccordion">
+                    <div class="accordion accordion-flush pagebuilder-page-accordion" id="pageAccordion">
                         <?php foreach ($parentPages as $index => $page): ?>
                             <?php 
                             $hasChildren = isset($childPages[$page->getId()]) && !empty($childPages[$page->getId()]);
                             $accordionId = 'page-' . $page->getId();
-                            $isFirst = $index === 0; // 判断是否是第一个
-                            // 检查是否为首页类型的顶级页面（可以导出）
+                            $isFirst = $index === 0;
                             $isHomePage = $page->getData('type') === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME;
                             $isTopLevel = empty($page->getData('parent_id')) || $page->getData('parent_id') == 0;
                             $canExport = $isHomePage && $isTopLevel;
+                            $isPublished = $page->getData('status') == 1;
                             ?>
                             
-                            <div class="accordion-item border rounded mb-2">
+                            <div class="accordion-item pagebuilder-page-item <?= $isPublished ? 'is-published' : 'is-draft' ?>" id="accordion-<?= $accordionId ?>">
                                 <!-- 父页面头部 -->
                                 <h2 class="accordion-header" id="heading-<?= $accordionId ?>">
-                                    <div class="d-flex align-items-center p-3 bg-light">
+                                    <div class="page-item-header">
+                                        <!-- 状态指示条 -->
+                                        <div class="status-indicator <?= $isPublished ? 'status-published' : 'status-draft' ?>"></div>
+                                        
                                         <!-- 展开按钮 -->
-                                        <?php if ($hasChildren): ?>
-                                            <button class="accordion-button <?= $isFirst ? '' : 'collapsed' ?> p-0 me-3 bg-transparent border-0 shadow-none" 
-                                                    type="button" 
-                                                    data-bs-toggle="collapse" 
-                                                    data-bs-target="#collapse-<?= $accordionId ?>" 
-                                                    aria-expanded="<?= $isFirst ? 'true' : 'false' ?>" 
-                                                    aria-controls="collapse-<?= $accordionId ?>"
-                                                    style="width: 30px; height: 30px;">
-                                            </button>
-                                        <?php else: ?>
-                                            <div class="me-3" style="width: 30px;"></div>
-                                        <?php endif; ?>
+                                        <div class="expand-toggle">
+                                            <?php if ($hasChildren): ?>
+                                                <button class="accordion-button <?= $isFirst ? '' : 'collapsed' ?>" 
+                                                        type="button" 
+                                                        data-bs-toggle="collapse" 
+                                                        data-bs-target="#collapse-<?= $accordionId ?>" 
+                                                        aria-expanded="<?= $isFirst ? 'true' : 'false' ?>" 
+                                                        aria-controls="collapse-<?= $accordionId ?>">
+                                                </button>
+                                            <?php else: ?>
+                                                <div class="expand-placeholder"></div>
+                                            <?php endif; ?>
+                                        </div>
                                         
                                         <!-- 页面信息 -->
-                                        <div class="flex-grow-1 d-flex align-items-center gap-3">
-                                            <div>
-                                                <span class="badge bg-primary">ID: <?= $page->getId() ?></span>
+                                        <div class="page-info">
+                                            <div class="page-id-badge">
+                                                <span class="id-label">ID</span>
+                                                <span class="id-value"><?= $page->getId() ?></span>
                                             </div>
-                                            <div>
-                                                <h6 class="mb-0">
-                                                    <i class="mdi mdi-file-document text-primary"></i>
+                                            
+                                            <div class="page-title-section">
+                                                <h6 class="page-name">
+                                                    <i class="mdi <?= $isHomePage ? 'mdi-home' : 'mdi-file-document' ?>"></i>
                                                     <?= htmlspecialchars((($page->getData('name') ?? '')) ?? '') ?>
                                                 </h6>
-                                                <small class="text-muted">
+                                                <span class="page-handle">
                                                     <i class="mdi mdi-link-variant"></i>
                                                     <?= htmlspecialchars((($page->getData('handle') ?? '')) ?? '') ?>
-                                                </small>
+                                                </span>
                                             </div>
-                                            <div>
-                                                <?php if ($page->getData('status') == 1): ?>
-                                                    <span class="badge bg-success"><i class="mdi mdi-check"></i> <?= __('已发布') ?></span>
-                                                <?php else: ?>
-                                                    <span class="badge bg-secondary"><i class="mdi mdi-clock-outline"></i> <?= __('草稿') ?></span>
-                                                <?php endif; ?>
-                                            </div>
-                                            <?php if ($hasChildren): ?>
-                                                <div>
-                                                    <span class="badge bg-info">
-                                                        <i class="mdi mdi-folder-outline"></i> 
-                                                        <?= count($childPages[$page->getId()]) ?> <?= __('个子页面') ?>
+                                            
+                                            <div class="page-badges">
+                                                <?php if ($isPublished): ?>
+                                                    <span class="badge badge-status badge-success">
+                                                        <i class="mdi mdi-check-circle"></i> <?= __('已发布') ?>
                                                     </span>
-                                                </div>
-                                            <?php endif; ?>
-                                            <?php
-                                            // 获取站点信息
-                                            $websiteId = (int)($page->getData('website_id') ?? 0);
-                                            $websiteName = '';
-                                            $websiteUrl = '';
-                                            if ($websiteId > 0) {
-                                                try {
-                                                    $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                                                    $website = clone $websiteModel;
-                                                    $website->load($websiteId);
-                                                    if ($website->getId()) {
-                                                        $websiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
-                                                        $websiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+                                                <?php else: ?>
+                                                    <span class="badge badge-status badge-draft">
+                                                        <i class="mdi mdi-file-edit"></i> <?= __('草稿') ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                
+                                                <?php if ($hasChildren): ?>
+                                                    <span class="badge badge-children">
+                                                        <i class="mdi mdi-folder-multiple"></i>
+                                                        <?= count($childPages[$page->getId()]) ?> <?= __('子页面') ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                                
+                                                <?php
+                                                // 获取站点信息
+                                                $websiteId = (int)($page->getData('website_id') ?? 0);
+                                                $websiteName = '';
+                                                $websiteUrl = '';
+                                                if ($websiteId > 0) {
+                                                    try {
+                                                        $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+                                                        $website = clone $websiteModel;
+                                                        $website->load($websiteId);
+                                                        if ($website->getId()) {
+                                                            $websiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
+                                                            $websiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+                                                        }
+                                                    } catch (\Exception $e) {
+                                                        // 忽略错误
                                                     }
-                                                } catch (\Exception $e) {
-                                                    // 忽略错误
                                                 }
-                                            }
-                                            if ($websiteName): ?>
-                                                <div>
-                                                    <span class="badge bg-secondary">
-                                                        <i class="mdi mdi-web"></i> 
+                                                ?>
+                                                <?php if ($websiteName): ?>
+                                                    <span class="badge badge-website">
+                                                        <i class="mdi mdi-web"></i>
                                                         <?= htmlspecialchars($websiteName) ?>
                                                     </span>
-                                                </div>
-                                            <?php endif; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                            
                                             <?php if ($websiteUrl): ?>
-                                                <div>
-                                                    <a href="<?= htmlspecialchars($websiteUrl) ?>" 
-                                                       target="_blank" 
-                                                       class="badge bg-light text-dark text-decoration-none"
-                                                       title="<?= __('访问站点') ?>">
-                                                        <i class="mdi mdi-open-in-new"></i> 
-                                                        <?= htmlspecialchars($websiteUrl) ?>
-                                                    </a>
-                                                </div>
+                                                <a href="<?= htmlspecialchars($websiteUrl) ?>" 
+                                                   target="_blank" 
+                                                   class="badge badge-url"
+                                                   title="<?= __('访问站点') ?>">
+                                                    <i class="mdi mdi-open-in-new"></i>
+                                                    <?= htmlspecialchars(mb_strimwidth($websiteUrl, 0, 30, '...')) ?>
+                                                </a>
                                             <?php endif; ?>
                                         </div>
                                         
                                         <!-- 操作按钮 -->
-                                        <div class="d-flex gap-1 ms-3 flex-nowrap">
+                                        <div class="page-actions">
                                             <?php
-                                            // 生成前端访问链接：与当前请求同 host 时用当前 base（含端口）
+                                            // 生成前端访问链接
                                             $currentBase = rtrim($this->request->getBaseHost(), '/');
                                             $baseUrl = $currentBase;
                                             if ($websiteUrl !== '') {
@@ -203,39 +220,37 @@
                                                     ? $currentBase : rtrim($websiteUrl, '/');
                                             }
                                             $pageHandle = $page->getData('handle') ?? '';
-                                            // 首页类型且没有handle时，直接使用网站地址
                                             if ($isHomePage && empty($pageHandle)) {
                                                 $frontendUrl = $baseUrl;
                                             } else {
                                                 $frontendUrl = $baseUrl . '/' . ltrim($pageHandle, '/');
                                             }
-                                            $isPublished = $page->getData('status') == 1;
                                             ?>
                                             
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
-                                                <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
+                                                <button class='btn btn-action-publish'
                                                         onclick="BackendToast.info('<?= __('功能建设中，敬请期待！') ?>'); return false;"
-                                                        style="min-width: 70px; white-space: nowrap;"
                                                         title="<?= __('发布页面') ?>">
-                                                    <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
+                                                    <i class="mdi mdi-publish"></i>
+                                                    <span><?= __('发布') ?></span>
                                                 </button>
                                             </acl>
+                                            
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
-                                                <a class='btn btn-sm btn-info d-inline-flex align-items-center'
-                                                   href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>"
-                                                   style="min-width: 70px; white-space: nowrap;">
-                                                    <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
+                                                <a class='btn btn-action-edit'
+                                                   href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>">
+                                                    <i class="mdi mdi-pencil"></i>
+                                                    <span><?= __('编辑') ?></span>
                                                 </a>
                                             </acl>
                                             
                                             <!-- 更多操作下拉菜单 -->
-                                            <div class="btn-group" role="group">
+                                            <div class="dropdown">
                                                 <button type="button" 
-                                                        class="btn btn-sm btn-secondary dropdown-toggle d-inline-flex align-items-center" 
+                                                        class="btn btn-action-more" 
                                                         data-bs-toggle="dropdown" 
-                                                        aria-expanded="false"
-                                                        style="min-width: 85px; white-space: nowrap;">
-                                                    <i class="mdi mdi-dots-horizontal me-1"></i><?= __('更多操作') ?>
+                                                        aria-expanded="false">
+                                                    <i class="mdi mdi-dots-horizontal"></i>
                                                 </button>
                                                 <ul class="dropdown-menu dropdown-menu-end">
                                                     <!-- 预览、查看、拷贝 -->
@@ -979,12 +994,12 @@
 
 <style>
 /* ============================================
-   组件：PageBuilder Page Manager
+   组件：PageBuilder Page Manager (美化版)
    模块：GuoLaiRen_PageBuilder
    前缀：pagebuilder-page-
    ============================================ */
 
-/* 页面标题适配 */
+/* ========== 页面基础适配 ========== */
 .page-title-box h4 {
     color: var(--backend-color-text-primary, #212529);
 }
@@ -997,72 +1012,425 @@
     color: var(--backend-color-text-secondary, #6c757d);
 }
 
-/* 卡片适配 */
-.card {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
+/* ========== 卡片容器 ========== */
+.pagebuilder-page-card {
+    border: none;
+    box-shadow: var(--backend-shadow-md, 0 4px 6px rgba(0, 0, 0, 0.07));
+    border-radius: var(--backend-border-radius-lg, 12px);
+    overflow: hidden;
 }
 
-.card-body {
-    background: var(--backend-color-card-bg, #fff);
+.pagebuilder-page-card .card-body {
+    padding: var(--backend-spacing-lg, 24px);
 }
 
-.card-title {
+/* ========== 页面管理头部 ========== */
+.pagebuilder-page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--backend-spacing-lg, 24px);
+    margin-bottom: var(--backend-spacing-xl, 32px);
+    padding-bottom: var(--backend-spacing-lg, 24px);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.header-title .card-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.header-title .card-title i {
+    color: var(--backend-color-primary, #556ee6);
+    font-size: 24px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+/* ========== 搜索框 ========== */
+.pagebuilder-search-form {
+    position: relative;
+}
+
+.search-input-group {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.search-input-group .search-icon {
+    position: absolute;
+    left: 14px;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 18px;
+    z-index: 5;
+}
+
+.search-input-group .search-input {
+    width: 300px;
+    padding: 10px 40px;
+    padding-left: 42px;
+    border: 2px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    font-size: 14px;
+    transition: all 0.2s ease;
+    background: var(--backend-color-input-bg, #fff);
     color: var(--backend-color-text-primary, #212529);
 }
 
-.card-title-desc {
-    color: var(--backend-color-text-secondary, #6c757d);
-}
-
-/* 表单元素适配 */
-.form-control {
-    background: var(--backend-color-input-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6);
-    color: var(--backend-color-text-primary, #212529);
-}
-
-.form-control:focus {
-    background: var(--backend-color-input-bg, #fff);
+.search-input-group .search-input:focus {
     border-color: var(--backend-color-primary, #556ee6);
-    color: var(--backend-color-text-primary, #212529);
+    box-shadow: 0 0 0 4px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.1);
+    outline: none;
 }
 
-.form-control::placeholder {
+.search-input-group .search-input::placeholder {
     color: var(--backend-color-text-placeholder, #adb5bd);
 }
 
-/* 手风琴适配 */
-.accordion-item {
+.search-input-group .search-clear {
+    position: absolute;
+    right: 12px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.search-input-group .search-clear:hover {
+    background: var(--backend-color-danger, #f46a6a);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* ========== 操作按钮 ========== */
+.btn-action-rocket,
+.btn-action-create {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    border-radius: var(--backend-border-radius-lg, 12px);
+    font-size: 14px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-action-rocket {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-rocket:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-create {
+    background: var(--backend-color-success, #34c38f);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-create:hover {
+    background: #2eb781;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(52, 195, 143, 0.4);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* ========== 手风琴列表 ========== */
+.pagebuilder-page-accordion {
+    display: flex;
+    flex-direction: column;
+    gap: var(--backend-spacing-md, 16px);
+}
+
+.pagebuilder-page-item {
     background: var(--backend-color-card-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6) !important;
+    border: 1px solid var(--backend-color-border-default, #dee2e6) !important;
+    border-radius: var(--backend-border-radius-lg, 12px) !important;
+    overflow: hidden;
+    transition: all 0.3s ease;
 }
 
-.accordion-item .bg-light {
-    background: var(--backend-color-bg-secondary, #f8f9fa) !important;
+.pagebuilder-page-item:hover {
+    border-color: var(--backend-color-primary, #556ee6) !important;
+    box-shadow: 0 4px 16px rgba(var(--backend-color-primary-rgb, 85, 110, 230), 0.15);
 }
 
-.accordion-item h6 {
+/* ========== 页面项头部 ========== */
+.page-item-header {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    padding: 16px 20px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+
+/* ========== 状态指示条 ========== */
+.status-indicator {
+    width: 4px;
+    height: 48px;
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.status-indicator.status-published {
+    background: var(--backend-color-success, #34c38f);
+}
+
+.status-indicator.status-draft {
+    background: var(--backend-color-warning, #f1b44c);
+}
+
+/* ========== 展开按钮 ========== */
+.expand-toggle {
+    width: 32px;
+    flex-shrink: 0;
+}
+
+.expand-toggle .accordion-button {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    border: none;
+    border-radius: var(--backend-border-radius, 6px);
+    transition: all 0.2s ease;
+}
+
+.expand-toggle .accordion-button::after {
+    background-size: 14px;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+.expand-toggle .accordion-button:hover {
+    background: var(--backend-color-primary, #556ee6);
+}
+
+.expand-toggle .accordion-button:hover::after {
+    filter: brightness(0) invert(1);
+}
+
+.expand-placeholder {
+    width: 32px;
+    height: 32px;
+}
+
+/* ========== 页面信息 ========== */
+.page-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-lg, 24px);
+    flex-wrap: wrap;
+}
+
+.page-id-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 12px;
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    border-radius: var(--backend-border-radius, 6px);
+    min-width: 50px;
+}
+
+.page-id-badge .id-label {
+    font-size: 10px;
+    color: var(--backend-color-primary, #556ee6);
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.page-id-badge .id-value {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.page-title-section {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.page-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
     color: var(--backend-color-text-primary, #212529);
 }
 
-.accordion-item .text-muted {
-    color: var(--backend-color-text-secondary, #6c757d) !important;
+.page-name i {
+    color: var(--backend-color-primary, #556ee6);
+    font-size: 18px;
 }
 
-.accordion-body {
-    background: var(--backend-color-card-bg, #fff);
+.page-handle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-family: 'SF Mono', 'Consolas', monospace;
 }
 
-/* 下拉菜单适配 */
+.page-handle i {
+    font-size: 14px;
+}
+
+/* ========== 徽章样式 ========== */
+.page-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.badge-status,
+.badge-children,
+.badge-website,
+.badge-url {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.badge-status.badge-success {
+    background: rgba(52, 195, 143, 0.15);
+    color: var(--backend-color-success, #34c38f);
+}
+
+.badge-status.badge-draft {
+    background: rgba(241, 180, 76, 0.15);
+    color: var(--backend-color-warning, #f1b44c);
+}
+
+.badge-children {
+    background: rgba(80, 165, 241, 0.15);
+    color: var(--backend-color-info, #50a5f1);
+}
+
+.badge-website {
+    background: rgba(111, 66, 193, 0.15);
+    color: #6f42c1;
+}
+
+.badge-url {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.badge-url:hover {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* ========== 页面操作按钮 ========== */
+.page-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-action-publish,
+.btn-action-edit,
+.btn-action-more {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: var(--backend-border-radius, 6px);
+    font-size: 13px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.btn-action-publish {
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-publish:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    transform: translateY(-1px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-edit {
+    background: var(--backend-color-info, #50a5f1);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-edit:hover {
+    background: #3b93e0;
+    transform: translateY(-1px);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+.btn-action-more {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.btn-action-more:hover {
+    background: var(--backend-color-text-secondary, #6c757d);
+    color: var(--backend-color-text-inverse, #fff);
+}
+
+/* ========== 下拉菜单适配 ========== */
 .dropdown-menu {
     background: var(--backend-color-card-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 8px;
 }
 
 .dropdown-item {
+    padding: 10px 14px;
+    border-radius: var(--backend-border-radius-sm, 4px);
     color: var(--backend-color-text-primary, #212529);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s ease;
 }
 
 .dropdown-item:hover {
@@ -1070,20 +1438,60 @@
     color: var(--backend-color-text-primary, #212529);
 }
 
+.dropdown-item i {
+    width: 18px;
+    text-align: center;
+}
+
 .dropdown-item.text-muted {
     color: var(--backend-color-text-tertiary, #adb5bd) !important;
+    cursor: not-allowed;
 }
 
 .dropdown-divider {
     border-color: var(--backend-color-border-light, #e9ecef);
+    margin: 6px 0;
 }
 
-/* 空状态适配 */
+/* ========== 手风琴内容适配 ========== */
+.accordion-body {
+    background: var(--backend-color-card-bg, #fff);
+    padding: var(--backend-spacing-md, 16px);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+/* ========== 子页面项 ========== */
+.child-page-item {
+    display: flex;
+    align-items: center;
+    gap: var(--backend-spacing-md, 16px);
+    padding: 12px 16px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius, 6px);
+    margin-bottom: 8px;
+    transition: all 0.2s ease;
+}
+
+.child-page-item:hover {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+}
+
+.child-page-item:last-child {
+    margin-bottom: 0;
+}
+
+/* ========== 空状态适配 ========== */
 .text-center.text-muted {
-    color: var(--backend-color-text-tertiary, #adb5bd) !important;
+    padding: var(--backend-spacing-xl, 48px) var(--backend-spacing-md, 24px) !important;
 }
 
-/* 步骤指示器 */
+.text-center.text-muted i {
+    font-size: 80px !important;
+    opacity: 0.3;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* ========== 步骤指示器 ========== */
 .step-indicator { 
     display: flex; 
     align-items: center; 
@@ -1116,7 +1524,7 @@
     color: var(--backend-color-text-secondary, #6c757d); 
 }
 
-/* 站点选择样式 */
+/* ========== 站点选择样式 ========== */
 .website-item {
     cursor: pointer;
     transition: all 0.2s;
