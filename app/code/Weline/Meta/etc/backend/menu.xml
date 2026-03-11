@@ -4,7 +4,7 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--元数据管理菜单-->
     <menu source="Weline_Meta::meta_manager" name="meta_manager" title="元数据管理" action="" 
-         parent="Weline_Eav::data_management"
+         parent="Weline_Eav::eav"
          icon="mdi mdi-file-document-edit" order="20410">
         <menu source="Weline_Meta::meta_list" name="meta_list" title="元数据列表" 
              action="meta/backend/meta"
