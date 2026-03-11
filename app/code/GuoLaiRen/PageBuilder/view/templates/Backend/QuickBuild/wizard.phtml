@@ -659,6 +659,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var domainListUrl = '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>';
     var domainPoolUrl = '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>';
     var provisionUrl = '<backend-url>pagebuilder/backend/quick-build/start-provisioning</backend-url>';
+    var userDataUrl = '<backend-url>backend/user-data</backend-url>';
+    var scopeKey = 'pagebuilder_quick_build_wizard';
 
     function postForm(url, data) {
         var fd = new FormData();
@@ -666,6 +668,18 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             fd.append(k, typeof data[k] === 'object' ? JSON.stringify(data[k]) : data[k]);
         });
         return window.Weline.Api.request(url, { method: 'POST', body: fd }).then(function(r) { return r.ok ? r.data : (r.data || {}); });
+    }
+
+    function debounce(fn, wait) {
+        var t = null;
+        return function() {
+            var args = arguments;
+            var self = this;
+            if (t) clearTimeout(t);
+            t = setTimeout(function() {
+                fn.apply(self, args);
+            }, wait);
+        };
     }
     
     // 配置进度步骤定义
@@ -692,9 +706,106 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         el.dispatchEvent(new Event('change', { bubbles: true }));
     }
 
+    function collectWizardState() {
+        return {
+            step: currentStep,
+            mode: currentMode,
+            selected_domain: selectedDomain || '',
+            selected_account_id: selectedAccountId || 0,
+            registrar_account_id_new: document.getElementById('pb-qb-account') ? (document.getElementById('pb-qb-account').value || '') : '',
+            registrar_account_id_existing: document.getElementById('pb-qb-account-existing') ? (document.getElementById('pb-qb-account-existing').value || '') : '',
+            domain_input: document.getElementById('pb-qb-domain') ? (document.getElementById('pb-qb-domain').value || '') : '',
+            dns_vendor: document.getElementById('pb-qb-dns-vendor') ? (document.getElementById('pb-qb-dns-vendor').value || 'follow_registrar') : 'follow_registrar',
+            dns_account_id: document.getElementById('pb-qb-dns-account') ? (document.getElementById('pb-qb-dns-account').value || '') : '',
+            cdn_vendor: document.getElementById('pb-qb-cdn-vendor') ? (document.getElementById('pb-qb-cdn-vendor').value || 'follow_registrar') : 'follow_registrar',
+            cdn_account_id: document.getElementById('pb-qb-cdn-account') ? (document.getElementById('pb-qb-cdn-account').value || '') : '',
+            apply_ssl: document.getElementById('pb-qb-apply-ssl') && document.getElementById('pb-qb-apply-ssl').checked ? '1' : '0',
+            auto_resolve: document.getElementById('pb-qb-auto-resolve') && document.getElementById('pb-qb-auto-resolve').checked ? '1' : '0'
+        };
+    }
+
+    function persistWizardState() {
+        var fd = new FormData();
+        fd.append('scope', scopeKey);
+        fd.append('data', JSON.stringify(collectWizardState()));
+        return window.Weline.Api.request(userDataUrl, { method: 'POST', body: fd });
+    }
+
+    var schedulePersistWizardState = debounce(function() {
+        persistWizardState();
+    }, 400);
+
+    function applyWizardState(state) {
+        if (!state || typeof state !== 'object') return;
+
+        function setValueIfExists(id, value) {
+            var el = document.getElementById(id);
+            if (!el || value == null || value === '') return;
+            if (el.tagName && el.tagName.toLowerCase() === 'select') {
+                var exists = !!el.querySelector('option[value="' + String(value).replace(/"/g, '\\"') + '"]');
+                if (!exists) return;
+            }
+            el.value = String(value);
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        setValueIfExists('pb-qb-account', state.registrar_account_id_new);
+        setValueIfExists('pb-qb-account-existing', state.registrar_account_id_existing);
+        setValueIfExists('pb-qb-domain', state.domain_input);
+        setValueIfExists('pb-qb-dns-vendor', state.dns_vendor);
+        setValueIfExists('pb-qb-cdn-vendor', state.cdn_vendor);
+        setValueIfExists('pb-qb-dns-account', state.dns_account_id);
+        setValueIfExists('pb-qb-cdn-account', state.cdn_account_id);
+
+        var applySsl = document.getElementById('pb-qb-apply-ssl');
+        if (applySsl && state.apply_ssl != null) {
+            applySsl.checked = String(state.apply_ssl) === '1';
+            applySsl.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        var autoResolve = document.getElementById('pb-qb-auto-resolve');
+        if (autoResolve && state.auto_resolve != null) {
+            autoResolve.checked = String(state.auto_resolve) === '1';
+            autoResolve.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        if (state.selected_domain) {
+            selectedDomain = String(state.selected_domain);
+        }
+        if (state.selected_account_id) {
+            selectedAccountId = parseInt(state.selected_account_id, 10) || 0;
+        }
+        if (state.mode && state.mode !== currentMode) {
+            var modeTab = document.querySelector('.pb-qb-mode-tab[data-mode="' + state.mode + '"]');
+            if (modeTab) modeTab.click();
+        }
+        updateFollowRegistrarLabels();
+        syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
+        syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
+        updateNextButtonState();
+        if (state.step) {
+            var step = parseInt(state.step, 10);
+            if (step >= 1 && step <= 4) {
+                goToStep(step);
+            }
+        }
+    }
+
+    function loadWizardState() {
+        return window.Weline.Api.request(userDataUrl + '?scope=' + encodeURIComponent(scopeKey), { method: 'GET' })
+            .then(function(r) {
+                var payload = r && r.data ? r.data : {};
+                var state = payload.json || payload.data || {};
+                applyWizardState(state);
+            })
+            .catch(function() {
+                // ignore restore failure
+            });
+    }
+
     function goToStep(step) {
         currentStep = step;
         setScopeState('step', step);
+        schedulePersistWizardState();
         for (var i = 1; i <= 4; i++) {
             var panel = document.getElementById('pb-qb-step' + i);
             var stepEl = document.querySelector('.pb-qb-step[data-step="' + i + '"]');
@@ -830,6 +941,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var mode = this.getAttribute('data-mode');
             currentMode = mode;
             setScopeState('mode', mode);
+            schedulePersistWizardState();
             document.querySelectorAll('.pb-qb-mode-tab').forEach(function(t) { t.classList.remove('active'); });
             document.querySelectorAll('.pb-qb-mode-panel').forEach(function(p) { p.classList.remove('active'); });
             this.classList.add('active');
@@ -890,6 +1002,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 selectedAccountId = acctId;
                 setScopeState('selected_domain', selectedDomain);
                 setScopeState('selected_account_id', selectedAccountId);
+                schedulePersistWizardState();
                 domainOwned = false;
                 document.getElementById('pb-qb-buy-btn').addEventListener('click', handleBuy);
                 updateFollowRegistrarLabels();
@@ -1086,6 +1199,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             selectedAccountId = acctId;
                             setScopeState('selected_domain', selectedDomain);
                             setScopeState('selected_account_id', selectedAccountId);
+                            schedulePersistWizardState();
                             domainOwned = true;
                             domainPurchased = false;
                             updateFollowRegistrarLabels();
@@ -1257,42 +1371,17 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     updateFollowRegistrarLabels();
     syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
     syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
-
-    // 从 scope 恢复已保存步骤与关键字段
-    function restoreWizardState() {
-        var modeInput = document.getElementById('pb-qb-state-mode');
-        var stepInput = document.getElementById('pb-qb-state-step');
-        var domainInput = document.getElementById('pb-qb-state-selected-domain');
-        var accountInput = document.getElementById('pb-qb-state-selected-account-id');
-        var mode = modeInput ? (modeInput.value || 'new') : 'new';
-        var step = stepInput ? parseInt(stepInput.value || '1', 10) : 1;
-        var savedDomain = domainInput ? (domainInput.value || '') : '';
-        var savedAccount = accountInput ? parseInt(accountInput.value || '0', 10) : 0;
-
-        if (mode !== currentMode) {
-            var modeTab = document.querySelector('.pb-qb-mode-tab[data-mode="' + mode + '"]');
-            if (modeTab) {
-                modeTab.click();
-            }
-        }
-        if (savedDomain) {
-            selectedDomain = savedDomain;
-        }
-        if (savedAccount > 0) {
-            selectedAccountId = savedAccount;
-        }
-        updateFollowRegistrarLabels();
-        syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
-        syncProviderAccountSelection('pb-qb-cdn-vendor', 'pb-qb-cdn-account');
-        updateNextButtonState();
-        if (step >= 1 && step <= 4) {
-            goToStep(step);
-        }
+    // 监听容器内变化，自动持久化当前向导状态
+    var scopeContainer = document.getElementById('pb-qb-container');
+    if (scopeContainer) {
+        scopeContainer.addEventListener('input', schedulePersistWizardState, true);
+        scopeContainer.addEventListener('change', schedulePersistWizardState, true);
+        scopeContainer.addEventListener('click', schedulePersistWizardState, true);
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(restoreWizardState, 300);
+    window.addEventListener('beforeunload', function() {
+        persistWizardState();
     });
+    loadWizardState();
 
     document.getElementById('pb-qb-prev3').addEventListener('click', function() { goToStep(2); });
     
