@@ -1527,6 +1527,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         // 监听完成事件
         progress.on('done', function(e) {
+            // 完成阶段始终允许返回上一步
+            document.getElementById('pb-qb-prev4').style.display = '';
             try {
                 var data = JSON.parse(e.data || '{}');
                 var websiteId = (data.website_id != null && data.website_id !== '') ? (data.website_id | 0) : 0;
