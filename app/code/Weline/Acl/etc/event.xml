@@ -10,6 +10,10 @@
     <event name="Weline_Framework_Router::route_before">
         <observer name="Weline_Acl::route_before" instance="Weline\Acl\Observer\RouteBefore" disabled="false" shared="true" sort="1"/>
     </event>
+    <!-- 路由收集后做 ACL diff：清理已卸载模块的 type=pc 及 role_access -->
+    <event name="Weline_Framework_Setup::after_route_collection">
+        <observer name="Weline_Acl::after_route_collection_acl_diff" instance="Weline\Acl\Observer\AfterRouteCollectionAclDiff" disabled="false" shared="true" sort="0"/>
+    </event>
     <!-- 系统升级完成后为 role_id=1 授予当前 ACL 全部权限，避免升级后超管无权限 -->
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_Acl::setup_upgrade_grant_super_admin" instance="Weline\Acl\Observer\SetupUpgradeGrantSuperAdmin" disabled="false" shared="true" sort="0"/>
