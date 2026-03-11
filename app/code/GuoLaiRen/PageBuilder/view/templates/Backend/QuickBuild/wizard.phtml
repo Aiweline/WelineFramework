@@ -1576,7 +1576,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         progress.reset();
         progress.setUrl(sseUrl);
         
-        // 监听完成事件
+        // 监听完成事件：成功完成时直接跳转完成步骤
         progress.on('done', function(e) {
             isProvisionRunning = false;
             isProvisionFinished = true;
@@ -1593,6 +1593,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             }
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('重新执行SSE配置') ?>';
+            goToStep(5);
         });
         
         // 监听失败事件
