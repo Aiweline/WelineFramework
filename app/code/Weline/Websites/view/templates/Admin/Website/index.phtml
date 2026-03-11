@@ -1,86 +1,199 @@
 <?php
 /**
  * 网站管理（内容模板）
- * 
  * 由布局系统自动包裹 HTML 框架
  *
  * @var \Weline\Framework\View\Template $this
  */
+$search = $this->getData('search') ?? '';
 ?>
 <style>
-.badge {
+/* ============================================
+   组件：Weline Websites 网站管理
+   前缀：weline-websites-admin-
+   ============================================ */
+.weline-websites-admin-badge {
     font-size: 0.75rem;
     padding: 0.25em 0.5em;
+}
+.weline-websites-admin-card .card,
+.weline-websites-admin-card .card-body {
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-websites-admin-card .card-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-websites-table-wrap .table {
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-websites-table-wrap .table thead th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+.weline-websites-table-wrap .table tbody td {
+    border-color: var(--backend-color-border-light, #e9ecef);
+}
+.weline-websites-table-wrap .table-hover tbody tr:hover {
+    background: var(--backend-color-table-bg-hover, #f8f9fa);
+}
+.weline-websites-table-wrap .table code {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-danger, #f46a6a);
+    padding: 2px 6px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+}
+.weline-websites-url-link {
+    color: var(--backend-color-primary, #556ee6);
+}
+.weline-websites-url-link:hover {
+    color: var(--backend-color-primary-hover, #485ec4);
+}
+.weline-websites-domain-cell {
+    max-width: 220px;
+}
+.weline-websites-domain-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 4px;
+    margin-right: 8px;
+}
+.weline-websites-domain-badge:last-child {
+    margin-bottom: 0;
+}
+.weline-websites-domain-link {
+    color: var(--backend-color-primary, #556ee6);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+.weline-websites-domain-link:hover {
+    text-decoration: underline;
+    color: var(--backend-color-primary-hover, #485ec4);
+}
+.weline-websites-admin-guide {
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-left: 4px solid var(--backend-color-primary, #556ee6);
+    padding: 16px 20px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    margin-bottom: 20px;
+    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+}
+.weline-websites-admin-guide-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+.weline-websites-admin-guide-header h6 {
+    margin: 0;
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+}
+.weline-websites-admin-guide-body {
+    margin-top: 12px;
+    display: none;
+}
+.weline-websites-admin-guide-body.show {
+    display: block;
+}
+.weline-websites-admin-guide-body ul {
+    margin: 8px 0 0 0;
+    padding-left: 20px;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+#search-form .form-control {
+    background: var(--backend-color-input-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    color: var(--backend-color-text-primary, #212529);
+}
+#search-form .form-control:focus {
+    border-color: var(--backend-color-primary, #556ee6);
 }
 </style>
 
 <!-- 页面标题 -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>面板</lang>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0 font-size-18">
+                <i class="mdi mdi-web me-2"></i>
+                <lang>网站管理</lang>
             </h4>
-
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                            <lang>后台</lang>
-                        </a></li>
-                    <li class='breadcrumb-item active'>
-                        <lang>面板</lang>
-                    </li>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>后台</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>网站管理</lang></li>
                 </ol>
             </div>
-
         </div>
     </div>
 </div>
 
 <!-- 消息 -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<!-- 使用说明（可折叠） -->
+<div class="row">
+    <div class="col-12">
+        <div class="weline-websites-admin-guide">
+            <div class="weline-websites-admin-guide-header" id="weline-websites-guide-toggle">
+                <h6><i class="mdi mdi-help-circle-outline me-2"></i><lang>使用说明</lang></h6>
+                <i class="mdi mdi-chevron-down" id="weline-websites-guide-icon" style="transition: transform 0.3s ease;"></i>
+            </div>
+            <div class="weline-websites-admin-guide-body" id="weline-websites-guide-body">
+                <ul>
+                    <li><strong><lang>网站</lang>：</strong><lang>代表一个独立站点，可配置多个域名、语言与货币</lang></li>
+                    <li><strong><lang>关联域名</lang>：</strong><lang>一个网站可绑定多个域名，主域名用于默认访问</lang></li>
+                    <li><strong><lang>编辑/删除</lang>：</strong><lang>在操作列中可编辑网站或删除（请谨慎操作）</lang></li>
+                </ul>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- 网站列表 -->
-<div class="card">
-    <div class="card-body">
-        <div class="d-flex justify-content-between mb-3">
-            <h4 class="card-title"><lang>网站列表</lang></h4>
-            <div class="d-flex gap-2">
-                <form id="search-form" method="get" action="<?= $this->getUrl('*/admin/website') ?>" class="d-flex gap-2">
-                    <input type="text" id="search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>" 
-                           value="<?= htmlspecialchars($search ?? '') ?>" style="width: 250px;">
-                    <button type="submit" class="btn btn-outline-primary">
-                        <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
-                    </button>
-                    <?php if (!empty($search)): ?>
-                        <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
-                            <i class="mdi mdi-close"></i> <lang>清除</lang>
-                        </a>
-                    <?php endif; ?>
-                </form>
-                <block class='Weline\Component\Block\OffCanvas'
-                       cache='0'
-                       id='add_result_modal'
-                       action='*/admin/website/add'
-                       title='添加网站'
-                       close-button-show='1'
-                       close-button-text='关闭'
-                       direction='right'
-                       class-names='w-75 h-100'
-                       off-canvas-body-style=''
-                       target-button-text='添加网站'
-                       icon='mdi mdi-plus'
-                       target-button-class='btn btn-primary'
-                       target-tag='a'
-                       save='1'
-                />
-            </div>
-        </div>
+<div class="row weline-websites-admin-card">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                    <h4 class="card-title mb-0"><lang>网站列表</lang></h4>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <form id="search-form" method="get" action="<?= $this->getUrl('*/admin/website') ?>" class="d-flex gap-2">
+                            <input type="text" id="search-input" name="search" class="form-control" placeholder="<?= __('搜索名称、代码或URL') ?>"
+                                   value="<?= htmlspecialchars($search) ?>" style="width: 250px;">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
+                            </button>
+                            <?php if ($search !== ''): ?>
+                                <a href="<?= $this->getUrl('*/admin/website') ?>" class="btn btn-outline-secondary" id="clear-search">
+                                    <i class="mdi mdi-close"></i> <lang>清除</lang>
+                                </a>
+                            <?php endif; ?>
+                        </form>
+                        <w:websites:website:build
+                               id="websites_add_website"
+                               mode="add"
+                               title="添加网站"
+                               target-button-text="添加网站"
+                               icon="mdi mdi-plus"
+                               target-button-class="btn btn-primary"
+                        />
+                    </div>
+                </div>
 
-        <div id="website-table-container">
-            <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
+                <div id="website-table-container">
+                    <?= $this->fetch('Weline_Websites::templates/Admin/Website/table.phtml') ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -96,7 +209,19 @@
 <script>
 (function() {
     'use strict';
-    
+
+    var guideToggle = document.getElementById('weline-websites-guide-toggle');
+    if (guideToggle) {
+        guideToggle.addEventListener('click', function() {
+            var body = document.getElementById('weline-websites-guide-body');
+            var icon = document.getElementById('weline-websites-guide-icon');
+            if (body && icon) {
+                body.classList.toggle('show');
+                icon.style.transform = body.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+            }
+        });
+    }
+
     var searchTimeout = null;
     var searchForm = document.getElementById('search-form');
     var searchInput = document.getElementById('search-input');
