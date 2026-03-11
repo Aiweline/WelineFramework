@@ -317,6 +317,10 @@ $accounts = $accounts ?? [];
                 <i class="mdi mdi-ip"></i>
                 <span><?= __('刷新服务器IP') ?></span>
             </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" onclick="WelineDomainList.showManualCreateDomainOffcanvas()">
+                <i class="mdi mdi-plus-circle-outline"></i>
+                <span><?= __('新建域名') ?></span>
+            </button>
             <button type="button" class="weline-domain-list-btn weline-domain-list-btn--primary" onclick="WelineDomainList.showImportModal()">
                 <i class="mdi mdi-import"></i>
                 <span><?= __('导入域名') ?></span>
@@ -875,6 +879,67 @@ $accounts = $accounts ?? [];
     </div>
 </div>
 
+<div class="offcanvas offcanvas-end" tabindex="-1" id="welineManualCreateDomainOffcanvas" aria-labelledby="welineManualCreateDomainLabel">
+    <div class="offcanvas-header">
+        <h5 id="welineManualCreateDomainLabel" class="offcanvas-title">
+            <i class="mdi mdi-plus-circle-outline me-2"></i><?= __('新建域名') ?>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <div class="mb-3">
+            <label class="form-label"><?= __('域名') ?></label>
+            <input type="text" class="form-control" id="weline-manual-domain" placeholder="<?= __('如：www.example.com') ?>">
+        </div>
+        <div class="mb-3">
+            <label class="form-label"><?= __('描述') ?></label>
+            <input type="text" class="form-control" id="weline-manual-description" placeholder="<?= __('可选') ?>">
+        </div>
+        <div class="row">
+            <div class="col-6 mb-3">
+                <label class="form-label"><?= __('DNS 账户') ?></label>
+                <select class="form-select" id="weline-manual-dns-account">
+                    <option value="0"><?= __('默认不设置') ?></option>
+                </select>
+            </div>
+            <div class="col-6 mb-3">
+                <label class="form-label"><?= __('CDN 账户') ?></label>
+                <select class="form-select" id="weline-manual-cdn-account">
+                    <option value="0"><?= __('默认不设置') ?></option>
+                </select>
+            </div>
+        </div>
+        <div class="mb-3">
+            <label class="form-label"><?= __('HTTPS 处理方式') ?></label>
+            <select class="form-select" id="weline-manual-https-mode" onchange="WelineDomainList.onManualHttpsModeChange()">
+                <option value="none"><?= __('暂不处理') ?></option>
+                <option value="auto"><?= __('自动申请证书') ?></option>
+                <option value="manual"><?= __('手动导入证书') ?></option>
+            </select>
+        </div>
+        <div class="mb-3" id="weline-manual-https-auto-box" style="display:none;">
+            <label class="form-label"><?= __('联系邮箱') ?></label>
+            <input type="email" class="form-control" id="weline-manual-https-email" placeholder="<?= __('可选，默认 admin@根域') ?>">
+        </div>
+        <div id="weline-manual-https-manual-box" style="display:none;">
+            <div class="mb-2"><small class="text-muted"><?= __('支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本') ?></small></div>
+            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-cert-file" accept=".pem,.crt"></div>
+            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-key-file" accept=".key,.pem"></div>
+            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-chain-file" accept=".pem,.crt"></div>
+            <div class="mb-2"><input type="file" class="form-control" id="weline-manual-pfx-file" accept=".pfx,.p12"></div>
+            <div class="mb-2"><input type="password" class="form-control" id="weline-manual-pfx-password" placeholder="<?= __('PFX/P12 密码（可选）') ?>"></div>
+            <div class="mb-2"><textarea class="form-control" rows="3" id="weline-manual-cert-text" placeholder="-----BEGIN CERTIFICATE-----"></textarea></div>
+            <div class="mb-2"><textarea class="form-control" rows="3" id="weline-manual-key-text" placeholder="-----BEGIN PRIVATE KEY-----"></textarea></div>
+            <div class="mb-2"><textarea class="form-control" rows="2" id="weline-manual-chain-text" placeholder="<?= __('可选：中间证书链') ?>"></textarea></div>
+        </div>
+        <div class="d-flex justify-content-end mt-3">
+            <button type="button" class="btn btn-primary" id="weline-manual-domain-submit" onclick="WelineDomainList.submitManualDomain()">
+                <i class="mdi mdi-check me-1"></i><?= __('创建域名') ?>
+            </button>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     'use strict';
@@ -909,6 +974,7 @@ $accounts = $accounts ?? [];
         cleanupDnsProviderDomains: '<?= $this->getUrl('*/admin/domain/cleanup-dns-provider-domains') ?>',
         batchSetAccounts: '<?= $this->getUrl('*/admin/domain/batch-set-accounts') ?>',
         getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>',
+        createManualDomain: '<?= $this->getUrl('*/admin/domain/create-manual-domain') ?>',
         switchDnsAccount: '<?= $this->getUrl('*/admin/domain/switch-dns-account') ?>'
     };
 
@@ -2268,6 +2334,112 @@ $accounts = $accounts ?? [];
             });
     }
 
+    var manualCreateOffcanvas = null;
+
+    function ensureManualCreateOffcanvas() {
+        if (manualCreateOffcanvas) {
+            return manualCreateOffcanvas;
+        }
+        var el = document.getElementById('welineManualCreateDomainOffcanvas');
+        if (!el || !window.bootstrap || !bootstrap.Offcanvas) {
+            return null;
+        }
+        manualCreateOffcanvas = new bootstrap.Offcanvas(el);
+        return manualCreateOffcanvas;
+    }
+
+    function onManualHttpsModeChange() {
+        var mode = (document.getElementById('weline-manual-https-mode').value || 'none').toLowerCase();
+        document.getElementById('weline-manual-https-auto-box').style.display = mode === 'auto' ? '' : 'none';
+        document.getElementById('weline-manual-https-manual-box').style.display = mode === 'manual' ? '' : 'none';
+    }
+
+    function loadManualCreateAccounts() {
+        fetch(urls.getDnsAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data || data.code !== 200 || !data.data) {
+                    return;
+                }
+                var dnsSelect = document.getElementById('weline-manual-dns-account');
+                var cdnSelect = document.getElementById('weline-manual-cdn-account');
+                dnsSelect.innerHTML = '<option value="0"><?= __('默认不设置') ?></option>';
+                cdnSelect.innerHTML = '<option value="0"><?= __('默认不设置') ?></option>';
+                (data.data.dns_accounts || []).forEach(function(acc) {
+                    var opt = document.createElement('option');
+                    opt.value = acc.account_id;
+                    opt.textContent = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
+                    dnsSelect.appendChild(opt);
+                });
+                (data.data.cdn_accounts || []).forEach(function(acc) {
+                    var opt = document.createElement('option');
+                    opt.value = acc.account_id;
+                    opt.textContent = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
+                    cdnSelect.appendChild(opt);
+                });
+            })
+            .catch(function() {});
+    }
+
+    function showManualCreateDomainOffcanvas() {
+        onManualHttpsModeChange();
+        loadManualCreateAccounts();
+        var canvas = ensureManualCreateOffcanvas();
+        if (canvas) {
+            canvas.show();
+        }
+    }
+
+    function submitManualDomain() {
+        var domain = (document.getElementById('weline-manual-domain').value || '').trim();
+        if (!domain) {
+            toast('<?= __('请输入域名') ?>', 'warning');
+            return;
+        }
+        var submitBtn = document.getElementById('weline-manual-domain-submit');
+        var fd = new FormData();
+        fd.append('domain', domain);
+        fd.append('description', document.getElementById('weline-manual-description').value || '');
+        fd.append('dns_account_id', document.getElementById('weline-manual-dns-account').value || '0');
+        fd.append('cdn_account_id', document.getElementById('weline-manual-cdn-account').value || '0');
+        fd.append('https_mode', document.getElementById('weline-manual-https-mode').value || 'none');
+        fd.append('https_email', document.getElementById('weline-manual-https-email').value || '');
+        fd.append('cert_fullchain_text', document.getElementById('weline-manual-cert-text').value || '');
+        fd.append('cert_private_key_text', document.getElementById('weline-manual-key-text').value || '');
+        fd.append('cert_chain_text', document.getElementById('weline-manual-chain-text').value || '');
+        fd.append('cert_pfx_password', document.getElementById('weline-manual-pfx-password').value || '');
+        var certFile = document.getElementById('weline-manual-cert-file');
+        var keyFile = document.getElementById('weline-manual-key-file');
+        var chainFile = document.getElementById('weline-manual-chain-file');
+        var pfxFile = document.getElementById('weline-manual-pfx-file');
+        if (certFile && certFile.files && certFile.files[0]) fd.append('cert_file', certFile.files[0]);
+        if (keyFile && keyFile.files && keyFile.files[0]) fd.append('key_file', keyFile.files[0]);
+        if (chainFile && chainFile.files && chainFile.files[0]) fd.append('chain_file', chainFile.files[0]);
+        if (pfxFile && pfxFile.files && pfxFile.files[0]) fd.append('pfx_file', pfxFile.files[0]);
+
+        submitBtn.disabled = true;
+        toast('<?= __('正在创建域名...') ?>', 'info');
+        fetch(urls.createManualDomain, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                submitBtn.disabled = false;
+                if (data.code === 200) {
+                    toast(data.msg || '<?= __('创建成功') ?>', 'success');
+                    var canvas = ensureManualCreateOffcanvas();
+                    if (canvas) {
+                        canvas.hide();
+                    }
+                    loadDomains(1);
+                } else {
+                    toast(data.msg || '<?= __('创建失败') ?>', 'error');
+                }
+            })
+            .catch(function() {
+                submitBtn.disabled = false;
+                toast('<?= __('请求失败') ?>', 'error');
+            });
+    }
+
     window.WelineDomainList = {
         loadDomains: loadDomains,
         showImportModal: showImportModal,
@@ -2302,6 +2474,9 @@ $accounts = $accounts ?? [];
         doBatchAddDnsRecords: doBatchAddDnsRecords,
         batchDetectDnsProvider: batchDetectDnsProvider,
         cleanupDnsProviderDomains: cleanupDnsProviderDomains,
+        showManualCreateDomainOffcanvas: showManualCreateDomainOffcanvas,
+        onManualHttpsModeChange: onManualHttpsModeChange,
+        submitManualDomain: submitManualDomain,
         showBatchSetAccountsModal: showBatchSetAccountsModal,
         doBatchSetAccounts: doBatchSetAccounts,
         showSwitchDnsAccountModal: showSwitchDnsAccountModal,
