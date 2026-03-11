@@ -70,10 +70,15 @@ class PcController extends Core
                 $this->request->getResponse()->redirect($url . (str_contains($url, '?') ? '&' : '') . http_build_query($params));
             } else {
                 if (str_starts_with($url, '/')) {
-                    $this->request->getResponse()->redirect($this->_url->getFrontendUrl($url, $params, $merge_params));
+                    if ($this->request->isBackend() && str_starts_with($url, '/component/offcanvas/')) {
+                        $this->request->getResponse()->redirect($this->_url->getBackendUrl(ltrim($url, '/'), $params, $merge_params));
+                    } else {
+                        $this->request->getResponse()->redirect($this->_url->getFrontendUrl($url, $params, $merge_params));
+                    }
+                } else {
+                    $this->request->getResponse()->redirect($this->request->isBackend() ? $this->_url->getBackendUrl($url, $params, $merge_params) :
+                        $this->_url->getUrl($url, $params, $merge_params));
                 }
-                $this->request->getResponse()->redirect($this->request->isBackend() ? $this->_url->getBackendUrl($url, $params, $merge_params) :
-                    $this->_url->getUrl($url, $params, $merge_params));
             }
         } elseif ($url = 404) {
             $this->request->getResponse()->responseHttpCode($url);

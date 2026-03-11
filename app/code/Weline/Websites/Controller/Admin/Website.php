@@ -548,6 +548,16 @@ class Website extends BackendController
                 ]);
             }
             
+            $websiteId = (int) $this->website->getData('website_id');
+            // 删除站点前解绑域名：删除该站点下所有 website_domain 并同步域名池 site_created
+            $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class);
+            $websiteDomainModel->clearQuery()
+                ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
+                ->delete()
+                ->fetch();
+            $domainPool = ObjectManager::getInstance(DomainPool::class);
+            $domainPool->syncSiteCreatedFromWebsiteDomainTable();
+            
             $this->website->delete()->fetch();
             return $this->fetchJson([
                 'code' => 200,
