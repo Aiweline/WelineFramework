@@ -42,6 +42,15 @@ class WebsiteManagement extends BaseController
         $this->objectManager = $objectManager;
     }
 
+    private function normalizeWebsiteUrl(string $url): string
+    {
+        $url = \trim($url);
+        if ($url !== '' && !\preg_match('/^https?:\/\//i', $url)) {
+            $url = 'http://' . $url;
+        }
+        return $url;
+    }
+
     /**
      * 网站管理首页 - 网站列表
      */
@@ -186,12 +195,13 @@ class WebsiteManagement extends BaseController
                     unset($data['website_id']);
                 }
 
-                $url = \trim((string) ($data['url'] ?? ''));
+                $url = $this->normalizeWebsiteUrl((string) ($data['url'] ?? ''));
                 if ($url !== '') {
+                    $data['url'] = $url;
                     $exist = $this->website->clearQuery()
                         ->where(Website::schema_fields_URL, $url)
-                        ->select()
-                        ->find();
+                        ->find()
+                        ->fetch();
                     if ($exist->getData(Website::schema_fields_ID)) {
                         throw new \Exception(__('该网站 URL 已存在，请勿重复添加：%{1}', [$url]));
                     }
@@ -384,13 +394,14 @@ class WebsiteManagement extends BaseController
                 // 确保 website_id 在数据中
                 $data['website_id'] = $postWebsiteId;
 
-                $url = \trim((string) ($data['url'] ?? ''));
+                $url = $this->normalizeWebsiteUrl((string) ($data['url'] ?? ''));
                 if ($url !== '') {
+                    $data['url'] = $url;
                     $exist = $this->website->clearQuery()
                         ->where(Website::schema_fields_URL, $url)
                         ->where(Website::schema_fields_ID, $postWebsiteId, '<>')
-                        ->select()
-                        ->find();
+                        ->find()
+                        ->fetch();
                     if ($exist->getData(Website::schema_fields_ID)) {
                         throw new \Exception(__('该网站 URL 已被其他站点使用，请勿重复：%{1}', [$url]));
                     }

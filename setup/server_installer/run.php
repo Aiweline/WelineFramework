@@ -175,6 +175,18 @@ if (!is_dir($generatedCodeDir)) {
     echo "Created generated/code/ for Composer autoload.\n";
 }
 
+// 0a. Unix/Linux 下确保 bin/w、bin/m 可执行（便于 crontab 等直接执行 bin/w cron:task:run）
+if (DIRECTORY_SEPARATOR !== '\\') {
+    $binW = $projectRoot . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'w';
+    $binM = $projectRoot . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . 'm';
+    if (is_file($binW)) {
+        @chmod($binW, 0755);
+    }
+    if (is_file($binM)) {
+        @chmod($binM, 0755);
+    }
+}
+
 // 0b. 在 composer 前先配置 php.ini（extension_dir、openssl、日志路径、扩展、disable_functions 等），避免 composer 报 “openssl extension is required”
 $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 if (!$fromStep5b && is_dir($phpDir)) {

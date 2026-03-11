@@ -39,6 +39,8 @@ class ServerQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'requestCertificate' => $this->requestCertificate($params),
+            'importCertificate' => $this->importCertificate($params),
+            'checkDomainReachability' => $this->checkDomainReachability($params),
             'status' => $this->status($params),
             'start' => $this->start($params),
             'stop' => $this->stop($params),
@@ -89,6 +91,30 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'challenge_strategy', 'type' => 'string', 'required' => false, 'description' => __('验证策略 auto|http01|dns01，非80端口时 auto 自动用 dns01')],
                         ['name' => 'pool_id',     'type' => 'int', 'required' => false, 'description' => __('域名池 ID，DNS-01 时用于解析 DNS 账户')],
                         ['name' => 'domain_id',   'type' => 'int', 'required' => false, 'description' => __('根域名 ID，DNS-01 时用于解析 DNS 账户')],
+                    ],
+                ],
+                [
+                    'name'        => 'importCertificate',
+                    'description' => __('手动导入 SSL 证书（支持 PEM/PFX）'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
+                        ['name' => 'website_id', 'type' => 'int', 'required' => false, 'description' => __('关联网站 ID')],
+                        ['name' => 'provider', 'type' => 'string', 'required' => false, 'description' => __('证书提供商标记，默认 manual')],
+                        ['name' => 'fullchain_pem', 'type' => 'string', 'required' => false, 'description' => __('fullchain PEM 文本')],
+                        ['name' => 'private_key_pem', 'type' => 'string', 'required' => false, 'description' => __('private key PEM 文本')],
+                        ['name' => 'chain_pem', 'type' => 'string', 'required' => false, 'description' => __('chain PEM 文本')],
+                        ['name' => 'pfx_base64', 'type' => 'string', 'required' => false, 'description' => __('pfx/p12 文件 base64 内容')],
+                        ['name' => 'pfx_password', 'type' => 'string', 'required' => false, 'description' => __('pfx/p12 文件密码')],
+                    ],
+                ],
+                [
+                    'name' => 'checkDomainReachability',
+                    'description' => __('校验域名 URL 可达性及是否命中期望 IP'),
+                    'params' => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
+                        ['name' => 'url', 'type' => 'string', 'required' => false, 'description' => __('访问 URL，默认 https://domain/')],
+                        ['name' => 'expected_ipv4', 'type' => 'string', 'required' => false, 'description' => __('期望 IPv4')],
+                        ['name' => 'expected_ipv6', 'type' => 'string', 'required' => false, 'description' => __('期望 IPv6')],
                     ],
                 ],
                 ['name' => 'status', 'description' => __('获取服务器状态'), 'params' => []],
@@ -177,6 +203,217 @@ class ServerQueryProvider implements QueryProviderInterface
             'domain'   => $requestedDomain,
             'requested_domain' => $domain,
         ];
+    }
+
+    private function importCertificate(array $params): array
+    {
+        $domain = (string) ($params['domain'] ?? '');
+        if ($domain === '') {
+            return ['success' => false, 'message' => __('域名不能为空')];
+        }
+
+        $websiteId = (int) ($params['website_id'] ?? 0);
+        $provider = (string) ($params['provider'] ?? 'manual');
+        $fullchainPem = (string) ($params['fullchain_pem'] ?? '');
+        $privateKeyPem = (string) ($params['private_key_pem'] ?? '');
+        $chainPem = (string) ($params['chain_pem'] ?? '');
+        $pfxBase64 = (string) ($params['pfx_base64'] ?? '');
+        $pfxPassword = (string) ($params['pfx_password'] ?? '');
+
+        if ($pfxBase64 !== '') {
+            $decoded = \base64_decode($pfxBase64, true);
+            if ($decoded === false) {
+                return ['success' => false, 'message' => __('PFX 文件内容无效（Base64 解码失败）')];
+            }
+            $certs = [];
+            if (!@\openssl_pkcs12_read($decoded, $certs, $pfxPassword)) {
+                return ['success' => false, 'message' => __('PFX/P12 解析失败，请确认文件与密码正确')];
+            }
+            $fullchainPem = (string) ($certs['cert'] ?? '');
+            $privateKeyPem = (string) ($certs['pkey'] ?? '');
+            if ($chainPem === '') {
+                $extraCerts = $certs['extracerts'] ?? '';
+                if (\is_array($extraCerts)) {
+                    $chainPem = \implode("\n", $extraCerts);
+                } else {
+                    $chainPem = (string) $extraCerts;
+                }
+            }
+        }
+        if ($fullchainPem === '' || $privateKeyPem === '') {
+            return ['success' => false, 'message' => __('证书内容不完整，请提供 fullchain 与 private key')];
+        }
+
+        $result = $this->sslCertificateService->importManualCertificate(
+            $domain,
+            $fullchainPem,
+            $privateKeyPem,
+            $chainPem,
+            $websiteId,
+            true,
+            $provider
+        );
+
+        return [
+            'success' => (bool) ($result['success'] ?? false),
+            'message' => (string) ($result['message'] ?? ''),
+            'cert_id' => (int) (($result['cert_id'] ?? 0)),
+            'cert' => $result['cert'] ?? null,
+        ];
+    }
+
+    private function checkDomainReachability(array $params): array
+    {
+        $domain = \strtolower(\trim((string) ($params['domain'] ?? '')));
+        if ($domain === '') {
+            return ['success' => false, 'message' => __('域名不能为空')];
+        }
+
+        $url = \trim((string) ($params['url'] ?? ''));
+        $baseUrl = $url !== '' ? $url : ('https://' . $domain . '/');
+        $probe = $this->createTemporaryReachabilityProbe();
+        if (!(bool) ($probe['success'] ?? false)) {
+            return ['success' => false, 'message' => (string) ($probe['message'] ?? __('创建检测地址失败'))];
+        }
+        $probeUrl = $this->composeProbeUrl($baseUrl, (string) ($probe['path'] ?? ''));
+        $expectedIpv4 = \trim((string) ($params['expected_ipv4'] ?? ''));
+        $expectedIpv6 = \trim((string) ($params['expected_ipv6'] ?? ''));
+
+        $aRecords = @\dns_get_record($domain, DNS_A) ?: [];
+        $aaaaRecords = @\dns_get_record($domain, DNS_AAAA) ?: [];
+        $resolvedIpv4 = [];
+        $resolvedIpv6 = [];
+        foreach ($aRecords as $record) {
+            $ip = (string) ($record['ip'] ?? '');
+            if ($ip !== '') {
+                $resolvedIpv4[] = $ip;
+            }
+        }
+        foreach ($aaaaRecords as $record) {
+            $ip = (string) ($record['ipv6'] ?? '');
+            if ($ip !== '') {
+                $resolvedIpv6[] = $ip;
+            }
+        }
+        $resolved = $resolvedIpv4 !== [] || $resolvedIpv6 !== [];
+
+        $ipMatched = false;
+        if ($expectedIpv4 === '' && $expectedIpv6 === '') {
+            $ipMatched = $resolved;
+        } else {
+            if ($expectedIpv4 !== '' && \in_array($expectedIpv4, $resolvedIpv4, true)) {
+                $ipMatched = true;
+            }
+            if (!$ipMatched && $expectedIpv6 !== '' && \in_array($expectedIpv6, $resolvedIpv6, true)) {
+                $ipMatched = true;
+            }
+        }
+
+        $probeToken = (string) ($probe['token'] ?? '');
+        $curlCheck = static function (string $targetUrl, string $token): array {
+            $ch = \curl_init($targetUrl);
+            if ($ch === false) {
+                return ['reachable' => false, 'http_code' => 0, 'error' => 'curl_init failed', 'url' => $targetUrl];
+            }
+            \curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_NOBODY => false,
+                CURLOPT_HEADER => false,
+                CURLOPT_TIMEOUT => 8,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_FOLLOWLOCATION => true,
+                CURLOPT_MAXREDIRS => 3,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
+            ]);
+            $body = \curl_exec($ch);
+            $errno = \curl_errno($ch);
+            $error = \curl_error($ch);
+            $code = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            \curl_close($ch);
+            $hasToken = \is_string($body) && $token !== '' && \str_contains($body, $token);
+            $reachable = $errno === 0 && $code > 0 && $code < 500 && $hasToken;
+            return [
+                'reachable' => $reachable,
+                'http_code' => $code,
+                'error' => $reachable ? '' : ($error !== '' ? $error : ($hasToken ? ('HTTP ' . $code) : 'probe_token_mismatch')),
+                'url' => $targetUrl,
+            ];
+        };
+        try {
+            $reachResult = $curlCheck($probeUrl, $probeToken);
+            if (!$reachResult['reachable'] && \str_starts_with(\strtolower($probeUrl), 'https://')) {
+                $fallbackUrl = 'http://' . \preg_replace('#^https://#i', '', $probeUrl);
+                $fallback = $curlCheck($fallbackUrl, $probeToken);
+                if ($fallback['reachable']) {
+                    $reachResult = $fallback;
+                }
+            }
+        } finally {
+            $this->removeTemporaryReachabilityProbe((string) ($probe['file'] ?? ''));
+        }
+
+        $success = $resolved && $ipMatched && (bool) $reachResult['reachable'];
+        $message = $success
+            ? (string) __('校验通过：域名已解析到期望 IP 且 URL 可达')
+            : (string) __('校验失败：请确认域名解析已指向本机且 URL 可访问');
+
+        return [
+            'success' => $success,
+            'message' => $message,
+            'domain' => $domain,
+            'probe_url' => $probeUrl,
+            'resolved' => $resolved,
+            'ip_matched' => $ipMatched,
+            'resolved_ipv4' => $resolvedIpv4,
+            'resolved_ipv6' => $resolvedIpv6,
+            'expected_ipv4' => $expectedIpv4,
+            'expected_ipv6' => $expectedIpv6,
+            'reachability' => $reachResult,
+        ];
+    }
+
+    /**
+     * 检测时临时创建一个静态探测地址，检测后删除。
+     */
+    private function createTemporaryReachabilityProbe(): array
+    {
+        $pubDir = \defined('PUB') ? \rtrim((string) PUB, '\\/') : \rtrim((string) (BP . DS . 'pub'), '\\/');
+        $probeDir = $pubDir . DS . 'wls-reachability';
+        if (!\is_dir($probeDir) && !@\mkdir($probeDir, 0755, true) && !\is_dir($probeDir)) {
+            return ['success' => false, 'message' => __('创建检测目录失败')];
+        }
+        $token = \bin2hex(\random_bytes(16));
+        $filename = $token . '.txt';
+        $file = $probeDir . DS . $filename;
+        if (\file_put_contents($file, $token) === false) {
+            return ['success' => false, 'message' => __('创建检测文件失败')];
+        }
+        return [
+            'success' => true,
+            'token' => $token,
+            'path' => '/wls-reachability/' . $filename,
+            'file' => $file,
+        ];
+    }
+
+    private function removeTemporaryReachabilityProbe(string $file): void
+    {
+        if ($file !== '' && \is_file($file)) {
+            @\unlink($file);
+        }
+    }
+
+    private function composeProbeUrl(string $baseUrl, string $probePath): string
+    {
+        $parts = \parse_url($baseUrl);
+        $scheme = (string) ($parts['scheme'] ?? 'https');
+        $host = (string) ($parts['host'] ?? '');
+        $port = isset($parts['port']) ? (':' . (int) $parts['port']) : '';
+        if ($host === '') {
+            return $baseUrl;
+        }
+        return $scheme . '://' . $host . $port . $probePath;
     }
 
     private function status(array $params): array

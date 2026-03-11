@@ -27,6 +27,7 @@ use Weline\Websites\Model\DomainDnsRecord;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DomainRegistrarResolverService;
+use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
@@ -42,6 +43,7 @@ class Domain extends BackendController
     private DomainModel $domainModel;
     private DomainConfig $domainConfig;
     private DomainResolveService $resolveService;
+    private DomainParserService $domainParserService;
     private DomainSyncService $syncService;
     private ServerIpService $serverIpService;
     private Schedule $schedule;
@@ -54,6 +56,7 @@ class Domain extends BackendController
         DomainModel $domainModel,
         DomainConfig $domainConfig,
         DomainResolveService $resolveService,
+        DomainParserService $domainParserService,
         DomainSyncService $syncService,
         ServerIpService $serverIpService,
         Schedule $schedule,
@@ -65,6 +68,7 @@ class Domain extends BackendController
         $this->domainModel = $domainModel;
         $this->domainConfig = $domainConfig;
         $this->resolveService = $resolveService;
+        $this->domainParserService = $domainParserService;
         $this->syncService = $syncService;
         $this->serverIpService = $serverIpService;
         $this->schedule = $schedule;
@@ -2721,6 +2725,9 @@ class Domain extends BackendController
                     return $this->fetchJson(['code' => 404, 'msg' => __('DNS 账户不存在')]);
                 }
             }
+            $dnsProviderCode = ($hasDnsAccount && (int) $dnsAccountId > 0)
+                ? (string) ($dnsAccount->getRegistrarCode() ?? '')
+                : '';
 
             if ($hasCdnAccount && (int) $cdnAccountId > 0) {
                 $cdnAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
@@ -2729,6 +2736,9 @@ class Domain extends BackendController
                     return $this->fetchJson(['code' => 404, 'msg' => __('CDN 账户不存在（请确认所选账户仍存在且已启用，或在「域名商账户」中添加 CDN 服务商账户）')]);
                 }
             }
+            $cdnProviderCode = ($hasCdnAccount && (int) $cdnAccountId > 0)
+                ? (string) ($cdnAccount->getRegistrarCode() ?? '')
+                : '';
 
             $updated = 0;
             $errors = [];
@@ -2765,6 +2775,33 @@ class Domain extends BackendController
                 if ($changed) {
                     $domain->forceCheck(false)->save();
                     $updated++;
+                }
+
+                if ($hasDnsAccount || $hasCdnAccount) {
+                    $poolUpdate = ObjectManager::getInstance(DomainPool::class, [], false);
+                    $poolUpdate->clearQuery()->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domain->getDomain()));
+
+                    if ($hasDnsAccount) {
+                        $newDnsAccountId = (int) $dnsAccountId;
+                        if ($newDnsAccountId > 0) {
+                            $poolUpdate->setData(DomainPool::schema_fields_DNS_STATUS, DomainPool::INFRA_STATUS_PENDING);
+                            $poolUpdate->setData(DomainPool::schema_fields_DNS_PROVIDER, $dnsProviderCode);
+                        } else {
+                            // 手动域名可无 DNS 账户，置为 ready 避免被强制阻塞
+                            $poolUpdate->setData(DomainPool::schema_fields_DNS_STATUS, DomainPool::INFRA_STATUS_READY);
+                            $poolUpdate->setData(DomainPool::schema_fields_DNS_PROVIDER, '');
+                        }
+                    }
+
+                    if ($hasCdnAccount) {
+                        $newCdnAccountId = (int) $cdnAccountId;
+                        if ($newCdnAccountId > 0) {
+                            $poolUpdate->setData(DomainPool::schema_fields_CDN_STATUS, DomainPool::INFRA_STATUS_PENDING);
+                        } else {
+                            $poolUpdate->setData(DomainPool::schema_fields_CDN_STATUS, DomainPool::INFRA_STATUS_READY);
+                        }
+                    }
+                    $poolUpdate->update()->fetch();
                 }
             }
 
@@ -3251,6 +3288,346 @@ class Domain extends BackendController
                 'msg' => __('取消拉取失败：%{1}', [$e->getMessage()]),
             ]);
         }
+    }
+
+    /**
+     * 手动新建域名（支持可选 DNS/CDN 账户与 HTTPS 初始化）
+     */
+    #[Acl('Weline_Websites::manual_create_domain', '手动新建域名', 'mdi mdi-plus-circle', '手动新建域名并可直接处理 HTTPS')]
+    public function postCreateManualDomain(): string
+    {
+        try {
+            $rawDomain = (string) $this->request->getPost('domain', '');
+            $description = (string) $this->request->getPost('description', '');
+            $dnsAccountId = (int) $this->request->getPost('dns_account_id', 0);
+            $cdnAccountId = (int) $this->request->getPost('cdn_account_id', 0);
+            $httpsMode = (string) $this->request->getPost('https_mode', 'none');
+            $httpsEmail = (string) $this->request->getPost('https_email', '');
+            $manualProvider = (string) $this->request->getPost('manual_cert_provider', 'manual');
+
+            $domain = $this->domainParserService->normalizeDomain($rawDomain);
+            if ($domain === '') {
+                return $this->fetchJson(['code' => 400, 'msg' => __('请输入域名')]);
+            }
+
+            $rootDomain = $this->domainParserService->parseRootDomain($domain);
+            if ($rootDomain === '') {
+                return $this->fetchJson(['code' => 400, 'msg' => __('无法解析根域名，请检查输入')]);
+            }
+
+            $dnsProvider = $this->getRegistrarCodeByAccountId($dnsAccountId);
+            $cdnProvider = $this->getRegistrarCodeByAccountId($cdnAccountId);
+
+            /** @var DomainModel $rootDomainModel */
+            $rootDomainModel = ObjectManager::getInstance(DomainModel::class, [], false);
+            $rootDomainModel->clearQuery()
+                ->where(DomainModel::schema_fields_DOMAIN, $rootDomain)
+                ->find()
+                ->fetch();
+
+            if (!$rootDomainModel->getDomainId()) {
+                $rootDomainModel->setAccountId(0)
+                    ->setDomain($rootDomain)
+                    ->setStatus(DomainModel::STATUS_ACTIVE)
+                    ->setResolveStatus(DomainModel::RESOLVE_STATUS_PENDING)
+                    ->setHttpsStatus(DomainModel::HTTPS_STATUS_NONE)
+                    ->setDnsAccountId($dnsAccountId)
+                    ->setCdnAccountId($cdnAccountId)
+                    ->setDnsProvider($dnsProvider)
+                    ->setCdnProvider($cdnProvider)
+                    ->forceCheck(false)
+                    ->save();
+            } else {
+                $rootDomainModel->setDnsAccountId($dnsAccountId)
+                    ->setCdnAccountId($cdnAccountId)
+                    ->setDnsProvider($dnsProvider)
+                    ->setCdnProvider($cdnProvider)
+                    ->forceCheck(false)
+                    ->save();
+            }
+
+            /** @var DomainPool $poolModel */
+            $poolModel = ObjectManager::getInstance(DomainPool::class, [], false);
+            $poolModel->clearQuery()
+                ->where(DomainPool::schema_fields_DOMAIN, $domain)
+                ->find()
+                ->fetch();
+
+            $isNewPool = !$poolModel->getPoolId();
+            if ($isNewPool) {
+                $poolModel->setDomain($domain)
+                    ->setParentDomainId($rootDomainModel->getDomainId())
+                    ->setDescription($description)
+                    ->setStatus(DomainPool::STATUS_ACTIVE)
+                    ->setResolveStatus(DomainPool::RESOLVE_STATUS_PENDING)
+                    ->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE)
+                    ->setSiteReady(false);
+            } else {
+                $poolModel->setParentDomainId($rootDomainModel->getDomainId());
+                if (\trim($description) !== '') {
+                    $poolModel->setDescription($description);
+                }
+            }
+
+            if ($dnsAccountId > 0) {
+                $poolModel->setDnsStatus(DomainPool::INFRA_STATUS_PENDING);
+                $poolModel->setDnsProvider($dnsProvider);
+            } else {
+                // 手动域名默认允许无 DNS 账户，避免阻塞后续流程
+                $poolModel->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+                $poolModel->setDnsProvider('');
+            }
+            if ($cdnAccountId > 0) {
+                $poolModel->setCdnStatus(DomainPool::INFRA_STATUS_PENDING);
+            } else {
+                $poolModel->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+            }
+            $poolModel->save();
+
+            $httpsMode = \strtolower(\trim($httpsMode));
+            if (!\in_array($httpsMode, ['none', 'auto', 'manual'], true)) {
+                $httpsMode = 'none';
+            }
+
+            $httpsResult = null;
+            if ($httpsMode !== 'none') {
+                $reachability = $this->precheckRootDomainReachability($rootDomain);
+                if (!(bool) ($reachability['success'] ?? false)) {
+                    return $this->fetchJson([
+                        'code' => 400,
+                        'msg' => __('HTTPS 前置校验失败，请先确认根域下所有域名都已指向本机并可访问'),
+                        'data' => [
+                            'domain' => $domain,
+                            'reachability' => $reachability,
+                            'domain_id' => $rootDomainModel->getDomainId(),
+                            'pool_id' => $poolModel->getPoolId(),
+                        ],
+                    ]);
+                }
+
+                if ($httpsMode === 'auto') {
+                    $email = \trim($httpsEmail);
+                    if ($email === '') {
+                        $email = 'admin@' . $rootDomain;
+                    }
+                    $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING)->setHttpsError('')->save();
+                    $httpsResult = w_query('server', 'requestCertificate', [
+                        'domain' => $domain,
+                        'webroot' => \defined('PUB') ? PUB : (BP . 'pub'),
+                        'email' => $email,
+                        'provider' => 'letsencrypt',
+                        'pool_id' => (int) $poolModel->getPoolId(),
+                        'domain_id' => (int) $rootDomainModel->getDomainId(),
+                        'challenge_strategy' => 'dns01',
+                    ]);
+
+                    if ((bool) ($httpsResult['success'] ?? false)) {
+                        $certId = (int) ($httpsResult['cert_id'] ?? 0);
+                        if ($certId > 0) {
+                            $poolModel->setCertId($certId);
+                        }
+                        $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID)->setHttpsError('');
+                        $poolModel->calculateSiteReady();
+                        $poolModel->save();
+                    } else {
+                        $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR)
+                            ->setHttpsError((string) ($httpsResult['message'] ?? __('证书申请失败')))
+                            ->save();
+                    }
+                }
+
+                if ($httpsMode === 'manual') {
+                    $certPayload = $this->buildManualCertificatePayloadFromRequest();
+                    if (!(bool) ($certPayload['success'] ?? false)) {
+                        return $this->fetchJson([
+                            'code' => 400,
+                            'msg' => (string) ($certPayload['message'] ?? __('请提供有效的证书内容')),
+                            'data' => [
+                                'domain' => $domain,
+                                'domain_id' => $rootDomainModel->getDomainId(),
+                                'pool_id' => $poolModel->getPoolId(),
+                            ],
+                        ]);
+                    }
+
+                    $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING)->setHttpsError('')->save();
+                    $httpsResult = w_query('server', 'importCertificate', [
+                        'domain' => $domain,
+                        'provider' => $manualProvider !== '' ? $manualProvider : 'manual',
+                        'website_id' => 0,
+                        'fullchain_pem' => (string) ($certPayload['fullchain_pem'] ?? ''),
+                        'private_key_pem' => (string) ($certPayload['private_key_pem'] ?? ''),
+                        'chain_pem' => (string) ($certPayload['chain_pem'] ?? ''),
+                        'pfx_base64' => (string) ($certPayload['pfx_base64'] ?? ''),
+                        'pfx_password' => (string) ($certPayload['pfx_password'] ?? ''),
+                    ]);
+
+                    if ((bool) ($httpsResult['success'] ?? false)) {
+                        $certId = (int) ($httpsResult['cert_id'] ?? 0);
+                        if ($certId > 0) {
+                            $poolModel->setCertId($certId);
+                        }
+                        $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID)->setHttpsError('');
+                        $poolModel->calculateSiteReady();
+                        $poolModel->save();
+                    } else {
+                        $poolModel->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR)
+                            ->setHttpsError((string) ($httpsResult['message'] ?? __('证书导入失败')))
+                            ->save();
+                    }
+                }
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => __('域名创建成功'),
+                'data' => [
+                    'domain' => $domain,
+                    'root_domain' => $rootDomain,
+                    'domain_id' => $rootDomainModel->getDomainId(),
+                    'pool_id' => $poolModel->getPoolId(),
+                    'https_mode' => $httpsMode,
+                    'https_result' => $httpsResult,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('新建域名失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 使用 WLS server 查询器校验域名 URL 可达性，并检测是否命中当前服务器公网 IP。
+     */
+    private function precheckDomainReachability(string $domain): array
+    {
+        $expectedIpv4 = $this->serverIpService->getPublicIpv4();
+        $expectedIpv6 = $this->serverIpService->getPublicIpv6();
+
+        return (array) w_query('server', 'checkDomainReachability', [
+            'domain' => $domain,
+            'url' => 'https://' . $domain . '/',
+            'expected_ipv4' => $expectedIpv4,
+            'expected_ipv6' => $expectedIpv6,
+        ]);
+    }
+
+    /**
+     * 手动触发 HTTPS 时，对根域下所有域名执行一次本机可达性校验。
+     */
+    private function precheckRootDomainReachability(string $rootDomain): array
+    {
+        $domainPool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $poolRows = $domainPool->getDomainsByRoot($rootDomain);
+        if ($poolRows === []) {
+            return ['success' => false, 'message' => __('根域下无可检测域名')];
+        }
+
+        $details = [];
+        $failed = [];
+        foreach ($poolRows as $row) {
+            $domain = \trim((string) ($row[DomainPool::schema_fields_DOMAIN] ?? ''));
+            if ($domain === '') {
+                continue;
+            }
+            $check = $this->precheckDomainReachability($domain);
+            $details[$domain] = $check;
+            if (!(bool) ($check['success'] ?? false)) {
+                $failed[$domain] = (string) ($check['message'] ?? __('可达性校验失败'));
+            }
+        }
+
+        if ($failed !== []) {
+            return [
+                'success' => false,
+                'message' => __('以下域名未通过可达性校验：%{1}', [\implode(', ', \array_keys($failed))]),
+                'failed' => $failed,
+                'details' => $details,
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => __('根域下全部域名可达性校验通过'),
+            'details' => $details,
+        ];
+    }
+
+    private function getRegistrarCodeByAccountId(int $accountId): string
+    {
+        if ($accountId <= 0) {
+            return '';
+        }
+        $account = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+        $account->load($accountId);
+        if (!$account->getAccountId()) {
+            return '';
+        }
+        return (string) ($account->getRegistrarCode() ?? '');
+    }
+
+    /**
+     * 组装手动证书导入参数：
+     * - 支持 PEM/KEY/CHAIN 文本
+     * - 支持上传 cert/key/chain/pfx(p12)
+     */
+    private function buildManualCertificatePayloadFromRequest(): array
+    {
+        $fullchainPem = \trim((string) $this->request->getPost('cert_fullchain_text', ''));
+        $privateKeyPem = \trim((string) $this->request->getPost('cert_private_key_text', ''));
+        $chainPem = \trim((string) $this->request->getPost('cert_chain_text', ''));
+        $pfxPassword = (string) $this->request->getPost('cert_pfx_password', '');
+
+        $certFile = $this->request->getFiles('cert_file');
+        $keyFile = $this->request->getFiles('key_file');
+        $chainFile = $this->request->getFiles('chain_file');
+        $pfxFile = $this->request->getFiles('pfx_file');
+
+        if ($fullchainPem === '') {
+            $fullchainPem = $this->readUploadedTextFile($certFile);
+        }
+        if ($privateKeyPem === '') {
+            $privateKeyPem = $this->readUploadedTextFile($keyFile);
+        }
+        if ($chainPem === '') {
+            $chainPem = $this->readUploadedTextFile($chainFile);
+        }
+
+        $pfxBase64 = '';
+        if (\is_array($pfxFile) && isset($pfxFile['tmp_name']) && \is_string($pfxFile['tmp_name']) && \is_file($pfxFile['tmp_name'])) {
+            $pfxContent = @\file_get_contents($pfxFile['tmp_name']);
+            if (\is_string($pfxContent) && $pfxContent !== '') {
+                $pfxBase64 = \base64_encode($pfxContent);
+            }
+        }
+
+        if ($pfxBase64 === '' && ($fullchainPem === '' || $privateKeyPem === '')) {
+            return ['success' => false, 'message' => __('请上传证书文件或粘贴证书内容')];
+        }
+
+        return [
+            'success' => true,
+            'fullchain_pem' => $fullchainPem,
+            'private_key_pem' => $privateKeyPem,
+            'chain_pem' => $chainPem,
+            'pfx_base64' => $pfxBase64,
+            'pfx_password' => $pfxPassword,
+        ];
+    }
+
+    private function readUploadedTextFile(mixed $file): string
+    {
+        if (!\is_array($file)) {
+            return '';
+        }
+        $tmpName = $file['tmp_name'] ?? '';
+        if (!\is_string($tmpName) || $tmpName === '' || !\is_file($tmpName)) {
+            return '';
+        }
+        $content = @\file_get_contents($tmpName);
+        return \is_string($content) ? \trim($content) : '';
     }
 
     /**
