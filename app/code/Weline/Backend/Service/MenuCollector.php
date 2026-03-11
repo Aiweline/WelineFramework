@@ -89,6 +89,7 @@ class MenuCollector
 
         [$file_menus, $modules_xml_menus] = $this->buildFileMenus($modulesFilter, $disabledModules, $modules_info);
         $db_menus = $this->buildDbAclMenus($modulesFilter);
+        $this->validateMenuParentChain($file_menus, $db_menus);
 
         // 保护：未指定模块且文件端为空时，不执行破坏性操作
         if (empty($modulesFilter) && empty($file_menus)) {
@@ -100,6 +101,46 @@ class MenuCollector
         $this->executeBatch($diff, $file_menus, $db_menus);
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
+    }
+
+    /**
+     * 框架约定校验：menu.xml 中声明的 parent_source 必须可追溯到真实菜单节点。
+     * 若父级不存在，直接中断收集，避免产生“断层菜单 ACL”。
+     *
+     * @throws \Exception
+     */
+    private function validateMenuParentChain(array $fileMenus, array $dbMenus): void
+    {
+        if (empty($fileMenus)) {
+            return;
+        }
+
+        $knownSources = [];
+        foreach ($fileMenus as $source => $menu) {
+            $knownSources[$source] = true;
+        }
+        foreach ($dbMenus as $source => $menu) {
+            $knownSources[$source] = true;
+        }
+
+        foreach ($fileMenus as $source => $menu) {
+            $parentSource = (string)($menu['parent_source'] ?? '');
+            if ($parentSource === '') {
+                continue;
+            }
+            if (isset($knownSources[$parentSource])) {
+                continue;
+            }
+
+            $module = (string)($menu['module'] ?? 'unknown');
+            throw new \Exception(
+                __('框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。', [
+                    $source,
+                    $module,
+                    $parentSource,
+                ])
+            );
+        }
     }
 
     /**

@@ -178,6 +178,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                         $acl->setParentSource($existingRecord['parent_source']);
                     }
                 }
+
+                $this->assertClassAclAttachedToMenu($acl);
                 
                 // 收集到批量保存数组，不立即保存
                 if (!isset($this->pending_class_level_acls[$module])) {
@@ -358,6 +360,45 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         if (!empty($acl->getParentSource()) && $acl->getSourceId() === $acl->getParentSource()) {
             throw new \Exception(__('资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}', [$acl->getSourceId(), $acl->getParentSource()]));
         }
+    }
+
+    /**
+     * 框架约定：类级 ACL 必须依附在菜单 ACL 上（source 命中菜单或 parent_source 指向菜单）。
+     * 断层直接抛异常，防止无菜单承接的权限节点进入系统。
+     *
+     * @throws \Exception
+     */
+    private function assertClassAclAttachedToMenu($acl): void
+    {
+        $sourceId = (string)$acl->getSourceId();
+        $parentSource = (string)$acl->getParentSource();
+
+        $sourceMenu = $this->acl->reset()
+            ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceId)
+            ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
+            ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
+            ->select()
+            ->fetchArray();
+        if (!empty($sourceMenu)) {
+            return;
+        }
+
+        if ($parentSource !== '') {
+            $parentMenu = $this->acl->reset()
+                ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $parentSource)
+                ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
+                ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
+                ->select()
+                ->fetchArray();
+            if (!empty($parentMenu)) {
+                return;
+            }
+        }
+
+        throw new \Exception(__('框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}', [
+            $sourceId,
+            $parentSource ?: __('(空)'),
+        ]));
     }
 
     /**
