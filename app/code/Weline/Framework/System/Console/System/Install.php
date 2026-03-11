@@ -173,6 +173,17 @@ class Install extends \Weline\Framework\Console\CommandAbstract
             $file->open($install_file, $file::mode_w);
             $file->close();
         }
+        // Unix/Linux 下确保 bin/w、bin/m 可执行，便于直接执行 bin/w cron:task:run 等
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            $binW = BP . 'bin' . DIRECTORY_SEPARATOR . 'w';
+            $binM = BP . 'bin' . DIRECTORY_SEPARATOR . 'm';
+            if (is_file($binW)) {
+                @chmod($binW, 0755);
+            }
+            if (is_file($binM)) {
+                @chmod($binM, 0755);
+            }
+        }
         $this->printer->success(str_pad('后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['backend']);
         $this->printer->success(str_pad('REST后台入口: ', 20, ' ', STR_PAD_LEFT) . $initData['rest_backend']);
         $this->printer->note('-------------------------------------------------------');

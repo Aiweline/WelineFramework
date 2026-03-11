@@ -30,6 +30,11 @@ return [
         'description' => __('系统升级完成后触发，允许其他模块执行升级后的操作。'),
         'doc' => 'setup/系统升级后.md',
     ],
+    'Weline_Framework_Setup::before_route_collection' => [
+        'name' => __('路由收集前'),
+        'description' => __('在收集路由之前触发，允许其他模块在路由收集前执行操作（如菜单收集，确保 ControllerAttributes 断言时 ACL 已有 type=menus 节点）。'),
+        'doc' => 'setup/路由收集前.md',
+    ],
     'Weline_Framework_System::system_update_after' => [
         'name' => __('系统更新后'),
         'description' => __('系统更新完成后触发，允许其他模块执行更新后的操作。'),
