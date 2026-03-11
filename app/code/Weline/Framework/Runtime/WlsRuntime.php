@@ -878,11 +878,14 @@ class WlsRuntime implements RuntimeInterface
         $payload = 'event: failed' . "\n";
         $data = array_merge([
             'code' => $statusCode,
+            'http_status' => $statusCode,
             'message' => $message,
         ], $extra);
         $payload .= 'data: ' . \json_encode($data, JSON_UNESCAPED_UNICODE) . "\n\n";
 
-        $response = \Weline\Framework\Http\WlsResponse::fromContent($payload, $statusCode, 'text/event-stream; charset=utf-8');
+        // EventSource 对非 200 状态码兼容性差，可能导致 failed 事件体无法被前端读取。
+        // 统一使用 200 作为传输状态，真实业务错误码放在 data.code/http_status 中。
+        $response = \Weline\Framework\Http\WlsResponse::fromContent($payload, 200, 'text/event-stream; charset=utf-8');
         $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
         $response->setHeader('X-Accel-Buffering', 'no');
