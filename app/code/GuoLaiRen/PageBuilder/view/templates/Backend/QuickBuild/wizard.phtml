@@ -1579,7 +1579,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         resultContent.innerHTML = html;
         resultContainer.style.display = 'block';
         document.getElementById('pb-qb-view-orders').style.display = '';
-        document.getElementById('pb-qb-prev4').style.display = success ? 'none' : '';
+        // 执行阶段结束后（无论成功/失败）都允许返回上一步
+        document.getElementById('pb-qb-prev4').style.display = '';
 
         var gotoBind = document.getElementById('pb-qb-goto-bind-template');
         if (success && gotoBind) {
