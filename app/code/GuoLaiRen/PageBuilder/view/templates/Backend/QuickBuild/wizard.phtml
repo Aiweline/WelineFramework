@@ -471,7 +471,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>DNS 服务商</lang></label>
                         <select id="pb-qb-dns-vendor">
-                            <option value=""><lang>跟随域名商（默认）</lang></option>
+                            <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
                             <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
                                 <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
@@ -482,16 +482,22 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>DNS 账户</lang></label>
                         <select id="pb-qb-dns-account">
-                            <option value="0"><lang>使用默认账户</lang></option>
                             <?php foreach ($cdnAccounts as $account): ?>
                             <option value="<?= (int)($account['account_id'] ?? 0) ?>"
-                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>">
+                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>"
+                                    data-is-default="<?= !empty($account['is_default']) ? '1' : '0' ?>">
                                 <?= htmlspecialchars(($account['name'] ?? '') . ' (' . ($account['adapter'] ?? '') . ')', ENT_QUOTES) ?>
                                 <?= !empty($account['is_default']) ? ' ★' : '' ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
+                </div>
+                <div style="margin-top: var(--backend-spacing-xs, 4px);">
+                    <small style="color: var(--backend-color-text-tertiary, #adb5bd);">
+                        <i class="mdi mdi-information-outline"></i>
+                        <lang>选择"跟随域名商"时，将使用域名购买时的默认 DNS 配置</lang>
+                    </small>
                 </div>
             </div>
             
@@ -504,7 +510,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>CDN 服务商</lang></label>
                         <select id="pb-qb-cdn-vendor">
-                            <option value=""><lang>跟随域名商（默认）</lang></option>
+                            <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
                             <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
                                 <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
@@ -515,16 +521,22 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <div class="pb-qb-field" style="margin-bottom: 0;">
                         <label><lang>CDN 账户</lang></label>
                         <select id="pb-qb-cdn-account">
-                            <option value="0"><lang>使用默认账户</lang></option>
                             <?php foreach ($cdnAccounts as $account): ?>
                             <option value="<?= (int)($account['account_id'] ?? 0) ?>"
-                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>">
+                                    data-adapter="<?= htmlspecialchars($account['adapter'] ?? '', ENT_QUOTES) ?>"
+                                    data-is-default="<?= !empty($account['is_default']) ? '1' : '0' ?>">
                                 <?= htmlspecialchars(($account['name'] ?? '') . ' (' . ($account['adapter'] ?? '') . ')', ENT_QUOTES) ?>
                                 <?= !empty($account['is_default']) ? ' ★' : '' ?>
                             </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
+                </div>
+                <div style="margin-top: var(--backend-spacing-xs, 4px);">
+                    <small style="color: var(--backend-color-text-tertiary, #adb5bd);">
+                        <i class="mdi mdi-information-outline"></i>
+                        <lang>选择"跟随域名商"时，将使用域名购买时的默认 CDN 配置</lang>
+                    </small>
                 </div>
             </div>
             
@@ -1079,53 +1091,97 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         goToStep(3);
     });
     
-    // DNS 服务商变化时，过滤账户列表
+    // DNS 服务商变化时，过滤账户列表并自动选择默认账户
     document.getElementById('pb-qb-dns-vendor').addEventListener('change', function() {
         var vendor = this.value;
         var accountSelect = document.getElementById('pb-qb-dns-account');
         var options = accountSelect.querySelectorAll('option');
+        var defaultOption = null;
         
-        options.forEach(function(opt) {
-            if (opt.value === '0') {
-                return;
+        // 如果选择"跟随域名商"，直接选择第一个账户（通常是默认账户）
+        if (vendor === 'follow_registrar') {
+            // 遍历找到默认账户
+            options.forEach(function(opt) {
+                if (opt.getAttribute('data-is-default') === '1') {
+                    defaultOption = opt;
+                }
+            });
+            // 如果没有找到默认账户，选择第一个可用账户
+            if (!defaultOption) {
+                defaultOption = options[0];
             }
+            if (defaultOption) {
+                defaultOption.selected = true;
+            }
+            return;
+        }
+        
+        // 选择具体服务商时，过滤账户列表
+        options.forEach(function(opt) {
             var optAdapter = opt.getAttribute('data-adapter') || '';
-            if (vendor === '' || optAdapter === vendor) {
+            if (optAdapter === vendor) {
                 opt.style.display = '';
+                if (!defaultOption) {
+                    defaultOption = opt;
+                }
             } else {
                 opt.style.display = 'none';
             }
         });
         
-        // 如果当前选中的账户被隐藏了，重置为默认
+        // 如果当前选中的账户被隐藏了，选择第一个可见的账户或默认账户
         var currentOpt = accountSelect.selectedOptions[0];
-        if (currentOpt && currentOpt.style.display === 'none') {
-            accountSelect.value = '0';
+        if (!currentOpt || currentOpt.style.display === 'none') {
+            if (defaultOption) {
+                defaultOption.selected = true;
+            }
         }
     });
     
-    // CDN 服务商变化时，过滤账户列表
+    // CDN 服务商变化时，过滤账户列表并自动选择默认账户
     document.getElementById('pb-qb-cdn-vendor').addEventListener('change', function() {
         var vendor = this.value;
         var accountSelect = document.getElementById('pb-qb-cdn-account');
         var options = accountSelect.querySelectorAll('option');
+        var defaultOption = null;
         
-        options.forEach(function(opt) {
-            if (opt.value === '0') {
-                return;
+        // 如果选择"跟随域名商"，直接选择第一个账户（通常是默认账户）
+        if (vendor === 'follow_registrar') {
+            // 遍历找到默认账户
+            options.forEach(function(opt) {
+                if (opt.getAttribute('data-is-default') === '1') {
+                    defaultOption = opt;
+                }
+            });
+            // 如果没有找到默认账户，选择第一个可用账户
+            if (!defaultOption) {
+                defaultOption = options[0];
             }
+            if (defaultOption) {
+                defaultOption.selected = true;
+            }
+            return;
+        }
+        
+        // 选择具体服务商时，过滤账户列表
+        options.forEach(function(opt) {
             var optAdapter = opt.getAttribute('data-adapter') || '';
-            if (vendor === '' || optAdapter === vendor) {
+            if (optAdapter === vendor) {
                 opt.style.display = '';
+                if (!defaultOption) {
+                    defaultOption = opt;
+                }
             } else {
                 opt.style.display = 'none';
             }
         });
         
-        // 如果当前选中的账户被隐藏了，重置为默认
+        // 如果当前选中的账户被隐藏了，选择第一个可见的账户或默认账户
         var currentOpt = accountSelect.selectedOptions[0];
-        if (currentOpt && currentOpt.style.display === 'none') {
-            accountSelect.value = '0';
+        if (!currentOpt || currentOpt.style.display === 'none') {
+            if (defaultOption) {
+                defaultOption.selected = true;
+            }
         }
     });
 
