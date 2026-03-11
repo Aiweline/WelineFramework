@@ -1690,6 +1690,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             }
         }
         
+        // 先收集菜单（MenuCollector diff 写入 weline_acl type=menus），确保 ControllerAttributes 断言时 parent_source 已存在
+        if ($willCommitRoute) {
+            $this->printing->note(__('   - 收集菜单（先于路由，供 ACL 断言校验 parent_source）...'));
+            try {
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $menuEventData = [];
+                $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $menuEventData);
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
+            }
+        }
+        
         // 收集路由注册任务（仅在将提交 route_update 时执行，避免污染路由缓冲）
         if ($willCommitRoute) {
             $this->printing->note(__('   - 批量收集路由注册任务...'));
