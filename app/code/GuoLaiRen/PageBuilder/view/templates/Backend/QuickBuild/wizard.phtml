@@ -767,6 +767,31 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
     }
 
+    function getFollowAccountLabel() {
+        var registrarCode = resolveCurrentRegistrarCode();
+        if (registrarCode && selectedAccountId) {
+            return '<?= __('跟随域名商账号（') ?>' + registrarCode + ' #' + selectedAccountId + '）';
+        }
+        if (registrarCode) {
+            return '<?= __('跟随域名商账号（') ?>' + registrarCode + '）';
+        }
+        return '<?= __('跟随域名商账号（默认）') ?>';
+    }
+
+    function ensureFollowRegistrarOption(accountSelect) {
+        if (!accountSelect) return null;
+        var followOpt = accountSelect.querySelector('option[data-follow-registrar="1"]');
+        if (!followOpt) {
+            followOpt = document.createElement('option');
+            followOpt.setAttribute('data-follow-registrar', '1');
+            followOpt.value = '__follow_registrar__';
+            accountSelect.insertBefore(followOpt, accountSelect.firstChild || null);
+        }
+        followOpt.textContent = getFollowAccountLabel();
+        followOpt.style.display = '';
+        return followOpt;
+    }
+
     // 建站描述折叠（默认收起）
     (function() {
         var desc = document.getElementById('pb-qb-desc');
@@ -1106,9 +1131,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var applySsl = document.getElementById('pb-qb-apply-ssl').checked;
         var autoResolve = document.getElementById('pb-qb-auto-resolve').checked;
         var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
-        var dnsAccountId = document.getElementById('pb-qb-dns-account').value;
+        var dnsAccountIdRaw = document.getElementById('pb-qb-dns-account').value;
+        var dnsAccountId = dnsAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : dnsAccountIdRaw;
         var cdnVendor = document.getElementById('pb-qb-cdn-vendor').value;
-        var cdnAccountId = document.getElementById('pb-qb-cdn-account').value;
+        var cdnAccountIdRaw = document.getElementById('pb-qb-cdn-account').value;
+        var cdnAccountId = cdnAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : cdnAccountIdRaw;
         var dnsVendorText = document.getElementById('pb-qb-dns-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
         var dnsAccountText = document.getElementById('pb-qb-dns-account').selectedOptions[0]?.text || '<?= __('默认账户') ?>';
         var cdnVendorText = document.getElementById('pb-qb-cdn-vendor').selectedOptions[0]?.text || '<?= __('跟随域名商') ?>';
@@ -1139,8 +1166,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var options = Array.prototype.slice.call(accountSelect.querySelectorAll('option'));
         var currentRegistrarCode = resolveCurrentRegistrarCode();
         var visibleOptions = [];
+        var followOpt = ensureFollowRegistrarOption(accountSelect);
 
         options.forEach(function(opt) {
+            if (opt.getAttribute('data-follow-registrar') === '1') {
+                return;
+            }
             var optAdapter = opt.getAttribute('data-adapter') || '';
             var visible;
             if (vendor === 'follow_registrar') {
@@ -1155,26 +1186,34 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             }
         });
 
-        if (!visibleOptions.length) {
-            return;
+        if (followOpt) {
+            followOpt.style.display = vendor === 'follow_registrar' ? '' : 'none';
         }
 
         var target = null;
 
         if (vendor === 'follow_registrar') {
-            // 切回默认时，优先选“当前域名商”的默认账户
-            target = visibleOptions.find(function(opt) {
+            // 切回默认时，账户回到当前域名商账号（显式标注）
+            target = followOpt;
+            // 若有当前域名商的真实账户，则优先定位默认账户（供后续切供应商时保留合理顺序）
+            var fallback = visibleOptions.find(function(opt) {
                 return opt.getAttribute('data-is-default') === '1';
             }) || null;
-            if (!target && currentRegistrarCode) {
-                target = visibleOptions.find(function(opt) {
+            if (!fallback && currentRegistrarCode) {
+                fallback = visibleOptions.find(function(opt) {
                     return (opt.getAttribute('data-adapter') || '') === currentRegistrarCode;
                 }) || null;
             }
+            if (!fallback && visibleOptions.length) {
+                fallback = visibleOptions[0];
+            }
             if (!target) {
-                target = visibleOptions[0];
+                target = fallback;
             }
         } else {
+            if (!visibleOptions.length) {
+                return;
+            }
             // 选择具体供应商时，优先该供应商默认账户
             target = visibleOptions.find(function(opt) { return opt.getAttribute('data-is-default') === '1'; }) || null;
             if (!target) {
@@ -1224,9 +1263,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         btn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('启动中...') ?>';
 
         var dnsVendor = document.getElementById('pb-qb-dns-vendor').value;
-        var dnsAccountId = document.getElementById('pb-qb-dns-account').value;
+        var dnsAccountIdRaw = document.getElementById('pb-qb-dns-account').value;
+        var dnsAccountId = dnsAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : dnsAccountIdRaw;
         var cdnVendor = document.getElementById('pb-qb-cdn-vendor').value;
-        var cdnAccountId = document.getElementById('pb-qb-cdn-account').value;
+        var cdnAccountIdRaw = document.getElementById('pb-qb-cdn-account').value;
+        var cdnAccountId = cdnAccountIdRaw === '__follow_registrar__' ? String(selectedAccountId || 0) : cdnAccountIdRaw;
         var applySsl = document.getElementById('pb-qb-apply-ssl').checked ? '1' : '0';
         var skipPurchase = domainOwned ? '1' : '0';
 
