@@ -539,8 +539,8 @@ class Website extends BackendController
         try {
             $this->website->load($websiteId);
             
-            // 检查是否是默认网站，默认网站不允许删除
-            if ($this->website->getCode() === 'default') {
+            // 检查是否是默认网站，默认网站不允许删除（与 Model::delete_before 底层拦截一致）
+            if ($this->website->getCode() === \Weline\Websites\Model\Website::CODE_DEFAULT) {
                 return $this->fetchJson([
                     'success' => false,
                     'code' => 403,
