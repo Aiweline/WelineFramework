@@ -473,6 +473,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                         <select id="pb-qb-dns-vendor">
                             <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
+                            <?php if (empty($adapter['code']) || ($adapter['code'] ?? '') === 'follow_registrar') continue; ?>
                             <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
                                 <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
                             </option>
@@ -512,6 +513,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                         <select id="pb-qb-cdn-vendor">
                             <option value="follow_registrar"><lang>跟随域名商（默认）</lang></option>
                             <?php foreach ($cdnAdapters as $adapter): ?>
+                            <?php if (empty($adapter['code']) || ($adapter['code'] ?? '') === 'follow_registrar') continue; ?>
                             <option value="<?= htmlspecialchars($adapter['code'] ?? '', ENT_QUOTES) ?>">
                                 <?= htmlspecialchars($adapter['name'] ?? $adapter['code'] ?? '', ENT_QUOTES) ?>
                             </option>
