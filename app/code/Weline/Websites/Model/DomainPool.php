@@ -766,7 +766,7 @@ class DomainPool extends Model
             ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where(self::schema_fields_HTTPS_STATUS, [self::HTTPS_STATUS_NONE, self::HTTPS_STATUS_EXPIRED, self::HTTPS_STATUS_ERROR], 'IN')
+            ->where(self::schema_fields_HTTPS_STATUS, [self::HTTPS_STATUS_NONE, self::HTTPS_STATUS_EXPIRED, self::HTTPS_STATUS_ERROR, self::HTTPS_STATUS_PENDING], 'IN')
             ->order(self::schema_fields_HTTPS_STATUS, 'ASC')
             ->limit($limit)
             ->select()
