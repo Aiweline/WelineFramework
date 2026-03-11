@@ -67,9 +67,10 @@ class WebsiteManagement extends BaseController
         $websites = $websiteModel->order()->pagination()->select()->fetch();
         $items = $websites->getItems();
         
-        // 获取每个网站的关联货币和语言
+        // 获取每个网站的关联货币、语言、域名
         $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
         $websiteLanguage = $this->objectManager->getInstance(WebsiteLanguage::class);
+        $websiteDomain = $this->objectManager->getInstance(WebsiteDomain::class);
         
         foreach ($items as &$website) {
             $websiteId = (int)$website['website_id'];
@@ -80,6 +81,9 @@ class WebsiteManagement extends BaseController
             // 获取关联语言
             $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
             $website['language_codes'] = $languageCodes;
+            
+            // 获取关联域名（多个）
+            $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
         }
         
         $this->assign('title', __('PageBuilder网站管理'));
@@ -110,9 +114,10 @@ class WebsiteManagement extends BaseController
             $websites = $websiteModel->order()->pagination()->select()->fetch();
             $items = $websites->getItems();
             
-            // 获取每个网站的关联货币和语言
+            // 获取每个网站的关联货币、语言、域名
             $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
             $websiteLanguage = $this->objectManager->getInstance(WebsiteLanguage::class);
+            $websiteDomain = $this->objectManager->getInstance(WebsiteDomain::class);
             
             foreach ($items as &$website) {
                 $websiteId = (int)$website['website_id'];
@@ -123,6 +128,9 @@ class WebsiteManagement extends BaseController
                 // 获取关联语言
                 $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
                 $website['language_codes'] = $languageCodes;
+                
+                // 获取关联域名（多个）
+                $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
             }
             
             // 渲染表格 HTML
