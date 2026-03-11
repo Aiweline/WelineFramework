@@ -244,7 +244,7 @@ class WebsiteManagement extends BaseController
                 
                 $this->redirect('/component/offcanvas/success', [
                     'msg' => __('网站添加成功'),
-                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
+                    'url' => '*/backend/websiteManagement',
                     'reload' => '1',
                     'time' => '3',
                 ]);
