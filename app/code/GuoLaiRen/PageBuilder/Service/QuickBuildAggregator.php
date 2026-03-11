@@ -76,19 +76,22 @@ class QuickBuildAggregator
     }
 
     /**
-     * 查询配置订单列表（事件聚合 - 多模块响应）
+     * 查询配置订单列表（通过统一查询器调用 Saas getOrders）
      */
     public function queryProvisioningOrders(array $filter = []): array
     {
-        $eventData = [
-            'data' => [
-                'filter' => $filter,
-                'orders' => [],
-            ],
+        $params = [
+            'page'      => 1,
+            'page_size' => (int)($filter['page_size'] ?? 500),
         ];
-        $this->eventsManager->dispatch('GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders', $eventData);
-
-        return $eventData['data']['orders'] ?? [];
+        if (!empty($filter['status'])) {
+            $params['status'] = $filter['status'];
+        }
+        if (!empty($filter['domain'])) {
+            $params['domain'] = $filter['domain'];
+        }
+        $result = $this->queryService->execute('saas', 'getOrders', $params);
+        return is_array($result['items'] ?? null) ? $result['items'] : [];
     }
 
     public function getDomainLifecycleStatus(string $domain): array

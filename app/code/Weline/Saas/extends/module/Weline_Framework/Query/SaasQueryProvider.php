@@ -111,6 +111,7 @@ class SaasQueryProvider implements QueryProviderInterface
                     'description' => __('获取配置订单列表'),
                     'params'      => [
                         ['name' => 'status', 'type' => 'string|null', 'required' => false, 'description' => __('按状态过滤')],
+                        ['name' => 'domain', 'type' => 'string|null', 'required' => false, 'description' => __('按域名模糊过滤')],
                         ['name' => 'page', 'type' => 'int', 'required' => false, 'description' => __('页码')],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false, 'description' => __('每页数量')],
                     ],
@@ -248,6 +249,7 @@ class SaasQueryProvider implements QueryProviderInterface
     private function getOrders(array $params): array
     {
         $status = $params['status'] ?? null;
+        $domain = isset($params['domain']) ? trim((string)$params['domain']) : '';
         $page = (int)($params['page'] ?? 1);
         $pageSize = (int)($params['page_size'] ?? 20);
 
@@ -256,6 +258,9 @@ class SaasQueryProvider implements QueryProviderInterface
 
         if ($status !== null && $status !== '') {
             $model->where(ProvisioningOrder::schema_fields_STATUS, (string)$status);
+        }
+        if ($domain !== '') {
+            $model->where(ProvisioningOrder::schema_fields_DOMAIN, '%' . $domain . '%', 'LIKE');
         }
 
         $model->order(ProvisioningOrder::schema_fields_ORDER_ID, 'DESC');
@@ -270,6 +275,8 @@ class SaasQueryProvider implements QueryProviderInterface
                 'status'        => (string)($record[ProvisioningOrder::schema_fields_STATUS] ?? ''),
                 'current_step'  => (string)($record[ProvisioningOrder::schema_fields_CURRENT_STEP] ?? ''),
                 'error_message' => (string)($record[ProvisioningOrder::schema_fields_ERROR_MESSAGE] ?? ''),
+                'created_at'    => (string)($record[ProvisioningOrder::schema_fields_CREATED_AT] ?? ''),
+                'updated_at'    => (string)($record[ProvisioningOrder::schema_fields_UPDATED_AT] ?? ''),
             ];
         }
 
