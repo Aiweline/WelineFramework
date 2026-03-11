@@ -659,7 +659,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var domainListUrl = '<backend-url>pagebuilder/backend/domain-management/get-domains</backend-url>';
     var domainPoolUrl = '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>';
     var provisionUrl = '<backend-url>pagebuilder/backend/quick-build/start-provisioning</backend-url>';
-    var userDataUrl = '<backend-url>backend/user-data</backend-url>';
+    var userDataUrl = '<backend-url>taglib/backend/scope</backend-url>';
     var scopeKey = 'pagebuilder_quick_build_wizard';
 
     function postForm(url, data) {
@@ -1513,4 +1513,4 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     }
 })();
 </script>
-<w:scope url="@backend-url('backend/user-data')" container-id="pb-qb-container" event="input change click"/>
+<w:scope url="@backend-url('taglib/backend/scope')" container-id="pb-qb-container" event="input change click"/>
