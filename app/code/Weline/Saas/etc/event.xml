@@ -34,13 +34,5 @@
                   disabled="false"
                   shared="true" sort="10"/>
     </event>
-    
-    <!--提供配置订单列表-->
-    <event name="GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders">
-        <observer name="Weline_Saas::provide_provisioning_orders" 
-                  instance="Weline\Saas\Observer\ProvideProvisioningOrders"
-                  disabled="false"
-                  shared="true" sort="10"/>
-    </event>
 
 </config>
