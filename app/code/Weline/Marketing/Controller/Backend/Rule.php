@@ -21,7 +21,7 @@ use Weline\Marketing\Service\RuleEngine;
 /**
  * 营销规则管理控制器
  */
-#[Acl('Weline_Marketing::rule', '营销规则', 'mdi-rule', '营销规则管理', 'Weline_Marketing::marketing_manager')]
+#[Acl('Weline_Marketing::rule', '营销规则', 'mdi-rule', '营销规则管理', 'Weline_Backend::marketing_group')]
 class Rule extends BackendController
 {
     /**

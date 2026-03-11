@@ -17,7 +17,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Checkout\Model\Order as OrderModel;
 
-#[Acl('Weline_Checkout::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Checkout::order_manage', '订单管理', 'mdi-cart', '订单管理', 'Weline_Backend::order_group')]
 class Order extends BackendController
 {
     private OrderService $orderService;

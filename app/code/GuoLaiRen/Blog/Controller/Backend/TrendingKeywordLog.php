@@ -15,7 +15,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 
-#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trending_keyword_log', '增长词日志', 'mdi mdi-format-list-bulleted', '查看趋势增长词日志', 'GuoLaiRen_Blog::blog_menu')]
+#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trending_keyword_log', '增长词日志', 'mdi mdi-format-list-bulleted', '查看趋势增长词日志', 'Weline_Backend::blog_group')]
 class TrendingKeywordLog extends BackendController
 {
     private TrendingKeywordLogModel $logModel;

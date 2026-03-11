@@ -24,7 +24,7 @@ use Weline\Seo\Service\SuggestionService;
  * 
  * @package Weline_Seo
  */
-#[Acl('Weline_Seo::seo_dashboard', 'SEO总览', 'mdi-view-dashboard-outline', 'SEO总览', 'Weline_Seo::seo_management')]
+#[Acl('Weline_Seo::seo_dashboard', 'SEO总览', 'mdi-view-dashboard-outline', 'SEO总览', 'Weline_Backend::seo_group')]
 class Dashboard extends BaseController
 {
     private ObjectManager $objectManager;

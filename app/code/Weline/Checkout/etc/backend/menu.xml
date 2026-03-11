@@ -7,7 +7,7 @@
          name="checkout_order_main" 
          title="订单管理" 
          action="*/backend/order/index"
-         parent="Weline_Backend::business_module" 
+         parent="Weline_Backend::business_operations" 
          icon="mdi mdi-cart" 
          order="30000">
         <!--订单列表-->

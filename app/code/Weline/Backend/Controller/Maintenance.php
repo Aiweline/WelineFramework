@@ -17,7 +17,7 @@ use Weline\Maintenance\Service\BackupManager;
  * 功能：
  * - 系统级维护模式（后台仍可访问）
  */
-#[Acl('Weline_Backend::system_maintenance', '系统维护模式', 'mdi-tools', '系统维护模式', 'Weline_Backend::system_service')]
+#[Acl('Weline_Backend::system_maintenance', '系统维护模式', 'mdi-tools', '系统维护模式', 'Weline_Backend::system_service_group')]
 class Maintenance extends BackendController
 {
     /**

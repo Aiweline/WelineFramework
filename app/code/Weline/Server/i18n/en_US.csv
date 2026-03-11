@@ -1186,10 +1186,6 @@ DDoS攻击,DDoS攻击
 "Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行","Dispatcher 监听主端口做 TCP 透传，Worker 各自处理 SSL，多核并行"
 定时器间隔必须大于0,"Timer interval must be greater than 0"
 "定时器需要 pcntl 扩展或事件循环支持","Timer requires pcntl extension or event loop support"
-正在加载证书管理...,正在加载证书管理...
-加载证书管理界面失败,加载证书管理界面失败
-在新窗口打开证书管理,在新窗口打开证书管理
-证书管理,证书管理
 加载中...,加载中...
 正在加载优化指南...,正在加载优化指南...
 加载失败,加载失败
@@ -1508,6 +1504,10 @@ LiteSSL,LiteSSL
 "Weline Server 未运行","Weline Server is not running"
 "Weline Server 正在运行，Master PID：%{1}","Weline Server is running, Master PID: %{1}"
 "Weline Server 已停止","Weline Server stopped"
+正在加载证书管理...,正在加载证书管理...
+加载证书管理界面失败,加载证书管理界面失败
+在新窗口打开证书管理,在新窗口打开证书管理
+证书管理,证书管理
 "每天检查即将到期的证书（%{1} 天内），自动续签","Check expiring certificates daily (within %{1} days) and auto-renew"
 "证书将在 %{1} 天后过期，已触发续签尝试","证书将在 %{1} 天后过期，已触发续签尝试"
 "TXT 记录已添加，正在通知 CA 验证...","TXT 记录已添加，正在通知 CA 验证..."

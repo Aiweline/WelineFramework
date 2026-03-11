@@ -11,7 +11,7 @@ namespace Weline\DataTable\Controller\Backend\Test;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 
-#[Acl('Weline_DataTable::test_index', 'DataTable测试入口', 'mdi mdi-test-tube', 'DataTable模块测试功能入口', 'Weline_DataTable::datatable')]
+#[Acl('Weline_DataTable::datatable_test_index', 'DataTable测试入口', 'mdi mdi-test-tube', 'DataTable模块测试功能入口', 'Weline_DataTable::datatable_module')]
 class Index extends BackendController
 {
     /**

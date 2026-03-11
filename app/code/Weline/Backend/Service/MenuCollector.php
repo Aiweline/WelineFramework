@@ -34,13 +34,6 @@ class MenuCollector
      */
     private const LEGACY_PARENT_SOURCE_MAP = [
         'Weline_Backend::system_service' => 'Weline_Backend::system_service_group',
-        'Weline_Backend::system_menu' => 'Weline_Backend::system_management',
-        'Weline_Backend::system_module' => 'Weline_Backend::other_tools_group',
-        'Weline_Backend::business_module' => 'Weline_Backend::business_operations',
-        'Weline_Backend::system_config' => 'Weline_Backend::system_config_group',
-        'Weline_Backend::system_configuration' => 'Weline_Backend::system_config_group',
-        'Weline_Backend::monitor_log' => 'Weline_Backend::access_log',
-        'Weline_Backend::system_security' => 'Weline_Backend::user_permission_group',
     ];
 
     private Acl $acl;

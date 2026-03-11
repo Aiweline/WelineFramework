@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Zone as ZoneModel;
 
-#[Acl('Weline_Shipping::zone', '配送区域管理', 'mdi-map', '配送区域管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::zone', '配送区域管理', 'mdi-map', '配送区域管理', 'Weline_Backend::shipping_group')]
 class Zone extends BackendController
 {
     private ZoneModel $zone;

@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理站点名称、时区等基础配置
  */
-#[Acl('Weline_Backend::basic_settings', '基础设置', 'mdi-settings', '基础设置', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::basic_settings', '基础设置', 'mdi-settings', '基础设置', 'Weline_Backend::system_config_group')]
 class Basic extends BackendController
 {
     /**
