@@ -30,6 +30,23 @@ var AutoLeadAgentTaskManager = (function () {
             return;
         }
 
+        // 页面加载时检测浏览器：非 Chrome 时显示不兼容提示
+        if (typeof BrowserDetector !== 'undefined' && BrowserDetector && typeof BrowserDetector.getBrowserInfo === 'function') {
+            try {
+                var browserInfo = BrowserDetector.getBrowserInfo();
+                if (!browserInfo.isChrome) {
+                    if (typeof BrowserDetector.showIncompatibleDialog === 'function') {
+                        BrowserDetector.showIncompatibleDialog({
+                            title: '浏览器不兼容',
+                            message: '自动寻客功能需要在 Chrome 浏览器中运行。当前浏览器无法使用寻客任务、模型推理等核心功能。'
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('[TaskManager] BrowserDetector check failed:', e);
+            }
+        }
+
         hasActiveTask = root.getAttribute('data-has-active-task') === '1';
         activeTaskId = parseInt(root.getAttribute('data-active-task-id') || '0', 10) || 0;
 
