@@ -1388,25 +1388,28 @@ CNF;
             }
             
             // 2. 创建或获取证书记录
-            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
-            if (!$cert->getCertId()) {
+            $normalizedDomain = \strtolower(\trim($domain));
+            $cert = $this->certModel->clearQuery()->loadByDomain($normalizedDomain);
+            $loadedDomain = \strtolower(\trim((string) $cert->getDomain()));
+            if (!$cert->getCertId() || $loadedDomain !== $normalizedDomain) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
                 $cert->clearData(true);
-                $certType = \str_starts_with($domain, '*.') 
+                $certType = \str_starts_with($normalizedDomain, '*.') 
                     ? SslCertificate::CERT_TYPE_WILDCARD 
                     : SslCertificate::CERT_TYPE_EXACT;
-                $cert->setDomain($domain)
+                $cert->setDomain($normalizedDomain)
                     ->setWebsiteId($websiteId)
                     ->setCertType($certType)
                     ->setProvider($provider)
                     ->setStatus(SslCertificate::STATUS_PENDING)
                     ->setAutoRenew(true);
             } else {
-                $cert->setProvider($provider);
+                $cert->setDomain($normalizedDomain)
+                    ->setProvider($provider);
             }
             
             // 3. 设置证书路径
-            $certDir = $this->getCertificateDir($domain);
+            $certDir = $this->getCertificateDir($normalizedDomain);
             $certPath = $certDir . 'fullchain.pem';
             $keyPath = $certDir . 'privkey.pem';
             $chainPath = $certDir . 'chain.pem';
@@ -1418,7 +1421,7 @@ CNF;
                     $onProgress((string) __('证书存储位置：%{1}', [$certDir]), ['cert_dir' => $certDir]);
                     $onProgress((string) __('正在同步证书管理记录…'), ['step' => 'sync_record']);
                 }
-                $synced = $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true, $provider);
+                $synced = $this->syncCertificateRecordFromFiles($normalizedDomain, $certPath, $keyPath, $websiteId, true, $provider);
                 if ($synced !== null) {
                     if ($onProgress) {
                         $onProgress((string) __('证书管理记录已同步，cert_id=%{1}', [$synced->getCertId()]), ['cert_id' => $synced->getCertId()]);
@@ -1432,7 +1435,7 @@ CNF;
                 ->setChainPath($chainPath);
 
             // 4. 使用 ACME 协议申请证书
-            $result = $this->performAcmeChallenge($domain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
+            $result = $this->performAcmeChallenge($normalizedDomain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
 
             if ($result['success']) {
                 if ($onProgress) {
@@ -1451,7 +1454,7 @@ CNF;
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
                     ->setRenewError('');
                 $cert = $this->resolveDuplicateDomainCert($cert);
-                $cert->setDomain($domain);
+                $cert->setDomain($normalizedDomain);
                 $cert->save();
 
                 if ($onProgress) {
@@ -1474,12 +1477,103 @@ CNF;
                 $cert->setStatus(SslCertificate::STATUS_ERROR)
                     ->setRenewError($result['message']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
-                $cert->setDomain($domain);
+                $cert->setDomain($normalizedDomain);
                 $cert->save();
                 return ['success' => false, 'message' => $result['message'], 'cert' => $cert];
             }
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'cert' => null];
+        }
+    }
+
+    /**
+     * 手动导入证书（文本或 PFX 解析后内容）
+     *
+     * @param string $domain 证书域名
+     * @param string $fullchainPem fullchain PEM 内容
+     * @param string $privateKeyPem 私钥 PEM 内容
+     * @param string $chainPem 可选 chain PEM 内容
+     * @param int $websiteId 网站 ID
+     * @param bool $httpsEnabled 是否启用 HTTPS
+     * @param string $provider 证书提供商标记
+     * @return array{success: bool, message: string, cert: ?SslCertificate, cert_id?: int}
+     */
+    public function importManualCertificate(
+        string $domain,
+        string $fullchainPem,
+        string $privateKeyPem,
+        string $chainPem = '',
+        int $websiteId = 0,
+        bool $httpsEnabled = true,
+        string $provider = 'manual'
+    ): array {
+        $domain = \strtolower(\trim($domain));
+        $fullchainPem = \trim($fullchainPem);
+        $privateKeyPem = \trim($privateKeyPem);
+        $chainPem = \trim($chainPem);
+
+        if ($domain === '') {
+            return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
+        }
+        if ($fullchainPem === '') {
+            return ['success' => false, 'message' => __('证书内容不能为空'), 'cert' => null];
+        }
+        if ($privateKeyPem === '') {
+            return ['success' => false, 'message' => __('私钥内容不能为空'), 'cert' => null];
+        }
+
+        $certResource = @\openssl_x509_read($fullchainPem);
+        if ($certResource === false) {
+            return ['success' => false, 'message' => __('证书内容格式无效，请上传/粘贴 PEM 证书链'), 'cert' => null];
+        }
+        $keyResource = @\openssl_pkey_get_private($privateKeyPem);
+        if ($keyResource === false) {
+            return ['success' => false, 'message' => __('私钥内容格式无效，请上传/粘贴 PEM 私钥'), 'cert' => null];
+        }
+
+        try {
+            $certDir = $this->getCertificateDir($domain);
+            $certPath = $certDir . 'fullchain.pem';
+            $keyPath = $certDir . 'privkey.pem';
+            $chainPath = $certDir . 'chain.pem';
+
+            if (\file_put_contents($certPath, $fullchainPem) === false) {
+                return ['success' => false, 'message' => __('写入证书文件失败'), 'cert' => null];
+            }
+            if (\file_put_contents($keyPath, $privateKeyPem) === false) {
+                return ['success' => false, 'message' => __('写入私钥文件失败'), 'cert' => null];
+            }
+            if ($chainPem !== '') {
+                if (\file_put_contents($chainPath, $chainPem) === false) {
+                    return ['success' => false, 'message' => __('写入中间证书文件失败'), 'cert' => null];
+                }
+            }
+
+            $provider = \trim($provider) !== '' ? $provider : 'manual';
+            $cert = $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, $httpsEnabled, $provider);
+            if (!$cert instanceof SslCertificate) {
+                return ['success' => false, 'message' => __('证书文件已写入，但同步证书记录失败'), 'cert' => null];
+            }
+
+            $certInfo = $this->parseCertificate($certPath);
+            $this->dispatchCertificateIssuedEvent(
+                $domain,
+                $cert->getCertId(),
+                $certPath,
+                $keyPath,
+                (string)($certInfo['issuer'] ?? $cert->getIssuer()),
+                (string)($certInfo['expires_at'] ?? $cert->getExpiresAt()),
+                $cert->getCertType()
+            );
+
+            return [
+                'success' => true,
+                'message' => __('证书导入成功'),
+                'cert' => $cert,
+                'cert_id' => $cert->getCertId(),
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => __('证书导入失败：%{1}', [$e->getMessage()]), 'cert' => null];
         }
     }
     
