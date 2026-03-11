@@ -52,13 +52,21 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                 // Iframe加载完成后
                 Iframe.on('load', function () {
                     try {
-                        // 检查当前URL是否是offcanvas的成功/错误页面
+                        // 优先看 iframe 内 body 是否有 data-offcanvas-result（success/error 模板会输出），有则一律不检测 form
+                        try {
+                            var resultAttr = Iframe.contents().find('body').attr('data-offcanvas-result');
+                            if (resultAttr === 'success' || resultAttr === 'error') {
+                                return;
+                            }
+                        } catch (e) {}
+                        // 再按 URL 判断：成功/错误页（前端或后端路由）不检测 form
                         var iframeSrc = Iframe.attr('src') || '';
-                        var iframeLocation = Iframe[0].contentWindow.location.href || '';
-                        var isOffcanvasResultPage = iframeSrc.indexOf('/component/offcanvas/') !== -1 || 
-                                                    iframeLocation.indexOf('/component/offcanvas/') !== -1;
-                        
-                        // 如果是offcanvas的结果页面，不检测form
+                        var iframeLocation = '';
+                        try { iframeLocation = Iframe[0].contentWindow.location.href || ''; } catch (e) {}
+                        var u = iframeSrc + ' ' + iframeLocation;
+                        var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
+                                                    u.indexOf('/component/backend/offcanvas/') !== -1 ||
+                                                    /offcanvas\/(getSuccess|getError|success|error)([\?\/\s]|$)/i.test(u);
                         if (isOffcanvasResultPage) {
                             return;
                         }
@@ -121,18 +129,20 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                 <?php endif; ?>
 
                 try {
-                    // 检查当前URL是否是offcanvas的成功/错误页面
+                    // 优先看 body 的 data-offcanvas-result 标记，有则不检测 form
+                    try {
+                        var resultAttr = iframe.contents().find('body').attr('data-offcanvas-result');
+                        if (resultAttr === 'success' || resultAttr === 'error') {
+                            return;
+                        }
+                    } catch (e) {}
                     var iframeSrc = iframe.attr('src') || '';
                     var iframeLocation = '';
-                    try {
-                        iframeLocation = iframe[0].contentWindow.location.href || '';
-                    } catch (e) {
-                        // 跨域时无法获取
-                    }
-                    var isOffcanvasResultPage = iframeSrc.indexOf('/component/offcanvas/') !== -1 || 
-                                                iframeLocation.indexOf('/component/offcanvas/') !== -1;
-                    
-                    // 如果是offcanvas的结果页面，不检测form
+                    try { iframeLocation = iframe[0].contentWindow.location.href || ''; } catch (e) {}
+                    var u = iframeSrc + ' ' + iframeLocation;
+                    var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
+                                                u.indexOf('/component/backend/offcanvas/') !== -1 ||
+                                                /offcanvas\/(getSuccess|getError|success|error)([\?\/\s]|$)/i.test(u);
                     if (isOffcanvasResultPage) {
                         return;
                     }

@@ -33,6 +33,7 @@ class AbTest extends Model
     public const schema_fields_VARIANT_A = 'variant_a';
     #[Col('text', comment: '变体B配置JSON')]
     public const schema_fields_VARIANT_B = 'variant_b';
+    /** 流量分配比例，长度需 ≥255 以避免升级时 varchar(20)→varchar(255) 的 DDL 截断报错 */
     #[Col('varchar', 255, nullable: false, default: '50:50', comment: '流量分配比例')]
     public const schema_fields_TRAFFIC_SPLIT = 'traffic_split';
     #[Col('datetime', comment: '创建时间')]
