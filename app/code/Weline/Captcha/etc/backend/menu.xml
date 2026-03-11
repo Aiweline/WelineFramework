@@ -6,7 +6,7 @@
          name="captcha_config"
          title="验证码配置"
          action="captcha/backend/config"
-         parent="Weline_Backend::system_security"
+         parent="Weline_Backend::user_permission_group"
          icon="mdi mdi-shield-check"
          order="100"/>
 </menus>

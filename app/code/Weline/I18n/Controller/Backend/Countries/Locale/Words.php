@@ -26,7 +26,7 @@ use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 
-#[\Weline\Framework\Acl\Acl('Weline_I18n::i18n', '国际化I18n管理', 'ri-translate', '国际化I18n管理')]
+#[\Weline\Framework\Acl\Acl('Weline_I18n::i18n', '国际化I18n管理', 'ri-translate', '国际化I18n管理', 'Weline_Backend::i18n_group')]
 class Words extends BaseController
 {
     /**

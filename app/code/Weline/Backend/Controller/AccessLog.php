@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 显示网站访问日志
  */
-#[Acl('Weline_Backend::access_log', '访问日志', 'mdi-file-document-outline', '访问日志', 'Weline_Backend::monitor_log')]
+#[Acl('Weline_Backend::access_log', '访问日志', 'mdi-file-document-outline', '访问日志', 'Weline_Backend::system_maintenance')]
 class AccessLog extends BackendController
 {
     /**

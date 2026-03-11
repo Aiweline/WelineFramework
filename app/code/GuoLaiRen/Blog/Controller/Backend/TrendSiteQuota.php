@@ -17,7 +17,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Website;
 
-#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_site_quota', '站点发文配额', 'mdi mdi-counter', '站点+画像每日发文配额', 'GuoLaiRen_Blog::blog_menu')]
+#[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::trend_site_quota', '站点发文配额', 'mdi mdi-counter', '站点+画像每日发文配额', 'Weline_Backend::blog_group')]
 class TrendSiteQuota extends BackendController
 {
     private TrendSiteQuotaModel $quotaModel;

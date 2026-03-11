@@ -13,7 +13,7 @@ use Weline\Framework\Manager\Message;
  * 功能：
  * - 管理邮件相关配置
  */
-#[Acl('Weline_Backend::email_settings', '邮件设置', 'mdi-email', '邮件设置', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::email_settings', '邮件设置', 'mdi-email', '邮件设置', 'Weline_Backend::system_config_group')]
 class Email extends BackendController
 {
     /**

@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\RateTemplate as RateTemplateModel;
 
-#[Acl('Weline_Shipping::rate_template', '费用模板管理', 'mdi-calculator', '费用模板管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::rate_template', '费用模板管理', 'mdi-calculator', '费用模板管理', 'Weline_Backend::shipping_group')]
 class RateTemplate extends BackendController
 {
     private RateTemplateModel $rateTemplate;

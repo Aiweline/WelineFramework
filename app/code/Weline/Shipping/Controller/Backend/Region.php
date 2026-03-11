@@ -18,7 +18,7 @@ use Weline\Framework\Manager\Message;
 use Weline\I18n\Model\Countries;
 use Weline\Shipping\Service\RegionService;
 
-#[Acl('Weline_Shipping::region', '地区管理', 'mdi-map-marker', '地区管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::region', '地区管理', 'mdi-map-marker', '地区管理', 'Weline_Backend::shipping_group')]
 class Region extends BackendController
 {
     private RegionService $regionService;

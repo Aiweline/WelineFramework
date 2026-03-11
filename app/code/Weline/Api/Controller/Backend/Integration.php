@@ -12,10 +12,10 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Api::integration', 'API闆嗘垚', 'mdi-api', 'API闆嗘垚', 'Weline_Backend::system_service')]
+#[Acl('Weline_Api::integration', 'API接入管理', 'mdi-api', 'API接入管理', 'Weline_Backend::system_service_group')]
 class Integration extends BackendController
 {
-    #[Acl('Weline_Api::integration_index', '鏌ョ湅API闆嗘垚闈㈡澘', 'mdi-api', '鏌ョ湅API闆嗘垚闈㈡澘')]
+    #[Acl('Weline_Api::integration_index', '查看API接入管理', 'mdi-api', '查看API接入管理')]
     public function index(): string
     {
         try {
@@ -36,7 +36,7 @@ class Integration extends BackendController
             $this->assign('links', $links);
             $this->assign('sandbox_key', $sandboxKey);
         } catch (\Throwable $e) {
-            Message::error(__('鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1}', [$e->getMessage()]));
+            Message::error(__('查看API接入管理失败：{1}', [$e->getMessage()]));
             $this->assign('stats', []);
             $this->assign('recent_users', []);
             $this->assign('links', []);

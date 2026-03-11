@@ -4,7 +4,7 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--生成式搜索引擎优化菜单-->
     <menu source="Weline_GenerativeEngineOptimization::geo_manager" name="geo_manager" title="生成式搜索引擎优化" action="" 
-         parent="Weline_Backend::system_menu"
+         parent="Weline_Backend::system_management"
          icon="mdi mdi-robot" order="20500">
         
         <menu source="Weline_GenerativeEngineOptimization::platform_list" name="platform_list" title="平台管理" 

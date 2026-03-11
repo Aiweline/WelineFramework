@@ -15,7 +15,7 @@ use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Websites\Model\DomainPool as DomainPoolModel;
 
-#[Acl('Weline_Websites::domain_pool_api', '域名池API', 'mdi-api', '域名池数据查询接口')]
+#[Acl('Weline_Websites::domain_pool_api', '域名池API', 'mdi-api', '域名池数据查询接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BaseController
 {
     private DomainPoolModel $domainPoolModel;
