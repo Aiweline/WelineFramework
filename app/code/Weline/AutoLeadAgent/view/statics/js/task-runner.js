@@ -97,6 +97,19 @@ var AutoLeadAgentTaskRunner = (function () {
     };
 
     /**
+     * 显示任务错误提示（优先 BackendToast / ConfigUtils，避免 alert）
+     */
+    function showTaskError(message) {
+        if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast.error) {
+            BackendToast.error(message, 12000);
+        } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+            ConfigUtils.safeToast('error', message);
+        } else {
+            console.error('[TaskRunner]', message);
+        }
+    }
+
+    /**
      * 初始化任务执行器
      */
     function init(options) {
@@ -2145,24 +2158,24 @@ var AutoLeadAgentTaskRunner = (function () {
             try {
                 var mcpAvailable = await MCPClient.isMCPAvailable();
                 if (!mcpAvailable) {
-                    var msgNoMcp = '未检测到 Browser MCP 浏览器扩展或其未就绪，无法通过 AI 工具自动操作浏览器。请先安装并启用 Browser MCP 扩展。';
+                    var msgNoMcp = '未检测到 AutoLeadAgent 浏览器扩展或其未就绪。请安装并启用 AutoLeadAgent 扩展后重试。';
                     console.error('[TaskRunner]', msgNoMcp);
                     emitLog('inference', '错误: ' + msgNoMcp);
-                    alert(msgNoMcp);
+                    showTaskError(msgNoMcp);
                     return false;
                 }
             } catch (e) {
                 console.warn('[TaskRunner] MCP availability check failed:', e);
-                var msgMcpErr = '检测 Browser MCP 扩展状态失败，请确认扩展已安装并启用后重试。';
+                var msgMcpErr = '检测扩展状态失败，请确认 AutoLeadAgent 扩展已安装并启用后重试。';
                 emitLog('inference', '错误: ' + msgMcpErr);
-                alert(msgMcpErr);
+                showTaskError(msgMcpErr);
                 return false;
             }
         } else {
-            var msgMcpUnsupported = '当前环境不支持 Browser MCP 扩展检测，无法确保模型可以通过 MCP 控制浏览器。';
+            var msgMcpUnsupported = '当前环境不支持扩展检测，无法确保模型可以通过工具控制浏览器。请刷新页面后重试。';
             console.error('[TaskRunner]', msgMcpUnsupported);
             emitLog('inference', '错误: ' + msgMcpUnsupported);
-            alert(msgMcpUnsupported);
+            showTaskError(msgMcpUnsupported);
             return false;
         }
 
