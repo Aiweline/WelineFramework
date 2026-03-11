@@ -242,13 +242,14 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
-                // 使用后端 offcanvas 路由（Weline_Component Backend Offcanvas），同一套模板
-                $this->redirect('/component/offcanvas/success', [
+                // 后端 offcanvas 实际路由为 component/backend/offcanvas/getSuccess，用 getBackendUrl 生成完整 URL 再跳转
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站添加成功'),
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '1',
                     'time' => '3',
                 ]);
+                $this->redirect($url);
             } catch (\Exception $e) {
                 if ($e instanceof RedirectException) {
                     throw $e;
@@ -259,12 +260,13 @@ class WebsiteManagement extends BaseController
                 } else {
                     $msg = __('网站添加失败: %{1}', [$msg]);
                 }
-                $this->redirect('/component/offcanvas/error', [
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
                     'msg' => $msg,
                     'url' => '/',
                     'reload' => '0',
                     'time' => '3',
                 ]);
+                $this->redirect($url);
             }
         }
         
@@ -315,11 +317,12 @@ class WebsiteManagement extends BaseController
         $websiteId = $this->request->getParam('id');
         
         if (empty($websiteId)) {
-            $this->redirect('/component/offcanvas/error', [
+            $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
                 'msg' => __('网站ID不能为空'),
                 'reload' => '0',
                 'time' => '3',
             ]);
+            $this->redirect($url);
             return '';
         }
         
@@ -328,11 +331,12 @@ class WebsiteManagement extends BaseController
         
         // 检查网站是否存在
         if (!$this->website->getWebsiteId()) {
-            $this->redirect('/component/offcanvas/error', [
+            $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
                 'msg' => __('网站不存在'),
                 'reload' => '0',
                 'time' => '3',
             ]);
+            $this->redirect($url);
             return '';
         }
 
@@ -351,11 +355,12 @@ class WebsiteManagement extends BaseController
             }
             
             if (empty($postWebsiteId)) {
-                $this->redirect('/component/offcanvas/error', [
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
                     'msg' => __('网站ID不能为空'),
                     'reload' => '0',
                     'time' => '3',
                 ]);
+                $this->redirect($url);
                 return '';
             }
             
@@ -436,13 +441,13 @@ class WebsiteManagement extends BaseController
                     }
                 }
                 
-                // 使用后端 offcanvas 路由，同一套模板
-                $this->redirect('/component/offcanvas/success', [
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getSuccess', [
                     'msg' => __('网站更新成功'),
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '1',
                     'time' => '3',
                 ]);
+                $this->redirect($url);
             } catch (\Exception $e) {
                 if ($e instanceof RedirectException) {
                     throw $e;
@@ -453,12 +458,13 @@ class WebsiteManagement extends BaseController
                 } else {
                     $msg = __('网站更新失败: %{1}', [$msg]);
                 }
-                $this->redirect('/component/offcanvas/error', [
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
                     'msg' => $msg,
                     'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
                     'reload' => '0',
                     'time' => '5',
                 ]);
+                $this->redirect($url);
             }
         }
 
