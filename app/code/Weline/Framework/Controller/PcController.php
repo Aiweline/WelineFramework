@@ -17,6 +17,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Manager\ResultManager;
 use Weline\Framework\Security\Token;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
@@ -394,6 +395,31 @@ class PcController extends Core
         return $this->_objectManager::getInstance(MessageManager::class);
     }
 
+    /**
+     * 设置成功结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
+     * 与 Core::success()（返回 array）区分：本方法仅写 ResultManager，无返回值。
+     */
+    protected function resultSuccess(string $message, bool $reload = true): void
+    {
+        ResultManager::success($message, $reload);
+    }
+
+    /**
+     * 设置错误结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
+     * 与 Core::error()（返回 array）区分：本方法仅写 ResultManager，无返回值。
+     */
+    protected function resultError(string $message, bool $reload = false): void
+    {
+        ResultManager::error($message, $reload);
+    }
+
+    /**
+     * 设置信息结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
+     */
+    protected function resultInfo(string $message, bool $reload = false): void
+    {
+        ResultManager::info($message, $reload);
+    }
 
     //    public function success(string $msg = '请求成功！', mixed $data = '', int $code = 200,string $url=''): array
     //    {
@@ -413,7 +439,19 @@ class PcController extends Core
         $statusCode = $code ?? \Weline\Framework\Exception\ErrorResponse::getStatusCode($exception);
         
         if (!\defined('DEBUG') || !DEBUG) {
-            return $this->getMessageManager()->addException($exception);
+            $this->getMessageManager()->exception($exception);
+            $statusCode = $code ?? \Weline\Framework\Exception\ErrorResponse::getStatusCode($exception);
+            $message = $msg ?: $exception->getMessage();
+            return [
+                'success' => false,
+                'error' => true,
+                'code' => $statusCode,
+                'title' => \Weline\Framework\Exception\ErrorResponse::getTitle($statusCode),
+                'msg' => __($message),
+                'message' => __($message),
+                'icon' => \Weline\Framework\Exception\ErrorResponse::getIcon($statusCode),
+                'data' => $data,
+            ];
         }
         
         $return_data = [];
