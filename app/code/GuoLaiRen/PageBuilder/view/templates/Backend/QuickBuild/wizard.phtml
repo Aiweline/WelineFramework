@@ -1647,7 +1647,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         resultContent.innerHTML = html;
         resultContainer.style.display = 'block';
-        document.getElementById('pb-qb-view-orders').style.display = '';
+        var viewOrdersEl = document.getElementById('pb-qb-view-orders');
+        if (viewOrdersEl) {
+            viewOrdersEl.style.display = '';
+            var baseOrdersUrl = viewOrdersEl.getAttribute('href') || viewOrdersEl.href || '';
+            viewOrdersEl.href = baseOrdersUrl.split('?')[0] + '?nocache=' + Date.now();
+        }
 
         var gotoBind = document.getElementById('pb-qb-goto-bind-template');
         if (success && gotoBind) {
