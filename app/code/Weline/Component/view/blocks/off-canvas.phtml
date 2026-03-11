@@ -55,7 +55,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                         // 优先看 iframe 内 body 是否有 data-offcanvas-result（success/error 模板会输出），有则一律不检测 form
                         try {
                             var resultAttr = Iframe.contents().find('body').attr('data-offcanvas-result');
-                            if (resultAttr === 'success' || resultAttr === 'error') {
+                            if (resultAttr === 'success' || resultAttr === 'error' || resultAttr === 'info') {
                                 return;
                             }
                         } catch (e) {}
@@ -66,7 +66,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                         var u = iframeSrc + ' ' + iframeLocation;
                         var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
                                                     u.indexOf('/component/backend/offcanvas/') !== -1 ||
-                                                    /offcanvas\/(getSuccess|getError|success|error)([\?\/\s]|$)/i.test(u);
+                                                    /offcanvas\/(getSuccess|getError|getResult|success|error)([\?\/\s]|$)/i.test(u);
                         if (isOffcanvasResultPage) {
                             return;
                         }
@@ -87,10 +87,9 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                             }
                         } else {
                             <?php if (DEBUG) {
-                           $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form ?? '');
-                           // 转义一下
-                           $msg = htmlspecialchars($msg);
-                           echo " confirm('{$msg}');";
+                           $msg = __("DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}", $save_form ?? '');
+                           $msgJs = addslashes($msg);
+                           echo "if(window.parent&&window.parent.BackendToast){window.parent.BackendToast.warning('{$msgJs}');}else{console.warn('{$msgJs}');}";
                             }
                             ?>
                         }
@@ -132,7 +131,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                     // 优先看 body 的 data-offcanvas-result 标记，有则不检测 form
                     try {
                         var resultAttr = iframe.contents().find('body').attr('data-offcanvas-result');
-                        if (resultAttr === 'success' || resultAttr === 'error') {
+                        if (resultAttr === 'success' || resultAttr === 'error' || resultAttr === 'info') {
                             return;
                         }
                     } catch (e) {}
@@ -142,7 +141,7 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                     var u = iframeSrc + ' ' + iframeLocation;
                     var isOffcanvasResultPage = u.indexOf('/component/offcanvas/') !== -1 ||
                                                 u.indexOf('/component/backend/offcanvas/') !== -1 ||
-                                                /offcanvas\/(getSuccess|getError|success|error)([\?\/\s]|$)/i.test(u);
+                                                /offcanvas\/(getSuccess|getError|getResult|success|error)([\?\/\s]|$)/i.test(u);
                     if (isOffcanvasResultPage) {
                         return;
                     }
@@ -156,10 +155,9 @@ data-bs-target='#{{id}}' aria-controls='{{id}}' title='{{title|""}}'>
                         hideLoading();
                     } else {
                         <?php if (DEBUG) {
-                        $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}", $save_form ?? '');
-                        // 转义一下
-                        $msg = htmlspecialchars($msg);
-                       echo " confirm('{$msg}');";
+                        $msg = __("DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}", $save_form ?? '');
+                        $msgJs = addslashes($msg);
+                        echo "if(window.parent&&window.parent.BackendToast){window.parent.BackendToast.warning('{$msgJs}');}else{console.warn('{$msgJs}');}";
                     }
                         ?>
                     }
