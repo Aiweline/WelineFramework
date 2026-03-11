@@ -7,7 +7,7 @@
          name="bt_center"
          title="宝塔管理"
          action=""
-         parent="Weline_Backend::system_module"
+         parent="Weline_Backend::other_tools_group"
          icon="mdi mdi-server-network"
          order="6000"/>
 
