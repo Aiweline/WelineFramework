@@ -26,7 +26,7 @@ use Weline\Seo\Service\SitemapRegistryService;
  * 
  * @package GuoLaiRen_PageBuilder
  */
-#[Acl('GuoLaiRen_PageBuilder::seo_management', 'PageBuilder SEO管理', 'mdi-chart-line', 'PageBuilder SEO管理', 'GuoLaiRen_PageBuilder::menu_page_management')]
+#[Acl('GuoLaiRen_PageBuilder::seo_management', 'PageBuilder SEO管理', 'mdi-chart-line', 'PageBuilder SEO管理', 'Weline_Backend::page_builder_group')]
 class Seo extends BaseController
 {
     private ObjectManager $objectManager;

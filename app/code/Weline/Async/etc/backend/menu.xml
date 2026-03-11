@@ -3,7 +3,7 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <!--文件同步服务分组菜单-->
-    <menu source="Weline_Async::file_sync_service" name="file_sync_service" title="文件同步服务" action="" parent="Weline_Backend::system_service"
+    <menu source="Weline_Async::file_sync_service" name="file_sync_service" title="文件同步服务" action="" parent="Weline_Backend::system_service_group"
          icon="mdi mdi-sync" order="30300">
         <!--文件同步管理-->
         <menu source="Weline_Async::host" name="host" title="同步主机管理"

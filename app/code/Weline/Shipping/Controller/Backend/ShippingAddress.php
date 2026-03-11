@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\ShippingAddressService;
 
-#[Acl('Weline_Shipping::shipping_address', '发货地址管理', 'mdi-map-marker', '发货地址管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::shipping_address', '发货地址管理', 'mdi-map-marker', '发货地址管理', 'Weline_Backend::shipping_group')]
 class ShippingAddress extends BackendController
 {
     private ShippingAddressService $service;

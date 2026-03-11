@@ -20,7 +20,7 @@ use Weline\Seo\Model\SeoAccount;
  * SEO 账户 API 控制器
  * 为 w:seo:account:select 标签提供数据
  */
-#[AclAttribute('Weline_Seo::seo_account', 'SEO账户API', 'mdi-api', 'SEO账户API接口', 'Weline_Seo::seo_management')]
+#[AclAttribute('Weline_Seo::seo_account', 'SEO账户API', 'mdi-api', 'SEO账户API接口', 'Weline_Backend::seo_group')]
 class Accounts extends BackendController
 {
     /**

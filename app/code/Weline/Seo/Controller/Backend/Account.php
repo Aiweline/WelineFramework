@@ -21,7 +21,7 @@ use Weline\Seo\Service\SitemapAdapterRegistry;
 /**
  * SEO 账户管理后台控制器
  */
-#[AclAttribute('Weline_Seo::seo_account', 'SEO账户管理', 'mdi-account-key', 'SEO账户管理', 'Weline_Seo::seo_management')]
+#[AclAttribute('Weline_Seo::seo_account', 'SEO账户管理', 'mdi-account-key', 'SEO账户管理', 'Weline_Backend::seo_group')]
 class Account extends BackendController
 {
     private SitemapAdapterRegistry $adapterRegistry;

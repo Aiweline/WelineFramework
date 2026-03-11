@@ -17,7 +17,7 @@ use Weline\BackendActivity\Model\BackendActivityLog;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 
-#[Acl('Weline_BackendActivity::activity_controller', '后台活动管理', 'fas fa-history', '查看管理员在后台的操作', 'Aiweline_BackendActivity:main')]
+#[Acl('Weline_BackendActivity::activity_controller', '后台活动管理', 'fas fa-history', '查看管理员在后台的操作', 'Weline_BackendActivity::main')]
 class Activity extends BackendController
 {
     private BackendActivityLog $activityLog;
@@ -47,7 +47,7 @@ class Activity extends BackendController
         return $this->fetch('listing');
     }
 
-    #[Acl('Aiweline_BackendActivity::delete', '删除日志', 'fas fa-trash', '删除日志')]
+    #[Acl('Weline_BackendActivity::delete', '删除日志', 'fas fa-trash', '删除日志')]
     function getDelete()
     {
         $id = $this->request->getGet('id');

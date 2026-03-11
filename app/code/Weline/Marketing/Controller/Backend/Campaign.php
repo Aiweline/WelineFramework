@@ -20,7 +20,7 @@ use Weline\Marketing\Model\Campaign\Campaign as CampaignModel;
 /**
  * 促销活动管理控制器
  */
-#[Acl('Weline_Marketing::campaign', '促销活动', 'mdi-bullhorn', '促销活动管理', 'Weline_Marketing::marketing_manager')]
+#[Acl('Weline_Marketing::campaign', '促销活动', 'mdi-bullhorn', '促销活动管理', 'Weline_Backend::marketing_group')]
 class Campaign extends BackendController
 {
     /**

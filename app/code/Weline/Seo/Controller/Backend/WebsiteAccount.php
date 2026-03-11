@@ -22,7 +22,7 @@ use Weline\Websites\Model\Website;
 /**
  * 站点-SEO账户关联管理控制器
  */
-#[AclAttribute('Weline_Seo::website_account', '站点SEO账户关联', 'mdi-link-variant', '管理站点与SEO账户的关联关系', 'Weline_Seo::seo_management')]
+#[AclAttribute('Weline_Seo::website_account', '站点SEO账户关联', 'mdi-link-variant', '管理站点与SEO账户的关联关系', 'Weline_Backend::seo_group')]
 class WebsiteAccount extends BackendController
 {
     private ObjectManager $objectManager;

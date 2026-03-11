@@ -13,7 +13,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('Weline_Backend::notification_channel', '渠道配置', 'mdi-tune', '配置通知渠道', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::notification_channel', '渠道配置', 'mdi-tune', '配置通知渠道', 'Weline_Backend::notification_settings')]
 class NotificationChannel extends BackendController
 {
     private ChannelModel $channelModel;

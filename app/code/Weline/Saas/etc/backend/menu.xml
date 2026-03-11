@@ -8,7 +8,7 @@
          name="saas_manager"
          title="SaaS 一站式配置"
          action=""
-         parent="Weline_Backend::business_module"
+         parent="Weline_Backend::business_operations"
          icon="mdi mdi-cloud-check"
          order="20100">
         <!-- 配置订单子菜单 -->

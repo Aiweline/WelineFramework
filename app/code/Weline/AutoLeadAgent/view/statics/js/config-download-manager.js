@@ -178,26 +178,36 @@ var ConfigDownloadManager = (function () {
                 if (!event.data) return;
                 
                 // content script 转发的进度消息: AUTOLEADAGENT_MODEL_LOAD_PROGRESS
+                // 扩展 inference-worker 格式: progress, currentFile, downloadedSize, totalSize, currentFileProgress, currentFileLoaded, currentFileTotal
                 if (event.data.type === 'AUTOLEADAGENT_MODEL_LOAD_PROGRESS') {
                     var payload = event.data.payload || {};
-                    console.log('[DownloadManager] 收到加载进度:', JSON.stringify(payload));
                     
-                    // 更新下载状态
+                    // 总进度 (0-100)
                     if (payload.progress !== undefined) {
                         downloadState.progress = payload.progress;
                     }
-                    if (payload.file) {
-                        downloadState.currentFile = payload.file;
+                    
+                    // 当前文件名 (兼容 file / currentFile / name)
+                    var fn = payload.currentFile || payload.file || payload.name || '';
+                    if (fn) downloadState.currentFile = fn;
+                    
+                    // 已下载/总大小 (兼容 loaded+total / downloadedSize+totalSize)
+                    var loaded = payload.downloadedSize !== undefined ? payload.downloadedSize : payload.loaded;
+                    var total = payload.totalSize !== undefined ? payload.totalSize : payload.total;
+                    if (loaded !== undefined) downloadState.downloadedSize = loaded;
+                    if (total !== undefined) downloadState.totalSize = total;
+                    if (total > 0 && loaded !== undefined) {
+                        downloadState.progress = (loaded / total) * 100;
                     }
-                    if (payload.loaded !== undefined && payload.total !== undefined) {
-                        downloadState.downloadedSize = payload.loaded;
-                        downloadState.totalSize = payload.total;
-                        if (payload.total > 0) {
-                            downloadState.progress = (payload.loaded / payload.total) * 100;
-                        }
+                    
+                    // 当前文件进度
+                    if (payload.currentFileProgress !== undefined) {
+                        downloadState.currentFileProgress = payload.currentFileProgress;
                     }
-                    if (payload.status === 'download') {
-                        downloadState.currentFile = payload.name || payload.file || '';
+                    if (payload.currentFileLoaded !== undefined && payload.currentFileTotal !== undefined && payload.currentFileTotal > 0) {
+                        downloadState.currentFileDownloaded = payload.currentFileLoaded;
+                        downloadState.currentFileSize = payload.currentFileTotal;
+                        downloadState.currentFileProgress = (payload.currentFileLoaded / payload.currentFileTotal) * 100;
                     }
                     
                     if (onProgress) onProgress(downloadState);

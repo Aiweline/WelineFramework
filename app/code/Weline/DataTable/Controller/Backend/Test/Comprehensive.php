@@ -27,7 +27,7 @@ use Weline\DataTable\Taglib\Field;
 use Weline\DataTable\Taglib\Form;
 use Weline\DataTable\Helper\TableContext;
 
-#[Acl('Weline_DataTable::test_comprehensive', 'DataTable综合测试', 'mdi mdi-table-test', 'DataTable模块综合功能测试中心', 'Weline_DataTable::datatable')]
+#[Acl('Weline_DataTable::datatable_test_comprehensive', 'DataTable综合测试', 'mdi mdi-table-test', 'DataTable模块综合功能测试中心', 'Weline_DataTable::datatable_module')]
 class Comprehensive extends BackendController
 {
     /**

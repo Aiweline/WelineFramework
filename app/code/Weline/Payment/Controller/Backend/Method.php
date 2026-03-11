@@ -18,7 +18,7 @@ use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\DiscountActionSupportService;
 use Weline\Payment\Model\PaymentMethod;
 
-#[Acl('Weline_Payment::payment_method', '支付方式管理', 'mdi-credit-card', '支付方式管理', 'Weline_Backend::system_service')]
+#[Acl('Weline_Payment::payment_method', '支付方式管理', 'mdi-credit-card', '支付方式管理', 'Weline_Backend::payment_group')]
 class Method extends BackendController
 {
     private PaymentMethodManager $methodManager;

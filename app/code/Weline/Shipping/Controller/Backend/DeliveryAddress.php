@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\DeliveryAddressService;
 use Weline\Frontend\Model\FrontendUser;
 
-#[Acl('Weline_Shipping::delivery_address', '运送地址管理', 'mdi-truck-delivery', '运送地址管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::delivery_address', '运送地址管理', 'mdi-truck-delivery', '运送地址管理', 'Weline_Backend::shipping_group')]
 class DeliveryAddress extends BackendController
 {
     private DeliveryAddressService $service;

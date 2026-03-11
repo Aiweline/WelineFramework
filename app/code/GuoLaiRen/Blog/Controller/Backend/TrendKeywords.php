@@ -15,7 +15,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('GuoLaiRen_Blog::trend_keywords', '趋势词分析', 'mdi mdi-chart-bar', '趋势词 Top10 分析', 'GuoLaiRen_Blog::blog_menu')]
+#[Acl('GuoLaiRen_Blog::trend_keywords', '趋势词分析', 'mdi mdi-chart-bar', '趋势词 Top10 分析', 'Weline_Backend::blog_group')]
 class TrendKeywords extends BackendController
 {
     #[Acl('GuoLaiRen_Blog::trend_keywords_index', '查看趋势词', 'mdi mdi-view-list', '查看趋势词分析', 'GuoLaiRen_Blog::trend_keywords')]

@@ -21,7 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 后台配置控制器
  * 用于管理后台系统的配置信息，包括logo等
  */
-#[Acl('Weline_Backend::backend_config', '后台配置', 'mdi-cog', '后台配置管理', 'Weline_Backend::system_settings')]
+#[Acl('Weline_Backend::backend_config', '后台配置', 'mdi-cog', '后台配置管理', 'Weline_Backend::system_config_group')]
 class Config extends BackendController
 {
     /**

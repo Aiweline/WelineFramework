@@ -16,7 +16,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Carrier as CarrierModel;
 
-#[Acl('Weline_Shipping::carrier', '快递公司管理', 'mdi-truck', '快递公司管理', 'Weline_Backend::business_module')]
+#[Acl('Weline_Shipping::carrier', '快递公司管理', 'mdi-truck', '快递公司管理', 'Weline_Backend::shipping_group')]
 class Carrier extends BackendController
 {
     private CarrierModel $carrier;

@@ -8,7 +8,7 @@
          name="search_engine_management" 
          title="搜索引擎配置" 
          action="search/backend/engine/index"
-         parent="Weline_Backend::system_service" 
+         parent="Weline_Backend::system_service_group" 
          icon="mdi mdi-magnify" 
          order="50"/>
     

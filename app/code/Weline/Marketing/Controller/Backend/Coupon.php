@@ -21,7 +21,7 @@ use Weline\Marketing\Service\CouponService;
 /**
  * 优惠券管理控制器
  */
-#[Acl('Weline_Marketing::coupon', '优惠券管理', 'mdi-ticket-percent', '优惠券管理', 'Weline_Marketing::marketing_manager')]
+#[Acl('Weline_Marketing::coupon', '优惠券管理', 'mdi-ticket-percent', '优惠券管理', 'Weline_Backend::marketing_group')]
 class Coupon extends BackendController
 {
     /**

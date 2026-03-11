@@ -52,8 +52,7 @@
 
 **待完善**：
 
-- 模型下载改为 MODEL_LOAD 流程后，进度与状态闭环优化
-- 扩展端 MODEL_LOAD_PROGRESS 广播与前端 UI 同步
+- （已完成）扩展 payload 字段与前端 downloadState 映射（currentFile/downloadedSize/totalSize 等）
 
 ### 阶段 4：ReAct Agent 与 MCP 集成 🔴
 
@@ -84,7 +83,7 @@
 | D3 | 下载流程 HF_DOWNLOAD_MODEL 扩展未支持 | P1 | ✅ 已改为 MODEL_LOAD |
 | D4 | 下载完成 autoLoad 时报 disabled 未定义 | P1 | ✅ 已修复 |
 | D5 | 模型选择无内存限制，大模型可选中导致失败 | P2 | ✅ 已加内存检测 |
-| D6 | 扩展 HF_DOWNLOAD 与 MODEL_LOAD 进度消息格式不一致 | P2 | 待验证 |
+| D6 | 扩展 MODEL_LOAD_PROGRESS 与前端字段映射 | P2 | ✅ 已修复 |
 | D7 | 规则推理与模型推理并存，需求要求完全模型驱动 | P3 | 待推进 |
 | D8 | 任务启动前 Chrome / 模型 / MCP 三项检查 | P2 | ✅ 已实现 |
 

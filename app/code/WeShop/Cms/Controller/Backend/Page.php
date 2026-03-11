@@ -17,7 +17,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locals;
 
-#[\Weline\Framework\Acl\Acl('WeShop_Cms::cms_page', 'CMS页面管理', 'mdi mdi-file-document-edit', '管理和构建页面')]
+#[\Weline\Framework\Acl\Acl('WeShop_Cms::cms_page', 'CMS页面管理', 'mdi mdi-file-document-edit', '管理和构建页面', 'WeShop_Cms::cms_page_management')]
 class Page extends BackendController
 {
     private PageModel $pageModel;

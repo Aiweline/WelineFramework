@@ -7,7 +7,7 @@
          name="layout_management" 
          title="布局管理"
          action="*/backend/layout"
-         parent="Weline_Backend::system_menu"
+         parent="Weline_Backend::system_management"
          icon="mdi mdi-view-dashboard-variant"
          order="80">
         

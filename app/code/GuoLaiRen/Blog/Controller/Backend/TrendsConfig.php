@@ -15,7 +15,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\Cache\Console\Cache\Clear;
 use Weline\Framework\Manager\ObjectManager;
 
-#[Acl('GuoLaiRen_Blog::trends_config', 'Trends 配置', 'mdi mdi-chart-timeline-variant', 'Google Trends 与自动发文配置', 'GuoLaiRen_Blog::blog_menu')]
+#[Acl('GuoLaiRen_Blog::trends_config', 'Trends 配置', 'mdi mdi-chart-timeline-variant', 'Google Trends 与自动发文配置', 'Weline_Backend::blog_group')]
 class TrendsConfig extends BackendController
 {
     #[Acl('GuoLaiRen_Blog::trends_config_index', '查看 Trends 配置', 'mdi-cog', '查看 Trends 配置')]
