@@ -19,6 +19,9 @@ namespace Weline\Framework\Http;
 /**
  * 响应终止异常
  * 
+ * 继承 \Error 而非 \Exception，使业务层 `catch (\Exception $e)` 不会意外捕获
+ * 重定向等控制流异常，避免 "Response terminate with status 302" 被当成错误。
+ * 
  * 所有需要终止请求的场景都通过此异常实现：
  * - 重定向 (RedirectException)
  * - 无路由 (NoRouterException)
@@ -29,7 +32,7 @@ namespace Weline\Framework\Http;
  * - FPM 模式：发送 header 并 exit()
  * - WLS 模式：构建 HTTP 响应字符串返回
  */
-class ResponseTerminateException extends \Exception
+class ResponseTerminateException extends \Error
 {
     /**
      * HTTP 状态码
