@@ -382,7 +382,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         </div>
         <div class="pb-qb-step-arrow"><i class="mdi mdi-chevron-right"></i></div>
         <div class="pb-qb-step" data-step="4">
-            <span class="pb-qb-step-num">4</span> <lang>完成</lang>
+            <span class="pb-qb-step-num">4</span> <lang>配置中</lang>
+        </div>
+        <div class="pb-qb-step-arrow"><i class="mdi mdi-chevron-right"></i></div>
+        <div class="pb-qb-step" data-step="5">
+            <span class="pb-qb-step-num">5</span> <lang>完成</lang>
         </div>
     </div>
 
@@ -617,7 +621,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
     <!-- Step 4: 配置进度 -->
     <div class="pb-qb-panel" id="pb-qb-step4">
-        <div class="pb-qb-panel-title"><i class="mdi mdi-progress-clock"></i> <lang>配置进度</lang></div>
+        <div class="pb-qb-panel-title"><i class="mdi mdi-progress-clock"></i> <lang>配置中（实时日志）</lang></div>
         
         <!-- SSE 进度组件（steps 通过 JS 动态设置） -->
         <w:theme:sse-progress 
@@ -625,21 +629,32 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             title="@lang(执行日志)"
             height="220px"
         />
-        
-        <!-- 完成状态 -->
-        <div id="pb-qb-provision-result" style="display:none; margin-top: var(--backend-spacing-lg, 24px); text-align:center;">
-            <div id="pb-qb-provision-result-content"></div>
-        </div>
-        
+
         <div class="pb-qb-actions">
             <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev4" style="display:none;">
                 <i class="mdi mdi-arrow-left"></i> <lang>返回</lang>
             </button>
-            <a href="<backend-url>pagebuilder/backend/quickBuild/orders</backend-url>" class="pb-qb-btn pb-qb-btn-primary" id="pb-qb-view-orders" style="display:none;">
+            <span id="pb-qb-step4-running-hint" style="color:var(--backend-color-text-secondary,#6c757d);">
+                <i class="mdi mdi-loading mdi-spin"></i> <lang>正在执行，请稍候...</lang>
+            </span>
+        </div>
+    </div>
+
+    <!-- Step 5: 完成概览 -->
+    <div class="pb-qb-panel" id="pb-qb-step5">
+        <div class="pb-qb-panel-title"><i class="mdi mdi-check-circle-outline"></i> <lang>完成概览</lang></div>
+        <div id="pb-qb-provision-result" style="margin-top: var(--backend-spacing-lg, 24px); text-align:center;">
+            <div id="pb-qb-provision-result-content"></div>
+        </div>
+        <div class="pb-qb-actions">
+            <button class="pb-qb-btn pb-qb-btn-secondary" id="pb-qb-prev5">
+                <i class="mdi mdi-arrow-left"></i> <lang>上一步</lang>
+            </button>
+            <a href="<backend-url>pagebuilder/backend/quickBuild/orders</backend-url>" class="pb-qb-btn pb-qb-btn-primary" id="pb-qb-view-orders">
                 <i class="mdi mdi-clipboard-list"></i> <lang>查看配置订单</lang>
             </a>
             <a href="#" id="pb-qb-goto-bind-template" class="pb-qb-btn pb-qb-btn-success" style="display:none;">
-                <i class="mdi mdi-palette"></i> <lang>继续：去网站构建器绑定模板</lang>
+                <i class="mdi mdi-palette"></i> <lang>去建站器（自动定位当前域名）</lang>
             </a>
         </div>
     </div>
@@ -839,7 +854,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         currentStep = step;
         setScopeState('step', step);
         schedulePersistWizardState();
-        for (var i = 1; i <= 4; i++) {
+        for (var i = 1; i <= 5; i++) {
             var panel = document.getElementById('pb-qb-step' + i);
             var stepEl = document.querySelector('.pb-qb-step[data-step="' + i + '"]');
             if (panel) panel.classList.toggle('active', i === step);
@@ -1474,6 +1489,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (gotoBind) gotoBind.style.display = 'none';
         document.getElementById('pb-qb-prev4').style.display = 'none';
     });
+    document.getElementById('pb-qb-prev5').addEventListener('click', function() {
+        goToStep(4);
+    });
 
     // 启动一站式配置（使用 SSE 实时进度）
     document.getElementById('pb-qb-start-btn').addEventListener('click', function() {
@@ -1495,6 +1513,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
         // 跳转到进度页面
         goToStep(4);
+        var step4Hint = document.getElementById('pb-qb-step4-running-hint');
+        if (step4Hint) step4Hint.style.display = '';
         
         // 使用框架生成的完整后台 URL，避免“当前路由路径拼接”导致 404
         var sseBaseUrl = '<?= addslashes($this->getBackendUrl('saas/backend/api/provisioning/stream')) ?>';
@@ -1527,8 +1547,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         
         // 监听完成事件
         progress.on('done', function(e) {
-            // 完成阶段始终允许返回上一步
-            document.getElementById('pb-qb-prev4').style.display = '';
+            var step4HintDone = document.getElementById('pb-qb-step4-running-hint');
+            if (step4HintDone) step4HintDone.style.display = 'none';
             try {
                 var data = JSON.parse(e.data || '{}');
                 var websiteId = (data.website_id != null && data.website_id !== '') ? (data.website_id | 0) : 0;
@@ -1536,18 +1556,22 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             } catch (err) {
                 showResult(true, '<?= __('配置完成！') ?>', undefined, 0);
             }
+            goToStep(5);
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
         });
         
         // 监听失败事件
         progress.on('failed', function(e) {
+            var step4HintFailed = document.getElementById('pb-qb-step4-running-hint');
+            if (step4HintFailed) step4HintFailed.style.display = 'none';
             try {
                 var data = JSON.parse(e.data || '{}');
                 showResult(false, data.message || '<?= __('配置失败') ?>');
             } catch (err) {
                 showResult(false, '<?= __('配置失败') ?>');
             }
+            goToStep(5);
             btn.disabled = false;
             btn.innerHTML = '<i class="mdi mdi-rocket-launch"></i> <?= __('启动一站式配置') ?>';
         });
@@ -1581,13 +1605,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         resultContent.innerHTML = html;
         resultContainer.style.display = 'block';
         document.getElementById('pb-qb-view-orders').style.display = '';
-        // 执行阶段结束后（无论成功/失败）都允许返回上一步
-        document.getElementById('pb-qb-prev4').style.display = '';
 
         var gotoBind = document.getElementById('pb-qb-goto-bind-template');
         if (success && gotoBind) {
             var pageIndexUrl = '<?= addslashes($this->getBackendUrl('pagebuilder/backend/page/index')) ?>';
-            gotoBind.href = pageIndexUrl + '?open_quick_site=1' + (websiteId ? '&website_id=' + websiteId : '');
+            gotoBind.href = pageIndexUrl + '?open_quick_site=1'
+                + (websiteId ? '&website_id=' + websiteId : '')
+                + (selectedDomain ? '&domain=' + encodeURIComponent(selectedDomain) : '');
             gotoBind.style.display = '';
         }
     }
