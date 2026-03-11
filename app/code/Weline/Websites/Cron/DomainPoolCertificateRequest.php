@@ -18,6 +18,7 @@ namespace Weline\Websites\Cron;
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 
 class DomainPoolCertificateRequest implements CronTaskInterface
@@ -137,6 +138,20 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         $requestDomain = $isWildcard && $rootDomain !== '' ? '*.' . $rootDomain : $domain;
         $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
         $poolDomain->setData($row);
+        $domainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
+        $parentDomain = ObjectManager::getInstance(Domain::class, [], false);
+        if ($domainId > 0) {
+            $parentDomain->load($domainId);
+        }
+        $hasDnsOrCdnAccount = $parentDomain->getDnsAccountId() > 0 || $parentDomain->getCdnAccountId() > 0;
+        if (!$hasDnsOrCdnAccount) {
+            $counter['skipped']++;
+            $line = "[{$requestDomain}] " . __('DNS/CDN 账户为空，定时任务跳过证书申请');
+            $processLogs[] = $line;
+            $this->echoLine($line);
+            return $counter;
+        }
+
         $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
         $poolDomain->setHttpsError('');
         $poolDomain->save();
@@ -148,7 +163,6 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         w_log_info('[DomainPoolCertificateRequest] ' . __('开始同步申请证书：%{1}，阻塞直至申请完成', [$requestDomain]), [], 'domain_pool_cert');
 
         $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
-        $domainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
         $onProgress = function (string $message, array $extra = []) use ($requestDomain, &$processLogs): void {
             $line = "[{$requestDomain}] " . $message;
             $processLogs[] = $line;
