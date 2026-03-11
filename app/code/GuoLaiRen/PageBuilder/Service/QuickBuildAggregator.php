@@ -252,7 +252,8 @@ class QuickBuildAggregator
         $data = $this->queryService->execute('websites', 'getDnsCdnAccounts', ['status' => 'active']);
         $cdnAccounts = $data['cdn_accounts'] ?? [];
         $seen = [];
-        $adapters = [['code' => '', 'name' => __('跟随域名商（默认）')]];
+        // 第一个选项是"跟随域名商"，使用 follow_registrar 作为值
+        $adapters = [['code' => 'follow_registrar', 'name' => __('跟随域名商（默认）')]];
         foreach ($cdnAccounts as $acc) {
             $code = (string) ($acc['registrar_code'] ?? '');
             $name = (string) ($acc['registrar_name'] ?? $code);
