@@ -29,11 +29,16 @@ class UserData extends BackendController
                 ->where(BackendUserData::schema_fields_BACKEND_USER_ID, $user_id)
                 ->find()
                 ->fetch();
-            $data = json_decode($backendUserData->getData(BackendUserData::schema_fields_JSON) ?? '') ?? [];
+            $data = json_decode($backendUserData->getData(BackendUserData::schema_fields_JSON) ?? '', true);
+            if (!is_array($data)) {
+                $data = [];
+            }
             return $this->fetchJson([
                 'code' => 200,
                 'msg' => '获取成功',
-                'data' => $data]);
+                'data' => $data,
+                'json' => $data,
+            ]);
         }
         if (!$this->request->isPost()) {
             return $this->fetchJson([
@@ -44,6 +49,13 @@ class UserData extends BackendController
         $scope = $this->request->getPost('scope');
         $name = $this->request->getPost('name');
         $value = $this->request->getPost('value');
+        $batchData = $this->request->getPost('data', []);
+        if (is_string($batchData)) {
+            $decoded = json_decode($batchData, true);
+            if (is_array($decoded)) {
+                $batchData = $decoded;
+            }
+        }
         $user_id = $this->session->getLoginUserID();
         # 读取数据
         $backendUserData = $this->backendUserData
@@ -58,8 +70,14 @@ class UserData extends BackendController
         }
         # 数据库中的数据
         $json = json_decode($backendUserData->getData(BackendUserData::schema_fields_JSON) ?? '', true) ?? [];
-        # 设置数据
-        $json[$name] = $value;
+        # 设置数据（兼容单字段与批量字段）
+        if (is_array($batchData) && !empty($batchData)) {
+            foreach ($batchData as $k => $v) {
+                $json[(string)$k] = $v;
+            }
+        } elseif (!empty($name)) {
+            $json[$name] = $value;
+        }
         $backendUserData->setData(BackendUserData::schema_fields_JSON, json_encode($json));
         $backendUserData->save(true);
         $backendUserData->unsetData(BackendUserData::schema_fields_BACKEND_USER_ID);
