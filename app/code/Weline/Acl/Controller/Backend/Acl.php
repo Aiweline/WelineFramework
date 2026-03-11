@@ -21,9 +21,13 @@ class Acl extends \Weline\Admin\Controller\BaseController
     {
         /**@var \Weline\Acl\Model\Acl $aclModel*/
         $aclModel = ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
-        if($search = $this->request->getGet('search')){
-            $aclModelFields = implode(',', $aclModel->getModelFields());
-            $aclModel->where('CONCAT('.$aclModelFields.')','%'.$search.'%','like');
+        if ($search = $this->request->getGet('search')) {
+            $connector = $aclModel->getConnection()->getConnector();
+            $quotedFields = array_map(
+                fn(string $f): string => $connector->quoteIdentifier($f),
+                $aclModel->getModelFields()
+            );
+            $aclModel->where('CONCAT(' . implode(',', $quotedFields) . ')', '%' . $search . '%', 'like');
         }
         $aclModel->pagination()->select()->fetch();
         $this->assign('acls',$aclModel->getItems());

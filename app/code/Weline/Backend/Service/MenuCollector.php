@@ -188,14 +188,14 @@ class MenuCollector
 
     /**
      * 构建数据库端 ACL 菜单状态（source_id => row）
-     * 读取 weline_acl 中 type=menus 且 acl_origin != 'user' 的记录。
-     * 不仅限于 acl_origin='menu_xml'，以兼容旧记录（空/NULL acl_origin）。
+     * 读取 weline_acl 中 type=menus 且 acl_origin 为 NULL、空或 != 'user' 的记录（系统来源，含旧数据）。
      */
     private function buildDbAclMenus(array $modulesFilter): array
     {
+        $field = Acl::schema_fields_ACL_ORIGIN;
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=');
+            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')");
         
         if (!empty($modulesFilter)) {
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
@@ -435,10 +435,11 @@ class MenuCollector
      */
     private function collectChildAclSources(string $parentSource, array &$sources): void
     {
+        $field = Acl::schema_fields_ACL_ORIGIN;
         $children = $this->acl->reset()
             ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->where(Acl::schema_fields_ACL_ORIGIN, Acl::acl_origin_user, '!=')
+            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')")
             ->select()
             ->fetchArray();
         foreach ($children as $child) {
