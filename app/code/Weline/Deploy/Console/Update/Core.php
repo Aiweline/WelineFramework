@@ -23,10 +23,13 @@ class Core extends CommandAbstract
     /** 命令别名：支持旧用法 core:update */
     public const ALIASES = ['core:update'];
 
+    /** 默认仓库（公用官网），未配置时使用 */
+    private const DEFAULT_REPO = 'https://gitee.com/aiweline/WelineFramework.git';
+
     private System $system;
     private bool $isWindows;
-    private string $defaultRepo = 'https://gitee.com/aiweline/WelineFramework.git';
-    
+    private string $envFilePath;
+
     private bool $updateAll = false;  // 是否更新整个项目
     private bool $forceUpdate = false;  // 是否强制更新（删除本地重新拉取）
     private int $updatedFiles = 0;  // 更新的文件数
@@ -52,6 +55,7 @@ class Core extends CommandAbstract
         $this->printer = $printer;
         $this->system = $system;
         $this->isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
+        $this->envFilePath = BP . '.env';
     }
 
     public function tip(): string
@@ -65,13 +69,14 @@ class Core extends CommandAbstract
             'deploy:update:core',
             __('从 Git 仓库增量更新框架核心代码'),
             [
-                '-b, --branch=<分支名>' => '指定分支（必填，如：main, master, dev）',
+                '-b, --branch=<分支名>' => __('指定分支（未配置默认分支时必填，如：main, master, dev）'),
                 '-t, --tag=<标签名>' => '指定标签版本（可选，如：v1.0.0）',
-                '--repo=<仓库地址>' => '指定 Git 仓库地址（默认：Gitee 仓库）',
+                '--repo=<仓库地址>' => __('指定 Git 仓库地址（覆盖配置文件，默认：公用官网或配置的仓库）'),
                 '-f, --force' => '强制更新：重新克隆仓库，完全覆盖核心文件',
                 '-h, --help' => '显示帮助信息',
             ],
             [
+                '仓库可配置' => __('仓库地址、默认分支、密钥可在项目根目录 .env 或 app/etc/env.php 的 core_update 中配置；未配置时使用公用官网'),
                 '增量更新' => '默认使用 git fetch 增量拉取，通过 git diff 获取变化文件列表，只拷贝变化的文件',
                 '强制更新' => '使用 -f 参数强制删除缓存并重新克隆，完全覆盖目标目录',
                 '临时目录方式' => '使用临时目录下载，不影响项目 Git 仓库',
@@ -81,6 +86,7 @@ class Core extends CommandAbstract
                 '增量更新到最新' => 'php bin/w update:core -b main  （或 core:update -b main）',
                 '强制完整更新' => 'php bin/w update:core -b main -f',
                 '指定标签' => 'php bin/w update:core -b main -t v1.0.0',
+                __('使用自定义仓库（需先配置 .env 或 env.php）') => 'php bin/w update:core -b master',
             ],
             'php bin/w update:core -b <分支名> 或 php bin/w core:update -b <分支名>'
         );
@@ -107,11 +113,13 @@ class Core extends CommandAbstract
 
         // 2. 验证参数
         $this->printer->setup(__('步骤 2/6：验证参数...'));
-        $branch = $this->getBranch($args);
+        $config = $this->getCoreUpdateConfig();
+        $branch = $this->getBranch($args, $config);
         $tag = $args['tag'] ?? $args['t'] ?? null;
-        $repo = $args['repo'] ?? $this->defaultRepo;
+        $repo = $args['repo'] ?? $config['repo_url'] ?? self::DEFAULT_REPO;
+        $repo = $this->buildRepoUrlWithAuth($repo, $config);
         
-        $this->printer->note(__('仓库：%{1}', [$repo]));
+        $this->printer->note(__('仓库：%{1}', [$this->maskRepoUrl($repo)]));
         $this->printer->note(__('分支：%{1}', [$branch]));
         if ($tag) {
             $this->printer->note(__('标签：%{1}', [$tag]));
@@ -160,11 +168,88 @@ class Core extends CommandAbstract
         $this->printer->success(__('✓ Git 检查通过'));
     }
 
-    private function getBranch(array $args): string
+    /**
+     * 加载核心更新配置：优先 app/etc/env.php 的 core_update，再叠加 .env 的 CORE_UPDATE_*
+     *
+     * @return array{repo_url?: string, branch_default?: string, repo_token?: string, repo_username?: string}
+     */
+    private function getCoreUpdateConfig(): array
     {
-        $branch = $args['branch'] ?? $args['b'] ?? null;
+        $config = [];
+        if (class_exists(Env::class)) {
+            $fromEnv = Env::getInstance()->getConfig('core_update');
+            if (is_array($fromEnv)) {
+                $config = array_merge($config, $fromEnv);
+            }
+        }
+        if (is_file($this->envFilePath) && is_readable($this->envFilePath)) {
+            $lines = file($this->envFilePath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if ($line === '' || str_starts_with($line, '#')) {
+                    continue;
+                }
+                if (str_contains($line, '=')) {
+                    [$key, $value] = explode('=', $line, 2);
+                    $key = trim($key);
+                    $value = trim($value);
+                    if ((str_starts_with($value, '"') && str_ends_with($value, '"')) ||
+                        (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+                        $value = substr($value, 1, -1);
+                    }
+                    $map = [
+                        'CORE_UPDATE_REPO_URL' => 'repo_url',
+                        'CORE_UPDATE_BRANCH_DEFAULT' => 'branch_default',
+                        'CORE_UPDATE_REPO_TOKEN' => 'repo_token',
+                        'CORE_UPDATE_REPO_USERNAME' => 'repo_username',
+                    ];
+                    if (isset($map[$key])) {
+                        $config[$map[$key]] = $value;
+                    }
+                }
+            }
+        }
+        return $config;
+    }
+
+    /**
+     * 为 HTTPS 仓库 URL 注入凭据（token 或 username+token），私有仓库时使用
+     */
+    private function buildRepoUrlWithAuth(string $repo, array $config): string
+    {
+        $token = $config['repo_token'] ?? '';
+        $username = $config['repo_username'] ?? '';
+        if ($token === '' || !str_starts_with($repo, 'http')) {
+            return $repo;
+        }
+        $parsed = parse_url($repo);
+        if ($parsed === false || !isset($parsed['host'])) {
+            return $repo;
+        }
+        $scheme = $parsed['scheme'] ?? 'https';
+        $host = $parsed['host'];
+        $path = $parsed['path'] ?? '';
+        if (isset($parsed['port']) && $parsed['port'] !== 80 && $parsed['port'] !== 443) {
+            $host .= ':' . $parsed['port'];
+        }
+        $user = $username !== '' ? $username : 'oauth2';
+        return $scheme . '://' . rawurlencode($user) . ':' . rawurlencode($token) . '@' . $host . $path;
+    }
+
+    /** 输出时隐藏 URL 中的凭据 */
+    private function maskRepoUrl(string $repo): string
+    {
+        if (str_contains($repo, '@')) {
+            return preg_replace('#://[^@]+@#', '://***@', $repo) ?: $repo;
+        }
+        return $repo;
+    }
+
+    private function getBranch(array $args, array $config): string
+    {
+        $branch = $args['branch'] ?? $args['b'] ?? $config['branch_default'] ?? null;
         if (empty($branch)) {
-            $this->printer->error(__('错误：必须指定分支'));
+            $this->printer->error(__('错误：必须指定分支（-b <分支名>）或在配置中设置 branch_default'));
             $this->printer->note(__('php bin/w update:core -b <分支名>'));
             exit(1);
         }
@@ -619,7 +704,7 @@ class Core extends CommandAbstract
         );
         
         foreach ($iterator as $item) {
-            $relativePath = $iterator->getSubPathName();
+            $relativePath = $iterator->getSubPathname();
             $targetPath = $target . DS . $relativePath;
             
             if ($item->isDir()) {

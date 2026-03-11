@@ -15,6 +15,9 @@ use Weline\Framework\Manager\ObjectManager;
 #[Index(name: 'idx_scope', columns: ['scope'])]
 class Website extends Model
 {
+    /** 默认网站代码，底层禁止删除 */
+    public const CODE_DEFAULT = 'default';
+
     public const schema_table = 'weline_websites_website';
     public const schema_primary_key = 'website_id';
 
@@ -36,6 +39,26 @@ class Website extends Model
     #[Col('varchar', 100, nullable: true, default: '', comment: '业务scope标识，如page_builder、catalog等')]
     public const schema_fields_SCOPE = 'scope';
 
+
+    /**
+     * 删除前：默认网站不允许删除（底层强制）
+     */
+    public function delete_before(): void
+    {
+        parent::delete_before();
+        $code = $this->getData(self::schema_fields_CODE);
+        if ($code === '' || $code === null) {
+            $id = $this->getWebsiteId();
+            if ($id > 0) {
+                $one = ObjectManager::getInstance(self::class, [], false);
+                $one->clearQuery()->where(self::schema_fields_ID, $id)->find()->fetch();
+                $code = $one->getData(self::schema_fields_CODE);
+            }
+        }
+        if ($code === self::CODE_DEFAULT) {
+            throw new \RuntimeException(__('默认网站不允许删除'));
+        }
+    }
 
     /**
      * 保存前处理URL
