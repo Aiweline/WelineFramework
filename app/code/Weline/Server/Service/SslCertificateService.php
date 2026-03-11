@@ -1044,6 +1044,7 @@ CNF;
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
             if (!$cert->getCertId()) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
+                $cert->clearData(true);
             }
 
             $parsed = $this->parseCertificate($certPath);
@@ -1094,12 +1095,33 @@ CNF;
                 $cert->setRenewError('');
             }
 
+            $cert = $this->resolveDuplicateDomainCert($cert);
             $cert->save();
             return $cert;
         } catch (\Throwable $e) {
             w_log_error('[SslCertificateService] ' . __('同步证书记录失败：%{1}', [$e->getMessage()]));
             return null;
         }
+    }
+
+    /**
+     * 避免 uk_domain 冲突：若已有其他行占用当前 domain，将当前数据合并到该行并返回该行供 save；否则返回原 cert
+     */
+    private function resolveDuplicateDomainCert(SslCertificate $cert): SslCertificate
+    {
+        $domain = $cert->getDomain();
+        if ($domain === '') {
+            return $cert;
+        }
+        $currentId = $cert->getCertId();
+        $existing = $this->certModel->clearQuery()->loadByDomain($domain);
+        $existingId = $existing->getCertId();
+        if ($existingId > 0 && $existingId !== $currentId) {
+            $existing->setData($cert->getData());
+            $existing->setData(SslCertificate::schema_fields_ID, $existingId);
+            return $existing;
+        }
+        return $cert;
     }
 
     /**
@@ -1363,6 +1385,7 @@ CNF;
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
             if (!$cert->getCertId()) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
+                $cert->clearData(true);
                 $certType = \str_starts_with($domain, '*.') 
                     ? SslCertificate::CERT_TYPE_WILDCARD 
                     : SslCertificate::CERT_TYPE_EXACT;
@@ -1420,8 +1443,9 @@ CNF;
                     ->setIssuer($issuer)
                     ->setStatus(SslCertificate::STATUS_ACTIVE)
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
-                    ->setRenewError('')
-                    ->save();
+                    ->setRenewError('');
+                $cert = $this->resolveDuplicateDomainCert($cert);
+                $cert->save();
 
                 if ($onProgress) {
                     $onProgress((string) __('证书管理记录已保存，cert_id=%{1}', [$cert->getCertId()]), ['cert_id' => $cert->getCertId()]);
@@ -1441,9 +1465,9 @@ CNF;
                 return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
             } else {
                 $cert->setStatus(SslCertificate::STATUS_ERROR)
-                    ->setRenewError($result['message'])
-                    ->save();
-                
+                    ->setRenewError($result['message']);
+                $cert = $this->resolveDuplicateDomainCert($cert);
+                $cert->save();
                 return ['success' => false, 'message' => $result['message'], 'cert' => $cert];
             }
         } catch (\Throwable $e) {
