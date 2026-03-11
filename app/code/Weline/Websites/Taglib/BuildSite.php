@@ -110,7 +110,7 @@ class BuildSite implements TaglibInterface
             }
 
             /** @var OffCanvas $block */
-            $block = ObjectManager::getInstance(OffCanvas::class, $blockData);
+            $block = ObjectManager::getInstance(OffCanvas::class, [$blockData]);
             $block->__init();
             return $block->render();
         };

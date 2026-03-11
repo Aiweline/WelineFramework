@@ -4233,8 +4233,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             var checkBtn = poolId > 0
                 ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __('快速查询解析并更新状态') ?>"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
                 : '';
-            var httpsBtn = poolId > 0 && (String(item.https_status || '').toLowerCase() === 'none' || String(item.https_status || '').toLowerCase() === 'error' || String(item.https_status || '').toLowerCase() === 'expired')
-                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('手动申请 HTTPS 证书') ?>"><i class="mdi mdi-certificate"></i> <?= __('申请HTTPS') ?></button>'
+            var needCert = String(item.https_status || '').toLowerCase() !== 'valid';
+            var httpsBtn = poolId > 0
+                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn' + (needCert ? '' : ' pb-dm-btn--disabled') + '" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" ' + (needCert ? '' : ' disabled title="<?= __('证书有效，无需申请') ?>"') + (needCert ? ' title="<?= __('手动申请 HTTPS 证书') ?>"' : '') + '><i class="mdi mdi-certificate"></i> <?= __('申请证书') ?></button>'
                 : '';
             var delBtn = poolId > 0
                 ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>'

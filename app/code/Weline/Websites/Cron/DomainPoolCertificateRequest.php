@@ -4,8 +4,9 @@ declare(strict_types=1);
 /**
  * Weline Websites - 域名池证书自动申请定时任务
  *
- * 定期检测域名池中解析已生效且指向本服务器的域名，自动申请 HTTPS 证书
- * 条件：resolve_status=resolved + is_local_server=1 + https_status in (none, expired, error)
+ * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
+ * 条件：resolve_status=resolved + is_local_server=1 + https_status in (none, expired, error, pending)
+ * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -51,19 +52,24 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             'failed' => 0,
             'skipped' => 0,
         ];
+        $processLogs = [];
 
         try {
             $domainPoolModel = ObjectManager::getInstance(DomainPool::class);
             $domains = $domainPoolModel->getDomainsNeedCertificate(50);
             $results['checked'] = \count($domains);
             if ($domains === []) {
+                w_log_info('[DomainPoolCertificateRequest] ' . __('没有需要申请证书的域名池域名'), [], 'domain_pool_cert');
                 return __('没有需要申请证书的域名池域名');
             }
+            $processLogs[] = __('本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程', [$results['checked']]);
+            w_log_info('[DomainPoolCertificateRequest] ' . __('本次待申请证书域名数：%{1}，同步阻塞直至每个申请完成并更新状态', [$results['checked']]), [], 'domain_pool_cert');
 
             $strategy = (string) (Env::get('server.ssl.cert_strategy', self::DEFAULT_CERT_STRATEGY) ?? self::DEFAULT_CERT_STRATEGY);
             $strategy = \in_array($strategy, ['single', 'wildcard_prefer', 'both'], true) ? $strategy : self::DEFAULT_CERT_STRATEGY;
             $webroot = \defined('PUB') ? PUB : (BP . 'pub');
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
+            $processLogs[] = __('策略: %{1}, webroot: %{2}', [$strategy, $webroot]);
 
             $groupedByRoot = [];
             foreach ($domains as $row) {
@@ -73,18 +79,19 @@ class DomainPoolCertificateRequest implements CronTaskInterface
 
             foreach ($groupedByRoot as $rootDomain => $rows) {
                 if (($strategy === 'wildcard_prefer' || $strategy === 'both') && $rootDomain !== '') {
-                    $wildResult = $this->requestByRow($rows[0], $webroot, $email, $strategy, true);
+                    $wildResult = $this->requestByRow($rows[0], $webroot, $email, $strategy, true, $processLogs);
                     $results['requested'] += $wildResult['requested'];
                     $results['success'] += $wildResult['success'];
                     $results['failed'] += $wildResult['failed'];
                     $results['skipped'] += $wildResult['skipped'];
                     if ($wildResult['success'] > 0 && $strategy === 'wildcard_prefer') {
+                        $this->markRootPoolRowsValid($rows);
                         continue;
                     }
                 }
 
                 foreach ($rows as $row) {
-                    $singleResult = $this->requestByRow($row, $webroot, $email, 'single', false);
+                    $singleResult = $this->requestByRow($row, $webroot, $email, 'single', false, $processLogs);
                     $results['requested'] += $singleResult['requested'];
                     $results['success'] += $singleResult['success'];
                     $results['failed'] += $singleResult['failed'];
@@ -92,12 +99,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 }
             }
 
-            return __('域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个', [
+            $summary = __('域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个', [
                 $results['checked'],
                 $results['requested'],
                 $results['success'],
                 $results['failed'],
             ]);
+            return \implode("\n", $processLogs) . "\n---\n" . $summary;
         } catch (\Throwable $e) {
             $err = __('域名池证书申请任务异常：%{1}', [$e->getMessage()]);
             w_log_error('[DomainPoolCertificateRequest] ' . $err, [], 'domain_pool_cert');
@@ -129,6 +137,8 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         $poolDomain->setHttpsError('');
         $poolDomain->save();
 
+        w_log_info('[DomainPoolCertificateRequest] ' . __('开始同步申请证书：%{1}，阻塞直至申请完成', [$requestDomain]), [], 'domain_pool_cert');
+
         $counter['requested']++;
         $reqEmail = $email !== '' ? $email : 'admin@' . $domain;
         $domainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
@@ -156,6 +166,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                     $poolDomain->setHttpsError((string)__('证书已签发，HTTPS 连通性校验未通过，等待下次检测'));
                     $poolDomain->setSiteReady(false);
                     $poolDomain->save();
+                    w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功但 HTTPS 校验未通过，保持待检测', [$requestDomain]), [], 'domain_pool_cert');
+                } else {
+                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                    $poolDomain->setHttpsError('');
+                    $poolDomain->calculateSiteReady();
+                    $poolDomain->save();
+                    w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功，已更新为可建站', [$requestDomain]), [], 'domain_pool_cert');
                 }
                 $counter['success']++;
             } else {
@@ -164,17 +181,34 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
                 $poolDomain->setHttpsError($msg);
                 $poolDomain->save();
-                w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请失败: %{2}', [$requestDomain, $msg]), [], 'domain_pool_cert');
+                w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，失败: %{2}', [$requestDomain, $msg]), [], 'domain_pool_cert');
             }
         } catch (\Throwable $e) {
             $counter['failed']++;
             $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
             $poolDomain->setHttpsError($e->getMessage());
             $poolDomain->save();
-            w_log_error(__('[DomainPoolCertificateRequest] %{1} 证书申请异常: %{2}', [$requestDomain, $e->getMessage()]), [], 'domain_pool_cert');
+            w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}', [$requestDomain, $e->getMessage()]), [], 'domain_pool_cert');
         }
 
         return $counter;
+    }
+
+    /**
+     * 泛域证书申请成功后，将同根下所有池子记录标为有效并更新可建站状态（泛域覆盖所有子域）
+     */
+    private function markRootPoolRowsValid(array $rows): void
+    {
+        foreach ($rows as $row) {
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->setData($row);
+            $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+            $pool->setHttpsError('');
+            $pool->calculateSiteReady();
+            $pool->save();
+        }
+        $firstDomain = (string) ($rows[0][DomainPool::schema_fields_DOMAIN] ?? '');
+        w_log_info('[DomainPoolCertificateRequest] ' . __('泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效', [\count($rows)]), [], 'domain_pool_cert');
     }
 
     private function validateHttpsAccess(string $domain): bool
