@@ -698,6 +698,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     var selectedAccountId = 0;
     var domainPurchased = false;
     var domainOwned = false;
+    var restoreStatePending = null;
 
     function setScopeState(name, value) {
         var el = document.querySelector('input[scope="pagebuilder_quick_build_wizard"][name="' + name + '"]');
@@ -749,6 +750,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             el.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
+        // 先切模式，避免后续被 mode click 重置
+        if (state.mode && state.mode !== currentMode) {
+            var modeTab = document.querySelector('.pb-qb-mode-tab[data-mode="' + state.mode + '"]');
+            if (modeTab) modeTab.click();
+        }
+
         setValueIfExists('pb-qb-account', state.registrar_account_id_new);
         setValueIfExists('pb-qb-account-existing', state.registrar_account_id_existing);
         setValueIfExists('pb-qb-domain', state.domain_input);
@@ -768,15 +775,35 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             autoResolve.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        if (state.selected_domain) {
-            selectedDomain = String(state.selected_domain);
+        // 再恢复运行态变量（这是 next2/next1/start 使用的关键）
+        selectedDomain = state.selected_domain ? String(state.selected_domain) : '';
+        selectedAccountId = state.selected_account_id ? (parseInt(state.selected_account_id, 10) || 0) : 0;
+        if (!selectedAccountId) {
+            var idFromSelect = currentMode === 'existing'
+                ? (document.getElementById('pb-qb-account-existing') ? document.getElementById('pb-qb-account-existing').value : '')
+                : (document.getElementById('pb-qb-account') ? document.getElementById('pb-qb-account').value : '');
+            selectedAccountId = parseInt(idFromSelect || '0', 10) || 0;
         }
-        if (state.selected_account_id) {
-            selectedAccountId = parseInt(state.selected_account_id, 10) || 0;
+        if (!selectedDomain && currentMode === 'new') {
+            var domainInputVal = document.getElementById('pb-qb-domain') ? document.getElementById('pb-qb-domain').value.trim() : '';
+            if (domainInputVal) selectedDomain = domainInputVal;
         }
-        if (state.mode && state.mode !== currentMode) {
-            var modeTab = document.querySelector('.pb-qb-mode-tab[data-mode="' + state.mode + '"]');
-            if (modeTab) modeTab.click();
+
+        // 已有域名模式：加载列表后自动回选上次域名
+        if (currentMode === 'existing' && selectedAccountId > 0 && selectedDomain) {
+            restoreStatePending = {
+                domain: selectedDomain,
+                accountId: String(selectedAccountId)
+            };
+            var existingAccountSelect = document.getElementById('pb-qb-account-existing');
+            if (existingAccountSelect) {
+                existingAccountSelect.value = String(selectedAccountId);
+                existingAccountSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            var loadBtn = document.getElementById('pb-qb-load-domains-btn');
+            if (loadBtn) {
+                setTimeout(function() { loadBtn.click(); }, 50);
+            }
         }
         updateFollowRegistrarLabels();
         syncProviderAccountSelection('pb-qb-dns-vendor', 'pb-qb-dns-account');
@@ -795,6 +822,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             .then(function(r) {
                 var payload = r && r.data ? r.data : {};
                 var state = payload.json || payload.data || {};
+                if (typeof state === 'string') {
+                    try { state = JSON.parse(state); } catch (e) { state = {}; }
+                }
                 applyWizardState(state);
             })
             .catch(function() {
@@ -1015,6 +1045,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     '<i class="mdi mdi-information"></i> <?= __('如果您已拥有此域名，请切换到"使用已有域名"模式') ?>' +
                     '</div></div>';
                 selectedDomain = '';
+                setScopeState('selected_domain', '');
+                schedulePersistWizardState();
                 updateNextButtonState();
             }
         }).catch(function(e) {
@@ -1208,6 +1240,18 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     });
                 }
                 bindDomainClickEvents();
+
+                // 恢复态：自动选中上次选择的域名
+                if (restoreStatePending && restoreStatePending.domain && restoreStatePending.accountId === String(acctId)) {
+                    var targetItem = null;
+                    container.querySelectorAll('.pb-qb-domain-item').forEach(function(item) {
+                        if (!targetItem && item.getAttribute('data-domain') === restoreStatePending.domain) {
+                            targetItem = item;
+                        }
+                    });
+                    if (targetItem) targetItem.click();
+                    restoreStatePending = null;
+                }
                 
                 // 实时筛选功能
                 var filterInput = document.getElementById('pb-qb-domain-filter');
