@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+</head>
+<body data-offcanvas-result="<?= htmlspecialchars($type ?? 'success') ?>">
+<script>
+(function() {
+    'use strict';
+    var type = <?= json_encode($type ?? 'success') ?>;
+    var msg = <?= json_encode($msg ?? '') ?>;
+    var url = <?= json_encode($url ?? '') ?>;
+    var reload = <?= json_encode(!empty($reload)) ?>;
+    var parentWin = window.parent;
+    var Toast = parentWin && parentWin.BackendToast;
+    if (Toast) {
+        if (type === 'error') {
+            Toast.error(msg);
+        } else if (type === 'info') {
+            Toast.info(msg);
+        } else {
+            Toast.success(msg);
+        }
+    }
+    try {
+        var closeBtn = parentWin.document.querySelector('.offcanvas .offcanvas-header .btn-close');
+        if (closeBtn) closeBtn.click();
+        if (reload) {
+            parentWin.location.reload();
+        } else if (url) {
+            parentWin.location.href = url;
+        }
+    } catch (e) {
+        console.log('Offcanvas result:', e);
+    }
+})();
+</script>
+</body>
+</html>
