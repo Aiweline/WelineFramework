@@ -120,3 +120,58 @@
     scrollbar-color: var(--backend-scrollbar-thumb, #c1c1c1) var(--backend-scrollbar-track, transparent);
 }
 
+/* =============================================
+   Alert 提示框主题适配（亮/暗色下文字可读）
+   ============================================= */
+.alert-warning,
+.alert.alert-warning {
+    color: var(--backend-color-alert-warning-text) !important;
+    background-color: var(--backend-color-alert-warning-bg) !important;
+    border-color: var(--backend-color-alert-warning-border) !important;
+}
+.alert-warning .alert-link,
+.alert.alert-warning .alert-link {
+    color: var(--backend-color-alert-warning-text) !important;
+}
+
+.alert-success,
+.alert.alert-success {
+    color: var(--backend-color-alert-success-text) !important;
+    background-color: var(--backend-color-alert-success-bg) !important;
+    border-color: var(--backend-color-alert-success-border) !important;
+}
+.alert-success .alert-link,
+.alert.alert-success .alert-link {
+    color: var(--backend-color-alert-success-text) !important;
+}
+
+.alert-danger,
+.alert.alert-danger {
+    color: var(--backend-color-alert-danger-text) !important;
+    background-color: var(--backend-color-alert-danger-bg) !important;
+    border-color: var(--backend-color-alert-danger-border) !important;
+}
+.alert-danger .alert-link,
+.alert.alert-danger .alert-link {
+    color: var(--backend-color-alert-danger-text) !important;
+}
+
+.alert-info,
+.alert.alert-info {
+    color: var(--backend-color-alert-info-text) !important;
+    background-color: var(--backend-color-alert-info-bg) !important;
+    border-color: var(--backend-color-alert-info-border) !important;
+}
+.alert-info .alert-link,
+.alert.alert-info .alert-link {
+    color: var(--backend-color-alert-info-text) !important;
+}
+
+/* =============================================
+   主渐变背景（适配主题，可配合 overflow: hidden）
+   ============================================= */
+.backend-gradient-primary {
+    background: linear-gradient(135deg, var(--backend-color-gradient-start) 0%, var(--backend-color-gradient-end) 100%) !important;
+    overflow: hidden;
+}
+

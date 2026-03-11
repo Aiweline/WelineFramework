@@ -268,15 +268,27 @@ class SaasQueryProvider implements QueryProviderInterface
 
         $records = $model->select()->fetchArray();
         $orders = [];
+        $field = static function (array $record, string $key): string {
+            if (isset($record[$key]) && $record[$key] !== null && $record[$key] !== '') {
+                return (string) $record[$key];
+            }
+            $withAlias = 'main_table.' . $key;
+            if (isset($record[$withAlias]) && $record[$withAlias] !== null && $record[$withAlias] !== '') {
+                return (string) $record[$withAlias];
+            }
+            return isset($record[$key]) ? (string) $record[$key] : (isset($record[$withAlias]) ? (string) $record[$withAlias] : '');
+        };
         foreach ($records as $record) {
+            $record = is_array($record) ? $record : [];
+            $oid = $record[ProvisioningOrder::schema_fields_ORDER_ID] ?? $record['main_table.' . ProvisioningOrder::schema_fields_ORDER_ID] ?? 0;
             $orders[] = [
-                'order_id'      => (int)($record[ProvisioningOrder::schema_fields_ORDER_ID] ?? 0),
-                'domain'        => (string)($record[ProvisioningOrder::schema_fields_DOMAIN] ?? ''),
-                'status'        => (string)($record[ProvisioningOrder::schema_fields_STATUS] ?? ''),
-                'current_step'  => (string)($record[ProvisioningOrder::schema_fields_CURRENT_STEP] ?? ''),
-                'error_message' => (string)($record[ProvisioningOrder::schema_fields_ERROR_MESSAGE] ?? ''),
-                'created_at'    => (string)($record[ProvisioningOrder::schema_fields_CREATED_AT] ?? ''),
-                'updated_at'    => (string)($record[ProvisioningOrder::schema_fields_UPDATED_AT] ?? ''),
+                'order_id'      => (int) $oid,
+                'domain'        => $field($record, ProvisioningOrder::schema_fields_DOMAIN),
+                'status'        => $field($record, ProvisioningOrder::schema_fields_STATUS),
+                'current_step'  => $field($record, ProvisioningOrder::schema_fields_CURRENT_STEP),
+                'error_message' => $field($record, ProvisioningOrder::schema_fields_ERROR_MESSAGE),
+                'created_at'    => $field($record, ProvisioningOrder::schema_fields_CREATED_AT),
+                'updated_at'    => $field($record, ProvisioningOrder::schema_fields_UPDATED_AT),
             ];
         }
 

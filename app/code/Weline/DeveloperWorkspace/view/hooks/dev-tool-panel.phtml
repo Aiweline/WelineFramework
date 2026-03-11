@@ -2106,7 +2106,11 @@ const DevToolPanel = (function() {
         
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载路由...</div></div>';
         
-        const url = (window.api ? window.api('dev/tool/rest/v1/routes', { type }) : ('/api/rest/dev/tool/rest/v1/routes?type=' + type));
+        const url = getDevToolApiUrl('routes', { type });
+        if (!url) {
+            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            return Promise.resolve();
+        }
         return fetch(url)
             .then(response => {
                 if (!response.ok) {
@@ -2210,8 +2214,34 @@ const DevToolPanel = (function() {
     }
 
     // ========== 文档功能 ==========
+    /**
+     * 构建开发工具后端 API URL（使用 rest_backend 前缀，避免 /api/rest/ 错误导致 404）
+     * 优先 window.api，其次 window.site.api_host；无可用 base 时返回空字符串。
+     */
+    function getDevToolApiUrl(path, params) {
+        const basePath = 'dev/tool/rest/v1/' + (path || '').replace(/^\//, '');
+        if (typeof window.api === 'function') {
+            return window.api(basePath, params || {});
+        }
+        if (window.site && window.site.api_host) {
+            const base = (window.site.api_host || '').replace(/\/$/, '');
+            const url = base ? (base + '/' + basePath) : '';
+            if (!url) return '';
+            if (params && typeof params === 'object' && Object.keys(params).length > 0) {
+                const q = new URLSearchParams(params).toString();
+                return q ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + q) : url;
+            }
+            return url;
+        }
+        return '';
+    }
+
     function loadModules() {
-        const url = (window.api ? window.api('dev/tool/rest/v1/document/modules') : '/api/rest/dev/tool/rest/v1/document/modules');
+        const url = getDevToolApiUrl('document/modules');
+        if (!url) {
+            console.warn('[DevToolPanel] Cannot build document API URL (missing window.api / window.site.api_host)');
+            return Promise.resolve();
+        }
         return fetch(url)
             .then(response => {
                 if (!response.ok) {
@@ -2291,21 +2321,16 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>搜索文档...</div></div>';
         
-        let url = (window.api ? window.api('dev/tool/rest/v1/document/search') : '/api/rest/dev/tool/rest/v1/document/search');
-        const params = [];
-        
-        if (state.docSearchKeyword) {
-            params.push('keyword=' + encodeURIComponent(state.docSearchKeyword));
+        const query = {};
+        if (state.docSearchKeyword) query.keyword = state.docSearchKeyword;
+        if (state.docSearchMode === 'module' && state.selectedModule) query.module = state.selectedModule;
+        if (state.docSearchPage) query.page = state.docSearchPage;
+        if (state.docSearchSize) query.size = state.docSearchSize;
+        const url = getDevToolApiUrl('document/search', query);
+        if (!url) {
+            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            return;
         }
-        
-        if (state.docSearchMode === 'module' && state.selectedModule) {
-            params.push('module=' + encodeURIComponent(state.selectedModule));
-        }
-        
-        if (params.length > 0) {
-            url += (url.includes('?') ? '&' : '?') + params.join('&');
-        }
-        
         fetch(url)
             .then(response => response.json())
             .then(data => {
@@ -2358,7 +2383,11 @@ const DevToolPanel = (function() {
         const content = document.getElementById('dev-tool-content');
         content.innerHTML = '<div class="dev-tool-loading"><i class="fa fa-spinner spinning"></i><div>加载文档...</div></div>';
         
-        const url = (window.api ? window.api('dev/tool/rest/v1/document/detail', { id: docId }) : ('/api/rest/dev/tool/rest/v1/document/detail?id=' + docId));
+        const url = getDevToolApiUrl('document/detail', { id: docId });
+        if (!url) {
+            content.innerHTML = '<div class="dev-tool-empty">⚠️ 无法构建 API 地址（请从后台打开本页）</div>';
+            return;
+        }
         fetch(url)
             .then(response => response.json())
             .then(data => {
