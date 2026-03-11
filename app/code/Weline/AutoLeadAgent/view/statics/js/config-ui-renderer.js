@@ -301,14 +301,6 @@ var ConfigUIRenderer = (function () {
      * 更新下载进度 UI
      */
     function updateDownloadProgress(state) {
-        console.log('[ConfigUIRenderer] 更新下载进度:', JSON.stringify({
-            isDownloading: state.isDownloading,
-            progress: state.progress,
-            currentFile: state.currentFile,
-            downloadedSize: state.downloadedSize,
-            totalSize: state.totalSize
-        }));
-        
         var modal = document.getElementById('hf-download-modal');
         if (!modal) {
             console.warn('[ConfigUIRenderer] 下载弹窗元素不存在');
