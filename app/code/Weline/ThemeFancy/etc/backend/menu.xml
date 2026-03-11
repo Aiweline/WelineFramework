@@ -6,7 +6,7 @@
           name="system_frontend_template_fancy" 
           title="Fancy" 
           action="frontend/Template/Fancy"
-          parent="Weline_Frontend::system_frontend" 
+          parent="Weline_Backend::template_management" 
           icon="mdi mdi-file-document-multiple" 
           order="10"/>
 </menus>
