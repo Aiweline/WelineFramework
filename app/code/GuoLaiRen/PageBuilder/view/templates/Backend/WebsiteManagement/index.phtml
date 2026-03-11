@@ -157,6 +157,29 @@ $search = $this->getData('search') ?: '';
     color: var(--backend-color-text-tertiary, #adb5bd) !important;
 }
 
+/* 关联域名列：多域名换行、链接样式 */
+.pagebuilder-website-domain-cell {
+    max-width: 220px;
+}
+.pagebuilder-website-domain-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 4px;
+    margin-right: 8px;
+}
+.pagebuilder-website-domain-badge:last-child {
+    margin-bottom: 0;
+}
+.pagebuilder-website-domain-link {
+    color: var(--backend-color-primary, #556ee6);
+    text-decoration: none;
+    font-size: 0.875rem;
+}
+.pagebuilder-website-domain-link:hover {
+    text-decoration: underline;
+    color: var(--backend-color-primary-hover, #485ec4);
+}
+
 /* 搜索表单适配 */
 #pagebuilder-website-search-form .form-control {
     background: var(--backend-color-input-bg, #fff);
@@ -222,6 +245,7 @@ $search = $this->getData('search') ?: '';
                 <p class="mb-2"><strong><lang>关于网站管理</lang></strong></p>
                 <ul>
                     <li><strong><lang>网站</lang>：</strong><lang>代表一个独立的站点，拥有独立的域名、语言、货币等配置</lang></li>
+                    <li><strong><lang>关联域名</lang>：</strong><lang>一个网站可绑定多个域名，主域名以「主」标识，点击域名可新窗口打开</lang></li>
                     <li><strong><lang>网站代码</lang>：</strong><lang>唯一标识符，用于程序中识别网站，如 default、en_us 等</lang></li>
                     <li><strong><lang>关联语言和货币</lang>：</strong><lang>配置该网站支持的语言和货币选项</lang></li>
                     <li><strong><lang>SEO账户绑定</lang>：</strong><lang>绑定后可自动提交sitemap到搜索引擎</lang></li>
@@ -251,21 +275,14 @@ $search = $this->getData('search') ?: '';
                                 </a>
                             <?php endif; ?>
                         </form>
-                        <block class='Weline\Component\Block\OffCanvas'
-                               cache='0'
-                               id='add_result_modal'
-                               action='*/backend/websiteManagement/add'
-                               title='添加网站'
-                               close-button-show='1'
-                               close-button-text='关闭'
-                               direction='right'
-                               class-names='w-75 h-100'
-                               off-canvas-body-style=''
-                               target-button-text='添加网站'
-                               icon='mdi mdi-plus'
-                               target-button-class='btn btn-primary'
-                               target-tag='a'
-                               save='1'
+                        <w:websites:website:build
+                               id="pagebuilder_add_website"
+                               mode="add"
+                               action="*/backend/websiteManagement/add"
+                               title="添加网站"
+                               target-button-text="添加网站"
+                               icon="mdi mdi-plus"
+                               target-button-class="btn btn-primary"
                         />
                     </div>
                 </div>

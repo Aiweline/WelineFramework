@@ -164,12 +164,15 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                         <w:websites:domain:select
                             id="pagebuilder_domain_select"
                             name="pool_id[]"
-                            value="{{domainSelectValueEscaped}}"
-                            display="{{domainSelectDisplayEscaped}}"
+                            value="<?= $this->getData('domainSelectValueEscaped') ?>"
+                            display="<?= $this->getData('domainSelectDisplayEscaped') ?>"
                             class="w-100"
                             multiple="true"
                             value-type="pool_id"
                             site-ready-only="false"
+                            auto-fill-code="code"
+                            auto-fill-name="name"
+                            auto-fill-url="url"
                         />
                         <div class="form-text-hint">
                             <lang>显示所有域名（包括已建站），选择后可修改站点的域名关联</lang>

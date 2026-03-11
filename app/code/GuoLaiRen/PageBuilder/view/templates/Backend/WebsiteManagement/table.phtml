@@ -15,6 +15,7 @@ $pagination = $this->getData('pagination') ?: '';
             <th><lang>名称</lang></th>
             <th><lang>代码</lang></th>
             <th>URL</th>
+            <th><lang>关联域名</lang></th>
             <th><lang>默认货币</lang></th>
             <th><lang>关联货币</lang></th>
             <th><lang>关联语言</lang></th>
@@ -25,7 +26,7 @@ $pagination = $this->getData('pagination') ?: '';
         <tbody>
         <?php if (empty($websites)): ?>
             <tr>
-                <td colspan="9" class="text-center text-muted py-4">
+                <td colspan="10" class="text-center text-muted py-4">
                     <i class="mdi mdi-web-off" style="font-size: 2rem;"></i>
                     <p class="mt-2"><lang>暂无网站数据</lang></p>
                 </td>
@@ -41,6 +42,31 @@ $pagination = $this->getData('pagination') ?: '';
                             <?= htmlspecialchars($website['url']) ?>
                             <i class="mdi mdi-open-in-new ms-1 small"></i>
                         </a>
+                    </td>
+                    <td class="pagebuilder-website-domain-cell">
+                        <?php
+                        $domainList = $website['domain_list'] ?? [];
+                        if (!empty($domainList)):
+                            foreach ($domainList as $d):
+                                $domain = $d['domain'] ?? '';
+                                if ($domain === '') continue;
+                                $isPrimary = !empty($d['is_primary']);
+                                $protocol = (!empty($d['https_enabled'])) ? 'https' : 'http';
+                                $url = $protocol . '://' . $domain;
+                        ?>
+                            <span class="pagebuilder-website-domain-badge">
+                                <a href="<?= htmlspecialchars($url) ?>" target="_blank" class="pagebuilder-website-domain-link" title="<?= htmlspecialchars($domain) ?>">
+                                    <?= htmlspecialchars($domain) ?>
+                                    <i class="mdi mdi-open-in-new ms-1 small"></i>
+                                </a>
+                                <?php if ($isPrimary): ?>
+                                    <span class="badge bg-primary ms-1"><lang>主</lang></span>
+                                <?php endif; ?>
+                            </span>
+                        <?php endforeach; ?>
+                        <?php else: ?>
+                            <span class="text-muted">-</span>
+                        <?php endif; ?>
                     </td>
                     <td>
                         <?php if (!empty($website['default_currency'])): ?>
@@ -73,31 +99,33 @@ $pagination = $this->getData('pagination') ?: '';
                     </td>
                     <td><small><?= htmlspecialchars($website['default_timezone'] ?? '') ?></small></td>
                     <td>
-                        <block class='Weline\Component\Block\OffCanvas'
-                               cache='0'
-                               id='edit_website_{{website.website_id}}'
-                               action='*/backend/websiteManagement/edit'
-                               vars='website'
-                               action-params='{id:website.website_id}'
-                               title='编辑网站'
-                               close-button-show='1'
-                               close-button-text='关闭'
-                               direction='right'
-                               class-names='w-75 h-100'
-                               off-canvas-body-style=''
-                               target-button-text='编辑'
-                               icon='mdi mdi-pencil'
-                               target-button-class='btn btn-sm btn-outline-info'
-                               target-tag='a'
-                               save='1'
-                        />
+                        <div class="d-flex gap-1 flex-wrap">
+                            <block class='Weline\Component\Block\OffCanvas'
+                                   cache='0'
+                                   id='edit_website_{{website.website_id}}'
+                                   action='*/backend/websiteManagement/edit'
+                                   vars='website'
+                                   action-params='{id:website.website_id}'
+                                   title='编辑网站'
+                                   close-button-show='1'
+                                   close-button-text='关闭'
+                                   direction='right'
+                                   class-names='w-75 h-100'
+                                   off-canvas-body-style=''
+                                   target-button-text='编辑'
+                                   icon='mdi mdi-pencil'
+                                   target-button-class='btn btn-sm btn-outline-info'
+                                   target-tag='a'
+                                   save='1'
+                            />
                         <a href="<?= $this->getBackendUrl('*/backend/websiteManagement/delete') ?>?id=<?= $website['website_id'] ?>"
-                           w-delete="true"
-                           w-msg="<?= __('您确定要删除此网站吗？') ?>"
-                           class="btn btn-sm btn-outline-danger"
-                           title="<?= __('删除') ?>">
-                            <i class="mdi mdi-delete"></i>
-                        </a>
+                               w-delete="true"
+                               w-msg="<?= __('您确定要删除此网站吗？') ?>"
+                               class="btn btn-sm btn-outline-danger"
+                               title="<?= __('删除') ?>">
+                                <i class="mdi mdi-delete"></i>
+                            </a>
+                        </div>
                     </td>
                 </tr>
             <?php endforeach; ?>

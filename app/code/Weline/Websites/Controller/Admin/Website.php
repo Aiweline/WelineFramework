@@ -46,9 +46,10 @@ class Website extends BackendController
         $websites = $this->website->order()->pagination()->select()->fetch();
         $items = $websites->getItems();
         
-        // 获取每个网站的关联货币和语言
+        // 获取每个网站的关联货币、语言、域名
         $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
         $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
+        $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
         
         foreach ($items as &$website) {
             $websiteId = (int)$website['website_id'];
@@ -59,6 +60,9 @@ class Website extends BackendController
             // 获取关联语言
             $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
             $website['language_codes'] = $languageCodes;
+            
+            // 获取关联域名（多个）
+            $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
         }
         
         $this->assign('websites', $items);
@@ -89,9 +93,10 @@ class Website extends BackendController
             $websites = $websiteModel->order()->pagination()->select()->fetch();
             $items = $websites->getItems();
             
-            // 获取每个网站的关联货币和语言
+            // 获取每个网站的关联货币、语言、域名
             $websiteCurrency = ObjectManager::getInstance(WebsiteCurrency::class);
             $websiteLanguage = ObjectManager::getInstance(WebsiteLanguage::class);
+            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
             
             foreach ($items as &$website) {
                 $websiteId = (int)$website['website_id'];
@@ -102,6 +107,9 @@ class Website extends BackendController
                 // 获取关联语言
                 $languageCodes = $websiteLanguage->getWebsiteLanguageCodes($websiteId);
                 $website['language_codes'] = $languageCodes;
+                
+                // 获取关联域名（多个）
+                $website['domain_list'] = $websiteDomain->getDomainsWithStatus($websiteId);
             }
             
             // 渲染表格 HTML
@@ -156,12 +164,14 @@ class Website extends BackendController
                         );
                     }
                 }
+                // 排序：当同时存在根域与 www 时，www 优先作为主 URL
+                $addressList = $this->orderAddressListPreferredUrl($addressList);
                 // 用第一个地址的域名生成默认 code（若未填）
                 $firstDomain = $addressList[0]['domain'];
                 if (empty(trim((string)($data['code'] ?? '')))) {
                     $data['code'] = $this->domainToCode($firstDomain);
                 }
-                // 用第一个地址作为主 URL
+                // 用第一个地址作为主 URL（不再自动加 www，站点可关联多域名）
                 $firstSubPath = $addressList[0]['sub_path'];
                 $data['url'] = 'https://' . $firstDomain . $firstSubPath;
                 
@@ -328,6 +338,7 @@ class Website extends BackendController
                         );
                     }
                 }
+                $addressList = $this->orderAddressListPreferredUrl($addressList);
                 $firstDomain = $addressList[0]['domain'];
                 $firstSubPath = $addressList[0]['sub_path'];
                 $data['url'] = 'https://' . $firstDomain . $firstSubPath;
@@ -662,6 +673,40 @@ class Website extends BackendController
         } catch (\Throwable $e) {
             return [];
         }
+    }
+
+    /**
+     * 对地址列表排序：当同时存在根域与 www 时，www 排在前（作为主 URL）
+     */
+    private function orderAddressListPreferredUrl(array $addressList): array
+    {
+        $domains = array_column($addressList, 'domain');
+        $hasWww = false;
+        $hasRoot = false;
+        foreach ($domains as $d) {
+            if (str_starts_with($d, 'www.')) {
+                $hasWww = true;
+                $root = substr($d, 4);
+                if (in_array($root, $domains, true)) {
+                    $hasRoot = true;
+                    break;
+                }
+            }
+        }
+        if (!$hasWww || !$hasRoot) {
+            return $addressList;
+        }
+        usort($addressList, function ($a, $b) {
+            $da = $a['domain'];
+            $db = $b['domain'];
+            $rootA = str_starts_with($da, 'www.') ? substr($da, 4) : $da;
+            $rootB = str_starts_with($db, 'www.') ? substr($db, 4) : $db;
+            if ($rootA !== $rootB) {
+                return 0;
+            }
+            return str_starts_with($da, 'www.') ? -1 : 1;
+        });
+        return $addressList;
     }
 
     /**
