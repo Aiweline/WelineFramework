@@ -15,6 +15,7 @@ namespace Weline\Websites\Cron;
 use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainResolveService;
@@ -77,6 +78,19 @@ class DomainPoolResolveCheck implements CronTaskInterface
                 $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
                 $poolDomain->setData($row);
                 $domainName = $row[DomainPool::schema_fields_DOMAIN] ?? '';
+                $parentDomainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
+                $parentDomain = ObjectManager::getInstance(Domain::class, [], false);
+                if ($parentDomainId > 0) {
+                    $parentDomain->load($parentDomainId);
+                }
+                $hasDnsOrCdnAccount = $parentDomain->getDnsAccountId() > 0 || $parentDomain->getCdnAccountId() > 0;
+                if (!$hasDnsOrCdnAccount) {
+                    $dnsSkipped++;
+                    $logPrefix = "[{$domainName}] ";
+                    $logs[] = $logPrefix . __('DNS/CDN 账户为空，定时任务跳过检测与证书标记');
+                    w_log_info($logPrefix . __('DNS/CDN 账户为空，定时任务跳过检测与证书标记'), [], self::LOG_KEY);
+                    continue;
+                }
 
                 try {
                     $logPrefix = "[{$domainName}] ";
