@@ -74,6 +74,9 @@ class ServiceOrchestrator
     /** 关闭时等待服务排水的超时时间（秒）- Windows 上通常较快 */
     private float $drainTimeout = 5.0;
 
+    /** IPC 断线后的重连宽限期（秒），避免旧进程仍存活时被过早复活 */
+    private float $ipcReconnectGraceSec = 8.0;
+
     /** 维护模式是否激活 */
     private bool $maintenanceMode = false;
 
@@ -295,6 +298,7 @@ class ServiceOrchestrator
         $this->fullRestartOnFailure = (bool)$context->getConfig('server.orchestrator.full_restart_on_failure', true);
         $this->fullRestartCooldown = (float)$context->getConfig('server.orchestrator.restart_cooldown_sec', 10.0);
         $this->registerTimeout = (float)$context->getConfig('server.orchestrator.register_timeout_sec', $this->startupGracePeriod);
+        $this->ipcReconnectGraceSec = (float)$context->getConfig('server.orchestrator.ipc_reconnect_grace_sec', 8.0);
         $this->reconcileInterval = (float)$context->getConfig('server.orchestrator.reconcile_interval_sec', 5.0);
         $this->sweeperInterval = (float)$context->getConfig('server.orchestrator.sweeper_interval_sec', 15.0);
         $this->periodicOrphanSweepEnabled = (bool)$context->getConfig('server.orchestrator.periodic_orphan_sweep', false);
@@ -1808,20 +1812,33 @@ class ServiceOrchestrator
             // 获取旧实例（在移除前）用于清理和传递 restarts
             $oldInstance = $this->registry->getInstance($entry['role'], $entry['instanceId']);
             $oldRestarts = $oldInstance?->restarts ?? 0;
+            $port = (int)($entry['port'] ?? ($oldInstance?->port ?? 0));
+
+            // 旧实例已经重新连回 Master，取消本次复活
+            if ($oldInstance !== null
+                && $oldInstance->ipcClientId !== null
+                && \in_array($oldInstance->state, [ServiceInstance::STATE_REGISTERED, ServiceInstance::STATE_READY], true)
+            ) {
+                WlsLogger::info_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 已恢复 IPC 连接，取消待执行复活");
+                unset($this->resurrectQueue[$key]);
+                continue;
+            }
 
             // 延迟复活：检查进程是否仍在运行
             if (!empty($entry['delayed']) && !empty($entry['pid'])) {
-                if ($this->isProcessRunning($entry['pid'])) {
-                    // 进程仍在运行，尝试强制终止后再复活
-                    WlsLogger::warning_("[Orchestrator] 进程 {$entry['pid']} 仍在运行（IPC已断开），强制终止");
-                    if ($oldInstance !== null) {
-                        $this->killInstanceProcess($oldInstance);
-                    } else {
-                        $this->forceKillProcess($entry['pid']);
-                    }
-                    // 稍等片刻让进程退出
-                    \usleep(200000); // 200ms
+                if (!$this->terminateStaleProcessBeforeResurrection($oldInstance, (int)$entry['pid'], $port)) {
+                    $entry['scheduledAt'] = \microtime(true) + 1.0;
+                    $this->resurrectQueue[$key] = $entry;
+                    WlsLogger::warning_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 旧进程/端口尚未释放，1 秒后重试复活");
+                    continue;
                 }
+            }
+
+            if (!$this->ensurePortReleasedForResurrection($port)) {
+                $entry['scheduledAt'] = \microtime(true) + 1.0;
+                $this->resurrectQueue[$key] = $entry;
+                WlsLogger::warning_("[Orchestrator] {$entry['role']}#{$entry['instanceId']} 端口 {$port} 仍被占用，推迟复活");
+                continue;
             }
 
             // 清理旧实例的 PID 文件
@@ -1855,6 +1872,81 @@ class ServiceOrchestrator
             return false;
         }
         return Processer::killByPid($pid, true);
+    }
+
+    /**
+     * 复活前确保旧进程已经真正退出，优先按真实 PID 终止，避免 PID 文件滞后误杀失败。
+     */
+    private function terminateStaleProcessBeforeResurrection(?ServiceInstance $oldInstance, int $pid, int $port): bool
+    {
+        if ($pid <= 0) {
+            return $this->ensurePortReleasedForResurrection($port);
+        }
+
+        if (!$this->isProcessRunning($pid)) {
+            return $this->ensurePortReleasedForResurrection($port);
+        }
+
+        WlsLogger::warning_("[Orchestrator] 进程 {$pid} 仍在运行（IPC已断开），优先按真实 PID 终止");
+
+        $stopped = Processer::gracefulKill($pid, 1.0, true);
+        if (!$stopped) {
+            $stopped = Processer::killProcessTreeByPid($pid, true);
+        }
+        if (!$stopped && $oldInstance !== null) {
+            $this->killInstanceProcess($oldInstance);
+            $stopped = !$this->isProcessRunning($pid);
+        }
+
+        if ($port > 0) {
+            Processer::clearPortCache($port);
+        }
+
+        return $stopped && !$this->isProcessRunning($pid) && $this->ensurePortReleasedForResurrection($port);
+    }
+
+    /**
+     * 复活前确认监听端口已释放，必要时再次清理己方残留占用。
+     */
+    private function ensurePortReleasedForResurrection(int $port): bool
+    {
+        if ($port <= 0) {
+            return true;
+        }
+
+        if ($this->waitForPortRelease($port, 1.5)) {
+            return true;
+        }
+
+        if (Processer::isPortUsedByWeline($port)) {
+            WlsLogger::warning_("[Orchestrator] 端口 {$port} 仍被 Weline 进程占用，尝试按端口清理");
+            Processer::killProcessByPort($port);
+            Processer::forceReleasePort($port);
+        }
+
+        return $this->waitForPortRelease($port, 1.5);
+    }
+
+    /**
+     * 等待端口释放，同时清理端口缓存，避免 Linux 侧短期缓存误判。
+     */
+    private function waitForPortRelease(int $port, float $timeout): bool
+    {
+        if ($port <= 0) {
+            return true;
+        }
+
+        $deadline = \microtime(true) + $timeout;
+        do {
+            Processer::clearPortCache($port);
+            if (!Processer::isPortInUse($port)) {
+                return true;
+            }
+            \usleep(100000);
+        } while (\microtime(true) < $deadline);
+
+        Processer::clearPortCache($port);
+        return !Processer::isPortInUse($port);
     }
 
     /**
@@ -2046,6 +2138,12 @@ class ServiceOrchestrator
             $instance->setMeta('worker_id', $workerId);
         }
         $this->registry->updateInstance($instance);
+
+        $resurrectKey = $instance->getKey();
+        if (isset($this->resurrectQueue[$resurrectKey])) {
+            unset($this->resurrectQueue[$resurrectKey]);
+            WlsLogger::info_("[Orchestrator] {$instance->role}#{$instance->instanceId} 已重新注册，取消待执行复活");
+        }
 
         if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
             $this->sendRoutingPolicyToWorker($instance);
@@ -3015,6 +3113,14 @@ class ServiceOrchestrator
         }
 
         $now = \microtime(true);
+        $processStillRunning = $instance->pid > 0 && $this->isProcessRunning($instance->pid);
+        if ($processStillRunning) {
+            $delay = \max(2.0, $this->ipcReconnectGraceSec);
+            WlsLogger::warning_("[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开但进程仍存活，给予 {$delay}s 重连宽限");
+            $this->scheduleResurrectionWithDelay($instance, $delay);
+            return;
+        }
+
         $isNewInstance = $instance->getUptime() < $this->stabilizationSec;
         if ($this->rollingRestartStabilizingUntil > 0 && $now < $this->rollingRestartStabilizingUntil && $isNewInstance) {
             $provider = $this->registry->getProvider($instance->role);
@@ -3089,6 +3195,7 @@ class ServiceOrchestrator
             'scheduledAt' => \microtime(true) + $delay,
             'delayed' => true,  // 标记为延迟复活，执行前需要再次检查进程状态
             'pid' => $instance->pid,  // 保存 PID 用于检查进程是否仍在运行
+            'port' => $instance->port ?? 0,
         ];
         WlsLogger::info_("[Orchestrator] 安排延迟复活 {$instance->role}#{$instance->instanceId}，延迟 {$delay}s (pid={$instance->pid})");
     }
