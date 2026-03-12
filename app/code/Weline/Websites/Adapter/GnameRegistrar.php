@@ -18,7 +18,9 @@ use Weline\Websites\Api\DomainRegistrarInterface;
 
 class GnameRegistrar implements DomainRegistrarInterface
 {
-    private const DEFAULT_API_HOST = 'api.gname.com';
+    /** 官方文档使用的 API 地址，可避免 api.gname.com 被 Cloudflare 返回 HTML 验证页 */
+    private const DEFAULT_API_HOST = 'www.gname.com';
+    private const LEGACY_API_HOST = 'api.gname.com';
     private const REQUEST_TIMEOUT = 30;
     private const CONNECT_TIMEOUT = 10;
 
@@ -66,7 +68,7 @@ class GnameRegistrar implements DomainRegistrarInterface
                 'label' => __('API 域名'),
                 'type' => 'text',
                 'required' => false,
-                'placeholder' => 'api.gname.com',
+                'placeholder' => 'www.gname.com',
                 'default' => self::DEFAULT_API_HOST,
                 'mapping' => 'extra_config.api_host',
             ],
@@ -99,7 +101,7 @@ class GnameRegistrar implements DomainRegistrarInterface
                 __('5. 协议签署完成后可查看 APP ID 和 APP Key'),
                 __('6. 将 APP ID 填入上方「APP ID」字段'),
                 __('7. 将 APP Key 填入上方「APP Key」字段'),
-                __('8. API 域名保持默认（api.gname.com）即可'),
+                __('8. API 域名建议使用 www.gname.com（与官方文档一致；若遇非 JSON 响应可改为 api.gname.com 重试）'),
             ],
         ];
     }
@@ -506,6 +508,22 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
+     * 根据 API 主机和端点构建请求路径
+     * 官方文档使用 www.gname.com，路径为 /domain/api/user/info、/domain/api/jiexi/list 等
+     * 若使用 api.gname.com，路径为 /api/user/info、/api/jiexi/list 等
+     */
+    private function buildApiPath(string $apiHost, string $endpoint): string
+    {
+        $endpoint = \ltrim($endpoint, '/');
+        $hostLower = \strtolower($apiHost);
+        if (\str_contains($hostLower, 'www.gname')) {
+            $suffix = \preg_replace('#^api/#', '', $endpoint);
+            return 'domain/api/' . $suffix;
+        }
+        return $endpoint;
+    }
+
+    /**
      * 生成签名
      *
      * GName 签名算法（官方文档）：
@@ -562,7 +580,10 @@ class GnameRegistrar implements DomainRegistrarInterface
         $gntoken = $this->generateSignature($data, $appKey);
         $data['gntoken'] = $gntoken;
 
-        $url = 'https://' . $apiHost . '/' . \ltrim($endpoint, '/');
+        // 官方文档：https://www.gname.com/domain/api/user/info 等，路径为 /domain/api/{接口}
+        // api.gname.com 可能返回 Cloudflare 验证页（非 JSON），故默认使用 www.gname.com
+        $path = $this->buildApiPath($apiHost, $endpoint);
+        $url = 'https://' . $apiHost . '/' . $path;
 
         // DEBUG: 记录请求信息（开发环境下包含签名详情）
         // 重新计算签名字符串用于调试
