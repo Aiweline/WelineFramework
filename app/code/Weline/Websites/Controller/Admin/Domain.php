@@ -1017,15 +1017,26 @@ class Domain extends BackendController
                         continue;
                     }
 
-                    // 1. 删除该根域下所有域名池记录（子域名一并删除）（fetch() 返回模型，需 getItems() 取记录列表）
+                    // 1. 删除该根域下所有域名池记录（子域名：按 parent_domain_id 与 root_domain 双条件，避免遗漏）
                     $poolModel = ObjectManager::getInstance(DomainPool::class);
-                    $poolRecords = $poolModel->clearQuery()
-                        ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
+                    $byParent = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
                         ->getItems();
-                    foreach ($poolRecords as $poolRecord) {
-                        $poolRecord->delete();
+                    $byRoot = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    $seen = [];
+                    foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
+                        $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
+                        if (isset($seen[$pid])) {
+                            continue;
+                        }
+                        $seen[$pid] = true;
+                        $poolRecord->delete()->fetch();
                         $poolDeleted++;
                     }
 
@@ -1037,12 +1048,12 @@ class Domain extends BackendController
                         ->fetch()
                         ->getItems();
                     foreach ($dnsRecords as $dnsRecord) {
-                        $dnsRecord->delete();
+                        $dnsRecord->delete()->fetch();
                         $dnsDeleted++;
                     }
 
-                    // 3. 删除根域记录
-                    $domain->delete();
+                    // 3. 删除根域记录（必须 fetch() 才真正执行 DELETE）
+                    $domain->delete()->fetch();
                     $deleted++;
                 } catch (\Throwable $e) {
                     $errors[] = "ID {$domainId}: " . $e->getMessage();
@@ -3257,16 +3268,26 @@ class Domain extends BackendController
                         continue;
                     }
 
-                    // 1. 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
-                    $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
-                    $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                    // 1. 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件，避免遗漏）
+                    $poolModel = ObjectManager::getInstance(DomainPool::class);
+                    $byParent = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
                         ->getItems();
-
-                    foreach ($poolRecords as $poolRecord) {
-                        $poolRecord->delete();
+                    $byRoot = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    $seen = [];
+                    foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
+                        $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
+                        if (isset($seen[$pid])) {
+                            continue;
+                        }
+                        $seen[$pid] = true;
+                        $poolRecord->delete()->fetch();
                         $poolDeleted++;
                     }
 
@@ -3279,12 +3300,12 @@ class Domain extends BackendController
                         ->getItems();
 
                     foreach ($dnsRecords as $dnsRecord) {
-                        $dnsRecord->delete();
+                        $dnsRecord->delete()->fetch();
                         $dnsDeleted++;
                     }
 
-                    // 3. 删除域名记录
-                    $domain->delete();
+                    // 3. 删除域名记录（必须 fetch() 才真正执行 DELETE）
+                    $domain->delete()->fetch();
                     $deleted++;
                 } catch (\Throwable $e) {
                     $errors[] = "ID {$domainId}: " . $e->getMessage();
@@ -3378,16 +3399,26 @@ class Domain extends BackendController
                     continue;
                 }
 
-                // 1. 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
-                $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
-                $poolRecords = $poolModel->clearQuery()
-                    ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                // 1. 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件）
+                $poolModel = ObjectManager::getInstance(DomainPool::class);
+                $byParent = $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                     ->select()
                     ->fetch()
                     ->getItems();
-
-                foreach ($poolRecords as $poolRecord) {
-                    $poolRecord->delete();
+                $byRoot = $poolModel->clearQuery()
+                    ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                $seen = [];
+                foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
+                    $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
+                    if (isset($seen[$pid])) {
+                        continue;
+                    }
+                    $seen[$pid] = true;
+                    $poolRecord->delete()->fetch();
                     $poolDeleted++;
                 }
 
@@ -3400,12 +3431,12 @@ class Domain extends BackendController
                     ->getItems();
 
                 foreach ($dnsRecords as $dnsRecord) {
-                    $dnsRecord->delete();
+                    $dnsRecord->delete()->fetch();
                     $dnsDeleted++;
                 }
 
-                // 3. 删除域名记录
-                $domain->delete();
+                // 3. 删除域名记录（必须 fetch() 才真正执行 DELETE）
+                $domain->delete()->fetch();
                 $deleted++;
             }
 
@@ -3850,16 +3881,26 @@ class Domain extends BackendController
                         continue;
                     }
 
-                    // 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
-                    $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
-                    $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                    // 删除关联的域名池记录（子域：按 parent_domain_id 与 root_domain 双条件）
+                    $poolModel = ObjectManager::getInstance(DomainPool::class);
+                    $byParent = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $domainId)
                         ->select()
                         ->fetch()
                         ->getItems();
-
-                    foreach ($poolRecords as $poolRecord) {
-                        $poolRecord->delete();
+                    $byRoot = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    $seen = [];
+                    foreach (\array_merge($byParent, $byRoot) as $poolRecord) {
+                        $pid = $poolRecord->getData(DomainPool::schema_fields_ID);
+                        if (isset($seen[$pid])) {
+                            continue;
+                        }
+                        $seen[$pid] = true;
+                        $poolRecord->delete()->fetch();
                         $poolDeleted++;
                     }
 
@@ -3872,12 +3913,12 @@ class Domain extends BackendController
                         ->getItems();
 
                     foreach ($dnsRecords as $dnsRecord) {
-                        $dnsRecord->delete();
+                        $dnsRecord->delete()->fetch();
                         $dnsDeleted++;
                     }
 
-                    // 删除域名记录
-                    $domain->delete();
+                    // 删除域名记录（必须 fetch() 才真正执行 DELETE）
+                    $domain->delete()->fetch();
                     $deleted++;
                 }
 
