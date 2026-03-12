@@ -475,7 +475,30 @@
                                                                         $website->load($childWebsiteId);
                                                                         if ($website->getId()) {
                                                                             $childWebsiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
-                                                                            $childWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+                                                                            // 获取站点的域名，兼容多个域名，并加上当前请求的端口
+                                                                            $childWebsiteUrls = [];
+                                                                            $rawWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+                                                                            $port = parse_url($this->request->getBaseHost(), PHP_URL_PORT);
+                                                                            if (!empty($rawWebsiteUrl)) {
+                                                                                // 支持多个域名以逗号或分号或空格分隔
+                                                                                $urls = preg_split('/[;, ]+/', $rawWebsiteUrl, -1, PREG_SPLIT_NO_EMPTY);
+                                                                                foreach ($urls as $url) {
+                                                                                    $trimmedUrl = rtrim($url, '/');
+                                                                                    // 判断是否已有端口
+                                                                                    $urlParts = parse_url($trimmedUrl);
+                                                                                    if ($port && !isset($urlParts['port'])) {
+                                                                                        $scheme = isset($urlParts['scheme']) ? $urlParts['scheme'] . '://' : '';
+                                                                                        $host = $urlParts['host'] ?? '';
+                                                                                        $path = isset($urlParts['path']) ? $urlParts['path'] : '';
+                                                                                        $newUrl = $scheme . $host . ':' . $port . $path;
+                                                                                        $childWebsiteUrls[] = $newUrl;
+                                                                                    } else {
+                                                                                        $childWebsiteUrls[] = $trimmedUrl;
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                            // 兼容后续代码，用第一个作为默认
+                                                                            $childWebsiteUrl = isset($childWebsiteUrls[0]) ? $childWebsiteUrls[0] : '';
                                                                         }
                                                                     } catch (\Exception $e) {
                                                                         // 忽略错误

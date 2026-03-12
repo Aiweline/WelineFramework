@@ -641,6 +641,19 @@ abstract class RequestAbstract extends RequestFilter
     }
 
     /**
+     * 获取用于展示的基础 URL（含当前请求端口）
+     *
+     * 用于页面访问地址（pageUrlDisplay）、复制链接、预览等展示场景。
+     * 始终跟随当前请求的 scheme、host、port（WLS 非标准端口会带上）。
+     *
+     * @return string 如 http://localhost:9981 或 https://example.com
+     */
+    public function getDisplayBaseUrl(): string
+    {
+        return rtrim($this->getBaseHost(), '/');
+    }
+
+    /**
      * @DESC         |返回响应类
      *
      * 参数区：
