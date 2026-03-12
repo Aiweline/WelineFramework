@@ -641,16 +641,48 @@ abstract class RequestAbstract extends RequestFilter
     }
 
     /**
-     * 获取用于展示的基础 URL（含当前请求端口）
+     * 获取用于展示的基础 URL（带端口，仅含路径）
      *
      * 用于页面访问地址（pageUrlDisplay）、复制链接、预览等展示场景。
-     * 始终跟随当前请求的 scheme、host、port（WLS 非标准端口会带上）。
+     * 始终跟随当前请求的 scheme、host、port、path，端口在非标准情况下必须带上。
      *
-     * @return string 如 http://localhost:9981 或 https://example.com
+     * @return string 如 http://localhost:9981/foo 或 https://example.com:8443/xxx
      */
     public function getDisplayBaseUrl(): string
     {
-        return rtrim($this->getBaseHost(), '/');
+        // 获取当前协议
+        $scheme = $this->getSsl();
+        // 获取主机名
+        $host = $_SERVER['SERVER_NAME'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        // 获取端口
+        $port = $_SERVER['SERVER_PORT'] ?? '';
+        $withPort = false;
+        if ($port !== '') {
+            // 80和443为默认端口，其它端口需显式加上
+            $withPort = !(
+                ($scheme === 'http' && $port == 80) ||
+                ($scheme === 'https' && $port == 443)
+            );
+        }
+        // 解析当前请求的路径部分
+        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
+        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $basePath = '';
+        if (!empty($requestUri)) {
+            $basePath = parse_url($requestUri, PHP_URL_PATH);
+            if (!empty($scriptName) && strpos($basePath, $scriptName) === 0) {
+                $basePath = substr($basePath, strlen($scriptName));
+            }
+            $basePath = trim($basePath, '/');
+        }
+        $url = $scheme . '://' . $host;
+        if ($withPort) {
+            $url .= ':' . $port;
+        }
+        if ($basePath !== '') {
+            $url = rtrim($url, '/') . '/' . $basePath;
+        }
+        return rtrim($url, '/');
     }
 
     /**
