@@ -177,6 +177,7 @@ class WebsiteForm implements TaglibInterface
             $html[] = '            multiple="true"';
             $html[] = '            value-type="pool_id"';
             $html[] = '            site-ready-only="true"';
+            $html[] = '            website-id="<?= isset($website[\'website_id\']) ? (int)$website[\'website_id\'] : 0 ?>"';
             $html[] = '            auto-fill-code="<?= htmlspecialchars($Taglib__id) ?>_code"';
             $html[] = '            auto-fill-name="<?= htmlspecialchars($Taglib__id) ?>_name"';
             $html[] = '        />';

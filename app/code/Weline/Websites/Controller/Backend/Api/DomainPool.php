@@ -14,6 +14,7 @@ namespace Weline\Websites\Controller\Backend\Api;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Websites\Model\DomainPool as DomainPoolModel;
+use Weline\Websites\Model\WebsiteDomain;
 
 #[Acl('Weline_Websites::domain_pool_api', '域名池API', 'mdi-api', '域名池数据查询接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BaseController
@@ -35,6 +36,7 @@ class DomainPool extends BaseController
      * - limit: 返回数量限制（默认 50）
      * - grouped: 是否按根域名分组（默认 true）
      * - site_ready: 是否只返回可建站域名（默认 true）
+     * - website_id: 编辑站点时传入当前站点ID，可建站列表中会包含本站已绑定的域名（便于取消绑定）
      * - parent_domain_id: 按根域名ID筛选
      * 
      * @return string JSON 响应
@@ -48,18 +50,28 @@ class DomainPool extends BaseController
             $grouped = $this->request->getGet('grouped', 'true') === 'true';
             $siteReadyOnly = $this->request->getGet('site_ready', 'true') === 'true';
             $parentDomainId = (int) $this->request->getGet('parent_domain_id', 0);
+            $websiteId = (int) $this->request->getGet('website_id', 0);
             
             $model = clone $this->domainPoolModel;
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             
-            // 只返回可建站且未已建站的域名（创建站点时选择）
+            // 只返回可建站域名；排除已被其他站点绑定的，但保留当前站点已绑定的（便于编辑时取消域名）
             if ($siteReadyOnly) {
                 $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
-                $model->whereRaw(
-                    '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0)',
-                    'AND'
-                );
+                if ($websiteId > 0) {
+                    $wdTable = WebsiteDomain::schema_table;
+                    $model->whereRaw(
+                        '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
+                        . ' OR ' . DomainPoolModel::schema_fields_ID . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0))',
+                        'AND'
+                    );
+                } else {
+                    $model->whereRaw(
+                        '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0)',
+                        'AND'
+                    );
+                }
             }
             
             // 按根域名ID筛选
