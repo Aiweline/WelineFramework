@@ -115,7 +115,7 @@ $stats = $stats ?? [];
                                 <th><?= __('HTTPS') ?></th>
                                 <th><?= __('到期时间') ?></th>
                                 <th><?= __('颁发机构') ?></th>
-                                <th><?= __('自动续签') ?></th>
+                                <th><?= __('服务商') ?></th>
                                 <th class="text-end"><?= __('操作') ?></th>
                             </tr>
                         </thead>
@@ -127,6 +127,7 @@ $stats = $stats ?? [];
                                 $httpsEnabled = $cert[\Weline\Server\Model\SslCertificate::schema_fields_HTTPS_ENABLED];
                                 $expiresAt = $cert[\Weline\Server\Model\SslCertificate::schema_fields_EXPIRES_AT];
                                 $issuer = $cert[\Weline\Server\Model\SslCertificate::schema_fields_ISSUER];
+                                $provider = $cert[\Weline\Server\Model\SslCertificate::schema_fields_PROVIDER] ?? '';
                                 $autoRenew = $cert[\Weline\Server\Model\SslCertificate::schema_fields_AUTO_RENEW];
                                 $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
                                 $daysLeft = $cert['_days_left'] ?? null;
@@ -179,11 +180,15 @@ $stats = $stats ?? [];
                                     </td>
                                     <td><?= htmlspecialchars($issuer ?: '-') ?></td>
                                     <td>
-                                        <?php if ($autoRenew): ?>
-                                            <i class="bi bi-check-circle text-success"></i>
-                                        <?php else: ?>
-                                            <i class="bi bi-x-circle text-muted"></i>
-                                        <?php endif; ?>
+                                        <?php
+                                        $providerLabel = match ($provider) {
+                                            'letsencrypt' => "Let's Encrypt",
+                                            'litessl' => 'LiteSSL',
+                                            'self_signed' => __('自签证书'),
+                                            default => $provider ?: '-',
+                                        };
+                                        ?>
+                                        <?= htmlspecialchars($providerLabel) ?>
                                     </td>
                                     <td class="text-end">
                                         <div class="btn-group btn-group-sm">
