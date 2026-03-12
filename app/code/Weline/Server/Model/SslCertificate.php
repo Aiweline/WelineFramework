@@ -84,6 +84,26 @@ class SslCertificate extends Model
                     'SslCertificate 新建记录时 domain 不能为空，请先 setDomain() 或检查调用方是否传入有效域名。'
                 );
             }
+        } else {
+            // 更新时校验 uk_domain：若目标 domain 已被其他行占用则提前抛错，避免 SQLSTATE[23505]
+            $domain = \strtolower(\trim((string) $this->getData(self::schema_fields_DOMAIN)));
+            if ($domain !== '') {
+                $currentId = (int) $this->getData(self::schema_fields_ID);
+                $fresh = \Weline\Framework\Manager\ObjectManager::getInstance(static::class, [], false);
+                $rows = $fresh->clearQuery()
+                    ->fields(self::schema_fields_ID)
+                    ->where(self::schema_fields_DOMAIN, $domain)
+                    ->where(self::schema_fields_ID, $currentId, '!=')
+                    ->limit(1)
+                    ->select()
+                    ->fetchArray();
+                if (\count($rows) > 0) {
+                    $otherId = (int) ($rows[0][self::schema_fields_ID] ?? 0);
+                    throw new \InvalidArgumentException(
+                        __('域名 %{1} 已被其他证书记录使用（cert_id=%{2}），不能重复保存。请通过证书管理合并或删除重复记录。', [$domain, $otherId])
+                    );
+                }
+            }
         }
     }
     
