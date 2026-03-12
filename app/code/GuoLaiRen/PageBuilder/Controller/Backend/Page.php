@@ -427,15 +427,15 @@ class Page extends BackendController
                 // 忽略错误，使用默认值
             }
         }
-        // 如果没有站点 URL，使用当前请求的 baseHost
+        // 如果没有站点 URL，使用当前请求的展示用 base（根域名+端口）
         if (empty($baseHost)) {
-            $baseHost = $this->request ? ($this->request->getBaseHost() ?? '') : '';
+            $baseHost = $this->request ? $this->request->getDisplayBaseUrl() : '';
         }
         
         $handle = (string)$page->getData(PageModel::schema_fields_HANDLE);
         $pageUrl = '';
         if ($baseHost !== '') {
-            $pageUrl = rtrim(rtrim($baseHost, '/'), ':') . '/' . ltrim($handle, '/');
+            $pageUrl = $baseHost . '/' . ltrim($handle, '/');
         }
         
         $locale = Cookie::getLang();
@@ -2400,8 +2400,8 @@ class Page extends BackendController
             if ($websiteUrl) {
                 $frontendUrl = rtrim($websiteUrl, '/') . '?' . http_build_query($query);
             } else {
-                // 回退到使用当前访问的网站地址
-                $baseUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
+                // 回退到使用当前访问的网站地址（根域名+请求端口）
+                $baseUrl = $this->request->getDisplayBaseUrl();
                 $frontendUrl = $baseUrl . '?' . http_build_query($query);
             }
         } else {
@@ -2667,9 +2667,9 @@ class Page extends BackendController
                     // 忽略错误
                 }
             }
-            // 如果没有网站 URL，使用当前请求的 baseHost
+            // 如果没有网站 URL，使用当前请求的展示用 base（根域名+端口）
             if (empty($websiteUrl)) {
-                $websiteUrl = rtrim(rtrim($this->request->getBaseHost() ?? '', '/'), ':');
+                $websiteUrl = $this->request->getDisplayBaseUrl();
             }
             
             $baseDir = rtrim(BP . 'pub/media/page-build', '/');
@@ -3471,8 +3471,8 @@ class Page extends BackendController
                 mkdir($fontsDir, 0755, true);
             }
 
-            // 解析HTML，提取并下载资源
-            $baseUrl = $this->request->getBaseHost();
+            // 解析HTML，提取并下载资源（使用展示用 base，含请求端口）
+            $baseUrl = $this->request->getDisplayBaseUrl();
             
             // 确保baseUrl是完整的URL（包含协议）
             if (!preg_match('/^https?:\/\//i', $baseUrl)) {
@@ -3705,8 +3705,8 @@ class Page extends BackendController
         $dom->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
         libxml_clear_errors();
         
-        // 获取基础URL用于解析链接
-        $baseUrl = $this->request->getBaseHost();
+        // 获取基础URL用于解析链接（展示用 base，含请求端口）
+        $baseUrl = $this->request->getDisplayBaseUrl();
         if (!preg_match('/^https?:\/\//i', $baseUrl)) {
             $scheme = $this->request->isSecure() ? 'https' : 'http';
             $host = $this->request->getHttpHost();
