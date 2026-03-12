@@ -288,34 +288,35 @@ $isEdit = $post && $post->getId();
     </div>
 </form>
 
-<!-- Offcanvas 新建站点（遵循 Websites 站点建立逻辑） -->
+<!-- Offcanvas 新建站点（与网站管理 add 一致：address_lines + pool_ids 多地址逻辑） -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNewSite" aria-labelledby="offcanvasNewSiteLabel">
     <div class="offcanvas-header border-bottom">
         <h5 class="offcanvas-title" id="offcanvasNewSiteLabel">
-            <i class="mdi mdi-web-plus"></i> <?= __('快速新建站点') ?>
+            <i class="mdi mdi-web-plus"></i> <?= __('新建站点') ?>
         </h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body">
         <form id="quickSiteForm" class="needs-validation" novalidate>
-            <!-- 可选：从域名池选择域名（自动填充下方字段） -->
+            <!-- 域名选择（可多选，选择后自动同步网站地址） -->
             <div class="mb-3">
                 <label class="form-label">
-                    <i class="mdi mdi-domain me-1"></i> <?= __('选择域名（可选）') ?>
+                    <i class="mdi mdi-domain me-1"></i> <?= __('选择域名') ?>
                 </label>
                 <w:websites:domain:select
                     id="quick_site_domain_select"
-                    name="quick_site_domain"
+                    name="pool_ids"
                     value="''"
-                    display="点击选择域名"
+                    display="<?= addslashes(__('点击选择域名（可多选）')) ?>"
                     class="w-100"
-                    multiple="false"
+                    multiple="true"
+                    value-type="pool_id"
                     site-ready-only="true"
                     auto-fill-name="new_site_name"
                     auto-fill-code="new_site_code"
-                    auto-fill-url="new_site_url"
+                    auto-fill-address="new_site_address_lines"
                 />
-                <div class="form-text"><?= __('从域名池选择后可自动填充站点名称、代码和URL') ?></div>
+                <div class="form-text"><?= __('选择域名后会自动填充站点名称、代码和网站地址') ?></div>
             </div>
             
             <!-- 站点名称（必填） -->
@@ -349,18 +350,19 @@ $isEdit = $post && $post->getId();
                 <div class="invalid-feedback"><?= __('请输入有效的站点代码') ?></div>
             </div>
             
-            <!-- 站点URL（必填） -->
+            <!-- 网站地址（必填，每行一个，与网站管理表单一致） -->
             <div class="mb-3">
-                <label for="new_site_url" class="form-label">
-                    <?= __('站点URL') ?> <span class="text-danger">*</span>
+                <label for="new_site_address_lines" class="form-label">
+                    <?= __('网站地址') ?> <span class="text-danger">*</span>
                 </label>
-                <input type="url" 
-                       class="form-control" 
-                       id="new_site_url" 
-                       name="url" 
-                       placeholder="<?= __('例如：https://example.com') ?>"
-                       required>
-                <div class="invalid-feedback"><?= __('请输入有效的站点URL') ?></div>
+                <textarea class="form-control" 
+                          id="new_site_address_lines" 
+                          name="address_lines" 
+                          rows="3" 
+                          required 
+                          placeholder="www.example.com&#10;www.example.com/blog"><?= '' ?></textarea>
+                <div class="form-text"><?= __('每行一个地址：可只填域名，或 域名/子路径（如 /blog）') ?></div>
+                <div class="invalid-feedback"><?= __('请至少填写一行网站地址') ?></div>
             </div>
             
             <!-- 提交按钮 -->
@@ -391,7 +393,7 @@ document.getElementById('title')?.addEventListener('input', function() {
     }
 });
 
-// 快速创建站点表单提交（使用 Websites 的 quickSave 接口）
+// 快速创建站点表单提交（与 add 一致：address_lines + pool_ids）
 document.getElementById('quickSiteForm')?.addEventListener('submit', async function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -400,21 +402,16 @@ document.getElementById('quickSiteForm')?.addEventListener('submit', async funct
     const alertDiv = document.getElementById('siteFormAlert');
     const submitBtn = document.getElementById('btnSaveSite');
     
-    // 表单验证
     if (!form.checkValidity()) {
         form.classList.add('was-validated');
         return;
     }
     
-    // 禁用按钮，显示加载状态
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __("保存中...") ?>';
     
     try {
-        const formData = new FormData();
-        formData.append('name', document.getElementById('new_site_name').value.trim());
-        formData.append('code', document.getElementById('new_site_code').value.trim());
-        formData.append('url', document.getElementById('new_site_url').value.trim());
+        const formData = new FormData(form);
         formData.append('default_timezone', 'Asia/Shanghai');
         
         // 发送到 Websites 的 quickSave 接口（与 PageBuilder 一键建站保持一致）
