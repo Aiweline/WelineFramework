@@ -244,7 +244,7 @@ class MenuCollector
             // 排除仍在当前 menu.xml 中定义的子项，避免父节点被移除时误删仍有效的子菜单
             $children = array_values(array_diff($children, $file_sources));
             $all = array_merge([$source], $children);
-            if (in_array($module, $disabledModules, true)) {
+            if ($this->shouldSoftDisableRemovedMenu($module, $disabledModules)) {
                 foreach ($all as $s) {
                     if (!in_array($s, $sourcesToDisable, true)) {
                         $sourcesToDisable[] = $s;
@@ -265,6 +265,25 @@ class MenuCollector
             'to_delete' => $sourcesToDelete,
             'to_disable' => $sourcesToDisable,
         ];
+    }
+
+    /**
+     * 已禁用但仍存在于代码目录中的模块，菜单保留为软禁用。
+     * 若模块目录已被删除（异常卸载），则必须直接删除残留菜单，不能仅软禁用。
+     */
+    private function shouldSoftDisableRemovedMenu(string $module, array $disabledModules): bool
+    {
+        if ($module === '' || !in_array($module, $disabledModules, true)) {
+            return false;
+        }
+
+        $moduleInfo = Env::getInstance()->getModuleByName($module);
+        $basePath = (string)($moduleInfo['base_path'] ?? '');
+        if ($basePath === '') {
+            return false;
+        }
+
+        return is_dir($basePath);
     }
 
     /**
