@@ -128,12 +128,12 @@ class Auto extends CommandAbstract
         $this->printer->note(__('Webroot：%{1}', [$webroot]));
         echo "\n";
         
-        // 本地域名（localhost、127.0.0.1 等）使用 ensureCertificate 生成自签证书
+        // 只有本地域名（localhost、127.0.0.1、IP 地址等）才用自签证书
+        // 线上域名即使在 dev 环境也应申请真证书
         $useEnsure = $this->sslService->isLocalDomain($domain)
-            || $this->sslService->resolvesToLoopback($domain)
-            || $this->sslService->isDevelopmentEnvironment();
+            || $this->sslService->resolvesToLoopback($domain);
         if ($useEnsure) {
-            $this->printer->note(__('检测到本地/开发环境，将生成自签证书'));
+            $this->printer->note(__('检测到本地域名，将生成自签证书'));
             $result = $this->sslService->ensureCertificate($domain, $webroot, $email);
             if ($result['success']) {
                 $this->printer->success(__('✓ 自签证书生成成功！'));
