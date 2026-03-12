@@ -1211,8 +1211,9 @@ class PageRenderService
     /**
      * 清理 HTML 文档结构标签
      * 
-     * 移除组件 HTML 中可能存在的完整文档结构标签
-     * 确保组件只是纯粹的 HTML 片段
+     * 移除组件 HTML 中可能存在的完整文档结构标签；
+     * 提取组件内所有 <style> 到片段前部，并从原位置移除，避免 <style> 出现在 nav 等标签内。
+     * 确保组件只是纯粹的 HTML 片段，且样式集中在片段前部。
      */
     private function cleanHtmlDocumentTags(string $html): string
     {
@@ -1223,11 +1224,12 @@ class PageRenderService
         $html = preg_replace('/<html[^>]*>/i', '', $html);
         $html = preg_replace('/<\/html>/i', '', $html);
         
-        // 移除 <head> 标签及其内容（保留重要的 meta 和 style）
-        // 提取 head 中的 style 标签
+        // 提取所有 style 标签（包括组件内部的，如 <nav><style>...</style>）
         $styles = '';
         if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
             $styles = implode("\n", $matches[0]);
+            // 从片段中移除这些 style 标签，避免 header 等组件里残留 <style> 导致结构混乱
+            $html = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $html);
         }
         $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
         
@@ -1235,9 +1237,9 @@ class PageRenderService
         $html = preg_replace('/<body[^>]*>/i', '', $html);
         $html = preg_replace('/<\/body>/i', '', $html);
         
-        // 如果有提取到的 styles，添加回去
+        // 将提取的样式放在片段前部，最终插入到插槽内时样式在组件结构之前
         if (!empty($styles)) {
-            $html = $styles . $html;
+            $html = $styles . "\n" . trim($html);
         }
         
         return trim($html);

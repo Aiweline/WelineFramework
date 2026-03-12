@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -23,6 +24,9 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Preview extends BackendController
 {
+    /** 预览输出完整 HTML 文档，禁止使用后台布局包裹 */
+    protected ?string $layoutType = null;
+
     private Page $pageModel;
     private LocalDescription $localDescriptionModel;
     private Style $styleModel;
@@ -356,8 +360,15 @@ class Preview extends BackendController
             $currentLocale,
             $tempStyleCode
         );
-        
-        echo $html;
+        // 通过终止异常直接输出完整 HTML，避免被主题/布局包裹导致 header 等组件被塞进后台 layout 的 body
+        $headers = [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Accel-Expires' => '0',
+        ];
+        throw new ResponseTerminateException(200, $html, $headers);
     }
 
     /**

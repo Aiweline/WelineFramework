@@ -680,15 +680,19 @@ class GnameRegistrar implements DomainRegistrarInterface
         $result = \json_decode((string) $responseBody, true);
         if (!\is_array($result)) {
             $bodyTrim = \trim((string) $responseBody);
-            w_log_error("响应解析失败: endpoint={$endpoint}, http_code={$httpCode}, body=" . \mb_substr($bodyTrim, 0, 500), [], 'gname_api');
+            $bodySnippet = \mb_substr($bodyTrim, 0, 800);
+            w_log_error("响应解析失败: endpoint={$endpoint}, http_code={$httpCode}, effective_url={$effectiveUrl}, body=" . \mb_substr($bodyTrim, 0, 500), [], 'gname_api');
+            $detail = __('HTTP 状态: %{1} | 请求 URL: %{2} | 响应内容摘要: %{3}', [
+                $httpCode,
+                $effectiveUrl ?: $url,
+                $bodySnippet !== '' ? $bodySnippet : __('空响应'),
+            ]);
             if ($bodyTrim !== '' && (\str_starts_with($bodyTrim, '<') || \str_contains($bodyTrim, '<script') || \str_contains($bodyTrim, '__CF$cv$params'))) {
-                throw new \RuntimeException(__(
-                    'GName API 返回了非 JSON 响应（可能是 Cloudflare 验证页面或网络异常）。' .
-                    '请检查：1) API 地址是否正确；2) 稍后重试；3) 若持续出现请联系 GName 客服确认接口状态。'
-                ));
+                throw new \RuntimeException(
+                    __('GName API 返回了非 JSON 响应（可能是 Cloudflare 验证页面或错误页面）。') . ' ' . $detail
+                );
             }
-            $bodySnippet = \mb_substr($bodyTrim, 0, 200);
-            throw new \RuntimeException(__('GName API 响应解析失败 (HTTP %{1}): %{2}', [$httpCode, $bodySnippet ?: __('空响应')]));
+            throw new \RuntimeException(__('GName API 响应解析失败：%{1}', [$detail]));
         }
 
         return $result;
