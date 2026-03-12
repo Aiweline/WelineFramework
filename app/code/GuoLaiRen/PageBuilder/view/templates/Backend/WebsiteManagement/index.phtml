@@ -21,17 +21,18 @@ $search = $this->getData('search') ?: '';
    ============================================ */
 .pagebuilder-website-badge {
     font-size: 0.75rem;
-    padding: 0.25em 0.5em;
+    padding: 0.35em 0.65em;
+    font-weight: 500;
 }
 
 .pagebuilder-website-usage-guide {
-    background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    background: linear-gradient(135deg, var(--backend-color-card-bg, #fff) 0%, var(--backend-color-bg-tertiary, #f8f9fa) 100%);
+    border: none;
     border-left: 4px solid var(--backend-color-primary, #556ee6);
     padding: 16px 20px;
     border-radius: var(--backend-border-radius-md, 8px);
-    margin-bottom: 20px;
-    box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
+    margin-bottom: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .pagebuilder-website-usage-guide-header {
@@ -40,7 +41,8 @@ $search = $this->getData('search') ?: '';
     align-items: center;
     cursor: pointer;
     user-select: none;
-    transition: color 0.2s ease;
+    transition: all 0.2s ease;
+    padding: 4px 0;
 }
 
 .pagebuilder-website-usage-guide-header:hover h6 {
@@ -110,62 +112,125 @@ $search = $this->getData('search') ?: '';
 #pagebuilder-website-table-container .card,
 .row > .col-12 > .card {
     background: var(--backend-color-card-bg, #fff);
-    border: 1px solid var(--backend-color-border-default, #dee2e6);
-    border-radius: var(--backend-border-radius-md, 8px);
+    border: none;
+    border-radius: var(--backend-border-radius-lg, 12px);
+    box-shadow: 0 0 0 1px var(--backend-color-border-light, #e9ecef), 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .pagebuilder-website-card .card-body,
 #pagebuilder-website-table-container .card-body,
 .row > .col-12 > .card > .card-body {
-    background: var(--backend-color-card-bg, #fff);
+    background: transparent;
+    padding: 1.5rem;
 }
 
 .pagebuilder-website-card .card-title,
 #pagebuilder-website-table-container .card-title,
 .row > .col-12 > .card .card-title {
     color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    margin-bottom: 0;
 }
 
 /* 表格样式适配 */
 #pagebuilder-website-table-container .table {
     color: var(--backend-color-text-primary, #212529);
+    margin-bottom: 0;
 }
-
 #pagebuilder-website-table-container .table thead th {
     background: var(--backend-color-bg-secondary, #f8f9fa);
     color: var(--backend-color-text-primary, #212529);
     border-color: var(--backend-color-border-default, #dee2e6);
+    font-weight: 600;
+    font-size: 0.875rem;
+    padding: 0.875rem 1rem;
+    white-space: nowrap;
+    border-bottom-width: 2px;
 }
-
 #pagebuilder-website-table-container .table tbody td {
     border-color: var(--backend-color-border-light, #e9ecef);
     color: var(--backend-color-text-primary, #212529);
+    padding: 0.875rem 1rem;
+    vertical-align: middle;
 }
-
+#pagebuilder-website-table-container .table tbody tr {
+    transition: background-color 0.15s ease-in-out;
+}
 #pagebuilder-website-table-container .table-hover tbody tr:hover {
-    background: var(--backend-color-table-bg-hover, #f8f9fa);
+    background: var(--backend-color-table-bg-hover, #f5f6f8);
 }
-
 #pagebuilder-website-table-container .table code {
     background: var(--backend-color-bg-tertiary, #e9ecef);
-    color: var(--backend-color-danger, #f46a6a);
-    padding: 2px 6px;
+    color: var(--backend-color-primary, #556ee6);
+    padding: 0.25rem 0.5rem;
     border-radius: var(--backend-border-radius-sm, 4px);
+    font-size: 0.85em;
 }
-
 #pagebuilder-website-table-container .table .text-muted {
     color: var(--backend-color-text-tertiary, #adb5bd) !important;
+}
+/* 表格列宽优化 */
+#pagebuilder-website-table-container .table th:nth-child(1),
+#pagebuilder-website-table-container .table td:nth-child(1) {
+    width: 60px;
+    text-align: center;
+}
+#pagebuilder-website-table-container .table th:nth-child(2),
+#pagebuilder-website-table-container .table td:nth-child(2) {
+    min-width: 120px;
+    font-weight: 500;
+}
+#pagebuilder-website-table-container .table th:nth-child(3),
+#pagebuilder-website-table-container .table td:nth-child(3) {
+    width: 140px;
+}
+#pagebuilder-website-table-container .table th:nth-child(4),
+#pagebuilder-website-table-container .table td:nth-child(4) {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#pagebuilder-website-table-container .table th:nth-child(5),
+#pagebuilder-website-table-container .table td:nth-child(5) {
+    min-width: 180px;
+}
+#pagebuilder-website-table-container .table th:nth-child(6),
+#pagebuilder-website-table-container .table td:nth-child(6),
+#pagebuilder-website-table-container .table th:nth-child(7),
+#pagebuilder-website-table-container .table td:nth-child(7),
+#pagebuilder-website-table-container .table th:nth-child(8),
+#pagebuilder-website-table-container .table td:nth-child(8) {
+    width: 100px;
+    text-align: center;
+}
+#pagebuilder-website-table-container .table th:nth-child(9),
+#pagebuilder-website-table-container .table td:nth-child(9) {
+    width: 120px;
+    font-size: 0.85rem;
+}
+#pagebuilder-website-table-container .table th:nth-child(10),
+#pagebuilder-website-table-container .table td:nth-child(10) {
+    width: 200px;
+    text-align: right;
 }
 
 /* 关联域名列：多域名换行、链接样式 */
 .pagebuilder-website-domain-cell {
-    max-width: 220px;
+    max-width: 280px;
+    line-height: 1.8;
 }
 .pagebuilder-website-domain-badge {
     display: inline-flex;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     margin-right: 8px;
+    background: var(--backend-color-bg-tertiary, #f5f6f8);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    transition: background-color 0.15s ease;
+}
+.pagebuilder-website-domain-badge:hover {
+    background: var(--backend-color-bg-secondary, #e9ecef);
 }
 .pagebuilder-website-domain-badge:last-child {
     margin-bottom: 0;
@@ -173,28 +238,42 @@ $search = $this->getData('search') ?: '';
 .pagebuilder-website-domain-link {
     color: var(--backend-color-primary, #556ee6);
     text-decoration: none;
-    font-size: 0.875rem;
+    font-size: 0.85rem;
 }
 .pagebuilder-website-domain-link:hover {
     text-decoration: underline;
     color: var(--backend-color-primary-hover, #485ec4);
 }
+.pagebuilder-website-domain-badge .badge {
+    font-size: 0.7rem;
+    padding: 0.2em 0.5em;
+}
 
 /* 搜索表单适配 */
 #pagebuilder-website-search-form .form-control {
     background: var(--backend-color-input-bg, #fff);
-    border-color: var(--backend-color-border-default, #dee2e6);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
     color: var(--backend-color-text-primary, #212529);
+    border-radius: var(--backend-border-radius-md, 8px);
+    transition: all 0.2s ease;
+    padding: 0.5rem 1rem;
 }
-
 #pagebuilder-website-search-form .form-control:focus {
     border-color: var(--backend-color-primary, #556ee6);
     background: var(--backend-color-input-bg, #fff);
     color: var(--backend-color-text-primary, #212529);
+    box-shadow: 0 0 0 3px rgba(85, 110, 230, 0.1);
 }
-
 #pagebuilder-website-search-form .form-control::placeholder {
     color: var(--backend-color-text-placeholder, #adb5bd);
+}
+#pagebuilder-website-search-form .btn {
+    border-radius: var(--backend-border-radius-md, 8px);
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+#pagebuilder-website-search-form .btn:hover {
+    transform: translateY(-1px);
 }
 
 /* 空状态样式 */
@@ -253,8 +332,20 @@ $search = $this->getData('search') ?: '';
 }
 
 /* 表格操作列按钮组 */
+#pagebuilder-website-table-container .pagebuilder-website-op-cell {
+    white-space: nowrap;
+}
 #pagebuilder-website-table-container .pagebuilder-website-op-cell .btn {
     white-space: nowrap;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8rem;
+    transition: all 0.15s ease-in-out;
+}
+#pagebuilder-website-table-container .pagebuilder-website-op-cell .btn:hover {
+    transform: translateY(-1px);
+}
+#pagebuilder-website-table-container .pagebuilder-website-op-cell .btn i {
+    font-size: 0.9rem;
 }
 </style>
 
