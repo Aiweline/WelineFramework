@@ -226,18 +226,16 @@ class Remove extends CommandAbstract
                 $this->printer->warning(__('标签注册表更新时发生错误：%{1}', [$e->getMessage()]));
             }
             
-            // 执行菜单 diff，移除已卸载模块在 weline_acl 中的菜单/ACL 记录
+            // 执行菜单 + ACL 差集同步，移除已卸载模块在 weline_acl 中的残留菜单/权限
             try {
-                $this->printer->note(__('正在同步菜单与 ACL（移除已卸载模块的菜单项）...'));
+                $this->printer->note(__('正在同步菜单与 ACL 差集（移除已卸载模块残留资源）...'));
                 // 必须先刷新 Env 缓存，否则 Scanner 仍使用旧的模块列表
                 Env::getInstance()->getModuleList(true);
                 Env::getInstance()->getActiveModules(true);
-                /** @var \Weline\Backend\Service\MenuCollector $menuCollector */
-                $menuCollector = ObjectManager::getInstance(\Weline\Backend\Service\MenuCollector::class);
-                $menuCollector->collect([]);
+                $this->syncAclResourcesAfterModuleRemoval();
                 $this->printer->success(__('✓ 菜单与 ACL 已同步完成。'));
             } catch (\Exception $e) {
-                $this->printer->warning(__('菜单同步时发生错误：%{1}，可手动执行：php bin/w menu:collect', [$e->getMessage()]));
+                $this->printer->warning(__('菜单与 ACL 差集同步时发生错误：%{1}，可手动执行：php bin/w setup:upgrade --route', [$e->getMessage()]));
             }
             
             $this->printer->success(__('模块卸载完成，共卸载 %{1} 个模块。', [$uninstalledCount]));
@@ -254,6 +252,31 @@ class Remove extends CommandAbstract
     public function tip(): string
     {
         return '批量卸载模块，执行卸载脚本并自动更新系统注册表';
+    }
+
+    /**
+     * 卸载模块后执行菜单与 ACL 的全量差集同步。
+     *
+     * 流程与 setup:upgrade 的路由收集阶段保持一致：
+     * 1. before_route_collection：触发菜单预收集
+     * 2. updateRoutes([])：重新收集现存模块路由，并落库控制器 ACL
+     * 3. after_route_collection：按「当前有效菜单 ∪ 当前有效 ACL」做差集，删除残留资源
+     *
+     * @throws \Weline\Framework\App\Exception
+     */
+    private function syncAclResourcesAfterModuleRemoval(): void
+    {
+        /** @var EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $beforeRouteCollectionEventData = [];
+        $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
+
+        /** @var \Weline\Framework\Router\Service\RouteUpdateService $routeUpdateService */
+        $routeUpdateService = ObjectManager::getInstance(\Weline\Framework\Router\Service\RouteUpdateService::class);
+        $routeUpdateService->updateRoutes([]);
+
+        $afterRouteCollectionEventData = [];
+        $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
     }
 
     public function help(): array|string
