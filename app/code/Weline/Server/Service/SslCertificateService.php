@@ -1176,10 +1176,10 @@ CNF;
         $map = [];
         foreach ($certificates as $cert) {
             $domain = $cert[SslCertificate::schema_fields_DOMAIN];
-            $certPath = $cert[SslCertificate::schema_fields_CERT_PATH];
-            $keyPath = $cert[SslCertificate::schema_fields_KEY_PATH];
-            
-            if (\is_file($certPath) && \is_file($keyPath)) {
+            $certPath = (string)($cert[SslCertificate::schema_fields_CERT_PATH] ?? '');
+            $keyPath = (string)($cert[SslCertificate::schema_fields_KEY_PATH] ?? '');
+
+            if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
                 $map[$domain] = [
                     'cert' => $certPath,
                     'key' => $keyPath,

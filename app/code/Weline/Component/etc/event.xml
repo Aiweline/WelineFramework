@@ -2,9 +2,7 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <event name="Framework_Http::response_redirect_before">
-        <observer name="Weline_Component::result_redirect_before" instance="Weline\Component\Observer\ResultRedirectBefore" disabled="false" shared="true" sort="100"/>
-    </event>
+    <!-- 结果桥接页地址：提供默认 URL（Offcanvas getResult），Framework 层负责在 redirect_before 中替换目标 -->
     <event name="Weline_Framework_Manager::result_bridge_url">
         <observer name="Weline_Component::result_bridge_url_provider" instance="Weline\Component\Observer\ResultBridgeUrlProvider" disabled="false" shared="true" sort="0"/>
     </event>
