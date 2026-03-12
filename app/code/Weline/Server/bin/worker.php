@@ -1517,6 +1517,40 @@ function handleRequest(
         
         $response = \Weline\Framework\Http\WlsResponse::fromContent($result, $statusCode);
         
+        // 合并应用通过 HeaderCollector 设置的响应头（否则 WLS 会“吞掉”页面/控制器设置的 header）
+        $pendingHeaders = $runtime->consumePendingHeaders();
+        foreach ($pendingHeaders as $name => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            $value = \is_array($value) ? \implode(', ', $value) : (string) $value;
+            $response->setHeader($name, $value);
+        }
+        // 合并应用通过 HeaderCollector 设置的 Cookie（与“HTTP/” 分支行为一致）
+        $pendingCookies = $runtime->consumePendingCookies();
+        foreach ($pendingCookies as $cookie) {
+            $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
+            if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
+                $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
+            }
+            if (!empty($cookie['path'])) {
+                $parts[] = 'Path=' . $cookie['path'];
+            }
+            if (!empty($cookie['domain'])) {
+                $parts[] = 'Domain=' . $cookie['domain'];
+            }
+            if (!empty($cookie['secure'])) {
+                $parts[] = 'Secure';
+            }
+            if (!empty($cookie['httpOnly'])) {
+                $parts[] = 'HttpOnly';
+            }
+            if (!empty($cookie['sameSite'])) {
+                $parts[] = 'SameSite=' . $cookie['sameSite'];
+            }
+            $response->addCookieHeader(\implode('; ', $parts));
+        }
+        
         // 添加路由提示头（用于 TCP 透传模式下的智能路由）
         $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
         \Weline\Server\Service\RouteHintService::addHintToWlsResponse($response, $sni);
