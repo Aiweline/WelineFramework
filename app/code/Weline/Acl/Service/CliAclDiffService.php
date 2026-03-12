@@ -3,9 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Service;
 
-use Weline\Acl\Model\Acl;
 use Weline\Backend\Config\MenuXmlReader;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Env;
 
 /**
  * CLI 生命周期内的 ACL diff 服务。
@@ -30,19 +29,12 @@ class CliAclDiffService
 
     public function cleanupAfterCollection(): int
     {
-        $validSourceIds = array_flip(array_merge(
+        $validSourceIds = array_merge(
             $this->getCollectedMenuSourceIds(),
             CollectedAclSourceIdsRegistry::getAll()
-        ));
-
-        $orphanSourceIds = [];
-        foreach ($this->getKnownSystemSourceIds() as $sourceId) {
-            if (!isset($validSourceIds[$sourceId])) {
-                $orphanSourceIds[] = $sourceId;
-            }
-        }
-
-        return $this->aclOrphanCleanupService->cleanupBySourceIds($orphanSourceIds);
+        );
+        $activeModules = array_keys(Env::getInstance()->getActiveModules());
+        return $this->aclOrphanCleanupService->cleanupByActiveModules($activeModules, $validSourceIds);
     }
 
     /**
@@ -63,27 +55,4 @@ class CliAclDiffService
         return $sources;
     }
 
-    /**
-     * @return string[]
-     */
-    private function getKnownSystemSourceIds(): array
-    {
-        /** @var Acl $acl */
-        $acl = ObjectManager::getInstance(Acl::class);
-        $field = Acl::schema_fields_ACL_ORIGIN;
-        $rows = $acl->reset()
-            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')")
-            ->fields(Acl::schema_fields_SOURCE_ID)
-            ->select()
-            ->fetchArray();
-
-        $sourceIds = [];
-        foreach ($rows as $row) {
-            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
-            if ($sourceId !== '') {
-                $sourceIds[] = $sourceId;
-            }
-        }
-        return $sourceIds;
-    }
 }
