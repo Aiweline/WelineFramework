@@ -2985,6 +2985,16 @@ CNF;
     }
 
     /**
+     * 清理无效 SSL 配置：清除实例配置中失效证书路径，并重新生成证书映射。
+     * 在检测到「证书文件不存在」时立即调用，避免反复报错。
+     */
+    public function cleanupInvalidSslConfigAndMap(): void
+    {
+        $this->clearInvalidSslPathsFromInstanceConfigs();
+        $this->regenerateCertificateMap();
+    }
+
+    /**
      * 清除实例配置文件中指向不存在证书的 ssl_cert/ssl_key/ssl_domain。
      * 证书重载或删除后，若实例配置仍引用已失效路径，server:start 会报「证书文件不存在」。
      */
