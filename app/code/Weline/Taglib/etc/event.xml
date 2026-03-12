@@ -5,4 +5,10 @@
     <event name="Weline_Framework_Template::after_tags_config">
         <observer name="Weline_Taglib::custom_tag" instance="Weline\Taglib\Observer\TagParser" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework_Setup::collect_taglib_registry">
+        <observer name="Weline_Taglib::setup_collect_taglib_registry" instance="Weline\Taglib\Observer\CollectTaglibRegistry" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Framework_Module::remove_after_taglib_collect">
+        <observer name="Weline_Taglib::module_remove_collect_taglib_registry" instance="Weline\Taglib\Observer\CollectTaglibRegistry" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>

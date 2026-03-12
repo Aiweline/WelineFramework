@@ -126,6 +126,7 @@ class Page extends FrontendController
         // 检查是否为预览模式
         $isPreview = $this->request->getGet('preview') == '1';
         $previewPageId = $isPreview ? (int)$this->request->getGet('page_id') : 0;
+        $previewStyleCode = $isPreview ? trim((string)$this->request->getGet('style_code', '')) : '';
 
         // 获取URL中的语言参数
         $requestedLocale = $this->request->getGet('lang', $this->request->getGet('locale'));
@@ -164,6 +165,7 @@ class Page extends FrontendController
         // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页
         if (($page === null || !$page->getId()) && empty($handle) && $websiteId > 0) {
             $page = clone $this->pageModel;
+            $page->clearData();
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
@@ -178,6 +180,7 @@ class Page extends FrontendController
             // 如果没找到，尝试 website_id = 0 的全局首页
             if (!$page->getId()) {
                 $page = clone $this->pageModel;
+                $page->clearData();
                 $page->clear()
                     ->where(PageModel::schema_fields_WEBSITE_ID, 0)
                     ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
@@ -197,6 +200,7 @@ class Page extends FrontendController
             
             // 加载页面（按 website_id + handle 查询）
             $page = clone $this->pageModel;
+            $page->clearData();
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::schema_fields_HANDLE, $handle);
@@ -211,6 +215,7 @@ class Page extends FrontendController
             // 如果没找到，尝试 website_id = 0（全局/默认站点，保持之前使用方式）
             if (!$page->getId() && $websiteId !== 0) {
                 $page = clone $this->pageModel;
+                $page->clearData();
                 $page->clear()
                     ->where(PageModel::schema_fields_WEBSITE_ID, 0)
                     ->where(PageModel::schema_fields_HANDLE, $handle);
@@ -262,6 +267,7 @@ class Page extends FrontendController
         if ($styleCode) {
             // 验证样式是否存在
             $style = clone $this->styleModel;
+            $style->clearData();
             $style->clear()
                 ->where(Style::schema_fields_CODE, $styleCode)
                 ->find()
@@ -273,11 +279,25 @@ class Page extends FrontendController
                 
                 // 使用统一的 PageRenderService 渲染页面
                 // 这确保了可视化编辑器预览和正式上线页面的渲染逻辑完全一致
+                // 预览模式下允许通过 URL 的 style_code 临时覆盖模板，避免编辑器已切换模板但页面尚未保存时仍渲染旧模板
+                $tempStyleCode = null;
+                if ($isPreview && $previewStyleCode !== '') {
+                    $previewStyle = clone $this->styleModel;
+                    $previewStyle->clearData();
+                    $previewStyle->clear()
+                        ->where(Style::schema_fields_CODE, $previewStyleCode)
+                        ->find()
+                        ->fetch();
+                    if ($previewStyle->getId()) {
+                        $tempStyleCode = $previewStyleCode;
+                    }
+                }
+
                 $html = $this->pageRenderService->render(
                     $page,
                     $renderMode,
                     $currentLocale,
-                    null // 无临时样式
+                    $tempStyleCode
                 );
                 
                 echo $html;
@@ -606,6 +626,14 @@ class Page extends FrontendController
         // 如果当前请求是预览模式，保留 preview 参数
         if (isset($_GET['preview']) && $_GET['preview'] == '1') {
             $params['preview'] = '1';
+        }
+        // 预览时保留 page_id，确保语言切换后仍预览同一页面
+        if (!empty($_GET['page_id'])) {
+            $params['page_id'] = (int)$_GET['page_id'];
+        }
+        // 预览时保留 style_code，确保语言切换后仍预览当前模板
+        if (!empty($_GET['style_code'])) {
+            $params['style_code'] = (string)$_GET['style_code'];
         }
         
         // 重新构建URL

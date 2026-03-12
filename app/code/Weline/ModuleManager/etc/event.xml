@@ -12,4 +12,13 @@
     <event name="Weline_Framework_Module::module_upgrade_before">
         <observer name="Weline_ModuleManager::module_upgrade_before" instance="Weline\ModuleManager\Observer\ModuleUpdateBefore" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Framework_Module::remove_before_backup">
+        <observer name="Weline_ModuleManager::remove_before_backup" instance="Weline\ModuleManager\Observer\RemoveBeforeBackup" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Framework_UninstallService::module_db_backup">
+        <observer name="Weline_ModuleManager::uninstall_module_db_backup" instance="Weline\ModuleManager\Observer\UninstallServiceModuleDbBackup" disabled="false" shared="true" sort="0"/>
+    </event>
+    <event name="Weline_Framework_UninstallService::module_db_restore">
+        <observer name="Weline_ModuleManager::uninstall_module_db_restore" instance="Weline\ModuleManager\Observer\UninstallServiceModuleDbRestore" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>
