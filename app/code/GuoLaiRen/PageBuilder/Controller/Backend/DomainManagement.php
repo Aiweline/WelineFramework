@@ -945,11 +945,30 @@ class DomainManagement extends BaseController
             $pagination = $model->pagination ?? [];
 
             // 正在注册中的根域（有未完成的生命周期订单）：这些域名的操作按钮需置灰并提示
+            // 若根域已在域名表（已拉取/已经注册），则不视为「正在注册中」，允许子域进行 DNS 检查
             $rootDomains = array_unique(array_filter(array_column($domains, DomainPool::schema_fields_ROOT_DOMAIN)));
+            $rootsInDomainTable = [];
+            if ($rootDomains !== []) {
+                $domainModel = ObjectManager::getInstance(Domain::class);
+                $domainRows = $domainModel->clearQuery()
+                    ->fields(Domain::schema_fields_DOMAIN)
+                    ->select()
+                    ->fetchArray();
+                foreach ($domainRows as $row) {
+                    $d = \strtolower(\trim((string) ($row[Domain::schema_fields_DOMAIN] ?? '')));
+                    if ($d !== '') {
+                        $rootsInDomainTable[$d] = true;
+                    }
+                }
+            }
             $registeringRoots = [];
             foreach ($rootDomains as $root) {
                 $root = (string) $root;
                 if ($root === '') {
+                    continue;
+                }
+                $rootLower = \strtolower(\trim($root));
+                if (!empty($rootsInDomainTable[$rootLower])) {
                     continue;
                 }
                 try {
