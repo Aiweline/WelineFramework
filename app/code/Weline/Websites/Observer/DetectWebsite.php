@@ -262,11 +262,6 @@ class DetectWebsite implements ObserverInterface
     private function expandSitesWithDomains(array $sites): array
     {
         $expanded = [];
-        $sitesById = [];
-        foreach ($sites as $row) {
-            $id = (int) ($row['website_id'] ?? 0);
-            $sitesById[$id] = $row;
-        }
         try {
             /** @var WebsiteDomain $domainModel */
             $domainModel = w_obj(WebsiteDomain::class);
@@ -294,11 +289,9 @@ class DetectWebsite implements ObserverInterface
             }
             $websiteId = (int) ($site['website_id'] ?? 0);
             $list = $domainsByWebsite[$websiteId] ?? [];
-            $scheme = 'https';
-            if (preg_match('#^https?://#i', $siteUrl, $m)) {
-                $scheme = strtolower($m[0]);
-                $scheme = str_starts_with($scheme, 'https') ? 'https' : 'http';
-            }
+            $parsedSiteUrl = \parse_url((string) $siteUrl);
+            $scheme = (($parsedSiteUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
+            $port = isset($parsedSiteUrl['port']) ? ':' . $parsedSiteUrl['port'] : '';
             foreach ($list as $d) {
                 $domain = $d[WebsiteDomain::schema_fields_DOMAIN] ?? '';
                 $subPath = $d[WebsiteDomain::schema_fields_SUB_PATH] ?? '';
@@ -306,7 +299,7 @@ class DetectWebsite implements ObserverInterface
                 if ($domain === '') {
                     continue;
                 }
-                $base = $scheme . '://' . $domain;
+                $base = $scheme . '://' . $domain . $port;
                 if ($subPath !== '' && $subPath !== null) {
                     $base .= '/' . trim((string) $subPath, '/');
                 }
@@ -329,6 +322,9 @@ class DetectWebsite implements ObserverInterface
      */
     private function findSiteByWebsiteDomain(string $requestUrl, string $currentHost, Website $websiteModel): ?array
     {
+        $parsedRequestUrl = \parse_url($requestUrl);
+        $requestScheme = (($parsedRequestUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
+        $requestPort = isset($parsedRequestUrl['port']) ? ':' . $parsedRequestUrl['port'] : '';
         $path = Url::parse_url($requestUrl, 'path') ?? '';
         $path = '/' . trim($path, '/');
         if ($path === '') {
@@ -385,6 +381,13 @@ class DetectWebsite implements ObserverInterface
         if (!$websiteModel->getWebsiteId()) {
             return null;
         }
-        return $websiteModel->getData();
+        $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
+        $matchedSubPath = (string) ($chosen['sub_path'] ?? '');
+        if ($matchedSubPath !== '' && $matchedSubPath !== '/') {
+            $matchedBaseUrl .= $matchedSubPath;
+        }
+        $data = $websiteModel->getData();
+        $data['url'] = $matchedBaseUrl;
+        return $data;
     }
 }
