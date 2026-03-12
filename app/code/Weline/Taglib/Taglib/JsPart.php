@@ -71,7 +71,16 @@ class JsPart implements \Weline\Taglib\TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            $name = $attributes['name'];
+            $name = trim((string)($attributes['name'] ?? ''));
+            $innerContent = trim((string)($tag_data[2] ?? ''));
+
+            // 成对标签：name 为空但含内联内容时，直接输出 <script> 包裹的 JS
+            if ($name === '' && $innerContent !== '') {
+                return '<script>' . $innerContent . '</script>';
+            }
+            if ($name === '') {
+                throw new Exception(htmlentities('<js:part name="">') . __('所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>'));
+            }
             $cache = w_cache('taglib');
             $cache_key = 'js:part::' . $name;
             $content = $cache->get($cache_key);
