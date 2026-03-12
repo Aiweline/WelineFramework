@@ -799,6 +799,28 @@ foreach ($menuItems as $item) {
 
 ---
 
+## 0.6 Phtml PHP 控制结构必须成对闭合 ⭐⭐⭐ 【强制】
+
+**模板编译后若存在未闭合的 `if/foreach/for/while`，会报 `ParseError: unexpected end of file, expecting elseif or else or endif`，导致页面 500。**
+
+❌ **禁止：**
+- `<?php if (...): ?>` 无对应 `<?php endif; ?>`
+- `<?php foreach (...): ?>` 无对应 `<?php endforeach; ?>`
+- `<?php for (...): ?>` 无对应 `<?php endfor; ?>`
+- 删除/重构时漏删或多删 `endif`/`endforeach`
+
+✅ **正确做法：**
+1. 成对书写：每写 `if (`、`foreach (` 立即补上对应的 `endif`/`endforeach`
+2. 嵌套时注意缩进，确保每层都有闭合
+3. `<acl>...</acl>`、`<w:xxx>` 等标签会展开为 PHP，若其内部有分支，需保证展开后的 PHP 结构完整
+4. 修改模板后：删除 `view/tpl/` 下对应编译缓存，或执行 `php bin/w cache:clear`，避免使用旧编译结果
+
+**校验方式：** 源模板中 `if (` 数量应等于 `endif` 数量，`foreach` 数量应等于 `endforeach` 数量（不含 `<?php if ($x) {` 等花括号写法）。
+
+**触发词：** phtml、模板、ParseError、unexpected end of file、endif、endforeach、编译缓存、view/tpl
+
+---
+
 ## 1. 模板标签系统 ⭐⭐⭐ 【重要参考】
 
 Weline 框架提供丰富的模板标签，用于简化前端开发。所有标签支持以下语法格式：
