@@ -1149,26 +1149,34 @@ CNF;
     /**
      * 基于 issuer 推断 provider（优先保留已知 provider）。
      */
+    /**
+     * 基于证书文件中的实际 issuer 推断 provider。
+     * 当 issuer 不为空时，以 issuer 为准（证书文件是真实来源）；
+     * 仅当 issuer 为空且 DB 已有有效 provider 时保留 DB 值。
+     */
     protected function inferProviderByIssuer(string $provider, string $issuer): string
     {
+        $issuerLower = \strtolower(\trim($issuer));
+
+        // issuer 不为空时，以证书文件中的实际 issuer 为准
+        if ($issuerLower !== '') {
+            if (\str_contains($issuerLower, 'self') || \str_contains($issuerLower, 'weline')) {
+                return self::PROVIDER_SELF_SIGNED;
+            }
+            if (\str_contains($issuerLower, 'let') && \str_contains($issuerLower, 'encrypt')) {
+                return self::PROVIDER_LETS_ENCRYPT;
+            }
+            if (\str_contains($issuerLower, 'sectigo') || \str_contains($issuerLower, 'litessl')) {
+                return self::PROVIDER_LITESSL;
+            }
+        }
+
+        // issuer 为空或无法识别：保留 DB 中已有的有效 provider
         $normalizedProvider = $this->normalizeAcmeProvider($provider);
         if ($this->isSupportedProvider($normalizedProvider)) {
             return $normalizedProvider;
         }
 
-        $issuerLower = \strtolower(\trim($issuer));
-        if ($issuerLower === '') {
-            return self::PROVIDER_LETS_ENCRYPT;
-        }
-        if (\str_contains($issuerLower, 'self') || \str_contains($issuerLower, 'weline')) {
-            return self::PROVIDER_SELF_SIGNED;
-        }
-        if (\str_contains($issuerLower, 'let') && \str_contains($issuerLower, 'encrypt')) {
-            return self::PROVIDER_LETS_ENCRYPT;
-        }
-        if (\str_contains($issuerLower, 'sectigo') || \str_contains($issuerLower, 'litessl')) {
-            return self::PROVIDER_LITESSL;
-        }
         return self::PROVIDER_LETS_ENCRYPT;
     }
     
