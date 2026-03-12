@@ -157,6 +157,75 @@ if (\is_array($envConfig)) {
     }
 }
 
+/**
+ * 从 TLS ClientHello 数据中解析 SNI（Server Name Indication）域名。
+ * 用于 defer-ssl 模式：PHP 的 SNI_server_certs 在 stream_socket_enable_crypto 时不生效，
+ * 需手动解析 ClientHello 并在握手前设置对应域名的证书。
+ *
+ * @param string $data peek 到的原始 TCP 数据（至少需要 43+ 字节）
+ * @return string|null 解析到的 SNI 主机名，失败返回 null
+ */
+function _parseSniHostFromClientHello(string $data): ?string
+{
+    $len = \strlen($data);
+    // TLS record: ContentType(1) + Version(2) + Length(2) + Handshake
+    // Handshake: HandshakeType(1) + Length(3) + ClientVersion(2) + Random(32) = 43 bytes minimum
+    if ($len < 43 || \ord($data[0]) !== 0x16) {
+        return null; // Not a TLS handshake
+    }
+    // Handshake type: ClientHello = 0x01
+    if (\ord($data[5]) !== 0x01) {
+        return null;
+    }
+    $pos = 43; // skip: record header(5) + handshake header(4) + client version(2) + random(32)
+    if ($pos >= $len) {
+        return null;
+    }
+    // Session ID
+    $sessionIdLen = \ord($data[$pos]);
+    $pos += 1 + $sessionIdLen;
+    if ($pos + 2 > $len) {
+        return null;
+    }
+    // Cipher Suites
+    $cipherSuitesLen = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+    $pos += 2 + $cipherSuitesLen;
+    if ($pos + 1 > $len) {
+        return null;
+    }
+    // Compression Methods
+    $compressionLen = \ord($data[$pos]);
+    $pos += 1 + $compressionLen;
+    if ($pos + 2 > $len) {
+        return null;
+    }
+    // Extensions total length
+    $extensionsLen = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+    $pos += 2;
+    $extensionsEnd = $pos + $extensionsLen;
+    if ($extensionsEnd > $len) {
+        $extensionsEnd = $len;
+    }
+    while ($pos + 4 <= $extensionsEnd) {
+        $extType = (\ord($data[$pos]) << 8) | \ord($data[$pos + 1]);
+        $extLen = (\ord($data[$pos + 2]) << 8) | \ord($data[$pos + 3]);
+        $pos += 4;
+        if ($extType === 0x0000) { // SNI extension
+            // Server Name List Length(2) + Name Type(1) + Name Length(2) + Name
+            if ($pos + 5 <= $extensionsEnd && $pos + $extLen <= $extensionsEnd) {
+                $nameType = \ord($data[$pos + 2]);
+                $nameLen = (\ord($data[$pos + 3]) << 8) | \ord($data[$pos + 4]);
+                if ($nameType === 0 && $pos + 5 + $nameLen <= $extensionsEnd) {
+                    return \substr($data, $pos + 5, $nameLen);
+                }
+            }
+            return null;
+        }
+        $pos += $extLen;
+    }
+    return null;
+}
+
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 $sniServerCerts = [];
 $certMapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
@@ -1368,8 +1437,28 @@ while (true) {
         }
         
         // SSL/TLS 握手请求，启动 SSL 握手
-        // 为 accept 的连接设置 SSL context（关键步骤！）
-        foreach ($deferSslOptions as $optName => $optValue) {
+        // defer-ssl 模式下 PHP 的 SNI_server_certs 不会生效（SNI 回调仅在 stream_socket_server 创建时注册），
+        // 因此需要手动从 ClientHello 中解析 SNI 域名，并选择对应的证书文件。
+        $sniOptions = $deferSslOptions;
+        if (!empty($sniServerCerts)) {
+            $sniPeek = @\stream_socket_recvfrom($conn, 4096, \STREAM_PEEK);
+            if ($sniPeek !== false && \strlen($sniPeek) > 5) {
+                $sniHost = _parseSniHostFromClientHello($sniPeek);
+                if ($sniHost !== null) {
+                    $sniHostLower = \strtolower($sniHost);
+                    if (isset($sniServerCerts[$sniHostLower])) {
+                        $sniOptions['local_cert'] = $sniServerCerts[$sniHostLower]['local_cert'];
+                        $sniOptions['local_pk'] = $sniServerCerts[$sniHostLower]['local_pk'];
+                        if ($isDev) {
+                            WlsLogger::info_("SNI 匹配: {$sniHostLower} → {$sniOptions['local_cert']}");
+                        }
+                    } elseif ($isDev) {
+                        WlsLogger::info_("SNI 未匹配: {$sniHostLower}，使用默认证书");
+                    }
+                }
+            }
+        }
+        foreach ($sniOptions as $optName => $optValue) {
             \stream_context_set_option($conn, 'ssl', $optName, $optValue);
         }
         
