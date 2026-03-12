@@ -105,11 +105,22 @@
                         <div class="weline-cron-search">
                             <block class='Weline\Component\Block\Form\Search' id='cron-search'
                                    action='*/cron/listing'
-                                   params="status"
+                                   params="status,module"
                                    method='get' keyword='q'
-                                   value=''
+                                   value='{{filterSearch}}'
                                    placeholder='搜索任务名/模块/类名'></block>
                         </div>
+                        <select id="weline-cron-module-filter" class="form-select form-select-sm" style="width: auto;">
+                            <option value=""><lang>全部模块</lang></option>
+                            <?php
+                            $moduleOptions = $moduleOptions ?? [];
+                            $filterModule = $filterModule ?? '';
+                            foreach ($moduleOptions as $mod) {
+                                $sel = ($filterModule !== '' && $filterModule === $mod) ? ' selected' : '';
+                                echo '<option value="' . htmlspecialchars((string)$mod) . '"' . $sel . '>' . htmlspecialchars((string)$mod) . '</option>';
+                            }
+                            ?>
+                        </select>
                         <select id="weline-cron-status-filter" class="form-select form-select-sm" style="width: auto;">
                             <option value=""><lang>全部状态</lang></option>
                             <option value="pending" <?php if (($status ?? '') === 'pending') echo 'selected'; ?>><lang>待执行</lang></option>
@@ -140,8 +151,11 @@
                         </thead>
                         <tbody>
                         <foreach name="tasks" item="task">
-                            <tr data-task-id="{{task.id}}" data-status="{{task.status}}">
-                                <td>
+                            <tr data-task-id="{{task.id}}" data-status="{{task.status}}" class="weline-cron-main-row">
+                                <td class="weline-cron-id-cell">
+                                    <button type="button" class="weline-cron-expand-toggle btn btn-link p-0 border-0 bg-transparent text-secondary" aria-expanded="false" data-target="cron-detail-{{task.id}}" title="@lang{展开任务描述}">
+                                        <i class="mdi mdi-chevron-down weline-cron-chevron"></i>
+                                    </button>
                                     <span class="fw-semibold">{{task.id}}</span>
                                 </td>
                                 <td>
@@ -154,11 +168,6 @@
                                             <span class="weline-cron-module">{{task.module}}</span>
                                             <span class="weline-cron-class" title="{{task.class}}"><string>task.class|30</string></span>
                                         </div>
-                                        <if condition="task.tip">
-                                            <div class="weline-cron-tip text-muted" title="{{task.tip}}">
-                                                <string>task.tip|40</string>
-                                            </div>
-                                        </if>
                                     </div>
                                 </td>
                                 <td>
@@ -176,10 +185,11 @@
                                     ];
                                     $taskStatus = $task['status'] ?? 'pending';
                                     $st = $statusMap[$taskStatus] ?? $statusMap['pending'];
+                                    $runningDuration = ($taskStatus === 'running' && !empty($task['running_duration_human'])) ? $task['running_duration_human'] : '';
                                     ?>
                                     <span class="weline-cron-status <?= $st['class'] ?>">
                                         <i class="mdi <?= $st['icon'] ?>"></i>
-                                        <?= $st['text'] ?>
+                                        <?= $st['text'] ?><?= $runningDuration !== '' ? ' · ' . $runningDuration : '' ?>
                                     </span>
                                     <if condition="task.out_run">
                                         <span class="weline-cron-outrun-badge" title="@lang{任务超时未执行}">
@@ -225,6 +235,14 @@
                                                 </button>
                                             </form>
                                         </if>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr class="weline-cron-detail-row" id="cron-detail-{{task.id}}" aria-hidden="true" style="display: none;">
+                                <td colspan="6" class="weline-cron-detail-cell">
+                                    <div class="weline-cron-tip-accordion">
+                                        <strong class="text-muted"><lang>任务描述</lang>：</strong>
+                                        <span class="weline-cron-tip-full"><if condition="task.tip">{{task.tip}}<else/><lang>无</lang></if></span>
                                     </div>
                                 </td>
                             </tr>
@@ -381,6 +399,32 @@
 .weline-cron-empty i { font-size: 4rem; margin-bottom: var(--backend-spacing-sm, 12px); }
 .weline-cron-empty p { margin: 0; font-size: 1rem; }
 
+.weline-cron-id-cell { vertical-align: middle; }
+.weline-cron-expand-toggle {
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 4px;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+.weline-cron-expand-toggle:hover { color: var(--backend-color-primary, #556ee6); }
+.weline-cron-expand-toggle[aria-expanded="true"] .weline-cron-chevron { transform: rotate(180deg); }
+.weline-cron-chevron { transition: transform 0.2s ease; font-size: 1.1rem; }
+.weline-cron-detail-row { background: var(--backend-color-bg-secondary, #f8f9fa); }
+.weline-cron-detail-cell {
+    padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
+    border-left: 3px solid var(--backend-color-primary, #556ee6);
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+    line-height: 1.5;
+}
+.weline-cron-tip-accordion { padding-left: 4px; }
+.weline-cron-tip-full { white-space: pre-wrap; word-break: break-word; }
+
 @media (max-width: 768px) {
     .weline-cron-search { min-width: 100%; }
     .weline-cron-stat-card { padding: var(--backend-spacing-sm, 12px); }
@@ -394,16 +438,36 @@
 (function() {
     'use strict';
     var baseUrl = '<?= htmlspecialchars((string)$this->getBackendUrl('*/cron/listing')) ?>';
+    var params = new URLSearchParams(window.location.search);
+    function applyFilters(overrides) {
+        var url = new URL(baseUrl, window.location.origin);
+        var q = params.get('q');
+        if (q) url.searchParams.set('q', q);
+        var status = overrides.status !== undefined ? overrides.status : params.get('status');
+        if (status) url.searchParams.set('status', status);
+        var module = overrides.module !== undefined ? overrides.module : params.get('module');
+        if (module) url.searchParams.set('module', module);
+        window.location.href = url.toString();
+    }
     var statusFilter = document.getElementById('weline-cron-status-filter');
     if (statusFilter) {
-        statusFilter.addEventListener('change', function() {
-            var status = this.value;
-            var url = new URL(baseUrl, window.location.origin);
-            var q = new URLSearchParams(window.location.search).get('q');
-            if (q) url.searchParams.set('q', q);
-            if (status) url.searchParams.set('status', status);
-            window.location.href = url.toString();
-        });
+        statusFilter.addEventListener('change', function() { applyFilters({ status: this.value }); });
     }
+    var moduleFilter = document.getElementById('weline-cron-module-filter');
+    if (moduleFilter) {
+        moduleFilter.addEventListener('change', function() { applyFilters({ module: this.value }); });
+    }
+    // 手风琴：点击展开/收起任务描述
+    document.querySelectorAll('.weline-cron-expand-toggle').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var targetId = this.getAttribute('data-target');
+            var row = targetId ? document.getElementById(targetId) : null;
+            if (!row) return;
+            var expanded = this.getAttribute('aria-expanded') === 'true';
+            this.setAttribute('aria-expanded', !expanded);
+            row.style.display = expanded ? 'none' : 'table-row';
+            row.setAttribute('aria-hidden', expanded);
+        });
+    });
 })();
 </script>
