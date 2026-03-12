@@ -191,7 +191,13 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
     var emailEl = document.getElementById('pb-ssl-email');
     var providerEl = document.getElementById('pb-ssl-provider');
     var detailModalEl = document.getElementById('pbSslDetailModal');
-    var detailModal = detailModalEl ? new bootstrap.Modal(detailModalEl) : null;
+    function getDetailModal() {
+        if (!detailModalEl) return null;
+        if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            return bootstrap.Modal.getOrCreateInstance(detailModalEl);
+        }
+        return null;
+    }
     var detailDomainEl = document.getElementById('pb-ssl-detail-domain');
     var detailSummaryEl = document.getElementById('pb-ssl-detail-summary');
     var detailPathsEl = document.getElementById('pb-ssl-detail-paths');
@@ -404,8 +410,22 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
         });
     }
 
+    function showDetailModal() {
+        var bsModal = getDetailModal();
+        if (bsModal) {
+            bsModal.show();
+        } else if (detailModalEl) {
+            detailModalEl.classList.add('show');
+            detailModalEl.style.display = 'block';
+            document.body.classList.add('modal-open');
+            var backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            document.body.appendChild(backdrop);
+        }
+    }
+
     function openDetail(domain) {
-        if (!detailModal) {
+        if (!detailModalEl) {
             return;
         }
 
@@ -450,7 +470,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
             setPemValue(detailCertPemEl, data.cert_pem, '<?= __('暂无证书内容') ?>');
             setPemValue(detailChainPemEl, data.chain_pem, '<?= __('暂无证书链内容') ?>');
             setPemValue(detailKeyPemEl, data.key_pem, '<?= __('暂无私钥内容') ?>');
-            detailModal.show();
+            showDetailModal();
         }).catch(function () {
             BackendToast.error('<?= __('证书详情请求失败') ?>');
         });
