@@ -1093,7 +1093,7 @@ CNF;
                 ->setCertPem($certContents['cert_pem'])
                 ->setKeyPem($certContents['key_pem'])
                 ->setChainPem($certContents['chain_pem'])
-                ->setIssuer($issuer !== '' ? $issuer : ($isSelfSigned ? self::ISSUER_SELF_SIGNED : "Let's Encrypt"))
+                ->setIssuer($isSelfSigned ? self::ISSUER_SELF_SIGNED : ($issuer !== '' ? $issuer : "Let's Encrypt"))
                 ->setProvider($provider)
                 ->setStatus($status)
                 ->setHttpsEnabled($httpsEnabled)
@@ -1160,7 +1160,7 @@ CNF;
         if ($issuerLower === '') {
             return self::PROVIDER_LETS_ENCRYPT;
         }
-        if (\str_contains($issuerLower, 'self')) {
+        if (\str_contains($issuerLower, 'self') || \str_contains($issuerLower, 'weline')) {
             return self::PROVIDER_SELF_SIGNED;
         }
         if (\str_contains($issuerLower, 'let') && \str_contains($issuerLower, 'encrypt')) {
@@ -1387,11 +1387,48 @@ CNF;
 
     protected function readCertificateContents(string $certPath, string $keyPath, string $chainPath = ''): array
     {
+        $certPem = \is_file($certPath) ? (string) @\file_get_contents($certPath) : '';
+        $keyPem = \is_file($keyPath) ? (string) @\file_get_contents($keyPath) : '';
+        $chainPem = ($chainPath !== '' && \is_file($chainPath)) ? (string) @\file_get_contents($chainPath) : '';
+
+        // 如果 chain_pem 为空，但 cert_pem（fullchain）内包含多张证书，自动提取中间证书链
+        if ($chainPem === '' && $certPem !== '') {
+            $chainPem = $this->extractChainFromFullchain($certPem);
+        }
+
         return [
-            'cert_pem' => \is_file($certPath) ? (string) @\file_get_contents($certPath) : '',
-            'key_pem' => \is_file($keyPath) ? (string) @\file_get_contents($keyPath) : '',
-            'chain_pem' => ($chainPath !== '' && \is_file($chainPath)) ? (string) @\file_get_contents($chainPath) : '',
+            'cert_pem' => $certPem,
+            'key_pem' => $keyPem,
+            'chain_pem' => $chainPem,
         ];
+    }
+
+    /**
+     * 从 fullchain PEM 中提取中间证书链（去掉第一张叶子证书，保留后续所有证书）。
+     * Let's Encrypt 的 fullchain.pem 通常包含：叶子证书 + R3/E1 中间证书。
+     * 浏览器需要中间证书链才能验证信任路径。
+     */
+    protected function extractChainFromFullchain(string $fullchainPem): string
+    {
+        $certs = [];
+        $offset = 0;
+        while (($start = \strpos($fullchainPem, '-----BEGIN CERTIFICATE-----', $offset)) !== false) {
+            $end = \strpos($fullchainPem, '-----END CERTIFICATE-----', $start);
+            if ($end === false) {
+                break;
+            }
+            $end += \strlen('-----END CERTIFICATE-----');
+            $certs[] = \trim(\substr($fullchainPem, $start, $end - $start));
+            $offset = $end;
+        }
+
+        if (\count($certs) <= 1) {
+            return '';
+        }
+
+        // 去掉第一张（叶子证书），其余为中间证书链
+        \array_shift($certs);
+        return \implode("\n", $certs);
     }
 
     protected function restoreCertificateFilesFromData(array $cert): bool
@@ -1402,6 +1439,11 @@ CNF;
         $chainPem = (string) ($cert[SslCertificate::schema_fields_CHAIN_PEM] ?? '');
         if ($domain === '' || $certPem === '' || $keyPem === '') {
             return false;
+        }
+
+        // 如果 chain_pem 为空，尝试从 cert_pem（fullchain）中提取中间证书链
+        if ($chainPem === '') {
+            $chainPem = $this->extractChainFromFullchain($certPem);
         }
 
         $certDir = $this->getCertificateDir($domain);
@@ -1433,6 +1475,11 @@ CNF;
                         ->setStatus(SslCertificate::STATUS_ACTIVE)
                         ->setRenewError('')
                         ->save();
+                    // 如果 DB 中 chain_pem 为空但从 fullchain 提取到了中间证书链，回填到 DB
+                    $dbChain = (string) ($cert[SslCertificate::schema_fields_CHAIN_PEM] ?? '');
+                    if ($dbChain === '' && $chainPem !== '') {
+                        $certModel->setChainPem($chainPem)->save();
+                    }
                 }
             }
         } catch (\Throwable $e) {
