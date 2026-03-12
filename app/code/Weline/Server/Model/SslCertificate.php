@@ -37,6 +37,12 @@ class SslCertificate extends Model
     public const schema_fields_KEY_PATH = 'key_path';
     #[Col('varchar', 500, comment: '证书链路径')]
     public const schema_fields_CHAIN_PATH = 'chain_path';
+    #[Col('text', nullable: true, comment: '证书PEM内容')]
+    public const schema_fields_CERT_PEM = 'cert_pem';
+    #[Col('text', nullable: true, comment: '私钥PEM内容')]
+    public const schema_fields_KEY_PEM = 'key_pem';
+    #[Col('text', nullable: true, comment: '证书链PEM内容')]
+    public const schema_fields_CHAIN_PEM = 'chain_pem';
     #[Col('varchar', 100, default: "Let's Encrypt", comment: '颁发机构')]
     public const schema_fields_ISSUER = 'issuer';
     #[Col('varchar', 30, default: 'letsencrypt', comment: '证书申请服务商')]
@@ -183,6 +189,39 @@ class SslCertificate extends Model
     public function getChainPath(): string
     {
         return (string) $this->getData(self::schema_fields_CHAIN_PATH);
+    }
+
+    public function setCertPem(string $pem): self
+    {
+        $this->setData(self::schema_fields_CERT_PEM, $pem);
+        return $this;
+    }
+
+    public function getCertPem(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CERT_PEM) ?? '');
+    }
+
+    public function setKeyPem(string $pem): self
+    {
+        $this->setData(self::schema_fields_KEY_PEM, $pem);
+        return $this;
+    }
+
+    public function getKeyPem(): string
+    {
+        return (string) ($this->getData(self::schema_fields_KEY_PEM) ?? '');
+    }
+
+    public function setChainPem(string $pem): self
+    {
+        $this->setData(self::schema_fields_CHAIN_PEM, $pem);
+        return $this;
+    }
+
+    public function getChainPem(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CHAIN_PEM) ?? '');
     }
     
     public function setIssuer(string $issuer): self
@@ -378,6 +417,17 @@ class SslCertificate extends Model
             ->where(self::schema_fields_EXPIRES_AT, $warningDate, '<=')
             ->select()
             ->fetchArray();
+    }
+
+    public function toSafeArray(): array
+    {
+        $data = $this->getData();
+        unset(
+            $data[self::schema_fields_CERT_PEM],
+            $data[self::schema_fields_KEY_PEM],
+            $data[self::schema_fields_CHAIN_PEM]
+        );
+        return $data;
     }
     
     /**
