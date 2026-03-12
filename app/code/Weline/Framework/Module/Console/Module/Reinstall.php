@@ -22,7 +22,6 @@ use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Register\Register;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\ModuleManager\Service\ModuleBackupService;
 
 class Reinstall extends CommandAbstract
 {
@@ -252,19 +251,27 @@ class Reinstall extends CommandAbstract
                 // 3. 更新模块注册信息（标记为已安装）
                 $this->updateModuleRegistration($moduleName, $moduleData);
 
-                // 4. 如指定 --restore，则尝试从卸载备份中恢复数据表
-                if ($restoreFromBackup && class_exists(ModuleBackupService::class)) {
-                    /** @var ModuleBackupService $backupService */
-                    $backupService = ObjectManager::getInstance(ModuleBackupService::class);
+                // 4. 如指定 --restore，则尝试从卸载备份中恢复数据表（由外部模块监听事件实现）
+                if ($restoreFromBackup) {
                     $this->printer->note(__('检测模块 %{1} 是否存在卸载备份记录...', [$moduleName]));
-                    $backupResult = $backupService->restoreModuleTables($moduleName, null);
-                    if (!empty($backupResult['success'])) {
+                    /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                    $restoreEventData = [
+                        'module_name' => $moduleName,
+                        'backup_timestamp' => null,
+                        'result' => null,
+                    ];
+                    $eventsManager->dispatch('Weline_Framework_UninstallService::module_db_restore', $restoreEventData);
+                    $backupResult = $restoreEventData['result'] ?? null;
+                    if (is_array($backupResult) && !empty($backupResult['success'])) {
                         $this->printer->success(__('模块 %{1} 数据表已从卸载备份中恢复', [$moduleName]));
-                    } else {
+                    } elseif (is_array($backupResult)) {
                         $this->printer->warning(__('模块 %{1} 未从卸载备份中恢复：%{2}', [
                             $moduleName,
                             $backupResult['message'] ?? '',
                         ]));
+                    } else {
+                        $this->printer->warning(__('未检测到数据库恢复监听器，跳过模块 %{1} 的备份恢复。', [$moduleName]));
                     }
                 }
                 

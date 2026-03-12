@@ -14,7 +14,6 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\File\Io\File;
-use Weline\ModuleManager\Service\ModuleBackupService;
 
 /**
  * 统一卸载服务
@@ -412,10 +411,15 @@ class UninstallService
                     'success' => true,
                 ];
 
-                // 数据库表备份（通过 ModuleManager 管理）
-                if (class_exists(ModuleBackupService::class)) {
-                    /** @var ModuleBackupService $moduleBackupService */
-                    $moduleBackupService = ObjectManager::getInstance(ModuleBackupService::class);
+                // 数据库表备份（由外部模块通过事件实现）
+                $eventManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                $dbBackupEventData = [
+                    'module_name' => $moduleName,
+                    'result' => null,
+                ];
+                $eventManager->dispatch('Weline_Framework_UninstallService::module_db_backup', $dbBackupEventData);
+                $dbBackupInfo = $dbBackupEventData['result'] ?? null;
+                if (is_array($dbBackupInfo) && isset($dbBackupInfo['success'])) {
                     $steps[] = [
                         'step' => 'db_backup',
                         'message' => __('开始备份模块数据库表'),
@@ -423,7 +427,6 @@ class UninstallService
                         'success' => true,
                     ];
 
-                    $dbBackupInfo = $moduleBackupService->backupModuleTables($moduleName);
                     if (empty($dbBackupInfo['success'])) {
                         $steps[] = [
                             'step' => 'db_backup',
@@ -763,11 +766,13 @@ class UninstallService
 
             // 恢复数据库表
             $dbRestoreResult = ['success' => true, 'message' => ''];
-            if (class_exists(ModuleBackupService::class)) {
-                /** @var ModuleBackupService $moduleBackupService */
-                $moduleBackupService = ObjectManager::getInstance(ModuleBackupService::class);
-                $dbRestoreResult = $moduleBackupService->restoreModuleTables($moduleName);
-                
+            $dbRestoreEventData = [
+                'module_name' => $moduleName,
+                'result' => null,
+            ];
+            $eventManager->dispatch('Weline_Framework_UninstallService::module_db_restore', $dbRestoreEventData);
+            if (is_array($dbRestoreEventData['result'] ?? null) && isset($dbRestoreEventData['result']['success'])) {
+                $dbRestoreResult = $dbRestoreEventData['result'];
                 if (!$dbRestoreResult['success']) {
                     $this->printer->warning(__('文件恢复成功，但数据库恢复失败：%{1}', [$dbRestoreResult['message']]));
                 }
