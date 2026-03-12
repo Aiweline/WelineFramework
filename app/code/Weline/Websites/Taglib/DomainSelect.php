@@ -66,7 +66,7 @@ class DomainSelect implements TaglibInterface
             'auto-fill-url' => false,   // 自动填充 URL 的目标输入框 ID
             'auto-fill-name' => false,  // 自动填充名称的目标输入框 ID
             'auto-fill-address' => false,  // 自动填充地址的目标 textarea ID（多选时填充多行）
-            'site-ready-only' => false,    // v1.6.0: 是否只显示 site_ready=1 的域名（默认 true）
+            'site-ready-only' => true,    // v1.6.0: 是否只显示可建站且未已建站（site_ready=1 且 site_created=0），默认 true
             'value-type' => false,         // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
         ];
     }
