@@ -56,17 +56,19 @@ class DomainPool extends BaseController
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             
-            // 只返回可建站域名；排除已被其他站点绑定的，但保留当前站点已绑定的（便于编辑时取消域名）
+            // 只返回可建站域名；排除已被其他站点绑定的，但保留当前站点已绑定的（编辑时全部展示并默认勾选，不能丢掉本站域名）
             if ($siteReadyOnly) {
-                $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
                 if ($websiteId > 0) {
                     $wdTable = WebsiteDomain::schema_table;
+                    // 可建站且未被他站占用 OR 本站已绑定的任意域名（含未就绪），保证编辑时本站域名一定在列表中
                     $model->whereRaw(
-                        '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
+                        '((' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
+                        . ' OR ' . DomainPoolModel::schema_fields_ID . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0)))'
                         . ' OR ' . DomainPoolModel::schema_fields_ID . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0))',
                         'AND'
                     );
                 } else {
+                    $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
                     $model->whereRaw(
                         '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0)',
                         'AND'
