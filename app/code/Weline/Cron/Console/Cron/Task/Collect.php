@@ -14,7 +14,6 @@ namespace Weline\Cron\Console\Cron\Task;
 
 use Weline\Cron\CronTaskInterface;
 use Weline\Cron\Model\CronTask;
-use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -51,35 +50,77 @@ class Collect implements CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         $modules = Env::getInstance()->getActiveModules();
+        /** @var list<string> 物理文件为唯一来源：仅保留此次扫描到的任务类 */
+        $collectedClasses = [];
+
         foreach ($modules as $module) {
-            if (is_dir($module['base_path'] . 'Cron')) {
-                $tasks = [];
-                $this->scan->globFile(
-                    $module['base_path'] . 'Cron' . DS . '*',
-                    $tasks, '.php',
-                    $module['base_path'],
-                    $module['namespace_path'] . '\\',
-                    true,
-                    true
-                );
-                foreach ($tasks as $task) {
-                    /**@var \Weline\Cron\CronTaskInterface $taskObject */
+            if (!is_dir($module['base_path'] . 'Cron')) {
+                continue;
+            }
+            $tasks = [];
+            $this->scan->globFile(
+                $module['base_path'] . 'Cron' . DS . '*',
+                $tasks,
+                '.php',
+                $module['base_path'],
+                $module['namespace_path'] . '\\',
+                true,
+                true
+            );
+            foreach ($tasks as $task) {
+                try {
+                    /** @var \Weline\Cron\CronTaskInterface $taskObject */
                     $taskObject = ObjectManager::getInstance($task);
-                    if ($taskObject instanceof CronTaskInterface) {
-                        $this->cronTask->clearData()
-                            ->setData(CronTask::schema_fields_NAME, $taskObject->name())
-                            ->setData(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name(), true)
-                            ->setData(CronTask::schema_fields_CLASS, $taskObject::class)
-                            ->setData(CronTask::schema_fields_TIP, $taskObject->tip())
-                            ->setData(CronTask::schema_fields_CRON_TIME, $taskObject->cron_time())
-                            ->setData(CronTask::schema_fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
-                            ->setData(CronTask::schema_fields_MODULE, $module['name'])
-                            ->save();
-                    }
+                } catch (\Throwable) {
+                    continue;
                 }
+                if (!$taskObject instanceof CronTaskInterface) {
+                    continue;
+                }
+                $this->cronTask->clearData()
+                    ->setData(CronTask::schema_fields_NAME, $taskObject->name())
+                    ->setData(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name(), true)
+                    ->setData(CronTask::schema_fields_CLASS, $taskObject::class)
+                    ->setData(CronTask::schema_fields_TIP, $taskObject->tip())
+                    ->setData(CronTask::schema_fields_CRON_TIME, $taskObject->cron_time())
+                    ->setData(CronTask::schema_fields_BLOCK_UNLOCK_TIMEOUT, $taskObject->unlock_timeout())
+                    ->setData(CronTask::schema_fields_MODULE, $module['name'])
+                    ->save();
+                $collectedClasses[] = $taskObject::class;
             }
         }
+
+        // Diff 删除：表中 class 不在本次收集列表中的记录（物理文件已删除的任务）
+        $deleted = $this->removeStaleTaskRecords($collectedClasses);
+        if ($deleted > 0) {
+            $this->printing->warning((string) __('已移除 %{1} 条已无物理文件的任务记录', [$deleted]));
+        }
         $this->printing->success(__('调度任务收集完成！'));
+    }
+
+    /**
+     * 删除表中 class 不在收集列表中的记录（以物理文件为唯一来源）
+     *
+     * @param list<string> $collectedClasses 本次扫描到的任务类名列表
+     * @return int 删除条数
+     */
+    private function removeStaleTaskRecords(array $collectedClasses): int
+    {
+        $model = clone $this->cronTask;
+        $rows = $model->clearQuery()->select()->fetch()->getItems();
+        if ($rows === []) {
+            return 0;
+        }
+        $allowed = array_flip($collectedClasses);
+        $deleted = 0;
+        foreach ($rows as $row) {
+            $class = (string) ($row->getData(CronTask::schema_fields_CLASS) ?? '');
+            if ($class !== '' && !isset($allowed[$class])) {
+                $row->delete();
+                $deleted++;
+            }
+        }
+        return $deleted;
     }
 
     public function tip(): string
