@@ -36,7 +36,8 @@ class DomainPool extends BaseController
      * - limit: 返回数量限制（默认 50）
      * - grouped: 是否按根域名分组（默认 true）
      * - site_ready: 是否只返回可建站域名（默认 true）
-     * - website_id: 编辑站点时传入当前站点ID，可建站列表中会包含本站已绑定的域名（便于取消绑定）
+     * - website_id: 编辑站点时传入当前站点ID，返回本站已绑定域名 + 其他可建站域名（便于默认勾选、取消绑定）
+     * - pool_ids: 逗号分隔的 pool_id，返回列表会强制包含这些域名（与 website_id 二选一或同时传）
      * - parent_domain_id: 按根域名ID筛选
      * 
      * @return string JSON 响应
@@ -51,29 +52,38 @@ class DomainPool extends BaseController
             $siteReadyOnly = $this->request->getGet('site_ready', 'true') === 'true';
             $parentDomainId = (int) $this->request->getGet('parent_domain_id', 0);
             $websiteId = (int) $this->request->getGet('website_id', 0);
+            $poolIdsRaw = trim((string) $this->request->getGet('pool_ids', ''));
+            $includePoolIds = [];
+            if ($poolIdsRaw !== '') {
+                foreach (explode(',', $poolIdsRaw) as $id) {
+                    $id = (int) trim($id);
+                    if ($id > 0) {
+                        $includePoolIds[] = $id;
+                    }
+                }
+                $includePoolIds = array_unique($includePoolIds);
+            }
             
             $model = clone $this->domainPoolModel;
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
             
-            // 只返回可建站域名；排除已被其他站点绑定的，但保留当前站点已绑定的（编辑时全部展示并默认勾选，不能丢掉本站域名）
+            // 编辑时：返回当前站点域名 + 其他可建站域名；或通过 pool_ids 显式包含指定域名，便于默认勾选
             if ($siteReadyOnly) {
+                $wdTable = WebsiteDomain::schema_table;
+                $idField = DomainPoolModel::schema_fields_ID;
+                $conditions = [];
                 if ($websiteId > 0) {
-                    $wdTable = WebsiteDomain::schema_table;
-                    // 可建站且未被他站占用 OR 本站已绑定的任意域名（含未就绪），保证编辑时本站域名一定在列表中
-                    $model->whereRaw(
-                        '((' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
-                        . ' OR ' . DomainPoolModel::schema_fields_ID . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0)))'
-                        . ' OR ' . DomainPoolModel::schema_fields_ID . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0))',
-                        'AND'
-                    );
+                    $conditions[] = '((' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
+                        . ' OR ' . $idField . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0)))'
+                        . ' OR ' . $idField . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0))';
                 } else {
-                    $model->where(DomainPoolModel::schema_fields_SITE_READY, 1);
-                    $model->whereRaw(
-                        '(' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0)',
-                        'AND'
-                    );
+                    $conditions[] = '(' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0))';
                 }
+                if (!empty($includePoolIds)) {
+                    $conditions[] = $idField . ' IN (' . implode(',', array_map('intval', $includePoolIds)) . ')';
+                }
+                $model->whereRaw('(' . implode(' OR ', $conditions) . ')', 'AND');
             }
             
             // 按根域名ID筛选

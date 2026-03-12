@@ -688,7 +688,9 @@ class DomainSelect implements TaglibInterface
             $html[] = '  list.innerHTML = "";';
             $html[] = '  var wrapper = document.getElementById(id + "_wrapper");';
             $html[] = '  var wid = parseInt(wrapper ? (wrapper.getAttribute("data-website-id") || "0") : "0", 10);';
-            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (wid > 0 ? "&website_id=" + wid : "");';
+            $html[] = '  var curPoolIds = (hidden.value || "").trim().split(",").map(function(v){ return v.trim(); }).filter(function(v){ return v !== ""; });';
+            $html[] = '  var poolIdsParam = curPoolIds.length ? "&pool_ids=" + encodeURIComponent(curPoolIds.join(",")) : "";';
+            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (wid > 0 ? "&website_id=" + wid : "") + poolIdsParam;';
             $html[] = '  fetch(apiUrl)';
             $html[] = '    .then(function(r) { return r.json(); })';
             $html[] = '    .then(function(res) {';
