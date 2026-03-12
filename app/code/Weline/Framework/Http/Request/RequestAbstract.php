@@ -603,40 +603,36 @@ abstract class RequestAbstract extends RequestFilter
 
     public function getBaseHost(): string
     {
-        $serverBag = $this->getServerBag();
-        
-        // 获取当前请求的协议
         $currentScheme = $this->getSsl();
         
-        // 获取当前请求的端口（用于后续判断是否需要添加端口）
-        $currentPort = $serverBag->getPort();
-        $isNonStandardPort = ($currentPort != 80 && $currentPort != 443);
+        // 直接从 $_SERVER 读取（ServerBag 可能在 Url::parser() 前初始化，值已过时）
+        $currentPort = $_SERVER['SERVER_PORT'] ?? '';
+        $isNonStandardPort = ($currentPort !== '' && $currentPort != 80 && $currentPort != 443);
         
-        // 如果有 WELINE_WEBSITE_URL，需要替换协议为当前请求的协议
-        // 并且：如果网站配置中没有端口，但当前请求使用非标准端口，需要添加端口
-        $websiteUrl = $serverBag->get('WELINE_WEBSITE_URL', '');
-        if ($websiteUrl) {
-            // 解析网站 URL
+        // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
+        // 它包含 scheme://host[:port][/sub_path]
+        $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+        if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $hostPart = $parsed['host'] ?? 'localhost';
+            $pathPart = $parsed['path'] ?? '';
             $urlHasPort = isset($parsed['port']) && $parsed['port'];
             
-            // 如果网站配置的 URL 有端口，使用配置的端口
-            // 如果没有端口，但当前请求是非标准端口，使用当前请求的端口
             if ($urlHasPort) {
                 $portSuffix = ':' . $parsed['port'];
             } elseif ($isNonStandardPort) {
-                // 网站配置没有端口，但当前请求使用非标准端口，添加当前端口
                 $portSuffix = ':' . $currentPort;
             } else {
                 $portSuffix = '';
             }
             
-            return $currentScheme . '://' . $hostPart . $portSuffix;
+            return $currentScheme . '://' . $hostPart . $portSuffix . $pathPart;
         }
         
-        $host = $serverBag->get('SERVER_NAME', '') ?: $serverBag->getHost();
-        // 如果 host 已经包含端口（如 HTTP_HOST），不重复添加
+        $host = $_SERVER['SERVER_NAME'] ?? '';
+        if ($host === '') {
+            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        }
         if (\str_contains($host, ':')) {
             return $currentScheme . '://' . $host;
         }
