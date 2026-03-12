@@ -58,7 +58,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $now = time();
         foreach ($tasks as &$task) {
             $task['out_run'] = false;
-            $task['out_time'] = '';
+            $task['out_time_human'] = '';
             $task['running_duration_human'] = '';
             if ($task['run_date']) {
                 $run_date_time = strtotime($task['run_date']);
@@ -68,7 +68,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
                 }
                 if ($now > $max_next_run_date_time) {
                     $task['out_run'] = true;
-                    $task['out_time'] = ($now - $run_date_time) / 3600;
+                    $task['out_time_human'] = $this->humanizeDuration($now - $run_date_time);
                 }
             }
         }
