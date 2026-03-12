@@ -194,6 +194,40 @@ function _loadSniCertsFromMap(): array
 }
 
 /**
+ * 为指定域名解析 SSL 证书。这是证书选择的唯一入口。
+ *
+ * 解析顺序：
+ *  1. 进程内存缓存（$sniServerCerts，由 IPC ssl_cert_reload 维护）
+ *  2. 磁盘证书目录（app/etc/ssl/{domain}/fullchain.pem + privkey.pem）
+ *
+ * 命中后自动写入内存缓存，后续同域名请求零开销。
+ * 未命中说明该域名确实没有可用证书（尚未申请或文件丢失），属于正常情况。
+ *
+ * @param string $domain 小写域名
+ * @param array<string, array{local_cert: string, local_pk: string}> &$cache 进程级缓存（引用传递）
+ * @return array{local_cert: string, local_pk: string}|null
+ */
+function _resolveSniCert(string $domain, array &$cache): ?array
+{
+    // 1. 内存缓存命中
+    if (isset($cache[$domain])) {
+        return $cache[$domain];
+    }
+
+    // 2. 磁盘证书目录
+    $certDir = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'ssl' . DIRECTORY_SEPARATOR . $domain . DIRECTORY_SEPARATOR;
+    $certFile = $certDir . 'fullchain.pem';
+    $keyFile = $certDir . 'privkey.pem';
+    if (\is_file($certFile) && \is_file($keyFile)) {
+        $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
+        $cache[$domain] = $entry;
+        return $entry;
+    }
+
+    return null;
+}
+
+/**
  * 从 TLS ClientHello 数据中解析 SNI（Server Name Indication）域名。
  * 用于 defer-ssl 模式：PHP 的 SNI_server_certs 在 stream_socket_enable_crypto 时不生效，
  * 需手动解析 ClientHello 并在握手前设置对应域名的证书。
@@ -1461,25 +1495,24 @@ while (true) {
             }
         }
         
-        // SSL/TLS 握手请求，启动 SSL 握手
-        // defer-ssl 模式下 PHP 的 SNI_server_certs 不会生效（SNI 回调仅在 stream_socket_server 创建时注册），
-        // 因此需要手动从 ClientHello 中解析 SNI 域名，并选择对应的证书文件。
+        // SSL/TLS 握手 — SNI 证书解析
+        // defer-ssl 模式下 PHP 的 SNI_server_certs 不生效（回调仅在 stream_socket_server 创建时注册），
+        // 因此手动解析 ClientHello 中的 SNI 域名，在握手前设置正确的证书。
         $sniOptions = $deferSslOptions;
-        if (!empty($sniServerCerts)) {
-            $sniPeek = @\stream_socket_recvfrom($conn, 4096, \STREAM_PEEK);
-            if ($sniPeek !== false && \strlen($sniPeek) > 5) {
-                $sniHost = _parseSniHostFromClientHello($sniPeek);
-                if ($sniHost !== null) {
-                    $sniHostLower = \strtolower($sniHost);
-                    if (isset($sniServerCerts[$sniHostLower])) {
-                        $sniOptions['local_cert'] = $sniServerCerts[$sniHostLower]['local_cert'];
-                        $sniOptions['local_pk'] = $sniServerCerts[$sniHostLower]['local_pk'];
-                        if ($isDev) {
-                            WlsLogger::info_("SNI 匹配: {$sniHostLower} → {$sniOptions['local_cert']}");
-                        }
-                    } elseif ($isDev) {
-                        WlsLogger::info_("SNI 未匹配: {$sniHostLower}，使用默认证书");
+        $sniPeek = @\stream_socket_recvfrom($conn, 4096, \STREAM_PEEK);
+        if ($sniPeek !== false && \strlen($sniPeek) > 5) {
+            $sniHost = _parseSniHostFromClientHello($sniPeek);
+            if ($sniHost !== null) {
+                $sniHostLower = \strtolower($sniHost);
+                $resolved = _resolveSniCert($sniHostLower, $sniServerCerts);
+                if ($resolved !== null) {
+                    $sniOptions['local_cert'] = $resolved['local_cert'];
+                    $sniOptions['local_pk'] = $resolved['local_pk'];
+                    if ($isDev) {
+                        WlsLogger::info_("SNI 证书: {$sniHostLower} → {$resolved['local_cert']}");
                     }
+                } elseif (!\filter_var($sniHostLower, \FILTER_VALIDATE_IP)) {
+                    WlsLogger::warning_("域名 {$sniHostLower} 无可用证书，使用默认证书");
                 }
             }
         }
