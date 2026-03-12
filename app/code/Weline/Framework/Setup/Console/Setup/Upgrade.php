@@ -1538,7 +1538,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $routeModules = array_values(array_filter(array_map('trim', (array)$routeModules)));
 
             $this->printing->note(__('进入仅更新路由模式，使用 RouteUpdateService 处理路由更新...'), '系统');
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            try {
+                $beforeRouteCollectionEventData = [];
+                $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
+            }
             $routeService->updateRoutes($routeModules);
+            try {
+                $afterRouteCollectionEventData = [];
+                $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
+            } catch (\Throwable $e) {
+                $this->printing->warning(__('路由收集后 ACL 同步失败：%{1}', [$e->getMessage()]));
+            }
             $this->printing->success(__('✓ 路由更新完成（仅路由模式）'));
 
             // 路由已完成更新，不再进入后续阶段管理器逻辑，直接结束当前方法
@@ -1749,7 +1763,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 路由收集完成后做 ACL diff（清理已卸载模块的 type=pc 等）
             try {
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', []);
+                $afterRouteCollectionEventData = [];
+                $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
             } catch (\Throwable $e) {
                 $this->printing->warning(__('路由收集后 ACL 同步失败：%{1}', [$e->getMessage()]));
             }
