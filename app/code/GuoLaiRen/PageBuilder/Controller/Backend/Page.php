@@ -87,7 +87,7 @@ class Page extends BackendController
         }
         
         // 获取用户角色
-        $user = $this->session->getLoginUser(\Weline\Backend\Model\BackendUser::class);
+        $user = $this->getLoginUser();
         if (!$user) {
             return false;
         }
@@ -137,7 +137,7 @@ class Page extends BackendController
         $listModel->clear();
         
         // 根据当前后台用户可访问的站点过滤页面（超管和拥有站点分配权限的用户可查看所有站点）
-        $userId = (int)$this->session->getLoginUserID();
+        $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1); // 超管ID为1
         $hasWebsiteAssignmentPermission = false;
         if ($userId > 0 && !$isSuperAdmin) {
@@ -240,7 +240,7 @@ class Page extends BackendController
      */
     private function getAccessibleWebsites(): array
     {
-        $userId = (int)$this->session->getLoginUserID();
+        $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1);
         $hasWebsiteAssignmentPermission = false;
         if ($userId > 0 && !$isSuperAdmin) {
@@ -471,7 +471,7 @@ class Page extends BackendController
     private function getAccessibleWebsiteIds(): array
     {
         try {
-            $userId = (int)$this->session->getLoginUserID();
+            $userId = (int)$this->getLoginUserId();
             if ($userId <= 0) {
                 return [];
             }
@@ -2418,8 +2418,7 @@ class Page extends BackendController
         }
         
         // 直接重定向到前端页面
-        header('Location: ' . $frontendUrl);
-        exit;
+        $this->request->getResponse()->redirect($frontendUrl);
     }
     
     /**
