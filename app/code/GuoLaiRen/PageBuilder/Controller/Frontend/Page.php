@@ -156,7 +156,6 @@ class Page extends FrontendController
             $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
             $response->setHeader('Pragma', 'no-cache');
             $response->setHeader('Expires', '0');
-            $response->setHeader('WELINE_WEBSITE_ID', (string)$websiteId);
             $response->setHeader('X-Accel-Expires', '0');
             $page = clone $this->pageModel;
             $page->clearData();
@@ -168,6 +167,8 @@ class Page extends FrontendController
             $response->setHeader('Pragma', 'no-cache');
             $response->setHeader('Expires', '0');
         }
+
+        $response->setHeader('Website-Id', (string)$websiteId);
         
         // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页
         if (($page === null || !$page->getId()) && empty($handle) && $websiteId > 0) {
