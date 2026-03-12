@@ -91,6 +91,7 @@ BackendConfirm.show('确定删除吗？').then(confirmed => { if (confirmed) { .
 - **禁止**使用 `error_log()`、echo/print 输出错误；须用 `Env::log_error()` 等。
 - **禁止**在模板标签内容中使用 PHP 变量或 `<?= ?>`；须用 `{{variable}}` 或先取到值再输出。
 - **禁止**在模板 .phtml 中定义全局函数或使用 `function_exists(...)` 打补丁；须用闭包（如 `$renderXxx = function(...) use (&$renderXxx) { ... };`）。详见 theme-development 技能「0.5 模板中禁止定义全局函数」。
+- **禁止**在 .phtml 中出现未闭合的 PHP 控制结构；`<?php if (): ?>` 必须成对出现 `<?php endif; ?>`，`<?php foreach (): ?>` 必须对应 `<?php endforeach; ?>`，否则编译后报 `ParseError: unexpected end of file, expecting elseif/else/endif`。详见 theme-development 技能「Phtml PHP 控制结构」。
 - **禁止**使用 `routes.xml`；路由为自动扫描，新控制器后执行 `php bin/w setup:upgrade --route`。
 - **禁止**在未验证修复成功前更新错误知识库（见 auto-update-skills-on-error.mdc）。
 - **禁止**使用原生浏览器弹窗 `alert()`、`confirm()`、`prompt()`；须用 `BackendToast`/`BackendConfirm.show()`/`BackendConfirm.showInput()`（后台）或自定义 FrontendToast（前台）。详见 friendly-notifications 技能。

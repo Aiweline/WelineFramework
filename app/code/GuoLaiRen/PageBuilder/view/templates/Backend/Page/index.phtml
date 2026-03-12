@@ -689,8 +689,7 @@
                                 }
                             }
                             
-                            // 显示第一页
-                            if ($startPage > 1): ?>
+                            if ($startPage > 1): /* 显示第一页 */ ?>
                                 <li class="page-item">
                                     <a class="page-link" href="<?= $buildUrl(1) ?>">1</a>
                                 </li>
@@ -705,8 +704,7 @@
                                 </li>
                             <?php endfor; ?>
                             
-                            <?php // 显示最后一页
-                            if ($endPage < $totalPages): ?>
+                            <?php if ($endPage < $totalPages): /* 显示最后一页 */ ?>
                                 <?php if ($endPage < $totalPages - 1): ?>
                                     <li class="page-item disabled"><span class="page-link">...</span></li>
                                 <?php endif; ?>
