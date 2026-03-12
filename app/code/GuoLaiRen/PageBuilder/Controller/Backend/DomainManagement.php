@@ -1924,7 +1924,8 @@ class DomainManagement extends BaseController
                     $errList = $result['errors'] ?? [];
                     $errParts = \array_map(static function ($e) {
                         if (\is_array($e)) {
-                            return $e['error'] ?? $e['message'] ?? \json_encode($e, \JSON_UNESCAPED_UNICODE);
+                            $v = $e['error'] ?? $e['message'] ?? $e;
+                            return \is_array($v) ? \json_encode($v, \JSON_UNESCAPED_UNICODE) : (string) $v;
                         }
                         return (string) $e;
                     }, $errList);
