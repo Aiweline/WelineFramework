@@ -2856,17 +2856,21 @@ CNF;
     /**
      * 从证书管理中重载证书文件并刷新 WLS 证书映射。
      *
-     * @return array{processed:int,reloaded:int,expired:int,skipped:int,errors:array<int,string>,domains:array<int,string>}
+     * @param string|null $domain 可选，只处理指定域名
+     * @param bool $clearNoPem 若为 true，对缺少 PEM 的证书记录执行删除而非跳过
+     * @return array{processed:int,reloaded:int,expired:int,skipped:int,deleted:int,errors:array<int,string>,domains:array<int,string>,deleted_domains:array<int,string>}
      */
-    public function reloadManagedCertificates(?string $domain = null): array
+    public function reloadManagedCertificates(?string $domain = null, bool $clearNoPem = false): array
     {
         $result = [
             'processed' => 0,
             'reloaded' => 0,
             'expired' => 0,
             'skipped' => 0,
+            'deleted' => 0,
             'errors' => [],
             'domains' => [],
+            'deleted_domains' => [],
         ];
 
         $query = $this->certModel->clearQuery();
@@ -2918,8 +2922,27 @@ CNF;
             $certPem = (string) ($cert[SslCertificate::schema_fields_CERT_PEM] ?? '');
             $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
             if ($certPem === '' || $keyPem === '') {
-                $result['skipped']++;
-                $result['errors'][] = (string) __('域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载', [$certDomain]);
+                if ($clearNoPem) {
+                    $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
+                    if ($certId > 0) {
+                        $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
+                        $toDelete->load($certId);
+                        if ($toDelete->getCertId()) {
+                            $toDelete->delete()->fetch();
+                            $result['deleted']++;
+                            $result['deleted_domains'][] = $certDomain;
+                        } else {
+                            $result['skipped']++;
+                            $result['errors'][] = (string) __('域名 %{1} 的证书记录加载失败', [$certDomain]);
+                        }
+                    } else {
+                        $result['skipped']++;
+                        $result['errors'][] = (string) __('域名 %{1} 的证书记录无效', [$certDomain]);
+                    }
+                } else {
+                    $result['skipped']++;
+                    $result['errors'][] = (string) __('域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载', [$certDomain]);
+                }
                 continue;
             }
 
@@ -2936,7 +2959,7 @@ CNF;
             $this->notifyExpiredCertificates($expiredCerts);
         }
 
-        if ($result['reloaded'] > 0) {
+        if ($result['reloaded'] > 0 || $result['deleted'] > 0) {
             $this->clearServerCache();
         }
 
