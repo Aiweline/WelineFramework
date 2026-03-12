@@ -121,6 +121,11 @@ class ControlMessage
     public const ACTION_SECURITY_UNBLOCK = 'security_unblock';
     /** 获取流量遥测快照 */
     public const ACTION_TELEMETRY_QUERY = 'telemetry_query';
+    /** 热重载 SSL 证书映射（不重启进程） */
+    public const ACTION_SSL_CERT_RELOAD = 'ssl_cert_reload';
+
+    /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
+    public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
 
     /** Master → Dispatcher：解封指定 IP 或清空全部封禁 */
     public const TYPE_SECURITY_UNBLOCK = 'security_unblock';
@@ -303,6 +308,16 @@ class ControlMessage
     {
         return self::encode([
             'type' => self::TYPE_CACHE_CLEAR,
+        ]);
+    }
+
+    /**
+     * 构建 ssl_cert_reload 消息（热重载 SSL 证书映射，不重启 Worker）
+     */
+    public static function sslCertReload(): string
+    {
+        return self::encode([
+            'type' => self::TYPE_SSL_CERT_RELOAD,
         ]);
     }
 

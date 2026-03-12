@@ -51,13 +51,14 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 | `shutdown` | Master → 子进程 | 通知优雅退出（主动终结） |
 | `reload` | Master → Worker | 通知代码重载（Worker 需优雅退出后重启） |
 | `cache_clear` | Master → Worker | 通知清缓存（原地执行，不重启） |
+| `ssl_cert_reload` | Master → Worker | 热重载 SSL 证书映射（不重启，重新读取 ssl_certificate_map.json） |
 | `drain` | Master → Dispatcher | 将指定端口加入黑名单，不再路由新流量 |
 | `undrain` | Master → Dispatcher | 将指定端口从黑名单移除，恢复路由 |
 | `add_worker` | Master → Dispatcher | 动态添加 Worker 端口到负载均衡池 |
 | `remove_worker` | Master → Dispatcher | 从负载均衡池移除端口 |
 | `draining_complete` | Worker → Master | Worker 处理完所有请求，准备退出 |
 | `status_report` | 子进程 → Master | 上报运行状态（连接数、内存、请求量） |
-| `command` | CLI → Master | CLI 命令（stop/reload/cache_clear/status） |
+| `command` | CLI → Master | CLI 命令（stop/reload/cache_clear/ssl_cert_reload/status） |
 | `command_result` | Master → CLI | CLI 命令执行结果 |
 
 ### 消息格式详情
@@ -82,6 +83,9 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 // cache_clear
 {"type":"cache_clear"}
 
+// ssl_cert_reload（热重载 SSL 证书映射，Worker 重新读取 ssl_certificate_map.json）
+{"type":"ssl_cert_reload"}
+
 // drain / undrain
 {"type":"drain","ports":[19981]}
 {"type":"undrain","ports":[19981]}
@@ -97,7 +101,7 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 {"type":"status_report","connections":5,"memory":1234567,"requests":100}
 
 // command (CLI)
-{"type":"command","action":"stop|reload|cache_clear|status","reload_type":"code|cache"}
+{"type":"command","action":"stop|reload|cache_clear|ssl_cert_reload|status","reload_type":"code|cache"}
 
 // command_result
 {"type":"command_result","success":true,"data":{}}
@@ -139,6 +143,15 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 1. Master 广播 `cache_clear` 给所有 Worker
 2. Worker 执行 `opcache_reset()` + 清静态缓存 + 清对象缓存
 3. 完成
+
+### SSL 证书热重载（ssl_cert_reload）
+
+零停机，不重启，动态生效新证书：
+1. 后台添加域名/导入证书 → `SslCertificateService::clearServerCache()` 重新生成 `ssl_certificate_map.json`
+2. 通过 IPC 发送 `ssl_cert_reload` 命令给 Master
+3. Master 广播 `ssl_cert_reload` 给所有 Worker
+4. SSL Worker 重新读取 `ssl_certificate_map.json`，更新进程内 `$sniServerCerts` 映射
+5. 后续 TLS 握手使用新证书（通过 ClientHello SNI 匹配）
 
 ### 代码重载（code）—— 滚动重启
 

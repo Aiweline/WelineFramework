@@ -158,6 +158,42 @@ if (\is_array($envConfig)) {
 }
 
 /**
+ * 从 ssl_certificate_map.json 加载 SNI 证书映射。
+ * 在 Worker 启动时调用一次，并在收到 ssl_cert_reload IPC 命令时再次调用以热更新。
+ *
+ * @return array<string, array{local_cert: string, local_pk: string}>
+ */
+function _loadSniCertsFromMap(): array
+{
+    $mapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
+    if (!\is_file($mapFile)) {
+        return [];
+    }
+    try {
+        \clearstatcache(true, $mapFile);
+        $raw = (string)@\file_get_contents($mapFile);
+        $map = \json_decode($raw, true);
+        if (!\is_array($map)) {
+            return [];
+        }
+        $certs = [];
+        foreach ($map as $domain => $pair) {
+            $certPath = (string)($pair['cert'] ?? '');
+            $keyPath = (string)($pair['key'] ?? '');
+            if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
+                $certs[(string)$domain] = [
+                    'local_cert' => $certPath,
+                    'local_pk' => $keyPath,
+                ];
+            }
+        }
+        return $certs;
+    } catch (\Throwable) {
+        return [];
+    }
+}
+
+/**
  * 从 TLS ClientHello 数据中解析 SNI（Server Name Indication）域名。
  * 用于 defer-ssl 模式：PHP 的 SNI_server_certs 在 stream_socket_enable_crypto 时不生效，
  * 需手动解析 ClientHello 并在握手前设置对应域名的证书。
@@ -227,28 +263,8 @@ function _parseSniHostFromClientHello(string $data): ?string
 }
 
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
-$sniServerCerts = [];
-$certMapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
-if (\is_file($certMapFile)) {
-    try {
-        $raw = (string)@\file_get_contents($certMapFile);
-        $map = \json_decode($raw, true);
-        if (\is_array($map)) {
-            foreach ($map as $domain => $pair) {
-                $certPath = (string)($pair['cert'] ?? '');
-                $keyPath = (string)($pair['key'] ?? '');
-                if ($domain !== '' && $certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
-                    $sniServerCerts[(string)$domain] = [
-                        'local_cert' => $certPath,
-                        'local_pk' => $keyPath,
-                    ];
-                }
-            }
-        }
-    } catch (\Throwable) {
-        $sniServerCerts = [];
-    }
-}
+// 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
+$sniServerCerts = _loadSniCertsFromMap();
 
 // ========== 日志系统：直接使用 WlsLogger ==========
 // 检测模式（只检测一次）
@@ -866,7 +882,7 @@ if ($controlPort > 0) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, $workerId): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, $workerId, &$sniServerCerts): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -902,6 +918,15 @@ if ($controlPort > 0) {
                         handleStaticFile('__CLEAR_CACHE__', '');
                     }
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存（opcache + ObjectManager + 静态文件缓存）");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
+                    \clearstatcache(true);
+                    $oldCount = \count($sniServerCerts);
+                    $sniServerCerts = _loadSniCertsFromMap();
+                    $newCount = \count($sniServerCerts);
+                    $domains = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
+                    WlsLogger::info_("收到 ssl_cert_reload 命令，已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domains}");
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
