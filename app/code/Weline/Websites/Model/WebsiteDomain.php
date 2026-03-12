@@ -109,6 +109,19 @@ class WebsiteDomain extends Model
     }
     
     /**
+     * 保存后清除网站缓存，使多域名探测与 Url 解析能加载到最新绑定域名
+     */
+    public function save_after(): void
+    {
+        parent::save_after();
+        try {
+            w_cache('website')->clear();
+        } catch (\Throwable $e) {
+            // 忽略
+        }
+    }
+    
+    /**
      * 使用 DomainParserService 解析根域名
      * 
      * @param string $domain 完整域名（如 www.example.co.uk）

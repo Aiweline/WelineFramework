@@ -3,7 +3,6 @@
 namespace Weline\Websites\Observer;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -11,6 +10,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 
 class DetectWebsite implements ObserverInterface
 {
@@ -71,6 +71,8 @@ class DetectWebsite implements ObserverInterface
             
             // 缓存未命中，查询数据库
             $sites = $website_model->select()->fetchArray();
+            // 多域名支持：为每个站点的每个绑定域名生成一条 base URL 记录，供 Url 解析做最长匹配
+            $sites = $this->expandSitesWithDomains($sites);
             
             // 保存到缓存
             $cache->set(self::CACHE_KEY_ALL_SITES, $sites);
@@ -123,10 +125,12 @@ class DetectWebsite implements ObserverInterface
 
         // 如果精确匹配失败，尝试使用最长匹配和域名匹配（处理 www 和非 www 的情况）
         if (!$site->getId()) {
-            // 获取所有网站配置（使用缓存）
+            $currentHost = parse_url($url1, PHP_URL_HOST);
+            // 获取所有网站配置（使用缓存，含多域名展开后的列表）
             $allSites = $cache->get(self::CACHE_KEY_ALL_SITES);
             if ($allSites === false || !is_array($allSites)) {
                 $allSites = $website_model->reset()->select()->fetchArray();
+                $allSites = $this->expandSitesWithDomains($allSites);
                 $cache->set(self::CACHE_KEY_ALL_SITES, $allSites);
             }
             
@@ -149,27 +153,25 @@ class DetectWebsite implements ObserverInterface
                 }
             }
             
-            // 如果最长匹配失败，尝试域名匹配
+            // 如果最长匹配失败，尝试域名匹配（主表 url 的 host）
             if ($matchedSite === null) {
-                // 解析当前URL的域名
                 $currentHost = parse_url($url1, PHP_URL_HOST);
-                
-                // 遍历所有网站，使用域名匹配
                 foreach ($allSites as $siteData) {
                     $siteUrl = $siteData['url'] ?? '';
                     if (empty($siteUrl)) {
                         continue;
                     }
-                    
-                    // 解析网站URL的域名
                     $siteHost = parse_url($siteUrl, PHP_URL_HOST);
-                    
-                    // 域名匹配（处理 www 和非 www 的情况）
-                    if ($this->isHostMatch($currentHost, $siteHost)) {
+                    if ($this->isHostMatch($currentHost ?? '', $siteHost ?? '')) {
                         $matchedSite = $siteData;
                         break;
                     }
                 }
+            }
+            
+            // 多域名：若仍未命中，按请求 host（及子路径）在 website_domain 表中查找
+            if ($matchedSite === null && $currentHost !== null && $currentHost !== '') {
+                $matchedSite = $this->findSiteByWebsiteDomain($url1, $currentHost, $website_model);
             }
             
             if ($matchedSite !== null) {
@@ -248,5 +250,141 @@ class DetectWebsite implements ObserverInterface
         $host2WithoutWww = preg_replace('/^www\./', '', $host2);
         
         return $host1WithoutWww === $host2WithoutWww;
+    }
+
+    /**
+     * 多域名支持：为每个站点的主 URL 及 website_domain 中绑定的每个域名生成一条 base URL 记录。
+     * 供 Framework Url 解析与本站点探测做最长匹配，使不同域名能正确归属到对应站点。
+     *
+     * @param array<int, array<string, mixed>> $sites 来自 Website 表的站点列表（每项含 url, website_id 等）
+     * @return array<int, array<string, mixed>> 展开后的站点列表（同一站点可能有多条，url 不同）
+     */
+    private function expandSitesWithDomains(array $sites): array
+    {
+        $expanded = [];
+        $sitesById = [];
+        foreach ($sites as $row) {
+            $id = (int) ($row['website_id'] ?? 0);
+            $sitesById[$id] = $row;
+        }
+        try {
+            /** @var WebsiteDomain $domainModel */
+            $domainModel = w_obj(WebsiteDomain::class);
+            $domainModel->clearQuery()->limit(1)->select()->fetchArray();
+        } catch (\Throwable $e) {
+            return $sites;
+        }
+        /** @var WebsiteDomain $domainModel */
+        $domainModel = w_obj(WebsiteDomain::class);
+        $domains = $domainModel->clearQuery()
+            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        $domainsByWebsite = [];
+        foreach ($domains as $d) {
+            $wid = (int) ($d[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0);
+            if ($wid > 0) {
+                $domainsByWebsite[$wid][] = $d;
+            }
+        }
+        foreach ($sites as $site) {
+            $siteUrl = $site['url'] ?? '';
+            if ($siteUrl !== '') {
+                $expanded[] = $site;
+            }
+            $websiteId = (int) ($site['website_id'] ?? 0);
+            $list = $domainsByWebsite[$websiteId] ?? [];
+            $scheme = 'https';
+            if (preg_match('#^https?://#i', $siteUrl, $m)) {
+                $scheme = strtolower($m[0]);
+                $scheme = str_starts_with($scheme, 'https') ? 'https' : 'http';
+            }
+            foreach ($list as $d) {
+                $domain = $d[WebsiteDomain::schema_fields_DOMAIN] ?? '';
+                $subPath = $d[WebsiteDomain::schema_fields_SUB_PATH] ?? '';
+                $domain = trim((string) $domain);
+                if ($domain === '') {
+                    continue;
+                }
+                $base = $scheme . '://' . $domain;
+                if ($subPath !== '' && $subPath !== null) {
+                    $base .= '/' . trim((string) $subPath, '/');
+                }
+                $row = $site;
+                $row['url'] = $base;
+                $expanded[] = $row;
+            }
+        }
+        return $expanded;
+    }
+
+    /**
+     * 根据请求 URL 的 host（及路径）在 website_domain 表中查找站点。
+     * 用于多域名场景：请求来自绑定域名而非主表 url 时仍能命中正确站点。
+     *
+     * @param string $requestUrl 当前请求完整 URL
+     * @param string $currentHost 已解析的 host
+     * @param Website $websiteModel 用于按 website_id 加载的模型
+     * @return array<string, mixed>|null 匹配到的站点数据，未命中返回 null
+     */
+    private function findSiteByWebsiteDomain(string $requestUrl, string $currentHost, Website $websiteModel): ?array
+    {
+        $path = Url::parse_url($requestUrl, 'path') ?? '';
+        $path = '/' . trim($path, '/');
+        if ($path === '') {
+            $path = '/';
+        }
+        try {
+            /** @var WebsiteDomain $domainModel */
+            $domainModel = w_obj(WebsiteDomain::class);
+            $domainModel->clearQuery()->limit(1)->select()->fetchArray();
+        } catch (\Throwable $e) {
+            return null;
+        }
+        /** @var WebsiteDomain $domainModel */
+        $domainModel = w_obj(WebsiteDomain::class);
+        $rows = $domainModel->clearQuery()
+            ->where(WebsiteDomain::schema_fields_STATUS, WebsiteDomain::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        $candidates = [];
+        $hostNorm = strtolower(trim($currentHost));
+        foreach ($rows as $r) {
+            $d = $r[WebsiteDomain::schema_fields_DOMAIN] ?? '';
+            $d = strtolower(trim((string) $d));
+            if ($d === '') {
+                continue;
+            }
+            if (!$this->isHostMatch($hostNorm, $d)) {
+                continue;
+            }
+            $subPath = $r[WebsiteDomain::schema_fields_SUB_PATH] ?? '';
+            $subPath = trim((string) $subPath);
+            if ($subPath !== '' && !str_starts_with($subPath, '/')) {
+                $subPath = '/' . $subPath;
+            }
+            if ($subPath !== '' && $subPath !== '/') {
+                if (!str_starts_with($path, $subPath) && $path !== $subPath) {
+                    continue;
+                }
+            }
+            $candidates[] = ['sub_path' => $subPath, 'website_id' => (int) ($r[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0), 'row' => $r];
+        }
+        if ($candidates === []) {
+            return null;
+        }
+        usort($candidates, function ($a, $b) {
+            return strlen($b['sub_path']) <=> strlen($a['sub_path']);
+        });
+        $chosen = $candidates[0];
+        $websiteId = $chosen['website_id'];
+        if ($websiteId <= 0) {
+            return null;
+        }
+        $websiteModel->reset()->load($websiteId);
+        if (!$websiteModel->getWebsiteId()) {
+            return null;
+        }
+        return $websiteModel->getData();
     }
 }
