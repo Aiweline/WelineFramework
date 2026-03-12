@@ -66,8 +66,8 @@ class SslCertificate extends Model
     public const STATUS_ERROR = 'error';
     public const CERT_TYPE_EXACT = 'exact';
     public const CERT_TYPE_WILDCARD = 'wildcard';
-/**
-     * 保存前自动更新时间戳
+    /**
+     * 保存前自动更新时间戳，并校验必填字段 domain（NOT NULL）
      */
     public function save_before(): void
     {
@@ -78,6 +78,12 @@ class SslCertificate extends Model
         
         if (!$this->getData(self::schema_fields_ID)) {
             $this->setData(self::schema_fields_CREATED_AT, $now);
+            $domain = \strtolower(\trim((string) $this->getData(self::schema_fields_DOMAIN)));
+            if ($domain === '') {
+                throw new \InvalidArgumentException(
+                    'SslCertificate 新建记录时 domain 不能为空，请先 setDomain() 或检查调用方是否传入有效域名。'
+                );
+            }
         }
     }
     

@@ -1096,6 +1096,8 @@ CNF;
             }
 
             $cert = $this->resolveDuplicateDomainCert($cert);
+            // 保存前再次设置 domain，避免 resolveDuplicateDomainCert 返回的模型因 getData() 未含 domain 导致 INSERT 违反 NOT NULL
+            $cert->setDomain($domain);
             $cert->save();
             return $cert;
         } catch (\Throwable $e) {
@@ -1389,6 +1391,9 @@ CNF;
             
             // 2. 创建或获取证书记录
             $normalizedDomain = \strtolower(\trim($domain));
+            if ($normalizedDomain === '') {
+                return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
+            }
             $cert = $this->certModel->clearQuery()->loadByDomain($normalizedDomain);
             $loadedDomain = \strtolower(\trim((string) $cert->getDomain()));
             if (!$cert->getCertId() || $loadedDomain !== $normalizedDomain) {
