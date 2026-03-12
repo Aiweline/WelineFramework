@@ -23,16 +23,10 @@ class Acl extends \Weline\Admin\Controller\BaseController
         $aclModel = ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
         if ($search = $this->request->getGet('search')) {
             $connector = $aclModel->getConnection()->getConnector();
-            $alias = 'main_table';
-            $quotedFields = [];
-            $reserved = ['order', 'key', 'table', 'fields'];
-            foreach ($aclModel->getModelFields() as $f) {
-                $quoted = $connector->quoteIdentifier($f);
-                if (in_array(strtolower((string)$f), $reserved, true) && !str_contains($quoted, '"')) {
-                    $quoted = '"' . str_replace('"', '""', (string)$f) . '"';
-                }
-                $quotedFields[] = str_contains((string)$f, '.') ? $quoted : ($alias . '.' . $quoted);
-            }
+            $quotedFields = array_map(
+                fn(string $f): string => $connector->quoteIdentifier($f),
+                $aclModel->getModelFields()
+            );
             $aclModel->where('CONCAT(' . implode(',', $quotedFields) . ')', '%' . $search . '%', 'like');
         }
         $aclModel->pagination()->select()->fetch();

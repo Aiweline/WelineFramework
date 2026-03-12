@@ -5758,18 +5758,16 @@ window.openFrontendPreview = function() {
     // 获取网站基础URL（同 host 时用当前请求 base 以保留端口）
     const baseUrl = typeof getDisplayBaseUrl === 'function' ? getDisplayBaseUrl(websiteId) : (websiteUrls[websiteId] || '<?= htmlspecialchars(rtrim($this->request->getBaseHost(), '/'), ENT_QUOTES, 'UTF-8') ?>');
     
-    // 构建预览URL（带 preview/page_id/style_code，确保实时预览当前编辑中的模板）
-    let previewUrl;
-    if (isHomePage && !handle) {
-        // 首页类型且没有handle：直接使用网站地址
-        previewUrl = baseUrl;
-    } else {
-        // 其他页面：网站地址 + 页面handle
-        previewUrl = baseUrl + '/' + handle;
-    }
-
+    // 构建预览URL：handle 放 query 并 encodeURIComponent，配合 website_id 解码
+    let previewUrl = baseUrl;
     const queryParams = [];
+    if (handle) {
+        queryParams.push('handle=' + encodeURIComponent(handle));
+    }
     queryParams.push('preview=1');
+    if (websiteId > 0) {
+        queryParams.push('website_id=' + String(websiteId));
+    }
     if (requestPageId > 0) {
         queryParams.push('page_id=' + encodeURIComponent(String(requestPageId)));
     }
@@ -5780,7 +5778,7 @@ window.openFrontendPreview = function() {
         queryParams.push('locale=' + encodeURIComponent(selectedLocale));
     }
     queryParams.push('t=' + Date.now());
-    previewUrl += (previewUrl.indexOf('?') === -1 ? '?' : '&') + queryParams.join('&');
+    previewUrl += (baseUrl.indexOf('?') === -1 ? '?' : '&') + queryParams.join('&');
     
     // 在新窗口打开前端预览
     window.open(previewUrl, '_blank');
