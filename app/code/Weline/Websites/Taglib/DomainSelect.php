@@ -280,9 +280,12 @@ class DomainSelect implements TaglibInterface
             $html[] = '}';
             $html[] = '</style>';
 
-            // HTML 结构
+            // HTML 结构（data-website-id 由页面渲染时写入，编辑时供 loadData 读取以包含本站已绑定域名）
             $multipleAttr = $isMultiple ? 'true' : 'false';
-            $html[] = '<div class="weline-domain-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '" id="<?= htmlspecialchars($Taglib__id) ?>_wrapper" data-multiple="' . $multipleAttr . '">';
+            $dataWebsiteId = ($websiteIdAttr !== '' && !str_contains($websiteIdAttr, '<?='))
+                ? ' data-website-id="' . (int) $websiteIdAttr . '"'
+                : ' data-website-id="' . $websiteIdAttr . '"';
+            $html[] = '<div class="weline-domain-select ' . htmlspecialchars($class) . '" style="' . htmlspecialchars($style) . '" id="<?= htmlspecialchars($Taglib__id) ?>_wrapper" data-multiple="' . $multipleAttr . '"' . $dataWebsiteId . '>';
             $html[] = '  <button type="button" class="weline-domain-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
             if ($isMultiple) {
                 $html[] = '    <div class="weline-domain-select-tags" id="<?= htmlspecialchars($Taglib__id) ?>_tags">';
@@ -338,12 +341,14 @@ class DomainSelect implements TaglibInterface
             $html[] = '    </div>';
             $html[] = '    <div class="row">';
             $html[] = '      <div class="col-6 mb-3">';
-            $html[] = '        <label class="form-label"><lang>DNS账户</lang></label>';
+            $html[] = '        <label class="form-label"><lang>DNS 供应商/账户</lang></label>';
             $html[] = '        <select class="form-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_dns_account"><option value="0">' . __('默认不设置') . '</option></select>';
+            $html[] = '        <div class="form-text"><lang>选择 DNS 服务商及账户，用于解析与证书</lang></div>';
             $html[] = '      </div>';
             $html[] = '      <div class="col-6 mb-3">';
-            $html[] = '        <label class="form-label"><lang>CDN账户</lang></label>';
+            $html[] = '        <label class="form-label"><lang>CDN 供应商/账户</lang></label>';
             $html[] = '        <select class="form-select" id="<?= htmlspecialchars($Taglib__id) ?>_manual_cdn_account"><option value="0">' . __('默认不设置') . '</option></select>';
+            $html[] = '        <div class="form-text"><lang>可选，如 Cloudflare 等</lang></div>';
             $html[] = '      </div>';
             $html[] = '    </div>';
             $html[] = '    <div class="mb-3">';
@@ -452,8 +457,8 @@ class DomainSelect implements TaglibInterface
             $html[] = '    var cdnAccounts = data.data.cdn_accounts || [];';
             $html[] = '    manualDnsSelect.innerHTML = \'<option value="0">' . addslashes(__('默认不设置')) . '</option>\';';
             $html[] = '    manualCdnSelect.innerHTML = \'<option value="0">' . addslashes(__('默认不设置')) . '</option>\';';
-            $html[] = '    dnsAccounts.forEach(function(acc){ var opt=document.createElement("option"); opt.value=acc.account_id; opt.textContent=(acc.name||acc.account_name||"") + " (" + (acc.registrar_name||acc.registrar_code||"") + ")"; manualDnsSelect.appendChild(opt); });';
-            $html[] = '    cdnAccounts.forEach(function(acc){ var opt=document.createElement("option"); opt.value=acc.account_id; opt.textContent=(acc.name||acc.account_name||"") + " (" + (acc.registrar_name||acc.registrar_code||"") + ")"; manualCdnSelect.appendChild(opt); });';
+            $html[] = '    dnsAccounts.forEach(function(acc){ var opt=document.createElement("option"); opt.value=acc.account_id; opt.textContent=(acc.registrar_name||acc.registrar_code||"") + " - " + (acc.name||acc.account_name||acc.account_id); manualDnsSelect.appendChild(opt); });';
+            $html[] = '    cdnAccounts.forEach(function(acc){ var opt=document.createElement("option"); opt.value=acc.account_id; opt.textContent=(acc.registrar_name||acc.registrar_code||"") + " - " + (acc.name||acc.account_name||acc.account_id); manualCdnSelect.appendChild(opt); });';
             $html[] = '  }).catch(function(){});';
             $html[] = '}';
             $html[] = '';
@@ -681,7 +686,9 @@ class DomainSelect implements TaglibInterface
             $html[] = 'function loadData() {';
             $html[] = '  loading.style.display = "block";';
             $html[] = '  list.innerHTML = "";';
-            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (websiteId > 0 ? "&website_id=" + websiteId : "");';
+            $html[] = '  var wrapper = document.getElementById(id + "_wrapper");';
+            $html[] = '  var wid = parseInt(wrapper ? (wrapper.getAttribute("data-website-id") || "0") : "0", 10);';
+            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (wid > 0 ? "&website_id=" + wid : "");';
             $html[] = '  fetch(apiUrl)';
             $html[] = '    .then(function(r) { return r.json(); })';
             $html[] = '    .then(function(res) {';
@@ -817,10 +824,27 @@ class DomainSelect implements TaglibInterface
             $html[] = '      fetch(manualCreateApi, { method: "POST", body: fd }).then(function(r){ return r.json(); }).then(function(res){';
             $html[] = '        manualSubmitBtn.disabled = false;';
             $html[] = '        if (!res || res.code !== 200) { notify((res && res.msg) ? res.msg : "' . addslashes(__('创建失败')) . '", "error"); return; }';
-            $html[] = '        notify((res.msg || "' . addslashes(__('创建成功')) . '"), "success");';
+            $html[] = '        var data = (res.data || {});';
+            $html[] = '        var newDomain = data.domain || "";';
+            $html[] = '        var newPoolId = data.pool_id ? String(data.pool_id) : "";';
+            $html[] = '        var rootDomain = data.root_domain || newDomain;';
+            $html[] = '        if (newDomain && selectedDomains.indexOf(newDomain) === -1) {';
+            $html[] = '          selectedDomains.push(newDomain);';
+            $html[] = '          if (valueType === "pool_id" && newPoolId) {';
+            $html[] = '            var cur = (hidden.value || "").trim();';
+            $html[] = '            hidden.value = cur ? cur + "," + newPoolId : newPoolId;';
+            $html[] = '          } else { updateHiddenValue(); }';
+            $html[] = '          if (!cache) cache = [];';
+            $html[] = '          var grp = cache.find(function(g) { return (g.label || "") === rootDomain; });';
+            $html[] = '          if (!grp) { grp = { label: rootDomain, options: [] }; cache.push(grp); }';
+            $html[] = '          if (!grp.options.some(function(o) { return o.domain === newDomain; })) {';
+            $html[] = '            grp.options.push({ domain: newDomain, pool_id: newPoolId, site_ready: 0, root_domain: rootDomain });';
+            $html[] = '          }';
+            $html[] = '          updateDisplay();';
+            $html[] = '          doAutoFill();';
+            $html[] = '        }';
+            $html[] = '        notify((res.msg || "' . addslashes(__('域名已添加并已选')) . '") + " ' . addslashes(__('系统将自动完成解析与证书，可建站后网站即可访问。')) . '", "success");';
             $html[] = '        hideManualOffcanvas();';
-            $html[] = '        cache = null;';
-            $html[] = '        loadData();';
             $html[] = '      }).catch(function(){ manualSubmitBtn.disabled = false; notify("' . addslashes(__('请求失败')) . '", "error"); });';
             $html[] = '    });';
             $html[] = '  }';
