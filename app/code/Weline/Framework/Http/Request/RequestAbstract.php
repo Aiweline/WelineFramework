@@ -444,6 +444,7 @@ abstract class RequestAbstract extends RequestFilter
         $this->uri = '';
         $this->origin_uri = '';
         $this->uri_cache_key = '';
+        $this->parse_url = [];
         return $this;
     }
     
