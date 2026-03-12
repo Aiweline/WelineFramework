@@ -828,11 +828,17 @@ CNF;
                 : SslCertificate::CERT_TYPE_EXACT;
             
             $expiresAt = \date('Y-m-d H:i:s', \strtotime("+{$validDays} days"));
+            $chainPath = \dirname($certPath) . DS . 'chain.pem';
+            $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
 
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
                 ->setCertPath($certPath)
                 ->setKeyPath($keyPath)
+                ->setChainPath(\is_file($chainPath) ? $chainPath : '')
+                ->setCertPem($certContents['cert_pem'])
+                ->setKeyPem($certContents['key_pem'])
+                ->setChainPem($certContents['chain_pem'])
                 ->setCertType($certType)
                 ->setIssuer($issuer)
                 ->setProvider($provider)
@@ -1076,6 +1082,7 @@ CNF;
             if (\is_file($candidateChainPath)) {
                 $chainPath = $candidateChainPath;
             }
+            $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
 
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
@@ -1083,6 +1090,9 @@ CNF;
                 ->setCertPath($certPath)
                 ->setKeyPath($keyPath)
                 ->setChainPath($chainPath)
+                ->setCertPem($certContents['cert_pem'])
+                ->setKeyPem($certContents['key_pem'])
+                ->setChainPem($certContents['chain_pem'])
                 ->setIssuer($issuer !== '' ? $issuer : ($isSelfSigned ? self::ISSUER_SELF_SIGNED : "Let's Encrypt"))
                 ->setProvider($provider)
                 ->setStatus($status)
@@ -1198,17 +1208,25 @@ CNF;
             $certId = (int)($cert[SslCertificate::schema_fields_ID] ?? 0);
             $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
 
-            // 检查证书文件是否存在
+            // 检查证书文件是否存在；不存在时先尝试从证书管理中保存的 PEM 内容恢复
             if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
-                // 证书文件不存在，检查是否过期
                 $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
-                
-                if ($isExpired) {
+                if (!$isExpired && $this->restoreCertificateFilesFromData($cert)) {
+                    $restoredDir = $this->getCertificateDir((string) $domain);
+                    $certPath = $restoredDir . 'fullchain.pem';
+                    $keyPath = $restoredDir . 'privkey.pem';
+                    $cert[SslCertificate::schema_fields_CERT_PATH] = $certPath;
+                    $cert[SslCertificate::schema_fields_KEY_PATH] = $keyPath;
+                    $cert[SslCertificate::schema_fields_CHAIN_PATH] = \is_file($restoredDir . 'chain.pem')
+                        ? $restoredDir . 'chain.pem'
+                        : '';
+                } elseif ($isExpired) {
                     $expiredCerts[] = [
                         'domain' => $domain,
                         'expires_at' => $expiresAt,
                         'cert_id' => $certId,
                     ];
+                    continue;
                 } else {
                     $missingCerts[] = [
                         'domain' => $domain,
@@ -1217,8 +1235,8 @@ CNF;
                         'cert_path' => $certPath,
                         'key_path' => $keyPath,
                     ];
+                    continue;
                 }
-                continue;
             }
 
             $certData = [
@@ -1228,43 +1246,7 @@ CNF;
                 'cert_type' => $certType,
             ];
             
-            // 添加原始域名映射
-            $map[$domain] = $certData;
-            
-            // 如果是泛域名证书，额外添加根域名映射
-            // 这样 www.example.com 可以匹配 *.example.com 证书
-            if ($certType === SslCertificate::CERT_TYPE_WILDCARD && \str_starts_with($domain, '*.')) {
-                // 提取根域名：*.example.com -> example.com
-                $rootDomain = \substr($domain, 2);
-                if ($rootDomain !== '' && !isset($map[$rootDomain])) {
-                    $map[$rootDomain] = $certData;
-                }
-                
-                // 从 DomainPool 获取该根域名下的所有已建站子域名，添加映射
-                // 这样 www.example.com 可以精确匹配到 *.example.com 证书
-                try {
-                    $poolModel = \Weline\Framework\Manager\ObjectManager::getInstance(
-                        \Weline\Websites\Model\DomainPool::class,
-                        [],
-                        false
-                    );
-                    $subdomains = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_STATUS, \Weline\Websites\Model\DomainPool::STATUS_ACTIVE)
-                        ->select()
-                        ->fetchArray();
-                    
-                    foreach ($subdomains as $row) {
-                        $subdomain = (string)($row[\Weline\Websites\Model\DomainPool::schema_fields_DOMAIN] ?? '');
-                        if ($subdomain !== '' && !isset($map[$subdomain])) {
-                            $map[$subdomain] = $certData;
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // DomainPool 模块可能不存在，忽略错误
-                    w_log_debug('[SslCertificateService] 获取 DomainPool 子域名失败: ' . $e->getMessage());
-                }
-            }
+            $this->appendCertificateMapEntries($map, (string) $domain, $certType, $certData);
         }
         
         // 发出证书缺失通知
@@ -1367,6 +1349,99 @@ CNF;
         }
     }
 
+    protected function appendCertificateMapEntries(array &$map, string $domain, string $certType, array $certData): void
+    {
+        $map[$domain] = $certData;
+
+        if ($certType !== SslCertificate::CERT_TYPE_WILDCARD || !\str_starts_with($domain, '*.')) {
+            return;
+        }
+
+        $rootDomain = \substr($domain, 2);
+        if ($rootDomain !== '' && !isset($map[$rootDomain])) {
+            $map[$rootDomain] = $certData;
+        }
+
+        try {
+            $poolModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Websites\Model\DomainPool::class,
+                [],
+                false
+            );
+            $subdomains = $poolModel->clearQuery()
+                ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
+                ->where(\Weline\Websites\Model\DomainPool::schema_fields_STATUS, \Weline\Websites\Model\DomainPool::STATUS_ACTIVE)
+                ->select()
+                ->fetchArray();
+
+            foreach ($subdomains as $row) {
+                $subdomain = (string) ($row[\Weline\Websites\Model\DomainPool::schema_fields_DOMAIN] ?? '');
+                if ($subdomain !== '' && !isset($map[$subdomain])) {
+                    $map[$subdomain] = $certData;
+                }
+            }
+        } catch (\Throwable $e) {
+            w_log_debug('[SslCertificateService] 获取 DomainPool 子域名失败: ' . $e->getMessage());
+        }
+    }
+
+    protected function readCertificateContents(string $certPath, string $keyPath, string $chainPath = ''): array
+    {
+        return [
+            'cert_pem' => \is_file($certPath) ? (string) @\file_get_contents($certPath) : '',
+            'key_pem' => \is_file($keyPath) ? (string) @\file_get_contents($keyPath) : '',
+            'chain_pem' => ($chainPath !== '' && \is_file($chainPath)) ? (string) @\file_get_contents($chainPath) : '',
+        ];
+    }
+
+    protected function restoreCertificateFilesFromData(array $cert): bool
+    {
+        $domain = \strtolower(\trim((string) ($cert[SslCertificate::schema_fields_DOMAIN] ?? '')));
+        $certPem = (string) ($cert[SslCertificate::schema_fields_CERT_PEM] ?? '');
+        $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
+        $chainPem = (string) ($cert[SslCertificate::schema_fields_CHAIN_PEM] ?? '');
+        if ($domain === '' || $certPem === '' || $keyPem === '') {
+            return false;
+        }
+
+        $certDir = $this->getCertificateDir($domain);
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        $chainPath = $certDir . 'chain.pem';
+
+        if (@\file_put_contents($certPath, $certPem) === false) {
+            return false;
+        }
+        if (@\file_put_contents($keyPath, $keyPem) === false) {
+            return false;
+        }
+        if ($chainPem !== '') {
+            @\file_put_contents($chainPath, $chainPem);
+        }
+        @\chmod($certPath, 0644);
+        @\chmod($keyPath, 0600);
+
+        try {
+            $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
+            if ($certId > 0) {
+                $certModel = ObjectManager::getInstance(SslCertificate::class, [], false);
+                $certModel->load($certId);
+                if ($certModel->getCertId()) {
+                    $certModel->setCertPath($certPath)
+                        ->setKeyPath($keyPath)
+                        ->setChainPath($chainPem !== '' ? $chainPath : '')
+                        ->setStatus(SslCertificate::STATUS_ACTIVE)
+                        ->setRenewError('')
+                        ->save();
+                }
+            }
+        } catch (\Throwable $e) {
+            w_log_error('[SslCertificateService] 恢复证书文件后更新记录失败：' . $e->getMessage());
+        }
+
+        return true;
+    }
+
     /**
      * 将数据库中的证书文件同步到 app/etc/ssl/{domain}/ 目录。
      *
@@ -1391,12 +1466,8 @@ CNF;
             $domain = (string)($row[SslCertificate::schema_fields_DOMAIN] ?? '');
             $sourceCert = (string)($row[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $sourceKey = (string)($row[SslCertificate::schema_fields_KEY_PATH] ?? '');
-            if ($domain === '' || $sourceCert === '' || $sourceKey === '') {
+            if ($domain === '') {
                 $result['skipped']++;
-                continue;
-            }
-            if (!\is_file($sourceCert) || !\is_file($sourceKey)) {
-                $result['errors'][] = __('证书源文件不存在：%{1}', [$domain]);
                 continue;
             }
 
@@ -1407,6 +1478,15 @@ CNF;
             $targetCert = $targetDir . 'fullchain.pem';
             $targetKey = $targetDir . 'privkey.pem';
             $targetExistsBefore = \is_file($targetCert) && \is_file($targetKey);
+
+            if ($sourceCert === '' || $sourceKey === '' || !\is_file($sourceCert) || !\is_file($sourceKey)) {
+                if ($this->restoreCertificateFilesFromData($row)) {
+                    $result[$targetExistsBefore ? 'updated' : 'written']++;
+                } else {
+                    $result['errors'][] = __('证书源文件不存在且无法从证书管理恢复：%{1}', [$domain]);
+                }
+                continue;
+            }
 
             try {
                 $copiedCert = $this->copyIfChanged($sourceCert, $targetCert);
