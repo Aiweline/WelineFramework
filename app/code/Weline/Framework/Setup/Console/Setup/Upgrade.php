@@ -40,6 +40,7 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Console\Console\Reflection\Compile as ReflectionCompile;
+use Weline\Acl\Service\AclOrphanCleanupService;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
@@ -132,11 +133,37 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private bool $registryCollectedInThisRun = false;
 
     function __construct(
-        private Printing $printing
+        private Printing $printing,
+        private AclOrphanCleanupService $aclOrphanCleanupService
     )
     {
         // 构造函数只负责初始化，不执行具体逻辑
         // 所有逻辑都在 execute() 方法中按正确顺序执行
+    }
+
+    /**
+     * 在 setup:upgrade 因异常卸载/搬迁中断前，先清理这些模块遗留的 ACL / 菜单。
+     *
+     * @param string[] $moduleNames
+     */
+    private function cleanupMissingModuleAclResidues(array $moduleNames): void
+    {
+        $moduleNames = array_values(array_filter(array_unique($moduleNames)));
+        if (empty($moduleNames)) {
+            return;
+        }
+
+        try {
+            $cleanedCount = $this->aclOrphanCleanupService->cleanupByModules($moduleNames);
+            if ($cleanedCount > 0) {
+                $this->printing->note(__('已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}', [
+                    $cleanedCount,
+                    implode(', ', $moduleNames),
+                ]));
+            }
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('清理异常卸载模块 ACL/菜单残留失败：%{1}', [$e->getMessage()]));
+        }
     }
     
     /**
@@ -1424,6 +1451,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 只有真正找不到 register.php 文件的模块才抛出异常
         if ($no_modules) {
+            $this->cleanupMissingModuleAclResidues($no_modules);
             $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printing->setup(__('%{modules} 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $no_modules)]));
@@ -1431,6 +1459,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             throw new Exception(__('模块检查失败：%{modules} 模块未找到(异常卸载)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $no_modules)]));
         }
         if ($diff_base_path_modules) {
+            $this->cleanupMissingModuleAclResidues($diff_base_path_modules);
             $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
             $this->printing->setup(__('%{modules} 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $diff_base_path_modules)]));
