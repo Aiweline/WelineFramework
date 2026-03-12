@@ -24,6 +24,7 @@ use Weline\Websites\Model\Domain as DomainModel;
 use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainDnsRecord;
+use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DomainRegistrarResolverService;
@@ -1002,6 +1003,19 @@ class Domain extends BackendController
                         continue;
                     }
                     $domainName = $domain->getDomain();
+                    $rootDomainLower = \strtolower(\trim($domainName));
+
+                    // 0. 若有网站正在使用该根域名，则禁止删除，提示先删除网站或解除绑定
+                    $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+                    $usedBySites = $websiteDomainModel->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    if (\count($usedBySites) > 0) {
+                        $errors[] = __('ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。', [$domainId, $domainName]);
+                        continue;
+                    }
 
                     // 1. 删除该根域下所有域名池记录（子域名一并删除）（fetch() 返回模型，需 getItems() 取记录列表）
                     $poolModel = ObjectManager::getInstance(DomainPool::class);
@@ -3229,11 +3243,24 @@ class Domain extends BackendController
                     }
 
                     $domainName = $domain->getDomain();
+                    $rootDomainLower = \strtolower(\trim($domainName));
+
+                    // 若有网站正在使用该根域名，则禁止删除
+                    $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+                    $usedBySites = $websiteDomainModel->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    if (\count($usedBySites) > 0) {
+                        $errors[] = __('ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。', [$domainId, $domainName]);
+                        continue;
+                    }
 
                     // 1. 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
                         ->fetch()
                         ->getItems();
@@ -3332,15 +3359,29 @@ class Domain extends BackendController
             $deleted = 0;
             $poolDeleted = 0;
             $dnsDeleted = 0;
+            $skipped = 0;
 
             foreach ($domains as $domain) {
                 $domainId = $domain->getDomainId();
                 $domainName = $domain->getDomain();
+                $rootDomainLower = \strtolower(\trim($domainName));
+
+                // 若有网站正在使用该根域名，则跳过不删
+                $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+                $usedBySites = $websiteDomainModel->clearQuery()
+                    ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                    ->select()
+                    ->fetch()
+                    ->getItems();
+                if (\count($usedBySites) > 0) {
+                    $skipped++;
+                    continue;
+                }
 
                 // 1. 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
                 $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                 $poolRecords = $poolModel->clearQuery()
-                    ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
+                    ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                     ->select()
                     ->fetch()
                     ->getItems();
@@ -3368,17 +3409,23 @@ class Domain extends BackendController
                 $deleted++;
             }
 
-            return $this->fetchJson([
-                'code' => 200,
-                'msg' => __('取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录', [
+            $msg = __('取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录', [
                     $deleted,
                     $poolDeleted,
                     $dnsDeleted,
-                ]),
+                ]);
+            if ($skipped > 0) {
+                $msg .= ' ' . __('（跳过 %{1} 个：正在被网站使用，请先删除相关网站或解除绑定）', [$skipped]);
+            }
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
                 'data' => [
                     'deleted' => $deleted,
                     'pool_deleted' => $poolDeleted,
                     'dns_deleted' => $dnsDeleted,
+                    'skipped' => $skipped,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -3784,15 +3831,29 @@ class Domain extends BackendController
                 $deleted = 0;
                 $poolDeleted = 0;
                 $dnsDeleted = 0;
+                $skipped = 0;
 
                 foreach ($domains as $domain) {
                     $domainId = $domain->getDomainId();
                     $domainName = $domain->getDomain();
+                    $rootDomainLower = \strtolower(\trim($domainName));
+
+                    // 若有网站正在使用该根域名，则跳过不删
+                    $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+                    $usedBySites = $websiteDomainModel->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $rootDomainLower)
+                        ->select()
+                        ->fetch()
+                        ->getItems();
+                    if (\count($usedBySites) > 0) {
+                        $skipped++;
+                        continue;
+                    }
 
                     // 删除关联的域名池记录（fetch() 返回模型，需 getItems() 取记录列表）
                     $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
                     $poolRecords = $poolModel->clearQuery()
-                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomainLower)
                         ->select()
                         ->fetch()
                         ->getItems();
