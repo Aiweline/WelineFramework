@@ -509,8 +509,8 @@ class GnameRegistrar implements DomainRegistrarInterface
 
     /**
      * 根据 API 主机和端点构建请求路径
-     * 官方文档使用 www.gname.com，路径为 /domain/api/user/info、/domain/api/jiexi/list 等
-     * 若使用 api.gname.com，路径为 /api/user/info、/api/jiexi/list 等
+     * 官方文档使用 www.gname.com，路径为 /domain/api/user/info、/domain/api/resolution/add 等
+     * 若使用 api.gname.com，路径为 /api/user/info、/api/resolution/add 等
      */
     private function buildApiPath(string $apiHost, string $endpoint): string
     {
@@ -934,20 +934,10 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        // 官方文档为 domain/api/jiexi/list，优先使用；resolution/list 可能不存在于 www.gname.com 导致返回 HTML
-        $response = $this->makeRequest('api/jiexi/list', [
+        // 官方文档：域名解析列表请求 URL 为 /api/resolution/list
+        $response = $this->makeRequest('api/resolution/list', [
             'ym' => $domain,
         ], $credentials);
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/resolution/list', [
-                'ym' => $domain,
-            ], $credentials);
-        }
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/domain/dnslist', [
-                'ym' => $domain,
-            ], $credentials);
-        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code !== 1) {
@@ -998,17 +988,8 @@ class GnameRegistrar implements DomainRegistrarInterface
             $params['mx'] = (string) $record['priority'];
         }
 
-        // 官方文档「添加域名解析」请求 URL 为 /api/resolution/add（文档页为 /domain/api/jiexi/add，非接口路径）
+        // 官方文档「添加域名解析」请求 URL 为 /api/resolution/add
         $response = $this->makeRequest('api/resolution/add', $params, $credentials);
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
-        }
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $legacyParams = $params;
-            $legacyParams['type'] = $legacyParams['lx'];
-            unset($legacyParams['lx'], $legacyParams['xl']);
-            $response = $this->makeRequest('api/domain/dnsadd', $legacyParams, $credentials);
-        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {
@@ -1060,18 +1041,8 @@ class GnameRegistrar implements DomainRegistrarInterface
             $params['mx'] = (string) $record['priority'];
         }
 
-        // 官方文档为 jiexi/edit，优先使用
-        $response = $this->makeRequest('api/jiexi/edit', $params, $credentials);
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
-        }
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $legacyParams = $params;
-            $legacyParams['id'] = $legacyParams['jxid'];
-            $legacyParams['type'] = $legacyParams['lx'];
-            unset($legacyParams['jxid'], $legacyParams['lx'], $legacyParams['xl']);
-            $response = $this->makeRequest('api/domain/dnsupdate', $legacyParams, $credentials);
-        }
+        // 官方文档「修改域名解析」请求 URL 为 /api/resolution/edit
+        $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {
@@ -1095,23 +1066,11 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        // 官方文档为 jiexi/del，优先使用
-        $response = $this->makeRequest('api/jiexi/del', [
+        // 官方文档「删除域名解析」请求 URL 为 /api/resolution/delete
+        $response = $this->makeRequest('api/resolution/delete', [
             'ym' => $domain,
             'jxid' => $recordId,
         ], $credentials);
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/resolution/delete', [
-                'ym' => $domain,
-                'jxid' => $recordId,
-            ], $credentials);
-        }
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/domain/dnsdel', [
-                'ym' => $domain,
-                'id' => $recordId,
-            ], $credentials);
-        }
 
         $code = (int) ($response['code'] ?? 0);
         if ($code === 1) {
