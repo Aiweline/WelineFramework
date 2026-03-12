@@ -26,7 +26,7 @@ class Website extends Model
     public const schema_fields_ID = 'website_id';
     #[Col('varchar', 128, nullable: false, unique: true, comment: '网站名称')]
     public const schema_fields_NAME = 'name';
-    #[Col('varchar', 20, nullable: false, unique: true, comment: '网站代码')]
+    #[Col('varchar', 255, nullable: false, unique: true, comment: '网站代码')]
     public const schema_fields_CODE = 'code';
     #[Col('varchar', 128, nullable: false, unique: true, comment: '网站链接')]
     public const schema_fields_URL = 'url';
