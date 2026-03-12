@@ -1253,6 +1253,30 @@ class AiGenerate extends BackendController
             } else {
                 $phtmlCode = $aiData['phtml'] ?? '';
             }
+
+            $qualityGate = $this->runMandatoryQualityGates(
+                $phtmlCode,
+                function (string $phase, array $detail) use ($sse) {
+                    $detail['phase'] = $phase;
+                    $sse->sendEvent('quality_gate', $detail);
+                    if (!empty($detail['message'])) {
+                        $sse->sendEvent('parsing', [
+                            'message' => $detail['message'],
+                            'phase' => $phase,
+                        ]);
+                    }
+                }
+            );
+            if (!$qualityGate['passed']) {
+                $sse->sendEvent('complete', [
+                    'success' => false,
+                    'message' => __('组件代码未通过两层质量检测，请根据详情修复后重试'),
+                    'quality_gate' => $qualityGate,
+                ]);
+                $sse->complete(['message' => __('生成结束（质量检测未通过）')]);
+                return;
+            }
+            $phtmlCode = $qualityGate['final_code'];
             
             // 构建组件信息
             $component = [
@@ -1325,7 +1349,8 @@ class AiGenerate extends BackendController
                 $useFramework,
                 $prompt,
                 $refineToken,
-                $draftId
+                $draftId,
+                $qualityGate
             ));
             
             // 发送结束事件（使用 complete 方法）
@@ -2516,7 +2541,8 @@ PROMPT;
         bool $useFramework,
         string $prompt,
         string $refineToken,
-        int $draftId
+        int $draftId,
+        array $qualityGate = []
     ): array {
         return [
             'success' => true,
@@ -2527,6 +2553,7 @@ PROMPT;
             'final_prompt' => $prompt,
             'refine_token' => $refineToken,
             'draft_id' => $draftId,
+            'quality_gate' => $qualityGate,
         ];
     }
 
@@ -2542,7 +2569,8 @@ PROMPT;
         string $agentCode,
         string $modelCode,
         int $iterations,
-        int $toolCallsCount
+        int $toolCallsCount,
+        array $qualityGate = []
     ): array {
         return [
             'success' => true,
@@ -2556,6 +2584,7 @@ PROMPT;
             'model_code' => $modelCode,
             'iterations' => $iterations,
             'tool_calls_count' => $toolCallsCount,
+            'quality_gate' => $qualityGate,
         ];
     }
 
@@ -3015,6 +3044,31 @@ PROMPT;
                                 $phtmlCode .= "\n<script>\n" . $jsContent . "\n</script>";
                             }
 
+                            $qualityGate = $this->runMandatoryQualityGates(
+                                $phtmlCode,
+                                function (string $phase, array $detail) use ($sse) {
+                                    $detail['phase'] = $phase;
+                                    $sse->sendEvent('quality_gate', $detail);
+                                    if (!empty($detail['message'])) {
+                                        $sse->sendEvent('agent_status', [
+                                            'status' => 'quality_gate',
+                                            'message' => $detail['message'],
+                                            'phase' => $phase,
+                                        ]);
+                                    }
+                                }
+                            );
+                            if (!$qualityGate['passed']) {
+                                $sse->sendEvent('complete', [
+                                    'success' => false,
+                                    'message' => __('智能体结果未通过两层质量检测，请根据详情修复后重试'),
+                                    'quality_gate' => $qualityGate,
+                                    'raw_content' => mb_substr($currentContent, 0, 2000),
+                                ]);
+                                return;
+                            }
+                            $phtmlCode = $qualityGate['final_code'];
+
                             $savedComponent = $this->registerAiComponent(
                                 $componentCode,
                                 $componentData['name'] ?? $name,
@@ -3040,7 +3094,8 @@ PROMPT;
                                 $result->agentCode,
                                 $result->modelCode,
                                 $result->iterations,
-                                count($result->toolCalls)
+                                count($result->toolCalls),
+                                $qualityGate
                             ));
                         }
                     } else {
@@ -3224,6 +3279,165 @@ PROMPT;
         }
         
         return ['valid' => true, 'error' => ''];
+    }
+
+    /**
+     * 组件生成两层强制质量关卡：
+     * 1) PHP 语法检测
+     * 2) 缺陷检测（含自动修复重试）
+     */
+    private function runMandatoryQualityGates(string $phtmlCode, ?callable $stepReporter = null): array
+    {
+        $report = static function (?callable $fn, string $phase, array $detail = []): void {
+            if (is_callable($fn)) {
+                $fn($phase, $detail);
+            }
+        };
+
+        $maxRepairAttempts = 2;
+        $currentCode = $phtmlCode;
+        $history = [];
+        $result = [
+            'passed' => false,
+            'final_code' => $currentCode,
+            'syntax' => ['valid' => false, 'error' => ''],
+            'defect' => ['valid' => false, 'errors' => [], 'warnings' => []],
+            'auto_fix_applied' => false,
+            'auto_fixes' => [],
+            'history' => [],
+        ];
+
+        $codeValidator = ObjectManager::getInstance(CodeValidator::class);
+        $codeFixer = ObjectManager::getInstance(CodeFixer::class);
+
+        for ($attempt = 0; $attempt <= $maxRepairAttempts; $attempt++) {
+            $round = $attempt + 1;
+            $isRetry = $attempt > 0;
+            $report($stepReporter, 'quality_round_start', [
+                'message' => __('质量确认第 %{1} 轮（共 %{2} 轮）', [$round, $maxRepairAttempts + 1]),
+                'round' => $round,
+                'is_retry' => $isRetry,
+            ]);
+
+            $report($stepReporter, 'php_syntax_start', [
+                'message' => __('步骤 1/2：开始 PHP 语法检测（第 %{1} 轮）', [$round]),
+                'round' => $round,
+            ]);
+            $syntax = $this->checkTemplateSyntax($currentCode);
+            $result['syntax'] = $syntax;
+            $report($stepReporter, 'php_syntax_result', [
+                'message' => $syntax['valid']
+                    ? __('步骤 1/2：PHP 语法检测通过（第 %{1} 轮）', [$round])
+                    : __('步骤 1/2：PHP 语法检测失败（第 %{1} 轮）', [$round]),
+                'valid' => $syntax['valid'],
+                'error' => $syntax['error'] ?? '',
+                'round' => $round,
+            ]);
+
+            if (!$syntax['valid']) {
+                if ($attempt >= $maxRepairAttempts) {
+                    $history[] = [
+                        'round' => $round,
+                        'syntax' => $syntax,
+                        'defect' => null,
+                        'fixes' => [],
+                    ];
+                    break;
+                }
+                $report($stepReporter, 'php_syntax_repairing', [
+                    'message' => __('步骤 1/2 未通过，进入自动修复并继续下一轮确认'),
+                    'round' => $round,
+                    'error' => $syntax['error'] ?? '',
+                ]);
+                $codeFixer->clearFixes();
+                $repairedCode = $codeFixer->fix($currentCode);
+                $fixes = $codeFixer->getFixes();
+                $result['auto_fix_applied'] = true;
+                $result['auto_fixes'] = array_merge($result['auto_fixes'], $fixes);
+                $history[] = [
+                    'round' => $round,
+                    'syntax' => $syntax,
+                    'defect' => null,
+                    'fixes' => $fixes,
+                ];
+                $report($stepReporter, 'php_syntax_repair_result', [
+                    'message' => __('语法修复完成，准备下一轮确认'),
+                    'round' => $round,
+                    'fixes' => $fixes,
+                    'code_changed' => $repairedCode !== $currentCode,
+                ]);
+                $currentCode = $repairedCode;
+                continue;
+            }
+
+            $report($stepReporter, 'defect_scan_start', [
+                'message' => __('步骤 2/2：开始缺陷检测（第 %{1} 轮）', [$round]),
+                'round' => $round,
+            ]);
+            $defect = $codeValidator->validate($currentCode);
+            $result['defect'] = $defect;
+            $report($stepReporter, 'defect_scan_result', [
+                'message' => $defect['valid']
+                    ? __('步骤 2/2：缺陷检测通过（第 %{1} 轮）', [$round])
+                    : __('步骤 2/2：缺陷检测未通过（第 %{1} 轮）', [$round]),
+                'valid' => $defect['valid'],
+                'errors' => $defect['errors'] ?? [],
+                'warnings' => $defect['warnings'] ?? [],
+                'round' => $round,
+            ]);
+
+            if ($defect['valid']) {
+                $result['passed'] = true;
+                $result['final_code'] = $currentCode;
+                $history[] = [
+                    'round' => $round,
+                    'syntax' => $syntax,
+                    'defect' => $defect,
+                    'fixes' => [],
+                ];
+                break;
+            }
+
+            if ($attempt >= $maxRepairAttempts) {
+                $history[] = [
+                    'round' => $round,
+                    'syntax' => $syntax,
+                    'defect' => $defect,
+                    'fixes' => [],
+                ];
+                break;
+            }
+
+            $report($stepReporter, 'defect_auto_fixing', [
+                'message' => __('步骤 2/2 未通过，进入自动修复并继续下一轮确认'),
+                'round' => $round,
+                'errors' => $defect['errors'] ?? [],
+            ]);
+
+            $fixResult = $codeFixer->fixAndValidate($currentCode, $codeValidator);
+            $fixedCode = $fixResult['code'] ?? $currentCode;
+            $fixes = $fixResult['fixes'] ?? [];
+            $result['auto_fix_applied'] = true;
+            $result['auto_fixes'] = array_merge($result['auto_fixes'], $fixes);
+            $history[] = [
+                'round' => $round,
+                'syntax' => $syntax,
+                'defect' => $defect,
+                'fixes' => $fixes,
+            ];
+            $report($stepReporter, 'defect_auto_fix_result', [
+                'message' => __('缺陷修复完成，准备下一轮确认'),
+                'round' => $round,
+                'fixes' => $fixes,
+                'code_changed' => $fixedCode !== $currentCode,
+            ]);
+            $currentCode = $fixedCode;
+        }
+
+        $result['final_code'] = $currentCode;
+        $result['history'] = $history;
+
+        return $result;
     }
 
     /**

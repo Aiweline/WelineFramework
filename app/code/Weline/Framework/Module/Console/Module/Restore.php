@@ -14,7 +14,6 @@ use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\ConsoleException;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\ModuleManager\Service\ModuleBackupService;
 
 class Restore extends CommandAbstract
 {
@@ -57,13 +56,6 @@ class Restore extends CommandAbstract
             $this->printer->warning(__('模块 %{1} 在系统注册中不存在（可能已卸载），但仍可尝试恢复数据库表。', [$moduleName]));
         }
 
-        if (!class_exists(ModuleBackupService::class)) {
-            throw new ConsoleException(__('未找到模块备份服务，请确认 Weline_ModuleManager 模块已安装并启用。'));
-        }
-
-        /** @var ModuleBackupService $backupService */
-        $backupService = ObjectManager::getInstance(ModuleBackupService::class);
-
         $this->printer->note('');
         $this->printer->note('═══════════════════════════════════════════════════════════════');
         $this->printer->setup(__('开始从备份中恢复模块数据：%{1}', [$moduleName]));
@@ -84,7 +76,18 @@ class Restore extends CommandAbstract
             return;
         }
 
-        $result = $backupService->restoreModuleTables($moduleName, $backupTimestamp ?: null);
+        /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+        $eventData = [
+            'module_name' => $moduleName,
+            'backup_timestamp' => $backupTimestamp ?: null,
+            'result' => null,
+        ];
+        $eventsManager->dispatch('Weline_Framework_UninstallService::module_db_restore', $eventData);
+        $result = $eventData['result'] ?? null;
+        if (!is_array($result)) {
+            throw new ConsoleException(__('未检测到数据库恢复监听器，请确认提供恢复能力的模块已安装并启用。'));
+        }
 
         if (!empty($result['success'])) {
             $this->printer->success(__('模块 %{1} 数据库表恢复成功。', [$moduleName]));

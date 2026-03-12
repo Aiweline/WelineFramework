@@ -3404,6 +3404,25 @@ async function generateComponentWithAgent(params) {
             // 心跳事件（保持 SSE 连接活跃，无需处理）
             eventSource.addEventListener('heartbeat', e => {});
 
+            // 质量关卡事件（语法检测 + 缺陷检测 + 自动修复）
+            eventSource.addEventListener('quality_gate', e => {
+                const d = safeParseJson(e.data);
+                if (!d) return;
+                const phase = d.phase || '';
+                const msg = d.message || ('[quality_gate] ' + phase);
+                const color = d.valid === false ? '#f87171' : '#94a3b8';
+                _logLine('🛡 ' + msg, color);
+                if (Array.isArray(d.errors) && d.errors.length) {
+                    d.errors.slice(0, 3).forEach(err => _logLine('    ✖ ' + err, '#fca5a5'));
+                }
+                if (Array.isArray(d.auto_fixes) && d.auto_fixes.length) {
+                    _logLine('    🔧 <?= __('自动修复') ?>: ' + d.auto_fixes.length, '#67e8f9');
+                }
+                if (typeof msg === 'string' && msg) {
+                    updateStreamStatus(msg, 55);
+                }
+            });
+
             eventSource.addEventListener('chunk', e => {
                 const d = safeParseJson(e.data);
                 if (d?.content) {
@@ -4314,6 +4333,25 @@ async function generateComponentWithAi(params) {
                 if (data) {
                     _logHtml('<span style="color:#ffa500">[WARN] ' + _escHtml(data.message) + '</span>');
                     updateStreamStatus('<?= __('生成出错') ?>', 50);
+                }
+            });
+
+            // 质量关卡事件（语法检测 + 缺陷检测 + 自动修复）
+            eventSource.addEventListener('quality_gate', function(e) {
+                const data = safeParseJson(e.data);
+                if (!data) return;
+                const phase = data.phase || '';
+                const msg = data.message || ('[quality_gate] ' + phase);
+                const color = data.valid === false ? '#f87171' : '#94a3b8';
+                _logLine('🛡 ' + msg, color);
+                if (Array.isArray(data.errors) && data.errors.length) {
+                    data.errors.slice(0, 3).forEach(err => _logLine('    ✖ ' + err, '#fca5a5'));
+                }
+                if (Array.isArray(data.auto_fixes) && data.auto_fixes.length) {
+                    _logLine('    🔧 <?= __('自动修复') ?>: ' + data.auto_fixes.length, '#67e8f9');
+                }
+                if (msg) {
+                    updateStreamStatus(msg, 70);
                 }
             });
             
