@@ -168,12 +168,12 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                             class="w-100"
                             multiple="true"
                             value-type="pool_id"
-                            site-ready-only="false"
+                            site-ready-only="true"
                             auto-fill-code="code"
                             auto-fill-name="name"
                         />
                         <div class="form-text-hint">
-                            <lang>显示所有域名（包括已建站），当前站点的访问路径由下方子路径统一控制</lang>
+                            <lang>仅显示可建站且未被使用的域名；已建站或等待中的域名不会出现在列表中。当前站点的访问路径由下方子路径统一控制</lang>
                         </div>
                     </div>
 

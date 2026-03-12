@@ -34,6 +34,8 @@ This skill ensures all generated code follows Weline Framework standards and bes
 - Creating new modules
 - Writing controllers, models, services, or blocks
 - Generating any code that will run in Weline Framework
+- **涉及 Framework 与模块边界**：新增/修改 Framework 内代码或跨层逻辑时，必须先读「架构角度级别生成代码」章节，再决定逻辑归属与扩展方式
+- **涉及 Framework 与模块边界**：新增/修改 Framework 内代码或跨层逻辑时，必须先读「架构角度级别生成代码」章节，再决定逻辑归属与扩展方式
 
 ## ⚠️ CRITICAL: Framework Boundary Constraints
 
@@ -75,6 +77,43 @@ This skill ensures all generated code follows Weline Framework standards and bes
 ### 编译期内联标签（如 @lang）
 
 模板内联标签中**编译期即可得出结果的**（如 `@lang(提交)` 的静态翻译），回调必须**直接返回最终文本**，不得返回 PHP 代码（如 `<?=__('...')?>`）。只有需要运行期求值的才返回 PHP。这样预展开后模板中直接是译文等内容，而不是再包一层 PHP 输出。
+
+---
+
+## 🏗️ 架构角度级别生成代码（必须遵守）
+
+生成代码前必须从**架构分层与依赖方向**做判断，再决定逻辑放在哪一层、谁依赖谁、如何扩展。
+
+### 1. 分层与依赖方向
+
+| 层级 | 职责 | 依赖关系 | 禁止 |
+|------|------|----------|------|
+| **Framework**（Weline\Framework） | 定义流程、契约、事件名；实现「何时/是否」做某事的通用逻辑；**不包含**具体业务 URL、具体模块路径、具体 UI 实现。 | 不依赖任何业务模块（不 use 非 Framework 的类、不写死模块路由/URL）。 | 禁止在 Framework 中写死 `component/backend/xxx`、`Vendor_Module::` 等业务地址或模块名。 |
+| **模块**（如 Weline\Component、GuoLaiRen_PageBuilder） | 提供**默认实现**或**具体实现**：通过事件观察者返回 URL、渲染模板、提供 UI。 | 依赖 Framework（ResultManager、事件、Http 等）。 | 禁止在模块里实现「是否/何时做某事」的流程控制并反向让 Framework 只当工具用；流程应在 Framework，模块只提供「做什么」的实现。 |
+
+- **依赖方向**：只允许「模块 → Framework」，禁止「Framework → 具体模块」。
+- **扩展方式**：Framework 通过**事件**让上层提供「地址/实现」；观察者在模块中注册，通过 `data['xxx']` 回传结果。
+
+### 2. 流程与实现分离
+
+- **流程（Framework）**：例如「在 response_redirect_before 时，若满足条件则取桥接页 URL 并替换重定向目标」。条件、事件派发、对 `data['bridge_url']` 的消费均在 Framework。
+- **实现（模块）**：例如「桥接页 URL 是什么」由观察者监听 `result_bridge_url` 并设置 `data['bridge_url']`。Framework 不写默认 URL；未设置则保持原重定向。
+
+生成新功能时先问：
+1. 这是**通用流程/契约**（与具体业务无关）→ 放 Framework，用事件让上层提供具体值。
+2. 这是**某业务的默认或可选实现**（如默认结果页、默认模板）→ 放模块，通过事件观察者注入。
+
+### 3. 事件与观察者放置
+
+- **事件定义**：在 Framework 的 `event.php` 中声明事件名与说明；需要时在 Framework 的 `event.xml` 中注册**仅负责流程**的观察者（不包含业务 URL/模板）。
+- **提供具体值的观察者**：放在业务模块的 `Observer/`，在模块的 `etc/event.xml` 中注册；通过事件 `data` 回传 URL、配置等，不接管「是否/何时」的判断逻辑。
+
+### 4. 自检清单（生成前必过）
+
+- [ ] 这段逻辑是「流程/契约」还是「具体实现」？该在 Framework 还是模块？
+- [ ] Framework 里是否出现具体模块路由、具体模块类名、具体业务 URL？
+- [ ] 若需扩展点，是否用事件 + 观察者返回 `data['xxx']`，而不是 Framework 直接依赖某模块？
+- [ ] 模块是否只提供「实现」（观察者填数据），而「何时用这份实现」由 Framework 的观察者/流程决定？
 
 ---
 
