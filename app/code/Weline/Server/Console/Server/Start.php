@@ -1269,6 +1269,9 @@ class Start extends CommandAbstract
             }
         }
         
+        // 确保本地域名（0.0.0.0/127.0.0.1/localhost）有自签证书
+        $this->ensureLocalSelfSignedCertificates();
+
         // 生成多域名证书映射文件（用于 SNI 支持）
         $this->generateCertificateMap();
         
@@ -1508,8 +1511,31 @@ class Start extends CommandAbstract
     }
     
     /**
+     * 确保 0.0.0.0、127.0.0.1、localhost 三个本地域名都有自签证书。
+     * 仅在证书目录不存在或证书无效时才生成，避免重复生成。
+     */
+    protected function ensureLocalSelfSignedCertificates(): void
+    {
+        /** @var SslCertificateService $sslService */
+        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+        $localDomains = ['0.0.0.0', '127.0.0.1', 'localhost'];
+
+        foreach ($localDomains as $localDomain) {
+            $certDir = $sslService->getCertificateDir($localDomain);
+            $certPath = $certDir . 'fullchain.pem';
+            if ($sslService->isCertificateValid($certPath)) {
+                continue;
+            }
+            $result = $sslService->generateSelfSignedCertificate($localDomain);
+            if ($result['success'] ?? false) {
+                $this->printer->note(__('已为 %{1} 生成自签证书', [$localDomain]));
+            }
+        }
+    }
+
+    /**
      * 生成多域名证书映射文件
-     * 
+     *
      * 扫描 app/etc/ssl/{domain}/ 目录，生成 SNI 证书映射
      */
     protected function generateCertificateMap(): void
