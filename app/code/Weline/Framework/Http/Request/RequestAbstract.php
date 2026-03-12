@@ -611,21 +611,14 @@ abstract class RequestAbstract extends RequestFilter
         
         // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
         // 它包含 scheme://host[:port][/sub_path]
+        // URL 生成时始终参考当前请求的端口（WLS 非标准端口如 9981 必须带上），避免生成错误链接
         $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $hostPart = $parsed['host'] ?? 'localhost';
             $pathPart = $parsed['path'] ?? '';
-            $urlHasPort = isset($parsed['port']) && $parsed['port'];
-            
-            if ($urlHasPort) {
-                $portSuffix = ':' . $parsed['port'];
-            } elseif ($isNonStandardPort) {
-                $portSuffix = ':' . $currentPort;
-            } else {
-                $portSuffix = '';
-            }
-            
+
+            $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
             return $currentScheme . '://' . $hostPart . $portSuffix . $pathPart;
         }
         
