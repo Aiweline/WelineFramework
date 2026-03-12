@@ -952,6 +952,28 @@ CNF;
     }
     
     /**
+     * 触发证书删除事件
+     *
+     * 通知其他模块（如 Websites）清除域名池的 HTTPS 状态和可建站状态
+     */
+    public function dispatchCertificateDeletedEvent(string $domain, ?int $certId = null, string $reason = ''): void
+    {
+        try {
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+
+            $data = [
+                'domain' => $domain,
+                'cert_id' => $certId,
+                'reason' => $reason,
+            ];
+            $eventsManager->dispatch('Weline_Server::domain::certificate_deleted', $data);
+        } catch (\Throwable $e) {
+            w_log_error('[SslCertificateService] ' . __('证书删除事件调度失败：%{1}', [$e->getMessage()]));
+        }
+    }
+
+    /**
      * 触发证书更新事件
      * 
      * @param string $domain 域名
@@ -1802,7 +1824,7 @@ CNF;
                 // 更新证书信息
                 $certInfo = $this->parseCertificate($certPath);
                 $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
-                $issuer = $certInfo['issuer'] !== '' ? $certInfo['issuer'] : $this->getIssuerByProvider($provider);
+                $issuer = ((string) ($certInfo['issuer'] ?? '')) !== '' ? (string) $certInfo['issuer'] : $this->getIssuerByProvider($provider);
 
                 // 将 PEM 内容写入证书记录，供 ssl:reload 等场景从 DB 恢复证书
                 $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
@@ -3072,8 +3094,16 @@ CNF;
      * @param array<string, mixed> $cert 证书行数据
      * @param array<string, mixed> &$result reloadManagedCertificates 的结果数组（引用修改）
      */
+    private const PROTECTED_LOCAL_DOMAINS = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
+
     protected function clearDomainCertificate(string $domain, array $cert, array &$result): void
     {
+        if (\in_array(\strtolower($domain), self::PROTECTED_LOCAL_DOMAINS, true)) {
+            $result['skipped'] = ($result['skipped'] ?? 0) + 1;
+            $result['errors'][] = (string) __('本地域名 %{1} 的证书受保护，跳过清除', [$domain]);
+            return;
+        }
+
         $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
 
         // 1. 删除 DB 记录
@@ -3103,6 +3133,9 @@ CNF;
             }
             @\rmdir($certDir);
         }
+
+        // 3. 通知其他模块清除关联状态
+        $this->dispatchCertificateDeletedEvent($domain, $certId, (string) __('ssl:reload --clear 清理'));
 
         $result['deleted']++;
         $result['deleted_domains'][] = $domain;
