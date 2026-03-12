@@ -381,7 +381,8 @@ class WebsiteManagement extends BaseController
                 $domainModel = $this->objectManager->getInstance(WebsiteDomain::class);
                 foreach ($addressList as $item) {
                     $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], $postWebsiteId);
-                    if ($conflict !== null) {
+                    // 编辑时：若冲突记录是当前网站自身，则不报错，允许更新地址
+                    if ($conflict !== null && (int) ($conflict['website_id'] ?? 0) !== $postWebsiteId) {
                         $addr = $item['domain'] . $item['sub_path'];
                         if ($item['sub_path'] === '') {
                             throw new \Exception(
