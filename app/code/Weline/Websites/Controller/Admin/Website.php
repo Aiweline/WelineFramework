@@ -444,61 +444,71 @@ class Website extends BackendController
 
     /**
      * 快速创建站点（AJAX接口）
-     * 用于一键建站等场景的快速创建
+     * 与 add 保持一致：支持 address_lines + pool_ids 多地址逻辑
+     * 兼容旧参数：仅传 url 时转为单行 address_lines
      */
     #[Acl('Weline_Websites::website_quick_save', '快速创建站点', '', '快速创建站点')]
     public function quickSave()
     {
         try {
-            $name = trim($this->request->getPost('name', ''));
-            $code = trim($this->request->getPost('code', ''));
-            $url = trim($this->request->getPost('url', ''));
-            $defaultTimezone = $this->request->getPost('default_timezone', 'Asia/Shanghai');
-            $scope = trim($this->request->getPost('scope', ''));
+            $name = trim((string) $this->request->getPost('name', ''));
+            $code = trim((string) $this->request->getPost('code', ''));
+            $addressLines = trim((string) $this->request->getPost('address_lines', ''));
+            $poolIds = trim((string) $this->request->getPost('pool_ids', ''));
+            $url = trim((string) $this->request->getPost('url', ''));
+            $defaultTimezone = (string) $this->request->getPost('default_timezone', 'Asia/Shanghai');
+            $scope = trim((string) $this->request->getPost('scope', ''));
             
-            // 验证必填字段
             if (empty($name)) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('站点名称不能为空'),
-                ]);
+                return $this->fetchJson(['success' => false, 'message' => __('站点名称不能为空')]);
             }
-            
             if (empty($code)) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('站点代码不能为空'),
-                ]);
+                return $this->fetchJson(['success' => false, 'message' => __('站点代码不能为空')]);
+            }
+            if (empty($addressLines) && empty($poolIds)) {
+                if (empty($url)) {
+                    return $this->fetchJson(['success' => false, 'message' => __('请填写网站地址或选择域名')]);
+                }
+                $url = preg_replace('#^https?://#i', '', rtrim($url, '/'));
+                $addressLines = $url;
             }
             
-            if (empty($url)) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('站点URL不能为空'),
-                ]);
+            $addressList = $this->parseAddressLines($addressLines, $poolIds);
+            if (empty($addressList)) {
+                return $this->fetchJson(['success' => false, 'message' => __('请至少填写一个网站地址（域名或域名/子路径）')]);
             }
+            /** @var WebsiteDomain $domainModel */
+            $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+            foreach ($addressList as $item) {
+                $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], null);
+                if ($conflict !== null) {
+                    $addr = $item['domain'] . $item['sub_path'];
+                    throw new \Exception(
+                        $item['sub_path'] === ''
+                            ? __('该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）', [$conflict['website_name']])
+                            : __('该地址 %{1} 已被站点「%{2}」使用', [$addr, $conflict['website_name']])
+                    );
+                }
+            }
+            $addressList = $this->orderAddressListPreferredUrl($addressList);
+            $firstDomain = $addressList[0]['domain'];
+            $firstSubPath = $addressList[0]['sub_path'];
             
-            // 检查code是否已存在
             $existingWebsite = clone $this->website;
             $existingWebsite->clear()
                 ->where(\Weline\Websites\Model\Website::schema_fields_CODE, $code)
                 ->find()
                 ->fetch();
-            
             if ($existingWebsite->getId()) {
-                return $this->fetchJson([
-                    'success' => false,
-                    'message' => __('站点代码已存在'),
-                ]);
+                return $this->fetchJson(['success' => false, 'message' => __('站点代码已存在')]);
             }
             
-            // 创建站点
-            // 使用新的模型实例，确保没有残留数据
+            $primaryUrl = 'https://' . $firstDomain . $firstSubPath;
             $newWebsite = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
             $newWebsite->clearData()  // 清除所有数据
                 ->setData(\Weline\Websites\Model\Website::schema_fields_NAME, $name)
                 ->setData(\Weline\Websites\Model\Website::schema_fields_CODE, $code)
-                ->setData(\Weline\Websites\Model\Website::schema_fields_URL, rtrim($url, '/'))
+                ->setData(\Weline\Websites\Model\Website::schema_fields_URL, $primaryUrl)
                 ->setData(\Weline\Websites\Model\Website::schema_fields_DEFAULT_TIMEZONE, $defaultTimezone);
             
             // 设置业务范围标识
@@ -512,15 +522,20 @@ class Website extends BackendController
             }
             
             $newWebsite->save(true);
+            $websiteId = (int) $newWebsite->getId();
+            if ($websiteId <= 0) {
+                throw new \Exception(__('网站保存失败，未能获取网站ID'));
+            }
+            $this->saveWebsiteDomains($websiteId, $addressList);
             
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('站点创建成功'),
                 'website' => [
-                    'website_id' => $newWebsite->getId(),
+                    'website_id' => $websiteId,
                     'name' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_NAME),
                     'code' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_CODE),
-                    'url' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_URL),
+                    'url' => $primaryUrl,
                     'scope' => $newWebsite->getData(\Weline\Websites\Model\Website::schema_fields_SCOPE) ?? '',
                 ],
             ]);
