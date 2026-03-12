@@ -1102,10 +1102,7 @@ class GnameRegistrar implements DomainRegistrarInterface
                 $added++;
             } else {
                 $failed++;
-                $errors[] = [
-                    'record' => $record,
-                    'error' => $result['message'] ?? __('未知错误'),
-                ];
+                $errors[] = ($record['host'] ?? '@') . ': ' . ($result['message'] ?? __('未知错误'));
             }
         }
 
