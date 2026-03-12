@@ -1710,12 +1710,17 @@ CNF;
                 $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
                 $issuer = $certInfo['issuer'] ?? "Let's Encrypt";
 
+                // 将 PEM 内容写入证书记录，供 ssl:reload 等场景从 DB 恢复证书
+                $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
                 $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
                     ->setExpiresAt($expiresAt)
                     ->setIssuer($issuer)
                     ->setStatus(SslCertificate::STATUS_ACTIVE)
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
-                    ->setRenewError('');
+                    ->setRenewError('')
+                    ->setCertPem($certContents['cert_pem'])
+                    ->setKeyPem($certContents['key_pem'])
+                    ->setChainPem($certContents['chain_pem']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
                 $cert->setDomain($normalizedDomain);
                 $cert->save();
