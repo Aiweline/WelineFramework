@@ -1037,6 +1037,10 @@ class Page extends BackendController
                 throw new \Exception(__('页面不存在！'));
             }
             
+            // 保存更新前的 handle / website_id，用于保存后若变更则删除旧 URL 重写
+            $oldHandle = $page->getData(PageModel::schema_fields_HANDLE);
+            $oldWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+            
             // 权限校验：编辑时也要验证站点归属
             $pageWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
@@ -1261,8 +1265,19 @@ class Page extends BackendController
             // 更新后重新加载数据到 Model（使用整数类型的 pageId）
             $page->clear()->load($pageIdInt);
             
-            // 自动创建或更新 URL 重写规则
+            // 自动创建或更新 URL 重写规则（保存即更新重定向链接）
             $this->createOrUpdateUrlRewrite($page);
+            
+            // 若 handle 或 website_id 变更，删除旧的重写规则，避免旧路径仍指向旧 handle
+            $newHandle = $page->getData(PageModel::schema_fields_HANDLE);
+            $newWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+            if (($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId) && $oldHandle !== '' && $oldHandle !== null) {
+                $oldPage = clone $this->pageModel;
+                $oldPage->clearData()
+                    ->setData(PageModel::schema_fields_HANDLE, $oldHandle)
+                    ->setData(PageModel::schema_fields_WEBSITE_ID, $oldWebsiteId);
+                $this->deleteUrlRewrite($oldPage);
+            }
             
             // 处理多语言内容翻译
             if (!empty($selectedLocales)) {
@@ -2353,9 +2368,10 @@ class Page extends BackendController
         $pageType = $page->getData(PageModel::schema_fields_TYPE);
         $isHomePage = ($pageType === PageModel::TYPE_HOME);
         
+        $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+
         // 首页类型且没有handle时，直接使用网站地址
         if ($isHomePage && empty($handle)) {
-            $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             $websiteUrl = '';
             if ($websiteId > 0) {
                 try {
@@ -2370,17 +2386,31 @@ class Page extends BackendController
                 }
             }
             
+            $query = ['preview' => '1'];
+            if ($websiteId > 0) {
+                $query['website_id'] = (string)$websiteId;
+            }
+            if ($pageId > 0) {
+                $query['page_id'] = (string)$pageId;
+            }
+            if (!empty($locale)) {
+                $query['locale'] = (string)$locale;
+            }
+
             if ($websiteUrl) {
-                $frontendUrl = rtrim($websiteUrl, '/') . '?preview=1';
+                $frontendUrl = rtrim($websiteUrl, '/') . '?' . http_build_query($query);
             } else {
                 // 回退到使用当前访问的网站地址
                 $baseUrl = rtrim(rtrim($this->request->getBaseHost(), '/'), ':');
-                $frontendUrl = $baseUrl . '?preview=1';
+                $frontendUrl = $baseUrl . '?' . http_build_query($query);
             }
         } else {
             $params = ['handle' => $handle, 'locale' => $locale, 'preview' => '1'];
             // 真实预览带上 page_id，前端据此按 ID 加载页面，与可视化预览数据一致
             $params['page_id'] = $pageId;
+            if ($websiteId > 0) {
+                $params['website_id'] = $websiteId;
+            }
             $frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl(
                 'pagebuilder/frontend/page/view',
                 $params

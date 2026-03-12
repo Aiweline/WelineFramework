@@ -160,6 +160,12 @@ class Page extends FrontendController
             $page = clone $this->pageModel;
             $page->clearData();
             $page->load($previewPageId);
+            if ($page->getId()) {
+                $pageWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+                if ($pageWebsiteId > 0) {
+                    $websiteId = $pageWebsiteId;
+                }
+            }
         } elseif ($isPreview) {
             // 预览模式但未带 page_id 时也禁止缓存，避免看到旧模板
             $response = $this->request->getResponse();
