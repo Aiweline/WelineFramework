@@ -36,7 +36,7 @@ class Router implements RouterInterface
             return;
         }
         
-        // 3. 处理空路径：域名根直接显示当前站点首页（不要求带 handle）
+        // 3. 处理空路径：域名根直接显示当前站点首页，或预览时用 query 的 handle
         $trimmedPath = trim($path, '/');
         if (empty($trimmedPath)) {
             $websiteId = self::getCurrentWebsiteId();
@@ -52,6 +52,23 @@ class Router implements RouterInterface
                         }
                     }
                 }
+            }
+            // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
+            $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
+            $queryHandle = isset($_GET['handle']) && is_string($_GET['handle']) ? trim(rawurldecode($_GET['handle'])) : '';
+            if ($isPreview && $queryHandle !== '') {
+                $websiteIdParam = isset($_GET['website_id']) ? (int)$_GET['website_id'] : 0;
+                if ($websiteIdParam > 0) {
+                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteIdParam;
+                    if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
+                        \Weline\Framework\Runtime\RequestContext::websiteId($websiteIdParam);
+                    }
+                }
+                $path = '/pagebuilder/frontend/page/view';
+                $rule['module'] = 'GuoLaiRen_PageBuilder';
+                $rule['handle'] = $queryHandle;
+                $_GET['handle'] = $queryHandle;
+                return;
             }
             if ($websiteId > 0) {
                 $homePageHandle = self::getHomePageHandle($websiteId);

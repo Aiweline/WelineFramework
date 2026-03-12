@@ -985,6 +985,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if (is_string($field) && str_contains($field, '(')) {
                 // 仅将 MySQL 风格的 ` 标识符引号替换为 PgSQL 的 "，其余保持原样
                 $field = str_replace('`', '"', $field);
+                // AST 层修复：为表达式中未加引号的保留字加双引号（如 CONCAT(a,b,order) 中的 order）
+                $field = self::quoteReservedWordsInExpression($field);
             } else {
                 // 情况 2：普通字段或 table.field
                 if (!str_contains((string)$field, '"') && !str_contains((string)$field, '`')) {
@@ -1812,6 +1814,25 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
     
     /**
+     * PostgreSQL 保留字（常作为列名出现，在表达式中必须用双引号）
+     * 与 SqlTrait::$special_fields 保持一致
+     */
+    private const PGSQL_RESERVED_WORDS = ['order', 'key', 'table', 'fields', 'group', 'user'];
+
+    /**
+     * 为表达式中未加引号的保留字加双引号，避免 syntax error
+     * 匹配形如 CONCAT(a,b,order,c) 中作为标识符的 order
+     */
+    protected static function quoteReservedWordsInExpression(string $sql): string
+    {
+        foreach (self::PGSQL_RESERVED_WORDS as $word) {
+            $pattern = '/([,(])\s*\b' . preg_quote($word, '/') . '\b\s*([,)])/i';
+            $sql = preg_replace($pattern, '$1"' . $word . '"$2', $sql);
+        }
+        return $sql;
+    }
+
+    /**
      * 统一处理 SQL：转换反引号为双引号，并将数据库名转换为 public schema，转换 MySQL 函数为 PostgreSQL 兼容函数
      * 
      * @param string $sql SQL 语句
@@ -1824,6 +1845,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         // 2. 转换反引号为双引号
         $sql = self::convertBackticksToDoubleQuotes($sql);
+        
+        // 2.5 为表达式中未加引号的保留字加上双引号（如 CONCAT(a,b,order,c) 中的 order）
+        $sql = self::quoteReservedWordsInExpression($sql);
         
         // 3. 处理直接传入的 SQL 字符串中的表名（仅用于 query() 方法直接传入的 SQL）
         // 注意：通过 table() 方法设置的表名已经在 formatTableNameForPgsql() 中处理，不需要这里处理
