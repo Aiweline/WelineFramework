@@ -40,7 +40,6 @@ use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Console\Console\Reflection\Compile as ReflectionCompile;
-use Weline\Acl\Service\AclOrphanCleanupService;
 use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
@@ -133,8 +132,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private bool $registryCollectedInThisRun = false;
 
     function __construct(
-        private Printing $printing,
-        private AclOrphanCleanupService $aclOrphanCleanupService
+        private Printing $printing
     )
     {
         // 构造函数只负责初始化，不执行具体逻辑
@@ -154,7 +152,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
 
         try {
-            $cleanedCount = $this->aclOrphanCleanupService->cleanupByModules($moduleNames);
+            /** @var \Weline\Acl\Service\AclOrphanCleanupService $cleanupService */
+            $cleanupService = ObjectManager::getInstance(\Weline\Acl\Service\AclOrphanCleanupService::class);
+            $cleanedCount = $cleanupService->cleanupByModules($moduleNames);
             if ($cleanedCount > 0) {
                 $this->printing->note(__('已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}', [
                     $cleanedCount,
