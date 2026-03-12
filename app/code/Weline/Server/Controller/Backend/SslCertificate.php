@@ -195,7 +195,7 @@ class SslCertificate extends BaseController
     /**
      * 本地/回环域名（禁止删除，用于后台访问）
      */
-    private const PROTECTED_DOMAINS = ['localhost', '127.0.0.1', '::1'];
+    private const PROTECTED_DOMAINS = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
 
     /**
      * 删除证书
@@ -232,12 +232,17 @@ class SslCertificate extends BaseController
             @\rmdir($certDir);
         }
         
+        $certId = $cert->getCertId();
+
         // 删除数据库记录
         $cert->clearQuery()
-            ->where(CertModel::schema_fields_ID, $cert->getCertId())
+            ->where(CertModel::schema_fields_ID, $certId)
             ->delete()
             ->fetch();
-        
+
+        // 通知其他模块清除关联状态（域名池 HTTPS/可建站）
+        $this->sslService->dispatchCertificateDeletedEvent($domain, $certId, (string) __('后台手动删除'));
+
         return $this->fetchJson(['success' => true, 'message' => __('证书已删除')]);
     }
     
@@ -398,6 +403,102 @@ class SslCertificate extends BaseController
             'message' => __('签发完成：成功 %{1} 个，失败 %{2} 个', [$successCount, $failedCount]),
             'results' => $results,
         ]);
+    }
+
+    /**
+     * 批量删除证书
+     */
+    public function postBatchDelete(): string
+    {
+        $domains = $this->request->getPost('domains', []);
+        if (!\is_array($domains) || $domains === []) {
+            return $this->fetchJson(['success' => false, 'message' => __('请选择要删除的证书')]);
+        }
+
+        $deleted = 0;
+        $skipped = [];
+        foreach ($domains as $domain) {
+            $domain = \strtolower(\trim((string) $domain));
+            if ($domain === '') {
+                continue;
+            }
+            if (\in_array($domain, self::PROTECTED_DOMAINS, true)) {
+                $skipped[] = $domain;
+                continue;
+            }
+            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            if (!$cert->getCertId()) {
+                continue;
+            }
+            if ($cert->isHttpsEnabled()) {
+                $cert->setHttpsEnabled(false)->save();
+            }
+            $certDir = $cert->getCertificateDir();
+            if (\is_dir($certDir)) {
+                $files = @\scandir($certDir);
+                if ($files !== false) {
+                    foreach ($files as $f) {
+                        if ($f !== '.' && $f !== '..') {
+                            @\unlink($certDir . $f);
+                        }
+                    }
+                }
+                @\rmdir($certDir);
+            }
+            $certId = $cert->getCertId();
+            $cert->clearQuery()
+                ->where(CertModel::schema_fields_ID, $certId)
+                ->delete()
+                ->fetch();
+            $this->sslService->dispatchCertificateDeletedEvent($domain, $certId, (string) __('后台批量删除'));
+            $deleted++;
+        }
+
+        $msg = __('已删除 %{1} 个证书', [$deleted]);
+        if ($skipped !== []) {
+            $msg .= '，' . __('跳过 %{1} 个本地域名（%{2}）', [\count($skipped), \implode(', ', $skipped)]);
+        }
+        return $this->fetchJson(['success' => true, 'message' => $msg, 'deleted' => $deleted, 'skipped' => $skipped]);
+    }
+
+    /**
+     * 批量续签证书
+     */
+    public function postBatchRenew(): string
+    {
+        $domains = $this->request->getPost('domains', []);
+        if (!\is_array($domains) || $domains === []) {
+            return $this->fetchJson(['success' => false, 'message' => __('请选择要续签的证书')]);
+        }
+
+        $success = 0;
+        $failed = 0;
+        $errors = [];
+        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+
+        foreach ($domains as $domain) {
+            $domain = \strtolower(\trim((string) $domain));
+            if ($domain === '') {
+                continue;
+            }
+            $cert = $this->certModel->clearQuery()->loadByDomain($domain);
+            if (!$cert->getCertId()) {
+                $failed++;
+                $errors[] = __('%{1}：证书记录不存在', [$domain]);
+                continue;
+            }
+            $email = 'admin@' . $domain;
+            $result = $this->sslService->renewCertificate($cert, $webroot, $email);
+            if ($result['success'] ?? false) {
+                $success++;
+            } else {
+                $failed++;
+                $errors[] = __('%{1}：%{2}', [$domain, $result['message'] ?? __('续签失败')]);
+            }
+        }
+
+        $msg = __('续签完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+        return $this->fetchJson(['success' => $failed === 0, 'message' => $msg, 'success_count' => $success, 'failed_count' => $failed, 'errors' => $errors]);
     }
 
     protected function stripSensitiveCertificateFields(array $certificate): array
