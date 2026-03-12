@@ -141,12 +141,11 @@ class Website extends BackendController
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
             try {
-                $addressLines = \trim((string)($data['address_lines'] ?? ''));
-                // v1.6.0: 支持从域名池选择域名（pool_ids）
-                $poolIds = \trim((string)($data['pool_ids'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                $poolIds = $data['pool_ids'] ?? '';
+                $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
+                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
-                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                    throw new \Exception(__('请至少选择一个域名'));
                 }
                 /** @var WebsiteDomain $domainModel */
                 $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
@@ -189,7 +188,7 @@ class Website extends BackendController
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
                 $this->website->clearData()->setData($data)->save();
                 $websiteId = $this->website->getId();
                 
@@ -243,8 +242,9 @@ class Website extends BackendController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
+        $this->assign('selected_pool_ids', []);
         $this->assign('domain_options', $this->getDomainOptions());
-        $this->assign('address_lines', '');
+        $this->assign('sub_path', '');
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -316,12 +316,11 @@ class Website extends BackendController
             $postWebsiteId = (int)$postWebsiteId;
             
             try {
-                $addressLines = \trim((string)($data['address_lines'] ?? ''));
-                // v1.6.0: 支持从域名池选择域名（pool_ids）
-                $poolIds = \trim((string)($data['pool_ids'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                $poolIds = $data['pool_ids'] ?? '';
+                $subPath = $this->normalizeSubPath((string)($data['sub_path'] ?? ''));
+                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
-                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                    throw new \Exception(__('请至少选择一个域名'));
                 }
                 /** @var WebsiteDomain $domainModel */
                 $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
@@ -355,7 +354,7 @@ class Website extends BackendController
                 }
                 
                 $data['website_id'] = $postWebsiteId;
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids']);
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path']);
                 $this->website->addData($data)->save();
                 
                 $this->saveWebsiteDomains($postWebsiteId, $addressList);
@@ -425,9 +424,22 @@ class Website extends BackendController
         $this->assign('website', $this->website->getData());
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
+        $selectedPoolIds = [];
+        try {
+            $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+            $domains = $websiteDomain->getWebsiteDomains($websiteId);
+            foreach ($domains as $domain) {
+                $poolId = (int)($domain[WebsiteDomain::schema_fields_POOL_ID] ?? 0);
+                if ($poolId > 0) {
+                    $selectedPoolIds[] = $poolId;
+                }
+            }
+        } catch (\Exception $e) {
+            $selectedPoolIds = [];
+        }
+        $this->assign('selected_pool_ids', $selectedPoolIds);
         $this->assign('domain_options', $this->getDomainOptions());
-        $addressLines = $this->formatAddressLinesForWebsite($websiteId);
-        $this->assign('address_lines', $addressLines);
+        $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
         
         // 获取所有货币
         $this->assign('currencies', $this->getAllCurrencies());
@@ -813,6 +825,52 @@ class Website extends BackendController
     }
 
     /**
+     * 从域名池选择构建站点地址列表，所有选中域名共享同一个子路径。
+     */
+    private function buildAddressListFromPoolSelection(array|string $poolIds, string $subPath = ''): array
+    {
+        $list = [];
+        $seen = [];
+        $subPath = $this->normalizeSubPath($subPath);
+        $poolIdArray = \is_array($poolIds)
+            ? \array_values(\array_filter(\array_map('intval', $poolIds)))
+            : \array_values(\array_filter(\array_map('intval', \explode(',', (string) $poolIds))));
+        foreach ($poolIdArray as $poolId) {
+            /** @var DomainPool $pool */
+            $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+            $pool->loadByPoolId((int) $poolId);
+            if (!$pool->getPoolId()) {
+                continue;
+            }
+            $domain = \strtolower(\trim((string) $pool->getDomain()));
+            if ($domain === '') {
+                continue;
+            }
+            $key = $domain . '|' . $subPath;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $list[] = [
+                'domain' => $domain,
+                'sub_path' => $subPath,
+                'pool_id' => (int) $poolId,
+            ];
+        }
+        return $list;
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+        return $subPath === '/' ? '' : $subPath;
+    }
+
+    /**
      * 域名转网站 code：小写，点换下划线
      */
     private function domainToCode(string $domain): string
@@ -864,18 +922,19 @@ class Website extends BackendController
     /**
      * 将站点已有域名格式化为多行文本（用于编辑页 address_lines）
      */
-    private function formatAddressLinesForWebsite(int $websiteId): string
+    private function getPrimarySubPathForWebsite(int $websiteId): string
     {
         /** @var WebsiteDomain $model */
         $model = ObjectManager::getInstance(WebsiteDomain::class);
         $rows = $model->getWebsiteDomains($websiteId);
-        $lines = [];
         foreach ($rows as $row) {
-            $domain = $row[WebsiteDomain::schema_fields_DOMAIN] ?? '';
-            $subPath = $row[WebsiteDomain::schema_fields_SUB_PATH] ?? '';
-            $lines[] = $domain . $subPath;
+            $isPrimary = (bool) ($row[WebsiteDomain::schema_fields_IS_PRIMARY] ?? false);
+            if ($isPrimary) {
+                return $this->normalizeSubPath((string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
+            }
         }
-        return \implode("\n", $lines);
+        $first = $rows[0][WebsiteDomain::schema_fields_SUB_PATH] ?? '';
+        return $this->normalizeSubPath((string) $first);
     }
 }
 
