@@ -14,30 +14,20 @@ use Weline\Websites\Model\WebsiteDomain;
 
 class DetectWebsite implements ObserverInterface
 {
-    private const CACHE_KEY_ALL_SITES = 'all_sites';
-    private const CACHE_KEY_PREFIX_URL = 'site_url_';
-    private const CACHE_KEY_TABLE_EXISTS = 'website_table_exists';
 
     /**
      * 网站表尚未创建时（如未执行 setup:upgrade）直接返回，避免 42P01 导致请求崩溃
      */
     private function ensureWebsiteTableExists(Website $websiteModel): bool
     {
-        $cache = w_cache('website');
-        $exists = $cache->get(self::CACHE_KEY_TABLE_EXISTS);
-        if ($exists !== false) {
-            return (bool) $exists;
-        }
         try {
             $websiteModel->clearQuery()->limit(1)->select()->fetchArray();
-            $cache->set(self::CACHE_KEY_TABLE_EXISTS, true, 60);
             return true;
         } catch (\PDOException $e) {
             $code = $e->getCode();
             $msg = $e->getMessage();
             // PostgreSQL 42P01 / MySQL 42S02 表不存在
             if ($code === '42P01' || $code === '42S02' || str_contains($msg, 'does not exist')) {
-                $cache->set(self::CACHE_KEY_TABLE_EXISTS, false, 60);
                 return false;
             }
             throw $e;
@@ -55,139 +45,34 @@ class DetectWebsite implements ObserverInterface
             $event->setData('sites', []);
             return;
         }
-
-        $cache = w_cache('website');
         
         $get_sites = $event->getData('get_sites');
         if ($get_sites) {
-            // 优化：使用缓存，避免重复查询
-            $sites = $cache->get(self::CACHE_KEY_ALL_SITES);
-            
-            if ($sites !== false && is_array($sites)) {
-                // 使用缓存数据
-                $event->setData('sites', array_values($sites));
-                return;
-            }
-            
-            // 缓存未命中，查询数据库
-            $sites = $website_model->select()->fetchArray();
-            // 多域名支持：为每个站点的每个绑定域名生成一条 base URL 记录，供 Url 解析做最长匹配
-            $sites = $this->expandSitesWithDomains($sites);
-            
-            // 保存到缓存
-            $cache->set(self::CACHE_KEY_ALL_SITES, $sites);
-            
-            $event->setData('sites', $sites);
+            $event->setData('sites', $this->expandSitesWithDomains($website_model->select()->fetchArray()));
             return;
-        }
-        
-        # 第一个url获取url协议和域名部分
-        $url1 = $event->getData('url');
-        $path = Url::parse_url($url1, 'path');
-        
-        // 优化：先尝试从缓存获取
-        $urlCacheKey = self::CACHE_KEY_PREFIX_URL . md5($url1);
-        $cachedSite = $cache->get($urlCacheKey);
-        
-        if ($cachedSite !== false && is_array($cachedSite) && !empty($cachedSite)) {
-            // 找到缓存，直接使用
-            /** @var Website $website_model */
-            $website_model = w_obj(Website::class);
-            $site = $website_model->reset();
-            $site->setData($cachedSite);
-            $this->processSite($event, $site);
-            return;
-        }
-        
-        # 网站模型
-        /** @var Website $website_model */
-        $website_model = w_obj(Website::class);
-        # 获取$first_url加上/分割部分的第一个path
-        if ($path !== '/') {
-            $url2 = $url1 . explode('/', $_SERVER['REQUEST_URI'])[1] ?? '';
-            /** @var Website $site */
-            $site = $website_model->where('url', $url2)->find()->fetch();
-            if ($site->getId()) {
-                // 保存到缓存
-                $url2CacheKey = self::CACHE_KEY_PREFIX_URL . md5($url2);
-                $cache->set($url2CacheKey, $site->getData());
-                $this->processSite($event, $site);
-                return;
-            }
         }
 
-        # 采用最长匹配
+        $url1 = (string) ($event->getData('url') ?? '');
         /** @var Website $site */
-        $site = $website_model
-            ->where('url', $url1)
-            ->find()
-            ->fetch();
-
-        // 如果精确匹配失败，尝试使用最长匹配和域名匹配（处理 www 和非 www 的情况）
-        if (!$site->getId()) {
-            $currentHost = parse_url($url1, PHP_URL_HOST);
-            // 获取所有网站配置（使用缓存，含多域名展开后的列表）
-            $allSites = $cache->get(self::CACHE_KEY_ALL_SITES);
-            if ($allSites === false || !is_array($allSites)) {
-                $allSites = $website_model->reset()->select()->fetchArray();
-                $allSites = $this->expandSitesWithDomains($allSites);
-                $cache->set(self::CACHE_KEY_ALL_SITES, $allSites);
-            }
-            
-            // 首先尝试最长URL匹配
-            $matchedSite = null;
-            $maxLength = 0;
-            foreach ($allSites as $siteData) {
-                $siteUrl = $siteData['url'] ?? '';
-                if (empty($siteUrl)) {
-                    continue;
-                }
-                
-                // 检查URL是否匹配（最长匹配）
-                if (str_starts_with($url1, $siteUrl)) {
-                    $siteUrlLength = strlen($siteUrl);
-                    if ($siteUrlLength > $maxLength) {
-                        $maxLength = $siteUrlLength;
-                        $matchedSite = $siteData;
-                    }
-                }
-            }
-            
-            // 如果最长匹配失败，尝试域名匹配（主表 url 的 host）
-            if ($matchedSite === null) {
-                $currentHost = parse_url($url1, PHP_URL_HOST);
-                foreach ($allSites as $siteData) {
-                    $siteUrl = $siteData['url'] ?? '';
-                    if (empty($siteUrl)) {
-                        continue;
-                    }
-                    $siteHost = parse_url($siteUrl, PHP_URL_HOST);
-                    if ($this->isHostMatch($currentHost ?? '', $siteHost ?? '')) {
-                        $matchedSite = $siteData;
-                        break;
-                    }
-                }
-            }
-            
-            // 多域名：若仍未命中，按请求 host（及子路径）在 website_domain 表中查找
-            if ($matchedSite === null && $currentHost !== null && $currentHost !== '') {
-                $matchedSite = $this->findSiteByWebsiteDomain($url1, $currentHost, $website_model);
-            }
-            
+        $site = $website_model->reset();
+        $currentHost = \parse_url($url1, PHP_URL_HOST);
+        if (\is_string($currentHost) && $currentHost !== '') {
+            $matchedSite = $this->findSiteByWebsiteDomain($url1, $currentHost, $website_model);
             if ($matchedSite !== null) {
-                // 找到匹配的网站，创建 Website 对象
-                $site = $website_model->reset();
                 $site->setData($matchedSite);
-                // 保存到缓存
-                $cache->set($urlCacheKey, $matchedSite);
+            }
+        }
+
+        // 兼容旧数据：若未配置 website_domain，则退回到主表 url 最长匹配。
+        if (!$site->getId()) {
+            $matchedSite = $this->findSiteByWebsiteUrl($url1, $website_model);
+            if ($matchedSite !== null) {
+                $site->setData($matchedSite);
             }
         }
 
         // 如果查不到站点，检查是否禁止未匹配的域名访问
         if (!$site->getId()) {
-            // 缓存未找到的结果（空数组表示不存在）
-            $cache->set($urlCacheKey, []);
-            
             // 检查配置：是否禁止未匹配的域名访问
             $banUnmatchedDomain = Env::module_env('Weline_Websites', 'ban_unmatched_domain') ?? false;
             
@@ -201,9 +86,6 @@ class DetectWebsite implements ObserverInterface
             // 默认情况下，查不到站点也没关系，直接返回
             return;
         }
-
-        // 保存到缓存
-        $cache->set($urlCacheKey, $site->getData());
         
         /** @var DataObject $data */
         $this->processSite($event, $site);
@@ -250,6 +132,33 @@ class DetectWebsite implements ObserverInterface
         $host2WithoutWww = preg_replace('/^www\./', '', $host2);
         
         return $host1WithoutWww === $host2WithoutWww;
+    }
+
+    /**
+     * 兼容旧站点数据：按 website.url 做最长匹配。
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findSiteByWebsiteUrl(string $requestUrl, Website $websiteModel): ?array
+    {
+        $sites = $websiteModel->reset()->select()->fetchArray();
+        $matchedSite = null;
+        $maxLength = 0;
+        foreach ($sites as $siteData) {
+            $siteUrl = (string) ($siteData['url'] ?? '');
+            if ($siteUrl === '') {
+                continue;
+            }
+            if (!\str_starts_with($requestUrl, $siteUrl)) {
+                continue;
+            }
+            $length = \strlen($siteUrl);
+            if ($length > $maxLength) {
+                $maxLength = $length;
+                $matchedSite = $siteData;
+            }
+        }
+        return $matchedSite;
     }
 
     /**
