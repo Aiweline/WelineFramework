@@ -1319,11 +1319,13 @@ class Start extends CommandAbstract
                     $config['ssl_key'] = '';
                     // 清除后 fall through 到下方 ensureCertificate 逻辑
                 } else {
+                    // 证书文件不存在：立即清理实例配置和映射中的失效路径，避免反复报错
+                    $sslService->cleanupInvalidSslConfigAndMap();
                     if (!\is_file($certPath)) {
-                        return ['success' => false, 'message' => __('SSL 证书文件不存在：%{1}', [$certPath])];
+                        return ['success' => false, 'message' => __('SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动', [$certPath])];
                     }
                     if (!\is_file($keyPath)) {
-                        return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}', [$keyPath])];
+                        return ['success' => false, 'message' => __('SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动', [$keyPath])];
                     }
                 }
             }
