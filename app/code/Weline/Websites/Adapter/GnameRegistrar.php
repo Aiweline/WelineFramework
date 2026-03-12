@@ -930,12 +930,12 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        // GName 新版文档使用 /api/resolution/list，保留历史端点兜底。
-        $response = $this->makeRequest('api/resolution/list', [
+        // 官方文档为 domain/api/jiexi/list，优先使用；resolution/list 可能不存在于 www.gname.com 导致返回 HTML
+        $response = $this->makeRequest('api/jiexi/list', [
             'ym' => $domain,
         ], $credentials);
         if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/jiexi/list', [
+            $response = $this->makeRequest('api/resolution/list', [
                 'ym' => $domain,
             ], $credentials);
         }
@@ -994,9 +994,10 @@ class GnameRegistrar implements DomainRegistrarInterface
             $params['mx'] = (string) $record['priority'];
         }
 
-        $response = $this->makeRequest('api/resolution/add', $params, $credentials);
+        // 官方文档为 jiexi/add，优先使用
+        $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
         if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
+            $response = $this->makeRequest('api/resolution/add', $params, $credentials);
         }
         if ((int) ($response['code'] ?? 0) !== 1) {
             $legacyParams = $params;
@@ -1055,9 +1056,10 @@ class GnameRegistrar implements DomainRegistrarInterface
             $params['mx'] = (string) $record['priority'];
         }
 
-        $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
+        // 官方文档为 jiexi/edit，优先使用
+        $response = $this->makeRequest('api/jiexi/edit', $params, $credentials);
         if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/jiexi/edit', $params, $credentials);
+            $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
         }
         if ((int) ($response['code'] ?? 0) !== 1) {
             $legacyParams = $params;
@@ -1089,12 +1091,13 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        $response = $this->makeRequest('api/resolution/delete', [
+        // 官方文档为 jiexi/del，优先使用
+        $response = $this->makeRequest('api/jiexi/del', [
             'ym' => $domain,
             'jxid' => $recordId,
         ], $credentials);
         if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/jiexi/del', [
+            $response = $this->makeRequest('api/resolution/delete', [
                 'ym' => $domain,
                 'jxid' => $recordId,
             ], $credentials);
