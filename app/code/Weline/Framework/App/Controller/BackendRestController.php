@@ -11,7 +11,6 @@ declare(strict_types=1);
 
 namespace Weline\Framework\App\Controller;
 
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
@@ -19,6 +18,8 @@ use Weline\Framework\Session\SessionFactory;
 
 class BackendRestController extends AbstractRestController
 {
+    private const OPTIONAL_BACKEND_USER_MODEL = 'Weline\\Backend\\Model\\BackendUser';
+
     protected AuthenticatedSessionInterface $session;
 
     public function __construct()
@@ -31,11 +32,17 @@ class BackendRestController extends AbstractRestController
             // 尝试通过session ID查找用户
             $sessionId = $this->session->getSession()->getId();
             if ($sessionId !== '') {
-                /** @var BackendUser $user */
-                $user = ObjectManager::getInstance(BackendUser::class);
+                $user = $this->resolveBackendUserModel();
+                if ($user === null) {
+                    throw new \Weline\Framework\Http\ResponseTerminateException(
+                        401,
+                        \json_encode(['code' => 401, 'msg' => __('请先登录'), 'data' => null], JSON_UNESCAPED_UNICODE),
+                        ['Content-Type' => 'application/json; charset=utf-8']
+                    );
+                }
                 $user->where('sess_id', $sessionId)->find()->fetch();
                 
-                if ($user->getId() && $user->getIsEnabled()) {
+                if ($user->getId() && (bool)$user->getData('is_enabled')) {
                     // 找到有效用户，执行登录
                     $this->session->login($user);
                 } else {
@@ -71,6 +78,21 @@ class BackendRestController extends AbstractRestController
     protected function exception(\Throwable $exception, string $msg = '', mixed $data = '', ?int $code = null): array|string
     {
         return parent::exception($exception, $msg, $data, $code);
+    }
+
+    private function resolveBackendUserModel(): ?object
+    {
+        $className = self::OPTIONAL_BACKEND_USER_MODEL;
+        if (!class_exists($className)) {
+            return null;
+        }
+
+        $user = ObjectManager::getInstance($className);
+        if (!is_object($user) || !method_exists($user, 'where')) {
+            return null;
+        }
+
+        return $user;
     }
     
 }
