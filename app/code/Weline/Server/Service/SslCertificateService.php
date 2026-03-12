@@ -2971,17 +2971,11 @@ CNF;
      */
     protected function clearServerCache(): void
     {
-        // 重新生成证书映射文件（含泛域名展开）
+        // 重新生成证书映射文件（含泛域名展开）+ 自动通知 Worker 热重载
         $this->regenerateCertificateMap();
         
         // 清除实例配置中指向不存在证书的 ssl_cert/ssl_key/ssl_domain，避免 server:start 加载失效路径
         $this->clearInvalidSslPathsFromInstanceConfigs();
-        
-        // 通过 IPC 控制通道通知 Master 执行缓存重载（含 SSL 证书缓存刷新）
-        $masterClass = MasterProcess::class;
-        if (\is_callable([$masterClass, 'sendCacheClearCommand'])) {
-            \call_user_func([$masterClass, 'sendCacheClearCommand'], 'default');
-        }
     }
 
     /**
@@ -3061,5 +3055,8 @@ CNF;
         \file_put_contents($mapFile, \json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
         
         w_log_debug('[SslCertificateService] 证书映射文件已重新生成，包含 ' . \count($map) . ' 个域名');
+
+        // 通知所有 Worker 热重载 SNI 证书映射（无需重启即可生效新证书）
+        MasterProcess::sendSslCertReloadCommand('default');
     }
 }
