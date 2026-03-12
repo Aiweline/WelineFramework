@@ -210,8 +210,8 @@
                                         <!-- 操作按钮 -->
                                         <div class="page-actions">
                                             <?php
-                                            // 生成前端访问链接
-                                            $currentBase = rtrim($this->request->getBaseHost(), '/');
+                                            // 生成前端访问链接：默认根域名并带当前请求端口（getDisplayBaseUrl）
+                                            $currentBase = $this->request->getDisplayBaseUrl();
                                             $baseUrl = $currentBase;
                                             if ($websiteUrl !== '') {
                                                 $siteHost = parse_url($websiteUrl, PHP_URL_HOST);
@@ -475,10 +475,10 @@
                                                                         $website->load($childWebsiteId);
                                                                         if ($website->getId()) {
                                                                             $childWebsiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
-                                                                            // 获取站点的域名，兼容多个域名，并加上当前请求的端口
+                                                                            // 获取站点的域名，兼容多个域名，并加上当前请求的端口（getDisplayBaseUrl 含端口）
                                                                             $childWebsiteUrls = [];
                                                                             $rawWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
-                                                                            $port = parse_url($this->request->getBaseHost(), PHP_URL_PORT);
+                                                                            $port = parse_url($this->request->getDisplayBaseUrl(), PHP_URL_PORT);
                                                                             if (!empty($rawWebsiteUrl)) {
                                                                                 // 支持多个域名以逗号或分号或空格分隔
                                                                                 $urls = preg_split('/[;, ]+/', $rawWebsiteUrl, -1, PREG_SPLIT_NO_EMPTY);
@@ -528,8 +528,8 @@
                                                             <!-- 子页面操作 -->
                                                             <div class="d-flex gap-1 ms-3 flex-nowrap">
                                                                 <?php
-                                                                // 生成子页面前端访问链接：与当前请求同 host 时用当前 base（含端口）
-                                                                $childCurrentBase = rtrim($this->request->getBaseHost(), '/');
+                                                                // 生成子页面前端访问链接：默认根域名并带当前请求端口（getDisplayBaseUrl）
+                                                                $childCurrentBase = $this->request->getDisplayBaseUrl();
                                                                 $childBaseUrl = $childCurrentBase;
                                                                 if ($childWebsiteUrl !== '') {
                                                                     $childSiteHost = parse_url($childWebsiteUrl, PHP_URL_HOST);
@@ -539,7 +539,15 @@
                                                                 } else {
                                                                     $childBaseUrl = $childCurrentBase;
                                                                 }
-                                                                $childFrontendUrl = $childBaseUrl . '/' . ltrim($childPage->getData('handle'), '/');
+                                                                $handle = $childPage->getData('handle');
+                                                                if (empty($handle)) {
+                                                                    // 若无 handle，则默认类型页url，如 about、contact等
+                                                                    $type = $childPage->getData('type');
+                                                                    $defaultTypeSlug = !empty($type) ? $type : 'about';
+                                                                    $childFrontendUrl = $childBaseUrl . '/' . $defaultTypeSlug;
+                                                                } else {
+                                                                    $childFrontendUrl = $childBaseUrl . '/' . ltrim($handle, '/');
+                                                                }
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
                                                                 
