@@ -422,6 +422,10 @@ return [
         'description' => __('在HTTP响应重定向前触发，允许其他模块修改重定向URL。'),
         'doc' => 'http/响应重定向前.md',
     ],
+    'Weline_Framework_Manager::result_bridge_url' => [
+        'name' => __('结果桥接页地址'),
+        'description' => __('获取 success/error/info/warning 结果桥接页 URL。观察者通过 data["bridge_url"] 返回地址，供 iframe 重定向后显示 BackendToast。'),
+    ],
     
     // ========== 资源编译事件 ==========
     'Weline_Framework_Resource::compiler' => [

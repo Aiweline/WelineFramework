@@ -396,8 +396,8 @@ class PcController extends Core
     }
 
     /**
-     * 设置成功结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
-     * 与 Core::success()（返回 array）区分：本方法仅写 ResultManager，无返回值。
+     * 成功结果，配合 redirect() 使用。
+     * 结果桥接页地址由事件 Weline_Framework_Manager::result_bridge_url 返回（默认 Component Offcanvas getResult），iframe 时自动跳转该页显示 BackendToast。
      */
     protected function resultSuccess(string $message, bool $reload = true): void
     {
@@ -405,8 +405,7 @@ class PcController extends Core
     }
 
     /**
-     * 设置错误结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
-     * 与 Core::error()（返回 array）区分：本方法仅写 ResultManager，无返回值。
+     * 错误结果，配合 redirect() 使用。桥接页地址通过事件返回。
      */
     protected function resultError(string $message, bool $reload = false): void
     {
@@ -414,11 +413,34 @@ class PcController extends Core
     }
 
     /**
-     * 设置信息结果，配合 redirect() 使用。iframe 时会自动跳转结果桥接页显示 BackendToast。
+     * 信息结果，配合 redirect() 使用。桥接页地址通过事件返回。
      */
     protected function resultInfo(string $message, bool $reload = false): void
     {
         ResultManager::info($message, $reload);
+    }
+
+    /**
+     * 警告结果，配合 redirect() 使用。桥接页地址通过事件返回。
+     */
+    protected function resultWarning(string $message, bool $reload = false): void
+    {
+        ResultManager::warning($message, $reload);
+    }
+
+    /**
+     * 统一结果入口：success/error/info/warning 之一，配合 redirect() 使用。
+     * @param string $type success|error|info|warning
+     */
+    protected function result(string $type, string $message, bool $reload = false): void
+    {
+        match ($type) {
+            'success' => ResultManager::success($message, $reload),
+            'error' => ResultManager::error($message, $reload),
+            'info' => ResultManager::info($message, $reload),
+            'warning' => ResultManager::warning($message, $reload),
+            default => ResultManager::info($message, $reload),
+        };
     }
 
     //    public function success(string $msg = '请求成功！', mixed $data = '', int $code = 200,string $url=''): array
