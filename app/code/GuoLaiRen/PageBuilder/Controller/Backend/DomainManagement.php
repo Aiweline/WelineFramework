@@ -1921,7 +1921,14 @@ class DomainManagement extends BaseController
                     }
                 } else {
                     $failed++;
-                    $errors[] = $domain->getDomain() . ': ' . \implode('; ', $result['errors'] ?? []);
+                    $errList = $result['errors'] ?? [];
+                    $errParts = \array_map(static function ($e) {
+                        if (\is_array($e)) {
+                            return $e['error'] ?? $e['message'] ?? \json_encode($e, \JSON_UNESCAPED_UNICODE);
+                        }
+                        return (string) $e;
+                    }, $errList);
+                    $errors[] = $domain->getDomain() . ': ' . \implode('; ', $errParts);
                     // 第三方 API 失败时，兜底使用实时 DNS 查询同步域名池（双保险）
                     $fallbackRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
                     if ($fallbackRecords !== []) {
