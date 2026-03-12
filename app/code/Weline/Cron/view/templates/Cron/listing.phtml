@@ -151,11 +151,11 @@
                         </thead>
                         <tbody>
                         <foreach name="tasks" item="task">
-                            <tr data-task-id="{{task.id}}" data-status="{{task.status}}" class="weline-cron-main-row">
+                            <tr data-task-id="{{task.id}}" data-status="{{task.status}}" class="weline-cron-main-row weline-cron-row-toggle" data-detail-id="cron-detail-{{task.id}}" role="button" tabindex="0" title="@lang{点击展开或收起任务描述}">
                                 <td class="weline-cron-id-cell">
-                                    <button type="button" class="weline-cron-expand-toggle btn btn-link p-0 border-0 bg-transparent text-secondary" aria-expanded="false" data-target="cron-detail-{{task.id}}" title="@lang{展开任务描述}">
+                                    <span class="weline-cron-chevron-wrap" aria-hidden="true">
                                         <i class="mdi mdi-chevron-down weline-cron-chevron"></i>
-                                    </button>
+                                    </span>
                                     <span class="fw-semibold">{{task.id}}</span>
                                 </td>
                                 <td>
@@ -168,6 +168,9 @@
                                             <span class="weline-cron-module">{{task.module}}</span>
                                             <span class="weline-cron-class" title="{{task.class}}"><string>task.class|30</string></span>
                                         </div>
+                                        <if condition="task.tip">
+                                        <div class="weline-cron-tip-summary text-muted" title="{{task.tip}}"><string>task.tip|60</string></div>
+                                        </if>
                                     </div>
                                 </td>
                                 <td>
@@ -193,7 +196,7 @@
                                     </span>
                                     <if condition="task.out_run">
                                         <span class="weline-cron-outrun-badge" title="@lang{任务超时未执行}">
-                                            <i class="mdi mdi-alert"></i> {{task.out_time}}<lang>h</lang>
+                                            <i class="mdi mdi-alert"></i> {{task.out_time_human}}
                                         </span>
                                     </if>
                                 </td>
@@ -216,7 +219,7 @@
                                         </if>
                                     </div>
                                 </td>
-                                <td>
+                                <td class="weline-cron-actions-cell" onclick="event.stopPropagation();">
                                     <div class="weline-cron-actions">
                                         <if condition="task.status === 'block'">
                                             <form action="@backend-url('*/cron/unlock')" method="post" class="d-inline">
@@ -399,21 +402,30 @@
 .weline-cron-empty i { font-size: 4rem; margin-bottom: var(--backend-spacing-sm, 12px); }
 .weline-cron-empty p { margin: 0; font-size: 1rem; }
 
+.weline-cron-main-row.weline-cron-row-toggle { cursor: pointer; }
+.weline-cron-main-row.weline-cron-row-toggle:hover { background: var(--backend-color-table-bg-hover, rgba(0,0,0,0.04)) !important; }
 .weline-cron-id-cell { vertical-align: middle; }
-.weline-cron-expand-toggle {
-    cursor: pointer;
-    width: 24px;
-    height: 24px;
+.weline-cron-chevron-wrap {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 24px;
+    height: 24px;
     margin-right: 4px;
-    border-radius: var(--backend-border-radius-sm, 4px);
-    transition: transform 0.2s ease, color 0.2s ease;
+    color: var(--backend-color-text-secondary, #6c757d);
+    transition: color 0.2s ease;
 }
-.weline-cron-expand-toggle:hover { color: var(--backend-color-primary, #556ee6); }
-.weline-cron-expand-toggle[aria-expanded="true"] .weline-cron-chevron { transform: rotate(180deg); }
+.weline-cron-row-toggle:hover .weline-cron-chevron-wrap { color: var(--backend-color-primary, #556ee6); }
+.weline-cron-main-row.weline-cron-row-expanded .weline-cron-chevron { transform: rotate(180deg); }
 .weline-cron-chevron { transition: transform 0.2s ease; font-size: 1.1rem; }
+.weline-cron-tip-summary {
+    font-size: 0.75rem;
+    margin-top: 2px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .weline-cron-detail-row { background: var(--backend-color-bg-secondary, #f8f9fa); }
 .weline-cron-detail-cell {
     padding: var(--backend-spacing-sm, 12px) var(--backend-spacing-md, 16px);
@@ -457,16 +469,25 @@
     if (moduleFilter) {
         moduleFilter.addEventListener('change', function() { applyFilters({ module: this.value }); });
     }
-    // 手风琴：点击展开/收起任务描述
-    document.querySelectorAll('.weline-cron-expand-toggle').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var targetId = this.getAttribute('data-target');
-            var row = targetId ? document.getElementById(targetId) : null;
-            if (!row) return;
-            var expanded = this.getAttribute('aria-expanded') === 'true';
-            this.setAttribute('aria-expanded', !expanded);
-            row.style.display = expanded ? 'none' : 'table-row';
-            row.setAttribute('aria-hidden', expanded);
+    // 手风琴：点击整行展开/收起任务描述（操作列点击不触发展开）
+    function toggleTaskDetail(mainRow) {
+        var detailId = mainRow.getAttribute('data-detail-id');
+        var detailRow = detailId ? document.getElementById(detailId) : null;
+        if (!detailRow) return;
+        var expanded = mainRow.classList.toggle('weline-cron-row-expanded');
+        detailRow.style.display = expanded ? 'table-row' : 'none';
+        detailRow.setAttribute('aria-hidden', !expanded);
+    }
+    document.querySelectorAll('.weline-cron-row-toggle').forEach(function(tr) {
+        tr.addEventListener('click', function(ev) {
+            if (ev.target.closest('.weline-cron-actions-cell')) return;
+            toggleTaskDetail(tr);
+        });
+        tr.addEventListener('keydown', function(ev) {
+            if (ev.key === 'Enter' || ev.key === ' ') {
+                ev.preventDefault();
+                if (!ev.target.closest('.weline-cron-actions-cell')) toggleTaskDetail(tr);
+            }
         });
     });
 })();
