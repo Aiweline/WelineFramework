@@ -477,6 +477,24 @@ class DomainPurchaseService
                     $rootDomain->setCdnAccountId($selectedCdnAccountId);
                 }
             }
+
+            $needSwitch = false;
+            if ($dnsChoice === 'provider_account' && $selectedDnsProvider !== '' && $selectedDnsAccountId > 0) {
+                $currentNsProvider = $provider !== '' && $provider !== 'unknown' ? $provider : \strtolower($registrarCode);
+                if ($selectedDnsProvider !== $currentNsProvider) {
+                    $needSwitch = true;
+                }
+            }
+            if ($cdnChoice === 'provider_account' && $selectedCdnProvider !== '' && $selectedCdnAccountId > 0) {
+                $currentNsProvider ??= $provider !== '' && $provider !== 'unknown' ? $provider : \strtolower($registrarCode);
+                if ($selectedCdnProvider !== $currentNsProvider) {
+                    $needSwitch = true;
+                }
+            }
+            if ($needSwitch) {
+                $rootDomain->setDnsSwitchPending(1);
+            }
+
             $rootDomain->save();
         } catch (\Throwable $e) {
             w_log_error(__('购买后同步域名 DNS 元数据失败：%{1}', [$e->getMessage()]));

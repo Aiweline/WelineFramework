@@ -89,6 +89,9 @@ class Domain extends Model
     #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS切换后待推送记录：1=定时任务将把本地记录推送到新账户')]
     public const schema_fields_DNS_MIGRATION_PENDING = 'dns_migration_pending';
 
+    #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS/CDN服务切换待执行：1=生命周期完成后定时任务将自动切换DNS/CDN服务商')]
+    public const schema_fields_DNS_SWITCH_PENDING = 'dns_switch_pending';
+
     #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
     public const schema_fields_RESOLVE_STATUS = 'resolve_status';
 
@@ -334,6 +337,17 @@ class Domain extends Model
     public function setDnsMigrationPending(int $value): self
     {
         $this->setData(self::schema_fields_DNS_MIGRATION_PENDING, $value);
+        return $this;
+    }
+
+    public function getDnsSwitchPending(): int
+    {
+        return (int) ($this->getData(self::schema_fields_DNS_SWITCH_PENDING) ?? 0);
+    }
+
+    public function setDnsSwitchPending(int $value): self
+    {
+        $this->setData(self::schema_fields_DNS_SWITCH_PENDING, $value);
         return $this;
     }
 

@@ -929,6 +929,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-set-accounts-btn" title="<?= __('批量设置选中域名的 DNS/CDN 管理账户') ?>">
                         <i class="mdi mdi-account-cog"></i> <lang>设置账户</lang>
                     </button>
+                    <button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm" id="pb-dm-batch-delete-root-btn" style="border-color:var(--backend-color-danger);color:var(--backend-color-danger);" title="<?= __('删除选中的根域，其子域名与池记录一并删除') ?>">
+                        <i class="mdi mdi-delete-outline"></i> <lang>批量删除</lang>
+                    </button>
                 </div>
             </div>
             <div id="pb-dm-domains-result">
@@ -1388,6 +1391,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         requestHttpsStream: '<backend-url>pagebuilder/backend/domain-management/request-https-stream</backend-url>',
         generateSubdomains: '<backend-url>pagebuilder/backend/domain-management/generate-subdomains</backend-url>',
         batchTransferToPool: '<backend-url>pagebuilder/backend/domain-management/batch-transfer-to-pool</backend-url>',
+        batchRemoveSync: '<backend-url>pagebuilder/backend/domain-management/batch-remove-sync</backend-url>',
         batchResolveToLocal: '<backend-url>pagebuilder/backend/domain-management/batch-resolve-to-local</backend-url>',
         batchChangeNameservers: '<backend-url>pagebuilder/backend/domain-management/batch-change-nameservers</backend-url>',
         getDnsProviders: '<backend-url>pagebuilder/backend/domain-management/get-dns-providers</backend-url>',
@@ -1972,7 +1976,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-playlist-plus"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
-                          '<i class="mdi mdi-swap-horizontal"></i></button>'
+                          '<i class="mdi mdi-swap-horizontal"></i></button>' +
+                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('删除根域（含子域名与池记录）') ?>" style="margin-left:4px;"><i class="mdi mdi-delete-outline"></i></button>'
                         : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
                           '<i class="mdi mdi-download"></i></button>';
 
@@ -2216,6 +2221,32 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var domain = btn.dataset.domain || '';
                 var accountId = parseInt(btn.dataset.accountId) || 0;
                 showRootDnsSwitchModal(domainId, domain, accountId);
+            });
+        });
+
+        domainContainer.querySelectorAll('.pb-dm-root-delete-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                var domainId = parseInt(btn.dataset.domainId, 10) || 0;
+                var domain = btn.dataset.domain || '';
+                if (domainId <= 0) return;
+                var msg = '<?= __('确定要删除根域「%{1}」吗？该根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', domain.replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+                BackendConfirm.show(msg).then(function(confirmed) {
+                    if (!confirmed) return;
+                    btn.disabled = true;
+                    postForm(API.batchRemoveSync, { domain_ids: JSON.stringify([domainId]) }).then(function(res) {
+                        if (res.success) {
+                            BackendToast.success(res.msg || '<?= __('删除成功') ?>');
+                            loadDomainList();
+                        } else {
+                            BackendToast.error(res.msg || '<?= __('删除失败') ?>');
+                            btn.disabled = false;
+                        }
+                    }).catch(function() {
+                        BackendToast.error('<?= __('请求失败') ?>');
+                        btn.disabled = false;
+                    });
+                });
             });
         });
     }
@@ -2766,6 +2797,39 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 }
             }).catch(function(err) {
                 setBtnLoading(btn, false, '<i class="mdi mdi-folder-move"></i> <?= __('批量转存') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
+            });
+        });
+    });
+
+    /* 批量删除根域（含子域名与池记录） */
+    document.getElementById('pb-dm-batch-delete-root-btn').addEventListener('click', function() {
+        var selected = domainListState.items.filter(function(d) {
+            return d.is_pulled && d.domain_id > 0;
+        }).filter(function(d) {
+            var checkbox = domainContainer.querySelector('.pb-dm-domain-select[data-domain="' + d.domain + '"]');
+            return checkbox && checkbox.checked;
+        });
+        if (selected.length === 0) {
+            BackendToast.warning('<?= __('请选择要删除的已拉取域名') ?>');
+            return;
+        }
+        var domainIds = selected.map(function(d) { return d.domain_id; });
+        var msg = '<?= __('确定要删除选中的 %{1} 个根域吗？每个根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', selected.length);
+        BackendConfirm.show(msg).then(function(confirmed) {
+            if (!confirmed) return;
+            var btn = document.getElementById('pb-dm-batch-delete-root-btn');
+            if (btn) btn.disabled = true;
+            postForm(API.batchRemoveSync, { domain_ids: JSON.stringify(domainIds) }).then(function(res) {
+                if (btn) btn.disabled = false;
+                if (res.success) {
+                    BackendToast.success(res.msg || '<?= __('删除成功') ?>');
+                    loadDomainList();
+                } else {
+                    BackendToast.error(res.msg || '<?= __('删除失败') ?>');
+                }
+            }).catch(function() {
+                if (btn) btn.disabled = false;
                 BackendToast.error('<?= __('网络错误') ?>');
             });
         });
@@ -4224,21 +4288,29 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">CDN</span><span class="pb-dm-provider-badge ' + (cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none') + '">' + escapeHtml(cdnName) + '</span></div>' +
                 '</div>';
             var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
+            var isRegistering = !!(item.is_registering);
 
             var poolId = item.pool_id || 0;
             var resolvedDisplay = (item.resolved_ip || '-');
             if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
                 resolvedDisplay += ' / ' + item.resolved_ipv6;
             }
+            var registeringTitle = '<?= __('正在注册中') ?>';
             var checkBtn = poolId > 0
-                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __('快速查询解析并更新状态') ?>"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __('快速查询解析并更新状态') ?>"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>')
                 : '';
             var needCert = String(item.https_status || '').toLowerCase() !== 'valid';
             var httpsBtn = poolId > 0
-                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn' + (needCert ? '' : ' pb-dm-btn--disabled') + '" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" ' + (needCert ? '' : ' disabled title="<?= __('证书有效，无需申请') ?>"') + (needCert ? ' title="<?= __('手动申请 HTTPS 证书') ?>"' : '') + '><i class="mdi mdi-certificate"></i> <?= __('申请证书') ?></button>'
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-certificate"></i> <?= __('申请证书') ?></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn' + (needCert ? '' : ' pb-dm-btn--disabled') + '" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" ' + (needCert ? '' : ' disabled title="<?= __('证书有效，无需申请') ?>"') + (needCert ? ' title="<?= __('手动申请 HTTPS 证书') ?>"' : '') + '><i class="mdi mdi-certificate"></i> <?= __('申请证书') ?></button>')
                 : '';
             var delBtn = poolId > 0
-                ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>'
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-delete-outline"></i></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>')
                 : '';
             var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
 

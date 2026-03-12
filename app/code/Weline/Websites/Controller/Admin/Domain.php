@@ -972,6 +972,98 @@ class Domain extends BackendController
     }
 
     /**
+     * 删除域名（根域及其子域名/池记录、DNS 记录一并删除）
+     *
+     * POST domain_ids: 数组或 JSON 数组，根域 domain_id 列表
+     */
+    #[Acl('Weline_Websites::domain_list', '域名列表', 'mdi mdi-format-list-bulleted', '查看域名列表')]
+    public function postDeleteDomains()
+    {
+        try {
+            $domainIds = $this->request->getPost('domain_ids', []);
+            if (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true) ?: [];
+            }
+            $domainIds = \array_filter(\array_map('intval', $domainIds));
+            if (empty($domainIds)) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('请选择要删除的域名')]);
+            }
+
+            $deleted = 0;
+            $poolDeleted = 0;
+            $dnsDeleted = 0;
+            $errors = [];
+
+            foreach ($domainIds as $domainId) {
+                try {
+                    $domain = ObjectManager::getInstance(DomainModel::class, [], false);
+                    $domain->clearQuery()->load($domainId);
+                    if (!$domain->getDomainId()) {
+                        continue;
+                    }
+                    $domainName = $domain->getDomain();
+
+                    // 1. 删除该根域下所有域名池记录（子域名一并删除）
+                    $poolModel = ObjectManager::getInstance(DomainPool::class);
+                    $poolRecords = $poolModel->clearQuery()
+                        ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
+                        ->select()
+                        ->fetch();
+                    foreach ($poolRecords as $poolRecord) {
+                        $poolRecord->delete();
+                        $poolDeleted++;
+                    }
+
+                    // 2. 删除该域名的 DNS 解析记录
+                    $dnsModel = ObjectManager::getInstance(DomainDnsRecord::class, [], false);
+                    $dnsRecords = $dnsModel->clearQuery()
+                        ->where(DomainDnsRecord::schema_fields_DOMAIN_ID, $domainId)
+                        ->select()
+                        ->fetch();
+                    foreach ($dnsRecords as $dnsRecord) {
+                        $dnsRecord->delete();
+                        $dnsDeleted++;
+                    }
+
+                    // 3. 删除根域记录
+                    $domain->delete();
+                    $deleted++;
+                } catch (\Throwable $e) {
+                    $errors[] = "ID {$domainId}: " . $e->getMessage();
+                }
+            }
+
+            $pool = ObjectManager::getInstance(DomainPool::class);
+            $pool->syncSiteCreatedFromWebsiteDomainTable();
+
+            $msg = __('删除完成：%{1} 个根域，%{2} 条池记录，%{3} 条 DNS 记录', [
+                $deleted,
+                $poolDeleted,
+                $dnsDeleted,
+            ]);
+            if (!empty($errors)) {
+                $msg .= ' ' . __('（%{1} 个失败）', [\count($errors)]);
+            }
+
+            return $this->fetchJson([
+                'code' => empty($errors) ? 200 : 207,
+                'msg' => $msg,
+                'data' => [
+                    'deleted' => $deleted,
+                    'pool_deleted' => $poolDeleted,
+                    'dns_deleted' => $dnsDeleted,
+                    'errors' => $errors,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('删除失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
      * 获取域名管理配置
      */
     public function getDomainConfig()
