@@ -944,6 +944,27 @@ class DomainManagement extends BaseController
             $domains = $model->select()->fetchArray();
             $pagination = $model->pagination ?? [];
 
+            // 正在注册中的根域（有未完成的生命周期订单）：这些域名的操作按钮需置灰并提示
+            $rootDomains = array_unique(array_filter(array_column($domains, DomainPool::schema_fields_ROOT_DOMAIN)));
+            $registeringRoots = [];
+            foreach ($rootDomains as $root) {
+                $root = (string) $root;
+                if ($root === '') {
+                    continue;
+                }
+                try {
+                    $lifecycle = w_query('saas', 'getDomainLifecycleStatus', ['domain' => $root]);
+                    if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
+                        $status = (string) ($lifecycle['data']['order']['status'] ?? '');
+                        if ($status !== 'completed' && $status !== 'failed') {
+                            $registeringRoots[$root] = true;
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Saas 未安装或查询失败，视为非注册中
+                }
+            }
+
             // 补充服务商名称（注册商、DNS、CDN）
             $parentIds = array_unique(array_filter(array_column($domains, DomainPool::schema_fields_PARENT_DOMAIN_ID)));
             $parentMap = [];
@@ -1015,6 +1036,7 @@ class DomainManagement extends BaseController
                     'registrar_name' => $registrarName,
                     'dns_provider_name' => $dnsProviderName,
                     'cdn_provider_name' => $cdnProviderName,
+                    'is_registering' => !empty($registeringRoots[$root]),
                 ];
             }
             
