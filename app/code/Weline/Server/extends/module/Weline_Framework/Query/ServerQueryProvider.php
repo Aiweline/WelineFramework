@@ -50,6 +50,7 @@ class ServerQueryProvider implements QueryProviderInterface
             'maintenanceDisable' => $this->maintenanceDisable($params),
             'optimizationData' => $this->optimizationData(),
             'listCertificates' => $this->listCertificates(),
+            'certificateDetail' => $this->certificateDetail($params),
             'toggleHttps' => $this->toggleHttps($params),
             'renewCertificate' => $this->renewCertificate($params),
             'deleteCertificate' => $this->deleteCertificate($params),
@@ -126,6 +127,13 @@ class ServerQueryProvider implements QueryProviderInterface
                 ['name' => 'maintenanceDisable', 'description' => __('禁用维护模式'), 'params' => []],
                 ['name' => 'optimizationData', 'description' => __('获取优化指南数据'), 'params' => []],
                 ['name' => 'listCertificates', 'description' => __('获取 SSL 证书列表'), 'params' => []],
+                [
+                    'name' => 'certificateDetail',
+                    'description' => __('获取 SSL 证书详情'),
+                    'params' => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
+                    ],
+                ],
             ],
         ];
     }
@@ -532,7 +540,36 @@ class ServerQueryProvider implements QueryProviderInterface
             ->fetchArray();
         return [
             'success' => true,
-            'data' => $certificates,
+            'data' => \array_map([$this, 'stripSensitiveCertificateFields'], $certificates),
+        ];
+    }
+
+    private function certificateDetail(array $params): array
+    {
+        $domain = \strtolower(\trim((string) ($params['domain'] ?? '')));
+        if ($domain === '') {
+            return ['success' => false, 'message' => __('请指定域名')];
+        }
+
+        $cert = $this->sslCertModel->clearQuery()->loadByDomain($domain);
+        if (!$cert->getCertId()) {
+            return ['success' => false, 'message' => __('未找到证书记录')];
+        }
+
+        $data = $cert->getData();
+        if ($cert->certificateFilesExist()) {
+            $data['cert_info'] = $this->sslCertificateService->parseCertificate($cert->getCertPath());
+        }
+
+        $data['pem_summary'] = [
+            'has_cert_pem' => $cert->getCertPem() !== '',
+            'has_key_pem' => $cert->getKeyPem() !== '',
+            'has_chain_pem' => $cert->getChainPem() !== '',
+        ];
+
+        return [
+            'success' => true,
+            'data' => $data,
         ];
     }
 
@@ -587,6 +624,17 @@ class ServerQueryProvider implements QueryProviderInterface
         }
         $cert->clearQuery()->where(CertModel::schema_fields_ID, $cert->getCertId())->delete()->fetch();
         return ['success' => true, 'message' => __('证书已删除')];
+    }
+
+    private function stripSensitiveCertificateFields(array $certificate): array
+    {
+        unset(
+            $certificate[CertModel::schema_fields_CERT_PEM],
+            $certificate[CertModel::schema_fields_KEY_PEM],
+            $certificate[CertModel::schema_fields_CHAIN_PEM]
+        );
+
+        return $certificate;
     }
 
     private function sessionList(array $params): array

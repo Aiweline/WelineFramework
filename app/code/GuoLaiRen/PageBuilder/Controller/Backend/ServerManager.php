@@ -91,6 +91,13 @@ class ServerManager extends BaseController
         return $this->fetchJson(w_query('server', 'listCertificates'));
     }
 
+    public function getSslDetail(): string
+    {
+        return $this->fetchJson(w_query('server', 'certificateDetail', [
+            'domain' => (string) $this->request->getGet('domain', ''),
+        ]));
+    }
+
     public function getSslDomainPool(): string
     {
         return $this->fetchJson([
