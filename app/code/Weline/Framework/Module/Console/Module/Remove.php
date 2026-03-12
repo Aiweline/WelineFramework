@@ -19,7 +19,6 @@ use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Helper\Data;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Uninstall\UninstallService;
-use Weline\ModuleManager\Service\ModuleBackupService;
 
 class Remove extends CommandAbstract
 {
@@ -137,12 +136,17 @@ class Remove extends CommandAbstract
             // 正常模块执行完整卸载流程
             $this->printer->note(__('执行 ') . $module . __(' 卸载程序...'));
 
-            // 如果可用，先通过 ModuleManager 进行数据库表备份（借助统一备份服务）
-            if (class_exists(ModuleBackupService::class)) {
-                /** @var ModuleBackupService $backupService */
-                $backupService = ObjectManager::getInstance(ModuleBackupService::class);
+            // 卸载前数据库备份由外部模块通过事件实现（如 ModuleManager）
+            $eventManager = ObjectManager::getInstance(EventsManager::class);
+            $beforeBackupEventData = [
+                'module_name' => $module,
+                'result' => null,
+            ];
+            $eventManager->dispatch('Weline_Framework_Module::remove_before_backup', $beforeBackupEventData);
+            $backupResult = $beforeBackupEventData['result'] ?? null;
+            if (is_array($backupResult) && isset($backupResult['success'])) {
                 $this->printer->note(__('开始为模块 %{1} 备份数据库表...', [$module]));
-                $dbBackupInfo = $backupService->backupModuleTables($module);
+                $dbBackupInfo = $backupResult;
                 if (empty($dbBackupInfo['success'])) {
                     $this->printer->error(__('模块 %{1} 数据库备份失败：%{2}，已取消卸载。', [
                         $module,
@@ -157,7 +161,6 @@ class Remove extends CommandAbstract
             }
             
             // 通过事件通知卸载服务执行卸载（文件级备份 + 事件）
-            $eventManager = ObjectManager::getInstance(EventsManager::class);
             $eventData = [
                 'type' => UninstallService::TYPE_MODULE,
                 'name' => $module,
@@ -218,10 +221,15 @@ class Remove extends CommandAbstract
             // 收集 Tag 注册表
             try {
                 $this->printer->note(__('正在更新标签注册表...'));
-                /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
-                $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-                $taglibCollect->execute([]);
-                $this->printer->success(__('✓ 标签注册表已更新完成。'));
+                $eventManager = ObjectManager::getInstance(EventsManager::class);
+                $taglibEventData = ['result' => null];
+                $eventManager->dispatch('Weline_Framework_Module::remove_after_taglib_collect', $taglibEventData);
+                $taglibResult = $taglibEventData['result'] ?? null;
+                if (is_array($taglibResult) && isset($taglibResult['success']) && !$taglibResult['success']) {
+                    $this->printer->warning(__('标签注册表更新失败：%{1}', [$taglibResult['message'] ?? '']));
+                } else {
+                    $this->printer->success(__('✓ 标签注册表已更新完成。'));
+                }
             } catch (\Exception $e) {
                 $this->printer->warning(__('标签注册表更新时发生错误：%{1}', [$e->getMessage()]));
             }
@@ -232,7 +240,7 @@ class Remove extends CommandAbstract
                 // 必须先刷新 Env 缓存，否则 Scanner 仍使用旧的模块列表
                 Env::getInstance()->getModuleList(true);
                 Env::getInstance()->getActiveModules(true);
-                $this->syncAclResourcesAfterModuleRemoval();
+                $this->syncAclResourcesAfterModuleRemoval($removableModules);
                 $this->printer->success(__('✓ 菜单与 ACL 已同步完成。'));
             } catch (\Exception $e) {
                 $this->printer->warning(__('菜单与 ACL 差集同步时发生错误：%{1}，可手动执行：php bin/w setup:upgrade --route', [$e->getMessage()]));
@@ -258,16 +266,20 @@ class Remove extends CommandAbstract
      * 卸载模块后执行菜单与 ACL 的全量差集同步。
      *
      * 流程与 setup:upgrade 的路由收集阶段保持一致：
-     * 1. before_route_collection：触发菜单预收集
+     * 1. 清空本轮收集 registry，并触发菜单预收集
      * 2. updateRoutes([])：重新收集现存模块路由，并落库控制器 ACL
-     * 3. after_route_collection：按「当前有效菜单 ∪ 当前有效 ACL」做差集，删除残留资源
+     * 3. 直接按「当前有效菜单 ∪ 当前有效 ACL」做差集，删除残留资源
      *
      * @throws \Weline\Framework\App\Exception
      */
-    private function syncAclResourcesAfterModuleRemoval(): void
+    private function syncAclResourcesAfterModuleRemoval(array $moduleNames = []): void
     {
-        /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
+        $aclDiffBeginEventData = [
+            'module_names' => $moduleNames,
+        ];
+        $eventsManager->dispatch('Weline_Framework_Module::remove_acl_diff_begin', $aclDiffBeginEventData);
+
         $beforeRouteCollectionEventData = [];
         $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
 
@@ -275,8 +287,11 @@ class Remove extends CommandAbstract
         $routeUpdateService = ObjectManager::getInstance(\Weline\Framework\Router\Service\RouteUpdateService::class);
         $routeUpdateService->updateRoutes([]);
 
-        $afterRouteCollectionEventData = [];
-        $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
+        $aclDiffCleanupEventData = [
+            'module_names' => $moduleNames,
+            'result' => null,
+        ];
+        $eventsManager->dispatch('Weline_Framework_Module::remove_acl_diff_cleanup', $aclDiffCleanupEventData);
     }
 
     public function help(): array|string
