@@ -671,19 +671,45 @@ class WlsRequest extends Request
      */
     public function getBaseHost(): string
     {
-        // 获取当前请求的协议
         $currentScheme = $this->isSecure() ? 'https' : 'http';
-        
-        // 使用解析出的 Host
         $host = $this->parsedHost ?: ($this->getHeader('Host') ?? 'localhost');
-        
-        // 如果 host 已经包含端口，直接使用
+
+        // 当前请求端口（从 Host 头或 SERVER_PORT 获取）
+        $currentPort = '';
         if (\str_contains($host, ':')) {
-            return $currentScheme . '://' . $host;
+            $parts = \explode(':', $host, 2);
+            $hostName = $parts[0];
+            $currentPort = $parts[1] ?? '';
+        } else {
+            $hostName = $host;
+            $serverPort = $_SERVER['SERVER_PORT'] ?? '';
+            if ($serverPort && $serverPort !== '80' && $serverPort !== '443') {
+                $currentPort = (string) $serverPort;
+            }
         }
-        
-        // 默认端口：http=80, https=443（通常不显示）
-        return $currentScheme . '://' . $host;
+        $isNonStandardPort = ($currentPort !== '' && $currentPort !== '80' && $currentPort !== '443');
+
+        // 直接从 $_SERVER 读取 WELINE_WEBSITE_URL（Url::parser → processUrlParse 写入）
+        // 不能用 getServer() / ServerBag，因为 ServerBag 可能在 parser 之前就已初始化
+        $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+        if ($websiteUrl !== '') {
+            $parsed = \parse_url($websiteUrl);
+            $wHost = $parsed['host'] ?? 'localhost';
+            $wPath = $parsed['path'] ?? '';
+            $urlHasPort = isset($parsed['port']) && $parsed['port'];
+
+            if ($urlHasPort) {
+                $portSuffix = ':' . $parsed['port'];
+            } elseif ($isNonStandardPort) {
+                $portSuffix = ':' . $currentPort;
+            } else {
+                $portSuffix = '';
+            }
+
+            return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
+        }
+
+        return $currentScheme . '://' . $hostName . ($isNonStandardPort ? ':' . $currentPort : '');
     }
 
     // ==================== 请求体解析引擎 ====================
