@@ -2974,10 +2974,48 @@ CNF;
         // 重新生成证书映射文件（含泛域名展开）
         $this->regenerateCertificateMap();
         
+        // 清除实例配置中指向不存在证书的 ssl_cert/ssl_key/ssl_domain，避免 server:start 加载失效路径
+        $this->clearInvalidSslPathsFromInstanceConfigs();
+        
         // 通过 IPC 控制通道通知 Master 执行缓存重载（含 SSL 证书缓存刷新）
         $masterClass = MasterProcess::class;
         if (\is_callable([$masterClass, 'sendCacheClearCommand'])) {
             \call_user_func([$masterClass, 'sendCacheClearCommand'], 'default');
+        }
+    }
+
+    /**
+     * 清除实例配置文件中指向不存在证书的 ssl_cert/ssl_key/ssl_domain。
+     * 证书重载或删除后，若实例配置仍引用已失效路径，server:start 会报「证书文件不存在」。
+     */
+    protected function clearInvalidSslPathsFromInstanceConfigs(): void
+    {
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        if (!\is_dir($instanceDir)) {
+            return;
+        }
+        $files = \glob($instanceDir . '*.json');
+        if ($files === false) {
+            return;
+        }
+        foreach ($files as $file) {
+            $path = (string) $file;
+            ServerInstanceManager::atomicUpdateJsonStatic($path, static function (array $data): array {
+                $sslCert = \trim((string) ($data['ssl_cert'] ?? ''));
+                $sslKey = \trim((string) ($data['ssl_key'] ?? ''));
+                if ($sslCert === '' && $sslKey === '') {
+                    return $data;
+                }
+                $certExists = $sslCert !== '' && \is_file($sslCert);
+                $keyExists = $sslKey !== '' && \is_file($sslKey);
+                if ($certExists && $keyExists) {
+                    return $data;
+                }
+                $data['ssl_cert'] = '';
+                $data['ssl_key'] = '';
+                $data['ssl_domain'] = '';
+                return $data;
+            });
         }
     }
     
