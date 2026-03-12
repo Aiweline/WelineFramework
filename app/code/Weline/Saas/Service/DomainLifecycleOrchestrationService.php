@@ -371,8 +371,12 @@ class DomainLifecycleOrchestrationService
             'resolve_to_local' => $resolveToLocal,
             'subdomains' => $this->normalizeSubdomains($options['subdomains'] ?? ['@', 'www']),
             'dns_choice' => (string) ($options['dns_choice'] ?? 'follow_registrar'),
+            'dns_provider' => (string) ($options['dns_provider'] ?? ''),
+            'dns_account_id' => (int) ($options['dns_account_id'] ?? 0),
             'dns_nameservers' => (string) ($options['dns_nameservers'] ?? ''),
             'cdn_choice' => (string) ($options['cdn_choice'] ?? 'follow_registrar'),
+            'cdn_provider' => (string) ($options['cdn_provider'] ?? ''),
+            'cdn_account_id' => (int) ($options['cdn_account_id'] ?? 0),
             'apply_ssl' => $applySsl,
         ];
     }

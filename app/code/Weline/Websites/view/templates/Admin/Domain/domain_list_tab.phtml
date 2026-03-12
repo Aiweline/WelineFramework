@@ -369,6 +369,10 @@ $accounts = $accounts ?? [];
                 <i class="mdi mdi-broom"></i>
                 <span><?= __('清理DNS域名') ?></span>
             </button>
+            <button type="button" class="weline-domain-list-btn weline-domain-list-btn--danger" onclick="WelineDomainList.batchDeleteDomains()" title="<?= __('删除选中的根域，其子域名与池记录一并删除') ?>">
+                <i class="mdi mdi-delete-outline"></i>
+                <span><?= __('批量删除') ?></span>
+            </button>
         </div>
     </div>
 </div>
@@ -975,7 +979,8 @@ $accounts = $accounts ?? [];
         batchSetAccounts: '<?= $this->getUrl('*/admin/domain/batch-set-accounts') ?>',
         getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>',
         createManualDomain: '<?= $this->getUrl('*/admin/domain/create-manual-domain') ?>',
-        switchDnsAccount: '<?= $this->getUrl('*/admin/domain/switch-dns-account') ?>'
+        switchDnsAccount: '<?= $this->getUrl('*/admin/domain/switch-dns-account') ?>',
+        deleteDomains: '<?= $this->getUrl('*/admin/domain/delete-domains') ?>'
     };
 
     var importModal = null;
@@ -1382,7 +1387,8 @@ $accounts = $accounts ?? [];
                 '<td class="text-end weline-domain-actions">' +
                     '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" onclick="WelineDomainList.transferToPool(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-database-export"></i></button> ' +
                     '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" onclick="WelineDomainList.showDnsModal(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-dns"></i></button> ' +
-                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" onclick="WelineDomainList.checkResolve(' + item.domain_id + ')"><i class="mdi mdi-refresh"></i></button>' +
+                    '<button type="button" class="btn btn-outline-primary btn-sm" title="<?= __('检测解析') ?>" onclick="WelineDomainList.checkResolve(' + item.domain_id + ')"><i class="mdi mdi-refresh"></i></button> ' +
+                    '<button type="button" class="btn btn-outline-danger btn-sm" title="<?= __('删除') ?>" onclick="WelineDomainList.deleteDomain(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-delete-outline"></i></button>' +
                 '</td>' +
                 '</tr>';
         });
@@ -1772,6 +1778,77 @@ $accounts = $accounts ?? [];
                 if (data.code === 200) {
                     toast(data.msg || '<?= __('删除成功') ?>', 'success');
                     loadDnsRecords(currentDomainId);
+                } else {
+                    toast(data.msg || '<?= __('删除失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function deleteDomain(domainId, domainName) {
+        var msg = '<?= __('确定要删除根域「%{1}」吗？该根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', (domainName || '').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
+        if (typeof BackendConfirm !== 'undefined') {
+            BackendConfirm.show(msg).then(function(confirmed) {
+                if (confirmed) doDeleteDomain(domainId);
+            });
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __('确认删除') ?>',
+                html: msg,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f46a6a',
+                cancelButtonText: '<?= __('取消') ?>',
+                confirmButtonText: '<?= __('删除') ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) doDeleteDomain(domainId);
+            });
+        } else {
+            if (confirm(msg)) doDeleteDomain(domainId);
+        }
+    }
+
+    function doDeleteDomain(domainId) {
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify([domainId]));
+        fetch(urls.deleteDomains, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 || data.code === 207) {
+                    toast(data.msg || '<?= __('删除成功') ?>', data.code === 200 ? 'success' : 'warning');
+                    loadDomains(1);
+                } else {
+                    toast(data.msg || '<?= __('删除失败') ?>', 'error');
+                }
+            })
+            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+    }
+
+    function batchDeleteDomains() {
+        var ids = getSelectedDomainIds();
+        if (!ids || ids.length === 0) {
+            toast('<?= __('请选择要删除的域名') ?>', 'warning');
+            return;
+        }
+        var msg = '<?= __('确定要删除选中的 %{1} 个根域吗？每个根域下的所有子域名（域名池记录）和 DNS 解析记录将一并删除，且不可恢复。') ?>'.replace('%{1}', ids.length);
+        if (typeof BackendConfirm !== 'undefined') {
+            BackendConfirm.show(msg).then(function(confirmed) {
+                if (confirmed) doBatchDeleteDomains(ids);
+            });
+        } else if (confirm(msg)) {
+            doBatchDeleteDomains(ids);
+        }
+    }
+
+    function doBatchDeleteDomains(domainIds) {
+        var fd = new FormData();
+        fd.append('domain_ids', JSON.stringify(domainIds));
+        fetch(urls.deleteDomains, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.code === 200 || data.code === 207) {
+                    toast(data.msg || '<?= __('删除成功') ?>', data.code === 200 ? 'success' : 'warning');
+                    loadDomains(1);
                 } else {
                     toast(data.msg || '<?= __('删除失败') ?>', 'error');
                 }
@@ -2457,6 +2534,8 @@ $accounts = $accounts ?? [];
         hideAddDnsRecordForm: hideAddDnsRecordForm,
         saveDnsRecord: saveDnsRecord,
         deleteDnsRecord: deleteDnsRecord,
+        deleteDomain: deleteDomain,
+        batchDeleteDomains: batchDeleteDomains,
         autoResolve: autoResolve,
         refreshServerIp: refreshServerIp,
         toggleSelectAll: toggleSelectAll,
