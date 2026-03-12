@@ -691,21 +691,13 @@ class WlsRequest extends Request
 
         // 直接从 $_SERVER 读取 WELINE_WEBSITE_URL（Url::parser → processUrlParse 写入）
         // 不能用 getServer() / ServerBag，因为 ServerBag 可能在 parser 之前就已初始化
+        // URL 生成时始终参考当前 WLS 请求的端口，非标准端口（如 9981）必须带上
         $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $wHost = $parsed['host'] ?? 'localhost';
             $wPath = $parsed['path'] ?? '';
-            $urlHasPort = isset($parsed['port']) && $parsed['port'];
-
-            if ($urlHasPort) {
-                $portSuffix = ':' . $parsed['port'];
-            } elseif ($isNonStandardPort) {
-                $portSuffix = ':' . $currentPort;
-            } else {
-                $portSuffix = '';
-            }
-
+            $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
             return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
         }
 
