@@ -6,6 +6,7 @@ namespace Weline\Acl\Service;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\App\Env;
 
 /**
  * 清理非用户创建的 ACL / 菜单残留。
@@ -77,6 +78,57 @@ class AclOrphanCleanupService
             ->fetchArray();
 
         return $this->cleanupByRows($rows);
+    }
+
+    /**
+     * 依据当前激活模块与本轮已收集 source_id，清理不存在于激活模块中的非用户 ACL / 菜单，并清理当前激活模块内未参与本轮收集的失效资源。
+     *
+     * @param string[] $activeModules
+     * @param string[] $activeSourceIds
+     */
+    public function cleanupByActiveModules(array $activeModules = [], array $activeSourceIds = []): int
+    {
+        if (empty($activeModules)) {
+            $activeModules = array_keys(Env::getInstance()->getActiveModules());
+        }
+
+        $activeModules = array_values(array_filter(array_unique(array_map('strval', $activeModules))));
+        $activeSourceIds = array_values(array_filter(array_unique(array_map('strval', $activeSourceIds))));
+        $activeModuleSet = array_flip($activeModules);
+        $activeSourceIdSet = array_flip($activeSourceIds);
+
+        $rows = $this->buildNonUserAclQuery()
+            ->fields(Acl::schema_fields_SOURCE_ID . ',' . Acl::schema_fields_MODULE)
+            ->select()
+            ->fetchArray();
+
+        $orphanRows = [];
+        foreach ($rows as $row) {
+            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+            if ($sourceId === '') {
+                continue;
+            }
+
+            $module = (string)($row[Acl::schema_fields_MODULE] ?? '');
+            $belongsActiveModule = $module !== '' && isset($activeModuleSet[$module]);
+            if (!$belongsActiveModule && $sourceId !== '') {
+                $parts = explode('::', $sourceId, 2);
+                if (isset($parts[0]) && isset($activeModuleSet[$parts[0]])) {
+                    $belongsActiveModule = true;
+                }
+            }
+
+            if (!$belongsActiveModule) {
+                $orphanRows[] = ['source_id' => $sourceId];
+                continue;
+            }
+
+            if (!isset($activeSourceIdSet[$sourceId])) {
+                $orphanRows[] = ['source_id' => $sourceId];
+            }
+        }
+
+        return $this->cleanupByRows($orphanRows);
     }
 
     /**
