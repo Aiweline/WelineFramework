@@ -135,6 +135,51 @@ class DetectWebsite implements ObserverInterface
     }
 
     /**
+     * 为站点候选 URL 增加 www/裸域兼容别名。
+     *
+     * @param array<int, array<string, mixed>> $expanded
+     * @param array<string, bool> $seen
+     * @param array<string, mixed> $site
+     */
+    private function addExpandedSiteUrls(array &$expanded, array &$seen, array $site, string $baseUrl): void
+    {
+        if ($baseUrl === '') {
+            return;
+        }
+        $parsed = \parse_url($baseUrl);
+        if (!\is_array($parsed)) {
+            return;
+        }
+        $scheme = (($parsed['scheme'] ?? '') === 'http') ? 'http' : 'https';
+        $host = \strtolower(\trim((string) ($parsed['host'] ?? '')));
+        if ($host === '') {
+            return;
+        }
+        $port = isset($parsed['port']) ? ':' . $parsed['port'] : '';
+        $path = (string) ($parsed['path'] ?? '');
+
+        $hosts = [$host];
+        if (!\filter_var($host, FILTER_VALIDATE_IP) && \str_contains($host, '.')) {
+            if (\str_starts_with($host, 'www.')) {
+                $hosts[] = (string) \substr($host, 4);
+            } else {
+                $hosts[] = 'www.' . $host;
+            }
+        }
+
+        foreach (\array_unique($hosts) as $candidateHost) {
+            $url = $scheme . '://' . $candidateHost . $port . $path;
+            if (isset($seen[$url])) {
+                continue;
+            }
+            $seen[$url] = true;
+            $row = $site;
+            $row['url'] = $url;
+            $expanded[] = $row;
+        }
+    }
+
+    /**
      * 兼容旧站点数据：按 website.url 做最长匹配。
      *
      * @return array<string, mixed>|null
@@ -144,18 +189,41 @@ class DetectWebsite implements ObserverInterface
         $sites = $websiteModel->reset()->select()->fetchArray();
         $matchedSite = null;
         $maxLength = 0;
+        $parsedRequestUrl = \parse_url($requestUrl);
+        $requestScheme = (($parsedRequestUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
+        $requestHost = \strtolower(\trim((string) ($parsedRequestUrl['host'] ?? '')));
+        $requestPort = isset($parsedRequestUrl['port']) ? ':' . $parsedRequestUrl['port'] : '';
+        $requestPath = Url::parse_url($requestUrl, 'path') ?? '/';
+        $requestPath = '/' . \trim((string) $requestPath, '/');
+        if ($requestPath === '//') {
+            $requestPath = '/';
+        }
         foreach ($sites as $siteData) {
             $siteUrl = (string) ($siteData['url'] ?? '');
             if ($siteUrl === '') {
                 continue;
             }
-            if (!\str_starts_with($requestUrl, $siteUrl)) {
+            $parsedSiteUrl = \parse_url($siteUrl);
+            if (!\is_array($parsedSiteUrl)) {
                 continue;
             }
-            $length = \strlen($siteUrl);
+            $siteHost = \strtolower(\trim((string) ($parsedSiteUrl['host'] ?? '')));
+            if ($siteHost === '' || !$this->isHostMatch($requestHost, $siteHost)) {
+                continue;
+            }
+            $sitePath = (string) ($parsedSiteUrl['path'] ?? '');
+            $sitePath = '/' . \trim($sitePath, '/');
+            if ($sitePath === '//') {
+                $sitePath = '/';
+            }
+            if ($sitePath !== '/' && !\str_starts_with($requestPath, $sitePath)) {
+                continue;
+            }
+            $length = \strlen($sitePath);
             if ($length > $maxLength) {
                 $maxLength = $length;
                 $matchedSite = $siteData;
+                $matchedSite['url'] = $requestScheme . '://' . $requestHost . $requestPort . ($sitePath === '/' ? '' : $sitePath);
             }
         }
         return $matchedSite;
@@ -171,6 +239,7 @@ class DetectWebsite implements ObserverInterface
     private function expandSitesWithDomains(array $sites): array
     {
         $expanded = [];
+        $seen = [];
         try {
             /** @var WebsiteDomain $domainModel */
             $domainModel = w_obj(WebsiteDomain::class);
@@ -192,10 +261,8 @@ class DetectWebsite implements ObserverInterface
             }
         }
         foreach ($sites as $site) {
-            $siteUrl = $site['url'] ?? '';
-            if ($siteUrl !== '') {
-                $expanded[] = $site;
-            }
+            $siteUrl = (string) ($site['url'] ?? '');
+            $this->addExpandedSiteUrls($expanded, $seen, $site, $siteUrl);
             $websiteId = (int) ($site['website_id'] ?? 0);
             $list = $domainsByWebsite[$websiteId] ?? [];
             $parsedSiteUrl = \parse_url((string) $siteUrl);
@@ -212,9 +279,7 @@ class DetectWebsite implements ObserverInterface
                 if ($subPath !== '' && $subPath !== null) {
                     $base .= '/' . trim((string) $subPath, '/');
                 }
-                $row = $site;
-                $row['url'] = $base;
-                $expanded[] = $row;
+                $this->addExpandedSiteUrls($expanded, $seen, $site, $base);
             }
         }
         return $expanded;
@@ -273,12 +338,20 @@ class DetectWebsite implements ObserverInterface
                     continue;
                 }
             }
-            $candidates[] = ['sub_path' => $subPath, 'website_id' => (int) ($r[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0), 'row' => $r];
+            $candidates[] = [
+                'sub_path' => $subPath,
+                'website_id' => (int) ($r[WebsiteDomain::schema_fields_WEBSITE_ID] ?? 0),
+                'host_exact' => $hostNorm === $d,
+                'row' => $r
+            ];
         }
         if ($candidates === []) {
             return null;
         }
         usort($candidates, function ($a, $b) {
+            if (($a['host_exact'] ?? false) !== ($b['host_exact'] ?? false)) {
+                return ($b['host_exact'] ?? false) <=> ($a['host_exact'] ?? false);
+            }
             return strlen($b['sub_path']) <=> strlen($a['sub_path']);
         });
         $chosen = $candidates[0];
