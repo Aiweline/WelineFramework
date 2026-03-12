@@ -33,7 +33,7 @@ class Offcanvas extends BaseController
 
     /**
      * 框架级结果桥接：接收 type/msg/url/reload，通过 BackendToast 显示并关 offcanvas。
-     * 由 ResultRedirectBefore 在 iframe + ResultManager 有数据时自动重定向到此。
+     * 由 Framework ResultBridgeRedirect 在 iframe + ResultManager 有数据时自动重定向到此（桥接页地址由事件返回）。
      */
     public function getResult(): string
     {
