@@ -47,6 +47,7 @@ class SslCertificate extends BaseController
             ->order(CertModel::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
+        $certificates = \array_map([$this, 'stripSensitiveCertificateFields'], $certificates);
         
         // 统计信息
         $stats = [
@@ -108,7 +109,8 @@ class SslCertificate extends BaseController
             ->order(CertModel::schema_fields_DOMAIN)
             ->select()
             ->fetchArray();
-        
+        $certificates = \array_map([$this, 'stripSensitiveCertificateFields'], $certificates);
+
         return $this->fetchJson(['success' => true, 'data' => $certificates]);
     }
     
@@ -157,7 +159,7 @@ class SslCertificate extends BaseController
         $result = $this->sslService->requestCertificate($domain, $webroot, $email, $websiteId, (string) $provider);
         
         if ($result['cert']) {
-            $result['cert'] = $result['cert']->getData();
+            $result['cert'] = $result['cert']->toSafeArray();
         }
         
         return $this->fetchJson($result);
@@ -184,7 +186,7 @@ class SslCertificate extends BaseController
         $result = $this->sslService->renewCertificate($cert, $webroot, $email ?: 'admin@' . $domain);
         
         if ($result['cert']) {
-            $result['cert'] = $result['cert']->getData();
+            $result['cert'] = $result['cert']->toSafeArray();
         }
         
         return $this->fetchJson($result);
@@ -255,7 +257,7 @@ class SslCertificate extends BaseController
             return $this->fetchJson(['success' => false, 'message' => __('未找到证书记录')]);
         }
         
-        $data = $cert->getData();
+        $data = $cert->toSafeArray();
         
         // 解析证书信息
         if ($cert->certificateFilesExist()) {
@@ -396,5 +398,15 @@ class SslCertificate extends BaseController
             'message' => __('签发完成：成功 %{1} 个，失败 %{2} 个', [$successCount, $failedCount]),
             'results' => $results,
         ]);
+    }
+
+    protected function stripSensitiveCertificateFields(array $certificate): array
+    {
+        unset(
+            $certificate[CertModel::schema_fields_CERT_PEM],
+            $certificate[CertModel::schema_fields_KEY_PEM],
+            $certificate[CertModel::schema_fields_CHAIN_PEM]
+        );
+        return $certificate;
     }
 }
