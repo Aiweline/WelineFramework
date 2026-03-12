@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DnsProviderDetector;
+use Weline\Websites\Service\SubdomainGeneratorService;
 
 class DomainNsCheck implements CronTaskInterface
 {
@@ -54,10 +55,21 @@ class DomainNsCheck implements CronTaskInterface
             $cloudflare = 0;
             $original = 0;
             $errors = 0;
+            $poolAdded = 0;
+
+            $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
 
             foreach ($domains as $row) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
                 $domain->setData($row);
+
+                // 无论 NS 查询成功或失败，都立即确保子域名接入域名池
+                try {
+                    $poolResult = $subdomainGenerator->generateDefaultSubdomains($domain);
+                    $poolAdded += $poolResult['added'] ?? 0;
+                } catch (\Throwable $e) {
+                    w_log_warning(__('子域名入池失败: %{1}, %{2}', [$domain->getDomain(), $e->getMessage()]), [], 'domain_ns_check');
+                }
 
                 try {
                     $nameservers = $domain->getNameservers();
@@ -141,6 +153,9 @@ class DomainNsCheck implements CronTaskInterface
                 $original,
                 $errors
             );
+            if ($poolAdded > 0) {
+                $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
+            }
 
             w_log_info($message, [], 'domain_ns_check');
 
