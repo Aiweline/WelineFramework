@@ -464,16 +464,20 @@ class WebsiteDomain extends Model
     {
         $domain = \strtolower(\trim($domain));
         $subPath = $subPath === '' ? '' : (\str_starts_with($subPath, '/') ? $subPath : '/' . $subPath);
-        $row = $this->clearQuery()
+        $query = $this->clearQuery()
             ->where(self::schema_fields_DOMAIN, $domain)
-            ->where(self::schema_fields_SUB_PATH, $subPath)
-            ->find()
-            ->fetch();
-        if (!$row || !$this->getDomainId()) {
+            ->where(self::schema_fields_SUB_PATH, $subPath);
+        // 编辑时在查询层排除当前网站，避免把自己判为冲突
+        if ($excludeWebsiteId !== null) {
+            $query->where(self::schema_fields_WEBSITE_ID, $excludeWebsiteId, '!=');
+        }
+        $rows = $query->select()->fetchArray();
+        if (empty($rows)) {
             return null;
         }
-        $websiteId = (int) $this->getData(self::schema_fields_WEBSITE_ID);
-        if ($excludeWebsiteId !== null && $websiteId === $excludeWebsiteId) {
+        $row = $rows[0];
+        $websiteId = (int) ($row[self::schema_fields_WEBSITE_ID] ?? 0);
+        if ($websiteId <= 0) {
             return null;
         }
         $website = ObjectManager::getInstance(Website::class);

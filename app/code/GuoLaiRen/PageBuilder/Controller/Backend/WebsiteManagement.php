@@ -168,11 +168,11 @@ class WebsiteManagement extends BaseController
                 // PageBuilder 内 scope 固定为 page_builder，不允许修改
                 $data['scope'] = 'page_builder';
 
-                $addressLines = \trim((string) ($data['address_lines'] ?? ''));
-                $poolIds = \trim((string) ($data['pool_ids'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                $poolIds = $data['pool_ids'] ?? '';
+                $subPath = $this->normalizeSubPath((string) ($data['sub_path'] ?? ''));
+                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
-                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                    throw new \Exception(__('请至少选择一个域名'));
                 }
 
                 /** @var WebsiteDomain $domainModel */
@@ -218,7 +218,7 @@ class WebsiteManagement extends BaseController
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['pool_id']);
+                unset($data['domain_values'], $data['pool_ids'], $data['pool_id'], $data['sub_path']);
 
                 $newWebsite = $this->objectManager->getInstance(Website::class);
                 $newWebsite->clearData()->setData($data)->save();
@@ -278,7 +278,7 @@ class WebsiteManagement extends BaseController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
-        $this->assign('address_lines', '');
+        $this->assign('sub_path', '');
         // 支持 URL 传入 pool_id 或 pool_ids，创建站点时预选域名并会在保存时自动绑定
         $poolIdParam = $this->request->getParam('pool_id');
         $poolIdsParam = $this->request->getParam('pool_ids');
@@ -370,11 +370,11 @@ class WebsiteManagement extends BaseController
             $postWebsiteId = (int)$postWebsiteId;
             
             try {
-                $addressLines = \trim((string) ($data['address_lines'] ?? ''));
-                $poolIds = \trim((string) ($data['pool_ids'] ?? ''));
-                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                $poolIds = $data['pool_ids'] ?? '';
+                $subPath = $this->normalizeSubPath((string) ($data['sub_path'] ?? ''));
+                $addressList = $this->buildAddressListFromPoolSelection($poolIds, $subPath);
                 if (empty($addressList)) {
-                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                    throw new \Exception(__('请至少选择一个域名'));
                 }
 
                 /** @var WebsiteDomain $domainModel */
@@ -418,7 +418,7 @@ class WebsiteManagement extends BaseController
                 
                 // 确保 website_id 在数据中
                 $data['website_id'] = $postWebsiteId;
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['pool_id']);
+                unset($data['domain_values'], $data['pool_ids'], $data['pool_id'], $data['sub_path']);
                 
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
@@ -506,7 +506,7 @@ class WebsiteManagement extends BaseController
         $this->assign('website', $this->website->getData());
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
-        $this->assign('address_lines', $this->formatAddressLinesForWebsite($websiteId));
+        $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
         
         // 获取网站已关联的域名（用于编辑时显示）
         $selectedPoolIds = [];
@@ -742,64 +742,47 @@ class WebsiteManagement extends BaseController
     }
 
     /**
-     * 解析网站地址与域名池选择为地址列表
+     * 从域名池选择构建站点地址列表，所有选中域名共享同一个子路径。
      */
-    private function parseAddressLines(string $text, string $poolIds = ''): array
+    private function buildAddressListFromPoolSelection(array|string $poolIds, string $subPath = ''): array
     {
         $list = [];
         $seen = [];
+        $subPath = $this->normalizeSubPath($subPath);
         $poolIdArray = $this->parsePoolIds($poolIds);
-        if (!empty($poolIdArray)) {
-            foreach ($poolIdArray as $poolId) {
-                /** @var DomainPool $pool */
-                $pool = $this->objectManager->getInstance(DomainPool::class, [], false);
-                $pool->loadByPoolId($poolId);
-                if ($pool->getPoolId()) {
-                    $domain = \strtolower($pool->getDomain());
-                    $key = $domain . '|';
-                    if (!isset($seen[$key])) {
-                        $seen[$key] = true;
-                        $list[] = [
-                            'domain' => $domain,
-                            'sub_path' => '',
-                            'pool_id' => $poolId,
-                        ];
-                    }
-                }
-            }
-        }
-        $lines = \preg_split('/\r\n|\r|\n/', $text, -1, \PREG_SPLIT_NO_EMPTY);
-        foreach (($lines ?: []) as $line) {
-            $line = \trim((string) $line);
-            if ($line === '') {
+        foreach ($poolIdArray as $poolId) {
+            /** @var DomainPool $pool */
+            $pool = $this->objectManager->getInstance(DomainPool::class, [], false);
+            $pool->loadByPoolId($poolId);
+            if (!$pool->getPoolId()) {
                 continue;
             }
-            $line = (string) \preg_replace('#^https?://#i', '', $line);
-            $line = \trim($line, "/ \t");
-            if ($line === '') {
-                continue;
-            }
-            $pos = \strpos($line, '/');
-            if ($pos === false) {
-                $domain = \strtolower($line);
-                $subPath = '';
-            } else {
-                $domain = \strtolower((string) \substr($line, 0, $pos));
-                $subPath = '/' . \trim((string) \substr($line, $pos), '/');
-                if ($subPath === '/') {
-                    $subPath = '';
-                }
-            }
+            $domain = \strtolower(\trim((string) $pool->getDomain()));
             if ($domain === '') {
                 continue;
             }
             $key = $domain . '|' . $subPath;
-            if (!isset($seen[$key])) {
-                $seen[$key] = true;
-                $list[] = ['domain' => $domain, 'sub_path' => $subPath, 'pool_id' => 0];
+            if (isset($seen[$key])) {
+                continue;
             }
+            $seen[$key] = true;
+            $list[] = [
+                'domain' => $domain,
+                'sub_path' => $subPath,
+                'pool_id' => $poolId,
+            ];
         }
         return $list;
+    }
+
+    private function normalizeSubPath(string $subPath): string
+    {
+        $subPath = \trim($subPath);
+        if ($subPath === '' || $subPath === '/') {
+            return '';
+        }
+        $subPath = '/' . \trim($subPath, '/');
+        return $subPath === '/' ? '' : $subPath;
     }
 
     private function domainToCode(string $domain): string
@@ -842,19 +825,18 @@ class WebsiteManagement extends BaseController
         $pool->syncSiteCreatedFromWebsiteDomainTable();
     }
 
-    private function formatAddressLinesForWebsite(int $websiteId): string
+    private function getPrimarySubPathForWebsite(int $websiteId): string
     {
         /** @var WebsiteDomain $model */
         $model = $this->objectManager->getInstance(WebsiteDomain::class);
         $rows = $model->getWebsiteDomains($websiteId);
-        $lines = [];
         foreach ($rows as $row) {
-            $domain = (string) ($row[WebsiteDomain::schema_fields_DOMAIN] ?? '');
-            $subPath = (string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? '');
-            if ($domain !== '') {
-                $lines[] = $domain . $subPath;
+            $isPrimary = (bool) ($row[WebsiteDomain::schema_fields_IS_PRIMARY] ?? false);
+            if ($isPrimary) {
+                return $this->normalizeSubPath((string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? ''));
             }
         }
-        return \implode("\n", $lines);
+        $first = $rows[0][WebsiteDomain::schema_fields_SUB_PATH] ?? '';
+        return $this->normalizeSubPath((string) $first);
     }
 }
