@@ -13,6 +13,7 @@ use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Service\DomainResolveService;
+use Weline\Websites\Service\SubdomainGeneratorService;
 
 class DomainResolveCheck implements CronTaskInterface
 {
@@ -52,10 +53,21 @@ class DomainResolveCheck implements CronTaskInterface
             $resolved = 0;
             $local = 0;
             $errors = 0;
+            $poolAdded = 0;
+
+            $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
 
             foreach ($domains as $row) {
                 $domain = clone $domainModel;
                 $domain->setData($row);
+
+                // 无论解析成功或失败，都立即确保子域名接入域名池
+                try {
+                    $poolResult = $subdomainGenerator->generateDefaultSubdomains($domain);
+                    $poolAdded += $poolResult['added'] ?? 0;
+                } catch (\Throwable $e) {
+                    w_log_warning(__('子域名入池失败: %{1}, %{2}', [$domain->getDomain(), $e->getMessage()]), [], 'domain_resolve_check');
+                }
 
                 try {
                     $result = $resolveService->checkResolve($domain);
@@ -82,6 +94,9 @@ class DomainResolveCheck implements CronTaskInterface
                 $local,
                 $errors
             );
+            if ($poolAdded > 0) {
+                $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
+            }
 
             w_log_info($message, [], 'domain_resolve_check');
 
