@@ -1165,6 +1165,15 @@ CNF;
     /**
      * 获取所有证书目录映射（用于 SNI）
      * 
+     * 注意：PHP 的 SNI_server_certs 需要精确的域名键匹配，不会自动处理泛域名匹配。
+     * 因此，对于泛域名证书（*.example.com），我们同时生成：
+     * 1. 根域名映射（example.com）- 根域名可以使用泛域名证书
+     * 2. 保留泛域名键（*.example.com）- 用于 fallback
+     * 
+     * 当证书文件不存在时，会检查数据库记录：
+     * - 未过期：发出警告通知（证书文件丢失，需要重新申请或恢复）
+     * - 已过期：发出提示通知（证书已过期，需要续签）
+     * 
      * @return array [domain => [cert => path, key => path], ...]
      */
     public function getCertificateMap(): array
@@ -1178,21 +1187,184 @@ CNF;
             ->fetchArray();
         
         $map = [];
+        $missingCerts = [];  // 记录证书文件缺失的域名
+        $expiredCerts = [];  // 记录已过期的证书
+        
         foreach ($certificates as $cert) {
             $domain = $cert[SslCertificate::schema_fields_DOMAIN];
             $certPath = (string)($cert[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $keyPath = (string)($cert[SslCertificate::schema_fields_KEY_PATH] ?? '');
+            $certType = (string)($cert[SslCertificate::schema_fields_CERT_TYPE] ?? SslCertificate::CERT_TYPE_EXACT);
+            $certId = (int)($cert[SslCertificate::schema_fields_ID] ?? 0);
+            $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
 
-            if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
-                $map[$domain] = [
-                    'cert' => $certPath,
-                    'key' => $keyPath,
-                    'chain' => $cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '',
-                ];
+            // 检查证书文件是否存在
+            if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+                // 证书文件不存在，检查是否过期
+                $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
+                
+                if ($isExpired) {
+                    $expiredCerts[] = [
+                        'domain' => $domain,
+                        'expires_at' => $expiresAt,
+                        'cert_id' => $certId,
+                    ];
+                } else {
+                    $missingCerts[] = [
+                        'domain' => $domain,
+                        'expires_at' => $expiresAt,
+                        'cert_id' => $certId,
+                        'cert_path' => $certPath,
+                        'key_path' => $keyPath,
+                    ];
+                }
+                continue;
+            }
+
+            $certData = [
+                'cert' => $certPath,
+                'key' => $keyPath,
+                'chain' => $cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '',
+                'cert_type' => $certType,
+            ];
+            
+            // 添加原始域名映射
+            $map[$domain] = $certData;
+            
+            // 如果是泛域名证书，额外添加根域名映射
+            // 这样 www.example.com 可以匹配 *.example.com 证书
+            if ($certType === SslCertificate::CERT_TYPE_WILDCARD && \str_starts_with($domain, '*.')) {
+                // 提取根域名：*.example.com -> example.com
+                $rootDomain = \substr($domain, 2);
+                if ($rootDomain !== '' && !isset($map[$rootDomain])) {
+                    $map[$rootDomain] = $certData;
+                }
+                
+                // 从 DomainPool 获取该根域名下的所有已建站子域名，添加映射
+                // 这样 www.example.com 可以精确匹配到 *.example.com 证书
+                try {
+                    $poolModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Websites\Model\DomainPool::class,
+                        [],
+                        false
+                    );
+                    $subdomains = $poolModel->clearQuery()
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, $rootDomain)
+                        ->where(\Weline\Websites\Model\DomainPool::schema_fields_STATUS, \Weline\Websites\Model\DomainPool::STATUS_ACTIVE)
+                        ->select()
+                        ->fetchArray();
+                    
+                    foreach ($subdomains as $row) {
+                        $subdomain = (string)($row[\Weline\Websites\Model\DomainPool::schema_fields_DOMAIN] ?? '');
+                        if ($subdomain !== '' && !isset($map[$subdomain])) {
+                            $map[$subdomain] = $certData;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // DomainPool 模块可能不存在，忽略错误
+                    w_log_debug('[SslCertificateService] 获取 DomainPool 子域名失败: ' . $e->getMessage());
+                }
             }
         }
         
+        // 发出证书缺失通知
+        if (!empty($missingCerts)) {
+            $this->notifyMissingCertificates($missingCerts);
+        }
+        
+        // 发出证书过期通知
+        if (!empty($expiredCerts)) {
+            $this->notifyExpiredCertificates($expiredCerts);
+        }
+        
         return $map;
+    }
+    
+    /**
+     * 通知证书文件缺失
+     * 
+     * @param array $missingCerts 缺失的证书列表
+     */
+    protected function notifyMissingCertificates(array $missingCerts): void
+    {
+        foreach ($missingCerts as $cert) {
+            $domain = $cert['domain'];
+            $expiresAt = $cert['expires_at'];
+            $certPath = $cert['cert_path'];
+            
+            $title = __('域名 %{1} 的证书文件丢失', [$domain]);
+            $content = __('证书路径：%{1}，到期时间：%{2}。请检查文件是否被删除，或重新申请证书。', [$certPath, $expiresAt ?: '未知']);
+            
+            // 发送系统通知
+            w_msg('ssl_cert_missing', 'warning', $title, $content, [
+                'priority' => 8,
+                'icon' => 'ri-shield-keyhole-line',
+                'metadata' => [
+                    'domain' => $domain,
+                    'cert_id' => $cert['cert_id'],
+                    'expires_at' => $expiresAt,
+                    'action' => 'renew',
+                ],
+            ]);
+            
+            w_log_warning('[SslCertificateService] ' . $title . ' - ' . $content);
+            
+            // 更新证书记录状态为错误
+            try {
+                $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
+                $certModel->load($cert['cert_id']);
+                if ($certModel->getCertId()) {
+                    $certModel->setStatus(SslCertificate::STATUS_ERROR)
+                        ->setRenewError(__('证书文件丢失'))
+                        ->save();
+                }
+            } catch (\Throwable $e) {
+                w_log_error('[SslCertificateService] 更新证书记录状态失败: ' . $e->getMessage());
+            }
+        }
+    }
+    
+    /**
+     * 通知证书已过期且文件不存在
+     * 
+     * @param array $expiredCerts 过期的证书列表
+     */
+    protected function notifyExpiredCertificates(array $expiredCerts): void
+    {
+        foreach ($expiredCerts as $cert) {
+            $domain = $cert['domain'];
+            $expiresAt = $cert['expires_at'];
+            
+            $title = __('域名 %{1} 的证书已过期', [$domain]);
+            $content = __('过期时间：%{1}。请续签证书以恢复 HTTPS 服务。', [$expiresAt ?: '未知']);
+            
+            // 发送系统通知
+            w_msg('ssl_cert_expired', 'error', $title, $content, [
+                'priority' => 9,
+                'icon' => 'ri-shield-keyhole-line',
+                'metadata' => [
+                    'domain' => $domain,
+                    'cert_id' => $cert['cert_id'],
+                    'expires_at' => $expiresAt,
+                    'action' => 'renew',
+                ],
+            ]);
+            
+            w_log_error('[SslCertificateService] ' . $title . ' - ' . $content);
+            
+            // 更新证书记录状态为过期
+            try {
+                $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
+                $certModel->load($cert['cert_id']);
+                if ($certModel->getCertId()) {
+                    $certModel->setStatus(SslCertificate::STATUS_EXPIRED)
+                        ->setRenewError(__('证书已过期'))
+                        ->save();
+                }
+            } catch (\Throwable $e) {
+                w_log_error('[SslCertificateService] 更新证书记录状态失败: ' . $e->getMessage());
+            }
+        }
     }
 
     /**
@@ -1435,6 +1607,8 @@ CNF;
                     if ($onProgress) {
                         $onProgress((string) __('证书管理记录已同步，cert_id=%{1}', [$synced->getCertId()]), ['cert_id' => $synced->getCertId()]);
                     }
+                    // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
+                    $this->regenerateCertificateMap();
                     return ['success' => true, 'message' => __('已存在未过期证书，已跳过申请并更新记录'), 'cert' => $synced];
                 }
             }
@@ -1480,6 +1654,9 @@ CNF;
                     $expiresAt,
                     $cert->getCertType()
                 );
+
+                // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
+                $this->regenerateCertificateMap();
 
                 return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
             } else {
@@ -1574,6 +1751,9 @@ CNF;
                 (string)($certInfo['expires_at'] ?? $cert->getExpiresAt()),
                 $cert->getCertType()
             );
+
+            // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
+            $this->regenerateCertificateMap();
 
             return [
                 'success' => true,
@@ -2593,16 +2773,38 @@ CNF;
      */
     protected function clearServerCache(): void
     {
-        // 删除证书映射缓存
-        $cacheFile = Env::VAR_DIR . 'cache' . DS . 'ssl_certificate_map.json';
-        if (\is_file($cacheFile)) {
-            @\unlink($cacheFile);
-        }
+        // 重新生成证书映射文件（含泛域名展开）
+        $this->regenerateCertificateMap();
         
         // 通过 IPC 控制通道通知 Master 执行缓存重载（含 SSL 证书缓存刷新）
         $masterClass = MasterProcess::class;
         if (\is_callable([$masterClass, 'sendCacheClearCommand'])) {
             \call_user_func([$masterClass, 'sendCacheClearCommand'], 'default');
         }
+    }
+    
+    /**
+     * 重新生成证书映射文件
+     * 
+     * 在证书签发、续签、启用/禁用后调用，确保证书映射文件包含最新的域名映射
+     * 特别是处理泛域名证书的展开，使子域名能够正确匹配证书
+     */
+    public function regenerateCertificateMap(): void
+    {
+        $mapFile = Env::VAR_DIR . 'server' . DS . 'ssl_certificate_map.json';
+        
+        // 确保目录存在
+        $mapDir = \dirname($mapFile);
+        if (!\is_dir($mapDir)) {
+            @\mkdir($mapDir, 0755, true);
+        }
+        
+        // 获取证书映射（包含泛域名展开）
+        $map = $this->getCertificateMap();
+        
+        // 保存映射文件
+        \file_put_contents($mapFile, \json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));
+        
+        w_log_debug('[SslCertificateService] 证书映射文件已重新生成，包含 ' . \count($map) . ' 个域名');
     }
 }
