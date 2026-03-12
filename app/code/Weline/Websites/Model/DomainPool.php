@@ -102,6 +102,7 @@ class DomainPool extends Model
 
     // DNS/CDN 状态常量
     public const INFRA_STATUS_PENDING = 'pending';
+    public const INFRA_STATUS_SWITCHING = 'switching';
     public const INFRA_STATUS_READY = 'ready';
     public const INFRA_STATUS_ERROR = 'error';
     
