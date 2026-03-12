@@ -35,8 +35,9 @@ class Rewriter extends \Weline\Framework\App\Controller\BackendController
             $urlRewriteModel->where('main_table.' . UrlRewrite::schema_fields_WEBSITE_ID, (int)$websiteIdFilter);
         }
         
+        // url_rewrite.url_id 为 varchar，url_manager.url_id 为 int；PostgreSQL 需显式类型一致，用 CAST 兼容 MySQL/Pg
         $rewrites = $urlRewriteModel->fields('main_table.*,main_table.path as rewrite_path,um.url_id,um.path,um.is_deleted')
-            ->joinModel(UrlManager::class, 'um', 'main_table.url_id=um.url_id', 'left')
+            ->joinModel(UrlManager::class, 'um', 'main_table.url_id = CAST(um.url_id AS VARCHAR(255))', 'left')
             ->pagination()
             ->select()
             ->fetch();
