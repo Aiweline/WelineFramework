@@ -67,8 +67,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
     }
     
     /**
-     * 按 website_id 和 rewrite 查找重写记录
-     * 
+     * 按 website_id 和 rewrite 查找重写记录，多条匹配时取 rewrite_id 最大的（最近新增的那条）
+     *
      * @param int $websiteId 网站ID
      * @param string $rewrite 重写路径
      * @return UrlRewrite
@@ -80,6 +80,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             ->clearQuery()
             ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
             ->where(UrlRewrite::schema_fields_REWRITE, $rewrite)
+            ->order(UrlRewrite::schema_fields_ID, 'DESC')
             ->find()
             ->fetch();
     }
