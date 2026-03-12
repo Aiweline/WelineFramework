@@ -173,11 +173,9 @@
 
     <div class="card-body">
         <i class="mdi mdi-checkbox-marked-circle-outline success-icon"></i>
-        <h4 class="success-title">
-            <lang>{{req.msg}}</lang>
-        </h4>
+        <h4 class="success-title">{{msg}}</h4>
         <?php if (!empty($this->getData('content'))): ?>
-            <p class="success-content">{{req.content}}</p>
+            <p class="success-content">{{content}}</p>
         <?php endif; ?>
         <p class="countdown-text mb-0" id="countdown"></p>
     </div>
