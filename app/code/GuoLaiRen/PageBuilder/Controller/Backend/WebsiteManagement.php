@@ -42,15 +42,6 @@ class WebsiteManagement extends BaseController
         $this->objectManager = $objectManager;
     }
 
-    private function normalizeWebsiteUrl(string $url): string
-    {
-        $url = \trim($url);
-        if ($url !== '' && !\preg_match('/^https?:\/\//i', $url)) {
-            $url = 'http://' . $url;
-        }
-        return $url;
-    }
-
     /**
      * 网站管理首页 - 网站列表
      */
@@ -176,6 +167,38 @@ class WebsiteManagement extends BaseController
             try {
                 // PageBuilder 内 scope 固定为 page_builder，不允许修改
                 $data['scope'] = 'page_builder';
+
+                $addressLines = \trim((string) ($data['address_lines'] ?? ''));
+                $poolIds = \trim((string) ($data['pool_ids'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                if (empty($addressList)) {
+                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                }
+
+                /** @var WebsiteDomain $domainModel */
+                $domainModel = $this->objectManager->getInstance(WebsiteDomain::class);
+                foreach ($addressList as $item) {
+                    $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], null);
+                    if ($conflict !== null) {
+                        $addr = $item['domain'] . $item['sub_path'];
+                        if ($item['sub_path'] === '') {
+                            throw new \Exception(
+                                __('该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）', [$conflict['website_name']])
+                            );
+                        }
+                        throw new \Exception(
+                            __('该地址 %{1} 已被站点「%{2}」使用', [$addr, $conflict['website_name']])
+                        );
+                    }
+                }
+
+                $addressList = $this->orderAddressListPreferredUrl($addressList);
+                $firstDomain = (string) ($addressList[0]['domain'] ?? '');
+                $firstSubPath = (string) ($addressList[0]['sub_path'] ?? '');
+                if (empty(\trim((string) ($data['code'] ?? '')))) {
+                    $data['code'] = $this->domainToCode($firstDomain);
+                }
+                $data['url'] = 'https://' . $firstDomain . $firstSubPath;
                 
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
@@ -195,18 +218,7 @@ class WebsiteManagement extends BaseController
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-
-                $url = $this->normalizeWebsiteUrl((string) ($data['url'] ?? ''));
-                if ($url !== '') {
-                    $data['url'] = $url;
-                    $exist = $this->website->clearQuery()
-                        ->where(Website::schema_fields_URL, $url)
-                        ->find()
-                        ->fetch();
-                    if ($exist->getData(Website::schema_fields_ID)) {
-                        throw new \Exception(__('该网站 URL 已存在，请勿重复添加：%{1}', [$url]));
-                    }
-                }
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['pool_id']);
 
                 $newWebsite = $this->objectManager->getInstance(Website::class);
                 $newWebsite->clearData()->setData($data)->save();
@@ -217,13 +229,8 @@ class WebsiteManagement extends BaseController
                     throw new \Exception(__('网站保存失败，未能获取网站ID'));
                 }
                 
-                // 处理域名池选择（pool_id[] 或单个隐藏域逗号分隔）
-                $poolIds = $this->parsePoolIds($data['pool_id'] ?? []);
-                
                 // 保存网站域名关联
-                if (!empty($poolIds)) {
-                    $this->saveWebsiteDomains((int)$websiteId, $poolIds);
-                }
+                $this->saveWebsiteDomains((int) $websiteId, $addressList);
                 
                 // 保存关联货币
                 $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
@@ -271,16 +278,15 @@ class WebsiteManagement extends BaseController
         $this->assign('website', []);
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
+        $this->assign('address_lines', '');
         // 支持 URL 传入 pool_id 或 pool_ids，创建站点时预选域名并会在保存时自动绑定
         $poolIdParam = $this->request->getParam('pool_id');
         $poolIdsParam = $this->request->getParam('pool_ids');
         $selectedPoolIds = [];
         if ($poolIdParam !== null && $poolIdParam !== '') {
-            $selectedPoolIds = array_filter(array_map('intval', (array) $poolIdParam));
+            $selectedPoolIds = $this->parsePoolIds((array) $poolIdParam);
         } elseif ($poolIdsParam !== null && $poolIdsParam !== '') {
-            $selectedPoolIds = is_array($poolIdsParam)
-                ? array_filter(array_map('intval', $poolIdsParam))
-                : array_filter(array_map('intval', explode(',', (string) $poolIdsParam)));
+            $selectedPoolIds = $this->parsePoolIds($poolIdsParam);
         }
         $this->assign('selected_pool_ids', $selectedPoolIds);
         
@@ -364,6 +370,37 @@ class WebsiteManagement extends BaseController
             $postWebsiteId = (int)$postWebsiteId;
             
             try {
+                $addressLines = \trim((string) ($data['address_lines'] ?? ''));
+                $poolIds = \trim((string) ($data['pool_ids'] ?? ''));
+                $addressList = $this->parseAddressLines($addressLines, $poolIds);
+                if (empty($addressList)) {
+                    throw new \Exception(__('请至少填写一个网站地址（域名或域名/子路径）'));
+                }
+
+                /** @var WebsiteDomain $domainModel */
+                $domainModel = $this->objectManager->getInstance(WebsiteDomain::class);
+                foreach ($addressList as $item) {
+                    $conflict = $domainModel->findConflict($item['domain'], $item['sub_path'], $postWebsiteId);
+                    if ($conflict !== null) {
+                        $addr = $item['domain'] . $item['sub_path'];
+                        if ($item['sub_path'] === '') {
+                            throw new \Exception(
+                                __('该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）', [$conflict['website_name']])
+                            );
+                        }
+                        throw new \Exception(
+                            __('该地址 %{1} 已被站点「%{2}」使用', [$addr, $conflict['website_name']])
+                        );
+                    }
+                }
+                $addressList = $this->orderAddressListPreferredUrl($addressList);
+                $firstDomain = (string) ($addressList[0]['domain'] ?? '');
+                $firstSubPath = (string) ($addressList[0]['sub_path'] ?? '');
+                if (empty(\trim((string) ($data['code'] ?? '')))) {
+                    $data['code'] = $this->domainToCode($firstDomain);
+                }
+                $data['url'] = 'https://' . $firstDomain . $firstSubPath;
+
                 // 处理关联货币和语言
                 $currencyCodes = $data['currency_codes'] ?? [];
                 $languageCodes = $data['language_codes'] ?? [];
@@ -380,28 +417,13 @@ class WebsiteManagement extends BaseController
                 
                 // 确保 website_id 在数据中
                 $data['website_id'] = $postWebsiteId;
-
-                $url = $this->normalizeWebsiteUrl((string) ($data['url'] ?? ''));
-                if ($url !== '') {
-                    $data['url'] = $url;
-                    $exist = $this->website->clearQuery()
-                        ->where(Website::schema_fields_URL, $url)
-                        ->where(Website::schema_fields_ID, $postWebsiteId, '<>')
-                        ->find()
-                        ->fetch();
-                    if ($exist->getData(Website::schema_fields_ID)) {
-                        throw new \Exception(__('该网站 URL 已被其他站点使用，请勿重复：%{1}', [$url]));
-                    }
-                }
+                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['pool_id']);
                 
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
                 
-                // 处理域名池选择（pool_id[] 或单个隐藏域逗号分隔）
-                $poolIds = $this->parsePoolIds($data['pool_id'] ?? []);
-                
                 // 保存网站域名关联
-                $this->saveWebsiteDomains($postWebsiteId, $poolIds);
+                $this->saveWebsiteDomains($postWebsiteId, $addressList);
                 
                 // 保存关联货币
                 try {
@@ -483,6 +505,7 @@ class WebsiteManagement extends BaseController
         $this->assign('website', $this->website->getData());
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
+        $this->assign('address_lines', $this->formatAddressLinesForWebsite($websiteId));
         
         // 获取网站已关联的域名（用于编辑时显示）
         $selectedPoolIds = [];
@@ -657,40 +680,136 @@ class WebsiteManagement extends BaseController
         return $locales ?: [];
     }
     
-    /**
-     * 解析域名池 ID 列表，兼容 DomainSelect 多选提交格式
-     * - 数组如 [1,2,3] 或 ['1','2','3'] 直接使用
-     * - 数组如 ['1,2,3']（单个逗号分隔串）需展开
-     * - 非数组如 "1,2,3" 按逗号拆分
-     *
-     * @param array|string $input
-     * @return array<int>
-     */
-    private function parsePoolIds($input): array
+    private function parsePoolIds(array|string $input): array
     {
-        if (is_array($input)) {
+        if (\is_array($input)) {
             $flat = [];
-            foreach ($input as $v) {
-                if (is_string($v) && str_contains($v, ',')) {
-                    $flat = array_merge($flat, array_filter(explode(',', $v)));
+            foreach ($input as $value) {
+                if (\is_string($value) && \str_contains($value, ',')) {
+                    $flat = \array_merge($flat, \array_filter(\explode(',', $value)));
                 } else {
-                    $flat[] = $v;
+                    $flat[] = $value;
                 }
             }
             $input = $flat;
         } else {
-            $input = array_filter(explode(',', (string) $input));
+            $input = \array_filter(\explode(',', (string) $input));
         }
-        return array_values(array_filter(array_map('intval', $input), fn ($id) => $id > 0));
+        return \array_values(\array_filter(\array_map('intval', $input), static fn (int $id): bool => $id > 0));
     }
 
     /**
-     * 保存站点的域名关联（先删后增）
-     * 
-     * @param int $websiteId 网站 ID
-     * @param array $poolIds 域名池 ID 数组
+     * 获取域名选项（用于多选，来自域名池）
      */
-    private function saveWebsiteDomains(int $websiteId, array $poolIds): void
+    private function getDomainOptions(): array
+    {
+        try {
+            $pool = $this->objectManager->getInstance(DomainPool::class);
+            return $pool->getSelectOptions();
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * 对地址列表排序：当同时存在根域与 www 时，www 排在前（作为主 URL）
+     */
+    private function orderAddressListPreferredUrl(array $addressList): array
+    {
+        $domains = \array_column($addressList, 'domain');
+        $hasPair = false;
+        foreach ($domains as $domain) {
+            if (\str_starts_with($domain, 'www.') && \in_array(\substr($domain, 4), $domains, true)) {
+                $hasPair = true;
+                break;
+            }
+        }
+        if (!$hasPair) {
+            return $addressList;
+        }
+        \usort($addressList, static function (array $a, array $b): int {
+            $domainA = (string) ($a['domain'] ?? '');
+            $domainB = (string) ($b['domain'] ?? '');
+            $rootA = \str_starts_with($domainA, 'www.') ? \substr($domainA, 4) : $domainA;
+            $rootB = \str_starts_with($domainB, 'www.') ? \substr($domainB, 4) : $domainB;
+            if ($rootA !== $rootB) {
+                return 0;
+            }
+            return \str_starts_with($domainA, 'www.') ? -1 : 1;
+        });
+        return $addressList;
+    }
+
+    /**
+     * 解析网站地址与域名池选择为地址列表
+     */
+    private function parseAddressLines(string $text, string $poolIds = ''): array
+    {
+        $list = [];
+        $seen = [];
+        $poolIdArray = $this->parsePoolIds($poolIds);
+        if (!empty($poolIdArray)) {
+            foreach ($poolIdArray as $poolId) {
+                /** @var DomainPool $pool */
+                $pool = $this->objectManager->getInstance(DomainPool::class, [], false);
+                $pool->loadByPoolId($poolId);
+                if ($pool->getPoolId()) {
+                    $domain = \strtolower($pool->getDomain());
+                    $key = $domain . '|';
+                    if (!isset($seen[$key])) {
+                        $seen[$key] = true;
+                        $list[] = [
+                            'domain' => $domain,
+                            'sub_path' => '',
+                            'pool_id' => $poolId,
+                        ];
+                    }
+                }
+            }
+        }
+        $lines = \preg_split('/\r\n|\r|\n/', $text, -1, \PREG_SPLIT_NO_EMPTY);
+        foreach (($lines ?: []) as $line) {
+            $line = \trim((string) $line);
+            if ($line === '') {
+                continue;
+            }
+            $line = (string) \preg_replace('#^https?://#i', '', $line);
+            $line = \trim($line, "/ \t");
+            if ($line === '') {
+                continue;
+            }
+            $pos = \strpos($line, '/');
+            if ($pos === false) {
+                $domain = \strtolower($line);
+                $subPath = '';
+            } else {
+                $domain = \strtolower((string) \substr($line, 0, $pos));
+                $subPath = '/' . \trim((string) \substr($line, $pos), '/');
+                if ($subPath === '/') {
+                    $subPath = '';
+                }
+            }
+            if ($domain === '') {
+                continue;
+            }
+            $key = $domain . '|' . $subPath;
+            if (!isset($seen[$key])) {
+                $seen[$key] = true;
+                $list[] = ['domain' => $domain, 'sub_path' => $subPath, 'pool_id' => 0];
+            }
+        }
+        return $list;
+    }
+
+    private function domainToCode(string $domain): string
+    {
+        return \str_replace('.', '_', \strtolower(\trim($domain)));
+    }
+
+    /**
+     * 保存站点的域名列表（先删后增，第一个为主域名）
+     */
+    private function saveWebsiteDomains(int $websiteId, array $addressList): void
     {
         /** @var WebsiteDomain $model */
         $model = $this->objectManager->getInstance(WebsiteDomain::class);
@@ -698,27 +817,43 @@ class WebsiteManagement extends BaseController
             ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
             ->delete()
             ->fetch();
-        
+
         $isFirst = true;
-        foreach ($poolIds as $poolId) {
-            $poolId = (int)$poolId;
-            if ($poolId <= 0) {
-                continue;
-            }
-            
+        foreach ($addressList as $item) {
             /** @var WebsiteDomain $newDomain */
             $newDomain = $this->objectManager->getInstance(WebsiteDomain::class, [], false);
             $newDomain->setWebsiteId($websiteId);
-            $newDomain->setPoolId($poolId);
-            $newDomain->syncFromPool();
+            $poolId = (int) ($item['pool_id'] ?? 0);
+            if ($poolId > 0) {
+                $newDomain->setPoolId($poolId);
+                $newDomain->syncFromPool();
+            } else {
+                $newDomain->setDomain((string) ($item['domain'] ?? ''));
+            }
+            $newDomain->setSubPath((string) ($item['sub_path'] ?? ''));
             $newDomain->setIsPrimary($isFirst);
             $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
             $newDomain->save();
             $isFirst = false;
         }
-        
-        // 同步域名池 site_created 状态（已建站的域名创建站点时不再展示）
+
         $pool = $this->objectManager->getInstance(DomainPool::class);
         $pool->syncSiteCreatedFromWebsiteDomainTable();
+    }
+
+    private function formatAddressLinesForWebsite(int $websiteId): string
+    {
+        /** @var WebsiteDomain $model */
+        $model = $this->objectManager->getInstance(WebsiteDomain::class);
+        $rows = $model->getWebsiteDomains($websiteId);
+        $lines = [];
+        foreach ($rows as $row) {
+            $domain = (string) ($row[WebsiteDomain::schema_fields_DOMAIN] ?? '');
+            $subPath = (string) ($row[WebsiteDomain::schema_fields_SUB_PATH] ?? '');
+            if ($domain !== '') {
+                $lines[] = $domain . $subPath;
+            }
+        }
+        return \implode("\n", $lines);
     }
 }
