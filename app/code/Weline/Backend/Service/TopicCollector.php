@@ -28,6 +28,9 @@ class TopicCollector
         $processedCodes = [];
 
         foreach ($providers as $provider) {
+            if (!$provider instanceof NotificationTopicProviderInterface) {
+                continue;
+            }
             $moduleName = $this->getModuleNameFromProvider($provider);
             $topics = $provider->getTopics();
 
@@ -48,11 +51,57 @@ class TopicCollector
     /**
      * 获取所有主题提供者
      *
+     * 从 extends 注册表读取实现类并实例化，与 ChannelAdapterCollector 一致；
+     * 不使用 ObjectManager::getInstances()，因其无参时返回所有已缓存实例，会误含非提供者类型。
+     *
      * @return NotificationTopicProviderInterface[]
      */
     private function getProviders(): array
     {
-        return ObjectManager::getInstances(NotificationTopicProviderInterface::class);
+        $implClasses = $this->getProviderClassesFromExtends();
+        $providers = [];
+        foreach ($implClasses as $implClass) {
+            if (!is_string($implClass) || !class_exists($implClass)) {
+                continue;
+            }
+            $instance = ObjectManager::getInstance($implClass);
+            if ($instance instanceof NotificationTopicProviderInterface) {
+                $providers[] = $instance;
+            }
+        }
+        return $providers;
+    }
+
+    /**
+     * 从各模块 extends 规约合并出 NotificationTopicProviderInterface 实现类列表
+     *
+     * @return string[]
+     */
+    private function getProviderClassesFromExtends(): array
+    {
+        $interface = NotificationTopicProviderInterface::class;
+        $merged = [];
+        $moduleList = \Weline\Framework\App\Env::getInstance()->getModuleList();
+        foreach ($moduleList as $moduleName => $module) {
+            $basePath = $module['base_path'] ?? '';
+            if ($basePath === '' || !($module['status'] ?? false)) {
+                continue;
+            }
+            $extendsFile = rtrim($basePath, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'extends.php';
+            if (!is_file($extendsFile)) {
+                continue;
+            }
+            $config = include $extendsFile;
+            if (!is_array($config) || !isset($config[$interface]) || !is_array($config[$interface])) {
+                continue;
+            }
+            foreach ($config[$interface] as $implClass) {
+                if (is_string($implClass)) {
+                    $merged[] = $implClass;
+                }
+            }
+        }
+        return array_values(array_unique($merged));
     }
 
     /**
