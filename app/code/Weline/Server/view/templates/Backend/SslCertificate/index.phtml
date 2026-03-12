@@ -93,6 +93,24 @@ $stats = $stats ?? [];
         </div>
     </div>
     
+    <!-- 批量操作工具栏 -->
+    <div id="sslCertBatchBar" class="ssl-cert-batch-bar" style="display:none;">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <span class="ssl-cert-batch-count">
+                <?= __('已选择') ?> <strong id="sslCertSelectedCount">0</strong> <?= __('项') ?>
+            </span>
+            <button type="button" class="btn btn-sm btn-outline-primary" onclick="SslCertBatch.batchRenew()">
+                <i class="bi bi-arrow-repeat me-1"></i><?= __('批量续签') ?>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="SslCertBatch.batchDelete()">
+                <i class="bi bi-trash me-1"></i><?= __('批量删除') ?>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="SslCertBatch.clearSelection()">
+                <i class="bi bi-x-lg me-1"></i><?= __('取消选择') ?>
+            </button>
+        </div>
+    </div>
+
     <!-- 证书列表 -->
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-transparent">
@@ -107,9 +125,13 @@ $stats = $stats ?? [];
                 </div>
             <?php else: ?>
                 <div class="table-responsive">
-                    <table class="table table-hover mb-0">
+                    <table class="table table-hover mb-0" id="sslCertTable">
                         <thead class="table-light">
                             <tr>
+                                <th style="width:40px;">
+                                    <input class="form-check-input" type="checkbox" id="sslCertSelectAll"
+                                           onchange="SslCertBatch.toggleAll(this.checked)">
+                                </th>
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
                                 <th><?= __('HTTPS') ?></th>
@@ -131,7 +153,8 @@ $stats = $stats ?? [];
                                 $autoRenew = $cert[\Weline\Server\Model\SslCertificate::schema_fields_AUTO_RENEW];
                                 $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
                                 $daysLeft = $cert['_days_left'] ?? null;
-                                
+                                $isProtectedDomain = \in_array(\strtolower($domain), ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true);
+
                                 $statusBadge = match ($status) {
                                     'active' => 'bg-success',
                                     'expired' => 'bg-danger',
@@ -149,7 +172,16 @@ $stats = $stats ?? [];
                                 ?>
                                 <tr>
                                     <td>
+                                        <input class="form-check-input ssl-cert-row-check" type="checkbox"
+                                               data-domain="<?= htmlspecialchars($domain) ?>"
+                                               data-protected="<?= $isProtectedDomain ? '1' : '0' ?>"
+                                               onchange="SslCertBatch.updateSelection()">
+                                    </td>
+                                    <td>
                                         <strong><?= htmlspecialchars($domain) ?></strong>
+                                        <?php if ($isProtectedDomain): ?>
+                                            <span class="badge bg-secondary ms-1" style="font-size:0.65em;"><?= __('本地') ?></span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <span class="badge <?= $statusBadge ?>"><?= $statusText ?></span>
@@ -203,9 +235,6 @@ $stats = $stats ?? [];
                                                     <i class="bi bi-arrow-repeat"></i> <?= __('续签') ?>
                                                 </button>
                                             <?php endif; ?>
-                                            <?php
-                                            $isProtectedDomain = \in_array(\strtolower($domain), ['localhost', '127.0.0.1', '::1'], true);
-                                            ?>
                                             <button type="button" class="btn btn-outline-danger<?= $isProtectedDomain ? ' disabled' : '' ?>" 
                                                     title="<?= $isProtectedDomain ? __('本地域名证书不允许删除') : __('删除') ?>"
                                                     <?= $isProtectedDomain ? 'disabled' : '' ?>
@@ -300,6 +329,25 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
         </div>
     </div>
 </div>
+
+<style>
+.ssl-cert-batch-bar {
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.5rem;
+    background: var(--backend-color-card-bg, #fff);
+    border: 1px solid var(--backend-color-primary, #0d6efd);
+    box-shadow: var(--backend-shadow-sm, 0 1px 3px rgba(0,0,0,.08));
+}
+.ssl-cert-batch-count {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.875rem;
+}
+.ssl-cert-batch-count strong {
+    color: var(--backend-color-primary, #0d6efd);
+    font-size: 1rem;
+}
+</style>
 
 <script>
 (function() {
@@ -467,5 +515,135 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             BackendToast.error(e.message);
         }
     };
+
+    // --- 批量操作 ---
+    var batchBar = document.getElementById('sslCertBatchBar');
+    var countEl = document.getElementById('sslCertSelectedCount');
+    var selectAllEl = document.getElementById('sslCertSelectAll');
+
+    function getCheckedDomains(opts) {
+        var checkboxes = document.querySelectorAll('.ssl-cert-row-check:checked');
+        var domains = [];
+        checkboxes.forEach(function(cb) {
+            if (opts && opts.skipProtected && cb.getAttribute('data-protected') === '1') {
+                return;
+            }
+            domains.push(cb.getAttribute('data-domain'));
+        });
+        return domains;
+    }
+
+    function getAllCheckedDomains() {
+        var checkboxes = document.querySelectorAll('.ssl-cert-row-check:checked');
+        var domains = [];
+        checkboxes.forEach(function(cb) { domains.push(cb.getAttribute('data-domain')); });
+        return domains;
+    }
+
+    function updateBatchBar() {
+        var all = getAllCheckedDomains();
+        var count = all.length;
+        if (countEl) { countEl.textContent = count; }
+        if (batchBar) { batchBar.style.display = count > 0 ? '' : 'none'; }
+        var allBoxes = document.querySelectorAll('.ssl-cert-row-check');
+        if (selectAllEl) {
+            selectAllEl.checked = allBoxes.length > 0 && count === allBoxes.length;
+            selectAllEl.indeterminate = count > 0 && count < allBoxes.length;
+        }
+    }
+
+    var SslCertBatch = {};
+
+    SslCertBatch.toggleAll = function(checked) {
+        document.querySelectorAll('.ssl-cert-row-check').forEach(function(cb) { cb.checked = checked; });
+        updateBatchBar();
+    };
+
+    SslCertBatch.updateSelection = function() {
+        updateBatchBar();
+    };
+
+    SslCertBatch.clearSelection = function() {
+        document.querySelectorAll('.ssl-cert-row-check').forEach(function(cb) { cb.checked = false; });
+        if (selectAllEl) { selectAllEl.checked = false; selectAllEl.indeterminate = false; }
+        updateBatchBar();
+    };
+
+    SslCertBatch.batchDelete = function() {
+        var domains = getCheckedDomains({skipProtected: true});
+        var allSelected = getAllCheckedDomains();
+        var protectedCount = allSelected.length - domains.length;
+
+        if (domains.length === 0) {
+            if (protectedCount > 0) {
+                BackendToast.warning('<?= __('所选证书均为本地域名证书，不允许删除') ?>');
+            } else {
+                BackendToast.warning('<?= __('请先选择要删除的证书') ?>');
+            }
+            return;
+        }
+
+        var msg = '<?= __('确定要删除选中的 ') ?>' + domains.length + ' <?= __(' 个证书吗？此操作不可恢复！') ?>';
+        if (protectedCount > 0) {
+            msg += '\n<?= __('（本地域名证书将被自动跳过）') ?>';
+        }
+
+        BackendConfirm.show(msg).then(async function(confirmed) {
+            if (!confirmed) return;
+            BackendToast.info('<?= __('正在批量删除，请稍候...') ?>');
+            try {
+                var body = new URLSearchParams();
+                domains.forEach(function(d) { body.append('domains[]', d); });
+                var response = await fetch(baseUrl + 'batch-delete', {
+                    method: 'POST',
+                    body: body
+                });
+                var result = await response.json();
+                if (result.success) {
+                    BackendToast.success(result.message);
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    BackendToast.error(result.message);
+                }
+            } catch (e) {
+                BackendToast.error(e.message);
+            }
+        });
+    };
+
+    SslCertBatch.batchRenew = function() {
+        var domains = getAllCheckedDomains();
+        if (domains.length === 0) {
+            BackendToast.warning('<?= __('请先选择要续签的证书') ?>');
+            return;
+        }
+
+        BackendConfirm.show('<?= __('确定要批量续签选中的 ') ?>' + domains.length + ' <?= __(' 个证书吗？') ?>').then(async function(confirmed) {
+            if (!confirmed) return;
+            BackendToast.info('<?= __('正在批量续签，请稍候...') ?>');
+            try {
+                var body = new URLSearchParams();
+                domains.forEach(function(d) { body.append('domains[]', d); });
+                var response = await fetch(baseUrl + 'batch-renew', {
+                    method: 'POST',
+                    body: body
+                });
+                var result = await response.json();
+                if (result.success) {
+                    BackendToast.success(result.message);
+                } else {
+                    BackendToast.warning(result.message);
+                }
+                if (result.errors && result.errors.length > 0) {
+                    result.errors.forEach(function(err) { BackendToast.error(err); });
+                }
+                setTimeout(function() { location.reload(); }, 2000);
+            } catch (e) {
+                BackendToast.error(e.message);
+            }
+        });
+    };
+
+    window.SslCertBatch = SslCertBatch;
 })();
 </script>

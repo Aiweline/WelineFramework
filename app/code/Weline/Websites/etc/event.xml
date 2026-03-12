@@ -39,6 +39,14 @@
                   shared="true" sort="10"/>
     </event>
     
+    <!--证书删除：清除域名池 HTTPS 和可建站状态-->
+    <event name="Weline_Server::domain::certificate_deleted">
+        <observer name="Weline_Websites::clear_domain_pool_certificate" 
+                  instance="Weline\Websites\Observer\ClearDomainPoolCertificate"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+    
     <!--证书更新：同步更新状态-->
     <event name="Weline_Server::domain::certificate_renewed">
         <observer name="Weline_Websites::update_certificate_status" 

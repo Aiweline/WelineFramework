@@ -61,6 +61,23 @@ return [
     ],
     
     /**
+     * 证书删除事件
+     * 当 SSL 证书被删除（含批量删除、ssl:reload --clear 清理）时触发
+     */
+    'Weline_Server::domain::certificate_deleted' => [
+        'name' => __('证书已删除'),
+        'description' => __('当 SSL 证书被删除时触发，允许其他模块清除关联的 HTTPS 状态、可建站状态等。'),
+        'doc' => 'domain/certificate_deleted.md',
+        'version' => '1.0.0',
+        'type' => 'domain',
+        'data_contract' => [
+            'domain' => ['type' => 'string', 'required' => true, 'description' => '被删除证书的域名'],
+            'cert_id' => ['type' => 'integer', 'required' => false, 'description' => '证书 ID（如有）'],
+            'reason' => ['type' => 'string', 'required' => false, 'description' => '删除原因'],
+        ],
+    ],
+
+    /**
      * 证书更新事件
      * 当证书续签或更新时触发
      */
