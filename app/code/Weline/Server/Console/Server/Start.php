@@ -1251,6 +1251,14 @@ class Start extends CommandAbstract
             }
         }
         
+        /** @var SslCertificateService $sslService */
+        $sslService = ObjectManager::getInstance(SslCertificateService::class);
+
+        // 如果已配置 SSL 域名但本地证书文件丢失，优先从证书管理重载到 app/etc/ssl
+        if (!empty($config['ssl_domain'])) {
+            $this->restoreManagedCertificateForConfig($config, $sslService, (string) $config['host']);
+        }
+
         // 如果未显式配置 SSL，检查是否有已存在的证书可用
         if (empty($config['ssl_cert']) && empty($config['ssl_key'])) {
             $autoSsl = $this->autoDetectSslCertificates();
@@ -1301,6 +1309,10 @@ class Start extends CommandAbstract
             $keyPath = $config['ssl_key'];
             
             if (!\is_file($certPath) || !\is_file($keyPath)) {
+                $this->restoreManagedCertificateForConfig($config, $sslService, (string) $host);
+                $certPath = (string) ($config['ssl_cert'] ?? '');
+                $keyPath = (string) ($config['ssl_key'] ?? '');
+
                 // 本地/内网环境：证书文件不存在时尝试自动生成，而不是直接报错
                 if ($needsLocalCert) {
                     $config['ssl_cert'] = '';
@@ -1379,6 +1391,47 @@ class Start extends CommandAbstract
             return 'localhost';
         }
         return $host;
+    }
+
+    protected function restoreManagedCertificateForConfig(array &$config, SslCertificateService $sslService, string $host): bool
+    {
+        $candidates = [];
+        $configuredDomain = \strtolower(\trim((string) ($config['ssl_domain'] ?? '')));
+        if ($configuredDomain !== '') {
+            $candidates[] = $configuredDomain;
+        }
+
+        $syncDomain = $this->resolveSslDomainForSync($host, $configuredDomain);
+        if ($syncDomain !== '' && !\in_array($syncDomain, $candidates, true)) {
+            $candidates[] = $syncDomain;
+        }
+
+        $sslCertPath = \strtolower(\trim((string) ($config['ssl_cert'] ?? '')));
+        if ($sslCertPath !== '') {
+            $pathDomain = \basename(\dirname($sslCertPath));
+            if ($pathDomain !== '' && $pathDomain !== '.' && $pathDomain !== '..' && !\in_array($pathDomain, $candidates, true)) {
+                $candidates[] = $pathDomain;
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $reload = $sslService->reloadManagedCertificates($candidate);
+            if (($reload['reloaded'] ?? 0) <= 0) {
+                continue;
+            }
+
+            $certDir = $sslService->getCertificateDir($candidate);
+            $certPath = $certDir . 'fullchain.pem';
+            $keyPath = $certDir . 'privkey.pem';
+            if (\is_file($certPath) && \is_file($keyPath)) {
+                $config['ssl_cert'] = $certPath;
+                $config['ssl_key'] = $keyPath;
+                $config['ssl_domain'] = $candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
