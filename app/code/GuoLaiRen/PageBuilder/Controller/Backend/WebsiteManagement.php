@@ -217,12 +217,8 @@ class WebsiteManagement extends BaseController
                     throw new \Exception(__('网站保存失败，未能获取网站ID'));
                 }
                 
-                // 处理域名池选择（pool_id[] 数组）
-                $poolIds = $data['pool_id'] ?? [];
-                if (!is_array($poolIds)) {
-                    $poolIds = array_filter(explode(',', (string)$poolIds));
-                }
-                $poolIds = array_filter(array_map('intval', $poolIds));
+                // 处理域名池选择（pool_id[] 或单个隐藏域逗号分隔）
+                $poolIds = $this->parsePoolIds($data['pool_id'] ?? []);
                 
                 // 保存网站域名关联
                 if (!empty($poolIds)) {
@@ -401,12 +397,8 @@ class WebsiteManagement extends BaseController
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
                 
-                // 处理域名池选择（pool_id[] 数组）
-                $poolIds = $data['pool_id'] ?? [];
-                if (!is_array($poolIds)) {
-                    $poolIds = array_filter(explode(',', (string)$poolIds));
-                }
-                $poolIds = array_filter(array_map('intval', $poolIds));
+                // 处理域名池选择（pool_id[] 或单个隐藏域逗号分隔）
+                $poolIds = $this->parsePoolIds($data['pool_id'] ?? []);
                 
                 // 保存网站域名关联
                 $this->saveWebsiteDomains($postWebsiteId, $poolIds);
@@ -665,6 +657,33 @@ class WebsiteManagement extends BaseController
         return $locales ?: [];
     }
     
+    /**
+     * 解析域名池 ID 列表，兼容 DomainSelect 多选提交格式
+     * - 数组如 [1,2,3] 或 ['1','2','3'] 直接使用
+     * - 数组如 ['1,2,3']（单个逗号分隔串）需展开
+     * - 非数组如 "1,2,3" 按逗号拆分
+     *
+     * @param array|string $input
+     * @return array<int>
+     */
+    private function parsePoolIds($input): array
+    {
+        if (is_array($input)) {
+            $flat = [];
+            foreach ($input as $v) {
+                if (is_string($v) && str_contains($v, ',')) {
+                    $flat = array_merge($flat, array_filter(explode(',', $v)));
+                } else {
+                    $flat[] = $v;
+                }
+            }
+            $input = $flat;
+        } else {
+            $input = array_filter(explode(',', (string) $input));
+        }
+        return array_values(array_filter(array_map('intval', $input), fn ($id) => $id > 0));
+    }
+
     /**
      * 保存站点的域名关联（先删后增）
      * 
