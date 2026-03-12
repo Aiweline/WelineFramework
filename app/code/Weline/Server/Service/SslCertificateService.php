@@ -34,9 +34,11 @@ class SslCertificateService
      */
     public const ISSUER_SELF_SIGNED = 'Weline Self-Signed';
     public const ISSUER_LETS_ENCRYPT = "Let's Encrypt";
+    public const ISSUER_LITESSL = 'Sectigo';
+    public const ISSUER_UNKNOWN = 'Unknown';
     
     /**
-     * 证书申请提供商
+     * 证书申请提供商（三种来源：自签 / Let's Encrypt / LiteSSL）
      */
     public const PROVIDER_LETS_ENCRYPT = 'letsencrypt';
     public const PROVIDER_LITESSL = 'litessl';
@@ -421,10 +423,10 @@ class SslCertificateService
             ];
         }
         
-        // 2. 判断使用自签证书还是 Let's Encrypt
-        // 条件：开发环境 OR 本地域名格式 OR 域名解析到本地/私有地址
-        $useSelfsigned = $this->isDevelopmentEnvironment() 
-            || $this->isLocalDomain($domain) 
+        // 2. 判断使用自签证书还是 ACME（Let's Encrypt / LiteSSL）
+        // 只看域名本身：本地域名/IP、或解析到回环地址 → 自签
+        // 线上域名即使在 dev 环境也用 ACME 申请真证书
+        $useSelfsigned = $this->isLocalDomain($domain) 
             || $this->resolvesToLoopback($domain);
         
         if ($useSelfsigned) {
@@ -846,7 +848,7 @@ CNF;
                 ->setExpiresAt($expiresAt)
                 ->setStatus(SslCertificate::STATUS_ACTIVE)
                 ->setHttpsEnabled(true)
-                ->setAutoRenew($issuer !== self::ISSUER_SELF_SIGNED); // 自签证书不自动续签
+                ->setAutoRenew($provider !== self::PROVIDER_SELF_SIGNED);
 
             // 避免 uk_domain 冲突：若该域名已被其他行占用，合并到该行并更新该行
             $cert = $this->resolveDuplicateDomainCert($cert);
@@ -1093,7 +1095,7 @@ CNF;
                 ->setCertPem($certContents['cert_pem'])
                 ->setKeyPem($certContents['key_pem'])
                 ->setChainPem($certContents['chain_pem'])
-                ->setIssuer($isSelfSigned ? self::ISSUER_SELF_SIGNED : ($issuer !== '' ? $issuer : "Let's Encrypt"))
+                ->setIssuer($isSelfSigned ? self::ISSUER_SELF_SIGNED : ($issuer !== '' ? $issuer : $this->getIssuerByProvider($provider)))
                 ->setProvider($provider)
                 ->setStatus($status)
                 ->setHttpsEnabled($httpsEnabled)
@@ -1138,7 +1140,7 @@ CNF;
             $existing->setData(SslCertificate::schema_fields_ID, $existingId);
             $existing->setDomain($cert->getDomain());
             $existing->setCertType($cert->getCertType());
-            $existing->setProvider($cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT);
+            $existing->setProvider($cert->getProvider() ?: self::PROVIDER_SELF_SIGNED);
             $existing->setStatus($cert->getStatus());
             $existing->setWebsiteId($cert->getWebsiteId());
             return $existing;
@@ -1147,18 +1149,29 @@ CNF;
     }
 
     /**
-     * 基于 issuer 推断 provider（优先保留已知 provider）。
+     * 根据 provider 返回对应的默认 issuer 显示名。
+     * 仅当证书文件无法解析出 issuer 时使用。
      */
+    public function getIssuerByProvider(string $provider): string
+    {
+        return match ($this->normalizeAcmeProvider($provider)) {
+            self::PROVIDER_LETS_ENCRYPT => self::ISSUER_LETS_ENCRYPT,
+            self::PROVIDER_LITESSL => self::ISSUER_LITESSL,
+            self::PROVIDER_SELF_SIGNED => self::ISSUER_SELF_SIGNED,
+            default => self::ISSUER_UNKNOWN,
+        };
+    }
+
     /**
      * 基于证书文件中的实际 issuer 推断 provider。
-     * 当 issuer 不为空时，以 issuer 为准（证书文件是真实来源）；
-     * 仅当 issuer 为空且 DB 已有有效 provider 时保留 DB 值。
+     * issuer 不为空时以 issuer 为准（证书文件是真实来源）；
+     * issuer 为空时保留 DB 中已有的有效 provider。
+     * 均无法判定时返回 self_signed（最安全的默认值）。
      */
     protected function inferProviderByIssuer(string $provider, string $issuer): string
     {
         $issuerLower = \strtolower(\trim($issuer));
 
-        // issuer 不为空时，以证书文件中的实际 issuer 为准
         if ($issuerLower !== '') {
             if (\str_contains($issuerLower, 'self') || \str_contains($issuerLower, 'weline')) {
                 return self::PROVIDER_SELF_SIGNED;
@@ -1169,15 +1182,18 @@ CNF;
             if (\str_contains($issuerLower, 'sectigo') || \str_contains($issuerLower, 'litessl')) {
                 return self::PROVIDER_LITESSL;
             }
+            // ISRG（Internet Security Research Group）是 Let's Encrypt 的母组织
+            if (\str_contains($issuerLower, 'isrg')) {
+                return self::PROVIDER_LETS_ENCRYPT;
+            }
         }
 
-        // issuer 为空或无法识别：保留 DB 中已有的有效 provider
         $normalizedProvider = $this->normalizeAcmeProvider($provider);
         if ($this->isSupportedProvider($normalizedProvider)) {
             return $normalizedProvider;
         }
 
-        return self::PROVIDER_LETS_ENCRYPT;
+        return self::PROVIDER_SELF_SIGNED;
     }
     
     /**
@@ -1786,7 +1802,7 @@ CNF;
                 // 更新证书信息
                 $certInfo = $this->parseCertificate($certPath);
                 $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
-                $issuer = $certInfo['issuer'] ?? "Let's Encrypt";
+                $issuer = $certInfo['issuer'] !== '' ? $certInfo['issuer'] : $this->getIssuerByProvider($provider);
 
                 // 将 PEM 内容写入证书记录，供 ssl:reload 等场景从 DB 恢复证书
                 $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
@@ -1804,14 +1820,17 @@ CNF;
                 $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
                     ->setExpiresAt($expiresAt)
                     ->setIssuer($issuer)
+                    ->setProvider($provider)
                     ->setStatus(SslCertificate::STATUS_ACTIVE)
                     ->setLastRenewAt(\date('Y-m-d H:i:s'))
                     ->setRenewError('')
+                    ->setAutoRenew(true)
                     ->setCertPem($certContents['cert_pem'])
                     ->setKeyPem($certContents['key_pem'])
                     ->setChainPem($certContents['chain_pem']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
-                $cert->setDomain($normalizedDomain);
+                $cert->setDomain($normalizedDomain)
+                    ->setProvider($provider);
                 $cert->save();
 
                 if ($onProgress) {
@@ -2565,7 +2584,7 @@ CNF;
         return [
             'issued_at' => \date('Y-m-d H:i:s', $cert['validFrom_time_t'] ?? \time()),
             'expires_at' => \date('Y-m-d H:i:s', $cert['validTo_time_t'] ?? \strtotime('+90 days')),
-            'issuer' => $cert['issuer']['O'] ?? "Let's Encrypt",
+            'issuer' => $cert['issuer']['O'] ?? $cert['issuer']['CN'] ?? '',
             'subject' => $cert['subject']['CN'] ?? '',
         ];
     }
