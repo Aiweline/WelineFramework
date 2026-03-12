@@ -89,6 +89,22 @@ class Domain extends BackendController
         }
     }
 
+    /**
+     * 格式化异常为完整错误信息（便于排查具体原因）
+     */
+    private function formatThrowableFull(\Throwable $e): string
+    {
+        $parts = [
+            \get_class($e) . ': ' . $e->getMessage(),
+            $e->getFile() . ':' . $e->getLine(),
+        ];
+        $out = \implode(' @ ', $parts);
+        if ($e->getPrevious() instanceof \Throwable) {
+            $out .= ' | Caused by: ' . $this->formatThrowableFull($e->getPrevious());
+        }
+        return $out;
+    }
+
     // ============================================================
     // 域名管理主页
     // ============================================================
@@ -1056,7 +1072,7 @@ class Domain extends BackendController
                     $domain->delete()->fetch();
                     $deleted++;
                 } catch (\Throwable $e) {
-                    $errors[] = "ID {$domainId}: " . $e->getMessage();
+                    $errors[] = "ID {$domainId}: " . $this->formatThrowableFull($e);
                 }
             }
 
@@ -1086,6 +1102,9 @@ class Domain extends BackendController
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('删除失败：%{1}', [$e->getMessage()]),
+                'data' => [
+                    'error_detail' => $this->formatThrowableFull($e),
+                ],
             ]);
         }
     }
@@ -3308,7 +3327,7 @@ class Domain extends BackendController
                     $domain->delete()->fetch();
                     $deleted++;
                 } catch (\Throwable $e) {
-                    $errors[] = "ID {$domainId}: " . $e->getMessage();
+                    $errors[] = "ID {$domainId}: " . $this->formatThrowableFull($e);
                 }
             }
 
@@ -3336,6 +3355,9 @@ class Domain extends BackendController
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('批量取消拉取失败：%{1}', [$e->getMessage()]),
+                'data' => [
+                    'error_detail' => $this->formatThrowableFull($e),
+                ],
             ]);
         }
     }
