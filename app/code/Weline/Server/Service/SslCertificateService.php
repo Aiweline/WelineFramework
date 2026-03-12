@@ -2847,6 +2847,96 @@ CNF;
             }
         }
     }
+
+    /**
+     * 从证书管理中重载证书文件并刷新 WLS 证书映射。
+     *
+     * @return array{processed:int,reloaded:int,expired:int,skipped:int,errors:array<int,string>,domains:array<int,string>}
+     */
+    public function reloadManagedCertificates(?string $domain = null): array
+    {
+        $result = [
+            'processed' => 0,
+            'reloaded' => 0,
+            'expired' => 0,
+            'skipped' => 0,
+            'errors' => [],
+            'domains' => [],
+        ];
+
+        $query = $this->certModel->clearQuery();
+        if ($domain !== null && \trim($domain) !== '') {
+            $query->where(SslCertificate::schema_fields_DOMAIN, \strtolower(\trim($domain)));
+        } else {
+            $query->where(SslCertificate::schema_fields_HTTPS_ENABLED, 1)
+                ->where(
+                    SslCertificate::schema_fields_STATUS,
+                    [
+                        SslCertificate::STATUS_ACTIVE,
+                        SslCertificate::STATUS_EXPIRED,
+                        SslCertificate::STATUS_ERROR,
+                    ],
+                    'IN'
+                );
+        }
+
+        $certificates = $query->select()->fetchArray();
+        if ($certificates === []) {
+            $result['errors'][] = $domain
+                ? (string) __('未找到域名 %{1} 的证书记录', [$domain])
+                : (string) __('证书管理中没有可重载的证书记录');
+            return $result;
+        }
+
+        $expiredCerts = [];
+        foreach ($certificates as $cert) {
+            $result['processed']++;
+            $certDomain = \strtolower(\trim((string) ($cert[SslCertificate::schema_fields_DOMAIN] ?? '')));
+            if ($certDomain === '') {
+                $result['skipped']++;
+                $result['errors'][] = (string) __('存在空域名证书记录，已跳过');
+                continue;
+            }
+
+            $expiresAt = (string) ($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
+            $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
+            if ($isExpired) {
+                $result['expired']++;
+                $expiredCerts[] = [
+                    'domain' => $certDomain,
+                    'expires_at' => $expiresAt,
+                    'cert_id' => (int) ($cert[SslCertificate::schema_fields_ID] ?? 0),
+                ];
+                continue;
+            }
+
+            $certPem = (string) ($cert[SslCertificate::schema_fields_CERT_PEM] ?? '');
+            $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
+            if ($certPem === '' || $keyPem === '') {
+                $result['skipped']++;
+                $result['errors'][] = (string) __('域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载', [$certDomain]);
+                continue;
+            }
+
+            if ($this->restoreCertificateFilesFromData($cert)) {
+                $result['reloaded']++;
+                $result['domains'][] = $certDomain;
+            } else {
+                $result['skipped']++;
+                $result['errors'][] = (string) __('域名 %{1} 的证书文件重载失败', [$certDomain]);
+            }
+        }
+
+        if ($expiredCerts !== []) {
+            $this->notifyExpiredCertificates($expiredCerts);
+        }
+
+        if ($result['reloaded'] > 0) {
+            $this->clearServerCache();
+        }
+
+        return $result;
+    }
     
     /**
      * 清理服务器缓存
