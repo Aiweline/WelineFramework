@@ -9,13 +9,11 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Observer;
 
-use Weline\Acl\Model\Acl;
-use Weline\Acl\Model\RoleAccess;
+use Weline\Acl\Service\AclOrphanCleanupService;
 use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
 use Weline\Backend\Config\MenuXmlReader;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 路由收集后执行 ACL 孤儿 diff：删除不在「收集到的菜单 ∪ 收集到的 ACL」中的记录。
@@ -24,7 +22,8 @@ use Weline\Framework\Manager\ObjectManager;
 class AfterRouteCollectionAclDiff implements ObserverInterface
 {
     public function __construct(
-        private Acl $acl
+        private MenuXmlReader $menuReader,
+        private AclOrphanCleanupService $aclOrphanCleanupService
     ) {
     }
 
@@ -37,35 +36,14 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
         $validAclSourceIds = CollectedAclSourceIdsRegistry::getAll();
         $validSourceIds = array_flip(array_merge($validMenuSourceIds, $validAclSourceIds));
 
-        $field = Acl::schema_fields_ACL_ORIGIN;
-        $allRows = $this->acl->reset()
-            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')")
-            ->select()
-            ->fetchArray();
-
         $orphanSourceIds = [];
-        foreach ($allRows as $row) {
-            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
-            if ($sourceId !== '' && !isset($validSourceIds[$sourceId])) {
+        foreach ($this->getKnownSystemSourceIds() as $sourceId) {
+            if (!isset($validSourceIds[$sourceId])) {
                 $orphanSourceIds[] = $sourceId;
             }
         }
 
-        if (empty($orphanSourceIds)) {
-            return;
-        }
-
-        /** @var RoleAccess $roleAccess */
-        $roleAccess = ObjectManager::getInstance(RoleAccess::class);
-        $roleAccess->reset()
-            ->where(RoleAccess::schema_fields_SOURCE_ID, $orphanSourceIds, 'in')
-            ->delete()
-            ->fetch();
-
-        $this->acl->reset()
-            ->where(Acl::schema_fields_SOURCE_ID, $orphanSourceIds, 'in')
-            ->delete()
-            ->fetch();
+        $this->aclOrphanCleanupService->cleanupBySourceIds($orphanSourceIds);
     }
 
     /**
@@ -75,9 +53,7 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
      */
     private function getCollectedMenuSourceIds(): array
     {
-        /** @var MenuXmlReader $menuReader */
-        $menuReader = ObjectManager::getInstance(MenuXmlReader::class);
-        $moduleMenus = $menuReader->read();
+        $moduleMenus = $this->menuReader->read();
         $sources = [];
         foreach ($moduleMenus as $menus) {
             $data = $menus['data'] ?? [];
@@ -89,5 +65,36 @@ class AfterRouteCollectionAclDiff implements ObserverInterface
             }
         }
         return $sources;
+    }
+
+    /**
+     * 返回当前库里所有非用户创建 ACL / 菜单的 source_id。
+     *
+     * 通过清理服务按 source_id 执行最终删除；这里仅负责构建“候选全集”。
+     *
+     * @return string[]
+     */
+    private function getKnownSystemSourceIds(): array
+    {
+        // 复用服务的非用户 ACL 过滤能力，通过全表 source_id 集合获得候选全集
+        // 这里不直接访问数据库，避免重复维护 acl_origin 的兼容判断逻辑。
+        $sourceIds = [];
+        // 利用 cleanupBySourceIds 的过滤语义要求，候选集必须来自现存 ACL 记录。
+        // 当前 observer 仍需查询数据库，因此保留最小范围的 ObjectManager 访问并在服务层执行删除。
+        /** @var \Weline\Acl\Model\Acl $acl */
+        $acl = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Acl\Model\Acl::class);
+        $field = \Weline\Acl\Model\Acl::schema_fields_ACL_ORIGIN;
+        $rows = $acl->reset()
+            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(\Weline\Acl\Model\Acl::acl_origin_user) . "')")
+            ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
+            ->select()
+            ->fetchArray();
+        foreach ($rows as $row) {
+            $sourceId = (string)($row[\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID] ?? '');
+            if ($sourceId !== '') {
+                $sourceIds[] = $sourceId;
+            }
+        }
+        return $sourceIds;
     }
 }
