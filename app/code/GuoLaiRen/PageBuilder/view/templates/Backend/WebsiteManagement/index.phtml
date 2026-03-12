@@ -269,11 +269,11 @@ $search = $this->getData('search') ?: '';
                             <button type="submit" class="btn btn-outline-primary">
                                 <i class="mdi mdi-magnify"></i> <lang>搜索</lang>
                             </button>
-                            <?php if (!empty($search)): ?>
+                            <?php if (!empty($search)) { ?>
                                 <a href="<?= $this->getBackendUrl('*/backend/websiteManagement') ?>" class="btn btn-outline-secondary" id="pagebuilder-website-clear-search">
                                     <i class="mdi mdi-close"></i> <lang>清除</lang>
                                 </a>
-                            <?php endif; ?>
+                            <?php } ?>
                         </form>
                         <?php $addLabel = $this->getData('add_site_label') ?: __('新建站点'); ?>
                         <w:websites:website:build

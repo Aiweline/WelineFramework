@@ -68,6 +68,7 @@ class DomainSelect implements TaglibInterface
             'auto-fill-address' => false,  // 自动填充地址的目标 textarea ID（多选时填充多行）
             'site-ready-only' => true,    // v1.6.0: 是否只显示可建站且未已建站（site_ready=1 且 site_created=0），默认 true
             'value-type' => false,         // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
+            'website-id' => false,        // 编辑站点时传入当前 website_id，列表中包含本站已绑定域名便于取消绑定
         ];
     }
 
@@ -99,6 +100,8 @@ class DomainSelect implements TaglibInterface
             
             // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
             $valueType = strtolower(trim($attributes['value-type'] ?? 'domain'));
+            $websiteIdAttr = trim((string) ($attributes['website-id'] ?? ''));
+            $websiteId = str_contains($websiteIdAttr, '<?=') ? 0 : (int) $websiteIdAttr;
             
             /** @var Url $url */
             $url = w_obj(Url::class);
@@ -389,6 +392,9 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var isMultiple = ' . ($isMultiple ? 'true' : 'false') . ';';
             $html[] = 'var siteReadyOnly = ' . ($siteReadyOnly ? 'true' : 'false') . ';';
             $html[] = 'var valueType = ' . json_encode($valueType) . ';';
+            $html[] = 'var websiteId = ' . (str_contains($websiteIdAttr, '<?=')
+                ? $websiteIdAttr
+                : (string) $websiteId) . ';';
             $html[] = 'var autoFillCode = ' . json_encode($autoFillCode) . ';';
             $html[] = 'var autoFillUrl = ' . json_encode($autoFillUrl) . ';';
             $html[] = 'var autoFillName = ' . json_encode($autoFillName) . ';';
@@ -675,7 +681,7 @@ class DomainSelect implements TaglibInterface
             $html[] = 'function loadData() {';
             $html[] = '  loading.style.display = "block";';
             $html[] = '  list.innerHTML = "";';
-            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false");';
+            $html[] = '  var apiUrl = ep + "?limit=" + limit + "&grouped=true&site_ready=" + (siteReadyOnly ? "true" : "false") + (websiteId > 0 ? "&website_id=" + websiteId : "");';
             $html[] = '  fetch(apiUrl)';
             $html[] = '    .then(function(r) { return r.json(); })';
             $html[] = '    .then(function(res) {';
@@ -761,12 +767,22 @@ class DomainSelect implements TaglibInterface
             $html[] = 'if (manualHttpsMode) {';
             $html[] = '  manualHttpsMode.addEventListener("change", toggleManualHttpsFields);';
             $html[] = '}';
-            $html[] = 'if (manualCreateBtn && manualOffcanvasEl && window.bootstrap && bootstrap.Offcanvas) {';
-            $html[] = '  var manualCanvas = new bootstrap.Offcanvas(manualOffcanvasEl);';
+            $html[] = 'var bs = (typeof window !== "undefined" && window.bootstrap) || (typeof window.parent !== "undefined" && window.parent.bootstrap);';
+            $html[] = 'var manualCanvas = (manualOffcanvasEl && bs && bs.Offcanvas) ? new bs.Offcanvas(manualOffcanvasEl) : null;';
+            $html[] = 'function showManualOffcanvas() {';
+            $html[] = '  if (manualCanvas) { manualCanvas.show(); return; }';
+            $html[] = '  if (manualOffcanvasEl) { manualOffcanvasEl.classList.add("show"); document.body.classList.add("offcanvas-backdrop"); }';
+            $html[] = '}';
+            $html[] = 'function hideManualOffcanvas() {';
+            $html[] = '  if (manualCanvas) { manualCanvas.hide(); return; }';
+            $html[] = '  if (manualOffcanvasEl) { manualOffcanvasEl.classList.remove("show"); document.body.classList.remove("offcanvas-backdrop"); }';
+            $html[] = '}';
+            $html[] = 'if (manualCreateBtn && manualOffcanvasEl) {';
             $html[] = '  manualCreateBtn.addEventListener("click", function(e) {';
             $html[] = '    e.stopPropagation();';
+            $html[] = '    e.preventDefault();';
             $html[] = '    loadManualAccounts();';
-            $html[] = '    manualCanvas.show();';
+            $html[] = '    showManualOffcanvas();';
             $html[] = '  });';
             $html[] = '  if (manualSubmitBtn) {';
             $html[] = '    manualSubmitBtn.addEventListener("click", function() {';
@@ -800,7 +816,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '        manualSubmitBtn.disabled = false;';
             $html[] = '        if (!res || res.code !== 200) { notify((res && res.msg) ? res.msg : "' . addslashes(__('创建失败')) . '", "error"); return; }';
             $html[] = '        notify((res.msg || "' . addslashes(__('创建成功')) . '"), "success");';
-            $html[] = '        manualCanvas.hide();';
+            $html[] = '        hideManualOffcanvas();';
             $html[] = '        cache = null;';
             $html[] = '        loadData();';
             $html[] = '      }).catch(function(){ manualSubmitBtn.disabled = false; notify("' . addslashes(__('请求失败')) . '", "error"); });';

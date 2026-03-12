@@ -169,11 +169,12 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                             multiple="true"
                             value-type="pool_id"
                             site-ready-only="true"
+                            website-id="<?= $isEdit ? (int)($website['website_id'] ?? 0) : 0 ?>"
                             auto-fill-code="code"
                             auto-fill-name="name"
                         />
                         <div class="form-text-hint">
-                            <lang>仅显示可建站且未被使用的域名；已建站或等待中的域名不会出现在列表中。当前站点的访问路径由下方子路径统一控制</lang>
+                            <lang>仅显示可建站且未被其他站点使用的域名；编辑时当前站点已绑定的域名会显示在列表中，可取消绑定。当前站点的访问路径由下方子路径统一控制</lang>
                         </div>
                     </div>
 
