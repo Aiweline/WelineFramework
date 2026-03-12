@@ -52,4 +52,9 @@
         <observer name="Weline_Framework_Database::schema_change_clear_cache" instance="Weline\Framework\Database\Observer\SchemaChangeClearCacheObserver" disabled="false" shared="true" sort="100"/>
     </event>
 
+    <!-- 响应重定向前：若有 ResultManager 结果且为后台 iframe，通过事件取桥接页 URL 并替换重定向目标 -->
+    <event name="Framework_Http::response_redirect_before">
+        <observer name="Weline_Framework_Manager::result_bridge_redirect" instance="Weline\Framework\Http\Observer\ResultBridgeRedirect" disabled="false" shared="true" sort="50"/>
+    </event>
+
 </config>
