@@ -847,12 +847,13 @@ class Url implements UrlInterface
                 $data['url'] = $url;
                 $parsed_url = self::parse_url($url);
                 $data['parse'] = is_array($parsed_url) ? $parsed_url : [];
-                $data['website_url'] = $site_url;
+                $matchedWebsiteUrl = $site_url_for_match;
+                $data['website_url'] = $matchedWebsiteUrl;
                 $data['website'] = $site;
                 self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
                 self::$parserServer['WELINE_WEBSITE_ID'] = $site['website_id'];
-                // 确保 WELINE_WEBSITE_URL 使用当前请求的协议
-                self::$parserServer['WELINE_WEBSITE_URL'] = self::ensureCurrentScheme($site['url']);
+                // 使用当前请求的协议、host 和端口，避免 WLS 特殊端口丢失
+                self::$parserServer['WELINE_WEBSITE_URL'] = $matchedWebsiteUrl;
                 self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
                 self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
                 if (empty(self::$parserServer['WELINE_USER_LANG'])) {
@@ -865,7 +866,7 @@ class Url implements UrlInterface
                 if (empty($uri)) {
                     $query_part = self::parse_url($url, 'query') ?: '';
                     $query = $query_part ? '?' . $query_part : '';
-                    $data['url'] = $site_url . $query;
+                    $data['url'] = $matchedWebsiteUrl . $query;
                     $data['server'] = self::$parserServer;
                     $data['language'] = self::$parserServer['WELINE_USER_LANG'];
                     $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'];
