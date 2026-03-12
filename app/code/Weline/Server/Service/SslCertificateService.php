@@ -1431,6 +1431,23 @@ CNF;
         return \implode("\n", $certs);
     }
 
+    /**
+     * 从 fullchain PEM 中提取叶子证书（第一张证书）。
+     */
+    protected function extractLeafCertFromFullchain(string $fullchainPem): string
+    {
+        $start = \strpos($fullchainPem, '-----BEGIN CERTIFICATE-----');
+        if ($start === false) {
+            return '';
+        }
+        $end = \strpos($fullchainPem, '-----END CERTIFICATE-----', $start);
+        if ($end === false) {
+            return '';
+        }
+        $end += \strlen('-----END CERTIFICATE-----');
+        return \trim(\substr($fullchainPem, $start, $end - $start));
+    }
+
     protected function restoreCertificateFilesFromData(array $cert): bool
     {
         $domain = \strtolower(\trim((string) ($cert[SslCertificate::schema_fields_DOMAIN] ?? '')));
@@ -1459,6 +1476,12 @@ CNF;
         }
         if ($chainPem !== '') {
             @\file_put_contents($chainPath, $chainPem);
+        }
+        // 补写 cert.pem（叶子证书）确保 4 文件齐全
+        $leafCertPath = $certDir . 'cert.pem';
+        $leafPem = $this->extractLeafCertFromFullchain($certPem);
+        if ($leafPem !== '') {
+            @\file_put_contents($leafCertPath, $leafPem);
         }
         @\chmod($certPath, 0644);
         @\chmod($keyPath, 0600);
@@ -1759,6 +1782,17 @@ CNF;
 
                 // 将 PEM 内容写入证书记录，供 ssl:reload 等场景从 DB 恢复证书
                 $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+                // ACME 只生成 fullchain.pem + privkey.pem，补全 chain.pem + cert.pem 到磁盘
+                if ($certContents['chain_pem'] !== '' && !\is_file($chainPath)) {
+                    @\file_put_contents($chainPath, $certContents['chain_pem']);
+                }
+                $leafCertPath = $certDir . 'cert.pem';
+                if (!\is_file($leafCertPath) && $certContents['cert_pem'] !== '') {
+                    $leafPem = $this->extractLeafCertFromFullchain($certContents['cert_pem']);
+                    if ($leafPem !== '') {
+                        @\file_put_contents($leafCertPath, $leafPem);
+                    }
+                }
                 $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
                     ->setExpiresAt($expiresAt)
                     ->setIssuer($issuer)
@@ -2970,25 +3004,10 @@ CNF;
             $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
             if ($certPem === '' || $keyPem === '') {
                 if ($clearNoPem) {
-                    $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
-                    if ($certId > 0) {
-                        $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
-                        $toDelete->load($certId);
-                        if ($toDelete->getCertId()) {
-                            $toDelete->delete()->fetch();
-                            $result['deleted']++;
-                            $result['deleted_domains'][] = $certDomain;
-                        } else {
-                            $result['skipped']++;
-                            $result['errors'][] = (string) __('域名 %{1} 的证书记录加载失败', [$certDomain]);
-                        }
-                    } else {
-                        $result['skipped']++;
-                        $result['errors'][] = (string) __('域名 %{1} 的证书记录无效', [$certDomain]);
-                    }
+                    $this->clearDomainCertificate($certDomain, $cert, $result);
                 } else {
                     $result['skipped']++;
-                    $result['errors'][] = (string) __('域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载', [$certDomain]);
+                    $result['errors'][] = (string) __('域名 %{1} 的证书管理记录缺少 PEM 内容，无法重载（使用 --clear 可清除并重置）', [$certDomain]);
                 }
                 continue;
             }
@@ -2997,8 +3016,12 @@ CNF;
                 $result['reloaded']++;
                 $result['domains'][] = $certDomain;
             } else {
-                $result['skipped']++;
-                $result['errors'][] = (string) __('域名 %{1} 的证书文件重载失败', [$certDomain]);
+                if ($clearNoPem) {
+                    $this->clearDomainCertificate($certDomain, $cert, $result);
+                } else {
+                    $result['skipped']++;
+                    $result['errors'][] = (string) __('域名 %{1} 的证书文件恢复失败（使用 --clear 可清除并重置）', [$certDomain]);
+                }
             }
         }
 
@@ -3016,6 +3039,48 @@ CNF;
     /**
      * 清理服务器缓存
      */
+    /**
+     * 清除指定域名的证书：删除 DB 记录 + 清除磁盘证书目录，使该域名回到"无证书"状态。
+     *
+     * @param array<string, mixed> $cert 证书行数据
+     * @param array<string, mixed> &$result reloadManagedCertificates 的结果数组（引用修改）
+     */
+    protected function clearDomainCertificate(string $domain, array $cert, array &$result): void
+    {
+        $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
+
+        // 1. 删除 DB 记录
+        if ($certId > 0) {
+            try {
+                $toDelete = ObjectManager::getInstance(SslCertificate::class, [], false);
+                $toDelete->load($certId);
+                if ($toDelete->getCertId()) {
+                    $toDelete->delete()->fetch();
+                }
+            } catch (\Throwable $e) {
+                $result['errors'][] = (string) __('域名 %{1} 删除 DB 记录失败：%{2}', [$domain, $e->getMessage()]);
+            }
+        }
+
+        // 2. 清除磁盘证书目录（app/etc/ssl/{domain}/）
+        $certDir = $this->certBaseDir . \strtolower($domain) . DS;
+        if (\is_dir($certDir)) {
+            $files = @\scandir($certDir);
+            if ($files !== false) {
+                foreach ($files as $file) {
+                    if ($file === '.' || $file === '..') {
+                        continue;
+                    }
+                    @\unlink($certDir . $file);
+                }
+            }
+            @\rmdir($certDir);
+        }
+
+        $result['deleted']++;
+        $result['deleted_domains'][] = $domain;
+    }
+
     protected function clearServerCache(): void
     {
         // 重新生成证书映射文件（含泛域名展开）+ 自动通知 Worker 热重载
