@@ -125,7 +125,8 @@ class Page extends FrontendController
         
         // 检查是否为预览模式
         $isPreview = $this->request->getGet('preview') == '1';
-        $previewPageId = $isPreview ? (int)$this->request->getGet('page_id') : 0;
+        // page_id 不仅用于预览，也用于 URL rewrite 解码后精准命中页面
+        $requestedPageId = (int)$this->request->getGet('page_id', 0);
         $previewStyleCode = $isPreview ? trim((string)$this->request->getGet('style_code', '')) : '';
 
         // 获取URL中的语言参数
@@ -141,6 +142,7 @@ class Page extends FrontendController
 
         // 获取当前网站ID；预览模式优先从 URL 的 website_id 配合 handle 解码，避免跨站预览时 getCurrentWebsiteId 不匹配
         $websiteId = \Weline\UrlManager\Model\UrlRewrite::getCurrentWebsiteId();
+        $response = $this->request->getResponse();
         if ($isPreview) {
             $websiteIdParam = $this->request->getGet('website_id');
             if ($websiteIdParam !== null && $websiteIdParam !== '') {
@@ -150,25 +152,31 @@ class Page extends FrontendController
         
         $page = null;
 
-        // 真实预览：与可视化预览一致，按 page_id 加载页面并禁止缓存，避免 handle 歧义或缓存导致显示错误模板/数据
-        if ($previewPageId > 0) {
-            $response = $this->request->getResponse();
-            $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
-            $response->setHeader('Pragma', 'no-cache');
-            $response->setHeader('Expires', '0');
-            $response->setHeader('X-Accel-Expires', '0');
+        // 预览和 rewrite 解码都优先按 page_id 精准加载页面，避免 handle 歧义导致命中旧模板
+        if ($requestedPageId > 0) {
+            if ($isPreview) {
+                $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0');
+                $response->setHeader('Pragma', 'no-cache');
+                $response->setHeader('Expires', '0');
+                $response->setHeader('X-Accel-Expires', '0');
+            }
             $page = clone $this->pageModel;
             $page->clearData();
-            $page->load($previewPageId);
+            $page->load($requestedPageId);
             if ($page->getId()) {
                 $pageWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
                 if ($pageWebsiteId > 0) {
                     $websiteId = $pageWebsiteId;
                 }
+                if (!$isPreview) {
+                    $pageStatus = (int)($page->getData(PageModel::schema_fields_STATUS) ?? PageModel::STATUS_DRAFT);
+                    if ($pageStatus !== PageModel::STATUS_PUBLISHED) {
+                        $page = null;
+                    }
+                }
             }
         } elseif ($isPreview) {
             // 预览模式但未带 page_id 时也禁止缓存，避免看到旧模板
-            $response = $this->request->getResponse();
             $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
             $response->setHeader('Pragma', 'no-cache');
             $response->setHeader('Expires', '0');
@@ -217,7 +225,8 @@ class Page extends FrontendController
             $page->clearData();
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
-                ->where(PageModel::schema_fields_HANDLE, $handle);
+                ->where(PageModel::schema_fields_HANDLE, $handle)
+                ->order(PageModel::schema_fields_ID, 'DESC');
             
             // 如果不是预览模式，只显示已发布的页面
             if (!$isPreview) {
@@ -232,7 +241,8 @@ class Page extends FrontendController
                 $page->clearData();
                 $page->clear()
                     ->where(PageModel::schema_fields_WEBSITE_ID, 0)
-                    ->where(PageModel::schema_fields_HANDLE, $handle);
+                    ->where(PageModel::schema_fields_HANDLE, $handle)
+                    ->order(PageModel::schema_fields_ID, 'DESC');
                 if (!$isPreview) {
                     $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
                 }
