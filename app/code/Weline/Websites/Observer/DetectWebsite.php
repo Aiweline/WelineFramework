@@ -100,7 +100,10 @@ class DetectWebsite implements ObserverInterface
     {
         /** @var DataObject $data */
         $data = $event->getData();
-        $data->setData('website_url', $site->getUrl());
+        // getData('url') 可能已被 findSiteByWebsiteDomain/findSiteByWebsiteUrl 改写为
+        // 带当前请求端口的值，优先使用它；否则回退 getUrl()（数据库原始值）
+        $websiteUrl = $site->getData('url') ?: $site->getUrl();
+        $data->setData('website_url', $websiteUrl);
         $data->setData('website_id', $site->getWebsiteId());
         $data->setData('code', $site->getCode());
         $data->setData('default_currency', $site->getDefaultCurrency());
