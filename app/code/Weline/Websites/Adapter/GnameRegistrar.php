@@ -998,10 +998,10 @@ class GnameRegistrar implements DomainRegistrarInterface
             $params['mx'] = (string) $record['priority'];
         }
 
-        // 官方文档为 jiexi/add，优先使用
-        $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
+        // 官方文档「添加域名解析」请求 URL 为 /api/resolution/add（文档页为 /domain/api/jiexi/add，非接口路径）
+        $response = $this->makeRequest('api/resolution/add', $params, $credentials);
         if ((int) ($response['code'] ?? 0) !== 1) {
-            $response = $this->makeRequest('api/resolution/add', $params, $credentials);
+            $response = $this->makeRequest('api/jiexi/add', $params, $credentials);
         }
         if ((int) ($response['code'] ?? 0) !== 1) {
             $legacyParams = $params;
