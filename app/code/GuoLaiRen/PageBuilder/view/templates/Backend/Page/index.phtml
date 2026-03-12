@@ -181,7 +181,32 @@
                                                         $website->load($websiteId);
                                                         if ($website->getId()) {
                                                             $websiteName = $website->getData(\Weline\Websites\Model\Website::schema_fields_NAME);
-                                                            $websiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+                                                            $rawWebsiteUrl = $website->getData(\Weline\Websites\Model\Website::schema_fields_URL);
+
+                                                            // 加上请求的端口
+                                                            if (!empty($rawWebsiteUrl)) {
+                                                                $parsedUrl = parse_url($rawWebsiteUrl);
+                                                                $requestPort = $_SERVER['SERVER_PORT'] ?? null;
+                                                                // 若 $parsedUrl 没有端口且请求端口不是默认端口（80, 443），则加上端口
+                                                                $scheme = $parsedUrl['scheme'] ?? 'http';
+                                                                $host = $parsedUrl['host'] ?? '';
+                                                                $port = $parsedUrl['port'] ?? null;
+                                                                $path = $parsedUrl['path'] ?? '';
+                                                                $query = isset($parsedUrl['query']) ? ('?' . $parsedUrl['query']) : '';
+                                                                $fragment = isset($parsedUrl['fragment']) ? ('#' . $parsedUrl['fragment']) : '';
+                                                                if (!$port && $requestPort
+                                                                    && (($scheme == 'http' && $requestPort != 80)
+                                                                        || ($scheme == 'https' && $requestPort != 443))) {
+                                                                    $portStr = ':' . $requestPort;
+                                                                } else if ($port) {
+                                                                    $portStr = ':' . $port;
+                                                                } else {
+                                                                    $portStr = '';
+                                                                }
+                                                                $websiteUrl = $scheme . '://' . $host . $portStr . $path . $query . $fragment;
+                                                            } else {
+                                                                $websiteUrl = '';
+                                                            }
                                                         }
                                                     } catch (\Exception $e) {
                                                         // 忽略错误
