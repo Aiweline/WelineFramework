@@ -784,6 +784,8 @@ class DomainSelect implements TaglibInterface
             $html[] = '    loadManualAccounts();';
             $html[] = '    showManualOffcanvas();';
             $html[] = '  });';
+            $html[] = '  var manualCloseBtn = manualOffcanvasEl.querySelector(\'.btn-close[data-bs-dismiss="offcanvas"], .btn-close\');';
+            $html[] = '  if (manualCloseBtn) manualCloseBtn.addEventListener("click", function() { hideManualOffcanvas(); });';
             $html[] = '  if (manualSubmitBtn) {';
             $html[] = '    manualSubmitBtn.addEventListener("click", function() {';
             $html[] = '      var domainVal = (manualDomainInput && manualDomainInput.value ? manualDomainInput.value : "").trim();';
