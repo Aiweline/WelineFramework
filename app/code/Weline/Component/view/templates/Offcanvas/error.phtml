@@ -172,11 +172,9 @@
     </div>
     <div class="card-body">
         <i class="mdi mdi-alert-outline error-icon"></i>
-        <h4 class="error-title">
-            <lang>{{req.msg}}</lang>
-        </h4>
+        <h4 class="error-title">{{msg}}</h4>
         <?php if (!empty($this->getData('content'))): ?>
-            <p class="error-content">{{req.content}}</p>
+            <p class="error-content">{{content}}</p>
         <?php endif; ?>
         <p class="countdown-text mb-0" id="countdown"></p>
     </div>
