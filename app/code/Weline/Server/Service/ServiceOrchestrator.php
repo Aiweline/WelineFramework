@@ -2488,6 +2488,11 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Cache clear broadcast sent'));
                 break;
 
+            case ControlMessage::ACTION_SSL_CERT_RELOAD:
+                $this->broadcastSslCertReload();
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'SSL cert reload broadcast sent'));
+                break;
+
             case ControlMessage::ACTION_MAINTENANCE_ENABLE:
                 $result = $this->enableMaintenanceMode();
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
@@ -2941,6 +2946,29 @@ class ServiceOrchestrator
             $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::cacheClear());
         }
         WlsLogger::info_('[IPC] CACHE_CLEAR -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
+    }
+
+    /**
+     * 广播 SSL 证书热重载命令给所有 Worker（含 SSL Worker 和普通 Worker）。
+     * Worker 收到后重新读取 ssl_certificate_map.json 并更新进程内 SNI 证书映射。
+     */
+    private function broadcastSslCertReload(): void
+    {
+        if ($this->controlServer === null) {
+            return;
+        }
+        $targets = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->ipcClientId === null) {
+                continue;
+            }
+            if ($instance->role !== ControlMessage::ROLE_WORKER) {
+                continue;
+            }
+            $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::sslCertReload());
+        }
+        WlsLogger::info_('[IPC] SSL_CERT_RELOAD -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
     }
 
     /**
