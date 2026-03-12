@@ -910,6 +910,62 @@ private function syncRoutesFromFile(string $filePath, string $type): void
 
 ---
 
+### Q10: WLS 下 SEO 解码后，为什么同一请求里仍然拿到旧的 `REQUEST_URI` / `$_GET` / `RequestContext`？
+
+**典型症状：**
+```text
+友好地址：/cashgameapk
+SEO 解码后内部应为：/pagebuilder/frontend/page/view?handle=cashgameapk&page_id=32&website_id=13
+
+但同一请求后半段：
+- Controller 里 getGet('page_id') 还是空
+- Request::getUri() 还是旧的 /cashgameapk
+- RequestContext::websiteId() 还是解码前状态
+```
+
+**根本原因：**
+在 WLS 模式下，`Url::decode_url()` / SEO Observer 即使改了事件里的 URL 字符串，  
+**当前请求对象和上下文不会自动重新同步**。尤其是：
+
+1. `RequestContext` 只在请求开始时 `init()/syncFromServer()` 一次  
+2. `Request` 的 `ParameterBag` 会缓存初始 `$_GET`  
+3. `Request::getUri()` / `parse_url()` 会缓存第一次读取的 URI
+
+所以，**不能只改 `$url` 或 `$_GET`**，必须把当前请求的 WLS 状态一起更新。
+
+**正确做法：**
+```php
+// 1. 更新当前请求的全局状态
+$_SERVER['REQUEST_URI'] = $decodedUri;
+$_SERVER['QUERY_STRING'] = $decodedQuery;
+$_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $originFriendlyUri;
+$_GET = $decodedParams;
+
+// 2. 同步 RequestContext
+\Weline\Framework\Runtime\RequestContext::syncFromServer();
+\Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
+
+// 3. 刷新当前 Request 对象缓存
+$request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+$request->resetParameterBag()
+    ->invalidateUriCache()
+    ->unsetData('params')
+    ->setServer('REQUEST_URI', $decodedUri)
+    ->setServer('QUERY_STRING', $decodedQuery);
+```
+
+**额外注意：**
+- `invalidateUriCache()` 不仅要清 `uri/origin_uri/uri_cache_key`，还要清 `parse_url` 缓存。
+- 这是**同一请求内状态同步**，不是 302 跳转。
+- 适用场景：SEO 重写解码、PageBuilder 友好地址解码、运行中把 URL 映射成内部路由。
+
+**历史案例（2026-03-12）：**
+PageBuilder 预览地址在直连 `?handle=...&preview=1&page_id=32&style_code=fitness-pro` 下正常，
+但 WLS 友好地址解码后同一请求仍读取旧 Request 状态，导致命中错误模板。
+修复：在 `RouterRewrite` 中同步 `$_SERVER`、`RequestContext`、`Request ParameterBag/URI cache`。
+
+---
+
 ## 参考资料
 
 - Weline Framework 路由文档
