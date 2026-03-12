@@ -772,67 +772,47 @@ class Url implements UrlInterface
             and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
             return $url;
         }
-        // 优化：使用缓存跨请求缓存网站数据，避免每次请求都查询数据库
-        // 如果 self::$parserSites 已经初始化，直接使用，避免重复查询和事件分发
+        // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
         if (empty(self::$parserSites)) {
-            // 使用网站缓存
-            $websiteCache = w_cache('website');
-            $cachedSites = $websiteCache->get('all_sites');
-            
-            if ($cachedSites !== false && is_array($cachedSites)) {
-                // 使用缓存数据，转换为 self::$parserSites 格式
-                foreach ($cachedSites as $site) {
-                    $site_url = $site['url'] ?? '';
-                    if ($site_url) {
-                        self::$parserSites[$site_url] = $site;
-                    }
+            self::$parsingInProgress = true;
+            try {
+                $detectWebsiteStart = \microtime(true);
+                $detect_website_data = new DataObject([
+                    'sites' => [],
+                    'site_sample' => [
+                        "website_id" => 1,
+                        "name" => "默认网站",
+                        "code" => "default",
+                        "url" => "http://127.0.0.1:9981/default",
+                        "default_currency" => "CNY",
+                        "default_language" => "zh_Hans_CN",
+                        "default_timezone" => "Asia/Shanghai",
+                    ],
+                    'get_sites' => true
+                ]);
+                $eventManager = w_obj(EventsManager::class);
+                $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
+                $detectWebsiteEnd = \microtime(true);
+                $detectWebsiteDuration = \round(($detectWebsiteEnd - $detectWebsiteStart) * 1000, 2);
+                if ($detectWebsiteDuration > 100) {
+                    w_log_warning('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
                 }
-            } else {
-                // 缓存不存在或无效，从数据库查询
-                // 设置重入保护标志，防止事件处理过程中触发循环
-                self::$parsingInProgress = true;
-                try {
-                    $detectWebsiteStart = \microtime(true);
-                    $detect_website_data = new DataObject([
-                        'sites' => [],
-                        'site_sample' => [
-                            "website_id" => 1,
-                            "name" => "默认网站",
-                            "code" => "default",
-                            "url" => "http://127.0.0.1:9981/default",
-                            "default_currency" => "CNY",
-                            "default_language" => "zh_Hans_CN",
-                            "default_timezone" => "Asia/Shanghai",
-                        ],
-                        'get_sites' => true
-                    ]);
-                    $eventManager = w_obj(EventsManager::class);
-                    $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
-                    $detectWebsiteEnd = \microtime(true);
-                    $detectWebsiteDuration = \round(($detectWebsiteEnd - $detectWebsiteStart) * 1000, 2);
-                    if ($detectWebsiteDuration > 100) {
-                        w_log_warning('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
-                    }
-                    $sites = $detect_website_data->getData('sites');
-                    # 找出站点链接最长的，依次写入self::$parserSites
-                    $tmp = [];
-                    foreach ($sites as $site) {
-                        $site_url = $site['url'];
-                        $length = strlen($site_url);
-                        $tmp[$length] = $site;
-                    }
-                    krsort($tmp);
-                    foreach ($tmp as $site) {
-                        $site_url = $site['url'];
-                        self::$parserSites[$site_url] = $site;
-                    }
-                    
-                    // 将查询结果保存到缓存
-                    $websiteCache->set('all_sites', $sites);
-                } finally {
-                    // 确保无论成功或异常都重置标志
-                    self::$parsingInProgress = false;
+                $sites = $detect_website_data->getData('sites');
+                # 找出站点链接最长的，依次写入self::$parserSites
+                $tmp = [];
+                foreach ($sites as $site) {
+                    $site_url = $site['url'];
+                    $length = strlen($site_url);
+                    $tmp[$length] = $site;
                 }
+                krsort($tmp);
+                foreach ($tmp as $site) {
+                    $site_url = $site['url'];
+                    self::$parserSites[$site_url] = $site;
+                }
+            } finally {
+                // 确保无论成功或异常都重置标志
+                self::$parsingInProgress = false;
             }
         }
         # 匹配网站 self::$parserSites 最长倒序
