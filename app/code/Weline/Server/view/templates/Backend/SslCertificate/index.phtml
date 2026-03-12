@@ -297,163 +297,170 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
 </div>
 
 <script>
-const baseUrl = '<?= $this->getBackendUrl('*/backend/ssl-certificate/') ?>';
+(function() {
+    'use strict';
 
-function getSelectedProvider() {
-    const select = document.querySelector('#requestForm select[name="provider"]');
-    return select ? select.value : 'letsencrypt';
-}
+    var baseUrl = '<?= $this->getBackendUrl('*/backend/ssl-certificate/') ?>';
 
-// 切换 HTTPS
-async function toggleHttps(domain, enabled) {
-    try {
-        const response = await fetch(baseUrl + 'toggle-https', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `domain=${encodeURIComponent(domain)}&enabled=${enabled ? 1 : 0}`
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            if (enabled) {
-                BackendToast.warning('<?= __('请重启服务器使配置生效') ?>');
+    function getSelectedProvider() {
+        var select = document.querySelector('#requestForm select[name="provider"]');
+        return select ? select.value : 'letsencrypt';
+    }
+
+    function hideRequestModal() {
+        var modalEl = document.getElementById('requestModal');
+        if (!modalEl) return;
+        var bsModal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+            ? bootstrap.Modal.getInstance(modalEl)
+            : null;
+        if (bsModal) {
+            bsModal.hide();
+        } else {
+            modalEl.classList.remove('show');
+            modalEl.style.display = 'none';
+            document.body.classList.remove('modal-open');
+            var backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) backdrop.remove();
+        }
+    }
+
+    window.toggleHttps = async function(domain, enabled) {
+        try {
+            var response = await fetch(baseUrl + 'toggle-https', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'domain=' + encodeURIComponent(domain) + '&enabled=' + (enabled ? 1 : 0)
+            });
+            var result = await response.json();
+            if (result.success) {
+                BackendToast.success(result.message);
+                if (enabled) {
+                    BackendToast.warning('<?= __('请重启服务器使配置生效') ?>');
+                }
+            } else {
+                BackendToast.error(result.message);
+                var el = document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, ''));
+                if (el) el.checked = !enabled;
             }
-        } else {
-            BackendToast.error(result.message);
-            // 恢复开关状态
-            document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, '')).checked = !enabled;
+        } catch (e) {
+            BackendToast.error(e.message);
         }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
 
-// 申请证书
-async function requestCertificate(domain) {
-    if (!confirm('<?= __('确定要为此域名申请证书吗？') ?>')) return;
-    
-    const email = prompt('<?= __('请输入联系邮箱') ?>', 'admin@' + domain);
-    if (!email) return;
-    
-    const provider = getSelectedProvider();
-    
-    BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
-    
-    try {
-        const response = await fetch(baseUrl + 'request', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `domain=${encodeURIComponent(domain)}&email=${encodeURIComponent(email)}&provider=${encodeURIComponent(provider)}`
+    window.requestCertificate = async function(domain) {
+        BackendConfirm.show('<?= __('确定要为此域名申请证书吗？') ?>').then(function(confirmed) {
+            if (!confirmed) return;
+            BackendConfirm.showInput('<?= __('请输入联系邮箱') ?>', {defaultValue: 'admin@' + domain}).then(async function(email) {
+                if (!email) return;
+                var provider = getSelectedProvider();
+                BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
+                try {
+                    var response = await fetch(baseUrl + 'request', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                        body: 'domain=' + encodeURIComponent(domain) + '&email=' + encodeURIComponent(email) + '&provider=' + encodeURIComponent(provider)
+                    });
+                    var result = await response.json();
+                    if (result.success) {
+                        BackendToast.success(result.message);
+                        setTimeout(function() { location.reload(); }, 1500);
+                    } else {
+                        BackendToast.error(result.message);
+                    }
+                } catch (e) {
+                    BackendToast.error(e.message);
+                }
+            });
         });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            BackendToast.error(result.message);
-        }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
 
-// 续签证书
-async function renewCertificate(domain) {
-    if (!confirm('<?= __('确定要续签此证书吗？') ?>')) return;
-    
-    BackendToast.info('<?= __('正在续签证书，请稍候...') ?>');
-    
-    try {
-        const response = await fetch(baseUrl + 'renew', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `domain=${encodeURIComponent(domain)}`
+    window.renewCertificate = async function(domain) {
+        BackendConfirm.show('<?= __('确定要续签此证书吗？') ?>').then(async function(confirmed) {
+            if (!confirmed) return;
+            BackendToast.info('<?= __('正在续签证书，请稍候...') ?>');
+            try {
+                var response = await fetch(baseUrl + 'renew', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'domain=' + encodeURIComponent(domain)
+                });
+                var result = await response.json();
+                if (result.success) {
+                    BackendToast.success(result.message);
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    BackendToast.error(result.message);
+                }
+            } catch (e) {
+                BackendToast.error(e.message);
+            }
         });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            BackendToast.error(result.message);
-        }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
 
-// 删除证书
-async function deleteCertificate(domain) {
-    if (!confirm('<?= __('确定要删除此证书吗？此操作不可恢复！') ?>')) return;
-    
-    try {
-        const response = await fetch(baseUrl + 'delete', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `domain=${encodeURIComponent(domain)}`
+    window.deleteCertificate = async function(domain) {
+        BackendConfirm.show('<?= __('确定要删除此证书吗？此操作不可恢复！') ?>').then(async function(confirmed) {
+            if (!confirmed) return;
+            try {
+                var response = await fetch(baseUrl + 'delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'domain=' + encodeURIComponent(domain)
+                });
+                var result = await response.json();
+                if (result.success) {
+                    BackendToast.success(result.message);
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    BackendToast.error(result.message);
+                }
+            } catch (e) {
+                BackendToast.error(e.message);
+            }
         });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            BackendToast.error(result.message);
-        }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
 
-// 同步域名
-async function syncDomains() {
-    const email = prompt('<?= __('请输入联系邮箱（用于申请证书）') ?>', 'admin@localhost');
-    if (!email) return;
-    
-    try {
-        const response = await fetch(baseUrl + 'sync', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: `email=${encodeURIComponent(email)}`
+    window.syncDomains = function() {
+        BackendConfirm.showInput('<?= __('请输入联系邮箱（用于申请证书）') ?>', {defaultValue: 'admin@localhost'}).then(async function(email) {
+            if (!email) return;
+            try {
+                var response = await fetch(baseUrl + 'sync', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'email=' + encodeURIComponent(email)
+                });
+                var result = await response.json();
+                if (result.success) {
+                    BackendToast.success(result.message);
+                    setTimeout(function() { location.reload(); }, 1500);
+                } else {
+                    BackendToast.error(result.message);
+                }
+            } catch (e) {
+                BackendToast.error(e.message);
+            }
         });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            BackendToast.error(result.message);
-        }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
 
-// 提交申请
-async function submitRequest() {
-    const form = document.getElementById('requestForm');
-    const formData = new FormData(form);
-    
-    BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
-    
-    try {
-        const response = await fetch(baseUrl + 'request', {
-            method: 'POST',
-            body: new URLSearchParams(formData)
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-            BackendToast.success(result.message);
-            bootstrap.Modal.getInstance(document.getElementById('requestModal')).hide();
-            setTimeout(() => location.reload(), 1500);
-        } else {
-            BackendToast.error(result.message);
+    window.submitRequest = async function() {
+        var form = document.getElementById('requestForm');
+        var formData = new FormData(form);
+        BackendToast.info('<?= __('正在申请证书，请稍候...') ?>');
+        try {
+            var response = await fetch(baseUrl + 'request', {
+                method: 'POST',
+                body: new URLSearchParams(formData)
+            });
+            var result = await response.json();
+            if (result.success) {
+                BackendToast.success(result.message);
+                hideRequestModal();
+                setTimeout(function() { location.reload(); }, 1500);
+            } else {
+                BackendToast.error(result.message);
+            }
+        } catch (e) {
+            BackendToast.error(e.message);
         }
-    } catch (e) {
-        BackendToast.error(e.message);
-    }
-}
+    };
+})();
 </script>
