@@ -456,15 +456,18 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $this->wheres[] = $where_array;
             }
         } else {
-            // 🔧 修复：使用 PostgreSQL 双引号格式化字段名
-            $field = self::parserFiled($field);
-            // 确保 $field 是字符串后再替换
-            if (is_string($field)) {
+            // 🔧 修复：函数/表达式（如 concat(a,b,c)）不经过 parserFiled，避免括号与逗号被拆成多个标识符导致 PostgreSQL 语法错误
+            if (is_string($field) && str_contains($field, '(') && str_contains($field, ')')) {
                 $field = str_replace('`', '"', $field);
             } else {
-                $field = (string)$field;
+                $field = self::parserFiled($field);
+                if (is_string($field)) {
+                    $field = str_replace('`', '"', $field);
+                } else {
+                    $field = (string)$field;
+                }
             }
-            
+
             if (is_array($value)) {
                 if ($condition === 'IN' || $condition === 'NOT IN') {
                     if (empty($value)) {
