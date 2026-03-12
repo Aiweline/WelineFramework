@@ -47,6 +47,18 @@ class DomainAutoResolveTask extends Model
 
     public const MAX_RETRY = 10;
 
+    /**
+     * 插入新记录前移除主键，避免框架/父类带入残留的 task_id 导致 PostgreSQL 唯一约束冲突
+     */
+    public function save_before(): void
+    {
+        parent::save_before();
+        if (!$this->getTaskId()) {
+            $this->unsetData(self::schema_fields_ID);
+            $this->unsetModelData(self::schema_fields_ID);
+        }
+    }
+
     public function getTaskId(): int
     {
         return (int) $this->getData(self::schema_fields_ID);
@@ -137,12 +149,14 @@ class DomainAutoResolveTask extends Model
             return $existing;
         }
 
-        // 使用新实例插入，确保不带主键，由数据库序列生成 task_id，避免 duplicate key
+        // 使用新实例插入，不传主键，由数据库自增/序列生成 task_id，避免 duplicate key（如 PostgreSQL 序列不同步）
         $task = new self();
+        $task->clearQuery();
+        $task->clearData();
         $task->setDomain($domain);
         $task->setAccountId($accountId);
         $task->setStatus(self::STATUS_PENDING);
-        $task->setData(self::schema_fields_ID, null);
+        $task->unsetData(self::schema_fields_ID);
         $task->save();
 
         return $task;
