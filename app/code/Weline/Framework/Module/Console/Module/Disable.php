@@ -11,9 +11,9 @@ namespace Weline\Framework\Module\Console\Module;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Helper\Data;
-use Weline\Backend\Service\MenuCollector;
 
 class Disable extends CommandAbstract
 {
@@ -46,9 +46,12 @@ class Disable extends CommandAbstract
             // 禁用对应模块的后台菜单（软禁用 is_enable=0，包括 WeShop_Cms::cms_page_management 等）
             if (!empty($disabledModules)) {
                 try {
-                    /** @var MenuCollector $menuCollector */
-                    $menuCollector = ObjectManager::getInstance(MenuCollector::class);
-                    $menuCollector->collect($disabledModules);
+                    /** @var EventsManager $eventsManager */
+                    $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                    $eventData = [
+                        'module_names' => $disabledModules,
+                    ];
+                    $eventsManager->dispatch('Weline_Framework_Module::disable_after_registry_update', $eventData);
                     $this->printer->success(__('已根据禁用模块更新后台菜单状态。'));
                 } catch (\Throwable $e) {
                     $this->printer->warning(__('菜单更新失败：%{1}，请手动执行后台菜单收集命令', [$e->getMessage()]));

@@ -18,12 +18,9 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\System;
 use Weline\Framework\Database\Model\ModelManager;
-use Weline\Framework\Event\EventRegistry;
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Extends\ExtendsRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
-use Weline\Framework\Module\Helper\Data;
 use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\Register;
@@ -39,8 +36,6 @@ use Weline\Framework\Setup\Stage\SchemaDiffStage;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
-use Weline\Framework\Console\Console\Reflection\Compile as ReflectionCompile;
-use Weline\Hook\HookRegistry;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
@@ -58,6 +53,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     public const STAGE_DATABASE_UPDATE = 'database_update';
     public const STAGE_ROUTE_UPDATE = 'route_update';
     public const STAGE_FILE_UPDATE = 'file_update';
+    private const EVENT_CLEANUP_MISSING_MODULE_ACL_RESIDUES = 'Weline_Framework_Setup::cleanup_missing_module_acl_residues';
+    private const EVENT_COLLECT_TAGLIB_REGISTRY = 'Weline_Framework_Setup::collect_taglib_registry';
 
     /** 所有阶段 code 列表（按执行顺序） */
     public const STAGE_CODES_ORDERED = [
@@ -152,9 +149,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
 
         try {
-            /** @var \Weline\Acl\Service\AclOrphanCleanupService $cleanupService */
-            $cleanupService = ObjectManager::getInstance(\Weline\Acl\Service\AclOrphanCleanupService::class);
-            $cleanedCount = $cleanupService->cleanupByModules($moduleNames);
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $eventData = [
+                'module_names' => $moduleNames,
+                'cleaned_count' => 0,
+                'result' => null,
+            ];
+            $eventsManager->dispatch(self::EVENT_CLEANUP_MISSING_MODULE_ACL_RESIDUES, $eventData);
+            $cleanedCount = (int)($eventData['cleaned_count'] ?? 0);
             if ($cleanedCount > 0) {
                 $this->printing->note(__('已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}', [
                     $cleanedCount,
@@ -1060,17 +1063,20 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($includeTag) {
             try {
                 $this->printing->note(__('收集标签注册表...'));
-                /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
-                $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-                // 在升级流程中跳过模板缓存清理，因为 Upgrade.php 已经在前面清理过了
-                // 如果指定了模块，则只收集指定模块的标签
-                $taglibArgs = ['skip_template_cache_clear' => true];
-                if (!empty($moduleNames)) {
-                    $taglibCollect->execute(['module' => implode(',', $moduleNames)], $taglibArgs);
+                /** @var EventsManager $eventsManager */
+                $eventsManager = ObjectManager::getInstance(EventsManager::class);
+                $taglibEventData = [
+                    'module_names' => $moduleNames,
+                    'skip_template_cache_clear' => true,
+                    'result' => null,
+                ];
+                $eventsManager->dispatch(self::EVENT_COLLECT_TAGLIB_REGISTRY, $taglibEventData);
+                $taglibResult = $taglibEventData['result'] ?? null;
+                if (is_array($taglibResult) && isset($taglibResult['success']) && !$taglibResult['success']) {
+                    $this->printing->warning(__('标签注册表收集失败：%{1}', [$taglibResult['message'] ?? '']));
                 } else {
-                    $taglibCollect->execute([], $taglibArgs);
+                    $this->printing->success(__('✓ 标签注册表已收集完成。'));
                 }
-                $this->printing->success(__('✓ 标签注册表已收集完成。'));
             } catch (\Exception $e) {
                 // 标签收集失败不影响系统更新，只记录警告
                 w_log_warning(__('标签注册表收集失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
@@ -1239,8 +1245,15 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 'moduleHandle' => $routeModuleHandle
             ]);
 
+            /** @var EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $beforeRouteCollectionEventData = [];
+            $eventsManager->dispatch('Weline_Framework_Setup::before_route_collection', $beforeRouteCollectionEventData);
+
             // 更新路由（支持指定模块）
             $routeUpdateService->updateRoutes($argsModule ?: []);
+            $afterRouteCollectionEventData = [];
+            $eventsManager->dispatch('Weline_Framework_Setup::after_route_collection', $afterRouteCollectionEventData);
         }
         
         if ($appoint) {

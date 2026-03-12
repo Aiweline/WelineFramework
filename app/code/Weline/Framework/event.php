@@ -40,6 +40,16 @@ return [
         'description' => __('在路由收集完成后触发，用于 ACL 等与路由阶段收集的数据做 diff（如清理已卸载模块的 type=pc 权限）。'),
         'doc' => 'setup/路由收集后.md',
     ],
+    'Weline_Framework_Setup::collect_taglib_registry' => [
+        'name' => __('收集标签注册表'),
+        'description' => __('在 setup:upgrade 注册表阶段触发，允许外部模块执行标签注册表收集并通过 result 回传结果。'),
+        'doc' => 'setup/收集标签注册表.md',
+    ],
+    'Weline_Framework_Setup::cleanup_missing_module_acl_residues' => [
+        'name' => __('清理缺失模块 ACL 残留'),
+        'description' => __('在 setup:upgrade 检测到异常卸载/搬迁模块时触发，允许外部模块清理 ACL/菜单残留并回填 cleaned_count。'),
+        'doc' => 'setup/清理缺失模块ACL残留.md',
+    ],
     'Weline_Framework_System::system_update_after' => [
         'name' => __('系统更新后'),
         'description' => __('系统更新完成后触发，允许其他模块执行更新后的操作。'),
@@ -66,6 +76,31 @@ return [
         'name' => __('模块卸载后'),
         'description' => __('模块卸载完成后触发，允许其他模块在卸载后执行清理和后续操作。'),
         'doc' => 'module/模块卸载后.md',
+    ],
+    'Weline_Framework_Module::remove_before_backup' => [
+        'name' => __('模块移除前备份'),
+        'description' => __('在 module:remove 卸载前触发，允许外部模块执行数据库等备份并通过 result 回传结果。'),
+        'doc' => 'module/模块移除前备份.md',
+    ],
+    'Weline_Framework_Module::remove_after_taglib_collect' => [
+        'name' => __('模块移除后标签收集'),
+        'description' => __('在 module:remove 卸载后触发，允许外部模块执行 Taglib 注册表收集。'),
+        'doc' => 'module/模块移除后标签收集.md',
+    ],
+    'Weline_Framework_Module::remove_acl_diff_begin' => [
+        'name' => __('模块移除 ACL Diff 开始'),
+        'description' => __('在 module:remove 的 ACL 差集处理开始前触发，允许外部模块初始化收集上下文。'),
+        'doc' => 'module/模块移除ACL差集开始.md',
+    ],
+    'Weline_Framework_Module::remove_acl_diff_cleanup' => [
+        'name' => __('模块移除 ACL Diff 清理'),
+        'description' => __('在 module:remove 路由收集完成后触发，允许外部模块执行 ACL 差集清理并回传结果。'),
+        'doc' => 'module/模块移除ACL差集清理.md',
+    ],
+    'Weline_Framework_Module::disable_after_registry_update' => [
+        'name' => __('模块禁用后注册表更新'),
+        'description' => __('在 module:disable 更新模块注册信息后触发，允许外部模块按禁用模块列表执行菜单等同步。'),
+        'doc' => 'module/模块禁用后注册表更新.md',
     ],
     
     // 服务器启动/停止事件已迁移至 Weline_Server 模块（Weline_Server::start_after / Weline_Server::stop_after）
@@ -405,6 +440,16 @@ return [
         'name' => __('卸载服务'),
         'description' => __('在卸载服务执行卸载操作时触发，允许其他模块监听卸载过程并执行相应的清理操作。'),
         'doc' => 'uninstall/卸载服务.md',
+    ],
+    'Weline_Framework_UninstallService::module_db_backup' => [
+        'name' => __('模块数据库备份'),
+        'description' => __('在 UninstallService 卸载模块前触发，允许外部模块执行数据库表备份并通过 result 回传结果。'),
+        'doc' => 'uninstall/模块数据库备份.md',
+    ],
+    'Weline_Framework_UninstallService::module_db_restore' => [
+        'name' => __('模块数据库恢复'),
+        'description' => __('在 UninstallService 回滚卸载时触发，允许外部模块执行数据库表恢复并通过 result 回传结果。'),
+        'doc' => 'uninstall/模块数据库恢复.md',
     ],
     
     // ========== 部署模式事件 ==========

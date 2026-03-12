@@ -353,9 +353,18 @@ class RegistryUpdateService
             if (!$silent) {
                 w_log_info(__('正在增量更新 Taglib（模块：%{1}）...', [implode(', ', $moduleNames)]), [], 'registry_update.log');
             }
-            /** @var \Weline\Taglib\Console\Taglib\Collect $taglibCollect */
-            $taglibCollect = ObjectManager::getInstance(\Weline\Taglib\Console\Taglib\Collect::class);
-            $taglibCollect->execute(['module' => implode(',', $moduleNames)]);
+            /** @var \Weline\Framework\Event\EventsManager $eventsManager */
+            $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $eventData = [
+                'module_names' => $moduleNames,
+                'skip_template_cache_clear' => false,
+                'result' => null,
+            ];
+            $eventsManager->dispatch('Weline_Framework_Setup::collect_taglib_registry', $eventData);
+            $result = $eventData['result'] ?? null;
+            if (is_array($result) && isset($result['success']) && !$result['success']) {
+                throw new \RuntimeException((string)($result['message'] ?? __('未知错误')));
+            }
             if (!$silent) {
                 w_log_info(__('✓ Taglib 增量更新完成。'), [], 'registry_update.log');
             }
