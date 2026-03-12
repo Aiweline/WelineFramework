@@ -540,6 +540,10 @@ if ($controlPort > 0) {
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存");
                     break;
 
+                case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
+                    // 非 SSL Worker 不处理证书重载，仅记录
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
                     $policyData = $msg['data'] ?? [];
                     if (\is_array($policyData)) {

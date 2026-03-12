@@ -796,6 +796,42 @@ class MasterProcess
     }
 
     /**
+     * 通知 Master 广播 SSL 证书热重载命令给所有 Worker。
+     * Worker 会重新读取 ssl_certificate_map.json 并更新 SNI 证书映射，无需重启。
+     */
+    public static function sendSslCertReloadCommand(string $instanceName = 'default'): bool
+    {
+        $info = self::getMasterInfo($instanceName);
+        if (!$info || empty($info['control_port'])) {
+            return false;
+        }
+
+        $controlPort = (int) $info['control_port'];
+        $host = '127.0.0.1';
+
+        $errno = 0;
+        $errstr = '';
+        $conn = @\stream_socket_client("tcp://{$host}:{$controlPort}", $errno, $errstr, 3);
+        if (!$conn) {
+            return false;
+        }
+
+        $msg = ControlMessage::command(ControlMessage::ACTION_SSL_CERT_RELOAD);
+        @\fwrite($conn, $msg);
+
+        \stream_set_timeout($conn, 3);
+        $response = @\fread($conn, 4096);
+        @\fclose($conn);
+
+        if ($response) {
+            $decoded = ControlMessage::decode($response);
+            return $decoded !== null && ($decoded['success'] ?? false);
+        }
+
+        return false;
+    }
+
+    /**
      * 通过 IPC 控制通道查询 Master 状态
      * 
      * @param string $instanceName 实例名称
