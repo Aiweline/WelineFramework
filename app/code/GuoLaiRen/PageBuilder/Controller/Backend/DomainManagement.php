@@ -1943,6 +1943,9 @@ class DomainManagement extends BaseController
             if ($autoTransferToPool) {
                 $msg .= '，' . __('域名池新增 %{1} 个，跳过 %{2} 个', [$poolAdded, $poolSkipped]);
             }
+            if ($errors !== []) {
+                $msg .= '。' . __('失败详情：%{1}', [\implode('；', $errors)]);
+            }
 
             return $this->fetchJson([
                 'success' => true,
