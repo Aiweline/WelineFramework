@@ -5,4 +5,7 @@
     <event name="Framework_Http::response_redirect_before">
         <observer name="Weline_Component::result_redirect_before" instance="Weline\Component\Observer\ResultRedirectBefore" disabled="false" shared="true" sort="100"/>
     </event>
+    <event name="Weline_Framework_Manager::result_bridge_url">
+        <observer name="Weline_Component::result_bridge_url_provider" instance="Weline\Component\Observer\ResultBridgeUrlProvider" disabled="false" shared="true" sort="0"/>
+    </event>
 </config>

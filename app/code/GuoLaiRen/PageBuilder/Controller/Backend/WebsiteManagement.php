@@ -255,9 +255,14 @@ class WebsiteManagement extends BaseController
                         // SEO 账户绑定失败不影响网站保存结果
                     }
                 }
-                
-                $this->resultSuccess(__('网站添加成功'), true);
-                $this->redirect($this->_url->getBackendUrl('*/backend/websiteManagement'));
+                // 跳转结果桥接页，显示 success 后再回网站管理（iframe 内也能看到 Toast）
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getSuccess', [
+                    'msg' => __('网站添加成功'),
+                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
+                    'reload' => '1',
+                    'time' => '3',
+                ]);
+                $this->redirect($url);
             } catch (\Exception $e) {
                 if ($e instanceof RedirectException) {
                     throw $e;
@@ -268,8 +273,14 @@ class WebsiteManagement extends BaseController
                 } else {
                     $msg = __('网站添加失败: %{1}', [$msg]);
                 }
-                $this->resultError($msg, false);
-                $this->redirect($this->_url->getBackendUrl('*/backend/websiteManagement'));
+                // 跳转结果桥接页，显示 error 后再回网站管理
+                $url = $this->_url->getBackendUrl('component/backend/offcanvas/getError', [
+                    'msg' => $msg,
+                    'url' => $this->_url->getBackendUrl('*/backend/websiteManagement'),
+                    'reload' => '0',
+                    'time' => '5',
+                ]);
+                $this->redirect($url);
             }
         }
         
