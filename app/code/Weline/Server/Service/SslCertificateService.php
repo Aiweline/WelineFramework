@@ -828,7 +828,7 @@ CNF;
                 : SslCertificate::CERT_TYPE_EXACT;
             
             $expiresAt = \date('Y-m-d H:i:s', \strtotime("+{$validDays} days"));
-            
+
             $cert->setDomain($domain)
                 ->setWebsiteId($websiteId)
                 ->setCertPath($certPath)
@@ -840,9 +840,13 @@ CNF;
                 ->setExpiresAt($expiresAt)
                 ->setStatus(SslCertificate::STATUS_ACTIVE)
                 ->setHttpsEnabled(true)
-                ->setAutoRenew($issuer !== self::ISSUER_SELF_SIGNED) // 自签证书不自动续签
-                ->save();
-            
+                ->setAutoRenew($issuer !== self::ISSUER_SELF_SIGNED); // 自签证书不自动续签
+
+            // 避免 uk_domain 冲突：若该域名已被其他行占用，合并到该行并更新该行
+            $cert = $this->resolveDuplicateDomainCert($cert);
+            $cert->setDomain($domain);
+            $cert->save();
+
             // 触发事件通知其他模块（使用事件机制解耦）
             if ($isRenewal) {
                 // 证书续签
