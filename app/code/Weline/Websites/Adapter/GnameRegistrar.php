@@ -380,27 +380,15 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 
         w_log_info(__('[GName] modifyDns 请求：domain=%{1}, dns=%{2}', [$domain, $dnsServers]), [], 'dns_cdn_switch');
 
-        $response = $this->makeRequest('api/domain/xgdns', [
+        $response = $this->makeRequest('api/domain/dns', [
             'ym' => $domain,
             'dns' => $dnsServers,
         ], $credentials);
 
-        w_log_info(__('[GName] xgdns 响应：code=%{1}, msg=%{2}', [
+        w_log_info(__('[GName] dns 响应：code=%{1}, msg=%{2}', [
             (string) ($response['code'] ?? '?'),
             (string) ($response['msg'] ?? ''),
         ]), [], 'dns_cdn_switch');
-
-        if ((int) ($response['code'] ?? 0) !== 1) {
-            w_log_info(__('[GName] xgdns 失败，回退到 api/domain/dns'), [], 'dns_cdn_switch');
-            $response = $this->makeRequest('api/domain/dns', [
-                'ym' => $domain,
-                'dns' => $dnsServers,
-            ], $credentials);
-            w_log_info(__('[GName] dns 回退响应：code=%{1}, msg=%{2}', [
-                (string) ($response['code'] ?? '?'),
-                (string) ($response['msg'] ?? ''),
-            ]), [], 'dns_cdn_switch');
-        }
 
         $code = (int) ($response['code'] ?? 0);
 
@@ -539,7 +527,7 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 
     /**
      * 根据 API 主机和端点构建请求路径
-     * api.gname.com（官方接口）：路径为 /api/domain/xgdns、/api/domain/reg 等，endpoint 原样返回
+     * api.gname.com（官方接口）：路径为 /api/domain/dns、/api/domain/reg 等，endpoint 原样返回
      * www.gname.com：路径为 /domain/api/... 格式（兼容旧配置）
      */
     private function buildApiPath(string $apiHost, string $endpoint): string
