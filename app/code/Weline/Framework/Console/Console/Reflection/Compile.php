@@ -17,6 +17,42 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
+ * 空目录迭代器，用于在无权限子目录处“不下降”，满足 getChildren() 返回类型
+ */
+class EmptyRecursiveDirectoryIterator extends \RecursiveDirectoryIterator
+{
+    public function __construct()
+    {
+        $emptyDir = \sys_get_temp_dir() . '/weline_reflection_empty_' . \getmypid();
+        if (!\is_dir($emptyDir)) {
+            @\mkdir($emptyDir, 0700, true);
+        }
+        parent::__construct($emptyDir, \RecursiveDirectoryIterator::SKIP_DOTS);
+    }
+
+    public function hasChildren(bool $allowLinks = false): bool
+    {
+        return false;
+    }
+}
+
+/**
+ * 递归目录迭代器：子目录无权限时跳过该目录，不抛异常
+ */
+class SafeRecursiveDirectoryIterator extends \RecursiveDirectoryIterator
+{
+    public function getChildren(): \RecursiveDirectoryIterator
+    {
+        try {
+            return parent::getChildren();
+        } catch (\UnexpectedValueException $e) {
+            w_log_warning(__('Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}', [$this->getPathname(), $e->getMessage()]));
+            return new EmptyRecursiveDirectoryIterator();
+        }
+    }
+}
+
+/**
  * 预编译反射元数据与编译型工厂
  *
  * 1. 正则扫描框架内 ObjectManager::getInstance/make 的 ::class 调用（热点类）
@@ -319,14 +355,20 @@ class Compile extends CommandAbstract
 
     /**
      * 递归扫描目录下 PHP 文件（含小写开头等，用于正则扫描内容）
+     * 无权限目录会被跳过并打日志，不中断扫描。
      */
     private function scanPhpFilesForContent(string $dir): array
     {
         $files = [];
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
-            \RecursiveIteratorIterator::SELF_FIRST
-        );
+        try {
+            $iterator = new \RecursiveIteratorIterator(
+                new SafeRecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+        } catch (\UnexpectedValueException $e) {
+            w_log_warning(__('Reflection Compile: 无法打开目录 %{1}，已跳过。原因：%{2}', [$dir, $e->getMessage()]));
+            return $files;
+        }
         foreach ($iterator as $file) {
             if ($file->isFile() && $file->getExtension() === 'php') {
                 $path = $file->getPathname();
