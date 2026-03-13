@@ -28,6 +28,7 @@ use Weline\Websites\Model\DomainDnsRecord;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Service\DnsSwitchService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainResolveService;
@@ -50,6 +51,7 @@ class Domain extends BackendController
     private ServerIpService $serverIpService;
     private Schedule $schedule;
     private BackendConfig $backendConfig;
+    private DnsSwitchService $dnsSwitchService;
 
     public function __construct(
         DomainRegistrar $registrar,
@@ -62,7 +64,8 @@ class Domain extends BackendController
         DomainSyncService $syncService,
         ServerIpService $serverIpService,
         Schedule $schedule,
-        BackendConfig $backendConfig
+        BackendConfig $backendConfig,
+        DnsSwitchService $dnsSwitchService
     ) {
         $this->registrar = $registrar;
         $this->registrarAccount = $registrarAccount;
@@ -75,6 +78,7 @@ class Domain extends BackendController
         $this->serverIpService = $serverIpService;
         $this->schedule = $schedule;
         $this->backendConfig = $backendConfig;
+        $this->dnsSwitchService = $dnsSwitchService;
     }
 
     /**
@@ -3014,8 +3018,6 @@ class Domain extends BackendController
                 return $this->fetchJson(['code' => 400, 'msg' => __('目标账户不支持 DNS 管理')]);
             }
 
-            $targetCode = (string) $targetAccount->getRegistrarCode();
-            $targetCredentials = $targetAccount->getCredentials();
             $success = 0;
             $skipped = 0;
             $failed = 0;
@@ -3030,61 +3032,20 @@ class Domain extends BackendController
                     continue;
                 }
 
-                $currentDnsAccountId = (int) $domain->getDnsAccountId();
-                if ($currentDnsAccountId === $targetAccountId) {
+                if ((int) $domain->getDnsAccountId() === $targetAccountId) {
                     $skipped++;
                     continue;
                 }
 
-                $domainName = $domain->getDomain();
+                $this->dnsSwitchService->markPoolSwitching($domain->getDomain(), (string) $targetAccount->getRegistrarCode());
+                $result = $this->dnsSwitchService->executeDnsSwitch($domain, $targetAccount);
 
-                // 1. 将当前 DNS 记录同步到本地，供后续定时任务推送到新账户
-                $this->resolveService->syncDnsRecords($domain);
-
-                // 2. 在注册商处把 NS 改为目标账户的 NS
-                $registrarAccountId = (int) $domain->getAccountId();
-                if ($registrarAccountId <= 0) {
+                if ($result['success']) {
+                    $success++;
+                } else {
                     $failed++;
-                    $errors[] = $domainName . ': ' . __('域名未关联注册商账户，无法修改 NS');
-                    continue;
+                    $errors[] = $domain->getDomain() . ': ' . $result['message'];
                 }
-
-                $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
-                $sourceAccount->load($registrarAccountId);
-                if (!$sourceAccount->getAccountId()) {
-                    $failed++;
-                    $errors[] = $domainName . ': ' . __('找不到注册商账户');
-                    continue;
-                }
-
-                $sourceAdapter = $this->resolverService->getAdapter($sourceAccount->getRegistrarCode());
-                if ($sourceAdapter === null) {
-                    $failed++;
-                    $errors[] = $domainName . ': ' . __('注册商适配器不存在');
-                    continue;
-                }
-
-                $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
-                if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
-                    $failed++;
-                    $errors[] = $domainName . ': ' . ($nsResult['message'] ?? __('无法获取目标 Nameserver'));
-                    continue;
-                }
-                $targetNs = $nsResult['nameservers'];
-                $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
-
-                if (!($updateResult['success'] ?? false)) {
-                    $failed++;
-                    $errors[] = $domainName . ': ' . ($updateResult['message'] ?? __('NS 切换失败'));
-                    continue;
-                }
-
-                $domain->setNameservers($targetNs);
-                $domain->setDnsAccountId($targetAccountId);
-                $domain->setDnsProvider($targetCode);
-                $domain->setDnsMigrationPending(1);
-                $domain->forceCheck(false)->save();
-                $success++;
             }
 
             $msg = __('切换完成：成功 %{1}，跳过（已是该账户）%{2}，失败 %{3}', [$success, $skipped, $failed]);
@@ -3143,9 +3104,10 @@ class Domain extends BackendController
             return;
         }
 
+        $total = \count($domainIds);
         $sse->sendEvent('init', [
-            'message' => __('开始 DNS/CDN 切换，共 %{1} 个域名', [\count($domainIds)]),
-            'total' => \count($domainIds),
+            'message' => __('开始 DNS/CDN 切换，共 %{1} 个域名', [$total]),
+            'total' => $total,
             'time' => $ts(),
         ]);
         w_log_info(__('[DnsSwitchSSE] 开始切换，domain_ids=%{1}, target=%{2}', [
@@ -3169,7 +3131,6 @@ class Domain extends BackendController
             }
 
             $targetCode = (string) $targetAccount->getRegistrarCode();
-            $targetCredentials = $targetAccount->getCredentials();
 
             $sse->sendEvent('init', [
                 'message' => __('目标账户验证通过：%{1}(%{2})', [$targetAccount->getName(), $targetCode]),
@@ -3179,8 +3140,6 @@ class Domain extends BackendController
             $success = 0;
             $skipped = 0;
             $failed = 0;
-            $total = \count($domainIds);
-            $detector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
 
             foreach ($domainIds as $idx => $domainId) {
                 $step = $idx + 1;
@@ -3195,14 +3154,12 @@ class Domain extends BackendController
                         'message' => __('域名不存在'),
                         'time' => $ts(),
                     ]);
-                    w_log_error(__('[DnsSwitchSSE] 域名 ID %{1} 不存在', [(string) $domainId]), [], $logCh);
                     continue;
                 }
 
                 $domainName = $domain->getDomain();
-                $currentDnsAccountId = (int) $domain->getDnsAccountId();
 
-                if ($currentDnsAccountId === $targetAccountId) {
+                if ((int) $domain->getDnsAccountId() === $targetAccountId) {
                     $skipped++;
                     $sse->sendEvent('step_skip', [
                         'step' => $step, 'total' => $total,
@@ -3215,178 +3172,39 @@ class Domain extends BackendController
 
                 w_log_info(__('[DnsSwitchSSE] 开始处理 %{1}（%{2}/%{3}）', [$domainName, (string) $step, (string) $total]), [], $logCh);
 
-                // Step 1: sync_records
-                $sse->sendEvent('sync_records', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('同步当前 DNS 记录到本地'),
-                    'time' => $ts(),
-                ]);
-                try {
-                    $this->resolveService->syncDnsRecords($domain);
-                    $sse->sendEvent('sync_records_done', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => __('DNS 记录同步完成'),
-                        'time' => $ts(),
-                    ]);
-                    w_log_info(__('[DnsSwitchSSE] %{1} 记录同步完成', [$domainName]), [], $logCh);
-                } catch (\Throwable $e) {
-                    w_log_warning(__('[DnsSwitchSSE] %{1} 记录同步异常（非致命）：%{2}', [$domainName, $e->getMessage()]), [], $logCh);
-                }
+                $this->dnsSwitchService->markPoolSwitching($domainName, $targetCode);
 
-                // Step 2: add_zone (get target NS)
-                $sse->sendEvent('add_zone', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('获取目标 Nameserver（%{1}）', [$targetCode]),
-                    'time' => $ts(),
-                ]);
-
-                $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
-                if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
-                    $failed++;
-                    $errMsg = $nsResult['message'] ?? __('无法获取目标 Nameserver');
-                    $sse->sendEvent('step_error', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => $errMsg,
-                        'time' => $ts(),
-                    ]);
-                    w_log_error(__('[DnsSwitchSSE] %{1} 获取目标 NS 失败：%{2}', [$domainName, $errMsg]), [], $logCh);
-                    continue;
-                }
-
-                $targetNs = $nsResult['nameservers'];
-                $sse->sendEvent('add_zone_done', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('获取到 NS：%{1}', [\implode(', ', $targetNs)]),
-                    'nameservers' => $targetNs,
-                    'time' => $ts(),
-                ]);
-                w_log_info(__('[DnsSwitchSSE] %{1} 目标 NS=%{2}', [$domainName, \implode(', ', $targetNs)]), [], $logCh);
-
-                // Step 3: switch_ns at registrar
-                $registrarAccountId = (int) $domain->getAccountId();
-                if ($registrarAccountId <= 0) {
-                    $failed++;
-                    $sse->sendEvent('step_error', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => __('域名未关联注册商账户，无法修改 NS'),
-                        'time' => $ts(),
-                    ]);
-                    continue;
-                }
-
-                $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
-                $sourceAccount->load($registrarAccountId);
-                if (!$sourceAccount->getAccountId()) {
-                    $failed++;
-                    $sse->sendEvent('step_error', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => __('注册商账户不存在'),
-                        'time' => $ts(),
-                    ]);
-                    continue;
-                }
-
-                $sourceAdapter = $this->resolverService->getAdapter($sourceAccount->getRegistrarCode());
-                if ($sourceAdapter === null) {
-                    $failed++;
-                    $sse->sendEvent('step_error', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => __('注册商适配器 %{1} 不存在', [$sourceAccount->getRegistrarCode()]),
-                        'time' => $ts(),
-                    ]);
-                    continue;
-                }
-
-                $sse->sendEvent('switch_ns', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()]),
-                    'time' => $ts(),
-                ]);
-
-                $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
-                if (!($updateResult['success'] ?? false)) {
-                    $failed++;
-                    $errMsg = $updateResult['message'] ?? __('NS 切换失败');
-                    $sse->sendEvent('step_error', [
-                        'step' => $step, 'total' => $total,
-                        'domain' => $domainName,
-                        'message' => $errMsg,
-                        'time' => $ts(),
-                    ]);
-                    w_log_error(__('[DnsSwitchSSE] %{1} NS 切换失败：%{2}', [$domainName, $errMsg]), [], $logCh);
-                    continue;
-                }
-
-                $sse->sendEvent('switch_ns_done', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('NS 切换成功'),
-                    'time' => $ts(),
-                ]);
-                w_log_info(__('[DnsSwitchSSE] %{1} NS 切换成功', [$domainName]), [], $logCh);
-
-                // Step 4: push_records (async via migration pending)
-                $sse->sendEvent('push_records', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('设置 DNS 记录迁移标记，由定时任务推送到 %{1}', [$targetCode]),
-                    'time' => $ts(),
-                ]);
-
-                // Step 5: update domain
-                $domain->setNameservers($targetNs);
-                $domain->setDnsAccountId($targetAccountId);
-                $domain->setDnsProvider($targetCode);
-                $domain->setDnsMigrationPending(1);
-                $domain->forceCheck(false)->save();
-
-                $sse->sendEvent('update_domain', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('域名状态已更新'),
-                    'time' => $ts(),
-                ]);
-
-                // Step 6: update pool
-                $cdnProvider = $detector->isCdnProvider($targetCode) ? $targetCode : '';
-                $poolModel = ObjectManager::getInstance(DomainPool::class);
-                $pools = $poolModel->clearQuery()
-                    ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($domainName))
-                    ->select()
-                    ->fetch();
-                foreach ($pools as $pool) {
-                    $pool->setDnsProvider($targetCode);
-                    $pool->setDnsStatus(DomainPool::INFRA_STATUS_SWITCHING);
-                    if ($cdnProvider !== '') {
-                        $pool->setCdnStatus(DomainPool::INFRA_STATUS_SWITCHING);
+                $result = $this->dnsSwitchService->executeDnsSwitch(
+                    $domain,
+                    $targetAccount,
+                    static function (string $event, array $data) use ($sse, $step, $total, $ts): void {
+                        $sse->sendEvent($event, \array_merge($data, [
+                            'step' => $step,
+                            'total' => $total,
+                            'time' => $ts(),
+                        ]));
                     }
-                    $pool->save();
+                );
+
+                if ($result['success']) {
+                    $success++;
+                    $sse->sendEvent('domain_done', [
+                        'step' => $step, 'total' => $total,
+                        'domain' => $domainName,
+                        'message' => __('域名 %{1} 切换完成', [$domainName]),
+                        'time' => $ts(),
+                    ]);
+                    w_log_info(__('[DnsSwitchSSE] %{1} 切换完成', [$domainName]), [], $logCh);
+                } else {
+                    $failed++;
+                    $sse->sendEvent('step_error', [
+                        'step' => $step, 'total' => $total,
+                        'domain' => $domainName,
+                        'message' => $result['message'],
+                        'time' => $ts(),
+                    ]);
+                    w_log_error(__('[DnsSwitchSSE] %{1} 切换失败：%{2}', [$domainName, $result['message']]), [], $logCh);
                 }
-
-                $sse->sendEvent('update_pool', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('域名池状态已更新（switching）'),
-                    'time' => $ts(),
-                ]);
-
-                $success++;
-                $sse->sendEvent('domain_done', [
-                    'step' => $step, 'total' => $total,
-                    'domain' => $domainName,
-                    'message' => __('域名 %{1} 切换完成', [$domainName]),
-                    'time' => $ts(),
-                ]);
-                w_log_info(__('[DnsSwitchSSE] %{1} 切换完成', [$domainName]), [], $logCh);
             }
 
             $sse->complete([
