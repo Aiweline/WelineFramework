@@ -421,8 +421,12 @@ class User extends \Weline\Framework\App\Controller\BackendController
         }
         /**@var UserRole $userRole */
         $userRole = ObjectManager::getInstance(UserRole::class);
+        $userId = (int) ($this->request->getPost('user_id') ?? 0);
         try {
-            $userRole->clearData()->setData($this->request->getPost())->save(true);
+            $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete();
+            if ($this->request->getPost('role_id') !== '' && $this->request->getPost('role_id') !== null) {
+                $userRole->clearData()->setData($this->request->getPost())->save(true);
+            }
             MessageManager::success(__('角色分配成功！'));
         } catch (\Exception $exception) {
             MessageManager::warning(__('角色分配失败！'));
@@ -465,20 +469,20 @@ class User extends \Weline\Framework\App\Controller\BackendController
                 ->find()
                 ->fetch();
             
+            $userIdInt = (int) $userId;
+            $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete();
+
             if (empty($roleId)) {
-                if ($userRole->getId()) {
-                    $userRole->delete();
-                }
                 return $this->fetchJson([
                     'success' => true,
                     'msg' => __('已取消角色分配')
                 ]);
             }
-            
+
             $userRole->clearData();
             $userRole->setData([
-                'user_id' => (int)$userId,
-                'role_id' => (int)$roleId
+                'user_id' => $userIdInt,
+                'role_id' => (int) $roleId
             ]);
             $userRole->save(true);
             
