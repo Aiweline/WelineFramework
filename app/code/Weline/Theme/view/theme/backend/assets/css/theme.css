@@ -26,6 +26,7 @@
 
 .backend-main-content {
     flex: 1;
+    padding: var(--backend-spacing-md);
     background-color: var(--backend-color-bg-primary);
 }
 
