@@ -3,7 +3,7 @@
 # 用法（复制到终端执行，勿用 sudo，Homebrew 禁止 root 运行；需权限时会提示输入密码）：
 #   Linux/macOS/Git Bash: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s --
 #   指定分支: curl -fsSL https://gitee.com/aiweline/WelineFramework/raw/master/bin/bootstrap.sh | bash -s -- -b server-opt
-# 依赖：macOS 会自动检测并等待 Xcode 命令行工具（含 Git）；Linux 下需已安装 Git 或由 install.sh 按发行版自动安装。
+# 依赖：macOS 会自动检测并安装 Xcode 命令行工具（含 Git）；Linux 会在克隆前按发行版自动安装 Git（apt/yum/dnf/zypper/apk）。
 
 if [ -z "${BASH_VERSION:-}" ]; then
   exec /usr/bin/env bash "$0" "$@"
@@ -57,6 +57,30 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
       exit 1
     fi
   fi
+fi
+
+# Linux：克隆前需有 Git；未安装则按发行版自动安装
+if ! command -v git &>/dev/null; then
+  echo "未检测到 Git，尝试按发行版自动安装…"
+  if command -v apt-get &>/dev/null; then
+    sudo apt-get update -qq && sudo apt-get install -y git
+  elif command -v yum &>/dev/null; then
+    sudo yum install -y git
+  elif command -v dnf &>/dev/null; then
+    sudo dnf install -y git
+  elif command -v zypper &>/dev/null; then
+    sudo zypper -n install git
+  elif command -v apk &>/dev/null; then
+    sudo apk add --no-cache git
+  else
+    echo "ERROR: 无法自动安装 Git，请先手动安装后重新执行本脚本。" >&2
+    exit 1
+  fi
+  if ! command -v git &>/dev/null; then
+    echo "ERROR: Git 安装后仍不可用，请检查环境。" >&2
+    exit 1
+  fi
+  echo "Git 已安装，继续克隆。"
 fi
 
 REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
