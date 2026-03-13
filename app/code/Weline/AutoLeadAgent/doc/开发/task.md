@@ -25,6 +25,9 @@
 - [x] 页面加载时非 Chrome 浏览器弹窗提示
 - [x] 任务错误提示改用 BackendToast（移除 alert）
 - [x] MODEL_LOAD_PROGRESS payload 字段映射（currentFile/downloadedSize/totalSize 等）
+- [x] 替换 alert/confirm 为 BackendToast/BackendConfirm（backend-task-manager、config-models、model-lifecycle、hf-model-manager）
+- [x] 内存限制文案修复（<1GB 显示 MB）
+- [x] config-download-manager 减少调试日志
 
 ---
 
@@ -46,18 +49,18 @@
 
 ### 中优先级 [P3]
 
-- [ ] 统一翻译接口 translateIfNeeded（Google 优先、模型降级、缓存）
-- [ ] ReAct Agent：react-agent.js think/act/observe/reactLoop
-- [ ] MCP 客户端：mcp-client.js connect/listTools/callTool
-- [ ] 扩展内 MCP 工具集：browser_navigate、browser_snapshot、browser_extract 等
-- [ ] prompts.js：工具描述注入、Few-shot 示例、多语言
-- [ ] 逐步移除规则推理，改为模型决策 + MCP 调用
+- [x] 统一翻译接口 translateIfNeeded（Google 优先、模型降级、缓存）
+- [x] ReAct Agent：react-agent.js think/act/observe/reactLoop
+- [x] MCP 客户端：mcp-client.js connect/listTools/callTool
+- [x] 扩展内 MCP 工具集：browser_navigate、browser_snapshot、browser_extract 等
+- [x] prompts.js：工具描述注入、Few-shot 示例、多语言
+- [x] 逐步移除规则推理，改为模型决策 + MCP 调用（ReAct 优先、analyzeProfile 模型增强）
 
 ### 低优先级 [P4-P5]
 
-- [ ] WASM 扩展：mcp_protocol.cpp、agent_brain.cpp、wasm-bridge.js
-- [ ] 单元测试与集成测试补全
-- [ ] 更新 README、使用指南、部署指南、架构设计
+- [x] WASM 扩展：wasm-bridge.js 集成（agent_brain/mcp_protocol 需 Emscripten 编译）
+- [x] 单元测试补全（SceneMappingServiceTest、AgentConfigTest、SearchEngineMappingService 修复）
+- [x] 更新 README、使用指南、部署指南、快速开始
 - [ ] 支持 inotify 监控（Linux，若适用）
 
 ---

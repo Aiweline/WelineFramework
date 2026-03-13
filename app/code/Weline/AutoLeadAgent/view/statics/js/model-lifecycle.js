@@ -697,7 +697,12 @@ var ModelLifecycle = (function () {
         var unloadBtn = document.getElementById('hf-model-unload-btn');
         if (unloadBtn) {
             unloadBtn.addEventListener('click', function () {
-                if (confirm('确定要卸载模型吗？\n\n卸载后将释放内存，但需要重新加载才能使用。')) {
+                var msg = '确定要卸载模型吗？卸载后将释放内存，但需要重新加载才能使用。';
+                if (typeof BackendConfirm !== 'undefined' && BackendConfirm && BackendConfirm.show) {
+                    BackendConfirm.show(msg, { title: '确认卸载', type: 'warning' }).then(function (confirmed) {
+                        if (confirmed) unloadModel();
+                    });
+                } else {
                     unloadModel();
                 }
             });
