@@ -669,6 +669,36 @@ if (($response['code'] ?? 0) !== 1) {
 
 ---
 
+#### Pattern 14: Request::get() 走 __call 魔术方法导致参数永远为 1
+**错误特征：**
+- 后端收到的参数值永远是 `1`，无论前端传什么
+- URL query string 参数明确正确（浏览器 Network 面板可见），但后端读到错误值
+- `(int) $this->request->get('key', 0)` 永远返回 1
+
+**根本原因：**
+`Request` 继承自 `DataObject`，后者的 `__call` 魔术方法将 `get('key', 0)` 解析为：
+`substr('get',3)=''` → `$key=''` → `getData('')` → 返回整个 `$this->_data` 数组 → `(int)` 强转非空数组 = 1。
+
+**解决模式：**
+```php
+// ❌ 错误：走 __call，返回整个 _data 数组
+$id = (int) $this->request->get('param_name', 0);
+
+// ✅ 正确：使用明确的参数获取方法
+$id = (int) $this->request->getParam('param_name', 0);
+$id = (int) $this->request->getGet('param_name', 0);
+$id = (int) $this->request->getPost('param_name', 0);
+```
+
+**框架修复：** 已在 `Request` 类显式定义 `get()`/`post()`/`body()` 覆盖 `__call`。
+
+**相关技能：** `code-generation-standards`, `error-tracking`
+
+**历史案例：**
+- 2026-03-13: DNS 切换 SSE 中 `dns_account_id` 永远为 1，选 Cloudflare 却始终切换到 GName
+
+---
+
 ## 学习增强机制
 
 ### 错误模式演化
@@ -858,6 +888,7 @@ if (($response['code'] ?? 0) !== 1) {
 | 引用传递错误 | 1 | 2026-01-28 |
 | SQL 聚合函数被当标识符加引号 | 1 | 2026-02-07 |
 | ORM save() 查询状态叠加 | 1 | 2026-02-07 |
+| Request::get() 走 __call 返回整个 _data | 1 | 2026-03-13 |
 
 ### 技能关联强度
 

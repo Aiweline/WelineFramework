@@ -82,7 +82,15 @@
 
 ---
 
-**版本**: 1.0.0  
-**更新时间**: 2026-03-09  
+## 10) Request 参数获取
+
+- **禁止**依赖 `DataObject::__call` 读取请求参数。`$this->request->get('key')` 在未显式定义 `get()` 方法前，会走 `__call('get', ['key'])` → `substr('get',3)=''` → `getData('')` → 返回整个 `_data` 数组。
+- **必须**使用 `getParam()`、`getGet()`/`getQuery()`、`getPost()`、`getBodyParams()` 等明确方法。
+- 框架已修复：`Request` 类显式定义了 `get()`/`post()`/`body()` 方法覆盖 `__call`。
+
+---
+
+**版本**: 1.1.0  
+**更新时间**: 2026-03-13  
 **状态**: ✅ 生效
 
