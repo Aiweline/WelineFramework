@@ -267,12 +267,23 @@ class SseWriter
     
     /**
      * 关闭 SSE 连接
+     *
+     * 发送结束注释、刷新缓冲区，并关闭底层连接（WLS 下关闭 socket），
+     * 以便客户端能正确断开、不再重连。
      */
     public function close(): void
     {
-        // SSE 标准：发送一个空事件表示结束
-        // 客户端收到后会自动重连，除非调用 eventSource.close()
+        if (!$this->started) {
+            return;
+        }
+        // 发送结束注释，便于客户端/代理识别流结束
+        SseContext::write(": stream closed\n\n");
+        // 刷新输出，确保数据发送完毕
+        if (SseContext::getConnection() !== null && \is_resource(SseContext::getConnection())) {
+            @\fflush(SseContext::getConnection());
+        }
         $this->started = false;
+        SseContext::closeConnection();
     }
     
     /**
