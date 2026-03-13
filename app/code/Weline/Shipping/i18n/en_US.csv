@@ -1,4 +1,4 @@
-快递公司不存在,"Carrier does not exist"
+﻿快递公司不存在,"Carrier does not exist"
 快递公司代码不能为空,"Carrier code cannot be empty"
 快递公司名称不能为空,"Carrier name cannot be empty"
 物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"
@@ -207,27 +207,3 @@ ID,ID
 例如：主仓库、分仓库等,例如：主仓库、分仓库等
 暂无地址，请添加发货地址,暂无地址，请添加发货地址
 发货地址详情,发货地址详情
-搜索菜单,搜索菜单
-搜索菜单...,搜索菜单...
-常用菜单,常用菜单
-搜索结果,搜索结果
-最近访问,最近访问
-访问最多,访问最多
-运送地址不存在或无权访问,"Delivery address does not exist or access denied"
-收货地址更新成功,"Delivery address updated successfully"
-收货地址添加成功,"Delivery address added successfully"
-保存失败：%{1},"Save failed: %{1}"
-收货地址删除成功,"Delivery address deleted successfully"
-删除失败：%{1},"Delete failed: %{1}"
-默认收货地址设置成功,"Default delivery address set successfully"
-设置默认失败：%{1},"Set default failed: %{1}"
-收货地址已启用,"Delivery address enabled"
-收货地址已禁用,"Delivery address disabled"
-操作失败：%{1},"Operation failed: %{1}"
-发货地址更新成功,"Shipping address updated successfully"
-发货地址添加成功,"Shipping address added successfully"
-发货地址删除成功,"Shipping address deleted successfully"
-默认发货地址设置成功,"Default shipping address set successfully"
-发货地址已启用,"Shipping address enabled"
-发货地址已禁用,"Shipping address disabled"
-"JSON格式，例如：{""api_key"":""your_key""","api_secret:""your_secret""}"

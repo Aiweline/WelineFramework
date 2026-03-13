@@ -1,4 +1,4 @@
-服务器不存在,"Server not found"
+﻿服务器不存在,"Server not found"
 无效的请求方法,"Invalid request method"
 服务器名称不能为空,"Server name cannot be empty"
 云平台不能为空,"Cloud platform cannot be empty"
@@ -56,6 +56,3 @@ ID,ID
 确定删除,确定删除
 取消,取消
 删除失败,删除失败
-宝塔管理,"Baota Management"
-宝塔服务器,"Baota Server"
-服务器名称或标识,"Server name or identifier"

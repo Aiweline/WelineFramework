@@ -1,4 +1,4 @@
-获取支付方式列表成功,"Payment methods retrieved successfully"
+﻿获取支付方式列表成功,"Payment methods retrieved successfully"
 缺少必需参数,"Required parameters are missing"
 订单支付,"Order Payment"
 "订单号: %{1}","Order No: %{1}"
@@ -90,14 +90,3 @@
 您的订单已支付成功,"Your order has been paid successfully"
 支付未完成，请重试,"Payment incomplete, please try again"
 返回首页,"Back to Home"
-"Weline.Api 未加载","Weline.Api 未加载"
-成功,成功
-确定,确定
-请重试,请重试
-支付管理,"Payment Management"
-支付交易管理,"Payment Transaction Management"
-支付交易,"Payment Transaction"
-交易记录,"Transaction Record"
-配置信息,Configuration
-货币代码,Currency
-查询支付状态失败,"Failed to query payment status"

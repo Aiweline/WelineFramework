@@ -38,25 +38,14 @@ class Data extends \Weline\Backend\Model\Config
 
     function get(string $key = '', string $module = 'Weline_Smtp'): string|array
     {
-        if (isset($this->smtp[$module])) {
-            if ($key) {
-                return $this->smtp[$module][$key] ?? '';
-            } else {
-                return $this->smtp[$module];
+        if (!isset($this->smtp[$module])) {
+            foreach (self::keys as $k) {
+                $val = $this->getConfig($k, $module);
+                $this->smtp[$module][$k] = $val !== null && $val !== '' ? (string) $val : '';
             }
         }
-        $items = $this->systemConfig->where('module', $module, '=', 'and')->where('key', self::keys, '=', 'or')->select()->fetch()->getItems();
-        foreach ($items as $item) {
-            $this->smtp[$module][$item->getKey()] = $item->getData('v');
-        }
-
-        if ($key) {
+        if ($key !== '') {
             return $this->smtp[$module][$key] ?? '';
-        }
-        foreach (self::keys as $key) {
-            if (!isset($this->smtp[$module][$key])) {
-                $this->smtp[$module][$key] = '';
-            }
         }
         return $this->smtp[$module];
     }

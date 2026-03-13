@@ -1,4 +1,4 @@
-布局定时切换任务,"Layout Scheduled Switch Task"
+﻿布局定时切换任务,"Layout Scheduled Switch Task"
 没有需要处理的布局计划,"No layout schedules to process"
 每分钟检查并执行布局定时切换任务,"Check and execute layout scheduled switch task every minute"
 "计划 #%1 数据不完整，跳过","Schedule #%1 data incomplete"
@@ -14,29 +14,3 @@
 布局切换后触发，可用于清除缓存、更新索引等。,布局切换后触发，可用于清除缓存、更新索引等。
 布局计划触发,布局计划触发
 布局定时计划触发时触发。,布局定时计划触发时触发。
-布局管理,"Layout Management"
-布局列表,"Layout List"
-布局计划,"Layout Schedule"
-布局,Layout
-布局代码,"Layout Code"
-布局名称,"Layout Name"
-布局描述,"Layout Description"
-模块代码,"Module Code"
-布局类型,"Layout Type"
-模板路径,"Template Path"
-布局配置,"Layout Config"
-是否启用,Enabled
-排序,"Sort Order"
-预览图片,"Preview Image"
-计划ID,"Schedule ID"
-布局ID,"Layout ID"
-开始时间,"Start Time"
-结束时间,"End Time"
-是否循环执行,"Is Recurring"
-Cron表达式,"Cron Expression"
-状态,Status
-待执行,Pending
-活动,Active
-已完成,Completed
-已取消,Cancelled
-描述,Description
