@@ -310,12 +310,28 @@ class Install extends CommandAbstract
 
     /**
      * 仅安装指定推荐项（扩展名或依赖名称），例如 env:install event -y
+     * 支持必需扩展（如 pdo_pgsql）和推荐扩展，便于 run.php 在数据库初始化前显式安装数据库驱动
      */
     private function executeInstallTarget(string $target, EnvCheckResult $result, bool $skipConfirm): void
     {
         $targetLower = strtolower($target);
+        $missing = $result->getMissingExtensions();
         $missingRec = $result->getMissingRecommendedExtensions();
         $unsatisfiedRec = $result->getUnsatisfiedRecommendedItems();
+
+        // 必需扩展（如 pdo_pgsql 数据库驱动）也可单独安装：env:install pdo_pgsql -y
+        if (in_array($targetLower, array_map('strtolower', $missing), true)) {
+            $this->printer->note(__('正在安装数据库驱动扩展: %{ext}', ['ext' => $target]));
+            $installed = $this->tryInstallExtension($targetLower);
+            if ($installed) {
+                $this->statusService->markInstalled('extension', $targetLower);
+                $this->printer->success(__('扩展 %{ext} 已启用 ✔', ['ext' => $target]));
+            } else {
+                $this->printer->warning(__('扩展 %{ext} 自动安装失败', ['ext' => $target]));
+                $this->printExtensionInstallGuide($targetLower);
+            }
+            return;
+        }
 
         if (in_array($targetLower, array_map('strtolower', $missingRec), true)) {
             $this->printer->note(__('正在安装推荐扩展: %{ext}', ['ext' => $target]));

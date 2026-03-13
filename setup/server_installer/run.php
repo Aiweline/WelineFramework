@@ -9,6 +9,26 @@ declare(strict_types=1);
 
 $projectRoot = dirname(__DIR__, 2);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnvLoader.php';
+
+/** 优先使用项目 PHP（extend/server/php），非 root 时需提权的命令由内部加 sudo */
+$resolveProjectPhpBin = static function (string $root, string $phpDir): string {
+    $bin = 'php';
+    if (DIRECTORY_SEPARATOR === '\\') {
+        if (is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe')) {
+            $bin = '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe' . '"';
+        } elseif (defined('PHP_BINARY') && PHP_BINARY !== '') {
+            $bin = (string) PHP_BINARY;
+        }
+    } else {
+        $phpPath = $phpDir . DIRECTORY_SEPARATOR . 'php';
+        if (is_file($phpPath) && is_executable($phpPath)) {
+            $bin = $phpPath;
+        } elseif (defined('PHP_BINARY') && PHP_BINARY !== '' && PHP_BINARY !== 'php') {
+            $bin = (string) PHP_BINARY;
+        }
+    }
+    return $bin;
+};
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'SetupPgsqlDatabase.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'ConfigurePhpIni.php';
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnsurePgsqlData.php';
@@ -35,7 +55,7 @@ if ($isEnvPhpInstalled($envPhpFile)) {
             // -y：系统已安装时直接执行 setup:upgrade，不询问、不断开（快捷路径，跳过 composer 等）
             $env = (new EnvLoader($projectRoot))->load(true);
             $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
-            $phpBin = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+            $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
             $run = function (string $cmd) use ($phpBin): int {
                 $full = $phpBin . ' ' . $cmd;
                 echo "执行命令：$full\n";
@@ -150,7 +170,7 @@ $fromStep5b = in_array('--from', $argv, true)
     && $argv[$i + 1] === '5b';
 
 $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
-$phpBin = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+$phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
 $run = function (string $cmd) use ($projectRoot, $phpBin): int {
     $full = $phpBin . ' ' . $cmd;
     echo "执行命令：$full\n";
@@ -251,6 +271,22 @@ if (is_dir($pgsqlBin)) {
 
 // 5a. 若 extend/server/pgsql 存在，确保 data 已初始化并启动（与 install.sh Linux 数据目录一致）
 (new EnsurePgsqlData($projectRoot))->ensure();
+
+// 5a2. 数据库驱动自动安装：pdo_pgsql 未加载时执行 env:install pdo_pgsql -y，成功时重新执行本脚本（--from 5b）以便新进程加载扩展
+if (!extension_loaded('pdo_pgsql')) {
+    echo "Step 5a2: pdo_pgsql 未加载，正在执行 env:install pdo_pgsql -y 尝试自动安装...\n";
+    $installCode = $run('bin/w env:install pdo_pgsql -y');
+    if ($installCode === 0) {
+        echo "数据库驱动安装已成功，正在重新执行以加载扩展...\n";
+        $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe')
+            ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"'
+            : (is_file($phpDir . DIRECTORY_SEPARATOR . 'php') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php"' : 'php');
+        $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
+        passthru($runCmd, $code);
+        exit($code);
+    }
+    fwrite(STDERR, "WARNING: env:install pdo_pgsql 未成功。Linux/Mac 请确保有 sudo 权限；Windows 需在 php.ini 启用 extension=pdo_pgsql 并将 extend/server/pgsql/bin 加入 PATH。\n");
+}
 
 // 5b. 每次运行都执行：根据 weline.env 同步 env.php 的 db，并视情况建库/校验连接
 echo "Step 5b: PostgreSQL database init (from weline.env DB_*)...\n";
