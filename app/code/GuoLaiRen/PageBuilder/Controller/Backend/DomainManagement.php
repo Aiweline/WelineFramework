@@ -1522,6 +1522,14 @@ class DomainManagement extends BaseController
                     $sse->sendEvent('info', ['message' => $msg]);
                     return;
                 }
+                if ($event === 'sync_records_result' || $event === 'registrar_ns_check' || $event === 'wait_ns_start' || $event === 'wait_ns_registrar_detail') {
+                    $sse->sendEvent('info', ['message' => $msg]);
+                    return;
+                }
+                if ($event === 'switch_ns_error') {
+                    $sse->sendEvent('info', ['message' => __('[错误] %{1}', [$msg]), 'type' => 'error']);
+                    return;
+                }
                 if ($event === 'wait_ns_progress') {
                     $elapsed = (int) ($data['elapsed'] ?? 0);
                     $live = $data['live'] ?? [];
