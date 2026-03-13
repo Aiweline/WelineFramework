@@ -125,28 +125,69 @@ if [[ "$PLATFORM" == "mac" ]] && { [[ "${EUID:-$(id -u)}" -eq 0 ]] || [[ -n "${S
   exit 1
 fi
 
-# 向 PATH 追加（避免重复）；同时在本 shell 中生效；Mac/Linux 下若配置文件不存在则创建，确保安装后新终端可用 php/pgsql
+# 获取目标用户的 home 目录（安装后实际使用 PATH 的用户）
+get_target_home() {
+  if [[ "$PLATFORM" == "linux" ]] && [[ -n "${WELINE_USER:-}" ]] && getent passwd "$WELINE_USER" &>/dev/null; then
+    getent passwd "$WELINE_USER" | cut -d: -f6
+    return
+  fi
+  echo "${HOME:-}"
+}
+
+# 向 PATH 追加（置前，覆盖系统 php）；同时在本 shell 中生效；若需 sudo 写 profile.d 则自动调用
 add_to_path() {
   local dir="$1"
   [[ ! -d "$dir" ]] && return
   export PATH="$dir:$PATH"
   local line="export PATH=\"$dir:\$PATH\""
-  # Linux：.bashrc + .profile（登录 shell 常用）+ .bash_profile + .zshrc
-  # Mac：默认 zsh，.zshrc + .zprofile（登录 shell）+ .bash_profile + .bashrc
-  local rc_files=(~/.bashrc ~/.profile ~/.bash_profile ~/.zshrc)
-  [[ "$PLATFORM" == "mac" ]] && rc_files=(~/.zshrc ~/.zprofile ~/.bash_profile ~/.bashrc)
+  local target_home
+  target_home="$(get_target_home)"
+  [[ -z "$target_home" ]] && target_home="${HOME:-}"
+  # Linux：优先写目标用户 home 下的 rc；Mac：当前用户
+  local rc_files=()
+  if [[ -n "$target_home" ]]; then
+    rc_files=("$target_home/.bashrc" "$target_home/.profile" "$target_home/.bash_profile" "$target_home/.zshrc" "$target_home/.zprofile")
+    [[ "$PLATFORM" == "mac" ]] && rc_files=("$target_home/.zshrc" "$target_home/.zprofile" "$target_home/.bash_profile" "$target_home/.bashrc")
+  fi
   for f in "${rc_files[@]}"; do
+    [[ -z "$f" ]] || [[ "$f" == /. ]] && continue
     if [[ ! -f "$f" ]]; then
-      touch "$f" 2>/dev/null || continue
+      touch "$f" 2>/dev/null || run_privileged touch "$f" 2>/dev/null || continue
     fi
     if grep -qF "$dir" "$f" 2>/dev/null; then
       continue
     fi
-    echo "" >> "$f"
-    echo "# WelineFramework install: $dir" >> "$f"
-    echo "$line" >> "$f"
-    echo "Added to $f: $dir"
+    if { echo "" >> "$f" && echo "# WelineFramework install: $dir" >> "$f" && echo "$line" >> "$f"; } 2>/dev/null; then
+      echo "Added to $f: $dir"
+    else
+      run_privileged bash -c "echo '' >> \"$f\" && echo '# WelineFramework install: $dir' >> \"$f\" && echo '$line' >> \"$f\"" 2>/dev/null && echo "Added to $f (sudo): $dir" || true
+    fi
   done
+}
+
+# Linux：写入 /etc/profile.d/weline-path.sh，使项目 php/pgsql/bin/w 在登录 shell 中优先于系统
+# 需 sudo，确保新终端、SSH、su - 等均使用项目安装的 php
+add_to_profile_d() {
+  [[ "$PLATFORM" != "linux" ]] && return
+  local ph="$SERVER_DIR/php/bin"
+  local pg="$SERVER_DIR/pgsql/bin"
+  local bn="$ROOT/bin"
+  local content="# WelineFramework - prepend project php/pgsql/w to PATH (written by install.bash)
+# Ensures project PHP takes precedence over system PHP
+"
+  [[ -d "$ph" ]] && content="${content}[ -d '$ph' ] && export PATH='$ph':\"\$PATH\"
+"
+  [[ -d "$pg" ]] && content="${content}[ -d '$pg' ] && export PATH='$pg':\"\$PATH\"
+"
+  [[ -d "$bn" ]] && content="${content}[ -d '$bn' ] && export PATH='$bn':\"\$PATH\"
+"
+  if [[ ! -d "$ph" ]] && [[ ! -d "$pg" ]] && [[ ! -d "$bn" ]]; then
+    return
+  fi
+  if run_privileged tee /etc/profile.d/weline-path.sh >/dev/null <<< "$content"; then
+    run_privileged chmod 644 /etc/profile.d/weline-path.sh 2>/dev/null || true
+    echo "Added /etc/profile.d/weline-path.sh (system-wide, login shells)"
+  fi
 }
 
 # 需 root 权限的操作统一通过 sudo 执行（含 root 运行时）
@@ -1244,10 +1285,12 @@ for c in "${COMPONENTS[@]}"; do
   esac
 done
 
-# 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（Linux/Mac 新开终端即可用 php、psql、w）
+# 安装后：将 php、pgsql、项目 bin（w 命令）写入环境变量（置前，优先于系统 php）
+# Linux 同时写 /etc/profile.d/weline-path.sh，确保登录 shell 使用项目 php
 [[ -d "$SERVER_DIR/php/bin" ]] && add_to_path "$SERVER_DIR/php/bin"
 [[ -d "$SERVER_DIR/pgsql/bin" ]] && add_to_path "$SERVER_DIR/pgsql/bin"
 add_to_path "$ROOT/bin"
+add_to_profile_d
 
 # 安装后：由 setup/server_installer/run.php 执行（与 Windows 一致；无 PHP 则报错退出）
 # 优先使用项目自编译 PHP（extend/server/php），宝塔环境下避免使用宝塔 PHP
@@ -1471,8 +1514,40 @@ if [[ "$LINK_SYSTEM" == true ]]; then
   echo "已尝试将 php/psql 软链到 /usr/local/bin（未成功则需手动 sudo）。"
 fi
 
-echo "Done. php, pgsql and bin (w command) have been added to PATH (written to shell config)."
-echo "  Linux: ~/.bashrc, ~/.profile  |  Mac: ~/.zshrc, ~/.zprofile"
+# 验证 PATH 是否添加成功（新登录 shell 中 php/w 是否指向项目安装）
+verify_path_added() {
+  local ok=1
+  local msg=""
+  if [[ "$PLATFORM" == "linux" ]] && [[ -n "${WELINE_USER:-}" ]]; then
+    local found_php found_w
+    found_php=$(run_privileged sudo -u "$WELINE_USER" bash -l -c 'which php 2>/dev/null' 2>/dev/null || true)
+    found_w=$(run_privileged sudo -u "$WELINE_USER" bash -l -c 'which w 2>/dev/null' || true)
+    if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+      local expect_php="$SERVER_DIR/php/bin/php"
+      if [[ -z "$found_php" ]] || { [[ "$found_php" != "$expect_php" ]] && [[ "$found_php" != *"extend/server/php"* ]]; }; then
+        ok=0
+        msg="php 仍指向系统: ${found_php:-未找到}"
+      fi
+    fi
+    if [[ -x "$ROOT/bin/w" ]] && [[ -z "$found_w" ]]; then
+      ok=0
+      msg="${msg:+$msg; }w 命令未找到"
+    fi
+  fi
+  if [[ $ok -eq 0 ]] && [[ -n "$msg" ]]; then
+    echo "" >&2
+    printf '\033[33mWARNING: PATH 验证未通过 - %s\033[0m\n' "$msg" >&2
+    echo "  建议: 新开终端后执行 source ~/.bashrc 或 source /etc/profile" >&2
+    echo "  或使用 --link-system 创建系统级软链: $0 --link-system" >&2
+    echo "" >&2
+  else
+    echo "PATH 验证通过（php 与 w 将优先使用项目安装）。"
+  fi
+}
+verify_path_added
+
+echo "Done. php, pgsql and bin (w command) have been added to PATH (project paths prepended, override system PHP)."
+echo "  Linux: ~/.bashrc, ~/.profile, /etc/profile.d/weline-path.sh (login)  |  Mac: ~/.zshrc, ~/.zprofile"
 echo "To use in this terminal now:  source ~/.bashrc   (Linux) or source ~/.zshrc   (Mac)"
 echo "Or open a new terminal window. Then you can run: php bin/w setup:upgrade"
 echo "Current directory is now project root: $ROOT"
