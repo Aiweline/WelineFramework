@@ -1,0 +1,126 @@
+<?php
+/**
+ * WeShop Motor Theme - Base Layout
+ * 摩托车主题基础布局 - 继承 WeShop Default，覆盖字体、配色、Tailwind 扩展
+ */
+?>
+<!DOCTYPE html>
+<html class="light" lang="<?= $this->getLocale() ?>" data-theme="motor">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title><?= $this->getTitle() ?></title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+    <!-- Google Fonts: Oswald（标题/运动感）+ Rajdhani（正文/科技感）+ Material Symbols -->
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Rajdhani:wght@400;500;600;700&family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/>
+
+    <!-- Tailwind Config: Motor 品牌色扩展 -->
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#e31837",
+              "primary-light": "#ff4d5a",
+              "primary-dark": "#b8122a",
+              "secondary": "#2d2d2d",
+              "background-light": "#F2F2F2",
+              "background-dark": "#141414",
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#1f1f1f",
+              "text-primary-light": "#1a1a1a",
+              "text-primary-dark": "#e5e5e5",
+              "text-secondary-light": "#3d3d3d",
+              "text-secondary-dark": "#b0b0b0",
+              "border-light": "#d0d0d0",
+              "border-dark": "#3d3d3d",
+              "motor-red": "#e31837",
+              "motor-black": "#1a1a1a",
+              "motor-steel": "#8c8c8c",
+            },
+            fontFamily: {
+              "display": ["Rajdhani", "Inter", "sans-serif"],
+              "heading": ["Oswald", "sans-serif"],
+            },
+            borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.375rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings:
+        'FILL' 0,
+        'wght' 400,
+        'GRAD' 0,
+        'opsz' 24
+      }
+    </style>
+
+    <!-- Hook: head-before -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::head-before"/>
+
+    <!-- 父主题 CSS -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/main.css') ?>">
+    <!-- Motor 主题 CSS -->
+    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/motor.css') ?>">
+
+    <!-- Hook: head-after -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::head-after"/>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
+    <!-- Hook: body-start -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::body-start"/>
+
+    <div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+        <div class="layout-container flex h-full grow flex-col">
+
+            <!-- Hook: header-before -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::header-before"/>
+
+            <!-- Header -->
+            <w:theme:template layout="partials.header">
+                WeShop_Motor::frontend/partials/header/default.phtml
+            </w:theme:template>
+
+            <!-- Hook: header-after -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::header-after"/>
+
+            <!-- Main Content -->
+            <main class="flex-1">
+                <!-- Hook: content-before -->
+                <w:hook name="Weline_Theme::frontend::layouts::base::content-before"/>
+
+                <?= $this->getChildHtml('content') ?>
+
+                <!-- Hook: content-after -->
+                <w:hook name="Weline_Theme::frontend::layouts::base::content-after"/>
+            </main>
+
+            <!-- Hook: footer-before -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::footer-before"/>
+
+            <!-- Footer -->
+            <w:theme:template layout="partials.footer">
+                WeShop_Motor::frontend/partials/footer/default.phtml
+            </w:theme:template>
+
+            <!-- Hook: footer-after -->
+            <w:hook name="Weline_Theme::frontend::layouts::base::footer-after"/>
+
+        </div>
+    </div>
+
+    <!-- Hook: body-end -->
+    <w:hook name="Weline_Theme::frontend::layouts::base::body-end"/>
+
+    <!-- 主题JS -->
+    <script src="<?= $this->getStaticUrl('frontend/assets/js/main.js') ?>"></script>
+</body>
+</html>
