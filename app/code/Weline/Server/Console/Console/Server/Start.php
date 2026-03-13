@@ -449,7 +449,7 @@ class Start implements CommandInterface
 🔧 常用选项：
     -f, --foreground        前台运行（实时查看日志输出）
     -r, --force             强制重启（停止现有服务器后重新启动）
-    -h, --host=<主机>       指定主机地址（默认：127.0.0.1）
+    --host=<主机>           指定主机地址（默认：127.0.0.1；直连外网用 --host 0.0.0.0；-h 保留给帮助）
     -p, --port=<端口>       指定端口（默认：9981）
     --help                  显示此帮助信息
 
