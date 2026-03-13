@@ -29,7 +29,11 @@ use Weline\Framework\System\Process\Processer;
  * - 500ms 防抖，避免频繁触发
  * - 支持的扩展名：.php、.phtml、.json、.xml
  * 
- * 性能优化：
+ * 监控模式：
+ * - Linux + inotify 扩展：事件驱动（推荐，低延迟、低 CPU）
+ * - 其他环境：轮询模式（mtime 扫描）
+ * 
+ * 轮询模式性能优化：
  * - 目录 mtime 缓存：跳过未变更的目录
  * - 增量扫描：只检查可能变更的部分
  * - 批量处理：避免 CPU 峰值
@@ -103,6 +107,11 @@ class FileWatcher
      * 每次检查的最大目录数（避免 CPU 峰值）
      */
     private int $maxDirsPerCheck = 50;
+
+    /**
+     * inotify 最大监控目录数（受 fs.inotify.max_user_watches 限制，通常 524288）
+     */
+    private int $inotifyMaxWatches = 8192;
 
     /**
      * FileWatcher 初始化完成时间戳
@@ -476,22 +485,164 @@ class FileWatcher
     }
     
     /**
+     * 是否支持 inotify（Linux + 扩展）
+     */
+    public static function supportsInotify(): bool
+    {
+        return \stripos(\PHP_OS, 'linux') !== false && \extension_loaded('inotify');
+    }
+
+    /**
+     * 递归收集目录（用于 inotify 批量添加 watch）
+     * @return array<string> 目录绝对路径列表
+     */
+    private function collectDirsRecursive(): array
+    {
+        $dirs = [];
+        $count = 0;
+        foreach ($this->watchDirs as $root) {
+            if (!\is_dir($root)) {
+                continue;
+            }
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \RecursiveDirectoryIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::SELF_FIRST
+            );
+            $dirs[] = $root;
+            $count++;
+            foreach ($iterator as $item) {
+                if ($item->isDir() && $count < $this->inotifyMaxWatches) {
+                    $dirs[] = $item->getPathname();
+                    $count++;
+                }
+            }
+        }
+        return \array_unique($dirs);
+    }
+
+    /**
+     * 使用 inotify 监控（仅 Linux，需 inotify 扩展）
+     * @phpstan-ignore-next-line inotify 为可选扩展，未安装时不会进入此路径
+     */
+    private function watchWithInotify(): void
+    {
+        if (!\extension_loaded('inotify') || !\function_exists('inotify_init')) {
+            return;
+        }
+        /** @var resource $stream */
+        $stream = \inotify_init();
+        if ($stream === false) {
+            return;
+        }
+        \stream_set_blocking($stream, false);
+
+        $wdToPath = [];
+        $dirs = $this->collectDirsRecursive();
+        $mask = \IN_MODIFY | \IN_CREATE | \IN_DELETE | \IN_MOVED_TO | \IN_MOVED_FROM | \IN_CLOSE_WRITE | \IN_ATTRIB;
+
+        foreach ($dirs as $dir) {
+            if (!\is_dir($dir)) {
+                continue;
+            }
+            $wd = @\inotify_add_watch($stream, $dir, $mask);
+            if ($wd !== false) {
+                $wdToPath[$wd] = \rtrim($dir, \DIRECTORY_SEPARATOR);
+            }
+        }
+
+        $pendingChanges = [];
+        $lastFlushTime = 0.0;
+
+        while ($this->running) {
+            $read = [$stream];
+            $timeoutSec = (int) \max(0.2, $this->checkInterval);
+            $timeoutUsec = (int) ((\max(0.2, $this->checkInterval) - $timeoutSec) * 1_000_000);
+            if (@\stream_select($read, $write = null, $except = null, $timeoutSec, $timeoutUsec) > 0) {
+                $events = \inotify_read($stream);
+                if (\is_array($events)) {
+                    foreach ($events as $event) {
+                        $parentPath = $wdToPath[$event['wd']] ?? null;
+                        if ($parentPath === null) {
+                            continue;
+                        }
+                        $name = $event['name'] ?? '';
+                        $fullPath = $parentPath . \DIRECTORY_SEPARATOR . $name;
+                        $isDir = (bool) ($event['mask'] & \IN_ISDIR);
+
+                        if ($isDir) {
+                            if (($event['mask'] & \IN_CREATE) && \is_dir($fullPath)) {
+                                $newWd = @\inotify_add_watch($stream, $fullPath, $mask);
+                                if ($newWd !== false && \count($wdToPath) < $this->inotifyMaxWatches) {
+                                    $wdToPath[$newWd] = $fullPath;
+                                }
+                            }
+                            continue;
+                        }
+
+                        if ($this->shouldWatch($fullPath)) {
+                            $maskEv = $event['mask'];
+                            $type = ($maskEv & (\IN_DELETE | \IN_MOVED_FROM)) ? 'deleted'
+                                : (($maskEv & (\IN_CREATE | \IN_MOVED_TO)) ? 'added' : 'modified');
+                            $pendingChanges[$fullPath] = [
+                                'type' => $type,
+                                'file' => $fullPath,
+                                'mtime' => \is_file($fullPath) ? @\filemtime($fullPath) : 0,
+                            ];
+                        }
+                    }
+                }
+            }
+
+            $now = \microtime(true);
+            if (!empty($pendingChanges) && ($now - $lastFlushTime) * 1000 >= $this->debounceMs) {
+                $changes = \array_values($pendingChanges);
+                $pendingChanges = [];
+                $lastFlushTime = $now;
+                $this->updateCachesFromChanges($changes);
+                $this->triggerCallbacks($changes);
+            }
+        }
+
+        \fclose($stream);
+    }
+
+    /**
+     * 根据 inotify 变更更新 fileCache（保持与轮询模式一致）
+     */
+    private function updateCachesFromChanges(array $changes): void
+    {
+        foreach ($changes as $c) {
+            $path = $c['file'] ?? '';
+            if (($c['type'] ?? '') === 'deleted') {
+                unset($this->fileCache[$path]);
+            } else {
+                $this->fileCache[$path] = $c['mtime'] ?? @\filemtime($path);
+            }
+        }
+    }
+
+    /**
      * 启动监控（阻塞模式）
+     * 优先使用 inotify（Linux），否则轮询
      */
     public function watch(): void
     {
         $this->init();
         $this->running = true;
-        
+
+        if (self::supportsInotify()) {
+            $this->watchWithInotify();
+            return;
+        }
+
         while ($this->running) {
             $changes = $this->checkChanges();
-            
+
             if (!empty($changes)) {
                 $this->triggerCallbacks($changes);
             }
-            
-            // 使用 usleep 以减少 CPU 占用
-            \usleep((int) ($this->checkInterval * 1000000));
+
+            \usleep((int) ($this->checkInterval * 1_000_000));
         }
     }
     
