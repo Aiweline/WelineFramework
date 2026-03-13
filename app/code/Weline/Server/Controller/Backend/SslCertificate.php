@@ -233,7 +233,7 @@ class SslCertificate extends BaseController
     /**
      * 本地/回环域名（禁止删除，用于后台访问）
      */
-    private const PROTECTED_DOMAINS = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
+    private const PROTECTED_DOMAINS = ['localhost', '127.0.0.1', '::1'];
 
     /**
      * 删除证书
