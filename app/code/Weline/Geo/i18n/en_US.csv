@@ -1,4 +1,4 @@
-定位成功,"Location successful"
+﻿定位成功,"Location successful"
 经纬度参数不能为空,经纬度参数不能为空
 经纬度格式不正确,经纬度格式不正确
 经纬度范围不正确,经纬度范围不正确
@@ -47,38 +47,3 @@ Geo模块未加载,Geo模块未加载
 IP定位服务响应错误,"IP location service response error"
 IP定位失败,"IP location failed"
 "IP定位服务不可用: %{1}","IP location service unavailable: %{1}"
-手动选择功能开发中...,手动选择功能开发中...
-Geo定位模块,"Geo Location Module"
-浏览器定位,"Browser Location"
-IP定位,"IP Location"
-智能定位,"Smart Location"
-位置缓存,"Position Cache"
-位置监听,"Position Watch"
-获取当前位置,"Get Current Position"
-监听位置变化,"Watch Position Changes"
-清除位置监听,"Clear Position Watch"
-清除缓存,"Clear Cache"
-设置缓存时长,"Set Cache Duration"
-纬度,Latitude
-经度,Longitude
-精度,Accuracy
-海拔,Altitude
-海拔精度,"Altitude Accuracy"
-方向,Heading
-速度,Speed
-国家,Country
-国家代码,"Country Code"
-地区,Region
-省份,Province
-城市,City
-时区,Timezone
-时间戳,Timestamp
-定位来源,"Location Source"
-浏览器不支持定位功能，将使用IP定位,"Browser does not support location, will use IP location"
-"使用浏览器定位，精度: %{1} 米","Using browser location, accuracy: %{1} meters"
-"使用IP定位，城市: %{1}","Using IP location, city: %{1}"
-所有定位方式都失败,"All location methods failed"
-无法自动填充地址,"Unable to auto-fill address"
-请允许浏览器定位权限以使用此功能,"Please allow browser location permission to use this feature"
-定位服务暂时不可用，请稍后重试,"Location service temporarily unavailable, please try again later"
-网络错误，请稍后重试,"Network error, please try again later"

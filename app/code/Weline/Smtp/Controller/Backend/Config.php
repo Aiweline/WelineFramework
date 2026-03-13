@@ -12,12 +12,15 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
+use Weline\Framework\App\Controller\BackendController;
 
-class Config extends \Weline\Admin\Controller\BaseController
+#[Acl('Weline_Smtp::system_smtp_config', 'SMTP 配置', 'mdi-email-send-outline', 'SMTP 邮件服务配置', 'Weline_Smtp::system_smtp')]
+class Config extends BackendController
 {
     /**
      * @var \Weline\Smtp\Helper\Data
@@ -29,14 +32,22 @@ class Config extends \Weline\Admin\Controller\BaseController
         $this->data = $data;
     }
 
-    function get()
+    #[Acl('Weline_Smtp::smtp_config_index', '配置页', 'mdi-cog', '查看 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function index(): string
     {
         $smtp = $this->data->get();
         $this->assign($smtp);
-        return $this->fetch();
+        return $this->fetch('Weline_Smtp::Backend/Config');
     }
 
-    function post()
+    /** @deprecated 兼容旧路由，重定向到 index */
+    public function get(): string
+    {
+        return $this->index();
+    }
+
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'mdi-content-save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function post(): string
     {
         $smtp_configs                = array_intersect_key($this->request->getPost(), array_flip(Data::keys));
         $smtp_configs['smtp_secure'] = '1';
@@ -54,19 +65,20 @@ class Config extends \Weline\Admin\Controller\BaseController
         } else {
             $this->getMessageManager()->addError($has_error);
         }
-        $this->redirect($this->_url->getBackendUrl('*/backend/config'));
+        $this->redirect($this->getBackendUrl('smtp/backend/config'));
     }
 
-    function postTest()
+    #[Acl('Weline_Smtp::smtp_config_test', '测试发送', 'mdi-send', '测试 SMTP 发送', 'Weline_Smtp::system_smtp_config')]
+    public function postTest(): string
     {
         $test_email = $this->request->getPost('smtp_test_address');
         try {
             $this->data->set('smtp_test_address', $test_email);
         } catch (Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect($this->_url->getBackendUrl('*/backend/config'));
+            $this->redirect($this->getBackendUrl('smtp/backend/config'));
         }
-        /**@var SmtpSender $smtpSender */
+        /** @var SmtpSender $smtpSender */
         $smtpSender = ObjectManager::getInstance(SmtpSender::class);
         try {
             $smtpSender->sender(
@@ -79,6 +91,6 @@ class Config extends \Weline\Admin\Controller\BaseController
         } catch (\PHPMailer\PHPMailer\Exception|Exception $e) {
             $this->getMessageManager()->addError($e->getMessage());
         }
-        $this->redirect($this->_url->getBackendUrl('*/backend/config'));
+        $this->redirect($this->getBackendUrl('smtp/backend/config'));
     }
 }
