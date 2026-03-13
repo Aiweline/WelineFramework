@@ -1,0 +1,27 @@
+<!--
+布局：account/auth - 登录/注册等认证页面
+兼容 layoutType=account.auth 的路径解析，与 account_auth/default 结构一致
+-->
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
+</head>
+<body>
+    @template(Weline_Frontend::templates/public/header.phtml)
+    
+    <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
+        <div class="auth-container">
+            <if condition="meta.contentTemplate">
+                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                <else/>
+                {{meta.content}}
+            </if>
+        </div>
+    </main>
+    
+    @template(Weline_Frontend::templates/public/footer.phtml)
+</body>
+</html>
