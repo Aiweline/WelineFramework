@@ -81,7 +81,7 @@ app/code/Weline/AutoLeadAgent/
     └── en_US.csv
 ```
 
-## 安装步骤
+## 快速开始
 
 1. **安装模块**
    ```bash
@@ -95,13 +95,16 @@ app/code/Weline/AutoLeadAgent/
    # 将生成的 agent-core.wasm 复制到 view/statics/wasm/ 目录
    ```
 
-3. **注册WASM哈希**
-   ```bash
-   # 安装脚本会自动计算并注册WASM哈希
-   # 或手动调用 WasmService::registerHash()
-   ```
+3. **安装浏览器扩展**
+   - 详见下方「浏览器扩展安装」章节
+   - 扩展路径：`app/code/Weline/AutoLeadAgent/browser-extension/`
 
-## API接口
+4. **配置模型（可选，用于端侧 AI 推理）**
+   - 进入后台：系统 → 自动寻客 → 配置
+   - 选择 Hugging Face 模型并下载
+   - 支持 Chrome Built-in AI 或 WebLLM
+
+## API 接口
 
 ### Token API
 
@@ -186,12 +189,27 @@ fetch('/api/v1/auto-lead-agent/token', {
   - 来源类型收集事件
   - 多模块扩展支持
 
-### 待完成
+- ✅ **ReAct Agent**（react-agent.js）
+  - think / act / observe / reactLoop
+  - 模型决策 + MCP 工具调用
+  - 任务执行优先级：ReAct → AutonomousPipeline → 传统管道
+- ✅ **MCP 客户端**（mcp-client.js）
+  - connectMCP、listTools、callTool
+  - 支持 AutoLeadAgent 扩展、Playwright MCP
+- ✅ **模型推理**（model-inference.js）
+  - ModelInference：callModel、generateKeywords、translateIfNeeded
+  - 翻译：Google 优先、模型降级、缓存
 
-- ⏳ WebLLM集成（Phi-3 Mini）
-- ⏳ ReAct Agent实现
-- ⏳ 客户画像智能分析
-- ⏳ 单元测试和集成测试
+### 待完成（P4-P5）
+
+- ⏳ WASM 扩展完善（mcp_protocol.cpp、agent_brain.cpp、wasm-bridge.js）
+- ⏳ 支持 inotify 监控（Linux，若适用）
+
+### 文档
+
+- ✅ 快速开始（doc/快速开始.md）
+- ✅ 使用指南（doc/使用指南.md）
+- ✅ 部署指南（doc/部署指南.md）
 
 ## 浏览器扩展安装
 

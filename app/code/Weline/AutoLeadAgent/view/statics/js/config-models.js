@@ -368,12 +368,18 @@
                 if (RECOMMENDED_MODELS[i].id === selectedModelId) { selectedModel = RECOMMENDED_MODELS[i]; break; }
             }
             if (selectedModel && selectedModel._sizeMB && selectedModel._sizeMB >= 400) {
-                var confirmMsg = '⚠️ 警告：该模型预估大小约 ' + selectedModel._sizeEstimate + '，加载后占用内存可能超过 ' + Math.round(selectedModel._sizeMB * 2.5) + 'MB。\n\n大模型可能导致浏览器卡顿甚至崩溃。\n\n推荐选择较小的模型（如 gemma-3-270m-it ~150MB）。\n\n确定要继续吗？';
-                if (!confirm(confirmMsg)) {
+                var confirmMsg = '⚠️ 该模型预估大小约 ' + selectedModel._sizeEstimate + '，加载后占用内存可能超过 ' + Math.round(selectedModel._sizeMB * 2.5) + 'MB。大模型可能导致浏览器卡顿甚至崩溃。推荐选择较小的模型（如 gemma-3-270m-it ~150MB）。确定要继续吗？';
+                if (typeof BackendConfirm !== 'undefined' && BackendConfirm && BackendConfirm.show) {
+                    BackendConfirm.show(confirmMsg, { title: '大模型警告', type: 'warning' }).then(function (confirmed) {
+                        if (confirmed) performSaveConfig();
+                    });
                     return;
                 }
             }
+            performSaveConfig();
+        }
 
+        async function performSaveConfig() {
             var enabled = enabledInput ? enabledInput.checked : false;
             var cache = cacheInput ? parseInt(cacheInput.value || '10240', 10) : 10240;
 

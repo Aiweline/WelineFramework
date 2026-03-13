@@ -171,23 +171,24 @@ Decision:
     }
 
     /**
-     * 格式化工具描述
-     * @param {Object} tool 工具对象
+     * 格式化工具描述（兼容 MCP 工具多种结构：name+description 或含 inputSchema）
+     * @param {Object} tool 工具对象 {name, description?, inputSchema?, parameters?}
      * @returns {string} 格式化的工具描述
      */
     function formatToolDescription(tool) {
-        if (!tool) {
+        if (!tool || !tool.name) {
             return '';
         }
-
-        return `
-### ${tool.name}
-用途：${tool.description || ''}
-参数：
-${JSON.stringify(tool.inputSchema || {}, null, 2)}
-返回：
-${JSON.stringify(tool.outputSchema || {}, null, 2)}
-`;
+        var desc = tool.description || '';
+        var params = tool.inputSchema || tool.parameters || tool.argumentsSchema || null;
+        var paramsStr = params && typeof params === 'object'
+            ? JSON.stringify(params, null, 2)
+            : '（根据工具名称推断）';
+        var outSchema = tool.outputSchema || null;
+        var outStr = outSchema && typeof outSchema === 'object'
+            ? JSON.stringify(outSchema, null, 2)
+            : '（工具执行结果）';
+        return '\n### ' + tool.name + '\n用途：' + desc + '\n参数：\n' + paramsStr + '\n返回：\n' + outStr + '\n';
     }
 
     /**

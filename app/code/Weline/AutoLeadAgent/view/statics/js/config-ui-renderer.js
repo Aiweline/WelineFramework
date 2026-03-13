@@ -25,22 +25,17 @@ var ConfigUIRenderer = (function () {
     function getDeviceMemoryMB() {
         // navigator.deviceMemory 返回设备 RAM 大小（GB），但仅支持部分浏览器且可能被舍入
         if (typeof navigator !== 'undefined' && navigator.deviceMemory) {
-            var deviceMemGB = navigator.deviceMemory;
-            console.log('[ConfigUIRenderer] 设备内存:', deviceMemGB, 'GB');
-            return deviceMemGB * 1024; // 转换为 MB
+            return navigator.deviceMemory * 1024; // 转换为 MB
         }
         
         // performance.memory (仅 Chrome 支持)
         if (typeof performance !== 'undefined' && performance.memory) {
-            var jsHeapLimit = performance.memory.jsHeapSizeLimit;
-            var limitMB = jsHeapLimit / (1024 * 1024);
-            console.log('[ConfigUIRenderer] JS 堆上限:', limitMB.toFixed(0), 'MB');
+            var limitMB = performance.memory.jsHeapSizeLimit / (1024 * 1024);
             // JS 堆上限通常是系统内存的一部分，估算设备内存约为堆限制的 2-4 倍
             return limitMB * 2;
         }
         
         // 默认假设 4GB
-        console.log('[ConfigUIRenderer] 无法检测设备内存，默认 4GB');
         return 4096;
     }
 
@@ -68,12 +63,16 @@ var ConfigUIRenderer = (function () {
         var availableMB = deviceMemoryMB * 0.7;
         var exceeded = requiredMB > availableMB;
         
+        var formatMem = function (mb) {
+            if (mb >= 1024) return Math.ceil(mb / 1024 * 10) / 10 + ' GB';
+            return Math.round(mb) + ' MB';
+        };
         return {
             exceeded: exceeded,
             required: requiredMB,
             available: availableMB,
-            message: exceeded 
-                ? '此模型需要约 ' + Math.ceil(requiredMB / 1024 * 10) / 10 + ' GB 内存，超出设备可用内存（约 ' + Math.ceil(availableMB / 1024 * 10) / 10 + ' GB）'
+            message: exceeded
+                ? '此模型需要约 ' + formatMem(requiredMB) + ' 内存，超出设备可用内存（约 ' + formatMem(availableMB) + '）'
                 : ''
         };
     }
@@ -117,7 +116,6 @@ var ConfigUIRenderer = (function () {
 
         // 获取设备内存（缓存）
         var deviceMemoryMB = getCachedDeviceMemory();
-        console.log('[ConfigUIRenderer] 设备内存:', deviceMemoryMB, 'MB');
 
         models.forEach(function (m) {
             var modelId = m.id || m.name || '';
