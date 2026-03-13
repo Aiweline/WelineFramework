@@ -165,6 +165,7 @@ if (\is_array($envConfig)) {
  */
 function _loadSniCertsFromMap(): array
 {
+    global $_domainPolicies;
     $mapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
     if (!\is_file($mapFile)) {
         return [];
@@ -177,6 +178,7 @@ function _loadSniCertsFromMap(): array
             return [];
         }
         $certs = [];
+        $policies = [];
         foreach ($map as $domain => $pair) {
             $certPath = (string)($pair['cert'] ?? '');
             $keyPath = (string)($pair['key'] ?? '');
@@ -186,11 +188,29 @@ function _loadSniCertsFromMap(): array
                     'local_pk' => $keyPath,
                 ];
             }
+            if ($domain !== '') {
+                $policies[(string)$domain] = [
+                    'force_https' => (int) ($pair['force_https'] ?? 1),
+                    'force_root_to_www' => (int) ($pair['force_root_to_www'] ?? 0),
+                ];
+            }
         }
+        $_domainPolicies = $policies;
         return $certs;
     } catch (\Throwable) {
         return [];
     }
+}
+
+/**
+ * 获取指定域名的重定向策略。
+ *
+ * @return array{force_https: int, force_root_to_www: int}
+ */
+function _getDomainPolicy(string $domain): array
+{
+    global $_domainPolicies;
+    return $_domainPolicies[$domain] ?? ['force_https' => 1, 'force_root_to_www' => 0];
 }
 
 /**
@@ -246,6 +266,7 @@ function _resolveSniCert(string $domain, array &$cache): ?array
  */
 function _restoreCertFromDb(string $domain): bool
 {
+    global $_domainPolicies;
     static $attempted = [];
     if (isset($attempted[$domain])) {
         return false;
@@ -257,7 +278,20 @@ function _restoreCertFromDb(string $domain): bool
         $sslService = \Weline\Framework\Manager\ObjectManager::getInstance(
             \Weline\Server\Service\SslCertificateService::class
         );
-        return $sslService->restoreCertificateFromDb($domain);
+        $restored = $sslService->restoreCertificateFromDb($domain);
+        if ($restored) {
+            $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Server\Model\SslCertificate::class, [], false
+            );
+            $certModel->clearQuery()->loadByDomain($domain);
+            if ($certModel->getCertId()) {
+                $_domainPolicies[$domain] = [
+                    'force_https' => $certModel->getForceHttps() ? 1 : 0,
+                    'force_root_to_www' => $certModel->getForceRootToWww() ? 1 : 0,
+                ];
+            }
+        }
+        return $restored;
     } catch (\Throwable $e) {
         WlsLogger::warning_("证书数据库恢复失败：{$domain} - {$e->getMessage()}");
         return false;
@@ -332,6 +366,9 @@ function _parseSniHostFromClientHello(string $data): ?string
     }
     return null;
 }
+
+// 域名策略缓存（force_https / force_root_to_www），由 _loadSniCertsFromMap() 填充
+$_domainPolicies = [];
 
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 // 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
@@ -1492,7 +1529,6 @@ while (true) {
             );
             
             if ($isPlainHttp) {
-                // HTTP 请求，执行 301 重定向到 HTTPS
                 $raw = '';
                 while (\strpos($raw, "\r\n\r\n") === false && \strlen($raw) < 65536) {
                     $chunk = @\fread($conn, 8192);
@@ -1515,17 +1551,38 @@ while (true) {
                 if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
                     $redirectHost = \trim($h[1]);
                 }
-                $redirectPort = (int) $port;
-                if (\strpos($redirectHost, ':') !== false) {
-                    $redirectUrl = "https://{$redirectHost}{$path}";
-                } else {
-                    $redirectUrl = ($redirectPort === 443)
-                        ? "https://{$redirectHost}{$path}"
-                        : "https://{$redirectHost}:{$redirectPort}{$path}";
+
+                $hostOnly = \strtolower(\explode(':', $redirectHost)[0]);
+                $policy = _getDomainPolicy($hostOnly);
+
+                if ($policy['force_https'] === 1) {
+                    $redirectPort = (int) $port;
+                    if (\strpos($redirectHost, ':') !== false) {
+                        $redirectUrl = "https://{$redirectHost}{$path}";
+                    } else {
+                        $redirectUrl = ($redirectPort === 443)
+                            ? "https://{$redirectHost}{$path}"
+                            : "https://{$redirectHost}:{$redirectPort}{$path}";
+                    }
+
+                    if ($policy['force_root_to_www'] === 1) {
+                        $hostParts = \explode('.', $hostOnly);
+                        if (\count($hostParts) === 2) {
+                            $wwwHost = 'www.' . $hostOnly;
+                            $redirectUrl = ($redirectPort === 443 || \strpos($redirectHost, ':') !== false)
+                                ? "https://{$wwwHost}{$path}"
+                                : "https://{$wwwHost}:{$redirectPort}{$path}";
+                        }
+                    }
+
+                    $body = '';
+                    $response = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$redirectUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+                    @\fwrite($conn, $response);
+                    @\fclose($conn);
+                    $completedPeeks[] = $connId;
+                    continue;
                 }
-                $body = '';
-                $response = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$redirectUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
-                @\fwrite($conn, $response);
+                // force_https disabled: close plain HTTP (HTTPS-only port cannot serve HTTP)
                 @\fclose($conn);
                 $completedPeeks[] = $connId;
                 continue;
@@ -1760,6 +1817,34 @@ while (true) {
             WlsLogger::info_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
         }
         
+        // force_root_to_www：HTTPS 下根域 301 到 www 子域（在框架处理前拦截）
+        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $rawRequest, $_hostMatch)) {
+            $_reqHost = \strtolower(\trim($_hostMatch[1]));
+            $_hostOnly = \explode(':', $_reqHost)[0];
+            $_hostParts = \explode('.', $_hostOnly);
+            if (\count($_hostParts) === 2) {
+                $_p = _getDomainPolicy($_hostOnly);
+                if ($_p['force_root_to_www'] === 1) {
+                    $_reqPath = '/';
+                    if (\preg_match('/^\w+\s+(\S+)\s+/', $rawRequest, $_rm)) {
+                        $_reqPath = \parse_url($_rm[1], \PHP_URL_PATH) ?: '/';
+                    }
+                    $_wwwHost = 'www.' . $_hostOnly;
+                    $_redirectPort = (int) $port;
+                    $_wwwUrl = ($_redirectPort === 443)
+                        ? "https://{$_wwwHost}{$_reqPath}"
+                        : "https://{$_wwwHost}:{$_redirectPort}{$_reqPath}";
+                    $_body = '';
+                    $_resp = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$_wwwUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                    @\fwrite($conn, $_resp);
+                    @\fclose($conn);
+                    unset($connections[$connId], $connectionTimes[$connId], $requestBuffers[$connId]);
+                    $activeRequests--;
+                    continue;
+                }
+            }
+        }
+
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
         

@@ -63,6 +63,10 @@ class SslCertificate extends Model
     public const schema_fields_LAST_RENEW_AT = 'last_renew_at';
     #[Col('text', comment: '续签错误信息')]
     public const schema_fields_RENEW_ERROR = 'renew_error';
+    #[Col('int', 1, default: 1, comment: '强制HTTPS')]
+    public const schema_fields_FORCE_HTTPS = 'force_https';
+    #[Col('int', 1, default: 0, comment: '根域跳转www')]
+    public const schema_fields_FORCE_ROOT_TO_WWW = 'force_root_to_www';
     #[Col('datetime', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', comment: '更新时间')]
@@ -235,6 +239,28 @@ class SslCertificate extends Model
     public function getCsrPem(): string
     {
         return (string) ($this->getData(self::schema_fields_CSR_PEM) ?? '');
+    }
+
+    public function setForceHttps(bool $force): self
+    {
+        $this->setData(self::schema_fields_FORCE_HTTPS, $force ? 1 : 0);
+        return $this;
+    }
+
+    public function getForceHttps(): bool
+    {
+        return (int) ($this->getData(self::schema_fields_FORCE_HTTPS) ?? 1) === 1;
+    }
+
+    public function setForceRootToWww(bool $force): self
+    {
+        $this->setData(self::schema_fields_FORCE_ROOT_TO_WWW, $force ? 1 : 0);
+        return $this;
+    }
+
+    public function getForceRootToWww(): bool
+    {
+        return (int) ($this->getData(self::schema_fields_FORCE_ROOT_TO_WWW) ?? 0) === 1;
     }
 
     public function setIssuer(string $issuer): self

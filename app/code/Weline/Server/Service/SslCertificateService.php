@@ -372,6 +372,110 @@ class SslCertificateService
         
         return $this->loopbackIpCache[$ip] = false;
     }
+
+    /**
+     * 从完整域名提取根域（去掉第一段子域标签）
+     *
+     * 例：www.example.com → example.com，api.store.example.com → store.example.com
+     * 对于只有两段的域名（example.com）返回自身（不再截断）。
+     */
+    protected function extractRootDomain(string $domain): string
+    {
+        $parts = \explode('.', \strtolower(\trim($domain)));
+        if (\count($parts) <= 2) {
+            return \implode('.', $parts);
+        }
+        \array_shift($parts);
+        return \implode('.', $parts);
+    }
+
+    /**
+     * 检查子域名是否被泛域名证书覆盖；若是则直接复制泛域证书到该子域记录并写入磁盘，跳过 ACME 申请。
+     *
+     * @return array|null 若复制成功则返回 ensureCertificate 兼容的结果数组；否则返回 null 表示继续原流程
+     */
+    public function applyWildcardToSubdomainIfExists(string $domain, int $websiteId = 0): ?array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '' || \str_starts_with($domain, '*.')) {
+            return null;
+        }
+
+        $parts = \explode('.', $domain);
+        if (\count($parts) < 3) {
+            return null;
+        }
+
+        $rootDomain = $this->extractRootDomain($domain);
+        $wildcardCert = ObjectManager::getInstance(SslCertificate::class, [], false)
+            ->findWildcardByRoot($rootDomain);
+
+        if ($wildcardCert === null) {
+            return null;
+        }
+
+        $certPem  = $wildcardCert->getCertPem();
+        $keyPem   = $wildcardCert->getKeyPem();
+        if ($certPem === '' || $keyPem === '') {
+            return null;
+        }
+
+        $now = \date('Y-m-d H:i:s');
+        $expiresAt = $wildcardCert->getExpiresAt();
+        if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
+            w_log_info(__('[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书', [$rootDomain, $domain]));
+            return null;
+        }
+
+        $subCert = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $subCert->clearQuery()->loadByDomain($domain);
+
+        if (!$subCert->getCertId()) {
+            $subCert->setDomain($domain);
+        }
+
+        $subCert->setCertPem($certPem)
+            ->setKeyPem($keyPem)
+            ->setChainPem($wildcardCert->getChainPem())
+            ->setCsrPem($wildcardCert->getCsrPem())
+            ->setIssuer($wildcardCert->getIssuer())
+            ->setProvider($wildcardCert->getProvider())
+            ->setIssuedAt($wildcardCert->getIssuedAt())
+            ->setExpiresAt($expiresAt)
+            ->setStatus(SslCertificate::STATUS_ACTIVE)
+            ->setAutoRenew(true)
+            ->setHttpsEnabled(true)
+            ->setCertType(SslCertificate::CERT_TYPE_EXACT)
+            ->setUpdatedAt($now);
+
+        if (!$subCert->getCertId()) {
+            $subCert->setCreatedAt($now);
+        }
+        if ($websiteId > 0) {
+            $subCert->setWebsiteId($websiteId);
+        }
+
+        $subCert->save();
+
+        $this->restoreCertificateFilesFromData($subCert->getData());
+
+        $certDir = $this->getCertificateDir($domain);
+        w_log_info(__(
+            '[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请',
+            [$domain, $rootDomain]
+        ));
+
+        return [
+            'success'     => true,
+            'message'     => __('子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书', [$domain, $rootDomain]),
+            'cert_path'   => $certDir . 'fullchain.pem',
+            'key_path'    => $certDir . 'privkey.pem',
+            'issuer'      => $wildcardCert->getIssuer(),
+            'expires_at'  => $expiresAt,
+            'is_new'      => false,
+            'ssl_enabled' => true,
+        ];
+    }
     
     /**
      * 为域名自动获取或生成证书
@@ -402,6 +506,12 @@ class SslCertificateService
                 'is_new' => false,
                 'ssl_enabled' => false,
             ];
+        }
+
+        // 0.5 泛域名覆盖检查：若存在有效泛域证书则直接复制给子域，跳过后续流程
+        $wildcardResult = $this->applyWildcardToSubdomainIfExists($domain, $websiteId);
+        if ($wildcardResult !== null) {
+            return $wildcardResult;
         }
         
         $certDir = $this->getCertificateDir($domain);
@@ -865,7 +975,6 @@ CNF;
 
             // 触发事件通知其他模块（使用事件机制解耦）
             if ($isRenewal) {
-                // 证书续签
                 $this->dispatchCertificateRenewedEvent(
                     $domain,
                     $cert->getCertId(),
@@ -873,7 +982,6 @@ CNF;
                     $expiresAt
                 );
             } else {
-                // 新证书签发
                 $this->dispatchCertificateIssuedEvent(
                     $domain,
                     $cert->getCertId(),
@@ -884,9 +992,13 @@ CNF;
                     $certType
                 );
             }
+
+            // 泛域名证书更新后同步 PEM 到子域记录
+            if ($certType === SslCertificate::CERT_TYPE_WILDCARD) {
+                $this->syncWildcardToSubdomains($domain);
+            }
             
         } catch (\Throwable $e) {
-            // 数据库更新失败不影响证书生成
             w_log_error('[SslCertificateService] ' . __('更新证书记录失败：%{1}', [$e->getMessage()]));
         }
     }
@@ -1298,6 +1410,8 @@ CNF;
                 'key' => $keyPath,
                 'chain' => $cert[SslCertificate::schema_fields_CHAIN_PATH] ?? '',
                 'cert_type' => $certType,
+                'force_https' => (int) ($cert[SslCertificate::schema_fields_FORCE_HTTPS] ?? 1),
+                'force_root_to_www' => (int) ($cert[SslCertificate::schema_fields_FORCE_ROOT_TO_WWW] ?? 0),
             ];
             
             $this->appendCertificateMapEntries($map, (string) $domain, $certType, $certData);
@@ -1800,6 +1914,13 @@ CNF;
     ): array
     {
         try {
+            // 0. 泛域名覆盖检查：若有效泛域证书已覆盖该子域，直接复制跳过 ACME
+            $wildcardResult = $this->applyWildcardToSubdomainIfExists($domain, $websiteId);
+            if ($wildcardResult !== null) {
+                $onProgress?->call($this, __('子域名 %{1} 已被泛域名覆盖，跳过申请', [$domain]));
+                return $wildcardResult;
+            }
+
             $provider = $this->normalizeAcmeProvider($provider);
             if (!\in_array($provider, [self::PROVIDER_LETS_ENCRYPT, self::PROVIDER_LITESSL], true)) {
                 return ['success' => false, 'message' => __('不支持的证书提供商：%{provider}', ['provider' => $provider]), 'cert' => null];
@@ -2045,13 +2166,94 @@ CNF;
      */
     public function renewCertificate(SslCertificate $cert, string $webroot, string $email): array
     {
-        return $this->requestCertificate(
+        $result = $this->requestCertificate(
             $cert->getDomain(),
             $webroot,
             $email,
             $cert->getWebsiteId(),
             $cert->getProvider() ?: self::PROVIDER_LETS_ENCRYPT
         );
+
+        if (($result['success'] ?? false) && $cert->getCertType() === SslCertificate::CERT_TYPE_WILDCARD) {
+            $this->syncWildcardToSubdomains($cert->getDomain());
+        }
+
+        return $result;
+    }
+
+    /**
+     * 泛域名证书续签后，将新 PEM 同步到所有引用该泛域证书的子域记录。
+     */
+    public function syncWildcardToSubdomains(string $wildcardDomain): void
+    {
+        $wildcardDomain = \strtolower(\trim($wildcardDomain));
+        if (!str_starts_with($wildcardDomain, '*.')) {
+            return;
+        }
+
+        $rootDomain = \substr($wildcardDomain, 2);
+
+        $wildcardCert = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $wildcardCert->clearQuery()->loadByDomain($wildcardDomain);
+        if (!$wildcardCert->getCertId() || $wildcardCert->getStatus() !== SslCertificate::STATUS_ACTIVE) {
+            return;
+        }
+
+        $certPem  = $wildcardCert->getCertPem();
+        $keyPem   = $wildcardCert->getKeyPem();
+        $chainPem = $wildcardCert->getChainPem();
+        $csrPem   = $wildcardCert->getCsrPem();
+        if ($certPem === '' || $keyPem === '') {
+            return;
+        }
+
+        $subCerts = ObjectManager::getInstance(SslCertificate::class, [], false)
+            ->clearQuery()
+            ->where(SslCertificate::schema_fields_CERT_TYPE, SslCertificate::CERT_TYPE_EXACT)
+            ->where(SslCertificate::schema_fields_STATUS, SslCertificate::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+
+        $now = \date('Y-m-d H:i:s');
+        $synced = 0;
+
+        foreach ($subCerts as $row) {
+            $subDomain = (string) ($row[SslCertificate::schema_fields_DOMAIN] ?? '');
+            if ($subDomain === '' || !\str_ends_with($subDomain, '.' . $rootDomain)) {
+                continue;
+            }
+            $parts = \explode('.', $subDomain);
+            if (\count($parts) < 3) {
+                continue;
+            }
+
+            $subCertModel = ObjectManager::getInstance(SslCertificate::class, [], false);
+            $subCertModel->load((int) $row[SslCertificate::schema_fields_ID]);
+            if (!$subCertModel->getCertId()) {
+                continue;
+            }
+
+            $subCertModel->setCertPem($certPem)
+                ->setKeyPem($keyPem)
+                ->setChainPem($chainPem)
+                ->setCsrPem($csrPem)
+                ->setIssuer($wildcardCert->getIssuer())
+                ->setProvider($wildcardCert->getProvider())
+                ->setIssuedAt($wildcardCert->getIssuedAt())
+                ->setExpiresAt($wildcardCert->getExpiresAt())
+                ->setUpdatedAt($now)
+                ->save();
+
+            $this->restoreCertificateFilesFromData($subCertModel->getData());
+            $synced++;
+        }
+
+        if ($synced > 0) {
+            w_log_info(__(
+                '[SslCertificateService] 泛域名 %{1} 续签后已同步 PEM 到 %{2} 个子域记录',
+                [$wildcardDomain, (string) $synced]
+            ));
+        }
     }
     
     /**
