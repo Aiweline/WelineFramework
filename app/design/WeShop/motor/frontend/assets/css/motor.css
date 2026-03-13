@@ -1,0 +1,181 @@
+/**
+ * 色系：Motor 摩托车主题颜色
+ *
+ * 摩托车风格的主题颜色覆盖文件
+ * @meta.name {default="Motor摩托车主题颜色",name="Motor摩托车主题颜色",description="Motor摩托车主题颜色，用于描述色系的名称"}
+ * @meta.description {default="机械运动风格，提供黑红色系主题",name="机械运动风格，提供黑红色系主题",description="机械运动风格，提供黑红色系主题，用于描述色系的用途"}
+ * @meta.theme {default="motor",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ */
+
+[data-theme="motor"] {
+    /* ========== 品牌色（摩托红） ========== */
+    --color-primary: #e31837;
+    --color-primary-light: #ff4d5a;
+    --color-primary-dark: #b8122a;
+    --color-primary-border: #9e0f24;
+
+    /* ========== 文本色 ========== */
+    --color-text-primary: #1a1a1a;
+    --color-text-secondary: #3d3d3d;
+    --color-text-tertiary: #6b6b6b;
+    --color-text-disabled: #b0b0b0;
+    --color-text-dark: #0d0d0d;
+    --color-text-muted: #4a4a4a;
+    --color-text-placeholder: #8c8c8c;
+    --color-text-light: #f5f5f5;
+    --color-text-light-secondary: #d4d4d4;
+
+    /* ========== 背景色（工业质感） ========== */
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f2f2f2;
+    --color-bg-tertiary: #e5e5e5;
+    --color-bg-dark: #1a1a1a;
+    --color-bg-dark-secondary: #111111;
+    --color-bg-dark-tertiary: #2d2d2d;
+
+    /* ========== 边框色 ========== */
+    --color-border-default: #d0d0d0;
+    --color-border-emphasis: #8c8c8c;
+    --color-border-focus: #e31837;
+    --color-border-light: #e5e5e5;
+
+    /* ========== 强调色（摩托红系） ========== */
+    --color-accent: #e31837;
+    --color-accent-hover: #b8122a;
+    --color-accent-light: rgba(227, 24, 55, 0.06);
+    --color-accent-medium: rgba(227, 24, 55, 0.12);
+    --color-accent-dark: rgba(227, 24, 55, 0.18);
+
+    /* ========== 功能色 ========== */
+    --color-success: #28a745;
+    --color-warning: #f1b44c;
+    --color-error: #dc3545;
+    --color-error-hover: #c82333;
+    --color-error-light: rgba(220, 53, 69, 0.06);
+    --color-info: #50a5f1;
+
+    /* ========== 链接色 ========== */
+    --color-link: #e31837;
+    --color-link-hover: #b8122a;
+    --color-link-visited: #7a1030;
+
+    /* ========== Header 专用颜色（深色头部） ========== */
+    --color-header-bg: #1a1a1a;
+    --color-header-bg-hover: #2d2d2d;
+    --color-header-border-hover: #404040;
+    --color-header-shadow: rgba(0, 0, 0, 0.25);
+    --color-header-focus-ring: rgba(227, 24, 55, 0.35);
+    --color-header-dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+
+    /* ========== 滚动条 ========== */
+    --scrollbar-width: 4px;
+    --scrollbar-thumb: #8c8c8c;
+    --scrollbar-thumb-hover: #6b6b6b;
+    --scrollbar-track: transparent;
+}
+
+/* ========== Motor 暗色模式 ========== */
+[data-theme="motor"].dark,
+.dark [data-theme="motor"] {
+    --color-text-primary: #e5e5e5;
+    --color-text-secondary: #b0b0b0;
+    --color-text-tertiary: #7a7a7a;
+    --color-text-disabled: #4a4a4a;
+    --color-text-dark: #f5f5f5;
+    --color-text-muted: #c4c4c4;
+    --color-text-placeholder: #6b6b6b;
+    --color-text-light: #f5f5f5;
+    --color-text-light-secondary: #d4d4d4;
+
+    --color-bg-primary: #141414;
+    --color-bg-secondary: #1f1f1f;
+    --color-bg-tertiary: #2d2d2d;
+    --color-bg-dark: #0a0a0a;
+    --color-bg-dark-secondary: #050505;
+    --color-bg-dark-tertiary: #1a1a1a;
+
+    --color-border-default: #3d3d3d;
+    --color-border-emphasis: #5c5c5c;
+    --color-border-focus: #ff4d5a;
+    --color-border-light: rgba(255, 255, 255, 0.08);
+
+    --color-accent: #ff4d5a;
+    --color-accent-hover: #ff6b75;
+    --color-accent-light: rgba(255, 77, 90, 0.15);
+    --color-accent-medium: rgba(255, 77, 90, 0.22);
+    --color-accent-dark: rgba(255, 77, 90, 0.3);
+
+    --color-success: #34ce57;
+    --color-error: #f44336;
+    --color-error-hover: #ff5252;
+    --color-error-light: rgba(244, 67, 54, 0.15);
+
+    --color-link: #ff4d5a;
+    --color-link-hover: #ff6b75;
+
+    --color-header-bg: #0a0a0a;
+    --color-header-bg-hover: #1a1a1a;
+
+    --scrollbar-thumb: #5c5c5c;
+    --scrollbar-thumb-hover: #7a7a7a;
+}
+
+/* ========== Motor 主题专属样式 ========== */
+
+/* 按钮增强：运动风格圆角与过渡 */
+[data-theme="motor"] .motor-btn-primary {
+    background-color: var(--color-primary, #e31837);
+    color: var(--color-text-light, #f5f5f5);
+    border: none;
+    border-radius: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.2s ease;
+}
+
+[data-theme="motor"] .motor-btn-primary:hover {
+    background-color: var(--color-primary-dark, #b8122a);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(227, 24, 55, 0.3);
+}
+
+/* 卡片：碳纤维质感边框 */
+[data-theme="motor"] .motor-card {
+    background: var(--color-bg-primary, #fff);
+    border: 1px solid var(--color-border-default, #d0d0d0);
+    border-radius: 2px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+[data-theme="motor"] .motor-card:hover {
+    border-color: var(--color-primary, #e31837);
+    box-shadow: 0 4px 16px rgba(227, 24, 55, 0.12);
+}
+
+/* 标签/徽章 */
+[data-theme="motor"] .motor-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2em 0.6em;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-radius: 2px;
+    background-color: var(--color-primary, #e31837);
+    color: var(--color-text-light, #f5f5f5);
+}
+
+/* 分隔线：带品牌色渐变 */
+[data-theme="motor"] .motor-divider {
+    height: 2px;
+    background: linear-gradient(
+        to right,
+        transparent,
+        var(--color-primary, #e31837),
+        transparent
+    );
+    border: none;
+    margin: 1.5rem 0;
+}
