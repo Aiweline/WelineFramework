@@ -158,6 +158,11 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
                         <span class="weline-nd-keyboard-hint text-muted small">
                             <i class="ri-keyboard-line me-1"></i><lang>使用 ← → 方向键可切换上/下一条</lang>
                         </span>
+                        <?php if (!empty($notification['topic_code'])): ?>
+                        <button type="button" class="btn btn-outline-secondary btn-sm weline-nd-mark-topic-read" data-topic-code="<?= htmlspecialchars($notification['topic_code']) ?>" data-topic-name="<?= htmlspecialchars($notification['topic_name'] ?? $notification['topic_code']) ?>">
+                            <i class="ri-checkbox-multiple-line me-1"></i><lang>此类全部已读</lang>
+                        </button>
+                        <?php endif; ?>
                         <a href="<?= $this->getBackendUrl('system/backend/notificationsubscription') ?>" class="btn btn-outline-primary btn-sm">
                             <i class="mdi mdi-cog me-1"></i><lang>订阅设置</lang>
                         </a>
@@ -416,6 +421,9 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
     'use strict';
     var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId) : 'null' ?>;
     var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId) : 'null' ?>;
+    var markTopicReadUrl = <?= json_encode($this->getBackendUrl('system/backend/notification/markTopicRead')) ?>;
+    var confirmMsg = <?= json_encode(__('确定要将「%{name}」类的所有通知标记为已读吗？', ['name' => ''])) ?>;
+
     document.addEventListener('keydown', function(e) {
         if (/input|textarea|select/i.test(document.activeElement && document.activeElement.tagName || '')) {
             return;
@@ -426,5 +434,31 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
             window.location.href = nextUrl;
         }
     });
+
+    var btn = document.querySelector('.weline-nd-mark-topic-read');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            var topicCode = btn.getAttribute('data-topic-code');
+            var topicName = btn.getAttribute('data-topic-name') || topicCode;
+            var msg = confirmMsg.replace('%{name}', topicName);
+            BackendConfirm.show(msg).then(function(confirmed) {
+                if (!confirmed) return;
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic_code: topicCode }) };
+                window.Weline.Api.request(markTopicReadUrl, opts)
+                    .then(function(res) {
+                        var data = (res && res.data) !== undefined ? res.data : res;
+                        if (data.success) {
+                            BackendToast.success(data.message || '<?= __('已标记为已读') ?>');
+                            setTimeout(function() { window.location.reload(); }, 800);
+                        } else {
+                            BackendToast.error(data.message || '<?= __('操作失败') ?>');
+                        }
+                    })
+                    .catch(function(err) {
+                        BackendToast.error('<?= __('网络错误，请重试') ?>');
+                    });
+            });
+        });
+    }
 })();
 </script>
