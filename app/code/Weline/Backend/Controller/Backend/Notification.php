@@ -115,6 +115,27 @@ class Notification extends BackendController
     }
 
     /**
+     * 按主题（topic_code）将该类通知全部标记为已读
+     * POST system/backend/notification/markTopicRead
+     */
+    public function markTopicRead(): void
+    {
+        $userId = (int) $this->session->getLoginUserId();
+        $topicCode = trim((string) $this->request->getBodyParam('topic_code', ''));
+
+        if (!$userId) {
+            $this->jsonResponse(401, false, __('未登录'));
+        }
+
+        if ($topicCode === '') {
+            $this->jsonResponse(400, false, __('请指定主题类型'));
+        }
+
+        $count = $this->notificationService->markByTopicAsRead($userId, $topicCode);
+        $this->jsonResponse(200, true, __('已将该类 %{count} 条通知标记为已读', ['count' => (string) $count]));
+    }
+
+    /**
      * 输出 JSON 并终止请求（与 Api/Notification 返回格式一致）
      */
     private function jsonResponse(int $code, bool $success, string $message): void
