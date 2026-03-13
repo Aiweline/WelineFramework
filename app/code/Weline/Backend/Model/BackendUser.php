@@ -218,9 +218,9 @@ class BackendUser extends Model implements AuthenticableInterface
     {
         /**@var UserRole $userRole */
         $userRole = ObjectManager::getInstance(UserRole::class);
-        $userRole->setUserId($this->getId())
-            ->setRoleId($role_id)
-            ->save(true);
+        $userId = (int) $this->getId();
+        $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete();
+        $userRole->clearData()->setUserId($userId)->setRoleId($role_id)->save(true);
     }
 
     public function save_before(): void
