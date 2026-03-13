@@ -181,6 +181,36 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->getServer('HTTP_' . strtoupper($key));
     }
 
+    /**
+     * 按 key 获取请求参数（GET/POST/Body 合并）
+     *
+     * 显式定义以覆盖 DataObject::__call('get', ...) 的歧义行为：
+     * __call 会将 get('key') 解析为 getData('') 从而返回整个 _data 数组。
+     */
+    public function get(string $key, mixed $default = null): mixed
+    {
+        return $this->getParam($key, $default ?? '');
+    }
+
+    /**
+     * 按 key 获取 POST 参数的便捷方法
+     */
+    public function post(string $key = '', mixed $default = null): mixed
+    {
+        return $this->getPost($key, $default);
+    }
+
+    /**
+     * 按 key 获取 Body 参数的便捷方法
+     */
+    public function body(string $key = '', mixed $default = null): mixed
+    {
+        if ($key === '') {
+            return $this->getBodyParams();
+        }
+        return $this->getBodyParam($key, $default);
+    }
+
     public function getParam(string $key, mixed $default = '', string $filter = '')
     {
         $filterType = $filter ?: gettype($default);
