@@ -1883,20 +1883,53 @@ class Start extends CommandAbstract
             return false;
         }
 
-        // 验证 setcap 是否生效
-        $testSocket = @\stream_socket_server(
-            "tcp://0.0.0.0:{$privilegedPorts[0]}",
-            $errno,
-            $errstr,
-            STREAM_SERVER_BIND
-        );
-        if ($testSocket) {
-            @\fclose($testSocket);
-            $this->printer->success(__('setcap 授权成功！PHP 已可绑定特权端口，以当前用户身份继续启动。'));
-            return true;
+        // 用 getcap 验证 capability 已写入
+        if ($getcapBin !== '') {
+            $verifyCap = \trim((string) @\shell_exec(\escapeshellarg($getcapBin) . ' ' . \escapeshellarg($realPhpBin) . ' 2>/dev/null'));
+            if (\stripos($verifyCap, 'cap_net_bind_service') === false) {
+                $this->printer->warning(__('setcap 执行成功但 getcap 未检测到 capability，可能被 SELinux/AppArmor 拦截。'));
+                return false;
+            }
         }
 
-        $this->printer->warning(__('setcap 已执行但绑定仍失败（%{1}），将回退到 sudo 方式。', [$errstr]));
+        // setcap 只对新进程生效，当前进程无法直接获得新 capability，需要以当前用户重新启动
+        $this->printer->success(__('setcap 授权成功！capability 已写入 PHP 二进制，以当前用户重新启动服务...'));
+
+        $this->releaseStartLock();
+
+        $rawArgv = $_SERVER['argv'] ?? [];
+        if (!\is_array($rawArgv) || empty($rawArgv)) {
+            $this->printer->note(__('请手动重新执行：php bin/w server:start ...'));
+            return false;
+        }
+        $parts = \array_merge([PHP_BINARY], $rawArgv);
+        $escaped = \array_map('escapeshellarg', $parts);
+        $relaunchCommand = \implode(' ', $escaped);
+
+        $relaunchExitCode = 0;
+        if (\function_exists('passthru')) {
+            @\passthru($relaunchCommand, $relaunchExitCode);
+        } elseif (\function_exists('proc_open')) {
+            $proc = @\proc_open(
+                $relaunchCommand,
+                [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+                $pipes,
+                null,
+                null
+            );
+            if (\is_resource($proc)) {
+                $relaunchExitCode = (int) \proc_close($proc);
+            } else {
+                $relaunchExitCode = -1;
+            }
+        } else {
+            $this->printer->note(__('请手动重新执行：%{1}', [$relaunchCommand]));
+            return false;
+        }
+        if ($relaunchExitCode !== 0) {
+            $this->printer->error(__('重启失败，退出码：%{1}', [(string) $relaunchExitCode]));
+        }
+        // 当前进程应终止，新进程已接管
         return false;
     }
 
