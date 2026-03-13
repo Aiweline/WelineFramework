@@ -45,7 +45,8 @@ class SafeRecursiveDirectoryIterator extends \RecursiveDirectoryIterator
     {
         try {
             return parent::getChildren();
-        } catch (\UnexpectedValueException $e) {
+        } catch (\Throwable $e) {
+            // 常见于 root 创建了 view/tpl、generated 等目录，weline 用户执行 CLI 时无读权限
             w_log_warning(__('Reflection Compile: 跳过无权限目录 %{1}，原因：%{2}', [$this->getPathname(), $e->getMessage()]));
             return new EmptyRecursiveDirectoryIterator();
         }
@@ -540,9 +541,9 @@ class Compile extends CommandAbstract
     private function scanPhpFiles(string $dir): array
     {
         $files = [];
-        
+        // 使用 SafeRecursiveDirectoryIterator：遇无权限子目录（如 root 创建的 view/tpl）时跳过，不抛异常
         $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
+            new SafeRecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS),
             \RecursiveIteratorIterator::SELF_FIRST
         );
         
