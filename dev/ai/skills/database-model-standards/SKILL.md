@@ -168,9 +168,10 @@ class YourModel extends Model
 ```
 
 - **表与主键**：显式定义 `schema_table`、`schema_primary_key`、`$_primary_key`、`$_unit_primary_keys`，与框架 AbstractModel 初始化约定一致。
-- **字段**：每个数据库列对应一个 `public const schema_fields_XXX = '列名';`，且该常量上必须有 `#[Col(type: ..., length: ..., nullable: ..., default: ..., comment: '...')]`，否则该列不会参与 `setup:upgrade` 的表结构同步。
-- **加字段 / 改表**：在 Model 上增改带 #[Col] 的 `schema_fields_*` 常量或 #[Index]，然后执行 `php bin/w setup:upgrade`。禁止在业务代码中手写 DDL 或方言 SQL。
+- **字段**：每个数据库列对应一个 `public const schema_fields_XXX = '列名';`，且该常量上必须有 `#[Col(...)]`，否则该列不会参与 `setup:upgrade` 的表结构同步。
+- **加字段 / 改表**：在 Model 上增改带 #[Col] 的 `schema_fields_*` 常量或 #[Index]，然后执行 `php bin/w setup:upgrade`，由 SchemaDiff 做 diff 并同步。禁止在业务代码或 Upgrade 阶段手写 DDL、方言 SQL 或对字段做 CRUD。
 - **业务初始化 / 种子数据**：放在模块 **Setup/Install.php**、**Setup/Upgrade.php**，不在 Model 内。
+- **Upgrade 阶段禁止字段 CRUD**：Setup/Upgrade.php 只处理**非字段变更的业务逻辑**（种子数据、数据迁移、配置更新等），**禁止**在 Upgrade 中执行 ADD COLUMN、DROP COLUMN、ALTER TABLE 等字段/表结构操作；字段变更统一由 Model 声明 + SchemaDiff 完成。
 - **columns()**：无需重写。基类 `Model::columns()` 通过 `SHOW FULL COLUMNS` 获取运行时列信息；SchemaDiff 仅通过反射读取常量上的 #[Col]。
 
 ### 2.1 SchemaParser / SchemaDiff 解析行为（必读）
