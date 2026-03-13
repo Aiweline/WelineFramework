@@ -52,7 +52,17 @@ DI编译失败：%{1},DI编译失败：%{1}
 菜单收集和系统更新完成！菜单已生效。,菜单收集和系统更新完成！菜单已生效。
 "请指定 --username=、--user_id= 或 --email= 之一","请指定 --username=、--user_id= 或 --email= 之一"
 用户不存在,"User does not exist"
-已为用户分配超管角色,已为用户分配超管角色
+已为用户分配超管角色,Assigned super admin role
+请指定 --role_id= 或 --role= 选择要分配的角色,Specify --role_id= or --role= to select role
+已为用户分配角色,Role assigned to user
+该用户已拥有该角色,User already has this role
+角色 ID %{id} 不存在,Role ID %{id} does not exist
+角色名「%{name}」不存在,Role name "%{name}" does not exist
+可用角色：,Available roles:
+暂无可用角色，请先在后台创建角色,No roles available. Create roles in backend first.
+为指定后台用户分配所选角色。,Assign selected role to backend user.
+角色ID,Role ID
+角色名,Role Name
 该用户已是超管角色,该用户已是超管角色
 分配失败,分配失败
 为指定后台用户分配超管角色。,为指定后台用户分配超管角色。
