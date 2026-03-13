@@ -1,4 +1,4 @@
-﻿开始扫描样式模板...,开始扫描样式模板...
+开始扫描样式模板...,开始扫描样式模板...
 扫描样式：%{1},扫描样式：%{1}
 缺少必需文件：%{1},缺少必需文件：%{1}
 "✓ 已更新","✓ 已更新"
@@ -152,8 +152,15 @@ SEO描述：%{1},SEO描述：%{1}
 "步骤 1/5：正在向注册商提交新 Nameserver…","Step 1/5: Submitting new nameservers to registrar…"
 "提交 NS 失败：%{1}","Failed to submit NS: %{1}"
 "Nameserver 已提交，等待全球解析生效（每 5 秒检测一次）…","Nameservers submitted; waiting for global propagation (checking every 5s)…"
+"目标账户：%{1}（%{2}），账户 ID：%{3}","Target account: %{1} (%{2}), account ID: %{3}"
+"目标 Nameserver（%{1}）：%{2}","Target Nameserver (%{1}): %{2}"
+"源注册商：%{1}，将在此处修改 NS 指向","Source registrar: %{1}, NS will be updated here"
+"Nameserver 已提交，等待全球解析生效（每 15 秒检测一次）…","Nameservers submitted; waiting for global propagation (checking every 15s)…"
 "等待 NS 生效，最多等待 30 分钟…","Waiting for NS propagation (max 30 minutes)…"
 "第 %{1} 秒检测：当前 NS %{2}，目标 NS %{3}","Check at %{1}s: current NS %{2}, target NS %{3}"
+"第 %{1} 秒检测：当前 NS %{2}，%{3}","Check at %{1}s: current NS %{2}, %{3}"
+"目标 NS（%{1}）：%{2}","Target NS (%{1}): %{2}"
+"目标 NS：%{1}","Target NS: %{1}"
 (暂无),"(none yet)"
 "NS 已生效","NS propagated"
 "等待 NS 生效超时（30 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录","NS propagation timeout (30 min). Please check and migrate records manually in DNS management later."
