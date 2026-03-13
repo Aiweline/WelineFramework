@@ -529,7 +529,7 @@ env.server,env.server
 "使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）","使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）"
 "使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）","使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）"
 显示可用策略信息,显示可用策略信息
-"监听地址（默认：127.0.0.1，仅本机；需外网访问时用 -h 0.0.0.0）","Listen address (default: 127.0.0.1, local only; use -h 0.0.0.0 for public access)"
+"监听地址（默认：127.0.0.1，仅本机；需外网访问时用 --host 0.0.0.0；-h 保留给帮助）","Listen address (default: 127.0.0.1, local only; use --host 0.0.0.0 for public access; -h reserved for help)"
 "基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）","基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）"
 "Worker 进程数（默认：auto 智能模式）","Worker 进程数（默认：auto 智能模式）"
 前台运行（查看实时日志）,前台运行（查看实时日志）
