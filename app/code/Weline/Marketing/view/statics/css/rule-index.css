@@ -1,0 +1,208 @@
+/**
+ * 营销规则管理页 - 组件样式
+ * 模块：Weline_Marketing
+ * 前缀：marketing-rule-
+ * 必须使用主题变量，支持暗色模式
+ */
+
+/* ============================================
+   容器
+   ============================================ */
+.marketing-rule-page {
+    --marketing-rule-transition: 0.2s ease;
+}
+
+/* 页面标题区域 */
+.marketing-rule-page .marketing-rule-header {
+    margin-bottom: var(--backend-spacing-lg, 1.5rem);
+}
+
+.marketing-rule-page .marketing-rule-header h4 {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    margin: 0;
+}
+
+/* ============================================
+   卡片
+   ============================================ */
+.marketing-rule-page .marketing-rule-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    box-shadow: var(--backend-card-shadow);
+    overflow: hidden;
+    transition: box-shadow var(--marketing-rule-transition), border-color var(--marketing-rule-transition);
+}
+
+.marketing-rule-page .marketing-rule-card:hover {
+    border-color: var(--backend-color-border-default, #dee2e6);
+    box-shadow: var(--backend-shadow-md);
+}
+
+/* 卡片头部 */
+.marketing-rule-page .marketing-rule-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--backend-spacing-lg, 1.5rem) var(--backend-padding-card, 1.5rem);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.marketing-rule-page .marketing-rule-card-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.marketing-rule-page .marketing-rule-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--backend-spacing-xs, 0.25rem);
+    padding: var(--backend-padding-button-sm, 0.25rem 0.75rem);
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+    border: none;
+    border-radius: var(--backend-border-radius, 0.375rem);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background var(--marketing-rule-transition), transform var(--marketing-rule-transition);
+}
+
+.marketing-rule-page .marketing-rule-add-btn:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    color: var(--backend-color-text-inverse, #fff);
+    transform: translateY(-1px);
+}
+
+.marketing-rule-page .marketing-rule-add-btn i {
+    font-size: 1rem;
+}
+
+/* 卡片主体 */
+.marketing-rule-page .marketing-rule-card-body {
+    padding: 0 var(--backend-padding-card, 1.5rem) var(--backend-padding-card, 1.5rem);
+}
+
+/* ============================================
+   表格
+   ============================================ */
+.marketing-rule-page .marketing-rule-table-wrap {
+    overflow-x: auto;
+}
+
+.marketing-rule-page .marketing-rule-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+}
+
+.marketing-rule-page .marketing-rule-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    padding: var(--backend-padding-table-cell, 0.75rem) var(--backend-spacing-md, 1rem);
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.marketing-rule-page .marketing-rule-table th:last-child {
+    text-align: center;
+    min-width: 80px;
+}
+
+.marketing-rule-page .marketing-rule-table td {
+    padding: var(--backend-padding-table-cell, 0.75rem) var(--backend-spacing-md, 1rem);
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: middle;
+}
+
+.marketing-rule-page .marketing-rule-table td:last-child {
+    text-align: center;
+}
+
+.marketing-rule-page .marketing-rule-table tbody tr {
+    transition: background var(--marketing-rule-transition);
+}
+
+.marketing-rule-page .marketing-rule-table tbody tr:hover td {
+    background: var(--backend-color-table-bg-hover, rgba(85, 110, 230, 0.04));
+}
+
+/* 交替行背景（可选） */
+.marketing-rule-page .marketing-rule-table tbody tr:nth-child(even) td {
+    background: var(--backend-color-bg-primary, #fff);
+}
+
+.marketing-rule-page .marketing-rule-table tbody tr:nth-child(even):hover td {
+    background: var(--backend-color-table-bg-hover, rgba(85, 110, 230, 0.04));
+}
+
+/*  badge 状态 */
+.marketing-rule-page .marketing-rule-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25em 0.6em;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    line-height: 1.2;
+}
+
+.marketing-rule-page .marketing-rule-badge--active {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.marketing-rule-page .marketing-rule-badge--inactive {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+/* 操作按钮 */
+.marketing-rule-page .marketing-rule-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    color: var(--backend-color-primary, #556ee6);
+    border: 1px solid var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius, 0.375rem);
+    text-decoration: none;
+    transition: all var(--marketing-rule-transition);
+}
+
+.marketing-rule-page .marketing-rule-action-btn:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary-hover, #4857d4);
+    border-color: var(--backend-color-primary-hover, #4857d4);
+}
+
+/* ============================================
+   空状态
+   ============================================ */
+.marketing-rule-page .marketing-rule-empty {
+    text-align: center;
+    padding: var(--backend-spacing-3xl, 4rem) var(--backend-spacing-xl, 2rem);
+}
+
+.marketing-rule-page .marketing-rule-empty-icon {
+    display: block;
+    font-size: 3.5rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0.5;
+    margin-bottom: var(--backend-spacing-lg, 1.5rem);
+}
+
+.marketing-rule-page .marketing-rule-empty-text {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1rem;
+}

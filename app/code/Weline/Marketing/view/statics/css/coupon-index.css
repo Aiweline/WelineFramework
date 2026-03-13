@@ -1,0 +1,198 @@
+/**
+ * 优惠券管理页 - 组件样式
+ * 模块：Weline_Marketing
+ * 前缀：marketing-coupon-
+ * 必须使用主题变量，支持暗色模式
+ */
+
+/* ============================================
+   容器
+   ============================================ */
+.marketing-coupon-page {
+    --marketing-coupon-transition: 0.2s ease;
+}
+
+.marketing-coupon-page .marketing-coupon-header {
+    margin-bottom: var(--backend-spacing-lg, 1.5rem);
+}
+
+.marketing-coupon-page .marketing-coupon-header h4 {
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    margin: 0;
+}
+
+/* ============================================
+   卡片
+   ============================================ */
+.marketing-coupon-page .marketing-coupon-card {
+    background: var(--backend-color-card-bg, #fff);
+    border: var(--backend-border-card);
+    border-radius: var(--backend-border-radius-lg, 0.75rem);
+    box-shadow: var(--backend-card-shadow);
+    overflow: hidden;
+    transition: box-shadow var(--marketing-coupon-transition), border-color var(--marketing-coupon-transition);
+}
+
+.marketing-coupon-page .marketing-coupon-card:hover {
+    border-color: var(--backend-color-border-default, #dee2e6);
+    box-shadow: var(--backend-shadow-md);
+}
+
+.marketing-coupon-page .marketing-coupon-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--backend-spacing-lg, 1.5rem) var(--backend-padding-card, 1.5rem);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+}
+
+.marketing-coupon-page .marketing-coupon-card-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+
+.marketing-coupon-page .marketing-coupon-add-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--backend-spacing-xs, 0.25rem);
+    padding: var(--backend-padding-button-sm, 0.25rem 0.75rem);
+    background: var(--backend-color-primary, #556ee6);
+    color: var(--backend-color-text-inverse, #fff);
+    border: none;
+    border-radius: var(--backend-border-radius, 0.375rem);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background var(--marketing-coupon-transition), transform var(--marketing-coupon-transition);
+}
+
+.marketing-coupon-page .marketing-coupon-add-btn:hover {
+    background: var(--backend-color-primary-hover, #4857d4);
+    color: var(--backend-color-text-inverse, #fff);
+    transform: translateY(-1px);
+}
+
+.marketing-coupon-page .marketing-coupon-card-body {
+    padding: 0 var(--backend-padding-card, 1.5rem) var(--backend-padding-card, 1.5rem);
+}
+
+/* ============================================
+   表格
+   ============================================ */
+.marketing-coupon-page .marketing-coupon-table-wrap {
+    overflow-x: auto;
+}
+
+.marketing-coupon-page .marketing-coupon-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+}
+
+.marketing-coupon-page .marketing-coupon-table th {
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-weight: 600;
+    padding: var(--backend-padding-table-cell, 0.75rem) var(--backend-spacing-md, 1rem);
+    border-bottom: 2px solid var(--backend-color-border-default, #dee2e6);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.marketing-coupon-page .marketing-coupon-table th:last-child {
+    text-align: center;
+    min-width: 80px;
+}
+
+.marketing-coupon-page .marketing-coupon-table td {
+    padding: var(--backend-padding-table-cell, 0.75rem) var(--backend-spacing-md, 1rem);
+    color: var(--backend-color-text-primary, #212529);
+    border-bottom: 1px solid var(--backend-color-border-light, #e9ecef);
+    vertical-align: middle;
+}
+
+.marketing-coupon-page .marketing-coupon-table td:last-child {
+    text-align: center;
+}
+
+.marketing-coupon-page .marketing-coupon-table tbody tr:hover td {
+    background: var(--backend-color-table-bg-hover, rgba(85, 110, 230, 0.04));
+}
+
+/* 状态 badge */
+.marketing-coupon-page .marketing-coupon-badge {
+    display: inline-flex;
+    padding: 0.25em 0.6em;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: var(--backend-border-radius-pill, 50rem);
+    line-height: 1.2;
+}
+
+.marketing-coupon-page .marketing-coupon-badge--active {
+    background: var(--backend-color-success-bg-subtle, rgba(52, 195, 143, 0.1));
+    color: var(--backend-color-success, #34c38f);
+}
+
+.marketing-coupon-page .marketing-coupon-badge--inactive {
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.marketing-coupon-page .marketing-coupon-badge--expired {
+    background: var(--backend-color-danger-bg-subtle, rgba(244, 106, 106, 0.1));
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.marketing-coupon-page .marketing-coupon-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    color: var(--backend-color-primary, #556ee6);
+    border: 1px solid var(--backend-color-primary, #556ee6);
+    border-radius: var(--backend-border-radius, 0.375rem);
+    text-decoration: none;
+    transition: all var(--marketing-coupon-transition);
+}
+
+.marketing-coupon-page .marketing-coupon-action-btn:hover {
+    background: var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.1));
+    color: var(--backend-color-primary-hover, #4857d4);
+    border-color: var(--backend-color-primary-hover, #4857d4);
+}
+
+.marketing-coupon-page .marketing-coupon-code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.9em;
+    padding: 0.2em 0.4em;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-radius: var(--backend-border-radius-sm, 0.25rem);
+    color: var(--backend-color-primary, #556ee6);
+}
+
+/* 空状态 */
+.marketing-coupon-page .marketing-coupon-empty {
+    text-align: center;
+    padding: var(--backend-spacing-3xl, 4rem) var(--backend-spacing-xl, 2rem);
+}
+
+.marketing-coupon-page .marketing-coupon-empty-icon {
+    display: block;
+    font-size: 3.5rem;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    opacity: 0.5;
+    margin-bottom: var(--backend-spacing-lg, 1.5rem);
+}
+
+.marketing-coupon-page .marketing-coupon-empty-text {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+    font-size: 1rem;
+}

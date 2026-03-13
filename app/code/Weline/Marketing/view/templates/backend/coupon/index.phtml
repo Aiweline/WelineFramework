@@ -1,43 +1,102 @@
 <?php
 /**
+ * 优惠券管理 - 内容模板
  * @var \Weline\Framework\View\Template $this
  * @var array $coupons
  * @var \Weline\Framework\Pagination\Pagination $pagination
  */
 ?>
-<div class="marketing-coupon-list">
-    <h1><?= __('优惠券列表') ?></h1>
-    <div class="toolbar">
-        <a href="<?= $this->getUrl('marketing/backend/coupon/getAdd') ?>" class="btn btn-primary"><?= __('添加优惠券') ?></a>
-    </div>
-    <table class="table">
-        <thead>
-            <tr>
-                <th><?= __('ID') ?></th>
-                <th><?= __('优惠券代码') ?></th>
-                <th><?= __('类型') ?></th>
-                <th><?= __('折扣值') ?></th>
-                <th><?= __('状态') ?></th>
-                <th><?= __('使用次数') ?></th>
-                <th><?= __('操作') ?></th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php foreach ($coupons as $coupon): ?>
-            <tr>
-                <td><?= $coupon['id'] ?></td>
-                <td><?= $this->escapeHtml($coupon['code']) ?></td>
-                <td><?= $this->escapeHtml($coupon['type']) ?></td>
-                <td><?= $coupon['discount_value'] ?></td>
-                <td><?= $this->escapeHtml($coupon['status']) ?></td>
-                <td><?= $coupon['usage_count'] ?>/<?= $coupon['usage_limit'] ?? '∞' ?></td>
-                <td>
-                    <a href="<?= $this->getUrl('marketing/backend/coupon/getEdit', ['id' => $coupon['id']]) ?>"><?= __('编辑') ?></a>
-                </td>
-            </tr>
-            <?php endforeach; ?>
-        </tbody>
-    </table>
-    <?= $this->getChildHtml('pagination') ?>
+<link rel="stylesheet" href="@static(Weline_Marketing::css/coupon-index.css)">
+<div class="row marketing-coupon-page">
+    <template>Weline_Component::message.phtml</template>
 </div>
 
+<div class="row marketing-coupon-page">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between marketing-coupon-header">
+            <h4 class="mb-sm-0">
+                <lang>优惠券管理</lang>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>后台</lang></a></li>
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>营销</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>优惠券</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row marketing-coupon-page">
+    <div class="col-12">
+        <div class="marketing-coupon-card">
+            <div class="marketing-coupon-card-header">
+                <h5 class="marketing-coupon-card-title"><lang>优惠券列表</lang></h5>
+                <a href="<?= $this->getUrl('marketing/backend/coupon/getAdd') ?>" class="marketing-coupon-add-btn">
+                    <i class="ri-add-line"></i><lang>添加优惠券</lang>
+                </a>
+            </div>
+            <div class="marketing-coupon-card-body">
+                <div class="marketing-coupon-table-wrap">
+                    <table class="marketing-coupon-table">
+                        <thead>
+                            <tr>
+                                <th><?= __('ID') ?></th>
+                                <th><?= __('优惠券代码') ?></th>
+                                <th><?= __('类型') ?></th>
+                                <th><?= __('折扣值') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('使用次数') ?></th>
+                                <th><?= __('操作') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($coupons)): ?>
+                            <tr>
+                                <td colspan="7">
+                                    <div class="marketing-coupon-empty">
+                                        <i class="ri-coupon-2-line marketing-coupon-empty-icon"></i>
+                                        <span class="marketing-coupon-empty-text"><lang>暂无数据</lang></span>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php else: ?>
+                            <?php foreach ($coupons as $coupon): ?>
+                            <?php
+                            $status = $coupon['status'] ?? '';
+                            $statusClass = 'inactive';
+                            if (in_array(strtolower((string)$status), ['1', 'active', '启用', 'enabled'], true)) {
+                                $statusClass = 'active';
+                            } elseif (in_array(strtolower((string)$status), ['expired', '已过期', '失效'], true)) {
+                                $statusClass = 'expired';
+                            }
+                            ?>
+                            <tr>
+                                <td><?= $coupon['id'] ?></td>
+                                <td><code class="marketing-coupon-code"><?= $this->escapeHtml($coupon['code']) ?></code></td>
+                                <td><?= $this->escapeHtml($coupon['type'] ?? '') ?></td>
+                                <td><?= $this->escapeHtml((string)($coupon['discount_value'] ?? '')) ?></td>
+                                <td>
+                                    <span class="marketing-coupon-badge marketing-coupon-badge--<?= $statusClass ?>">
+                                        <?= $this->escapeHtml((string)$status) ?>
+                                    </span>
+                                </td>
+                                <td><?= (int)($coupon['usage_count'] ?? 0) ?>/<?= ($coupon['usage_limit'] ?? 0) ? (int)$coupon['usage_limit'] : '∞' ?></td>
+                                <td>
+                                    <a href="<?= $this->getUrl('marketing/backend/coupon/getEdit', ['id' => $coupon['id']]) ?>"
+                                       class="marketing-coupon-action-btn" title="<?= __('编辑') ?>">
+                                        <i class="ri-edit-line"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?= $this->getChildHtml('pagination') ?>
+            </div>
+        </div>
+    </div>
+</div>
