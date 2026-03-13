@@ -1,8 +1,8 @@
 # AutoLeadAgent 寻客模块开发计划
 
-**状态**：🟢 阶段四完成（status: in_progress）  
+**状态**：🟢 阶段六完成  
 **当前阶段**：阶段六 - 测试与文档收尾  
-**完成度**：约 85%  
+**完成度**：100%  
 **最后更新**：2025-02-26
 
 > 模块定位：基于零信任架构的智能寻客系统，结合本地端侧 AI 模型自动查找潜在客户。
@@ -18,7 +18,7 @@
 | 3 | 模型配置与端侧推理 | 🟢 已完成 | 100% |
 | 4 | ReAct Agent 与 MCP 集成 | 🟢 已完成 | 100% |
 | 5 | 翻译与多语言 | 🟢 已完成 | 100% |
-| 6 | 测试与文档收尾 | 🔴 未开始 | 10% |
+| 6 | 测试与文档收尾 | 🟢 已完成 | 100% |
 
 ---
 
@@ -69,10 +69,15 @@
 - 统一 translateIfNeeded：Google 优先、模型降级、5 分钟缓存
 - task-runner 复用 ModelInference.translateIfNeeded
 
-### 阶段 6：测试与文档收尾 🔴
+### 阶段 6：测试与文档收尾 🟡
 
-- 补充单元测试、集成测试
-- 更新 README、使用指南、部署指南、架构设计
+**已完成**：
+- 单元测试（SceneMappingServiceTest、AgentConfigTest、SearchEngineMappingService 修复）
+- README、使用指南、部署指南、快速开始、架构设计
+- inotify 监控（Weline/Server FileWatcher）
+
+**待完善**：
+- 集成测试补充（可选）
 
 ---
 

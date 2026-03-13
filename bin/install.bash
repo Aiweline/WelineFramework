@@ -1094,34 +1094,32 @@ install_pgsql_linux() {
   run_privileged systemctl stop postgresql 2>/dev/null || run_privileged service postgresql stop 2>/dev/null || true
   run_privileged systemctl disable postgresql 2>/dev/null || true
 
-  # 检测 5432 端口是否被占用，启动失败时输出完整错误并支持用户干预后重试
-  local pg_port=5432
-  is_pg_port_in_use() {
-    (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${pg_port}([^0-9]|$)" && return 0
-    (lsof -i ":${pg_port}" 2>/dev/null) | grep -q LISTEN && return 0
+  # 端口检测：5432 被占用时自动选用 5433、5434 等
+  is_port_in_use() {
+    local p="$1"
+    (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -qE ":${p}([^0-9]|$)" && return 0
+    (lsof -i ":${p}" 2>/dev/null) | grep -q LISTEN && return 0
     return 1
   }
+  find_available_pg_port() {
+    local p=5432
+    while is_port_in_use "$p"; do
+      p=$((p + 1))
+      [[ $p -gt 65535 ]] && { echo 5432; return; }
+    done
+    echo "$p"
+  }
+  local pg_port
+  pg_port=$(find_available_pg_port)
+  if [[ "$pg_port" != "5432" ]]; then
+    echo "端口 5432 已被占用，改用端口 $pg_port"
+  fi
   start_pg_with_retry() {
     local max_attempts=5
     local attempt=1
     local interactive=0
     [[ -t 0 ]] && interactive=1
     while [[ $attempt -le $max_attempts ]]; do
-      if is_pg_port_in_use; then
-        echo "" >&2
-        echo "ERROR: 端口 $pg_port 已被占用，PostgreSQL 无法启动。" >&2
-        echo "  请检查: ss -tlnp | grep $pg_port  或  lsof -i :$pg_port" >&2
-        echo "  常见处理: systemctl stop postgresql  或宝塔面板中停止 PostgreSQL" >&2
-        if [[ $interactive -eq 1 ]]; then
-          echo "  处理完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
-          read -r
-        else
-          echo "  非交互模式，5秒后自动重试 (第 $attempt/$max_attempts 次)..." >&2
-          sleep 5
-        fi
-        attempt=$((attempt + 1))
-        continue
-      fi
       if run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" -l "$pgsql_data/logfile" start "${pg_ctl_opts[@]}"; then
         return 0
       fi
@@ -1147,22 +1145,41 @@ install_pgsql_linux() {
     return 1
   }
 
-  pg_ctl_opts=(-o "-k $pgsql_data")
+  pg_ctl_opts=(-o "-k $pgsql_data" -o "-p $pg_port")
+  update_pg_port_conf() {
+    [[ -f "$pgsql_data/postgresql.conf" ]] || return
+    grep -qE "^\s*port\s*=\s*$pg_port" "$pgsql_data/postgresql.conf" 2>/dev/null && return
+    sed -i.bak -E "s/^#?(port\s*=\s*)[0-9]+/\1$pg_port/" "$pgsql_data/postgresql.conf" 2>/dev/null || true
+  }
   if [[ -f "$pgsql_data/PG_VERSION" ]]; then
+    update_pg_port_conf
     if ! run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/pg_ctl" -D "$pgsql_data" status 2>/dev/null | grep -q "running"; then
-      echo "Starting PostgreSQL cluster at $pgsql_data..."
+      echo "Starting PostgreSQL cluster at $pgsql_data (port $pg_port)..."
       start_pg_with_retry || return 1
     fi
   else
     echo "Initializing PostgreSQL data directory at $pgsql_data (run as $WELINE_USER)..."
     [[ "$(id -u)" -eq 0 ]] && run_privileged chown -R "$WELINE_USER":"$WELINE_USER" "$pgsql_data"
     run_as_weline env PATH="$pg_bindir:$PATH" "$pg_bindir/initdb" -D "$pgsql_data" -E UTF8 -U postgres
-    echo "Starting PostgreSQL server..."
+    update_pg_port_conf
+    echo "Starting PostgreSQL server (port $pg_port)..."
     start_pg_with_retry || return 1
   fi
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
   echo "  重启后需手动启动: pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}"
+  if [[ "$pg_port" != "5432" ]]; then
+    if [[ -f "$ROOT/weline.env" ]]; then
+      if grep -qE '^DB_PORT=' "$ROOT/weline.env" 2>/dev/null; then
+        sed -i.bak -E "s/^DB_PORT=.*/DB_PORT=$pg_port/" "$ROOT/weline.env"
+      else
+        echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
+      fi
+    else
+      echo "DB_PORT=$pg_port" >> "$ROOT/weline.env"
+    fi
+    echo "  已写入 DB_PORT=$pg_port 到 weline.env（供 run.php 连接数据库）"
+  fi
   set -e
 }
 
