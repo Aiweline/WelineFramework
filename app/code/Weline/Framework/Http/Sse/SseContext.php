@@ -182,6 +182,23 @@ class SseContext
     }
     
     /**
+     * 关闭连接并重置上下文
+     *
+     * WLS 模式：关闭 socket，客户端会收到连接断开。
+     * FPM 模式：仅重置状态，脚本结束后连接由 PHP 关闭。
+     */
+    public static function closeConnection(): void
+    {
+        if (self::$connection !== null && \is_resource(self::$connection)) {
+            @\fclose(self::$connection);
+        }
+        self::$connection = null;
+        self::$sseEnabled = false;
+        self::$headersSent = false;
+        self::$writeCallback = null;
+    }
+
+    /**
      * 重置上下文（请求结束时调用）
      */
     public static function reset(): void
