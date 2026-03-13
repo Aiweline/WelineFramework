@@ -1906,6 +1906,15 @@ while (true) {
             
             // 小响应：使用非阻塞模式
             $totalWritten = 0;
+
+            // 写入前检查 stream 是否仍有效（客户端可能在 handleRequest 期间已断开）
+            $streamOk = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
+            if (!$streamOk) {
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId]);
+                \Weline\Framework\Http\Sse\SseContext::reset();
+                $activeRequests--;
+                continue;
+            }
             
             // 立即尝试写入（最多重试几次，避免阻塞太久）
             $immediateRetries = 0;
@@ -2004,6 +2013,13 @@ while (true) {
                     continue;
                 }
                 
+                // 写入前确认 stream 仍有效（客户端可能已断开）
+                if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                    @\fclose($conn);
+                    unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+                    \Weline\Framework\Http\Sse\SseContext::reset();
+                    continue 2;
+                }
                 // 连接可写，执行 fwrite
                 $remaining = \substr($response, $totalWritten);
                 $written = @\fwrite($conn, $remaining);
@@ -2109,6 +2125,12 @@ while (true) {
         
         while (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '' && $writeAttempts < $maxWriteAttempts) {
             $writeAttempts++;
+            // 写入前确认 stream 仍有效（客户端可能已断开）
+            if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                @\fclose($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                break;
+            }
             $buffer = $writeBuffers[$connId];
             $bufferLen = \strlen($buffer);
             
