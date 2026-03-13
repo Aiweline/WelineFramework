@@ -55,7 +55,12 @@ class Search extends \Weline\Framework\View\Block implements ComponentInterface
         $data['keyword'] = $data['keyword'] ?? 'keyword';
         $data['method'] = $data['method'] ?? 'GET';
         $data['placeholder'] = $data['placeholder'] ?? __('回车搜索');
-        $data['value'] = $this->request->getGet($data['keyword']) ?: $data['value'] ?? '';
+        $fromRequest = $this->request->getGet($data['keyword']);
+        $fromVars = ($this->getData('vars') ?? [])['filterSearch'] ?? '';
+        $fromAttr = $data['value'] ?? '';
+        // 若 value 为未替换的模板占位（如 {{filterSearch}}）或为空，则用 vars 中的 filterSearch
+        $resolvedAttr = (is_string($fromAttr) && !str_contains($fromAttr, '{{')) ? $fromAttr : '';
+        $data['value'] = $fromRequest ?: ($resolvedAttr ?: $fromVars);
         $this->assign($data);
     }
 
