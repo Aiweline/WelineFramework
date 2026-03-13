@@ -431,6 +431,7 @@ SQL调试输出,SQL调试输出
 强制模式：将重试所有推荐项（忽略之前的安装记录）,"Force mode: will retry all (ignoring previous records)"
 "环境检测通过，无需修复 ✔","环境检测通过，无需修复 ✔"
 "必需依赖已满足 ✔","必需依赖已满足 ✔"
+检测到推荐项未满足，正在自动安装推荐项...,"Recommended items not satisfied. Auto-installing..."
 "即将执行以上操作（必需项 + 可选推荐项），是否继续？(y/n)","即将执行以上操作（必需项 + 可选推荐项），是否继续？(y/n)"
 操作已取消,操作已取消
 开始执行修复（必需项与可选推荐项）...,开始执行修复（必需项与可选推荐项）...
@@ -460,6 +461,27 @@ SQL调试输出,SQL调试输出
 "正在安装推荐项: %{name}","正在安装推荐项: %{name}"
 "推荐项 %{name} 安装成功 ✔","推荐项 %{name} 安装成功 ✔"
 "推荐项 %{name} 安装失败","推荐项 %{name} 安装失败"
+【推荐函数】尝试解禁...,"Recommended functions - attempting to unblock..."
+"已从 disable_functions 解禁","Unblocked from disable_functions"
+"推荐函数 %{func} 解禁成功 ✔","Recommended func %{func} unblocked ✔"
+"解禁失败，需手动编辑 php.ini","Unblock failed, manually edit php.ini"
+"推荐函数 %{func} 解禁失败（不影响系统运行）","Recommended func %{func} unblock failed (not critical)"
+所属扩展未安装,"Extension not installed"
+【推荐扩展】尝试安装...,"Recommended extensions - attempting to install..."
+"正在处理推荐扩展: %{ext}","正在处理推荐扩展: %{ext}"
+自动安装失败,"Auto install failed"
+"推荐扩展 %{ext} 安装失败（不影响系统运行）","推荐扩展 %{ext} 安装失败（不影响系统运行）"
+【推荐依赖】执行安装脚本...,"Recommended dependencies - executing install scripts..."
+"推荐项 %{name} 已尝试过（%{status}），跳过","Recommended item %{name} already attempted (%{status}), skipping"
+无模块路径,"No module path"
+"安装成功 ✔","安装成功 ✔"
+安装脚本返回失败,"Install script returned failure"
+安装失败（不影响系统运行）,安装失败（不影响系统运行）
+"========== 推荐项安装完成 ==========","========== Recommended Items Installation Complete =========="
+"成功: %{success} 项","Succeeded: %{success} items"
+"未安装: %{fail} 项（可选，不影响运行）","Not installed: %{fail} items (optional"
+"已跳过: %{skip} 项（之前已尝试，使用 --force 强制重试）","Skipped: %{skip} items (previously attempted"
+没有需要安装的推荐项,"No recommended items to install"
 "【步骤 1】尝试解禁函数...","【步骤 1】尝试解禁函数..."
 "函数解禁成功 ✔","函数解禁成功 ✔"
 "【步骤 2】尝试安装缺失的扩展...","【步骤 2】尝试安装缺失的扩展..."
@@ -470,27 +492,14 @@ SQL调试输出,SQL调试输出
 "【步骤 3】执行依赖项安装脚本...","【步骤 3】执行依赖项安装脚本..."
 "跳过 %{name}（无模块路径）","跳过 %{name}（无模块路径）"
 "正在安装: %{name}","正在安装: %{name}"
-"安装成功 ✔","安装成功 ✔"
 "安装失败 ✖","安装失败 ✖"
 "【步骤 4】尝试处理推荐函数（可选优化）...","【步骤 4】尝试处理推荐函数（可选优化）..."
 "推荐函数 %{func} 已尝试过（%{status}），跳过","Recommended func %{func} already attempted (%{status}), skipping"
 "尝试解禁函数: %{func}","尝试解禁函数: %{func}"
-"已从 disable_functions 解禁","Unblocked from disable_functions"
-"推荐函数 %{func} 解禁成功 ✔","Recommended func %{func} unblocked ✔"
-"解禁失败，需手动编辑 php.ini","Unblock failed, manually edit php.ini"
-"推荐函数 %{func} 解禁失败（不影响系统运行）","Recommended func %{func} unblock failed (not critical)"
-所属扩展未安装,"Extension not installed"
 "推荐函数 %{func} 不可用（所属扩展未安装）","推荐函数 %{func} 不可用（所属扩展未安装）"
 "【步骤 5】尝试安装推荐扩展（可选优化）...","【步骤 5】尝试安装推荐扩展（可选优化）..."
 "推荐扩展 %{ext} 已尝试过（%{status}），跳过","Recommended ext %{ext} already attempted (%{status}), skipping"
-"正在处理推荐扩展: %{ext}","正在处理推荐扩展: %{ext}"
-自动安装失败,"Auto install failed"
-"推荐扩展 %{ext} 安装失败（不影响系统运行）","推荐扩展 %{ext} 安装失败（不影响系统运行）"
 "【步骤 6】执行推荐依赖安装脚本（可选优化）...","【步骤 6】执行推荐依赖安装脚本（可选优化）..."
-"推荐项 %{name} 已尝试过（%{status}），跳过","Recommended item %{name} already attempted (%{status}), skipping"
-无模块路径,"No module path"
-安装脚本返回失败,"Install script returned failure"
-安装失败（不影响系统运行）,安装失败（不影响系统运行）
 "========== 安装完成 ==========","========== 安装完成 =========="
 "必需项 - 成功: %{success} 项","必需项 - 成功: %{success} 项"
 "必需项 - 失败: %{fail} 项（请参考上面的手动修复指引）","必需项 - 失败: %{fail} 项（请参考上面的手动修复指引）"
@@ -1956,7 +1965,6 @@ Cookie已过期，正在重新登录...,Cookie已过期，正在重新登录...
 检测并尝试自动修复环境依赖问题，包括函数解禁、依赖项安装脚本执行等,检测并尝试自动修复环境依赖问题，包括函数解禁、依赖项安装脚本执行等
 "【步骤 4】尝试安装推荐扩展（可选优化）...","【步骤 4】尝试安装推荐扩展（可选优化）..."
 "【步骤 5】执行推荐依赖安装脚本（可选优化）...","【步骤 5】执行推荐依赖安装脚本（可选优化）..."
-"成功: %{success} 项","成功: %{success} 项"
 "失败: %{fail} 项（请参考上面的手动修复指引）","失败: %{fail} 项（请参考上面的手动修复指引）"
 "扩展 %{ext} 需要手动安装","扩展 %{ext} 需要手动安装"
 环境依赖检测未通过,环境依赖检测未通过
@@ -2297,13 +2305,4 @@ API规范验证失败：,"API specification validation failed:"
 无法连接到服务器，请检查网络连接。,"Cannot connect to server. Please check your network connection."
 立即重试,"Retry Now"
 "将在 %{seconds} 秒后自动重试...","Auto retry in %{seconds} seconds..."
-检测到推荐项未满足，正在自动安装推荐项...,Recommended items not satisfied. Auto-installing...
-或运行 php bin/w env:install -y 自动安装所有推荐项,Or run: php bin/w env:install -y to auto-install all recommended items
-========== 推荐项安装完成 ==========,========== Recommended Items Installation Complete ==========
-没有需要安装的推荐项,No recommended items to install
-【推荐函数】尝试解禁...,Recommended functions - attempting to unblock...
-【推荐扩展】尝试安装...,Recommended extensions - attempting to install...
-【推荐依赖】执行安装脚本...,Recommended dependencies - executing install scripts...
-成功: %{success} 项,Succeeded: %{success} items
-未安装: %{fail} 项（可选，不影响运行）,Not installed: %{fail} items (optional, does not affect operation)
-已跳过: %{skip} 项（之前已尝试，使用 --force 强制重试）,Skipped: %{skip} items (previously attempted, use --force to retry)
+"或运行 php bin/w env:install -y 自动安装所有推荐项","Or run: php bin/w env:install -y to auto-install all recommended items"

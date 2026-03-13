@@ -17,6 +17,7 @@ namespace Weline\Websites\Controller\Admin;
 
 use Weline\Backend\Model\Config as BackendConfig;
 use Weline\Cron\Schedule\Schedule;
+use Weline\Framework\App\Env;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -76,6 +77,12 @@ class Domain extends BackendController
         $this->backendConfig = $backendConfig;
     }
 
+    /**
+     * 检测系统定时任务是否已安装
+     * 主检测：schedule->exist() 通过 crontab/schtasks 查询
+     * 回退：当 Web 进程用户与安装用户不同时（如 root 安装、www-data 运行），exist() 可能误报未安装，
+     *      此时检查 generated 目录下是否已有 cron 脚本文件（安装成功时会创建）
+     */
     private function isCronInstalled(): bool
     {
         try {
@@ -83,7 +90,13 @@ class Domain extends BackendController
             if ($cronName === '') {
                 $cronName = Schedule::cron_flag . '-' . \md5(self::CRON_MODULE) . '-' . Schedule::cron_flag;
             }
-            return $this->schedule->exist($cronName);
+            if ($this->schedule->exist($cronName)) {
+                return true;
+            }
+            // 回退：检查 generated 目录下 cron 脚本是否存在（解决 Linux 下安装用户≠Web 用户导致的误报）
+            $suffix = (\defined('IS_WIN') && IS_WIN) ? '-cron.vbs' : '-cron.sh';
+            $scriptPath = Env::path_framework_generated . $cronName . $suffix;
+            return \is_file($scriptPath);
         } catch (\Throwable) {
             return false;
         }
@@ -3489,11 +3502,12 @@ class Domain extends BackendController
     {
         $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
 
-        // 查找域名池中所有 root_domain 匹配的记录
+        // 查找域名池中所有 root_domain 匹配的记录（fetch 返回 Model，需 getItems() 取记录列表）
         $poolDomains = $poolModel->clearQuery()
             ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems();
 
         $updated = 0;
         foreach ($poolDomains as $poolDomain) {
