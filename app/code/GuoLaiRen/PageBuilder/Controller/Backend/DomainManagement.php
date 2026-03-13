@@ -3392,33 +3392,47 @@ class DomainManagement extends BaseController
     {
         try {
             $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
-            $accounts = ObjectManager::getInstance(DomainRegistrarAccount::class);
-            $allAccounts = $accounts->clearQuery()
+            $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
+            $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $allRows = $accountModel->clearQuery()
                 ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
                 ->select()
-                ->fetch();
+                ->fetchArray();
 
             $dnsAccounts = [];
             $cdnAccounts = [];
 
-            foreach ($allAccounts as $account) {
-                $registrarCode = $account->getRegistrarCode();
-                $adapter = $registrarResolver->getAdapter($registrarCode);
+            foreach ($allRows as $row) {
+                $accountId = (int) ($row[DomainRegistrarAccount::schema_fields_ID] ?? 0);
+                if ($accountId <= 0) {
+                    continue;
+                }
+                $registrarCode = (string) ($row['registrar_code'] ?? '');
+                $registrarName = (string) ($row['registrar_name'] ?? '');
+                $registrarId = (int) ($row[DomainRegistrarAccount::schema_fields_REGISTRAR_ID] ?? 0);
 
+                if ($registrarCode === '' && $registrarId > 0) {
+                    $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
+                    $registrar->clearData(true)->clearQuery();
+                    $registrar->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+                    $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE) ?? '');
+                    $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_NAME) ?? $registrarCode);
+                }
+                if ($registrarName === '') {
+                    $registrarName = $registrarCode;
+                }
+
+                $adapter = $registrarResolver->getAdapter($registrarCode);
                 $accountInfo = [
-                    'account_id' => $account->getAccountId(),
-                    'name' => $account->getName(),
+                    'account_id' => $accountId,
+                    'name' => (string) ($row[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? ''),
                     'registrar_code' => $registrarCode,
-                    'registrar_name' => $account->getData('registrar_name') ?: $registrarCode,
+                    'registrar_name' => $registrarName,
                 ];
 
-                // 支持 DNS 管理的账户
                 if ($adapter !== null && $adapter->supportsDnsManagement()) {
                     $dnsAccounts[] = $accountInfo;
                 }
-
-                // CDN 服务商账户
-                $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
                 if ($dnsDetector->isCdnProvider($registrarCode)) {
                     $cdnAccounts[] = $accountInfo;
                 }
