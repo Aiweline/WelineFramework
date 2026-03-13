@@ -134,13 +134,20 @@ if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
   else
     echo "User $WELINE_USER already exists."
   fi
-  # 准备克隆目录：若当前目录为 /root 等 weline 无法访问的路径，则使用 /home/weline/weline
+  # 配置 weline 免密 sudo，避免安装阶段 apt/yum 等待密码导致非交互失败
+  if ! sudo -u "$WELINE_USER" sudo -n true 2>/dev/null; then
+    echo "Configuring passwordless sudo for $WELINE_USER..."
+    echo "$WELINE_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/weline
+    chmod 440 /etc/sudoers.d/weline
+  fi
+  # 准备克隆目录：若当前目录为 /root 等 weline 无法访问的路径，则使用 /home/weline（一层目录）
   WORK_DIR="$(pwd)"
   WELINE_HOME="$(eval echo ~$WELINE_USER)"
+  USE_WELINE_HOME=false
   if [[ "$WORK_DIR" == /root ]] || [[ "$WORK_DIR" == /root/* ]]; then
-    WORK_DIR="$WELINE_HOME/$INSTALL_DIR"
-    mkdir -p "$WORK_DIR"
+    WORK_DIR="$WELINE_HOME"
     chown "$WELINE_USER":"$WELINE_USER" "$WORK_DIR"
+    USE_WELINE_HOME=true
     echo "当前为 root 目录，将安装到 $WORK_DIR"
   elif is_empty_dir .; then
     chown "$WELINE_USER":"$WELINE_USER" "$WORK_DIR"
@@ -151,10 +158,17 @@ if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
     chown -R "$WELINE_USER":"$WELINE_USER" "$INSTALL_DIR"
   fi
   echo "Switching to user $WELINE_USER for clone and install..."
-  exec sudo -u "$WELINE_USER" env REPO_URL="$REPO_URL" BRANCH="$BRANCH" INSTALL_DIR="$INSTALL_DIR" WORK_DIR="$WORK_DIR" \
-    bash -c 'cd "$WORK_DIR" && export REPO_URL BRANCH INSTALL_DIR
+  exec sudo -u "$WELINE_USER" env REPO_URL="$REPO_URL" BRANCH="$BRANCH" INSTALL_DIR="$INSTALL_DIR" WORK_DIR="$WORK_DIR" USE_WELINE_HOME="$USE_WELINE_HOME" \
+    bash -c 'cd "$WORK_DIR" && export REPO_URL BRANCH INSTALL_DIR WORK_DIR
     is_empty_dir() { [[ -z "$(ls -A "${1:-.}" 2>/dev/null)" ]]; }
-    if is_empty_dir .; then
+    if [[ "$USE_WELINE_HOME" == true ]]; then
+      echo "Cloning WelineFramework (branch: $BRANCH) into $WORK_DIR..."
+      tmp_clone=$(mktemp -d)
+      git clone -b "$BRANCH" "$REPO_URL" "$tmp_clone"
+      cp -a "$tmp_clone"/. "$WORK_DIR/"
+      rm -rf "$tmp_clone"
+      cd "$WORK_DIR"
+    elif is_empty_dir .; then
       echo "Cloning WelineFramework (branch: $BRANCH) into current directory (project root)..."
       git clone -b "$BRANCH" "$REPO_URL" .
     elif [[ -d "$INSTALL_DIR/.git" ]]; then
