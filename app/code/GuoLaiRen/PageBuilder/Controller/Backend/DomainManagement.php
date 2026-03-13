@@ -68,6 +68,9 @@ class DomainManagement extends BaseController
 
     /**
      * 检测系统定时任务是否已安装（用于域名池解析状态自动检测）
+     * 主检测：schedule->exist() 通过 crontab/schtasks 查询
+     * 回退：当 Web 进程用户与安装用户不同时（如 root 安装、www-data 运行），exist() 可能误报未安装，
+     *      此时检查 generated 目录下是否已有 cron 脚本文件（安装成功时会创建）
      */
     private function isCronInstalled(): bool
     {
@@ -76,7 +79,13 @@ class DomainManagement extends BaseController
             if ($cronName === '') {
                 $cronName = Schedule::cron_flag . '-' . \md5(self::CRON_MODULE) . '-' . Schedule::cron_flag;
             }
-            return $this->schedule->exist($cronName);
+            if ($this->schedule->exist($cronName)) {
+                return true;
+            }
+            // 回退：检查 generated 目录下 cron 脚本是否存在
+            $suffix = (\defined('IS_WIN') && IS_WIN) ? '-cron.vbs' : '-cron.sh';
+            $scriptPath = Env::path_framework_generated . $cronName . $suffix;
+            return \is_file($scriptPath);
         } catch (\Throwable) {
             return false;
         }
@@ -498,6 +507,8 @@ class DomainManagement extends BaseController
                             'dns_provider_name' => $dnsProviderName,
                             'cdn_provider' => $cdnProvider,
                             'cdn_provider_name' => $cdnProviderName,
+                            'dns_account_id' => $isLocal ? (int) ($localData['dns_account_id'] ?? 0) : 0,
+                            'cdn_account_id' => $isLocal ? (int) ($localData['cdn_account_id'] ?? 0) : 0,
                             'site_ready' => $siteReady,
                             'site_created' => ($isLocal && $domainId > 0 && \in_array($domainId, $parentIdsWithSiteCreated, true)) ? 1 : 0,
                         ];
@@ -3212,10 +3223,12 @@ class DomainManagement extends BaseController
     {
         $poolModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainPool::class);
 
+        // fetch 返回 Model，需 getItems() 取记录列表
         $poolDomains = $poolModel->clearQuery()
             ->where(\Weline\Websites\Model\DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems();
 
         $updated = 0;
         foreach ($poolDomains as $poolDomain) {
