@@ -51,6 +51,12 @@ require_once BP . 'vendor' . DIRECTORY_SEPARATOR . 'autoload.php';
 $watcher = new \Weline\Server\Service\FileWatcher($watchDirs);
 $watcher->setCheckInterval($checkInterval);
 
+if (\Weline\Server\Service\FileWatcher::supportsInotify()) {
+    echo "[FileWatcher] 使用 inotify 模式（事件驱动）\n";
+} else {
+    echo "[FileWatcher] 使用轮询模式（check_interval={$checkInterval}s）\n";
+}
+
 // 信号处理（仅 Linux/Mac）
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
 if (\function_exists('pcntl_signal')) {

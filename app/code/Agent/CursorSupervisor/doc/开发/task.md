@@ -20,7 +20,7 @@
 ## 待办事项
 
 - [ ] 添加 Web UI 控制面板 @Agent:UI @File:Controller/Backend/Dashboard.php [P3]
-- [ ] 支持 inotify 监控（Linux） @Agent:General @CodeID:INOTIFY_001 [P4]
+- [x] 支持 inotify 监控（Linux）— 由 Weline/Server FileWatcher 实现 @CodeID:INOTIFY_001 [P4]
 - [ ] 添加任务优先级队列 @Agent:General [P3]
 - [ ] 支持自定义 Agent 规则 @Agent:General [P4]
 - [ ] 添加任务执行统计 @Agent:General [P5]
