@@ -6,40 +6,41 @@
  * @var \Weline\Framework\Pagination\Pagination $pagination
  */
 ?>
-<div class='row'>
+<link rel="stylesheet" href="@static(Weline_Marketing::css/rule-index.css)">
+<div class="row marketing-rule-page">
     <template>Weline_Component::message.phtml</template>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
+<div class="row marketing-rule-page">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between marketing-rule-header">
+            <h4 class="mb-sm-0">
                 <lang>营销规则</lang>
             </h4>
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>后台</lang></a></li>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'><lang>营销</lang></a></li>
-                    <li class='breadcrumb-item active'><lang>规则管理</lang></li>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>后台</lang></a></li>
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><lang>营销</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>规则管理</lang></li>
                 </ol>
             </div>
         </div>
     </div>
 </div>
 
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-header d-flex justify-content-between align-items-center'>
-                <h5 class='card-title mb-0'><lang>规则列表</lang></h5>
-                <a href="<?= $this->getUrl('marketing/backend/rule/getAdd') ?>" class="btn btn-primary btn-sm">
-                    <i class="ri-add-line me-1"></i><lang>添加规则</lang>
+<div class="row marketing-rule-page">
+    <div class="col-12">
+        <div class="marketing-rule-card">
+            <div class="marketing-rule-card-header">
+                <h5 class="marketing-rule-card-title"><lang>规则列表</lang></h5>
+                <a href="<?= $this->getUrl('marketing/backend/rule/getAdd') ?>" class="marketing-rule-add-btn">
+                    <i class="ri-add-line"></i><lang>添加规则</lang>
                 </a>
             </div>
-            <div class='card-body'>
-                <div class="table-responsive">
-                    <table class="table table-bordered table-striped mb-0">
-                        <thead class="table-light">
+            <div class="marketing-rule-card-body">
+                <div class="marketing-rule-table-wrap">
+                    <table class="marketing-rule-table">
+                        <thead>
                             <tr>
                                 <th><?= __('ID') ?></th>
                                 <th><?= __('规则名称') ?></th>
@@ -53,14 +54,17 @@
                         <tbody>
                             <?php if (empty($rules)): ?>
                             <tr>
-                                <td colspan="7" class="text-center text-muted py-4">
-                                    <i class="ri-inbox-line fs-3 d-block mb-2"></i>
-                                    <lang>暂无数据</lang>
+                                <td colspan="7">
+                                    <div class="marketing-rule-empty">
+                                        <i class="ri-inbox-2-line marketing-rule-empty-icon"></i>
+                                        <span class="marketing-rule-empty-text"><lang>暂无数据</lang></span>
+                                    </div>
                                 </td>
                             </tr>
                             <?php else: ?>
                             <?php foreach ($rules as $rule): ?>
                             <?php $this->assign('rule', $rule); ?>
+                            <?php $isActive = ($rule['status'] ?? '') == '1' || ($rule['status'] ?? '') == 'active'; ?>
                             <tr>
                                 <td><?= $rule['id'] ?></td>
                                 <td>
@@ -75,17 +79,17 @@
                                 </td>
                                 <td><?= $this->escapeHtml($rule['rule_type'] ?? '') ?></td>
                                 <td>
-                                    <?php if (($rule['status'] ?? '') == '1' || ($rule['status'] ?? '') == 'active'): ?>
-                                        <span class="badge bg-success"><lang>启用</lang></span>
+                                    <?php if ($isActive): ?>
+                                    <span class="marketing-rule-badge marketing-rule-badge--active"><lang>启用</lang></span>
                                     <?php else: ?>
-                                        <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                    <span class="marketing-rule-badge marketing-rule-badge--inactive"><lang>禁用</lang></span>
                                     <?php endif; ?>
                                 </td>
                                 <td><?= $rule['priority'] ?? 0 ?></td>
                                 <td><?= $rule['usage_count'] ?? 0 ?></td>
                                 <td>
                                     <a href="<?= $this->getUrl('marketing/backend/rule/getEdit', ['id' => $rule['id']]) ?>" 
-                                       class="btn btn-sm btn-outline-primary">
+                                       class="marketing-rule-action-btn" title="<?= __('编辑') ?>">
                                         <i class="ri-edit-line"></i>
                                     </a>
                                 </td>

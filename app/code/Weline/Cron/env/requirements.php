@@ -17,7 +17,8 @@ return [
     'recommended_items' => [
         [
             'name' => 'Crontab CLI（Linux/macOS 定时任务）',
-            'description' => 'Linux/macOS 下 cron:install 需要 crontab 命令，用于安装系统定时任务。Windows 使用 Schtasks，无需 crontab。',
+            'install_id' => 'crontab',
+            'description' => 'Linux/macOS 下 cron:install 需要 crontab 命令，用于安装系统定时任务。Windows 使用 Schtasks，无需 crontab。可运行 php bin/w env:install crontab -y 自动安装。',
             'platform' => 'unix',
             'script_linux' => 'script/install_crontab_linux.sh',
             'script_darwin' => 'script/install_crontab_linux.sh',
