@@ -1007,15 +1007,24 @@ install_pgsql_linux() {
     fi
   elif [[ -f /etc/redhat-release ]] || [[ -f /etc/rocky-release ]] || [[ -f /etc/almalinux-release ]] || [[ "$os_id" == "amzn" ]] || [[ "$os_id" == "rhel" ]] || [[ "$os_id" == "centos" ]] || [[ "$os_id" == "ol" ]] || [[ "$os_id" == "rocky" ]] || [[ "$os_id" == "almalinux" ]]; then
     echo "Installing PostgreSQL (dnf/yum)..."
+    local pg_installed=0
     if command -v dnf &>/dev/null; then
-      run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null || \
-      run_privileged dnf install -y postgresql-server postgresql || return 1
+      run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null && pg_installed=1
+      [[ "$pg_installed" -eq 0 ]] && run_privileged dnf install -y postgresql-server postgresql 2>/dev/null && pg_installed=1
     elif command -v yum &>/dev/null; then
-      run_privileged yum install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null || \
-      run_privileged yum install -y postgresql-server postgresql || return 1
-    else
-      echo "ERROR: dnf or yum required for PostgreSQL install." >&2
-      return 1
+      run_privileged yum install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null && pg_installed=1
+      [[ "$pg_installed" -eq 0 ]] && run_privileged yum install -y postgresql-server postgresql 2>/dev/null && pg_installed=1
+    fi
+    if [[ "$pg_installed" -eq 0 ]]; then
+      echo "尝试指定版本 postgresql${INSTALL_PGSQL_VERSION} 失败，改为安装发行版默认 postgresql-server postgresql..."
+      if command -v dnf &>/dev/null; then
+        run_privileged dnf install -y postgresql-server postgresql || return 1
+      elif command -v yum &>/dev/null; then
+        run_privileged yum install -y postgresql-server postgresql || return 1
+      else
+        echo "ERROR: dnf or yum required for PostgreSQL install." >&2
+        return 1
+      fi
     fi
   elif [[ -f /etc/alpine-release ]]; then
     echo "Installing PostgreSQL (apk)..."
@@ -1089,14 +1098,21 @@ install_pgsql_linux() {
   start_pg_with_retry() {
     local max_attempts=5
     local attempt=1
+    local interactive=0
+    [[ -t 0 ]] && interactive=1
     while [[ $attempt -le $max_attempts ]]; do
       if is_pg_port_in_use; then
         echo "" >&2
         echo "ERROR: 端口 $pg_port 已被占用，PostgreSQL 无法启动。" >&2
         echo "  请检查: ss -tlnp | grep $pg_port  或  lsof -i :$pg_port" >&2
         echo "  常见处理: systemctl stop postgresql  或宝塔面板中停止 PostgreSQL" >&2
-        echo "  处理完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
-        read -r
+        if [[ $interactive -eq 1 ]]; then
+          echo "  处理完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
+          read -r
+        else
+          echo "  非交互模式，5秒后自动重试 (第 $attempt/$max_attempts 次)..." >&2
+          sleep 5
+        fi
         attempt=$((attempt + 1))
         continue
       fi
@@ -1111,8 +1127,13 @@ install_pgsql_linux() {
         tail -30 "$pgsql_data/logfile" 2>/dev/null | sed 's/^/  /' >&2
       fi
       echo "" >&2
-      echo "  请根据日志处理（如停止占用端口的服务），完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
-      read -r
+      if [[ $interactive -eq 1 ]]; then
+        echo "  请根据日志处理，完成后按 Enter 重试 (第 $attempt/$max_attempts 次)，或 Ctrl+C 退出" >&2
+        read -r
+      else
+        echo "  非交互模式，5秒后自动重试 (第 $attempt/$max_attempts 次)..." >&2
+        sleep 5
+      fi
       attempt=$((attempt + 1))
     done
     echo "ERROR: PostgreSQL 启动失败次数过多，请手动排查后执行:" >&2
