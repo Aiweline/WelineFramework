@@ -4619,11 +4619,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (cdnSelect) cdnSelect.innerHTML = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
         document.getElementById('pb-dm-root-dns-switch-modal').classList.add('pb-dm-form-modal--open');
 
-        var url = API.getRegistrarAccounts + (API.getRegistrarAccounts.indexOf('?') >= 0 ? '&' : '?') + 'active_only=1';
-        (window.Weline && window.Weline.Api ? window.Weline.Api.get(url, { silent: true }) : fetch(url).then(function(r) { return r.json(); }))
+        // 使用 getDnsAccounts：仅列出支持 DNS 管理的账户（含 Cloudflare/GName 等），便于选择正确目标
+        (window.Weline && window.Weline.Api ? window.Weline.Api.get(API.getDnsAccounts, { silent: true }) : fetch(API.getDnsAccounts).then(function(r) { return r.json(); }))
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
-                var accounts = (data.data && data.data.accounts) ? data.data.accounts : ((data.accounts) ? data.accounts : []);
+                var accounts = (data.data && data.data.dns_accounts) ? data.data.dns_accounts : ((data.dns_accounts) ? data.dns_accounts : []);
                 if (!Array.isArray(accounts)) accounts = [];
 
                 var accountById = {};
