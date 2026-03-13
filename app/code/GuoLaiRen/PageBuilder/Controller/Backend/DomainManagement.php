@@ -1352,7 +1352,7 @@ class DomainManagement extends BaseController
             $onProgress = function (string $message, array $extra = []) use ($sse): void {
                 $sse->sendEvent('progress', \array_merge(['message' => $message], $extra));
             };
-            $challengeRaw = $this->request->getGet('challenge_strategy', '') ?: $this->request->get('challenge_strategy', '');
+            $challengeRaw = $this->request->getGet('challenge_strategy', '') ?: $this->request->getParam('challenge_strategy', '');
             $challengeStrategy = \is_array($challengeRaw)
                 ? \trim((string) ($challengeRaw[0] ?? 'auto'))
                 : \trim((string) ($challengeRaw ?: 'auto'));
@@ -1437,9 +1437,9 @@ class DomainManagement extends BaseController
      */
     public function getDnsSwitchStream(): void
     {
-        $domainId = (int) $this->request->get('domain_id', 0);
-        $dnsAccountId = (int) $this->request->get('dns_account_id', 0);
-        $cdnAccountId = (int) $this->request->get('cdn_account_id', 0);
+        $domainId = (int) $this->request->getParam('domain_id', 0);
+        $dnsAccountId = (int) $this->request->getParam('dns_account_id', 0);
+        $cdnAccountId = (int) $this->request->getParam('cdn_account_id', 0);
 
         $sse = new SseWriter();
         $sse->setRetryInterval(86400000);
