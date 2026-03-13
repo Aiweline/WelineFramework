@@ -1201,8 +1201,8 @@ class Start extends CommandAbstract
         
         // 4. 命令行参数覆盖（最高优先级）
         $hasCliOverride = false;
-        if (isset($args['host']) || isset($args['h'])) {
-            $config['host'] = $args['host'] ?? $args['h'];
+        if (isset($args['host'])) {
+            $config['host'] = $args['host'];
             $config['source'] = __('命令行参数');
             $hasCliOverride = true;
         }
@@ -1632,7 +1632,7 @@ class Start extends CommandAbstract
         }
         // 选项值（需要跳过的）
         $optionValues = [];
-        $valueOptions = ['port', 'p', 'host', 'h', 'count', 'c'];
+        $valueOptions = ['port', 'p', 'host', 'count', 'c'];
         foreach ($valueOptions as $opt) {
             if (isset($args[$opt])) {
                 $optionValues[] = (string) $args[$opt];
@@ -3602,7 +3602,7 @@ PHP;
         // 代理转发说明（默认 127.0.0.1 仅本机）
         $this->printer->note(__('代理转发：WLS 默认仅监听 127.0.0.1。外网访问需用 Nginx/Caddy 反向代理：'));
         $this->printer->note('  proxy_pass ' . $scheme . '://' . $host . ':' . $portNum . ';');
-        $this->printer->note(__('直连外网时：') . 'php bin/w server:start -h 0.0.0.0');
+        $this->printer->note(__('直连外网时：') . 'php bin/w server:start --host 0.0.0.0');
         $this->printer->separator('─');
         
         // 常用命令
@@ -3636,7 +3636,7 @@ PHP;
                 '--cli' => __('使用 PHP 内置 CLI 服务器（开发模式，无 HTTPS）'),
                 '--strategy' => __('使用跨平台优化策略模式（Linux: SO_REUSEPORT 直连; Windows: TCP 透传）'),
                 '--strategy-info' => __('显示可用策略信息'),
-                '-h, --host <ip>' => __('监听地址（默认：127.0.0.1，仅本机；需外网访问时用 -h 0.0.0.0）'),
+                '--host <ip>' => __('监听地址（默认：127.0.0.1，仅本机；需外网访问时用 --host 0.0.0.0；-h 保留给帮助）'),
                 '-p, --port <port>' => __('基础端口（默认：80/443，HTTPS 时用 443；可 -p 9981 等自定义）'),
                 '-c, --count <n>' => __('Worker 进程数（默认：auto 智能模式）'),
                 '--no-daemon' => __('前台运行（查看实时日志）'),

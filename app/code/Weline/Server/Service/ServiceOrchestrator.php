@@ -2296,7 +2296,7 @@ class ServiceOrchestrator
             echo "  • " . __('WLS 默认仅监听 127.0.0.1，仅本机可访问') . "\n";
             echo "  • " . __('外网访问需用 Nginx/Caddy 等反向代理转发到 ') . "{$host}:{$mainPort}" . "\n";
             echo "  • " . __('Nginx 示例：') . "proxy_pass {$protocol}://{$host}:{$mainPort};" . "\n";
-            echo "  • " . __('需直连外网时：') . "php bin/w server:start -h 0.0.0.0" . "\n";
+            echo "  • " . __('需直连外网时：') . "php bin/w server:start --host 0.0.0.0" . "\n";
             echo "\n";
             if (\function_exists('flush')) {
                 @\flush();

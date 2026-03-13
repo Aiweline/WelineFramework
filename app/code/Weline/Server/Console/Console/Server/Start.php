@@ -468,7 +468,7 @@ class Start implements CommandInterface
     php bin/w server:start --force        # 强制重启（完整参数名）
 
 4️⃣ 自定义配置：
-    php bin/w server:start -h 0.0.0.0 -p 8080    # 监听所有网卡，端口8080
+    php bin/w server:start --host 0.0.0.0 -p 8080    # 监听所有网卡，端口8080
 
 💡 提示：
     - 后台模式：适合日常开发，不阻塞终端
