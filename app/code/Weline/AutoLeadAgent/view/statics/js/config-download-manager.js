@@ -106,10 +106,6 @@ var ConfigDownloadManager = (function () {
             var messageHandler = function (event) {
                 if (event.source !== window) return;
                 
-                // 调试：记录所有消息
-                if (event.data && (event.data.type === 'AUTOLEADAGENT_DOWNLOAD_MESSAGE' || event.data.type === 'AUTOLEADAGENT_RESPONSE')) {
-                    console.log('[DownloadManager] 收到消息:', JSON.stringify(event.data).substring(0, 500));
-                }
                 
                 // 处理下载专用消息
                 if (event.data && event.data.type === 'AUTOLEADAGENT_DOWNLOAD_MESSAGE') {
@@ -137,13 +133,11 @@ var ConfigDownloadManager = (function () {
                         downloadState.totalSize = responseData.total || downloadState.totalSize;
                         downloadState.currentFile = responseData.filename || responseData.currentFile || downloadState.currentFile;
                         
-                        console.log('[DownloadManager] RESPONSE 进度:', downloadState.progress, '%');
                         if (onProgress) onProgress(downloadState);
                     }
                     
                     // 如果下载完成
                     if (responseData.success === true && responseData.complete === true) {
-                        console.log('[DownloadManager] RESPONSE 下载完成');
                         downloadState.isDownloading = false;
                         downloadState.progress = 100;
                         if (onProgress) onProgress(downloadState);
@@ -215,11 +209,9 @@ var ConfigDownloadManager = (function () {
                 
                 // content script 转发的模型事件: AUTOLEADAGENT_MODEL_EVENT
                 if (event.data.type === 'AUTOLEADAGENT_MODEL_EVENT') {
-                    console.log('[DownloadManager] 收到模型事件:', event.data.event, event.data.data);
                     
                     if (event.data.event === 'loaded') {
                         // 模型加载完成
-                        console.log('[DownloadManager] 模型加载完成');
                         clearTimeout(downloadTimeout);
                         downloadState.isDownloading = false;
                         downloadState.progress = 100;
@@ -235,13 +227,11 @@ var ConfigDownloadManager = (function () {
                         window.removeEventListener('message', messageHandler);
                         reject(new Error(event.data.data && event.data.data.error || '模型加载失败'));
                     } else if (event.data.event === 'loading') {
-                        console.log('[DownloadManager] 模型正在加载...');
                     }
                 }
                 
                 // MODEL_LOAD_RESPONSE 是 MODEL_LOAD_REQUEST 的直接响应
                 if (event.data.type === 'MODEL_LOAD_RESPONSE') {
-                    console.log('[DownloadManager] 收到加载响应:', event.data);
                     if (event.data.error) {
                         console.error('[DownloadManager] 加载错误:', event.data.error);
                         // 不在这里 reject，等待 MODEL_EVENT 的 load_error
