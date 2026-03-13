@@ -86,6 +86,7 @@ fi
 REPO_URL="${WELINE_REPO_URL:-https://gitee.com/aiweline/WelineFramework.git}"
 BRANCH="master"
 INSTALL_DIR="weline"
+WELINE_USER="${WELINE_USER:-weline}"
 
 next_is_b=
 for i in "$@"; do
@@ -93,23 +94,81 @@ for i in "$@"; do
   [[ "$i" == "-b" ]] && next_is_b=1
 done
 
-# 当前目录为空则克隆到当前目录（项目根 = 含 bin/ 的目录）；否则克隆到 INSTALL_DIR 子目录
 is_empty_dir() { [[ -z "$(ls -A "$1" 2>/dev/null)" ]]; }
-CLONE_TO_ROOT=false
-if is_empty_dir .; then
-  echo "Cloning WelineFramework (branch: $BRANCH) into current directory (project root)..."
-  git clone -b "$BRANCH" "$REPO_URL" .
-  CLONE_TO_ROOT=true
-elif [[ -d "$INSTALL_DIR/.git" ]]; then
-  echo "Directory $INSTALL_DIR already exists. Updating..."
-  (cd "$INSTALL_DIR" && git fetch origin && git checkout "$BRANCH" 2>/dev/null || git pull origin "$BRANCH" 2>/dev/null || true)
-  cd "$INSTALL_DIR"
-else
-  echo "Cloning WelineFramework (branch: $BRANCH) into $INSTALL_DIR..."
-  git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
+
+# Linux root：先创建 weline 用户并设置密码，再切换为 weline 执行克隆（项目归属 weline）
+do_clone_and_install() {
+  if is_empty_dir .; then
+    echo "Cloning WelineFramework (branch: $BRANCH) into current directory (project root)..."
+    git clone -b "$BRANCH" "$REPO_URL" .
+  elif [[ -d "$INSTALL_DIR/.git" ]]; then
+    echo "Directory $INSTALL_DIR already exists. Updating..."
+    (cd "$INSTALL_DIR" && git fetch origin && git checkout "$BRANCH" 2>/dev/null || git pull origin "$BRANCH" 2>/dev/null || true)
+    cd "$INSTALL_DIR"
+  else
+    echo "Cloning WelineFramework (branch: $BRANCH) into $INSTALL_DIR..."
+    git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+  fi
+  chmod +x bin/install bin/install.sh 2>/dev/null || true
+  exec ./bin/install "$@"
+}
+
+if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
+  if ! id "$WELINE_USER" &>/dev/null; then
+    echo "Creating user $WELINE_USER (project owner, with sudo)..."
+    useradd -m -s /bin/bash "$WELINE_USER" || exit 1
+    getent group wheel &>/dev/null && usermod -aG wheel "$WELINE_USER" 2>/dev/null || true
+    getent group sudo &>/dev/null && usermod -aG sudo "$WELINE_USER" 2>/dev/null || true
+    echo "User $WELINE_USER created."
+    if [[ -n "${WELINE_USER_PASSWORD:-}" ]]; then
+      echo "正在为 $WELINE_USER 设置密码（来自环境变量 WELINE_USER_PASSWORD）…"
+      echo "$WELINE_USER:$WELINE_USER_PASSWORD" | chpasswd || {
+        echo "自动设置密码失败，请手动输入：" >&2
+        passwd "$WELINE_USER"
+      }
+    else
+      echo "请为用户 $WELINE_USER 设置登录密码（用于 SSH、sudo 等）："
+      passwd "$WELINE_USER"
+    fi
+  else
+    echo "User $WELINE_USER already exists."
+  fi
+  # 准备克隆目录：若当前目录为 /root 等 weline 无法访问的路径，则使用 /home/weline/weline
+  WORK_DIR="$(pwd)"
+  WELINE_HOME="$(eval echo ~$WELINE_USER)"
+  if [[ "$WORK_DIR" == /root ]] || [[ "$WORK_DIR" == /root/* ]]; then
+    WORK_DIR="$WELINE_HOME/$INSTALL_DIR"
+    mkdir -p "$WORK_DIR"
+    chown "$WELINE_USER":"$WELINE_USER" "$WORK_DIR"
+    echo "当前为 root 目录，将安装到 $WORK_DIR"
+  elif is_empty_dir .; then
+    chown "$WELINE_USER":"$WELINE_USER" "$WORK_DIR"
+  elif [[ ! -d "$INSTALL_DIR" ]]; then
+    mkdir -p "$INSTALL_DIR"
+    chown "$WELINE_USER":"$WELINE_USER" "$INSTALL_DIR"
+  elif [[ -d "$INSTALL_DIR/.git" ]]; then
+    chown -R "$WELINE_USER":"$WELINE_USER" "$INSTALL_DIR"
+  fi
+  echo "Switching to user $WELINE_USER for clone and install..."
+  exec sudo -u "$WELINE_USER" env REPO_URL="$REPO_URL" BRANCH="$BRANCH" INSTALL_DIR="$INSTALL_DIR" WORK_DIR="$WORK_DIR" \
+    bash -c 'cd "$WORK_DIR" && export REPO_URL BRANCH INSTALL_DIR
+    is_empty_dir() { [[ -z "$(ls -A "${1:-.}" 2>/dev/null)" ]]; }
+    if is_empty_dir .; then
+      echo "Cloning WelineFramework (branch: $BRANCH) into current directory (project root)..."
+      git clone -b "$BRANCH" "$REPO_URL" .
+    elif [[ -d "$INSTALL_DIR/.git" ]]; then
+      echo "Directory $INSTALL_DIR already exists. Updating..."
+      (cd "$INSTALL_DIR" && git fetch origin && git checkout "$BRANCH" 2>/dev/null || git pull origin "$BRANCH" 2>/dev/null || true)
+      cd "$INSTALL_DIR"
+    else
+      echo "Cloning WelineFramework (branch: $BRANCH) into $INSTALL_DIR..."
+      git clone -b "$BRANCH" "$REPO_URL" "$INSTALL_DIR"
+      cd "$INSTALL_DIR"
+    fi
+    chmod +x bin/install bin/install.sh 2>/dev/null || true
+    exec ./bin/install "$@"' - "$@"
 fi
 
-# 保证 bin/install 可执行（克隆后可能无 x 位）
-chmod +x bin/install bin/install.sh 2>/dev/null || true
-exec ./bin/install "$@"
+# 非 root 或 macOS：直接克隆并安装
+do_clone_and_install
