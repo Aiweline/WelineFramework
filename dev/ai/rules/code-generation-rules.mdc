@@ -96,6 +96,7 @@ BackendConfirm.show('确定删除吗？').then(confirmed => { if (confirmed) { .
 - **禁止**在未验证修复成功前更新错误知识库（见 auto-update-skills-on-error.mdc）。
 - **禁止**使用原生浏览器弹窗 `alert()`、`confirm()`、`prompt()`；须用 `BackendToast`/`BackendConfirm.show()`/`BackendConfirm.showInput()`（后台）或自定义 FrontendToast（前台）。详见 friendly-notifications 技能。
 - **禁止**使用框架不存在的方法（如 `whereIn()`、`orWhere()`、`select([数组])`）；须查阅 database-model-standards 技能确认方法签名。**不确定时先查再用，禁止凭记忆或猜测。**
+- **禁止**在 Setup/Upgrade.php 中做字段 CRUD（ADD COLUMN、DROP COLUMN、ALTER TABLE 等）；字段变更由 Model #[Col] 声明 + SchemaDiff 完成；Upgrade 仅处理非字段的业务逻辑（种子数据、数据迁移等）。详见 module-development、database-model-standards。
 
 ## 开发前与验证
 

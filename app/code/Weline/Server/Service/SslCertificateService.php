@@ -493,6 +493,11 @@ class SslCertificateService
      */
     public function ensureCertificate(string $domain, string $webroot = '', string $email = '', int $websiteId = 0): array
     {
+        // 0.0.0.0 是"监听所有网卡"的绑定地址，不是真实域名，归一化为 localhost
+        if ($domain === '0.0.0.0') {
+            $domain = 'localhost';
+        }
+
         // 0. 若后台已禁用该域名的 HTTPS，直接返回「不使用 SSL」
         $cert = $this->certModel->clearQuery()->loadByDomain($domain);
         if ($cert->getCertId() && !$cert->getHttpsEnabled()) {
@@ -1367,7 +1372,13 @@ CNF;
         $expiredCerts = [];  // 记录已过期的证书
         
         foreach ($certificates as $cert) {
-            $domain = $cert[SslCertificate::schema_fields_DOMAIN];
+            $domain = (string)($cert[SslCertificate::schema_fields_DOMAIN] ?? '');
+
+            // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是真实域名，跳过
+            if ($domain === '0.0.0.0') {
+                continue;
+            }
+
             $certPath = (string)($cert[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $keyPath = (string)($cert[SslCertificate::schema_fields_KEY_PATH] ?? '');
             $certType = (string)($cert[SslCertificate::schema_fields_CERT_TYPE] ?? SslCertificate::CERT_TYPE_EXACT);
@@ -1754,7 +1765,7 @@ CNF;
             $domain = (string)($row[SslCertificate::schema_fields_DOMAIN] ?? '');
             $sourceCert = (string)($row[SslCertificate::schema_fields_CERT_PATH] ?? '');
             $sourceKey = (string)($row[SslCertificate::schema_fields_KEY_PATH] ?? '');
-            if ($domain === '') {
+            if ($domain === '' || $domain === '0.0.0.0') {
                 $result['skipped']++;
                 continue;
             }
@@ -1851,7 +1862,7 @@ CNF;
 
         // 兼容旧格式：app/etc 下直接放证书
         $defaultDomain = (string)(Env::get('server.host') ?? 'localhost');
-        if ($defaultDomain === '127.0.0.1' || $defaultDomain === '::1') {
+        if ($defaultDomain === '127.0.0.1' || $defaultDomain === '::1' || $defaultDomain === '0.0.0.0') {
             $defaultDomain = 'localhost';
         }
         $defaultDomain = \strtolower(\trim($defaultDomain));
@@ -3355,7 +3366,7 @@ CNF;
      * @param array<string, mixed> $cert 证书行数据
      * @param array<string, mixed> &$result reloadManagedCertificates 的结果数组（引用修改）
      */
-    private const PROTECTED_LOCAL_DOMAINS = ['localhost', '127.0.0.1', '::1', '0.0.0.0'];
+    private const PROTECTED_LOCAL_DOMAINS = ['localhost', '127.0.0.1', '::1'];
 
     protected function clearDomainCertificate(string $domain, array $cert, array &$result): void
     {

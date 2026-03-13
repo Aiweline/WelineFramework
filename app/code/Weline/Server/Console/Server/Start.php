@@ -1362,11 +1362,11 @@ class Start extends CommandAbstract
         // 2. 确定域名
         $domain = $config['ssl_domain'] ?? '';
         if (empty($domain)) {
-            // 本地回环 IP 用 localhost 作为证书域名；内网 IP 直接用 IP；域名保持原样
-            if ($host === '127.0.0.1' || $host === '::1') {
+            // 0.0.0.0 是监听所有网卡的绑定地址，不是真实域名，归一化为 localhost
+            if ($host === '127.0.0.1' || $host === '::1' || $host === '0.0.0.0') {
                 $domain = 'localhost';
             } elseif (\filter_var($host, FILTER_VALIDATE_IP)) {
-                $domain = $host;  // 内网 IP 如 192.168.1.100 直接作为域名
+                $domain = $host;
             } else {
                 $domain = $host;
             }
@@ -1392,7 +1392,7 @@ class Start extends CommandAbstract
             return $configuredDomain;
         }
         $host = \strtolower(\trim($host));
-        if ($host === '127.0.0.1' || $host === '::1') {
+        if ($host === '127.0.0.1' || $host === '::1' || $host === '0.0.0.0') {
             return 'localhost';
         }
         return $host;
@@ -1518,7 +1518,8 @@ class Start extends CommandAbstract
     {
         /** @var SslCertificateService $sslService */
         $sslService = ObjectManager::getInstance(SslCertificateService::class);
-        $localDomains = ['0.0.0.0', '127.0.0.1', 'localhost'];
+        // 0.0.0.0 只是"监听所有网卡"的绑定地址，不是合法证书 CN，归一为 localhost
+        $localDomains = ['127.0.0.1', 'localhost'];
 
         foreach ($localDomains as $localDomain) {
             $certDir = $sslService->getCertificateDir($localDomain);

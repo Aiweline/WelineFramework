@@ -351,11 +351,21 @@ Register::register(
 
 **当前机制：**
 
-1. **表结构**：在 Model 上使用 **声明式注解** `#[Table]`、`#[Col]`、`#[Index]` 定义表与字段，由 **SchemaDiffStage** 在 `php bin/w setup:upgrade` 时解析并同步到数据库。**必须为每个参与建表的列添加 #[Col]**，仅常量无注解的列不会被 SchemaParser 解析。`LocalModel` 子类（多语言翻译表）须显式为 `schema_fields_ID`、`schema_fields_local_code` 等加 #[Col]。详见 **database-model-standards** 技能中「2.1 SchemaParser 解析行为」与「2.2 LocalModel 子类表结构声明」。
+1. **表结构（字段/列）**：在 Model 上使用 **声明式注解** `#[Table]`、`#[Col]`、`#[Index]` 定义表与字段，由 **SchemaDiffStage** 在 `php bin/w setup:upgrade` 时做 **diff 同步**（CREATE TABLE / ADD COLUMN / MODIFY COLUMN / ADD INDEX 等）。**字段的增删改全部由 Model #[Col] 控制，通过 diff 操作完成，禁止在 Upgrade 阶段做字段 CRUD。** 必须为每个参与建表的列添加 #[Col]，仅常量无注解的列不会被 SchemaParser 解析。`LocalModel` 子类须显式为 `schema_fields_ID`、`schema_fields_local_code` 等加 #[Col]。详见 **database-model-standards** 技能。
 2. **业务初始化 / 种子数据**：放在模块 **Setup/Install.php**（首次安装）、**Setup/Upgrade.php**（升级时）中执行，不在 Model 内写 install/upgrade/setup 逻辑。
 3. **register.php 版本号**：仍可用于模块加载与依赖等；不再用于“触发 Model upgrade()”。
 
-**加字段 / 改表结构**：在对应 Model 上增加或修改 `#[Col]`/`#[Index]`，然后执行 `php bin/w setup:upgrade` 即可。
+**加字段 / 改表结构**：在对应 Model 上增加或修改 `#[Col]`/`#[Index]`，然后执行 `php bin/w setup:upgrade` 即可（由 SchemaDiff 自动 diff 并同步）。
+
+**⚠️ Upgrade 阶段职责边界（重要）**
+
+| 职责 | 是否在 Upgrade 中做 | 说明 |
+|------|---------------------|------|
+| 字段增删改（ADD/DROP/MODIFY COLUMN） | ❌ 禁止 | 由 Model #[Col] 声明 + SchemaDiff 自动 diff 同步 |
+| 索引增删改 | ❌ 禁止 | 由 Model #[Index] 声明 + SchemaDiff 自动 diff 同步 |
+| 建表 / 改表 DDL | ❌ 禁止 | 同上，统一由 SchemaDiff 完成 |
+| 业务初始化、种子数据 | ✅ 可以 | 如默认网站、默认配置、数据回填等 |
+| 跨表数据迁移、配置迁移 | ✅ 可以 | 非表结构的业务数据变更 |
 
 ### 升级阶段批量写入（大路由/大配置导入）⚠️
 
