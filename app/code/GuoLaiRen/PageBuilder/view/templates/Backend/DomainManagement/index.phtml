@@ -4619,36 +4619,43 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (cdnSelect) cdnSelect.innerHTML = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
         document.getElementById('pb-dm-root-dns-switch-modal').classList.add('pb-dm-form-modal--open');
 
-        // 使用 getDnsAccounts：仅列出支持 DNS 管理的账户（含 Cloudflare/GName 等），便于选择正确目标
+        // getDnsAccounts 返回 { dns_accounts: [...], cdn_accounts: [...] }
         (window.Weline && window.Weline.Api ? window.Weline.Api.get(API.getDnsAccounts, { silent: true }) : fetch(API.getDnsAccounts).then(function(r) { return r.json(); }))
             .then(function(res) {
                 var data = (res && res.data) !== undefined ? res.data : res;
-                var accounts = (data.data && data.data.dns_accounts) ? data.data.dns_accounts : ((data.dns_accounts) ? data.dns_accounts : []);
-                if (!Array.isArray(accounts)) accounts = [];
+                var payload = data.data || data || {};
+                var dnsAccountsList = payload.dns_accounts || [];
+                var cdnAccountsList = payload.cdn_accounts || [];
+                if (!Array.isArray(dnsAccountsList)) dnsAccountsList = [];
+                if (!Array.isArray(cdnAccountsList)) cdnAccountsList = [];
 
-                var accountById = {};
-                accounts.forEach(function(acc) {
-                    var id = acc.account_id || acc.id || 0;
-                    accountById[id] = acc;
+                var allById = {};
+                dnsAccountsList.concat(cdnAccountsList).forEach(function(acc) {
+                    allById[acc.account_id || acc.id || 0] = acc;
                 });
                 if (currentDnsEl && dnsAccountId > 0) {
-                    var dAcc = accountById[dnsAccountId];
+                    var dAcc = allById[dnsAccountId];
                     currentDnsEl.textContent = dAcc ? ((dAcc.name || dAcc.account_name || '') + ' (' + (dAcc.registrar_name || dAcc.registrar_code || '') + ')') : (dnsProviderName || ('ID:' + dnsAccountId));
                 }
                 if (currentCdnEl && cdnAccountId > 0) {
-                    var cAcc = accountById[cdnAccountId];
+                    var cAcc = allById[cdnAccountId];
                     currentCdnEl.textContent = cAcc ? ((cAcc.name || cAcc.account_name || '') + ' (' + (cAcc.registrar_name || cAcc.registrar_code || '') + ')') : (cdnProviderName || ('ID:' + cdnAccountId));
                 }
 
                 var dnsOpts = '<option value=""><?= __('-- 请选择目标 DNS 账户 --') ?></option>';
-                var cdnOpts = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
-                accounts.forEach(function(acc) {
+                dnsAccountsList.forEach(function(acc) {
                     var accId = acc.account_id || acc.id || '';
                     var label = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
                     dnsOpts += '<option value="' + accId + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
-                    cdnOpts += '<option value="' + accId + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
                 });
                 if (dnsSelect) dnsSelect.innerHTML = dnsOpts;
+
+                var cdnOpts = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
+                cdnAccountsList.forEach(function(acc) {
+                    var accId = acc.account_id || acc.id || '';
+                    var label = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
+                    cdnOpts += '<option value="' + accId + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
+                });
                 if (cdnSelect) cdnSelect.innerHTML = cdnOpts;
             })
             .catch(function() {

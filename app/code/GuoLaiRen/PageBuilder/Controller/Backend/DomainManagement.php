@@ -1466,20 +1466,35 @@ class DomainManagement extends BaseController
             $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
             $targetAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
             $targetAccount->load($dnsAccountId);
+
+            $sse->sendEvent('info', ['message' => __('[DEBUG] 请求参数 dns_account_id=%{1}，load 后 getAccountId()=%{2}，registrar_id=%{3}', [
+                (string) $dnsAccountId,
+                (string) $targetAccount->getAccountId(),
+                (string) $targetAccount->getRegistrarId(),
+            ])]);
+
             if (!$targetAccount->getAccountId()) {
                 $sse->sendEvent('failed', ['message' => __('目标 DNS 账户不存在')]);
                 $sse->close();
                 return;
             }
-            $targetAdapter = $registrarResolver->getAdapter($targetAccount->getRegistrarCode());
+
+            $targetRegistrarCode = (string) $targetAccount->getRegistrarCode();
+
+            $sse->sendEvent('info', ['message' => __('[DEBUG] getRegistrarCode()=%{1}', [$targetRegistrarCode])]);
+
+            $targetAdapter = $registrarResolver->getAdapter($targetRegistrarCode);
             if ($targetAdapter === null) {
-                $sse->sendEvent('failed', ['message' => __('目标适配器不存在')]);
+                $allAdapterCodes = \array_keys($registrarResolver->getAllAdapters());
+                $sse->sendEvent('failed', ['message' => __('目标适配器不存在，code=%{1}，已注册适配器：%{2}', [
+                    $targetRegistrarCode,
+                    \implode(', ', $allAdapterCodes),
+                ])]);
                 $sse->close();
                 return;
             }
 
             $targetCredentials = $targetAccount->getCredentials();
-            $targetRegistrarCode = (string) $targetAccount->getRegistrarCode();
             $targetAccountName = (string) ($targetAccount->getData('account_name') ?: $targetAccount->getName() ?: '');
             $targetRegistrarName = (string) ($targetAccount->getData('registrar_name') ?: $targetRegistrarCode);
 
@@ -3393,11 +3408,13 @@ class DomainManagement extends BaseController
         try {
             $registrarResolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
             $dnsDetector = ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class);
-            $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
             $allRows = $accountModel->clearQuery()
                 ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
                 ->select()
                 ->fetchArray();
+
+            w_log_info(__('[getDnsAccounts] 活跃账户数量：%{1}', [(string) \count($allRows)]), [], 'dns_cdn_switch');
 
             $dnsAccounts = [];
             $cdnAccounts = [];
@@ -3412,9 +3429,8 @@ class DomainManagement extends BaseController
                 $registrarId = (int) ($row[DomainRegistrarAccount::schema_fields_REGISTRAR_ID] ?? 0);
 
                 if ($registrarCode === '' && $registrarId > 0) {
-                    $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
-                    $registrar->clearData(true)->clearQuery();
-                    $registrar->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_ID, $registrarId)->find()->fetch();
+                    $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class, [], false);
+                    $registrar->load($registrarId);
                     $registrarCode = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE) ?? '');
                     $registrarName = (string) ($registrar->getData(\Weline\Websites\Model\DomainRegistrar::schema_fields_NAME) ?? $registrarCode);
                 }
@@ -3423,6 +3439,18 @@ class DomainManagement extends BaseController
                 }
 
                 $adapter = $registrarResolver->getAdapter($registrarCode);
+                $supportsDns = $adapter !== null && $adapter->supportsDnsManagement();
+                $isCdn = $dnsDetector->isCdnProvider($registrarCode);
+
+                w_log_info(__('[getDnsAccounts] 账户 ID=%{1}, name=%{2}, registrar_id=%{3}, code=%{4}, supportsDns=%{5}, isCdn=%{6}', [
+                    (string) $accountId,
+                    (string) ($row[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? ''),
+                    (string) $registrarId,
+                    $registrarCode,
+                    $supportsDns ? 'true' : 'false',
+                    $isCdn ? 'true' : 'false',
+                ]), [], 'dns_cdn_switch');
+
                 $accountInfo = [
                     'account_id' => $accountId,
                     'name' => (string) ($row[DomainRegistrarAccount::schema_fields_ACCOUNT_NAME] ?? ''),
@@ -3430,13 +3458,18 @@ class DomainManagement extends BaseController
                     'registrar_name' => $registrarName,
                 ];
 
-                if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                if ($supportsDns) {
                     $dnsAccounts[] = $accountInfo;
                 }
-                if ($dnsDetector->isCdnProvider($registrarCode)) {
+                if ($isCdn) {
                     $cdnAccounts[] = $accountInfo;
                 }
             }
+
+            w_log_info(__('[getDnsAccounts] DNS 账户数：%{1}，CDN 账户数：%{2}', [
+                (string) \count($dnsAccounts),
+                (string) \count($cdnAccounts),
+            ]), [], 'dns_cdn_switch');
 
             return $this->fetchJson([
                 'success' => true,
@@ -3446,6 +3479,7 @@ class DomainManagement extends BaseController
                 ],
             ]);
         } catch (\Throwable $e) {
+            w_log_error(__('[getDnsAccounts] 异常：%{1}', [$e->getMessage()]), [], 'dns_cdn_switch');
             return $this->fetchJson([
                 'success' => false,
                 'msg' => __('获取账户列表失败：%{1}', [$e->getMessage()]),
