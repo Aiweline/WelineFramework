@@ -853,6 +853,8 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_edit_offcanvas', '编辑AI模型（侧边栏）', 'mdi-pencil', '编辑AI模型（侧边栏）')]
     public function editOffcanvas(): string
     {
+        # 使用blank布局
+        $this->layoutType = 'default.blank';
         $id = (int)$this->request->getGet('id');
         
         if ($id) {
