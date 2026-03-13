@@ -276,6 +276,13 @@ class MasterResurrector
             || ($sslEnabled && $redirectPort > 0 && $redirectPort < 1024);
 
         if ($needsPrivileged && (int)\posix_geteuid() !== 0) {
+            // 非 root 但可能有 setcap cap_net_bind_service，尝试实际绑定测试
+            $testPort = ($mainPort > 0 && $mainPort < 1024) ? $mainPort : $redirectPort;
+            $testSock = @\stream_socket_server("tcp://0.0.0.0:{$testPort}", $errno, $errstr, STREAM_SERVER_BIND);
+            if ($testSock) {
+                @\fclose($testSock);
+                return true;
+            }
             return false;
         }
         return true;
