@@ -1759,10 +1759,11 @@ class Start extends CommandAbstract
         $isPrivileged = ($port === 80 || $port === 443);
         
         if ($isPrivileged && !IS_WIN) {
-            $this->printer->note(__('提示：端口 %{1} 为特权端口，Linux/Mac 下需 root 或 setcap 才能绑定。', [$port]));
-            $this->printer->note(__('  • 以 root 运行：sudo php bin/w server:start -p %{1}', [$port]));
-            $this->printer->note(__('  • 或授权能力：sudo setcap cap_net_bind_service=+ep $(which php)'));
+            $this->printer->note(__('提示：端口 %{1} 为特权端口，Linux/Mac 下需 setcap 或 root 才能绑定。', [$port]));
+            $this->printer->note(__('  • 推荐 setcap（当前用户即可运行，避免 root 文件权限问题）：'));
+            $this->printer->note(__('    sudo setcap cap_net_bind_service=+ep $(which php)'));
             $this->printer->note(__('  • 或 Nginx 反代：Nginx 监听 %{1}，proxy_pass 到本机高端口（如 9981）', [$port]));
+            $this->printer->note(__('  • 或以 root 运行（不推荐，会导致生成文件权限问题）：sudo php bin/w server:start -p %{1}', [$port]));
             echo "\n";
         }
         
@@ -1788,7 +1789,6 @@ class Start extends CommandAbstract
             return true;
         }
         if (!\function_exists('posix_geteuid')) {
-            // 无法判断权限时不阻断（保持兼容）
             return true;
         }
         if ((int)\posix_geteuid() === 0) {
@@ -1807,28 +1807,115 @@ class Start extends CommandAbstract
             return true;
         }
 
-        // 检测是否为交互式终端（多种方式兜底）
-        $interactive = false;
-        // 方式1：posix_isatty 检测 STDIN
-        if (\defined('STDIN') && \function_exists('posix_isatty') && @\posix_isatty(STDIN)) {
-            $interactive = true;
+        // 先尝试直接绑定（可能已有 setcap 或 sysctl 配置）
+        $testSocket = @\stream_socket_server(
+            "tcp://0.0.0.0:{$privilegedPorts[0]}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND
+        );
+        if ($testSocket) {
+            @\fclose($testSocket);
+            return true;
         }
-        // 方式2：检查 /dev/tty 是否可读（Mac/Linux 通用）
-        if (!$interactive && @\is_readable('/dev/tty')) {
-            $interactive = true;
+
+        $this->printer->warning(__('检测到特权端口 %{1}，当前用户无法直接绑定。', [\implode(', ', $privilegedPorts)]));
+
+        // Linux 优先 setcap（授权后以当前用户运行，避免 root 生成文件导致权限问题）
+        if ($this->trySetcapForPrivilegedPort($privilegedPorts)) {
+            return true;
         }
-        // 方式3：检查 TERM 环境变量是否存在（终端环境通常设置）
-        if (!$interactive && \getenv('TERM')) {
-            $interactive = true;
+
+        // setcap 不可用/失败，回退到 sudo 重启
+        return $this->fallbackSudoRelaunch($privilegedPorts);
+    }
+
+    /**
+     * 尝试通过 setcap 给 PHP 赋予绑定特权端口的能力，成功后以当前用户继续运行。
+     *
+     * 优势：不切换到 root，所有生成文件属主保持当前用户，彻底避免 root 文件权限问题。
+     */
+    protected function trySetcapForPrivilegedPort(array $privilegedPorts): bool
+    {
+        if (PHP_OS === 'Darwin') {
+            // macOS 不支持 setcap
+            return false;
         }
-        // 如果无法确定是否交互式，尝试直接执行 sudo（sudo 自己会报错如果无法获取密码）
-        // 仅当明确判定为非交互式且无法继续时才提示
+
+        $phpBin = PHP_BINARY;
+        $realPhpBin = @\readlink($phpBin) ?: $phpBin;
+        if (!\is_file($realPhpBin)) {
+            $realPhpBin = $phpBin;
+        }
+
+        $setcapBin = \trim((string) @\shell_exec('which setcap 2>/dev/null'));
+        if ($setcapBin === '') {
+            $this->printer->note(__('未找到 setcap 命令，跳过 setcap 方式。'));
+            return false;
+        }
+
+        // 检查是否已有 cap_net_bind_service（getcap 检测）
+        $getcapBin = \trim((string) @\shell_exec('which getcap 2>/dev/null'));
+        if ($getcapBin !== '') {
+            $currentCap = \trim((string) @\shell_exec(\escapeshellarg($getcapBin) . ' ' . \escapeshellarg($realPhpBin) . ' 2>/dev/null'));
+            if (\stripos($currentCap, 'cap_net_bind_service') !== false) {
+                // 已有 setcap，但绑定仍失败（可能 capability 被覆盖或内核限制）
+                $this->printer->note(__('PHP 已有 cap_net_bind_service 但绑定仍失败，可能需要重新设置。'));
+            }
+        }
+
+        $setcapCmd = 'sudo ' . \escapeshellarg($setcapBin) . ' \'cap_net_bind_service=+ep\' ' . \escapeshellarg($realPhpBin);
+
+        $this->printer->note(__('推荐方案：通过 setcap 授权 PHP 绑定特权端口（以当前用户运行，避免 root 文件权限问题）'));
+        $this->printer->note(__('  PHP 路径：%{1}', [$realPhpBin]));
+        $this->printer->note(__('  将执行：%{1}', [$setcapCmd]));
+        echo "\n";
+        echo __('是否使用 setcap 授权？[Y/n] ');
+        $input = \trim((string) @\fgets(STDIN));
+        if ($input !== '' && !\in_array(\strtolower($input), ['y', 'yes', '是', ''], true)) {
+            return false;
+        }
+
+        $exitCode = 0;
+        @\passthru($setcapCmd, $exitCode);
+        if ($exitCode !== 0) {
+            $this->printer->warning(__('setcap 执行失败（退出码 %{1}），将回退到 sudo 方式。', [(string) $exitCode]));
+            return false;
+        }
+
+        // 验证 setcap 是否生效
+        $testSocket = @\stream_socket_server(
+            "tcp://0.0.0.0:{$privilegedPorts[0]}",
+            $errno,
+            $errstr,
+            STREAM_SERVER_BIND
+        );
+        if ($testSocket) {
+            @\fclose($testSocket);
+            $this->printer->success(__('setcap 授权成功！PHP 已可绑定特权端口，以当前用户身份继续启动。'));
+            return true;
+        }
+
+        $this->printer->warning(__('setcap 已执行但绑定仍失败（%{1}），将回退到 sudo 方式。', [$errstr]));
+        return false;
+    }
+
+    /**
+     * setcap 不可用时，回退到 sudo 重启。
+     * 
+     * 注意：此方式会以 root 运行，生成的文件属主为 root，可能导致后续权限问题。
+     */
+    protected function fallbackSudoRelaunch(array $privilegedPorts): bool
+    {
+        $interactive = $this->isInteractiveTerminal();
         $canPassthru = \function_exists('passthru');
         $canProcOpen = \function_exists('proc_open');
+
         if (!$interactive && !$canPassthru && !$canProcOpen) {
             $this->printer->error(__('端口 %{1} 需要 root 权限，请使用 sudo 重新执行。', [\implode(', ', $privilegedPorts)]));
             return false;
         }
+
         $rawArgv = $_SERVER['argv'] ?? [];
         if (!\is_array($rawArgv) || empty($rawArgv)) {
             $this->printer->error(__('无法自动重启为 sudo，请手动执行：sudo php bin/w server:start ...'));
@@ -1838,25 +1925,22 @@ class Start extends CommandAbstract
         $escaped = \array_map('escapeshellarg', $parts);
         $relaunchCommand = 'sudo ' . \implode(' ', $escaped);
 
-        $this->printer->warning(__('检测到特权端口 %{1}，需要 root 权限。', [\implode(', ', $privilegedPorts)]));
+        $this->printer->warning(__('回退方案：以 sudo (root) 启动。注意：root 进程生成的文件属主为 root，可能导致其他用户权限问题。'));
         $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
 
-        // 询问用户是否继续
         echo __('是否使用 sudo 继续？[Y/n] ');
-        $input = \trim((string)@\fgets(STDIN));
+        $input = \trim((string) @\fgets(STDIN));
         if ($input !== '' && !\in_array(\strtolower($input), ['y', 'yes', '是', ''], true)) {
             $this->printer->note(__('已取消。你可以手动执行：%{1}', [$relaunchCommand]));
             return false;
         }
 
-        // 释放启动锁，否则 sudo 子进程无法获取锁（父进程持锁导致子进程报「正在被另一个进程启动中」）
         $this->releaseStartLock();
 
         $exitCode = 0;
         if ($canPassthru) {
             @\passthru($relaunchCommand, $exitCode);
         } elseif ($canProcOpen) {
-            // passthru 被禁用时用 proc_open 继承 STDIN/STDOUT/STDERR，支持交互式输入 sudo 密码
             $proc = @\proc_open(
                 $relaunchCommand,
                 [0 => STDIN, 1 => STDOUT, 2 => STDERR],
@@ -1870,46 +1954,56 @@ class Start extends CommandAbstract
                 $exitCode = -1;
             }
         } else {
-            // 两个函数都不可用，只能提示
             $this->printer->error(__('端口 %{1} 需要 root 权限；passthru/proc_open 均不可用，请使用 sudo 重新执行：', [\implode(', ', $privilegedPorts)]));
             $this->printer->note($relaunchCommand);
             return false;
         }
         if ($exitCode !== 0) {
-            $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
+            $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string) $exitCode]));
+        }
+        return false;
+    }
+
+    /**
+     * 检测当前终端是否为交互式
+     */
+    protected function isInteractiveTerminal(): bool
+    {
+        if (\defined('STDIN') && \function_exists('posix_isatty') && @\posix_isatty(STDIN)) {
+            return true;
+        }
+        if (@\is_readable('/dev/tty')) {
+            return true;
+        }
+        if (\getenv('TERM')) {
+            return true;
         }
         return false;
     }
     
     /**
-     * Linux/macOS 下检测 socket 绑定权限，必要时询问用户使用 sudo。
+     * Linux/macOS 下检测 socket 绑定权限。
      * 
      * 某些情况下即使高端口也可能需要权限：
      * - macOS：防火墙、沙盒、SIP 保护等
      * - Linux：SELinux、AppArmor、容器沙盒等
      * 
-     * 此方法在启动前尝试绑定端口，失败时提示用户使用 sudo。
+     * 此方法在启动前尝试绑定端口，失败时优先 setcap，回退 sudo。
      *
      * @return bool true=可继续执行；false=当前进程应终止
      */
     protected function ensureUnixSocketPermission(string $host, int $port): bool
     {
-        // Windows 不需要此检测
         if (IS_WIN) {
             return true;
         }
-        
-        // 仅 Linux 和 macOS 需要此检测
         if (PHP_OS !== 'Darwin' && PHP_OS !== 'Linux') {
             return true;
         }
-        
-        // 已是 root 或已 sudo 重启过，无需检测
         if (\function_exists('posix_geteuid') && (int)\posix_geteuid() === 0) {
             return true;
         }
         
-        // 尝试绑定端口测试权限
         $testSocket = @\stream_socket_server(
             "tcp://{$host}:{$port}",
             $errno,
@@ -1922,69 +2016,25 @@ class Start extends CommandAbstract
             return true;
         }
         
-        // 绑定失败，检查是否为权限问题
         $isPermissionError = \stripos($errstr, 'permission') !== false 
             || \stripos($errstr, 'denied') !== false
-            || $errno === 13; // EACCES
+            || $errno === 13;
         
         if (!$isPermissionError) {
-            // 非权限问题（如端口已占用），不触发 sudo
             return true;
         }
         
-        // 权限问题，询问用户是否使用 sudo
         $platform = PHP_OS === 'Darwin' ? 'macOS' : 'Linux';
         $this->printer->warning(__('%{1} 检测到 socket 权限问题：%{2}', [$platform, $errstr]));
         $this->printer->note(__('端口 %{1} 绑定需要更高权限（可能由防火墙或系统安全设置引起）。', [$port]));
-        
-        // 构建 sudo 重启命令
-        $rawArgv = $_SERVER['argv'] ?? [];
-        if (!\is_array($rawArgv) || empty($rawArgv)) {
-            $this->printer->error(__('无法自动重启为 sudo，请手动执行：sudo php bin/w server:start ...'));
-            return false;
-        }
-        $parts = \array_merge([PHP_BINARY], $rawArgv);
-        $escaped = \array_map('escapeshellarg', $parts);
-        $relaunchCommand = 'sudo ' . \implode(' ', $escaped);
-        
-        $this->printer->note(__('将执行命令：%{1}', [$relaunchCommand]));
-        
-        echo __('是否使用 sudo 继续？[Y/n] ');
-        $input = \trim((string)@\fgets(STDIN));
-        if ($input !== '' && !\in_array(\strtolower($input), ['y', 'yes', '是', ''], true)) {
-            $this->printer->note(__('已取消。你可以手动执行：%{1}', [$relaunchCommand]));
-            return false;
+
+        // Linux 优先 setcap
+        if ($port < 1024 && $this->trySetcapForPrivilegedPort([$port])) {
+            return true;
         }
 
-        // 释放启动锁，否则 sudo 子进程无法获取锁
-        $this->releaseStartLock();
-
-        $exitCode = 0;
-        if (\function_exists('passthru')) {
-            @\passthru($relaunchCommand, $exitCode);
-        } elseif (\function_exists('proc_open')) {
-            $proc = @\proc_open(
-                $relaunchCommand,
-                [0 => STDIN, 1 => STDOUT, 2 => STDERR],
-                $pipes,
-                null,
-                null
-            );
-            if (\is_resource($proc)) {
-                $exitCode = (int) \proc_close($proc);
-            } else {
-                $exitCode = -1;
-            }
-        } else {
-            $this->printer->error(__('passthru/proc_open 均不可用，请手动执行：'));
-            $this->printer->note($relaunchCommand);
-            return false;
-        }
-        
-        if ($exitCode !== 0) {
-            $this->printer->error(__('sudo 执行失败，退出码：%{1}', [(string)$exitCode]));
-        }
-        return false;
+        // 回退 sudo
+        return $this->fallbackSudoRelaunch([$port]);
     }
     
     /**
