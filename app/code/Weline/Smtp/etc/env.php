@@ -8,5 +8,9 @@
  */
 
 return [
-    'router'       => 'smtp',
+    'router'        => 'smtp',
+    'backend_router' => 'smtp',
+    'dependencies'  => [
+        'Weline_SystemConfig',
+    ],
 ];

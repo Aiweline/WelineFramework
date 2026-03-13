@@ -12,9 +12,12 @@ declare(strict_types=1);
 
 namespace Weline\Smtp\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Smtp\Model\SmtpSendLog;
 
-class Log extends \Weline\Admin\Controller\BaseController
+#[Acl('Weline_Smtp::system_smtp_log', 'SMTP 发件记录', 'mdi-email-check-outline', '查看 SMTP 发送日志', 'Weline_Smtp::system_smtp')]
+class Log extends BackendController
 {
     /**
      * @var \Weline\Smtp\Model\SmtpSendLog
@@ -52,6 +55,6 @@ class Log extends \Weline\Admin\Controller\BaseController
         } else {
             $this->getMessageManager()->addSuccess(__('你要删除的记录已不存在！'));
         }
-        $this->redirect($this->_url->getBackendUrl('*/backend/log/listing'));
+            $this->redirect($this->getBackendUrl('smtp/backend/log/listing'));
     }
 }

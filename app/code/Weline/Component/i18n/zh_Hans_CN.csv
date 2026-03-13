@@ -1,4 +1,4 @@
-搜索组件：快速构建搜索框,搜索组件：快速构建搜索框
+﻿搜索组件：快速构建搜索框,搜索组件：快速构建搜索框
 回车搜索,回车搜索
 OffCanvas组件：侧边栏弹出窗,OffCanvas组件：侧边栏弹出窗
 排序组件：快速构建排序按钮,排序组件：快速构建排序按钮
@@ -51,17 +51,3 @@ OffCanvas组件：侧边栏弹出窗,OffCanvas组件：侧边栏弹出窗
 页面将在,页面将在
 秒后关闭,秒后关闭
 成功提示！,成功提示！
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到"
-无法访问表单内容，请稍后重试,无法访问表单内容，请稍后重试
-未找到表单，请检查页面是否正确加载,未找到表单，请检查页面是否正确加载
-保存时发生错误：,保存时发生错误：
-请设置搜索Block块参数：,请设置搜索Block块参数：
-请设置OffCanvas的Block块参数：,请设置OffCanvas的Block块参数：
-{{target_button_text}},{{target_button_text}}
-{{title}},{{title}}
-{{flush_button_text}},{{flush_button_text}}
-{{submit_button_text}},{{submit_button_text}}
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到"
-{{req.msg}},{{req.msg}}
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}","DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}"
-"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}","DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}"

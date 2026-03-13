@@ -1,4 +1,4 @@
-"实体不存在: %s","实体不存在: %s"
+﻿"实体不存在: %s","实体不存在: %s"
 "缺少必要参数：attribute_id 或 (entity_code + attribute_code)","缺少必要参数：attribute_id 或 (entity_code + attribute_code)"
 属性不存在,属性不存在
 缺少必要参数：entity_code,缺少必要参数：entity_code
@@ -313,42 +313,3 @@ EAV管理,EAV管理
 删除失败,删除失败
 确定要删除此属性集吗？,确定要删除此属性集吗？
 暂无属性数据,暂无属性数据
-"Weline Admin 管理面板","Weline Admin 管理面板"
-属性集管理,属性集管理
-属性集表,属性集表
-属性集ID,属性集ID
-请输入要查找�?属性集�?或�?属性集代码,请输入要查找�?属性集�?或�?属性集代码
-请输入要查找�?属性集名或�?属性集代码,请输入要查找�?属性集名或�?属性集代码
-请输入要查找的【实�?属性集-属性组】名或者【实�?属性集-属性组】代码,请输入要查找的【实�?属性集-属性组】名或者【实�?属性集-属性组】代码
-搜索【实�?属性集-属性组】结果,搜索【实�?属性集-属性组】结果
-�?部分的数据,�?部分的数据
-将属性归档为�?方便管理,将属性归档为�?方便管理
-"请输入 ","请输入 "
-{{target_button_text}},{{target_button_text}}
-{{title}},{{title}}
-"搜索 {{eav_entity.name}} 属性集","Search {{eav_entity.name}} attribute set"
-????,"Delete failed"
-???...,Loading...
-??,Retry
-???,"Attribute group"
-???????,"Failed to load child nodes"
-????????,"System nodes cannot be deleted"
-$attribute->getName(,$attribute->getName(
-"'-请选择-%{1}-依赖项-', $dependence","'-请选择-%{1}-依赖项-', $dependence"
-"'Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1}', $this::class","'Eav模型未设置实体代码eav_entity_id_field_type常量或者未设置eav_entity_id_field_type属性。Eav类：%{1}', $this::class"
-"'Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1}', $this::class","'Eav模型未设置实体代码entity_code常量或者未设置entity_code属性。Eav类：%{1}', $this::class"
-"'Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1}', $this::class","'Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_entity_id_field_length属性。Eav类：%{1}', $this::class"
-"'Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1}', $this::class","'Eav模型未设置实体名entity_name常量或者未设置entity_name属性。Eav类：%{1}', $this::class"
-"'单值属性不支持数组或者对象类型值：%{1}', w_var_export($value, true","'单值属性不支持数组或者对象类型值：%{1}', w_var_export($value, true"
-"'单值属性只能接收一个值！当前值：%{1}', w_var_export($value, true","'单值属性只能接收一个值！当前值：%{1}', w_var_export($value, true"
-"'实体（%{1}）已经存在属性（%{2}）', [$this->getEntityCode(","'实体（%{1}）已经存在属性（%{2}）', [$this->getEntityCode("
-"'属性值保存失败！信息：%{1}', $e->getMessage(","'属性值保存失败！信息：%{1}', $e->getMessage("
-"'属性所属实体不存在！实体：%{1}', $code","'属性所属实体不存在！实体：%{1}', $code"
-"'属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}', ['name' => $this->getName(","'属性类型不存在！属性：%{name}, 属性代码：%{code} 属性实体：%{entity} 属性实体代码：%{entity_code}', ['name' => $this->getName("
-"'属性类型不存在！类型：%{1}', $type_code","'属性类型不存在！类型：%{1}', $type_code"
-"'属性类型添加失败 %{1}', $type->getCode(","'属性类型添加失败 %{1}', $type->getCode("
-"'当前实体不存在 %{1}', $entity_code","'当前实体不存在 %{1}', $entity_code"
-"'模型类: %{1} 必须是 EavModelInterface 接口类的实例', $model_class","'模型类: %{1} 必须是 EavModelInterface 接口类的实例', $model_class"
-"'类型不存在:%{1}', $type_code","'类型不存在:%{1}', $type_code"
-实体不存在！,"Entity does not exist!"
-该模型没有实体！,"The model has no entity!"

@@ -1,4 +1,4 @@
-"请指定 --module=ModuleName 或 --tables=table1,table2","请指定 --module=ModuleName 或 --tables=table1,table2"
+﻿"请指定 --module=ModuleName 或 --tables=table1,table2","请指定 --module=ModuleName 或 --tables=table1,table2"
 "手动表备份: %{1}","手动表备份: %{1}"
 创建备份记录失败,创建备份记录失败
 "备份表 %{1} 失败: %{2}","备份表 %{1} 失败: %{2}"
@@ -152,5 +152,3 @@
 "当前版本 %{1} 已经是最新或更高版本","当前版本 %{1} 已经是最新或更高版本"
 "模块 %{1} 版本已升级: %{2} -> %{3}","模块 %{1} 版本已升级: %{2} -> %{3}"
 "记录版本历史失败: %{1}","记录版本历史失败: %{1}"
-Running,执行中
-" -> file %{1}"," -> 文件 %{1}"

@@ -1,4 +1,4 @@
-记录ID不能为空,"Record ID cannot be empty"
+﻿记录ID不能为空,"Record ID cannot be empty"
 记录不存在,"Record does not exist"
 记录删除成功,"Record deleted successfully"
 文件不存在,"File does not exist"
@@ -9,6 +9,7 @@
 在线字体压缩工具,"Online Font Subset Tool"
 "Font Subset Tool","Font Subset Tool"
 字体处理记录,"Font Processing Records"
+"Font Processing Records","Font Processing Records"
 删除成功,删除成功
 请求方法错误,"Request method error"
 请选择字体文件,"Please select a font file"
@@ -251,25 +252,3 @@ ID,ID
 错误,错误
 请重新选择文件进行上传。,请重新选择文件进行上传。
 已清理,已清理
-100MB,100MB
-格式错误,格式错误
-字体字符提取与压缩工具模块,"Font Character Extraction and Compression Tool Module"
-不支持的字体格式,"Unsupported font format"
-文件上传失败,"File upload failed"
-文件大小超过限制,"File size exceeds limit"
-无法创建子集字体文件,"Unable to create subset font file"
-生成子集字体,"Generate Subset Font"
-下载字体文件,"Download Font File"
-删除记录,"Delete Record"
-返回,Back
-字符数量,"Character Count"
-压缩比例,"Compression Ratio"
-字体压缩工具,"Font Compression Tool"
-在线压缩字体,"Online Font Compression"
-字体提取,"Font Extraction"
-字符选择,"Character Selection"
-子集生成,"Subset Generation"
-文件下载,"File Download"
-字体子集生成失败,"Font subset generation failed"
-GD扩展未安装，无法处理字体,"GD extension not installed, cannot process fonts"
-无法创建图像资源,"Cannot create image resource"

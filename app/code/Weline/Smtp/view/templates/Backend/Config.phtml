@@ -38,7 +38,7 @@
                     </strong>
                     <lang>为了安全，默认支持auth验证和开启secure安全模式！仅https和验证模式下正常运行。</lang>
                 </div>
-                <form class='needs-validation' novalidate method='post' action="@backend-url{'*/backend/config'}">
+                <form class='needs-validation' novalidate method='post' action="<?= $this->getBackendUrl('smtp/backend/config/post') ?>">
                     <div class='row'>
                         <div class='col-md-6'>
                             <div class='mb-3'>
@@ -114,7 +114,7 @@
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title"><?= __('Smtp邮件服务配置测试') ?></h4>
-                <form class='needs-validation' novalidate method='post' action="@backend-url{'*/backend/config/test'}">
+                <form class='needs-validation' novalidate method='post' action="<?= $this->getBackendUrl('smtp/backend/config/posttest') ?>">
                     <div class='row'>
                         <div class='col-md-6'>
                             <div class='mb-3'>

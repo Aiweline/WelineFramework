@@ -1,4 +1,4 @@
-搜索组件：快速构建搜索框,"Search Component: Quickly build search box"
+﻿搜索组件：快速构建搜索框,"Search Component: Quickly build search box"
 回车搜索,"Press Enter to search"
 OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
 排序组件：快速构建排序按钮,"Sort Component: Quickly build sort buttons"
@@ -51,17 +51,3 @@ OffCanvas组件：侧边栏弹出窗,"OffCanvas Component: Sidebar popup window"
 页面将在,"Page will close in"
 秒后关闭,seconds
 成功提示！,Success!
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\Component\Block\OffCanvas】指定提交form表单未找到","DEBUG mode: Initialization error, please check if the form is correct! Block [Weline\Component\Block\OffCanvas] specified form not found"
-无法访问表单内容，请稍后重试,"Unable to access form content, please try again later"
-未找到表单，请检查页面是否正确加载,"Form not found, please check if the page is loaded correctly"
-保存时发生错误：,"An error occurred while saving:"
-请设置搜索Block块参数：,"Please set search Block parameters:"
-请设置OffCanvas的Block块参数：,"Please set OffCanvas Block parameters:"
-{{target_button_text}},{{target_button_text}}
-{{title}},{{title}}
-{{flush_button_text}},{{flush_button_text}}
-{{submit_button_text}},{{submit_button_text}}
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到","DEBUG mode: Initialization error, please check if the form is correct! Block [Weline\\Component\\Block\\OffCanvas] specified form not found"
-{{req.msg}},{{req.msg}}
-"DEBUG模式：初始化错误,请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}","DEBUG mode: Initialization error, please check if the form is correct! Block [Weline\\Component\\Block\\OffCanvas] specified form not found: %{1}}"
-"DEBUG模式：保存出错！请检查表单是否正确!block【Weline\\Component\\Block\\OffCanvas】指定提交form表单未找到：%{1}}","DEBUG mode: Save error! Please check if the form is correct! Block [Weline\\Component\\Block\\OffCanvas] specified form not found: %{1}}"
