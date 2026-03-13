@@ -144,6 +144,35 @@ foreach ($adapters as $a) {
         <template>Weline_Component::message.phtml</template>
     </div>
 
+    <!-- 适配器说明（手风琴） -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="accordion weline-adapter-guide" id="adapterGuideAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="adapterGuideHeading">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#adapterGuideCollapse" aria-expanded="false" aria-controls="adapterGuideCollapse">
+                            <i class="mdi mdi-information-outline me-2"></i>
+                            <lang>适配器说明</lang>
+                        </button>
+                    </h2>
+                    <div id="adapterGuideCollapse" class="accordion-collapse collapse" aria-labelledby="adapterGuideHeading" data-bs-parent="#adapterGuideAccordion">
+                        <div class="accordion-body">
+                            <p class="mb-2"><strong><lang>适配器</lang></strong><lang>用于不同业务场景调用 AI（如翻译、摘要、文章生成等）。每个适配器可设置默认模型，调用时会优先使用该模型；若未设置，则使用系统默认模型。</lang></p>
+                            <p class="mb-0"><lang>使用流程：先在「模型」Tab 配置并启用模型，在「供应商账户」Tab 添加并激活账户；再在本页为各适配器设置默认模型，并激活需要使用的适配器。</lang></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <style>
+    .weline-adapter-guide .accordion-item { background: var(--backend-color-card-bg); border-color: var(--backend-color-border-default); }
+    .weline-adapter-guide .accordion-button { background: var(--backend-color-bg-secondary); color: var(--backend-color-text-primary); }
+    .weline-adapter-guide .accordion-button:not(.collapsed) { background: var(--backend-color-card-header-bg, var(--backend-color-bg-secondary)); }
+    .weline-adapter-guide .accordion-body { background: var(--backend-color-card-bg); color: var(--backend-color-text-primary); }
+    </style>
+    <!-- 适配器说明结束 -->
+
     <!-- 统计卡片 -->
     <div class="row mb-4">
         <div class="col-xl-3 col-md-6">
