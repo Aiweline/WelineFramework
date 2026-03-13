@@ -345,6 +345,9 @@ var MCPClient = (function () {
                 tools = [
                     { name: 'search_google', description: '在 Google 搜索' },
                     { name: 'go_to_url', description: '导航到 URL' },
+                    { name: 'browser_navigate', description: '导航到 URL（同 go_to_url）' },
+                    { name: 'browser_snapshot', description: '获取页面快照，返回 textContent' },
+                    { name: 'browser_extract', description: '提取页面结构化数据（email、phone、social）' },
                     { name: 'go_back', description: '返回上一页' },
                     { name: 'click_element', description: '点击元素' },
                     { name: 'input_text', description: '输入文本' },
@@ -380,7 +383,8 @@ var MCPClient = (function () {
                 // Playwright MCP 的工具列表
                 tools = [
                     { name: 'browser_navigate', description: '导航到URL' },
-                    { name: 'browser_snapshot', description: '获取页面快照' },
+                    { name: 'browser_snapshot', description: '获取页面快照，返回 textContent 供模型分析' },
+                    { name: 'browser_extract', description: '提取页面结构化数据（email、phone、social 等）' },
                     { name: 'browser_click', description: '点击元素' },
                     { name: 'browser_type', description: '输入文本' },
                     { name: 'browser_fill_form', description: '填写表单' },

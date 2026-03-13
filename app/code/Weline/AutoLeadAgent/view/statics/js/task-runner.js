@@ -2236,7 +2236,44 @@ var AutoLeadAgentTaskRunner = (function () {
         updateModelStatus('running', null, getMemoryUsage());
 
         try {
-            // 优先使用自主寻客管道（AutonomousPipeline + PlatformStrategies）
+            // 1. 优先使用 ReAct Agent（模型决策 + MCP 工具调用，完全模型驱动）
+            if (typeof ReActAgent !== 'undefined' && ReActAgent && typeof MCPClient !== 'undefined' && MCPClient &&
+                typeof ModelInference !== 'undefined' && ModelInference && typeof AutoLeadAgentPrompts !== 'undefined') {
+                try {
+                    var mcpOk = await MCPClient.isMCPAvailable ? MCPClient.isMCPAvailable() : false;
+                    if (mcpOk) {
+                        emitLog('inference', '使用 ReAct Agent（模型决策 + MCP）执行任务...');
+                        ReActAgent.init({ maxIterations: 50 });
+                        if (!MCPClient.isConnected || !MCPClient.isConnected()) {
+                            await MCPClient.connectMCP();
+                        }
+                        var profileForReAct = {
+                            name: sourceTypeProfile.name,
+                            industry: sourceTypeProfile.industry,
+                            region: sourceTypeProfile.region,
+                            description: (sourceTypeProfile.description || '').substring(0, 500),
+                            keywords: sourceTypeProfile.keywords || []
+                        };
+                        var reactResult = await ReActAgent.reactLoop(taskId, profileForReAct, function (progress) {
+                            if (progress && progress.phase === 'act' && progress.iteration) {
+                                updateFoundCount(state.foundCount);
+                            }
+                        });
+                        if (reactResult && reactResult.success) {
+                            state.foundCount = (reactResult.foundCustomers || []).length;
+                            state.status = TASK_STATUS.COMPLETED;
+                            updateUIStatus(TASK_STATUS.COMPLETED);
+                            updateModelStatus('idle', null, getMemoryUsage());
+                            emitLog('inference', 'ReAct 任务完成，发现 ' + state.foundCount + ' 个候选人');
+                            return true;
+                        }
+                    }
+                } catch (reactErr) {
+                    emitLog('inference', 'ReAct Agent 执行失败，回退到自主管道: ' + (reactErr.message || reactErr));
+                }
+            }
+
+            // 2. 使用自主寻客管道（AutonomousPipeline + PlatformStrategies，模型增强关键词）
             if (typeof AutonomousPipeline !== 'undefined' && AutonomousPipeline &&
                 typeof PlatformStrategies !== 'undefined' && PlatformStrategies) {
                 
@@ -2389,7 +2426,11 @@ var AutoLeadAgentTaskRunner = (function () {
          */
         async function translateSceneMapping(mapping, targetLang) {
             var translatedMapping = {};
-            
+            // 优先使用 ModelInference.translateIfNeeded（缓存 + 模型降级），否则用 translateWithGoogle
+            var translateOne = (typeof ModelInference !== 'undefined' && typeof ModelInference.translateIfNeeded === 'function')
+                ? function (t) { return ModelInference.translateIfNeeded(t, targetLang); }
+                : function (t) { return translateWithGoogle(t, targetLang); };
+
             // 翻译每个特征词对应的场景数组
             for (var trait in mapping) {
                 // 跳过特殊键
@@ -2401,7 +2442,7 @@ var AutoLeadAgentTaskRunner = (function () {
                 if (Array.isArray(scenes)) {
                     var translatedScenes = [];
                     for (var i = 0; i < scenes.length; i++) {
-                        var translated = await translateWithGoogle(scenes[i], targetLang);
+                        var translated = await translateOne(scenes[i]);
                         if (translated && translated.trim()) {
                             translatedScenes.push(translated.trim());
                         } else {
@@ -2417,7 +2458,7 @@ var AutoLeadAgentTaskRunner = (function () {
             if (mapping.activityWords && Array.isArray(mapping.activityWords)) {
                 var translatedActivities = [];
                 for (var i = 0; i < mapping.activityWords.length; i++) {
-                    var translated = await translateWithGoogle(mapping.activityWords[i], targetLang);
+                    var translated = await translateOne(mapping.activityWords[i]);
                     if (translated && translated.trim()) {
                         translatedActivities.push(translated.trim());
                     } else {
@@ -2431,7 +2472,7 @@ var AutoLeadAgentTaskRunner = (function () {
             if (mapping.roleWords && Array.isArray(mapping.roleWords)) {
                 var translatedRoles = [];
                 for (var i = 0; i < mapping.roleWords.length; i++) {
-                    var translated = await translateWithGoogle(mapping.roleWords[i], targetLang);
+                    var translated = await translateOne(mapping.roleWords[i]);
                     if (translated && translated.trim()) {
                         translatedRoles.push(translated.trim());
                     } else {
@@ -2443,7 +2484,7 @@ var AutoLeadAgentTaskRunner = (function () {
             
             // 翻译通用场景后缀
             if (mapping._communitySuffix) {
-                var translatedSuffix = await translateWithGoogle(mapping._communitySuffix, targetLang);
+                var translatedSuffix = await translateOne(mapping._communitySuffix);
                 translatedMapping._communitySuffix = translatedSuffix && translatedSuffix.trim() ? translatedSuffix.trim() : mapping._communitySuffix;
             }
             
