@@ -422,7 +422,7 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
     var prevUrl = <?= $prevId ? json_encode($detailUrlBase . '?id=' . (int)$prevId) : 'null' ?>;
     var nextUrl = <?= $nextId ? json_encode($detailUrlBase . '?id=' . (int)$nextId) : 'null' ?>;
     var markTopicReadUrl = <?= json_encode($this->getBackendUrl('system/backend/notification/markTopicRead')) ?>;
-    var confirmMsg = <?= json_encode(__('确定要将「%{name}」类的所有通知标记为已读吗？', ['name' => ''])) ?>;
+    var confirmMsgTemplate = <?= json_encode(__('确定要将「%{name}」类的所有通知标记为已读吗？')) ?>;
 
     document.addEventListener('keydown', function(e) {
         if (/input|textarea|select/i.test(document.activeElement && document.activeElement.tagName || '')) {
@@ -440,7 +440,7 @@ $detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
         btn.addEventListener('click', function() {
             var topicCode = btn.getAttribute('data-topic-code');
             var topicName = btn.getAttribute('data-topic-name') || topicCode;
-            var msg = confirmMsg.replace('%{name}', topicName);
+            var msg = confirmMsgTemplate.replace('%{name}', topicName || topicCode || '');
             BackendConfirm.show(msg).then(function(confirmed) {
                 if (!confirmed) return;
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topic_code: topicCode }) };
