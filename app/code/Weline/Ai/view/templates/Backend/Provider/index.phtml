@@ -32,7 +32,35 @@ $this->assign('providerAdd', $providerAdd);
 </div>
 <!-- end message -->
 
+<!-- 供应商账户工作原理（手风琴） -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="accordion weline-ai-provider-guide" id="providerGuideAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="providerGuideHeading">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#providerGuideCollapse" aria-expanded="false" aria-controls="providerGuideCollapse">
+                        <i class="mdi mdi-information-outline me-2"></i>
+                        <?= __('供应商账户工作原理') ?>
+                    </button>
+                </h2>
+                <div id="providerGuideCollapse" class="accordion-collapse collapse" aria-labelledby="providerGuideHeading" data-bs-parent="#providerGuideAccordion">
+                    <div class="accordion-body">
+                        <p class="mb-2"><?= __('供应商账户用于集中管理各 AI 供应商（如 OpenAI、阿里云等）的 API 密钥。添加账户后需进行「连通性测试」，测试通过才能激活账户。') ?></p>
+                        <p class="mb-2"><?= __('模型在调用时可选择使用「供应商账户」或「自配置」：使用供应商账户时，模型会从已激活的该供应商账户中获取 API 密钥，无需在每个模型中单独填写。') ?></p>
+                        <p class="mb-0"><?= __('使用流程：先在本页添加账户 → 填写 API 密钥并保存 → 点击「连通性测试」→ 测试通过后激活账户 → 在「模型」Tab 中选择使用该供应商账户的模型进行配置和启用。') ?></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 供应商账户工作原理结束 -->
+
 <style>
+.weline-ai-provider-guide .accordion-item { background: var(--backend-color-card-bg); border-color: var(--backend-color-border-default); }
+.weline-ai-provider-guide .accordion-button { background: var(--backend-color-bg-secondary); color: var(--backend-color-text-primary); }
+.weline-ai-provider-guide .accordion-button:not(.collapsed) { background: var(--backend-color-card-header-bg, var(--backend-color-bg-secondary)); }
+.weline-ai-provider-guide .accordion-body { background: var(--backend-color-card-bg); color: var(--backend-color-text-primary); }
 .weline-ai-provider-logo {
     width: 32px;
     height: 32px;
