@@ -135,7 +135,7 @@ php -S 127.0.0.1:8080 -t pub
 启动服务器。
 
 ```bash
-php bin/w server:start [name] [-p port] [-c count] [-h host] [-d]
+php bin/w server:start [name] [-p port] [-c count] [--host ip] [-d]
 ```
 
 ### server:stop
