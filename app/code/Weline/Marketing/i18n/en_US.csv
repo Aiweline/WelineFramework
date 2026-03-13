@@ -1,4 +1,4 @@
-优惠券代码不能为空,"Coupon code cannot be empty"
+﻿优惠券代码不能为空,"Coupon code cannot be empty"
 优惠券无效或已过期,"Coupon is invalid or expired"
 加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
@@ -178,30 +178,3 @@ ID,ID
 禁用,禁用
 规则名称,"Rule Name"
 优先级,Priority
-翻译窗口,翻译窗口
-营销规则管理,营销规则管理
-营销规则列表,"Marketing Rule List"
-市场营销,Marketing
-促销活动,"Promotion Campaign"
-规则描述,"Rule Description"
-规则类型,"Rule Type"
-已使用次数,"Used Count"
-总使用次数限制,"Total Usage Limit"
-每个客户使用次数限制,"Customer Usage Limit"
-是否停止后续规则处理,"Stop Processing"
-激活,Active
-未激活,Inactive
-已过期,Expired
-优惠类型,"Discount Type"
-最小订单金额,"Minimum Amount"
-已用完,Exhausted
-活动描述,"Campaign Description"
-草稿,Draft
-暂停,Paused
-已完成,Completed
-已取消,Cancelled
-目标受众,"Target Audience"
-条件值,"Condition Value"
-动作值,"Action Value"
-活动,Campaign
-自动,Automatic

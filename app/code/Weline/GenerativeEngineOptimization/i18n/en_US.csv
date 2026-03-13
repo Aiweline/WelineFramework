@@ -1,4 +1,4 @@
-加载Feed列表失败：%{1},"Failed to load feed list: %{1}"
+﻿加载Feed列表失败：%{1},"Failed to load feed list: %{1}"
 Feed不存在,"Feed does not exist"
 内容,Content
 产品,Product
@@ -124,13 +124,3 @@ Feed格式,"Feed Format"
 提示,提示
 请选择Feed和至少一个平台,"Please select feed and at least one platform"
 推送失败,推送失败
-生成式搜索引擎优化,"Generative Engine Optimization"
-推送管理,"Push Management"
-查看平台列表,"View Platform List"
-保存平台,"Save Platform"
-查看Feed列表,"View Feed List"
-保存Feed,"Save Feed"
-生成Feed,"Generate Feed"
-查看推送历史,"View Push History"
-执行推送,"Execute Push"
-"推送完成：成功 %{1} 个，失败 %{2} 个","Push completed: %{1} successful"

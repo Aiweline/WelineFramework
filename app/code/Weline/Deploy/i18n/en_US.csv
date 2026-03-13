@@ -1,4 +1,4 @@
-"从 Git 仓库拉取代码并更新部署项目","从 Git 仓库拉取代码并更新部署项目"
+﻿"从 Git 仓库拉取代码并更新部署项目","从 Git 仓库拉取代码并更新部署项目"
 "Git 部署开始...","Git 部署开始..."
 "步骤 1/5：读取配置文件...","步骤 1/5：读取配置文件..."
 "错误：无法读取 .env 配置文件或配置为空！","错误：无法读取 .env 配置文件或配置为空！"
@@ -137,25 +137,3 @@
 "✓ 共恢复 %{1} 个路径","✓ 共恢复 %{1} 个路径"
 "清理: %{1}","清理: %{1}"
 "✓ 缓存清理完成","✓ 缓存清理完成"
-错误：必须指定分支,错误：必须指定分支
-"从 Git 仓库更新框架核心代码（只更新核心文件）","从 Git 仓库更新框架核心代码（只更新核心文件）"
-"从 Git 仓库更新框架核心代码","从 Git 仓库更新框架核心代码"
-框架核心代码更新（临时目录方式）,框架核心代码更新（临时目录方式）
-将更新整个项目（覆盖已有文件，新增缺失文件）,将更新整个项目（覆盖已有文件，新增缺失文件）
-"步骤 6/6：清理临时文件...","步骤 6/6：清理临时文件..."
-删除旧临时目录...,删除旧临时目录...
-"✓ 临时目录：%{1}","✓ 临时目录：%{1}"
-克隆仓库...,克隆仓库...
-"更新 %{1}...","更新 %{1}..."
-"⚠ %{1} 拷贝失败","⚠ %{1} 拷贝失败"
-"✓ 共更新 %{1} 个路径","✓ 共更新 %{1} 个路径"
-"✓ 临时文件已清理","✓ 临时文件已清理"
-"  1. 访问 https://git-scm.com/download/win","  1. 访问 https://git-scm.com/download/win"
-"  2. 下载并安装 Git for Windows","  2. 下载并安装 Git for Windows"
-"  3. 安装完成后重启终端","  3. 安装完成后重启终端"
-"  Ubuntu/Debian: sudo apt-get install git","  Ubuntu/Debian: sudo apt-get install git"
-"  CentOS/RHEL: sudo yum install git","  CentOS/RHEL: sudo yum install git"
-"  Fedora: sudo dnf install git","  Fedora: sudo dnf install git"
-"  brew install git","  brew install git"
-"  或者访问 https://git-scm.com/download/mac","  或者访问 https://git-scm.com/download/mac"
-"php bin/w update:core -b <分支名>","php bin/w update:core -b <分支名>"

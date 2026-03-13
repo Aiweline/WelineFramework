@@ -1,4 +1,4 @@
-用户名和密码不能为空,"Username and password cannot be empty"
+﻿用户名和密码不能为空,"Username and password cannot be empty"
 用户不存在,"User does not exist"
 用户已被禁用,"User has been disabled"
 密码错误,"Password incorrect"
@@ -164,5 +164,3 @@ API,API
 默认604800（7天），范围：86400-2592000（1-30天）,默认604800（7天），范围：86400-2592000（1-30天）
 默认2592000（30天），范围：604800-7776000（7-90天）,默认2592000（30天），范围：604800-7776000（7-90天）
 已复制到剪贴板,已复制到剪贴板
-鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1},鍔犺浇API闆嗘垚闈㈡澘澶辫触锛?{1}
-API文档缓存,"API Documentation Cache"

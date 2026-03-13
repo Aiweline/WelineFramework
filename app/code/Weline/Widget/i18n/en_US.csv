@@ -1,4 +1,4 @@
-开始刷新部件注册表...,开始刷新部件注册表...
+﻿开始刷新部件注册表...,开始刷新部件注册表...
 "✓ 部件注册表已刷新完成。","✓ 部件注册表已刷新完成。"
 位置：generated/widgets.php,位置：generated/widgets.php
 "✖ 写入部件注册表失败。","✖ 写入部件注册表失败。"
@@ -143,58 +143,3 @@ FAQ部件,FAQ部件
 版本,Version
 操作,Actions
 详情,Details
-部件多语言翻译表,部件多语言翻译表
-部件唯一标识符（格式：module_type_name）,部件唯一标识符（格式：module_type_name）
-语言代码,语言代码
-部件名称（翻译）,部件名称（翻译）
-部件描述（翻译）,部件描述（翻译）
-创建时间,"Created At"
-更新时间,"Updated At"
-编辑代码,"Edit Code"
-取消,Cancel
-部件详情,"Widget Details"
-加载中...,Loading...
-关闭,Close
-名称,Name
-参数配置,Parameters
-参数名,"Parameter Name"
-默认值,"Default Value"
-说明,说明
-获取详情失败,"Failed to get details"
-加载失败,"Load failed"
-简体中文,简体中文
-输入简体中文值,输入简体中文值
-"不支持的 operation: %{op}","不支持的 operation: %{op}"
-"无效的 data 参数","无效的 data 参数"
-保存配置,保存配置
-编辑器首页,"Editor Home"
-访问编辑器,"Access Editor"
-保存页面,"Save Page"
-加载页面,"Load Page"
-获取部件列表,"Get Widget List"
-查看部件列表,"View Widget List"
-查看部件详情,"View Widget Details"
-预览部件,"Preview Widget"
-预览页面,"Preview Page"
-"可视化编辑器模块，支持通过拖放方式组织页面，使用 w:widget 标签存储和渲染部件。","Visual editor module that supports organizing pages through drag and drop, using w:widget tags to store and render widgets."
-此部件没有可配置的参数,"This widget has no configurable parameters"
-更新,Update
-编辑,Edit
-部件显示名称,"Widget Display Name"
-部件描述,"Widget Description"
-部件规约文件（必需），定义部件的基本信息、参数配置和模板路径,"Widget specification file (required), defines widget basic information, parameter configuration and template path"
-"部件模板文件（必需，如果未提供 block_class）","Widget template file (required if block_class is not provided)"
-部件文档（可选），说明部件的使用方法,"Widget documentation (optional), describes how to use the widget"
-可视化编辑器页面表,"Visual Editor Page Table"
-页面ID,"Page ID"
-"页面内容（w:widget 标签）","Page Content (w:widget tags)"
-"元数据（JSON 格式）","Metadata (JSON format)"
-"页面状态（draft, published）","Page Status (draft, published)"
-"Widget 错误: type 和 name 属性是必需的","Widget Error: type and name attributes are required"
-"Widget 错误: 未找到部件 %{1}/%{2}","Widget Error: Widget not found %{1}/%{2}"
-"Widget 错误: 无效的部件类型 %{1}","Widget Error: Invalid widget type %{1}"
-"Widget 错误: 未找到模板或 Block 类","Widget Error: Template or Block class not found"
-"Widget Block 渲染错误: %{1}","Widget Block rendering error: %{1}"
-"Widget 错误: Block 类缺少 render() 方法","Widget Error: Block class missing render() method"
-"Widget 模板渲染错误: %{1}","Widget template rendering error: %{1}"
-"Widget 错误: %{1}","Widget Error: %{1}"
