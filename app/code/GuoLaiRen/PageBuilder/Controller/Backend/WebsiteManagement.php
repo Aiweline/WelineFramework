@@ -231,6 +231,11 @@ class WebsiteManagement extends BaseController
                 
                 // 保存网站域名关联
                 $this->saveWebsiteDomains((int) $websiteId, $addressList);
+
+                // 触发网站保存后事件（用于站点默认分配给创建者等）
+                $eventsManager = $this->objectManager->getInstance(\Weline\Framework\Event\EventsManager::class);
+                $saveAfterData = ['data' => ['website' => $newWebsite, 'is_new' => true]];
+                $eventsManager->dispatch('GuoLaiRen_PageBuilder::website_save_after', $saveAfterData);
                 
                 // 保存关联货币
                 $websiteCurrency = $this->objectManager->getInstance(WebsiteCurrency::class);
@@ -433,6 +438,11 @@ class WebsiteManagement extends BaseController
                 
                 // 保存网站基本信息
                 $this->website->addData($data)->save();
+
+                // 触发网站保存后事件（编辑时仅通知，观察者不会覆盖已有分配）
+                $eventsManager = $this->objectManager->getInstance(\Weline\Framework\Event\EventsManager::class);
+                $saveAfterData = ['data' => ['website' => $this->website, 'is_new' => false]];
+                $eventsManager->dispatch('GuoLaiRen_PageBuilder::website_save_after', $saveAfterData);
                 
                 // 保存网站域名关联
                 $this->saveWebsiteDomains($postWebsiteId, $addressList);
