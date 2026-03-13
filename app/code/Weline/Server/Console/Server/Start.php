@@ -678,6 +678,8 @@ class Start extends CommandAbstract
         }
         // master-only 权限门禁（Unix）：
         // 避免子进程/复活链路在非 root 下拉起 Master，导致后续子进程绑定 80/443 失败。
+        // 注意：setcap cap_net_bind_service 授权后，非 root 用户也可绑定特权端口，
+        // 因此通过实际 stream_socket_server 测试替代单纯的 euid 检查。
         if (!IS_WIN && \function_exists('posix_geteuid')) {
             $mainPort = (int)($data['port'] ?? 0);
             $redirectPort = (int)($data['http_redirect_port'] ?? 0);
@@ -685,9 +687,17 @@ class Start extends CommandAbstract
             $needsPrivileged = ($mainPort > 0 && $mainPort < 1024)
                 || ($sslEnabledFlag && $redirectPort > 0 && $redirectPort < 1024);
             if ($needsPrivileged && (int)\posix_geteuid() !== 0) {
-                $this->printer->error(__('master-only 启动被拒绝：特权端口需要 root 权限。'));
-                $this->printer->note(__('请使用 sudo php bin/w server:start %{1}', [$instanceName]));
-                return;
+                // 非 root 但可能有 setcap，尝试实际绑定测试
+                $testPort = $mainPort > 0 && $mainPort < 1024 ? $mainPort : $redirectPort;
+                $testSock = @\stream_socket_server("tcp://0.0.0.0:{$testPort}", $errno, $errstr, STREAM_SERVER_BIND);
+                if ($testSock) {
+                    @\fclose($testSock);
+                    // setcap 生效，允许继续
+                } else {
+                    $this->printer->error(__('master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。', [$testPort, $errstr]));
+                    $this->printer->note(__('请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。'));
+                    return;
+                }
             }
         }
         $sslEnabled = (bool)($data['ssl_enabled'] ?? false);
