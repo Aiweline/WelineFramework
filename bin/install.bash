@@ -1500,18 +1500,26 @@ RUN_ARGS=""
 echo ""
 cd "$ROOT"
 
-# --link-system：在 /usr/local/bin 创建 php、psql 软链，便于系统级使用（需提权时自动 sudo）
-if [[ "$LINK_SYSTEM" == true ]]; then
-  if [[ -x "$ROOT/extend/server/php/bin/php" ]]; then
-    safe_ln_sf "$ROOT/extend/server/php/bin/php" "/usr/local/bin/php${PHP_VERSION//./}" 2>/dev/null || true
-    safe_ln_sf "$ROOT/extend/server/php/bin/php" /usr/local/bin/php 2>/dev/null || true
+# 将项目 php/psql/w 软链到 /usr/local/bin，确保 `php` 命令使用项目安装（不依赖 PATH）
+# 当存在 extend/server/php 时自动执行；或显式传 --link-system 时执行
+ensure_system_bin_links() {
+  local did_link=0
+  if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+    safe_ln_sf "$SERVER_DIR/php/bin/php" "/usr/local/bin/php${PHP_VERSION//./}" 2>/dev/null && did_link=1
+    safe_ln_sf "$SERVER_DIR/php/bin/php" /usr/local/bin/php 2>/dev/null && did_link=1
   fi
-  if [[ -x "$ROOT/extend/server/pgsql/bin/psql" ]] || [[ -x "$SERVER_DIR/pgsql/bin/psql" ]]; then
-    _psql_bin="$ROOT/extend/server/pgsql/bin/psql"
-    [[ -x "$SERVER_DIR/pgsql/bin/psql" ]] && _psql_bin="$SERVER_DIR/pgsql/bin/psql"
-    safe_ln_sf "$_psql_bin" /usr/local/bin/psql 2>/dev/null || true
+  if [[ -x "$SERVER_DIR/pgsql/bin/psql" ]]; then
+    safe_ln_sf "$SERVER_DIR/pgsql/bin/psql" /usr/local/bin/psql 2>/dev/null && did_link=1
   fi
-  echo "已尝试将 php/psql 软链到 /usr/local/bin（未成功则需手动 sudo）。"
+  if [[ -x "$ROOT/bin/w" ]]; then
+    safe_ln_sf "$ROOT/bin/w" /usr/local/bin/w 2>/dev/null && did_link=1
+  fi
+  if [[ $did_link -eq 1 ]]; then
+    echo "已将项目 php/psql/w 软链到 /usr/local/bin（php 将指向 extend/server/php/bin/php）"
+  fi
+}
+if [[ "$LINK_SYSTEM" == true ]] || [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+  ensure_system_bin_links
 fi
 
 # 验证 PATH 是否添加成功（新登录 shell 中 php/w 是否指向项目安装）
