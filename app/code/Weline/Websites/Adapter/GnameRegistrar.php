@@ -19,9 +19,8 @@ use Weline\Websites\Api\DomainRegistrarInterface;
 
 class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 {
-    /** 官方文档使用的 API 地址，可避免 api.gname.com 被 Cloudflare 返回 HTML 验证页 */
-    private const DEFAULT_API_HOST = 'www.gname.com';
-    private const LEGACY_API_HOST = 'api.gname.com';
+    /** 官方接口域名 */
+    private const DEFAULT_API_HOST = 'api.gname.com';
     private const REQUEST_TIMEOUT = 30;
     private const CONNECT_TIMEOUT = 10;
 
@@ -69,7 +68,7 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
                 'label' => __('API 域名'),
                 'type' => 'text',
                 'required' => false,
-                'placeholder' => 'www.gname.com',
+                'placeholder' => 'api.gname.com',
                 'default' => self::DEFAULT_API_HOST,
                 'mapping' => 'extra_config.api_host',
             ],
@@ -102,7 +101,7 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
                 __('5. 协议签署完成后可查看 APP ID 和 APP Key'),
                 __('6. 将 APP ID 填入上方「APP ID」字段'),
                 __('7. 将 APP Key 填入上方「APP Key」字段'),
-                __('8. API 域名建议使用 www.gname.com（与官方文档一致；若遇非 JSON 响应可改为 api.gname.com 重试）'),
+                __('8. API 域名为 api.gname.com（官方接口），请勿填写错误地址。'),
             ],
         ];
     }
@@ -540,8 +539,8 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 
     /**
      * 根据 API 主机和端点构建请求路径
-     * 官方文档使用 www.gname.com，路径为 /domain/api/user/info、/domain/api/resolution/add 等
-     * 若使用 api.gname.com，路径为 /api/user/info、/api/resolution/add 等
+     * api.gname.com（官方接口）：路径为 /api/domain/xgdns、/api/domain/reg 等，endpoint 原样返回
+     * www.gname.com：路径为 /domain/api/... 格式（兼容旧配置）
      */
     private function buildApiPath(string $apiHost, string $endpoint): string
     {
@@ -611,8 +610,7 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         $gntoken = $this->generateSignature($data, $appKey);
         $data['gntoken'] = $gntoken;
 
-        // 官方文档：https://www.gname.com/domain/api/user/info 等，路径为 /domain/api/{接口}
-        // api.gname.com 可能返回 Cloudflare 验证页（非 JSON），故默认使用 www.gname.com
+        // 官方接口：api.gname.com，路径为 /api/domain/{接口} 等
         $path = $this->buildApiPath($apiHost, $endpoint);
         $url = 'https://' . $apiHost . '/' . $path;
 
@@ -718,11 +716,6 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
                 $effectiveUrl ?: $url,
                 $bodySnippet !== '' ? $bodySnippet : __('空响应'),
             ]);
-            if ($bodyTrim !== '' && (\str_starts_with($bodyTrim, '<') || \str_contains($bodyTrim, '<script') || \str_contains($bodyTrim, '__CF$cv$params'))) {
-                throw new \RuntimeException(
-                    __('GName API 返回了非 JSON 响应（可能是 Cloudflare 验证页面或错误页面）。') . ' ' . $detail
-                );
-            }
             throw new \RuntimeException(__('GName API 响应解析失败：%{1}', [$detail]));
         }
 
