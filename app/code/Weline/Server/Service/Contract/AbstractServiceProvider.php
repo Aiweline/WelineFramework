@@ -89,6 +89,13 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
             return HealthCheckResult::unhealthy('Process not running');
         }
 
+        // 已有 IPC 连接的实例无需 fsockopen 探活（IPC 本身已证明进程健康），
+        // 避免每 30 秒产生一次无意义的 TCP connect → disconnect 日志。
+        if ($instance->ipcClientId !== null) {
+            return HealthCheckResult::healthy();
+        }
+
+        // 无 IPC 连接时才用 fsockopen 做端口连通性检测
         if ($instance->port !== null) {
             $socket = @\fsockopen('127.0.0.1', $instance->port, $errno, $errstr, 1);
             if (!$socket) {

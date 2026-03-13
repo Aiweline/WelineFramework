@@ -18,7 +18,10 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     public static function getInstance(string $host, int $port, array $options = []): self
     {
         $normalizedOptions = self::normalizeOptions($options);
-        $key = $host . ':' . $port . ':' . \md5(\json_encode($normalizedOptions) ?: '{}');
+        // 池 key 仅取连接身份字段（host:port:token），忽略 max_size/min_idle 等量级差异，
+        // 确保同一 host:port:token 的不同调用方（预热、SessionClient、WlsSharedStorage）共享同一连接池。
+        $tokenFileName = (string)($normalizedOptions['token_file_name'] ?? '');
+        $key = $host . ':' . $port . ':' . $tokenFileName;
         if (!isset(self::$instances[$key])) {
             self::$instances[$key] = new self($host, $port, $normalizedOptions);
         }
