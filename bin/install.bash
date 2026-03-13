@@ -968,7 +968,9 @@ KALIEOF
 }
 
 # Linux：用 apt/dnf/apk/zypper 安装 PostgreSQL，并软链到 extend/server/pgsql/bin（与 Mac 一致，run.php 复用）
+# 使用 set +e 避免 sudo/dnf 失败时静默退出，确保打印错误信息
 install_pgsql_linux() {
+  set +e
   local dest="$SERVER_DIR/pgsql"
   local os_id=""
   [[ -f /etc/os-release ]] && . /etc/os-release 2>/dev/null && os_id="${ID:-}"
@@ -1161,6 +1163,7 @@ install_pgsql_linux() {
 
   echo "PostgreSQL installed and linked at $dest/bin -> $pg_dir, data at $pgsql_data"
   echo "  重启后需手动启动: pg_ctl -D $pgsql_data -l $pgsql_data/logfile start ${pg_ctl_opts[*]}"
+  set -e
 }
 
 # ---- PostgreSQL ----（Linux：apt/dnf 自动安装并软链；Mac：Homebrew；初始化由 run.php Step 5b 完成）
