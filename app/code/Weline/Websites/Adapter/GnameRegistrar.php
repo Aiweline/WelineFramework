@@ -347,8 +347,8 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 
         $data = $response['data'] ?? [];
         $nameservers = [];
-
-        $dnsStr = (string) ($data['dns'] ?? '');
+        // GName api/domain/info 官方返回字段为 ymdns（域名DNS），非 dns
+        $dnsStr = (string) ($data['ymdns'] ?? $data['dns'] ?? '');
         if ($dnsStr !== '') {
             $nameservers = \array_map('trim', \explode(',', $dnsStr));
         }
