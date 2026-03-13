@@ -423,9 +423,19 @@ class User extends \Weline\Framework\App\Controller\BackendController
         $userRole = ObjectManager::getInstance(UserRole::class);
         $userId = (int) ($this->request->getPost('user_id') ?? 0);
         try {
-            $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete();
-            if ($this->request->getPost('role_id') !== '' && $this->request->getPost('role_id') !== null) {
-                $userRole->clearData()->setData($this->request->getPost())->save(true);
+            $existing = $userRole->where(UserRole::schema_fields_USER_ID, $userId)->select()->fetch();
+            $items = $existing->getItems();
+            if (count($items) === 1 && ($roleId = $this->request->getPost('role_id')) !== '' && $roleId !== null) {
+                $row = reset($items);
+                $userRole->clearData()->load($row['id'] ?? $row[$userRole->getPrimaryKey()] ?? 0)
+                    ->setData($this->request->getPost())->save(true);
+            } elseif (count($items) !== 1) {
+                $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete()->fetch();
+                if ($this->request->getPost('role_id') !== '' && $this->request->getPost('role_id') !== null) {
+                    $userRole->clearData()->setData($this->request->getPost())->save(true);
+                }
+            } else {
+                $userRole->where(UserRole::schema_fields_USER_ID, $userId)->delete()->fetch();
             }
             MessageManager::success(__('角色分配成功！'));
         } catch (\Exception $exception) {
@@ -463,28 +473,30 @@ class User extends \Weline\Framework\App\Controller\BackendController
             
             /** @var UserRole $userRole */
             $userRole = ObjectManager::getInstance(UserRole::class, [], false);
-            
-            $userRole->clearData()
-                ->where($userRole::schema_fields_USER_ID, (int)$userId)
-                ->find()
-                ->fetch();
-            
             $userIdInt = (int) $userId;
-            $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete();
 
             if (empty($roleId)) {
+                $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete()->fetch();
                 return $this->fetchJson([
                     'success' => true,
                     'msg' => __('已取消角色分配')
                 ]);
             }
 
-            $userRole->clearData();
-            $userRole->setData([
-                'user_id' => $userIdInt,
-                'role_id' => (int) $roleId
-            ]);
-            $userRole->save(true);
+            $existing = $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->select()->fetch();
+            $items = $existing->getItems();
+            if (count($items) === 1) {
+                $row = reset($items);
+                $pk = $userRole->getPrimaryKey();
+                $userRole->clearData()->load($row[$pk] ?? $row['id'] ?? 0)
+                    ->setRoleId((int) $roleId)->save(true);
+            } else {
+                $userRole->where(UserRole::schema_fields_USER_ID, $userIdInt)->delete()->fetch();
+                $userRole->clearData()->setData([
+                    'user_id' => $userIdInt,
+                    'role_id' => (int) $roleId
+                ])->save(true);
+            }
             
             return $this->fetchJson([
                 'success' => true,

@@ -22,8 +22,9 @@ namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
 use Weline\Websites\Api\DomainRegistrarInterface;
+use Weline\Websites\Api\ZoneManagementInterface;
 
-class CloudflareRegistrar implements DomainRegistrarInterface
+class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInterface
 {
     private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
     private const REQUEST_TIMEOUT = 30;
