@@ -19,6 +19,8 @@ $themes = $this->getData('themes') ?: [];
 $page_type = $this->getData('page_type') ?: 'homepage';
 $page_types = $this->getData('page_types') ?: [];
 $areas = $this->getData('areas') ?: [];
+$editor_area = $this->getData('editor_area') ?: 'frontend';
+$theme_has_backend = (bool)$this->getData('theme_has_backend');
 $layout = $this->getData('layout') ?: [];
 $available_widgets = $this->getData('available_widgets') ?: [];
 
@@ -64,6 +66,8 @@ $getWidgetIcon = function ($type) {
 
 <div class="theme-editor-container" id="themeEditor" 
      data-theme-id="<?= $theme_id ?>"
+     data-editor-area="<?= htmlspecialchars($editor_area) ?>"
+     data-theme-has-backend="<?= $theme_has_backend ? '1' : '0' ?>"
      data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
      data-api-base="<?= $this->getUrl('theme/backend/theme-editor') ?>"
@@ -120,6 +124,12 @@ $getWidgetIcon = function ($type) {
                             <?= htmlspecialchars((string)($label ?? '')) ?>
                         </option>
                     <?php endforeach; ?>
+                </select>
+                <select id="editorAreaSelect" class="form-select" title="<?= __('前端/后端主题') ?>" <?= !$theme_has_backend ? 'style="display:none"' : '' ?>>
+                    <option value="frontend" <?= $editor_area === 'frontend' ? 'selected' : '' ?>><?= __('前端') ?></option>
+                    <?php if ($theme_has_backend): ?>
+                    <option value="backend" <?= $editor_area === 'backend' ? 'selected' : '' ?>><?= __('后端') ?></option>
+                    <?php endif; ?>
                 </select>
             </div>
         </div>
@@ -222,7 +232,7 @@ $getWidgetIcon = function ($type) {
                 <!-- iframe 实时预览（编译后的布局页面） -->
                 <div class="preview-view preview-view-preview active" id="previewViewPreview">
                     <iframe id="previewFrame" 
-                            src="<?= $theme_id ? $this->getUrl('theme/backend/theme-editor/layout-preview', ['theme_id' => $theme_id, 'layout_type' => 'homepage', 'layout_option' => 'default', 'editor_mode' => '1', 'status' => 'draft']) : 'about:blank' ?>"
+                            src="<?= $theme_id ? $this->getUrl('theme/backend/theme-editor/layout-preview', ['theme_id' => $theme_id, 'layout_type' => 'homepage', 'layout_option' => 'default', 'editor_mode' => '1', 'status' => 'draft', 'editor_area' => $editor_area]) : 'about:blank' ?>"
                             class="preview-iframe"></iframe>
                     <div class="preview-loading" id="previewLoading">
                         <div class="spinner-border text-light" role="status">

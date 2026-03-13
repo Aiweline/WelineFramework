@@ -139,12 +139,14 @@
 
         state.themeId = parseInt(container.dataset.themeId) || 0;
         state.pageType = container.dataset.pageType || 'default';
+        state.editorArea = container.dataset.editorArea || 'frontend';
 
         // 缓存 DOM 元素
         elements = {
             container: container,
             themeSelect: document.getElementById('themeSelect'),
             pageTypeSelect: document.getElementById('pageTypeSelect'),
+            editorAreaSelect: document.getElementById('editorAreaSelect'),
             configPanel: document.getElementById('configPanel'),
             configContent: document.getElementById('configContent'),
             widgetPanel: document.getElementById('widgetPanel'),
@@ -207,12 +209,27 @@
      * 绑定事件
      */
     function bindEvents() {
-        // 主题选择
+        // 主题选择（跳转时默认前端区域）
         if (elements.themeSelect) {
             elements.themeSelect.addEventListener('change', function() {
                 const themeId = this.value;
                 if (themeId) {
-                    window.location.href = `${config.apiBase}?theme_id=${themeId}&page_type=${state.pageType}`;
+                    const params = new URLSearchParams({ theme_id: themeId, page_type: state.pageType, editor_area: 'frontend' });
+                    window.location.href = `${config.apiBase}?${params.toString()}`;
+                }
+            });
+        }
+
+        // 前端/后端区域切换（刷新页面以加载对应布局）
+        if (elements.editorAreaSelect) {
+            elements.editorAreaSelect.addEventListener('change', function() {
+                const area = this.value;
+                if (state.themeId && area) {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('theme_id', state.themeId);
+                    params.set('page_type', state.pageType);
+                    params.set('editor_area', area);
+                    window.location.href = `${config.apiBase}?${params.toString()}`;
                 }
             });
         }
@@ -7391,6 +7408,7 @@
         url.searchParams.set('editor_mode', '1');
         // 支持版本切换：默认 draft，可通过 state.previewStatus 切换
         url.searchParams.set('status', state.previewStatus || 'draft');
+        url.searchParams.set('editor_area', state.editorArea || 'frontend');
 
         // #region agent log
         fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadLayoutPreview:setSrc',message:'layout preview iframe load',data:{url:url.toString(),themeId:state.themeId},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});

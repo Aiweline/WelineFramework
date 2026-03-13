@@ -14,6 +14,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Session;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
@@ -57,8 +58,8 @@ class ControllerFetchFileBefore implements ObserverInterface
         $template = Template::getInstance();
         $welineThemeColorMode = ThemeModeResolver::getThemeMode($area);
         
-        // 获取当前主题（无论是否有 layoutType，都需要主题对象）
-        $theme = $this->welineTheme->getActiveTheme();
+        // 获取当前主题：优先使用预览主题（URL 参数或 Session），否则使用激活主题
+        $theme = $this->resolveThemeForLayout($request, $area);
         
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -281,6 +282,36 @@ class ControllerFetchFileBefore implements ObserverInterface
             // 保持原路径，不影响原有功能
             return;
         }
+    }
+
+    /**
+     * 解析布局用主题：优先预览主题（URL 参数或 Session），否则激活主题
+     */
+    private function resolveThemeForLayout(?Request $request, string $area): WelineTheme
+    {
+        $previewThemeId = 0;
+        $previewThemeArea = '';
+        if ($request) {
+            $previewThemeId = (int)$request->getParam('preview_theme', 0);
+        }
+        if (!$previewThemeId) {
+            $session = ObjectManager::getInstance(Session::class);
+            $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
+            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+        } else {
+            $session = ObjectManager::getInstance(Session::class);
+            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+        }
+        if ($previewThemeArea === '' && $previewThemeId) {
+            $previewThemeArea = $area;
+        }
+        if ($previewThemeId && $previewThemeArea === $area) {
+            $this->welineTheme->load($previewThemeId);
+            if ($this->welineTheme->getId()) {
+                return $this->welineTheme;
+            }
+        }
+        return $this->welineTheme->getActiveTheme();
     }
 
     /**

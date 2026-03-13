@@ -453,10 +453,14 @@ class DomainPurchaseService
                 $rootDomain->setNameservers($nameservers);
             }
             if ($provider === '' || $provider === 'unknown') {
-                if ($dnsChoice === 'follow_registrar' && $registrarCode !== '') {
+                if ($registrarCode !== '') {
                     $provider = \strtolower($registrarCode);
                 }
             }
+
+            // 在覆盖前保存当前真实 NS 归属，用于后续判断是否需要切换
+            $currentNsProvider = ($provider !== '' && $provider !== 'unknown') ? $provider : \strtolower($registrarCode);
+
             if ($dnsChoice === 'provider_account') {
                 if ($selectedDnsProvider !== '') {
                     $provider = $selectedDnsProvider;
@@ -480,19 +484,20 @@ class DomainPurchaseService
 
             $needSwitch = false;
             if ($dnsChoice === 'provider_account' && $selectedDnsProvider !== '' && $selectedDnsAccountId > 0) {
-                $currentNsProvider = $provider !== '' && $provider !== 'unknown' ? $provider : \strtolower($registrarCode);
                 if ($selectedDnsProvider !== $currentNsProvider) {
                     $needSwitch = true;
                 }
             }
             if ($cdnChoice === 'provider_account' && $selectedCdnProvider !== '' && $selectedCdnAccountId > 0) {
-                $currentNsProvider ??= $provider !== '' && $provider !== 'unknown' ? $provider : \strtolower($registrarCode);
                 if ($selectedCdnProvider !== $currentNsProvider) {
                     $needSwitch = true;
                 }
             }
             if ($needSwitch) {
                 $rootDomain->setDnsSwitchPending(1);
+                w_log_info(__('[DomainPurchase] 域名 %{1} 需要 DNS 切换：当前=%{2}, 目标=%{3}, dns_account_id=%{4}', [
+                    $domain, $currentNsProvider, $selectedDnsProvider ?: $selectedCdnProvider, (string)($selectedDnsAccountId ?: $selectedCdnAccountId),
+                ]), [], 'dns_cdn_switch');
             }
 
             $rootDomain->save();

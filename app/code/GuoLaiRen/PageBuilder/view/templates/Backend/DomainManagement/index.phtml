@@ -1322,7 +1322,9 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 <strong><lang>严重说明</lang></strong><br>
                 <lang>切换 DNS 会导致网站断开服务。整个过程可能需 10 多分钟至 24 小时，具体取决于供应商的解析广播速度，不受我们控制。请确认后再操作。</lang>
             </div>
-            <p class="pb-dm-text-muted" style="margin-bottom:12px;"><lang>根域名</lang>：<strong id="pb-dm-root-dns-switch-domain"></strong></p>
+            <p class="pb-dm-text-muted" style="margin-bottom:8px;"><lang>根域名</lang>：<strong id="pb-dm-root-dns-switch-domain"></strong></p>
+            <p class="pb-dm-text-muted" style="margin-bottom:12px;"><lang>当前 DNS 账户</lang>：<span id="pb-dm-root-dns-switch-current-dns">-</span></p>
+            <p class="pb-dm-text-muted" style="margin-bottom:12px;"><lang>当前 CDN 账户</lang>：<span id="pb-dm-root-dns-switch-current-cdn">-</span></p>
             <div class="pb-dm-form-group">
                 <label><lang>目标 DNS 账户</lang> <span class="pb-dm-text-danger">*</span></label>
                 <select id="pb-dm-root-dns-switch-dns-account" class="pb-dm-form-control">
@@ -1975,7 +1977,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                           '<i class="mdi mdi-dns"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-playlist-plus"></i></button>' +
-                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
+                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-swap-horizontal"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('删除根域（含子域名与池记录）') ?>" style="margin-left:4px;"><i class="mdi mdi-delete-outline"></i></button>'
                         : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
@@ -2220,7 +2222,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var domainId = parseInt(btn.dataset.domainId) || 0;
                 var domain = btn.dataset.domain || '';
                 var accountId = parseInt(btn.dataset.accountId) || 0;
-                showRootDnsSwitchModal(domainId, domain, accountId);
+                var dnsAccountId = parseInt(btn.dataset.dnsAccountId) || 0;
+                var cdnAccountId = parseInt(btn.dataset.cdnAccountId) || 0;
+                var dnsProviderName = btn.dataset.dnsProviderName || '';
+                var cdnProviderName = btn.dataset.cdnProviderName || '';
+                showRootDnsSwitchModal(domainId, domain, { accountId: accountId, dnsAccountId: dnsAccountId, cdnAccountId: cdnAccountId, dnsProviderName: dnsProviderName, cdnProviderName: cdnProviderName });
             });
         });
 
@@ -4583,14 +4589,30 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         // if (sseModal) sseModal.addEventListener('click', function(e) { if (e.target === sseModal) closeHttpsSseModal(); });
     })();
 
-    var rootDnsSwitchState = { domainId: 0, domain: '', accountId: 0 };
+    var rootDnsSwitchState = { domainId: 0, domain: '', accountId: 0, dnsAccountId: 0, cdnAccountId: 0 };
 
-    function showRootDnsSwitchModal(domainId, domain, accountId) {
+    function showRootDnsSwitchModal(domainId, domain, opts) {
+        opts = opts || {};
+        var accountId = opts.accountId || 0;
+        var dnsAccountId = opts.dnsAccountId || 0;
+        var cdnAccountId = opts.cdnAccountId || 0;
+        var dnsProviderName = opts.dnsProviderName || '';
+        var cdnProviderName = opts.cdnProviderName || '';
+
         rootDnsSwitchState.domainId = domainId;
         rootDnsSwitchState.domain = domain || '';
-        rootDnsSwitchState.accountId = accountId || 0;
+        rootDnsSwitchState.accountId = accountId;
+        rootDnsSwitchState.dnsAccountId = dnsAccountId;
+        rootDnsSwitchState.cdnAccountId = cdnAccountId;
+
         var domainEl = document.getElementById('pb-dm-root-dns-switch-domain');
         if (domainEl) domainEl.textContent = domain || ('ID:' + domainId);
+
+        var currentDnsEl = document.getElementById('pb-dm-root-dns-switch-current-dns');
+        var currentCdnEl = document.getElementById('pb-dm-root-dns-switch-current-cdn');
+        if (currentDnsEl) currentDnsEl.textContent = dnsAccountId > 0 ? (dnsProviderName || ('ID:' + dnsAccountId)) : '<?= __("未配置") ?>';
+        if (currentCdnEl) currentCdnEl.textContent = cdnAccountId > 0 ? (cdnProviderName || ('ID:' + cdnAccountId)) : '<?= __("未配置") ?>';
+
         var dnsSelect = document.getElementById('pb-dm-root-dns-switch-dns-account');
         var cdnSelect = document.getElementById('pb-dm-root-dns-switch-cdn-account');
         if (dnsSelect) dnsSelect.innerHTML = '<option value=""><?= __('-- 加载中... --') ?></option>';
@@ -4603,12 +4625,28 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var data = (res && res.data) !== undefined ? res.data : res;
                 var accounts = (data.data && data.data.accounts) ? data.data.accounts : ((data.accounts) ? data.accounts : []);
                 if (!Array.isArray(accounts)) accounts = [];
+
+                var accountById = {};
+                accounts.forEach(function(acc) {
+                    var id = acc.account_id || acc.id || 0;
+                    accountById[id] = acc;
+                });
+                if (currentDnsEl && dnsAccountId > 0) {
+                    var dAcc = accountById[dnsAccountId];
+                    currentDnsEl.textContent = dAcc ? ((dAcc.name || dAcc.account_name || '') + ' (' + (dAcc.registrar_name || dAcc.registrar_code || '') + ')') : (dnsProviderName || ('ID:' + dnsAccountId));
+                }
+                if (currentCdnEl && cdnAccountId > 0) {
+                    var cAcc = accountById[cdnAccountId];
+                    currentCdnEl.textContent = cAcc ? ((cAcc.name || cAcc.account_name || '') + ' (' + (cAcc.registrar_name || cAcc.registrar_code || '') + ')') : (cdnProviderName || ('ID:' + cdnAccountId));
+                }
+
                 var dnsOpts = '<option value=""><?= __('-- 请选择目标 DNS 账户 --') ?></option>';
                 var cdnOpts = '<option value=""><?= __('-- 不切换 CDN --') ?></option>';
                 accounts.forEach(function(acc) {
-                    var label = (acc.name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
-                    dnsOpts += '<option value="' + (acc.id || '') + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
-                    cdnOpts += '<option value="' + (acc.id || '') + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
+                    var accId = acc.account_id || acc.id || '';
+                    var label = (acc.name || acc.account_name || '') + ' (' + (acc.registrar_name || acc.registrar_code || '') + ')';
+                    dnsOpts += '<option value="' + accId + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
+                    cdnOpts += '<option value="' + accId + '">' + (label.replace(/</g, '&lt;').replace(/>/g, '&gt;')) + '</option>';
                 });
                 if (dnsSelect) dnsSelect.innerHTML = dnsOpts;
                 if (cdnSelect) cdnSelect.innerHTML = cdnOpts;

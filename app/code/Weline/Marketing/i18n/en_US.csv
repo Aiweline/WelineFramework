@@ -160,18 +160,20 @@ ID,ID
 已花费,Spent
 操作,Action
 编辑,Edit
+优惠券管理,"Coupon Management"
+后台,后台
+营销,营销
+优惠券,Coupon
 优惠券列表,"Coupon List"
 添加优惠券,"Add Coupon"
+暂无数据,暂无数据
 优惠券代码,"Coupon Code"
 折扣值,"Discount Value"
 使用次数,"Usage Count"
 营销规则,"Marketing Rule"
-后台,后台
-营销,营销
 规则管理,规则管理
 规则列表,"Rule List"
 添加规则,"Add Rule"
-暂无数据,暂无数据
 启用,启用
 禁用,禁用
 规则名称,"Rule Name"
@@ -180,7 +182,6 @@ ID,ID
 营销规则管理,营销规则管理
 营销规则列表,"Marketing Rule List"
 市场营销,Marketing
-优惠券管理,"Coupon Management"
 促销活动,"Promotion Campaign"
 规则描述,"Rule Description"
 规则类型,"Rule Type"
@@ -191,7 +192,6 @@ ID,ID
 激活,Active
 未激活,Inactive
 已过期,Expired
-优惠券,Coupon
 优惠类型,"Discount Type"
 最小订单金额,"Minimum Amount"
 已用完,Exhausted

@@ -138,34 +138,7 @@ class Countries extends BaseController
         # 拷贝查询条件
         $query_copy = clone $query;
         
-        // DEBUG: 输出当前filter值和SQL
-        $debug_filter = $filter;
-        $debug_sql = $query->select()->getLastSql();
-        
         $installed_countries = $query->pagination()->select()->fetch();
-        
-        // DEBUG: 检查查询结果
-        $debug_count = count($installed_countries->getItems());
-        $debug_first_item = null;
-        if ($debug_count > 0) {
-            $items = $installed_countries->getItems();
-            $first = reset($items);
-            $debug_first_item = [
-                'code' => $first->getData('code'),
-                'is_install' => $first->getData('is_install'),
-                'is_active' => $first->getData('is_active')
-            ];
-        }
-        
-        // 将调试信息写入日志
-        $debugInfo = sprintf(
-            "[DEBUG Countries] filter=%s, sql=%s, count=%d, first_item=%s",
-            $debug_filter,
-            $debug_sql,
-            $debug_count,
-            json_encode($debug_first_item)
-        );
-        \Weline\Framework\App\Debug::log($debugInfo);
         
         # 查不到数据就更新
         if (empty($installed_countries->getItems())) {
@@ -230,14 +203,6 @@ class Countries extends BaseController
         $this->assign('countries_pagination', $installed_countries->getPagination());
         $this->assign('current_filter', $filter);
         $this->assign('search', $search);
-        
-        // DEBUG: 传递调试信息到模板
-        $this->assign('debug_info', [
-            'filter' => $debug_filter,
-            'sql' => $debug_sql,
-            'count' => $debug_count,
-            'first_item' => $debug_first_item
-        ]);
         
         return $this->fetch();
     }

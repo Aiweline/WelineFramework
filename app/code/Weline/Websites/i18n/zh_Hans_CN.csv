@@ -502,7 +502,6 @@
 "[DnsCdnAutoSwitch] %{1} 全部完成，dns_provider=%{2}, cdn=%{3}","[DnsCdnAutoSwitch] %{1} 全部完成，dns_provider=%{2}, cdn=%{3}"
 域名自动解析,域名自动解析
 "自动为未解析到本服务器的域名添加 DNS 记录","自动为未解析到本服务器的域名添加 DNS 记录"
-"自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}","自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}"
 "域名池解析检查失败: root=%{1}, 错误=%{2}","域名池解析检查失败: root=%{1}, 错误=%{2}"
 "[DnsMigration] 开始处理 DNS 记录迁移，待处理=%{1}","[DnsMigration] 开始处理 DNS 记录迁移，待处理=%{1}"
 "[DnsMigration] %{1} 目标 DNS 账户未设置，跳过","[DnsMigration] %{1} 目标 DNS 账户未设置，跳过"
@@ -1284,6 +1283,7 @@ SEO账户管理请前往：,SEO账户管理请前往：
 建站进度,建站进度
 例如：茶叶电商网站,例如：茶叶电商网站
 请填写要购买的域名,请填写要购买的域名
+"自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}","自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}"
 "8. API 域名保持默认（api.gname.com）即可","8. API 域名保持默认（api.gname.com）即可"
 "GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
 "DNS/CDN 自动切换异常：%{domain} - %{error}","DNS/CDN 自动切换异常：%{domain} - %{error}"

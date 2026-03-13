@@ -68,6 +68,23 @@ class ThemeEditor extends BackendController
      * flush() 会自动触发 Weline_Framework_Cache::integration::cache_flushed 事件，
      * Server 模块监听该事件并通知 WLS Worker 重载内存缓存，无需手动处理 WLS 通知。
      */
+    /**
+     * 判断主题目录是否包含后端（backend）区域
+     * 无 backend 目录时可视化编辑仅用前端
+     */
+    private function themeHasBackendDir(WelineTheme $theme): bool
+    {
+        $themePath = $theme->getPath();
+        if ($themePath === '' || !is_dir($themePath)) {
+            return false;
+        }
+        $base = rtrim($themePath, \DIRECTORY_SEPARATOR);
+        $ds = \DIRECTORY_SEPARATOR;
+        return is_dir($base . $ds . 'view' . $ds . 'theme' . $ds . 'backend')
+            || is_dir($base . $ds . 'theme' . $ds . 'backend')
+            || is_dir($base . $ds . 'backend');
+    }
+
     private function flushFullPageCache(): void
     {
         try {
@@ -119,16 +136,17 @@ class ThemeEditor extends BackendController
             return $this->redirect($themeListUrl);
         }
         
-        // 获取所有主题列表
+        // 获取所有主题列表（按 id 去重，避免重复显示）
         $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
-        $themes = [];
+        $themesById = [];
         foreach ($themesCollection as $themeItem) {
-            if (is_object($themeItem)) {
-                $themes[] = $themeItem->getData();
-            } elseif (is_array($themeItem)) {
-                $themes[] = $themeItem;
+            $data = is_object($themeItem) ? $themeItem->getData() : (is_array($themeItem) ? $themeItem : []);
+            $tid = (int)($data['id'] ?? 0);
+            if ($tid && !isset($themesById[$tid])) {
+                $themesById[$tid] = $data;
             }
         }
+        $themes = array_values($themesById);
 
         // 获取布局数据（编辑器读取草稿数据）
         $layout = [];
@@ -155,12 +173,21 @@ class ThemeEditor extends BackendController
         // 区域列表
         $areas = ThemeLayout::getAreas();
 
+        // 编辑区域：默认前端；若主题目录无 backend 则仅前端
+        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
+        $themeHasBackend = $this->themeHasBackendDir($this->welineTheme);
+        if (!$themeHasBackend || ($editorArea !== 'frontend' && $editorArea !== 'backend')) {
+            $editorArea = 'frontend';
+        }
+
         $this->assign('theme_id', $themeId);
         $this->assign('theme', $this->welineTheme);
         $this->assign('themes', $themes);
         $this->assign('page_type', $pageType);
         $this->assign('page_types', $pageTypes);
         $this->assign('areas', $areas);
+        $this->assign('editor_area', $editorArea);
+        $this->assign('theme_has_backend', $themeHasBackend);
         $this->assign('layout', $layout);
         $this->assign('available_widgets', $availableWidgets);
         $this->assign('has_draft', $hasDraft);
@@ -1675,17 +1702,26 @@ class ThemeEditor extends BackendController
 
     /**
      * 获取布局预览 (iframe) - 编译后的页面带编辑模式
-     * 
+     *
+     * 禁用后端布局包装，直接输出前端布局 HTML（与 MediaManager iframe 一致）。
+     * 若主题目录无 backend 则默认用 frontend 布局。
+     *
      * 预览模式会读取草稿数据
      */
     public function getLayoutPreview()
     {
+        $this->layoutType = null; // 禁用后端布局，iframe 仅渲染前端内容
+
         $themeId = (int)$this->request->getParam('theme_id');
         $layoutType = $this->request->getParam('layout_type', 'homepage');
         $layoutOption = $this->request->getParam('layout_option', 'default');
+        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
+        if ($editorArea !== 'backend') {
+            $editorArea = 'frontend';
+        }
 
-        // 检查布局模板文件是否存在
-        $relativePath = "theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
+        // 检查布局模板文件是否存在（按区域：frontend/backend）
+        $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
         $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
         
         if (!file_exists($templateFile)) {
@@ -1709,8 +1745,8 @@ class ThemeEditor extends BackendController
             'showPartners' => true,
         ]);
 
-        // 返回编译后的布局（在 iframe 中渲染）
-        $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
+        // 返回编译后的布局（在 iframe 中渲染，按 editor_area 使用前端或后端布局）
+        $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
         $html = $this->fetch($templatePath);
         // 注入编辑模式的 CSS 和 JS
         $html = $this->injectEditorModeAssets($html);

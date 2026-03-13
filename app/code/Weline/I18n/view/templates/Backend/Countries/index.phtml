@@ -51,22 +51,6 @@
                                     {{target_locale.flag}} {{target_locale.name}}（{{target_locale.code}}）
                                 </p>
                                 
-                                <!-- DEBUG 信息 -->
-                                <?php if (isset($debug_info) && !empty($debug_info)): ?>
-                                <div class="alert alert-warning mb-3">
-                                    <h5>DEBUG 信息</h5>
-                                    <pre style="font-size: 12px; white-space: pre-wrap; word-break: break-all;">
-Filter: <?= htmlspecialchars($debug_info['filter'] ?? 'N/A') ?>
-
-SQL: <?= htmlspecialchars($debug_info['sql'] ?? 'N/A') ?>
-
-Count: <?= $debug_info['count'] ?? 0 ?>
-
-First Item: <?= htmlspecialchars(json_encode($debug_info['first_item'] ?? null, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?>
-                                    </pre>
-                                </div>
-                                <?php endif; ?>
-                                
                                 <!-- 筛选按钮 -->
                                 <div class="row mb-3">
                                     <div class="col-12">

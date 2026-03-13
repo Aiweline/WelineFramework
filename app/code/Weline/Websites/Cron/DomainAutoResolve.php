@@ -23,7 +23,6 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainResolveService;
-use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
 
 class DomainAutoResolve implements CronTaskInterface
@@ -98,8 +97,6 @@ class DomainAutoResolve implements CronTaskInterface
             $success = 0;
             $skipped = 0;
             $failed = 0;
-            /** @var array<int, true> 解析成功的账户 ID，用于任务结束后拉取到本地 */
-            $successfulAccountIds = [];
             /** @var array<string, true> 解析成功的根域名，用于任务结束后检查并更新域名池记录 */
             $successfulDomains = [];
 
@@ -119,7 +116,6 @@ class DomainAutoResolve implements CronTaskInterface
                             $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                             $task->save();
                             $success++;
-                            $successfulAccountIds[$accountId] = true;
                             $successfulDomains[$domain] = true;
                             continue;
                         }
@@ -174,7 +170,6 @@ class DomainAutoResolve implements CronTaskInterface
                         $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                         $task->save();
                         $success++;
-                        $successfulAccountIds[$accountId] = true;
                         $successfulDomains[$domain] = true;
                     } else {
                         $task->incrementRetryCount();
@@ -206,21 +201,6 @@ class DomainAutoResolve implements CronTaskInterface
                         $failed++;
                     } else {
                         $skipped++;
-                    }
-                }
-            }
-
-            // 解析成功后自动从域名商拉取到本地，确保本地数据与线上一致
-            if ($successfulAccountIds !== []) {
-                $syncService = ObjectManager::getInstance(DomainSyncService::class);
-                foreach (\array_keys($successfulAccountIds) as $accountId) {
-                    try {
-                        $syncService->syncAccount((int) $accountId);
-                    } catch (\Throwable $e) {
-                        w_log_warning(__('自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}', [
-                            (string) $accountId,
-                            $e->getMessage(),
-                        ]), [], 'domain_auto_resolve');
                     }
                 }
             }

@@ -6,6 +6,7 @@ namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Websites\Api\NameserverSwitchInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
@@ -765,14 +766,13 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('未找到适配器：%{1}', $registrarCode)];
             }
 
-            if (!method_exists($adapter, 'modifyDns')) {
+            if (!$adapter instanceof NameserverSwitchInterface) {
                 return ['success' => false, 'message' => (string)__('域名商 %{1} 不支持 NS 切换', $registrarCode)];
             }
 
             $credentials = $account->getCredentials();
-            /** @var callable $callable */
-            $callable = [$adapter, 'modifyDns'];
-            return \call_user_func($callable, $domain, $nameservers, $credentials);
+            $nsList = \array_filter(\array_map('trim', \explode(',', $nameservers)));
+            return $adapter->updateNameservers($domain, $nsList, $credentials);
         } catch (\Throwable $e) {
             w_log_error((string)__('修改 DNS 失败：%{1}', $e->getMessage()), [], 'domain_management');
             return ['success' => false, 'message' => $e->getMessage()];
