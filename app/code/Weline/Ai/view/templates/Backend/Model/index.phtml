@@ -31,6 +31,44 @@ $activeTab = $activeTab ?? 'model';
 <!-- 页面标题结束 -->
 <?php endif; ?>
 
+<style>
+.weline-ai-model-guide .accordion-item { background: var(--backend-color-card-bg); border-color: var(--backend-color-border-default); }
+.weline-ai-model-guide .accordion-button { background: var(--backend-color-bg-secondary); color: var(--backend-color-text-primary); }
+.weline-ai-model-guide .accordion-button:not(.collapsed) { background: var(--backend-color-card-header-bg, var(--backend-color-bg-secondary)); }
+.weline-ai-model-guide .accordion-body { background: var(--backend-color-card-bg); color: var(--backend-color-text-primary); }
+</style>
+<!-- 模型启用指南（手风琴） -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="accordion weline-ai-model-guide" id="modelEnableGuideAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="guideHeading">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#guideCollapse" aria-expanded="false" aria-controls="guideCollapse">
+                        <i class="mdi mdi-book-open-page-variant me-2"></i>
+                        <lang>模型启用指南</lang>
+                    </button>
+                </h2>
+                <div id="guideCollapse" class="accordion-collapse collapse" aria-labelledby="guideHeading" data-bs-parent="#modelEnableGuideAccordion">
+                    <div class="accordion-body">
+                        <ol class="mb-0 ps-3">
+                            <li class="mb-2">
+                                <strong><lang>先添加供应商账户</lang></strong>：切换到「<lang>供应商账户</lang>」Tab，点击「<lang>添加账户</lang>」，选择供应商并填写 API 密钥，保存后点击「连通性测试」，<strong><lang>测试通过后才能激活账户</lang></strong>。
+                            </li>
+                            <li class="mb-2">
+                                <strong><lang>在模型内启用模型</lang></strong>：在本页（模型 Tab）中，点击「编辑」进入模型配置，选择使用「供应商账户」或「自配置」填写密钥；<strong><lang>必须先完成配置，再点击「连通性测试」按钮，测试通过后才能启用/激活该模型</lang></strong>（启用按钮变为可用）。
+                            </li>
+                            <li class="mb-2">
+                                <strong><lang>适配器说明</lang></strong>：「<lang>适配器</lang>」Tab 用于管理各业务场景的适配器（如翻译、摘要等），可为适配器设置默认使用的 AI 模型；适配器调用时会优先使用该默认模型。
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- 模型启用指南结束 -->
+
 <!-- 按钮操作栏 -->
 <div class="row mb-3">
     <div class="col-12">

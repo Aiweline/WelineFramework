@@ -14,8 +14,8 @@ use Weline\Framework\Event\ObserverInterface;
  * 网站保存后自动为当前后台用户建立站点归属关系
  *
  * 规则：
- * - 一个站点同一时间只能分配给一个后台用户
- * - 为站点分配新的用户时，会自动卸载之前的分配（删除旧记录）
+ * - 新建站点：默认分配给创建者（当前登录用户）
+ * - 编辑站点：不覆盖已有分配，用户可在「站点分配」页面修改
  */
 class WebsiteUserAutoAssign implements ObserverInterface
 {
@@ -47,14 +47,17 @@ class WebsiteUserAutoAssign implements ObserverInterface
 
         $websiteId = (int)$website->getWebsiteId();
 
-        // 先删除该站点之前的归属关系（一个站点只能绑定一个用户）
-        $mappingCleaner = clone $this->websiteUser;
-        $mappingCleaner->clear()
+        // 若已有分配记录则跳过（默认分配仅对新建生效，编辑不覆盖，可在站点分配页面修改）
+        $existing = clone $this->websiteUser;
+        $existing->clear()
             ->where(WebsiteUser::schema_fields_WEBSITE_ID, $websiteId)
-            ->delete()
+            ->find()
             ->fetch();
+        if ($existing->getId()) {
+            return;
+        }
 
-        // 为当前用户建立新的归属关系
+        // 新建站点：默认分配给当前用户（创建者）
         $newMapping = clone $this->websiteUser;
         $newMapping->clear()
             ->setData(WebsiteUser::schema_fields_WEBSITE_ID, $websiteId)
