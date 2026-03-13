@@ -1,4 +1,4 @@
-客服人员管理,"Gestion des agents de service"
+﻿客服人员管理,"Gestion des agents de service"
 加载客服人员失败：%{1},"Échec du chargement des agents de service : %{1}"
 客服名称不能为空,"Le nom de l'agent ne peut pas être vide"
 邮箱格式不正确,"Format d'email invalide"
@@ -203,33 +203,3 @@ English,English
 如有问题，请,"Si vous avez des questions"
 联系客服,"Contacter le service"
 此页面用于独立聊天界面，实际聊天功能通过右下角悬浮按钮使用。,"Utilisez le bouton flottant pour le chat"
-无效的请求方法,"Méthode invalide"
-添加客服功能待实现,"À implémenter"
-源文本,"Texte source"
-客服服务模块，提供多语言实时聊天、客户语言配置、客服语言配置、邮件绑定客户等功能,"Module de service client multilingue"
-客服人员,"Agents de service"
-查看客服配置,"Voir la configuration"
-查看客服人员,"Voir les agents"
-保存客服人员,"Enregistrer l'agent"
-删除客服人员,"Supprimer l'agent"
-查看会话,"Voir les sessions"
-您好，,Bonjour
-"您正在绑定邮箱 %{1} 到客服会话。","Vous liez l'email %{1} à la session."
-请点击以下链接完成绑定：,"Cliquez sur le lien :"
-验证邮箱,"Vérifier l'email"
-如果按钮无法点击，请复制以下链接到浏览器中打开：,"Copiez ce lien :"
-此链接将在24小时后失效。,"Expire dans 24h"
-如果您没有进行此操作，请忽略此邮件。,"Ignorez si ce n'est pas vous"
-此邮件由系统自动发送，请勿回复。,"Envoyé automatiquement"
-查看工作台,"Voir la console"
-服务语言,"Langue du service"
-日本語,Japonais
-한국어,Coréen
-Français,Français
-Deutsch,Allemand
-Español,Espagnol
-Português,Portugais
-Русский,Russe
-العربية,Arabe
-ไทย,Thaï
-"Tiếng Việt",Vietnamien

@@ -1,4 +1,4 @@
-"无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)","无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)"
+﻿"无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)","无效的工作模式: %{mode}，有效值为: %{valid} (detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取)"
 "无效的级别: %{level}，有效值为: %{valid}","无效的级别: %{level}，有效值为: %{valid}"
 "无效的润色风格: %{style}，有效值为: %{valid}","无效的润色风格: %{style}，有效值为: %{valid}"
 "工作模式（detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取）","工作模式（detect=检测, desensitize=脱敏, mark=标记, detect_mark=检测+标记, rewrite=润色, extract=提取）"
@@ -99,4 +99,3 @@ AI正在润色中，请稍候...,AI正在润色中，请稍候...
 请输入需要测试的内容，例如：我的邮箱是test@example.com，电话13812345678,请输入需要测试的内容，例如：我的邮箱是test@example.com，电话13812345678
 正在测试...,正在测试...
 测试完成,测试完成
-"Weline.Api 未加载","Weline.Api 未加载"

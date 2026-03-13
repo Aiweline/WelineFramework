@@ -1,4 +1,4 @@
-库存源添加成功！,"Source added successfully!"
+﻿库存源添加成功！,"Source added successfully!"
 库存源添加失败！,"Failed to add source!"
 库存源不存在！,"Source does not exist!"
 库存源保存成功！,"Source saved successfully!"
@@ -18,30 +18,3 @@
 库存低于阈值时触发。,库存低于阈值时触发。
 缺货,"Out of Stock"
 产品库存归零时触发。,产品库存归零时触发。
-库存管理,"Inventory Management"
-库存源管理,"Source Management"
-产品库存,"Product Stock"
-库存源,"Inventory Source"
-库存源代码,"Source Code"
-库存源名称,"Source Name"
-描述,Description
-国家,Country
-地区/省份,Region/Province
-城市,City
-详细地址,Address
-邮编,Postcode
-联系电话,Phone
-联系邮箱,Email
-联系人姓名,"Contact Name"
-是否启用,Enabled
-优先级,Priority
-是否使用默认物流,"Use Default Carrier"
-默认仓库,"Default Warehouse"
-系统默认库存源,"System Default Source"
-库存项,"Stock Item"
-产品ID,"Product ID"
-产品SKU,"Product SKU"
-库存数量,Quantity
-库存状态,"Stock Status"
-有货,"In Stock"
-低库存阈值,"Low Stock Threshold"

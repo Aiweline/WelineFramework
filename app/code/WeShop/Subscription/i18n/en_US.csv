@@ -1,4 +1,4 @@
-订阅计划管理,"Subscription Plan Management"
+﻿订阅计划管理,"Subscription Plan Management"
 编辑订阅计划,"Edit Subscription Plan"
 新建订阅计划,"New Subscription Plan"
 计划不存在,"Plan not found"
@@ -111,11 +111,3 @@
 确认暂停此订阅？,确认暂停此订阅？
 确认恢复,确认恢复
 确认恢复此订阅？,确认恢复此订阅？
-编辑,Edit
-删除,Delete
-产品ID,"Product ID"
-货币,Currency
-更新时间,"Updated At"
-筛选,Filter
-已取消订阅,"Cancelled Subscriptions"
-订阅统计,"Subscription Statistics"
