@@ -1,0 +1,94 @@
+<?php
+/**
+ * WeShop Motor Theme - Footer Partial
+ * 摩托车主题底部 - 深色工业风格
+ */
+?>
+<footer class="font-display">
+    <!-- Back to Top -->
+    <a href="#top" class="block w-full bg-motor-black hover:bg-primary text-white text-center py-3 text-sm font-bold uppercase tracking-widest transition-colors">
+        <?= __('Back to Top') ?>
+    </a>
+
+    <!-- Footer Content -->
+    <div class="bg-gray-900 text-gray-300 pt-16 pb-8">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+                <!-- Shop -->
+                <div>
+                    <h3 class="font-heading font-bold text-white mb-4 text-base uppercase tracking-wider"><?= __('Shop') ?></h3>
+                    <ul class="space-y-3 text-sm">
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('') ?>"><?= __('Home') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('catalog/category') ?>"><?= __('Motorcycles') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('catalog/category/parts') ?>"><?= __('Parts & Accessories') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('catalog/category/gear') ?>"><?= __('Gear & Apparel') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('catalog/new-arrivals') ?>"><?= __('New Arrivals') ?></a></li>
+                    </ul>
+                </div>
+
+                <!-- Company -->
+                <div>
+                    <h3 class="font-heading font-bold text-white mb-4 text-base uppercase tracking-wider"><?= __('Company') ?></h3>
+                    <ul class="space-y-3 text-sm">
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/about-us') ?>"><?= __('About Us') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/contact-us') ?>"><?= __('Contact Us') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/careers') ?>"><?= __('Careers') ?></a></li>
+                    </ul>
+                </div>
+
+                <!-- Support -->
+                <div>
+                    <h3 class="font-heading font-bold text-white mb-4 text-base uppercase tracking-wider"><?= __('Support') ?></h3>
+                    <ul class="space-y-3 text-sm">
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/faq') ?>"><?= __('FAQ') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/shipping-policy') ?>"><?= __('Shipping Info') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/return-policy') ?>"><?= __('Returns') ?></a></li>
+                        <li><a class="hover:text-primary transition-colors" href="<?= $this->getUrl('cms/page/privacy-policy') ?>"><?= __('Privacy Policy') ?></a></li>
+                    </ul>
+                </div>
+
+                <!-- Connect -->
+                <div>
+                    <h3 class="font-heading font-bold text-white mb-4 text-base uppercase tracking-wider"><?= __('Follow Us') ?></h3>
+                    <w:hook name="WeShop_Social::footer::social_links"/>
+                    <div class="flex space-x-4 text-gray-400 mb-6">
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="Facebook">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path clip-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" fill-rule="evenodd"></path>
+                            </svg>
+                        </a>
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="Instagram">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.416 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.345 4.22c.636-.247 1.363-.416 2.427-.465C9.793 2.013 10.147 2 12.315 2zm-1.002 11.833a4.833 4.833 0 100-9.666 4.833 4.833 0 000 9.666zM12 8.417a3.583 3.583 0 110 7.166 3.583 3.583 0 010-7.166zM16.516 8.243a1.229 1.229 0 01-2.458 0 1.229 1.229 0 012.458 0z" fill-rule="evenodd"></path>
+                            </svg>
+                        </a>
+                        <a class="hover:text-primary transition-colors" href="#" aria-label="YouTube">
+                            <svg aria-hidden="true" class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 3.993L9 16z"></path>
+                            </svg>
+                        </a>
+                    </div>
+
+                    <!-- Newsletter -->
+                    <h3 class="font-heading font-bold text-white text-base uppercase tracking-wider mb-3"><?= __('Newsletter') ?></h3>
+                    <form class="flex gap-2">
+                        <input type="email" placeholder="<?= __('Your email') ?>" class="flex-1 bg-gray-800 border border-gray-700 rounded text-sm text-gray-200 px-3 py-2 placeholder:text-gray-500 focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"/>
+                        <button type="submit" class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded text-sm font-bold uppercase tracking-wide transition-colors"><?= __('Join') ?></button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent mb-8"></div>
+
+            <!-- Copyright -->
+            <div class="flex flex-col md:flex-row justify-between items-center gap-4 text-center md:text-left">
+                <div class="flex items-center gap-2 text-white">
+                    <span class="material-symbols-outlined text-primary">two_wheeler</span>
+                    <span class="font-heading font-bold text-lg uppercase tracking-wider"><?= $this->getStoreName() ?></span>
+                </div>
+                <p class="text-sm text-gray-500">&copy; <?= date('Y') ?> <?= $this->getStoreName() ?>. <?= __('All rights reserved.') ?></p>
+            </div>
+        </div>
+    </div>
+</footer>

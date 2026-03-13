@@ -499,6 +499,50 @@ namespace Vendor\Module\Controller\Backend;
 
 ---
 
+## ⚠️ CRITICAL: Request 参数获取规范
+
+**获取请求参数时，必须使用明确的方法，禁止依赖 `DataObject::__call` 魔术方法。**
+
+### ❌ 绝对禁止
+
+```php
+// ❌ 走 __call('get', ['key', 0])：substr('get',3)='' → getData('') → 返回整个 _data 数组
+// (int) 强转数组 → PHP 永远返回 1！参数永远读不到正确值！
+$id = (int) $this->request->get('some_id', 0);
+```
+
+### ✅ 正确写法
+
+```php
+// ✅ getParam()：从 GET+POST+Body 合并参数中按 key 获取
+$id = (int) $this->request->getParam('some_id', 0);
+
+// ✅ getGet() / getQuery()：仅从 URL query string 获取
+$id = (int) $this->request->getGet('some_id', 0);
+
+// ✅ getPost()：仅从 POST 参数获取
+$name = $this->request->getPost('name', '');
+
+// ✅ getBodyParams()：获取请求 Body（JSON/form）
+$body = $this->request->getBodyParams();
+
+// ✅ get()（已修复）：现在等价于 getParam()，可安全使用
+$id = (int) $this->request->get('some_id', 0);
+```
+
+### 方法速查
+
+| 方法 | 数据源 | 用途 |
+|------|--------|------|
+| `getParam($key, $default)` | GET + POST + Body 合并 | 通用参数获取 |
+| `get($key, $default)` | 同 getParam（显式覆盖 __call） | 通用便捷方法 |
+| `getGet($key)` / `getQuery($key)` | `$_GET` / URL query string | 仅获取 URL 参数 |
+| `getPost($key)` / `post($key)` | `$_POST` | 仅获取 POST 参数 |
+| `getBodyParams()` / `body()` | 请求体（JSON/form-data） | 获取请求体 |
+| `getBodyParam($key)` | 请求体按 key | 获取请求体单个字段 |
+
+---
+
 ## ⚠️ CRITICAL: Testing Requirements
 
 **All module development MUST include tests. See `module-development` skill for complete requirements.**
