@@ -21,8 +21,8 @@ use Weline\Server\Model\SslCertificate;
  * SSL 证书管理服务
  * 
  * 支持：
- * - 开发环境自签证书自动生成
- * - 生产环境 Let's Encrypt 自动申请
+ * - 开发环境（本地域名）自签证书自动生成
+ * - 生产环境 （线上域名没有证书时，自签证书会立即生效，等待线上正式证书下发会动态替换正式证书） Let's Encrypt 自动申请
  * - 证书自动续签
  * - 多域名证书管理
  * - SNI 证书匹配
@@ -523,8 +523,9 @@ class SslCertificateService
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
         
-        // 1. 检查证书是否已存在且有效
-        if ($this->isCertificateValid($certPath)) {
+        // 1. 检查本地证书文件是否存在且未过期，若有则入库后直接使用（避免每次重新申请）
+        if ($this->isCertificateValid($certPath) && \is_file($keyPath)) {
+            $this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath, $websiteId, true);
             $certInfo = $this->parseCertificate($certPath);
             return [
                 'success' => true,
