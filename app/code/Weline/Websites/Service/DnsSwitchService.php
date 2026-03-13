@@ -101,9 +101,16 @@ class DnsSwitchService
             return $this->fail(__('注册商适配器 %{1} 不存在', [$sourceAccount->getRegistrarCode()]));
         }
 
-        $this->syncRecordsFromSource($domain, $sourceAccount);
-        $notify('sync_records_done', ['domain' => $domainName, 'message' => __('DNS 记录同步完成')]);
-        w_log_info(__('[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成', [$domainName, $sourceAccount->getRegistrarCode()]), [], $logCh);
+        $syncResult = $this->syncRecordsFromSource($domain, $sourceAccount);
+        $syncErr = (string) ($syncResult['error'] ?? '');
+        $syncAdded = (int) ($syncResult['added'] ?? 0);
+        $syncUpdated = (int) ($syncResult['updated'] ?? 0);
+        if ($syncErr !== '') {
+            $notify('sync_records_result', ['error' => $syncErr, 'message' => __('[步骤1] 同步记录（非致命）：%{1}', [$syncErr])]);
+        } else {
+            $notify('sync_records_done', ['domain' => $domainName, 'added' => $syncAdded, 'updated' => $syncUpdated, 'message' => __('DNS 记录同步完成，新增 %{1} 条，更新 %{2} 条', [(string) $syncAdded, (string) $syncUpdated])]);
+        }
+        w_log_info(__('[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成，added=%{3}，updated=%{4}', [$domainName, $sourceAccount->getRegistrarCode(), (string) $syncAdded, (string) $syncUpdated]), [], $logCh);
 
         // ── Step 2: 在目标获取 NS（会自动 addZone） ──
         $notify('add_zone', ['domain' => $domainName, 'message' => __('获取目标 Nameserver（%{1}）', [$targetCode])]);
@@ -125,27 +132,35 @@ class DnsSwitchService
 
         $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
         $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
-        if (!($updateResult['success'] ?? false)) {
-            $updateMsg = $updateResult['message'] ?? __('NS 切换失败');
+        $updateSuccess = (bool) ($updateResult['success'] ?? false);
+        $updateMsg = (string) ($updateResult['message'] ?? __('NS 切换失败'));
+        if (!$updateSuccess) {
+            $notify('switch_ns_error', ['message' => $updateMsg, 'raw' => $updateResult]);
             w_log_error(__('[DnsSwitchService] %{1} NS 切换失败：%{2}', [$domainName, $updateMsg]), [], $logCh);
             return $this->fail($updateMsg);
         }
-        $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换成功')]);
+        $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换成功（API 返回：%{1}）', [$updateMsg])]);
         w_log_info(__('[DnsSwitchService] %{1} Step3: NS 切换成功', [$domainName]), [], $logCh);
 
-        // 提交后即时用注册商接口校验（可选）
-        $registrarNs = $this->getRegistrarNameservers($sourceAdapter, $domainName, $sourceAccount->getCredentials());
-        if ($registrarNs !== null) {
-            $regNsNorm = $this->normalizeNameservers($registrarNs);
+        // 提交后即时用注册商接口校验（可选），并输出详细日志
+        $registrarCheck = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $sourceAccount->getCredentials());
+        if ($registrarCheck['supported'] === false) {
+            $notify('registrar_ns_check', ['message' => __('[步骤2后] 注册商 getDomainDetail 不支持或未实现，跳过注册商侧校验')]);
+        } elseif ($registrarCheck['error'] !== '') {
+            $notify('registrar_ns_check', ['message' => __('[步骤2后] 注册商 NS 查询异常：%{1}', [$registrarCheck['error']]), 'error' => $registrarCheck['error']]);
+        } else {
+            $regNsNorm = $registrarCheck['normalized'];
             if ($regNsNorm === $targetNsNormalized) {
                 $notify('registrar_ns_updated', ['message' => __('注册商侧已更新为目标 NS，提交已生效')]);
             } else {
-                $notify('registrar_ns_current', ['nameservers' => $regNsNorm, 'message' => __('注册商侧当前 NS：%{1}', [\implode(', ', $regNsNorm)])]);
+                $nsStr = $regNsNorm === [] ? __('(空)') : \implode(', ', $regNsNorm);
+                $notify('registrar_ns_current', ['nameservers' => $regNsNorm, 'message' => __('[步骤2后] 注册商侧当前 NS：%{1}', [$nsStr])]);
             }
         }
 
         // ── Step 3b: 可选等待 NS 生效（公网或注册商侧） ──
         if ($waitForNs) {
+            $notify('wait_ns_start', ['message' => __('[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟', [(string) $waitIntervalSeconds, (string) (\round($waitMaxSeconds / 60))])]);
             $waitResult = $this->waitForNameservers(
                 $domainName,
                 $targetNsNormalized,
@@ -263,6 +278,14 @@ class DnsSwitchService
             $elapsed += $intervalSeconds;
             $liveNs = $this->resolveService->getLiveNameservers($domainName);
             $liveNormalized = $this->normalizeNameservers($liveNs);
+            $registrarCheckNow = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $sourceCredentials);
+            $regNormNow = $registrarCheckNow['normalized'] ?? [];
+            if ($registrarCheckNow['supported'] && $registrarCheckNow['error'] === '') {
+                $regStr = $regNormNow === [] ? __('(空)') : \implode(', ', $regNormNow);
+                $notify('wait_ns_registrar_detail', ['elapsed' => $elapsed, 'registrar_ns' => $regStr, 'message' => __('  注册商侧 NS：%{1}', [$regStr])]);
+            } elseif ($registrarCheckNow['error'] !== '') {
+                $notify('wait_ns_registrar_detail', ['elapsed' => $elapsed, 'error' => $registrarCheckNow['error'], 'message' => __('  注册商侧查询异常：%{1}', [$registrarCheckNow['error']])]);
+            }
             $notify('wait_ns_progress', [
                 'elapsed' => $elapsed,
                 'live' => $liveNormalized,
@@ -272,13 +295,9 @@ class DnsSwitchService
                 $notify('wait_ns_verified', ['by' => 'public']);
                 return ['verified' => true, 'aborted' => false];
             }
-            $registrarNsNow = $this->getRegistrarNameservers($sourceAdapter, $domainName, $sourceCredentials);
-            if ($registrarNsNow !== null) {
-                $regNormNow = $this->normalizeNameservers($registrarNsNow);
-                if ($regNormNow === $targetNsNormalized) {
-                    $notify('wait_ns_verified', ['by' => 'registrar']);
-                    return ['verified' => true, 'aborted' => false];
-                }
+            if ($registrarCheckNow['supported'] && $registrarCheckNow['error'] === '' && $regNormNow === $targetNsNormalized) {
+                $notify('wait_ns_verified', ['by' => 'registrar']);
+                return ['verified' => true, 'aborted' => false];
             }
         }
         return ['verified' => false, 'aborted' => false];
@@ -303,15 +322,28 @@ class DnsSwitchService
      */
     private function getRegistrarNameservers(object $sourceAdapter, string $domainName, array $credentials): ?array
     {
+        $r = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $credentials);
+        return $r['supported'] && $r['error'] === '' ? $r['raw'] : null;
+    }
+
+    /**
+     * 获取注册商当前 NS，带详细结果便于日志
+     *
+     * @return array{supported: bool, raw: array<string>|null, normalized: array<string>, error: string}
+     */
+    private function getRegistrarNameserversWithDetail(object $sourceAdapter, string $domainName, array $credentials): array
+    {
         if (!\method_exists($sourceAdapter, 'getDomainDetail')) {
-            return null;
+            return ['supported' => false, 'raw' => null, 'normalized' => [], 'error' => __('适配器无 getDomainDetail 方法')];
         }
         try {
             $detail = $sourceAdapter->getDomainDetail($domainName, $credentials);
             $ns = $detail['nameservers'] ?? null;
-            return \is_array($ns) ? $ns : null;
+            $raw = \is_array($ns) ? $ns : [];
+            $normalized = $this->normalizeNameservers($raw);
+            return ['supported' => true, 'raw' => $raw, 'normalized' => $normalized, 'error' => ''];
         } catch (\Throwable $e) {
-            return null;
+            return ['supported' => true, 'raw' => null, 'normalized' => [], 'error' => $e->getMessage()];
         }
     }
 

@@ -45,9 +45,9 @@ class FrontendController extends PcController
         array $additionalData = []
     ): string {
         $layoutMap = [
-            'auth' => 'Weline_Theme::theme/frontend/layouts/account/auth.phtml',
-            'default' => 'Weline_Theme::theme/frontend/layouts/default.phtml',
-            'full' => 'Weline_Theme::theme/frontend/layouts/full.phtml',
+            'auth' => 'Weline_Theme::theme/frontend/layouts/account_auth/default.phtml',
+            'default' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
+            'full' => 'Weline_Theme::theme/frontend/layouts/default/default.phtml',
         ];
         
         $layoutTemplate = $layoutMap[$layoutType] ?? $layoutType;
@@ -58,10 +58,15 @@ class FrontendController extends PcController
             $contentTemplate = $moduleName . '::templates/frontend/' . \ltrim($contentTemplate, '/');
         }
         
+        $contentHtml = $this->fetch($contentTemplate, $additionalData);
         $layoutData = \array_merge([
             'title' => $title,
-            'content' => $this->fetch($contentTemplate, $additionalData)
+            'content' => $contentHtml,
         ], $additionalData);
+        $layoutData['meta'] = \array_merge(
+            $layoutData['meta'] ?? [],
+            ['content' => $contentHtml, 'contentTemplate' => $contentTemplate]
+        );
         
         return $this->fetch($layoutTemplate, $layoutData);
     }
