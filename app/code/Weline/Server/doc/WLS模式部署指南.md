@@ -46,7 +46,7 @@ php bin/w server:start
 php bin/w server:start -p 9981
 
 # 指定地址与端口
-php bin/w server:start -h 0.0.0.0 -p 443
+php bin/w server:start --host 0.0.0.0 -p 443
 
 # 启动（Master 进程默认启用，监控并自动重启异常 Worker）
 php bin/w server:start
@@ -126,13 +126,13 @@ WLS 默认每个 Worker 监听**不同端口**（`port, port+1, port+2...`）。
 **方式 A：WLS 直连 80/443（推荐，省去 Nginx）**
 
 - 默认启动即监听 80/443（HTTPS 时用 443）：`php bin/w server:start`
-- 外网访问时：`php bin/w server:start -h 0.0.0.0`
+- 外网访问时：`php bin/w server:start --host 0.0.0.0`
 - Linux/Mac 需 root 或 setcap：`sudo php bin/w server:start` 或 `sudo setcap cap_net_bind_service=+ep $(which php)`
 - 访问：`https://www.example.com/`（无端口）
 
 **方式 B：WLS 监听高端口（开发/与 Nginx 配合）**
 
-- 启动：`php bin/w server:start -h 0.0.0.0 -p 9981`
+- 启动：`php bin/w server:start --host 0.0.0.0 -p 9981`
 - 域名解析：公网 DNS A 记录指到服务器 IP；本机在 `hosts` 中添加 `127.0.0.1 www.example.com`
 - 访问：`https://www.example.com:9981/` 或由 Nginx 反代（见方式 C）
 
@@ -206,7 +206,7 @@ php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
 |------|------|
 | `php bin/w server:start [name]` | 启动 WLS（默认 80/443，HTTPS 用 443） |
 | `php bin/w server:start -p 9981` | 改用端口 9981（可省 Nginx 时用 80/443） |
-| `php bin/w server:start -h 0.0.0.0 -p 443` | 指定地址与端口 |
+| `php bin/w server:start --host 0.0.0.0 -p 443` | 指定地址与端口 |
 | `php bin/w server:start -c 8` | 指定 Worker 数量 |
 | `php bin/w server:start` | 启动（Master 默认启用，监控并自动重启 Worker） |
 | `php bin/w server:start -d` | 守护进程模式 |
@@ -220,7 +220,7 @@ php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem
 | 现象 | 可能原因 | 处理 |
 |------|----------|------|
 | 访问域名 404 或非预期网站 | 后台未配置该域名或 URL 不匹配 | 在网站管理中为对应网站添加该域名，注意协议与端口 |
-| 无法访问 | 防火墙未放行端口或 WLS 未监听 0.0.0.0 | 放行 80/443 或所用端口；外网访问时使用 `-h 0.0.0.0` |
+| 无法访问 | 防火墙未放行端口或 WLS 未监听 0.0.0.0 | 放行 80/443 或所用端口；外网访问时使用 `--host 0.0.0.0` |
 | 80/443 绑定失败（Linux/Mac） | 特权端口需 root 或 setcap | `sudo php bin/w server:start` 或 `sudo setcap cap_net_bind_service=+ep $(which php)`，或改用 `-p 9981` + Nginx 反代 |
 | 端口被占用 | 已有进程占用该端口 | 使用 `server:stop` 停止对应实例，或 `-p 9981` 等改端口 |
 | Nginx 502 | WLS 未启动或端口错误 | 执行 `php bin/w server:status` 确认 WLS 监听端口，与 Nginx `proxy_pass` 一致 |

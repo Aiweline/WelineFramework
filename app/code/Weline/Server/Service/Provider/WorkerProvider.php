@@ -72,7 +72,12 @@ class WorkerProvider extends AbstractServiceProvider
         $port = $this->getPort($instanceId, $context);
         $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName . '-' . $instanceId;
 
-        $host = $context->host ?: '127.0.0.1';
+        // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
+        // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外；Worker 端口只供本机 Dispatcher 连接
+        $mode = $context->mode;
+        $host = ($mode === 'linux-direct')
+            ? ($context->host ?: '127.0.0.1')
+            : '127.0.0.1';
 
         $arguments = [
             $host,
@@ -93,7 +98,6 @@ class WorkerProvider extends AbstractServiceProvider
             $arguments[] = '--frontend';
         }
 
-        $mode = $context->mode;
         if ($mode === 'linux-direct') {
             $arguments[] = '--reuseport';
         }
