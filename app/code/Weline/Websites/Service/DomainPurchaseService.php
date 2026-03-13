@@ -493,14 +493,16 @@ class DomainPurchaseService
                     $needSwitch = true;
                 }
             }
-            if ($needSwitch) {
-                $rootDomain->setDnsSwitchPending(1);
-                w_log_info(__('[DomainPurchase] 域名 %{1} 需要 DNS 切换：当前=%{2}, 目标=%{3}, dns_account_id=%{4}', [
-                    $domain, $currentNsProvider, $selectedDnsProvider ?: $selectedCdnProvider, (string)($selectedDnsAccountId ?: $selectedCdnAccountId),
-                ]), [], 'dns_cdn_switch');
-            }
-
             $rootDomain->save();
+
+            if ($needSwitch) {
+                $switchService = ObjectManager::getInstance(DnsSwitchService::class);
+                $switchService->markPendingSwitch(
+                    $rootDomain,
+                    $selectedDnsAccountId ?: $selectedCdnAccountId,
+                    $selectedDnsProvider ?: $selectedCdnProvider
+                );
+            }
         } catch (\Throwable $e) {
             w_log_error(__('购买后同步域名 DNS 元数据失败：%{1}', [$e->getMessage()]));
         }
