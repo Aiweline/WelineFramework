@@ -33,8 +33,9 @@ class Stop extends CommandAbstract
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
     private const IPC_TIMEOUT = 15;
     
-    /** 子进程全部退出后等待 Master 退出的最大时间（秒）*/
-    private const MASTER_EXIT_TIMEOUT = 5;
+    /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Linux 上 Master 清理索引/退出主循环较慢，需更长超时 */
+    private const MASTER_EXIT_TIMEOUT_WIN = 5;
+    private const MASTER_EXIT_TIMEOUT_LINUX = 15;
     
     /** IPC 消息颜色常量 */
     private const IPC_COLOR_TAG = 'Blue';       // [IPC] 标签颜色
@@ -527,7 +528,10 @@ class Stop extends CommandAbstract
         $waitMsg = $this->printer->colorize('等待 Master 进程退出', self::IPC_COLOR_INFO);
         echo "  {$tag} {$waitMsg}";
         
-        $deadline = \microtime(true) + self::MASTER_EXIT_TIMEOUT;
+        $timeout = (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN')
+            ? self::MASTER_EXIT_TIMEOUT_WIN
+            : self::MASTER_EXIT_TIMEOUT_LINUX;
+        $deadline = \microtime(true) + $timeout;
         $confirmed = 0;
         
         while (\microtime(true) < $deadline) {

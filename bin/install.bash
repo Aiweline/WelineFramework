@@ -1503,19 +1503,51 @@ cd "$ROOT"
 # 将项目 php/psql/w 软链到 /usr/local/bin，确保 `php` 命令使用项目安装（不依赖 PATH）
 # 当存在 extend/server/php 时自动执行；或显式传 --link-system 时执行
 ensure_system_bin_links() {
-  local did_link=0
+  local did_link=0 failed=0
+  [[ ! -d /usr/local/bin ]] && { sudo mkdir -p /usr/local/bin || true; }
+
+  # 先测一次 sudo 是否可用（让密码提示正常显示，不吞 stderr）
+  if ! sudo -n true 2>/dev/null; then
+    echo "创建系统软链需要 sudo 权限（输入密码后继续）："
+    if ! sudo true; then
+      echo "  sudo 验证失败，无法创建 /usr/local/bin 软链。" >&2
+      echo "  请安装完成后手动执行:" >&2
+      echo "    sudo ln -sf $SERVER_DIR/php/bin/php /usr/local/bin/php" >&2
+      echo "    sudo ln -sf $SERVER_DIR/pgsql/bin/psql /usr/local/bin/psql" >&2
+      echo "    sudo ln -sf $ROOT/bin/w /usr/local/bin/w" >&2
+      return 1
+    fi
+  fi
+
   if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
-    safe_ln_sf "$SERVER_DIR/php/bin/php" "/usr/local/bin/php${PHP_VERSION//./}" 2>/dev/null && did_link=1
-    safe_ln_sf "$SERVER_DIR/php/bin/php" /usr/local/bin/php 2>/dev/null && did_link=1
+    echo "正在创建软链: /usr/local/bin/php -> $SERVER_DIR/php/bin/php"
+    sudo ln -sf "$SERVER_DIR/php/bin/php" "/usr/local/bin/php${PHP_VERSION//./}" && did_link=1
+    sudo ln -sf "$SERVER_DIR/php/bin/php" /usr/local/bin/php && did_link=1
   fi
   if [[ -x "$SERVER_DIR/pgsql/bin/psql" ]]; then
-    safe_ln_sf "$SERVER_DIR/pgsql/bin/psql" /usr/local/bin/psql 2>/dev/null && did_link=1
+    echo "正在创建软链: /usr/local/bin/psql -> $SERVER_DIR/pgsql/bin/psql"
+    sudo ln -sf "$SERVER_DIR/pgsql/bin/psql" /usr/local/bin/psql && did_link=1
   fi
   if [[ -x "$ROOT/bin/w" ]]; then
-    safe_ln_sf "$ROOT/bin/w" /usr/local/bin/w 2>/dev/null && did_link=1
+    echo "正在创建软链: /usr/local/bin/w -> $ROOT/bin/w"
+    sudo ln -sf "$ROOT/bin/w" /usr/local/bin/w && did_link=1
   fi
-  if [[ $did_link -eq 1 ]]; then
-    echo "已将项目 php/psql/w 软链到 /usr/local/bin（php 将指向 extend/server/php/bin/php）"
+
+  # 验证软链
+  if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+    local actual_php expect_php
+    actual_php="$(readlink -f /usr/local/bin/php 2>/dev/null || true)"
+    expect_php="$(readlink -f "$SERVER_DIR/php/bin/php" 2>/dev/null || echo "$SERVER_DIR/php/bin/php")"
+    if [[ "$actual_php" == "$expect_php" ]]; then
+      echo "  ✓ /usr/local/bin/php -> $actual_php"
+    else
+      echo "  ✗ /usr/local/bin/php 指向 ${actual_php:-未知}，期望 $expect_php" >&2
+      echo "  请手动执行: sudo ln -sf $SERVER_DIR/php/bin/php /usr/local/bin/php" >&2
+      failed=1
+    fi
+  fi
+  if [[ $did_link -eq 1 ]] && [[ $failed -eq 0 ]]; then
+    echo "已将项目 php/psql/w 软链到 /usr/local/bin"
   fi
 }
 if [[ "$LINK_SYSTEM" == true ]] || [[ -x "$SERVER_DIR/php/bin/php" ]]; then
@@ -1526,30 +1558,35 @@ fi
 verify_path_added() {
   local ok=1
   local msg=""
-  if [[ "$PLATFORM" == "linux" ]] && [[ -n "${WELINE_USER:-}" ]]; then
-    local found_php found_w
-    found_php=$(run_privileged sudo -u "$WELINE_USER" bash -l -c 'which php 2>/dev/null' 2>/dev/null || true)
-    found_w=$(run_privileged sudo -u "$WELINE_USER" bash -l -c 'which w 2>/dev/null' || true)
-    if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
-      local expect_php="$SERVER_DIR/php/bin/php"
-      if [[ -z "$found_php" ]] || { [[ "$found_php" != "$expect_php" ]] && [[ "$found_php" != *"extend/server/php"* ]]; }; then
-        ok=0
-        msg="php 仍指向系统: ${found_php:-未找到}"
-      fi
-    fi
-    if [[ -x "$ROOT/bin/w" ]] && [[ -z "$found_w" ]]; then
+  # 直接用 hash -r 清除缓存后检查当前 shell（不嵌套 sudo）
+  hash -r 2>/dev/null || true
+  local found_php found_w
+  found_php="$(command -v php 2>/dev/null || true)"
+  found_w="$(command -v w 2>/dev/null || true)"
+  if [[ -x "$SERVER_DIR/php/bin/php" ]]; then
+    local expect_real
+    expect_real="$(readlink -f "$SERVER_DIR/php/bin/php" 2>/dev/null || echo "$SERVER_DIR/php/bin/php")"
+    local found_real
+    found_real="$(readlink -f "$found_php" 2>/dev/null || echo "$found_php")"
+    if [[ -z "$found_php" ]] || [[ "$found_real" != "$expect_real" ]]; then
       ok=0
-      msg="${msg:+$msg; }w 命令未找到"
+      msg="php 指向 ${found_php:-未找到}（实际 ${found_real:-未知}），期望 $expect_real"
     fi
+  fi
+  if [[ -x "$ROOT/bin/w" ]] && [[ -z "$found_w" ]]; then
+    ok=0
+    msg="${msg:+$msg; }w 命令未找到"
   fi
   if [[ $ok -eq 0 ]] && [[ -n "$msg" ]]; then
     echo "" >&2
     printf '\033[33mWARNING: PATH 验证未通过 - %s\033[0m\n' "$msg" >&2
-    echo "  建议: 新开终端后执行 source ~/.bashrc 或 source /etc/profile" >&2
-    echo "  或使用 --link-system 创建系统级软链: $0 --link-system" >&2
+    echo "  请手动执行:" >&2
+    echo "    sudo ln -sf $SERVER_DIR/php/bin/php /usr/local/bin/php" >&2
+    echo "    sudo ln -sf $ROOT/bin/w /usr/local/bin/w" >&2
+    echo "  然后: hash -r  或新开终端" >&2
     echo "" >&2
   else
-    echo "PATH 验证通过（php 与 w 将优先使用项目安装）。"
+    echo "PATH 验证通过: php=$(command -v php) -> $(readlink -f "$(command -v php)" 2>/dev/null || echo "?")"
   fi
 }
 verify_path_added
