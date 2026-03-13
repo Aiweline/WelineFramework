@@ -183,7 +183,15 @@ class Install extends CommandAbstract
 
         if (!$result->hasError() && $result->hasRecommendation()) {
             $this->printer->success(__('必需依赖已满足 ✔'));
-            $this->printer->note(__('可选推荐项可单独安装，例如: php bin/w env:install event -y'));
+
+            if ($skipConfirm) {
+                $this->printer->note(__('检测到推荐项未满足，正在自动安装推荐项...'));
+                $this->printer->note('');
+                $this->executeInstallRecommended($result);
+            } else {
+                $this->printer->note(__('可选推荐项可单独安装，例如: php bin/w env:install event -y'));
+                $this->printer->note(__('或运行 php bin/w env:install -y 自动安装所有推荐项'));
+            }
             return;
         }
 
@@ -374,6 +382,124 @@ class Install extends CommandAbstract
         }
 
         $this->printer->warning(__('未找到推荐项「%{target}」。可运行 php bin/w env:check 查看当前推荐项。', ['target' => $target]));
+    }
+
+    /**
+     * 仅安装推荐项（必需依赖已满足时使用）
+     */
+    private function executeInstallRecommended(EnvCheckResult $result): void
+    {
+        $recSuccess = 0;
+        $recFail = 0;
+        $recSkipped = 0;
+
+        // 推荐函数
+        $disabledRecFuncs = $result->getDisabledRecommendedFunctions();
+        if (!empty($disabledRecFuncs)) {
+            $this->printer->note(__('【推荐函数】尝试解禁...'));
+            $disabledList = array_map('trim', explode(',', ini_get('disable_functions') ?? ''));
+            foreach ($disabledRecFuncs as $func) {
+                if ($this->statusService->hasAttempted('function', $func)) {
+                    $recSkipped++;
+                    continue;
+                }
+                if (in_array($func, $disabledList, true)) {
+                    $success = $this->tryUnblockFunctions([$func]);
+                    if ($success) {
+                        $recSuccess++;
+                        $this->statusService->markInstalled('function', $func, __('已从 disable_functions 解禁'));
+                        $this->printer->success(__('  推荐函数 %{func} 解禁成功 ✔', ['func' => $func]));
+                    } else {
+                        $recFail++;
+                        $this->statusService->markFailed('function', $func, __('解禁失败，需手动编辑 php.ini'));
+                        $this->printer->warning(__('  推荐函数 %{func} 解禁失败（不影响系统运行）', ['func' => $func]));
+                    }
+                } else {
+                    $this->statusService->markFailed('function', $func, __('所属扩展未安装'));
+                }
+            }
+            $this->printer->note('');
+        }
+
+        // 推荐扩展
+        $missingRec = $result->getMissingRecommendedExtensions();
+        if (!empty($missingRec)) {
+            $this->printer->note(__('【推荐扩展】尝试安装...'));
+            foreach ($missingRec as $ext) {
+                if ($this->statusService->hasAttempted('extension', $ext)) {
+                    $recSkipped++;
+                    continue;
+                }
+                $this->printer->note(__('  正在处理推荐扩展: %{ext}', ['ext' => $ext]));
+                $installed = $this->tryInstallExtension($ext);
+                if ($installed) {
+                    $recSuccess++;
+                    $this->statusService->markInstalled('extension', $ext);
+                    $this->printer->success(__('    推荐扩展 %{ext} 已启用 ✔', ['ext' => $ext]));
+                } else {
+                    $recFail++;
+                    $this->statusService->markFailed('extension', $ext, __('自动安装失败'));
+                    $this->printer->warning(__('    推荐扩展 %{ext} 安装失败（不影响系统运行）', ['ext' => $ext]));
+                    $this->printExtensionInstallGuide($ext);
+                }
+            }
+            $this->printer->note('');
+        }
+
+        // 推荐 items（自定义脚本安装）
+        $unsatisfiedRec = $result->getUnsatisfiedRecommendedItems();
+        if (!empty($unsatisfiedRec)) {
+            $this->printer->note(__('【推荐依赖】执行安装脚本...'));
+            $executor = $this->getScriptExecutor();
+            foreach ($unsatisfiedRec as $item) {
+                $name = $item['name'] ?? __('未命名');
+                $modulePath = $item['module_path'] ?? '';
+                if ($this->statusService->hasAttempted('item', $name)) {
+                    $prevStatus = $this->statusService->getStatus('item', $name);
+                    $this->printer->note(__('  推荐项 %{name} 已尝试过（%{status}），跳过', ['name' => $name, 'status' => $prevStatus]));
+                    $recSkipped++;
+                    continue;
+                }
+                if (empty($modulePath)) {
+                    $this->statusService->markFailed('item', $name, __('无模块路径'));
+                    $recFail++;
+                    continue;
+                }
+                $this->printer->note(__('  正在安装推荐项: %{name}', ['name' => $name]));
+                $envDir = $modulePath . DIRECTORY_SEPARATOR . 'env' . DIRECTORY_SEPARATOR;
+                $execResult = $executor->execute($modulePath, $item, $envDir, InstallScriptExecutorInterface::ACTION_INSTALL);
+                if ($execResult->isSuccess()) {
+                    $recSuccess++;
+                    $this->statusService->markInstalled('item', $name, $execResult->getOutput() ?: '');
+                    $this->printer->success(__('    安装成功 ✔'));
+                } else {
+                    $recFail++;
+                    $this->statusService->markFailed('item', $name, $execResult->getErrorOutput() ?: __('安装脚本返回失败'));
+                    $this->printer->warning(__('    安装失败（不影响系统运行）'));
+                    if ($execResult->getErrorOutput()) {
+                        $this->printer->note('    ' . $execResult->getErrorOutput());
+                    }
+                }
+            }
+            $this->printer->note('');
+        }
+
+        // 总结
+        $this->printer->note(__('========== 推荐项安装完成 =========='));
+        if ($recSuccess > 0) {
+            $this->printer->printing(__('成功: %{success} 项', ['success' => $recSuccess]));
+        }
+        if ($recFail > 0) {
+            $this->printer->warning(__('未安装: %{fail} 项（可选，不影响运行）', ['fail' => $recFail]));
+        }
+        if ($recSkipped > 0) {
+            $this->printer->note(__('已跳过: %{skip} 项（之前已尝试，使用 --force 强制重试）', ['skip' => $recSkipped]));
+        }
+        if ($recSuccess === 0 && $recFail === 0 && $recSkipped === 0) {
+            $this->printer->success(__('没有需要安装的推荐项'));
+        }
+        $this->printer->note('');
+        $this->printer->note(__('请再次运行 php bin/w env:check 验证环境'));
     }
 
     /**
