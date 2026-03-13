@@ -89,10 +89,10 @@ if ($channel) {
                             <div class="mb-3">
                                 <label class="form-label"><lang>最低通知级别</lang></label>
                                 <select class="form-select" name="min_type">
-                                    <?php foreach ($types as $type): ?>
-                                    <option value="<?= $type['value'] ?>" 
-                                            <?= ($channelData['min_type'] ?? 'info') === $type['value'] ? 'selected' : '' ?>>
-                                        <?= __('≥') ?> <?= $type['label'] ?>
+                                    <?php foreach ($types as $value => $label): ?>
+                                    <option value="<?= htmlspecialchars($value) ?>" 
+                                            <?= ($channelData['min_type'] ?? 'info') === $value ? 'selected' : '' ?>>
+                                        <?= __('≥') ?> <?= htmlspecialchars($label) ?>
                                     </option>
                                     <?php endforeach; ?>
                                 </select>
