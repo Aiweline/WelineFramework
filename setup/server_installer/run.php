@@ -257,6 +257,15 @@ if (!$fromStep5b) {
     }
 }
 
+// 3b. Linux/macOS 下安装 crontab 依赖（cron:install 需要）；失败不阻断
+if (!$fromStep5b && DIRECTORY_SEPARATOR !== '\\') {
+    echo "Step 3b: 安装 crontab 依赖（cron:install 需要）...\n";
+    $code = $run('bin/w env:install crontab -y');
+    if ($code !== 0) {
+        fwrite(STDERR, "WARNING: crontab 安装失败 (exit $code)。cron:install 可能不可用，可稍后运行 php bin/w env:install crontab -y。\n");
+    }
+}
+
 // 4. （无独立步骤）
 
 // 5. 将 pgsql/bin 加入 PATH（便于 psql / pdo_pgsql 加载 libpq.dll）
