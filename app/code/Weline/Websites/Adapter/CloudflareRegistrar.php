@@ -81,21 +81,19 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
             'help_steps' => [
                 __('【获取 API Token】'),
                 __('1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/'),
-                __('2. 点击右上角头像 → My Profile'),
-                __('3. 左侧菜单选择 API Tokens'),
-                __('4. 点击 Create Token'),
-                __('5. 选择 "Edit zone DNS" 模板（或自定义权限）'),
-                __('6. Zone Resources 选择 "All zones" 或指定域名'),
-                __('7. 点击 Continue to summary → Create Token'),
-                __('8. 复制生成的 API Token 填入上方字段'),
-                __('【权限要求】'),
-                __('- Zone:DNS:Edit（DNS 记录管理必需）'),
-                __('- Zone:Zone:Read（获取域名列表必需）'),
-                __('- Zone:Zone Settings:Edit（可选，修改 DNS 设置）'),
-                __('【获取 Account ID（必填）】'),
-                __('1. 进入任意已添加的域名'),
-                __('2. 在 Overview 页面右下角找到「API」区域'),
-                __('3. 复制「Account ID」填入上方字段'),
+                __('2. 点击右上角头像 → My Profile（我的个人资料）'),
+                __('3. 左侧菜单选择 API Tokens（API 令牌）'),
+                __('4. 点击 Create Token（创建令牌）→ 使用 "Get started" 或 "Create Custom Token"'),
+                __('5. 权限必须包含以下四项（少一项都会导致部分功能报错）：'),
+                __('   • Account → Account Settings → Read（账户设置读：用于自动获取 Account ID）'),
+                __('   • Zone → Zone → Read（Zone 读：获取域名/站点列表与详情）'),
+                __('   • Zone → Zone → Edit（Zone 编辑/区域编辑：含「添加新站点」能力；控制台里若只有「区域」→「区域」→「编辑」，就是这项）'),
+                __('   • Zone → DNS → Edit（DNS 编辑：DNS 记录的增删改查）'),
+                __('6. 【重要】若要支持「添加新域名/新站点」（如 DNS 切换时自动在 CF 建站），「区域资源」必须选 All zones（所有区域）；若只选「指定区域」会报 permission zone.create，无法创建新站点'),
+                __('7. 点击 Continue to summary → Create Token，复制生成的 Token 填入上方「API Token」字段'),
+                __('【Account ID（可选）】'),
+                __('若未填，系统会通过 Account Settings Read 权限自动获取。也可手动填写：'),
+                __('进入任意已添加的域名 → Overview → 右侧「API」区域复制 Account ID'),
             ],
         ];
     }
@@ -629,6 +627,12 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? __('未知错误')) : __('添加域名失败');
             w_log_error(__('[CF] addZone 失败：%{1}, errors=%{2}', [$errorMsg, \json_encode($errors, JSON_UNESCAPED_UNICODE)]), [], 'dns_cdn_switch');
+            if (\stripos($errorMsg, 'zone.create') !== false || \stripos($errorMsg, 'permission') !== false) {
+                $errorMsg .= "\n\n" . __('【解决方法】添加新站点需要 Zone Edit 且区域资源为「所有区域」：') . "\n"
+                    . __('1. 登录 https://dash.cloudflare.com → 我的个人资料 → API 令牌，编辑当前 Token') . "\n"
+                    . __('2. 权限中确保有 Zone → Zone → Edit（控制台可能显示为「区域」→「区域」→「编辑」）') . "\n"
+                    . __('3. 「区域资源」必须选 All zones（所有区域）；只选「指定区域」时无法创建新站点，会报此错误');
+            }
             return [
                 'success' => false,
                 'message' => $errorMsg,
