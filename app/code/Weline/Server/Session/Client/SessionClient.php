@@ -38,7 +38,7 @@ final class SessionClient
             'connect_timeout' => (float)($options['connect_timeout'] ?? 1.0),
             'timeout' => (float)($options['timeout'] ?? 2.0),
             'min_idle' => (int)($options['pool_min_idle'] ?? 1),
-            'max_size' => (int)($options['pool_size'] ?? 2),
+            'max_size' => (int)($options['pool_size'] ?? 8),
             'token_file_name' => (string)($options['token_file_name'] ?? 'session_server.token'),
         ]);
     }
