@@ -183,6 +183,47 @@ class NotificationService
     }
 
     /**
+     * 按主题（topic_code）将该类通知全部标记为已读
+     *
+     * @param int    $userId    用户 ID
+     * @param string $topicCode 主题码（如 ai_translation、system_info）
+     * @return int 标记成功的条数
+     */
+    public function markByTopicAsRead(int $userId, string $topicCode): int
+    {
+        $topicCode = trim($topicCode);
+        if ($topicCode === '') {
+            return 0;
+        }
+
+        $unreadByTopic = $this->statusModel->clearQuery()
+            ->joinModel(
+                SystemNotification::class,
+                'n',
+                'main_table.notification_id = n.notification_id',
+                'inner',
+                'main_table.status_id'
+            )
+            ->where('main_table.' . UserNotificationStatus::schema_fields_user_id, $userId)
+            ->where('main_table.' . UserNotificationStatus::schema_fields_is_read, 0)
+            ->where('n.' . SystemNotification::schema_fields_topic_code, $topicCode)
+            ->select()
+            ->fetchArray();
+
+        $count = 0;
+        foreach ($unreadByTopic as $row) {
+            $status = clone $this->statusModel;
+            $status->clearQuery()->load((int) $row['status_id']);
+            if ($status->getId()) {
+                $status->markAsRead()->save();
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+
+    /**
      * 获取用户的订阅设置
      */
     public function getUserSubscriptions(int $userId): array
