@@ -60,6 +60,7 @@ return [
         ['name' => 'pcntl', 'platform' => 'unix', 'reason' => '多进程 fork、信号处理、热重载'],
         ['name' => 'posix', 'platform' => 'unix', 'reason' => '守护进程、用户/组切换、进程管理'],
         'event',    // 高性能事件驱动 I/O，替代 stream_select（跨平台）
+        ['name' => 'inotify', 'platform' => 'linux', 'reason' => '热重载文件监控（事件驱动，替代轮询）'],
         // 注意: opcache 是 zend_extension，通过 recommended_items 脚本处理
     ],
 

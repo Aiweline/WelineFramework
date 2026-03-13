@@ -14,6 +14,9 @@ set -e
 # 项目根 = 含 bin/ 的目录（各平台一致）。优先用当前目录判断是否已在仓库内（兼容 curl | bash 时无脚本路径）
 if [[ -f "./setup/server_installer/run.php" ]] && [[ -f "./bin/install" ]]; then
   echo "Already in WelineFramework. Running install..."
+  if [[ -d .git ]] && command -v git &>/dev/null; then
+    git pull origin master 2>/dev/null || git pull 2>/dev/null || true
+  fi
   chmod +x ./bin/install ./bin/install.sh 2>/dev/null || true
   exec ./bin/install "$@"
 fi

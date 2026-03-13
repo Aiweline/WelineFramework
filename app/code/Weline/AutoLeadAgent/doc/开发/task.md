@@ -61,7 +61,7 @@
 - [x] WASM 扩展：wasm-bridge.js 集成（agent_brain/mcp_protocol 需 Emscripten 编译）
 - [x] 单元测试补全（SceneMappingServiceTest、AgentConfigTest、SearchEngineMappingService 修复）
 - [x] 更新 README、使用指南、部署指南、快速开始
-- [ ] 支持 inotify 监控（Linux，若适用）
+- [x] 支持 inotify 监控（Linux，若适用）— 由 Weline/Server FileWatcher 实现
 
 ---
 
