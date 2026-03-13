@@ -208,8 +208,16 @@ ensure_weline_user() {
   fi
   echo "User $WELINE_USER created."
   echo ""
-  echo "请为用户 $WELINE_USER 设置登录密码（用于 SSH、sudo 等）："
-  run_privileged passwd "$WELINE_USER"
+  if [[ -n "${WELINE_USER_PASSWORD:-}" ]]; then
+    echo "正在为 $WELINE_USER 设置密码（来自 weline.env 或环境变量 WELINE_USER_PASSWORD）…"
+    echo "$WELINE_USER:$WELINE_USER_PASSWORD" | run_privileged chpasswd || {
+      echo "自动设置密码失败，请手动输入：" >&2
+      run_privileged passwd "$WELINE_USER"
+    }
+  else
+    echo "请为用户 $WELINE_USER 设置登录密码（用于 SSH、sudo 等）："
+    run_privileged passwd "$WELINE_USER"
+  fi
 }
 
 # Linux root 安装时：先创建 weline 用户，项目归属及 initdb 均用此用户
