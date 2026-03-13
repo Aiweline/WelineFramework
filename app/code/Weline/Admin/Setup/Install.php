@@ -11,8 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Setup;
 
-use Weline\Admin\Model\System\SystemNotification;
 use Weline\Backend\Model\Config;
+use Weline\Backend\Model\SystemNotification;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Data;
@@ -61,17 +61,19 @@ class Install implements \Weline\Framework\Setup\InstallInterface
 4、代码模块化，接口以及传统路由分前后台。包括接口，具有后台接口入口，后台url入口。
 5、配置文件统一化。文件位置：app/etc/env.php
 等等...')
-            ->setIsRead()
-            ->setIsIcon(1)
-            ->setIsImg(0)
+            ->setSourceModule('Weline_Admin')
+            ->setType('info')
+            ->setIsIcon(true)
+            ->setIsImg(false)
             ->setAvatar('ri-checkbox-circle-line')
             ->save();
         $model->clearData()
             ->setTitle('框架开发理念！')
             ->setContent('灵活适应性强，高性能的基于PHP8的互联网快速开发框架...')
-            ->setIsRead()
-            ->setIsIcon(0)
-            ->setIsImg(1)
+            ->setSourceModule('Weline_Admin')
+            ->setType('info')
+            ->setIsIcon(false)
+            ->setIsImg(true)
             ->setAvatar('assets/images/users/avatar-3.jpg')
             ->save();
     }
