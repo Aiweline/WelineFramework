@@ -1479,6 +1479,14 @@ class DomainManagement extends BaseController
             }
 
             $targetCredentials = $targetAccount->getCredentials();
+            $targetRegistrarCode = (string) $targetAccount->getRegistrarCode();
+            $targetAccountName = (string) ($targetAccount->getData('account_name') ?: $targetAccount->getName() ?: '');
+            $targetRegistrarName = (string) ($targetAccount->getData('registrar_name') ?: $targetRegistrarCode);
+
+            $sse->sendEvent('info', ['message' => __('目标账户：%{1}（%{2}），账户 ID：%{3}', [
+                $targetAccountName, $targetRegistrarName, (string) $dnsAccountId,
+            ])]);
+
             $nsResult = $targetAdapter->getProviderNameservers($targetCredentials, $domainName);
             if (!($nsResult['success'] ?? false) || empty($nsResult['nameservers'])) {
                 $sse->sendEvent('failed', ['message' => __('无法获取目标 Nameserver：%{1}', [$nsResult['message'] ?? ''])]);
@@ -1486,6 +1494,8 @@ class DomainManagement extends BaseController
                 return;
             }
             $targetNs = $nsResult['nameservers'];
+
+            $sse->sendEvent('info', ['message' => __('目标 Nameserver（%{1}）：%{2}', [$targetRegistrarName, \implode(', ', $targetNs)])]);
 
             $sourceAccountId = (int) $domain->getAccountId();
             $sourceAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
@@ -1502,6 +1512,9 @@ class DomainManagement extends BaseController
                 return;
             }
             $sourceCredentials = $sourceAccount->getCredentials();
+
+            $sourceRegistrarName = (string) ($sourceAccount->getData('registrar_name') ?: $sourceAccount->getRegistrarCode() ?: '');
+            $sse->sendEvent('info', ['message' => __('源注册商：%{1}，将在此处修改 NS 指向', [$sourceRegistrarName])]);
 
             // Step 1: 提交 NS 切换
             $sse->sendEvent('progress', ['message' => __('步骤 1/5：正在向注册商提交新 Nameserver…'), 'step' => 1]);
@@ -1527,13 +1540,14 @@ class DomainManagement extends BaseController
                 $domain->setCdnAccountId($targetAccount->getAccountId());
             }
             $domain->forceCheck(false)->save();
-            $sse->sendEvent('progress', ['message' => __('Nameserver 已提交，等待全球解析生效（每 5 秒检测一次）…'), 'step' => 1]);
+            $sse->sendEvent('progress', ['message' => __('Nameserver 已提交，等待全球解析生效（每 15 秒检测一次）…'), 'step' => 1]);
 
-            // Step 2: 等待 NS 生效，每 5s 检测
+            // Step 2: 等待 NS 生效，每 15s 检测（进度中带目标供应商名，便于核对是否选错账户）
             $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
             $targetNsNormalized = $this->normalizeNameservers($targetNs);
+            $targetProviderName = (string) ($targetAccount->getData('registrar_name') ?: $targetAccount->getRegistrarCode() ?: '');
             $maxWait = 30 * 60; // 30 分钟
-            $interval = 5;
+            $interval = 15;
             $elapsed = 0;
             $sse->sendEvent('info', ['message' => __('等待 NS 生效，最多等待 30 分钟…')]);
             while ($elapsed < $maxWait) {
@@ -1541,10 +1555,13 @@ class DomainManagement extends BaseController
                 $elapsed += $interval;
                 $liveNs = $resolveService->getLiveNameservers($domainName);
                 $liveNormalized = $this->normalizeNameservers($liveNs);
-                $sse->sendEvent('progress', ['message' => __('第 %{1} 秒检测：当前 NS %{2}，目标 NS %{3}', [
+                $targetLabel = $targetProviderName !== ''
+                    ? __('目标 NS（%{1}）：%{2}', [$targetProviderName, \implode(', ', $targetNsNormalized)])
+                    : __('目标 NS：%{1}', [\implode(', ', $targetNsNormalized)]);
+                $sse->sendEvent('progress', ['message' => __('第 %{1} 秒检测：当前 NS %{2}，%{3}', [
                     $elapsed,
                     $liveNormalized === [] ? __('(暂无)') : \implode(', ', $liveNormalized),
-                    \implode(', ', $targetNsNormalized),
+                    $targetLabel,
                 ]), 'step' => 2, 'elapsed' => $elapsed]);
                 if ($liveNormalized === $targetNsNormalized) {
                     $sse->sendEvent('progress', ['message' => __('NS 已生效'), 'step' => 2]);
