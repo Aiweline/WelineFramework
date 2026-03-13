@@ -135,7 +135,13 @@ class DnsCdnAutoSwitch implements CronTaskInterface
             if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
                 $status = (string) ($lifecycle['data']['order']['status'] ?? '');
                 w_log_info(__('[DnsCdnAutoSwitch] %{1} 生命周期状态=%{2}', [$domainName, $status]), [], $logCh);
-                if ($status !== 'completed' && $status !== 'failed') {
+                if ($status !== 'completed') {
+                    if ($status === 'failed') {
+                        $domain->setDnsSwitchPending(0);
+                        $domain->forceCheck(false)->save();
+                        w_log_warning(__('[DnsCdnAutoSwitch] %{1} 生命周期已失败，取消切换', [$domainName]), [], $logCh);
+                        return __('生命周期已失败，取消切换');
+                    }
                     return null;
                 }
             } else {
