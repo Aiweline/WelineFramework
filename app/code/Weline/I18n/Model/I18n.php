@@ -640,11 +640,20 @@ class I18n
                             fclose($handle);
                         }
 
-                        $file_translations = array_merge($module_words, $file_words);
-                        unset($file_words); // 释放中间变量
-                        $file_translations = array_unique($file_translations);
+                        // 只保留从代码收集的键，避免乱码/损坏的 CSV 键被写回；翻译值优先用现有 CSV，疑似乱码则用原文
+                        $file_translations = [];
+                        foreach ($module_words as $key => $defaultVal) {
+                            $val = $file_words[$key] ?? $defaultVal;
+                            if (self::isLikelyCorruptedTranslation($val)) {
+                                $val = $defaultVal;
+                            }
+                            $file_translations[$key] = $val;
+                        }
+                        unset($file_words);
                         $csv_file = @fopen($file->getPathname(), 'w+');
                         if ($csv_file !== false) {
+                            // 写入 UTF-8 BOM，避免在 Windows 下被误存为非 UTF-8 导致乱码
+                            fwrite($csv_file, "\xEF\xBB\xBF");
                             foreach ($file_translations as $key => $value) {
                                 fputcsv($csv_file, [$key, $value], ',', '"', '\\');
                             }
@@ -855,6 +864,21 @@ class I18n
             }
         } catch (\Exception $e) {}
         return 'Weline_' . $module_name;
+    }
+
+    /**
+     * 判断翻译值是否疑似乱码（如 UTF-8 被误存为非 UTF-8 后中文变成 ?）
+     */
+    private static function isLikelyCorruptedTranslation(string $value): bool
+    {
+        if ($value === '') {
+            return false;
+        }
+        if (preg_match('/\?{3,}/', $value)) {
+            return true;
+        }
+        $qCount = substr_count($value, '?');
+        return $qCount >= 5;
     }
 
     private function parseMemoryLimit(string $limit): int
