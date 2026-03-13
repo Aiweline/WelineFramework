@@ -118,14 +118,14 @@ class GnameRegistrarIntegrationTest extends TestCase
     }
 
     /**
-     * 测试：GName modifyDns 返回结构正确（无效凭据场景）
+     * 测试：GName updateNameservers 返回结构正确（无效凭据场景）
      */
-    public function testModifyDnsWithInvalidCredentials(): void
+    public function testUpdateNameserversWithInvalidCredentials(): void
     {
         $adapter = new GnameRegistrar();
 
         try {
-            $result = $adapter->modifyDns('example.com', 'ns1.cf.com,ns2.cf.com', [
+            $result = $adapter->updateNameservers('example.com', ['ns1.cf.com', 'ns2.cf.com'], [
                 'appid' => 'invalid',
                 'appkey' => 'invalid',
             ]);

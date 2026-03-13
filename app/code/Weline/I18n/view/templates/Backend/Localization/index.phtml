@@ -120,15 +120,15 @@ $search = $this->getData('search') ?? '';
                                             </h5>
                                             <div class="d-flex gap-3">
                                                 <div class="d-flex align-items-center">
-                                                    <div class="me-2" style="width: 12px; height: 12px; background-color: #6c757d; border-radius: 50%;"></div>
+                                                    <div class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: var(--backend-color-text-secondary, #6c757d);"></div>
                                                     <small class="text-muted">未安装</small>
                                                 </div>
                                                 <div class="d-flex align-items-center">
-                                                    <div class="me-2" style="width: 12px; height: 12px; background-color: #fd7e14; border-radius: 50%;"></div>
+                                                    <div class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: var(--backend-color-warning, #fd7e14);"></div>
                                                     <small class="text-muted">已安装</small>
                                                 </div>
                                                 <div class="d-flex align-items-center">
-                                                    <div class="me-2" style="width: 12px; height: 12px; background-color: #198754; border-radius: 50%;"></div>
+                                                    <div class="me-2 rounded-circle" style="width: 12px; height: 12px; background-color: var(--backend-color-success, #198754);"></div>
                                                     <small class="text-muted">已激活</small>
                                                 </div>
                                             </div>
@@ -232,7 +232,7 @@ $search = $this->getData('search') ?? '';
                                                     <button type="button" class="btn btn-success rounded-pill px-3" onclick="batchAction('activate')" title="批量激活">
                                                         <i class="ri-play-line me-1"></i>激活
                                                     </button>
-                                                    <button type="button" class="btn btn-warning rounded-pill px-3" onclick="batchAction('deactivate')" title="批量停用">
+                                                    <button type="button" class="btn btn-warning rounded-pill px-3 text-dark" onclick="batchAction('deactivate')" title="批量停用">
                                                         <i class="ri-pause-line me-1"></i>停用
                                                     </button>
                                                 </div>
@@ -303,7 +303,7 @@ $search = $this->getData('search') ?? '';
                                                     </td>
                                                     <td class="text-center">
                                                         <?php if (!empty($locale['iso3'])): ?>
-                                                            <span class="badge bg-warning bg-opacity-10 text-warning fw-medium px-2 py-1 rounded-pill" title="ISO 639-2">
+                                                            <span class="badge bg-warning bg-opacity-10 fw-medium px-2 py-1 rounded-pill" title="ISO 639-2" style="color: var(--backend-color-text-primary, #212529);">
                                                                 <?= htmlspecialchars($locale['iso3']) ?>
                                                             </span>
                                                         <?php else: ?>
@@ -341,7 +341,7 @@ $search = $this->getData('search') ?? '';
                                                                 <i class="ri-check-circle-fill me-1"></i>激活
                                                             </span>
                                                         <?php elseif ($locale['is_install']): ?>
-                                                            <span class="badge bg-warning bg-opacity-10 text-warning px-2 py-1 rounded-pill">
+                                                            <span class="badge bg-warning bg-opacity-10 px-2 py-1 rounded-pill" style="color: var(--backend-color-text-primary, #212529);">
                                                                 <i class="ri-download-line me-1"></i>已安装
                                                             </span>
                                                         <?php else: ?>
@@ -379,7 +379,7 @@ $search = $this->getData('search') ?? '';
                                                                 </a>
                                                             <?php else: ?>
                                                                 <a href="@backend-url('*/backend/localization/deactivate')?locale_code=<?= $locale['code'] ?>" 
-                                                                   class="btn btn-warning btn-sm rounded-pill px-3"
+                                                                   class="btn btn-warning btn-sm rounded-pill px-3 text-dark"
                                                                    onclick="return confirm('确定要停用 <?= $locale['code'] ?> 区域吗？')"
                                                                    title="停用">
                                                                    <i class="ri-pause-line me-1"></i>停用

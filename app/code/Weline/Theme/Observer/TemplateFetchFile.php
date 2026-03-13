@@ -16,6 +16,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Session;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
 
@@ -86,14 +87,29 @@ class TemplateFetchFile implements ObserverInterface
         }
 
         # 开始分析主题路径
-        // 检查是否有预览主题（从请求参数获取）
+        // 检查是否有预览主题：优先 URL 参数 preview_theme，其次 Session（兜底，避免重定向丢失参数）
         $previewThemeId = 0;
+        $previewThemeArea = '';
         if (!CLI) {
             try {
                 $request = ObjectManager::getInstance(Request::class);
                 $previewThemeId = (int)$request->getParam('preview_theme', 0);
+                if (!$previewThemeId) {
+                    $session = ObjectManager::getInstance(Session::class);
+                    $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
+                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+                } else {
+                    $session = ObjectManager::getInstance(Session::class);
+                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+                }
+                // 校验区域：仅当模板路径对应预览区域时才使用预览主题
+                if ($previewThemeId && $previewThemeArea) {
+                    $areaFromPath = str_contains($module_file_path, 'theme/frontend') ? 'frontend' : (str_contains($module_file_path, 'theme/backend') ? 'backend' : '');
+                    if ($areaFromPath !== '' && $areaFromPath !== $previewThemeArea) {
+                        $previewThemeId = 0;
+                    }
+                }
             } catch (\Throwable $e) {
-                // 如果获取 Request 失败，忽略预览逻辑
                 $previewThemeId = 0;
             }
         }

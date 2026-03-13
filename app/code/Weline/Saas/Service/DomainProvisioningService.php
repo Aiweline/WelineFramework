@@ -102,17 +102,25 @@ class DomainProvisioningService
         // 执行购买流程
         $this->recordStep($orderId, ProvisioningOrder::STEP_PURCHASE, 'running', '', 0, []);
 
-        $items = [
-            [
-                'domain' => $domain,
-                'years' => $years,
-                'website_id' => $websiteId,
-                'auto_create_site' => $autoCreateSite,
-            ],
+        $item = [
+            'domain' => $domain,
+            'years' => $years,
+            'website_id' => $websiteId,
+            'auto_create_site' => $autoCreateSite,
         ];
+        if ($dnsVendor !== '' && $dnsAccountId > 0) {
+            $item['dns_choice'] = 'provider_account';
+            $item['dns_provider'] = $dnsVendor;
+            $item['dns_account_id'] = $dnsAccountId;
+        }
+        if ($cdnVendor !== '' && $cdnAccountId > 0) {
+            $item['cdn_choice'] = 'provider_account';
+            $item['cdn_provider'] = $cdnVendor;
+            $item['cdn_account_id'] = $cdnAccountId;
+        }
         $result = w_query('websites', 'purchaseDomain', [
             'account_id' => $registrarAccountId,
-            'items'      => $items,
+            'items'      => [$item],
         ]);
 
         if (!($result['success'] ?? false)) {

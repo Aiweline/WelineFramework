@@ -273,7 +273,8 @@ class DnsCdnAutoSwitch implements CronTaskInterface
         $pools = $poolModel->clearQuery()
             ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems();
 
         foreach ($pools as $pool) {
             $pool->setDnsStatus(DomainPool::INFRA_STATUS_SWITCHING);
@@ -294,7 +295,8 @@ class DnsCdnAutoSwitch implements CronTaskInterface
         $pools = $poolModel->clearQuery()
             ->where(DomainPool::schema_fields_ROOT_DOMAIN, \strtolower($rootDomain))
             ->select()
-            ->fetch();
+            ->fetch()
+            ->getItems();
 
         foreach ($pools as $pool) {
             $pool->setDnsProvider($dnsProvider);

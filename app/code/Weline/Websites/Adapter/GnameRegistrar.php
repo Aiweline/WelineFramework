@@ -14,9 +14,10 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
+use Weline\Websites\Api\AccountInfoInterface;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
-class GnameRegistrar implements DomainRegistrarInterface
+class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 {
     /** 官方文档使用的 API 地址，可避免 api.gname.com 被 Cloudflare 返回 HTML 验证页 */
     private const DEFAULT_API_HOST = 'www.gname.com';
@@ -367,14 +368,14 @@ class GnameRegistrar implements DomainRegistrarInterface
     // ──────────────────────────────────────────
 
     /**
-     * 修改域名 NS（切换到 Cloudflare 等第三方 NS）
+     * 修改域名 NS（内部实现，由 updateNameservers() 调用）
      *
      * @param string $domain 域名
      * @param string $dnsServers 逗号分隔的 NS，如 "ns1.cf.com,ns2.cf.com"
      * @param array $credentials API 凭据
      * @return array{success: bool, message: string}
      */
-    public function modifyDns(string $domain, string $dnsServers, array $credentials): array
+    private function modifyDns(string $domain, string $dnsServers, array $credentials): array
     {
         $this->validateCredentials($credentials);
 
@@ -421,9 +422,25 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
+     * @inheritDoc
+     */
+    public function getAccountBalance(array $credentials): array
+    {
+        return $this->getBalance($credentials);
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function getContactTemplates(array $credentials): array
+    {
+        return $this->getTemplates($credentials);
+    }
+
+    /**
      * 获取联系人模板列表
      */
-    public function getTemplates(array $credentials): array
+    private function getTemplates(array $credentials): array
     {
         $this->validateCredentials($credentials);
 
@@ -441,7 +458,7 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
-     * 获取 TLD 价格列表
+     * @inheritDoc
      */
     public function getTldPrices(array $credentials): array
     {
@@ -461,9 +478,9 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
-     * 获取账户余额信息
+     * 获取账户余额信息（内部实现）
      */
-    public function getBalance(array $credentials): array
+    private function getBalance(array $credentials): array
     {
         $this->validateCredentials($credentials);
 
