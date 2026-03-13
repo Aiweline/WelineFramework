@@ -118,9 +118,9 @@ $user_contacts = $user_contacts ?? [];
                                                     data-channel="<?= $channelCode ?>"
                                                     onchange="WelineSubscription.saveMinType(this)"
                                                     style="font-size: 0.75rem; padding: 0.1rem 1.5rem 0.1rem 0.25rem;">
-                                                <?php foreach ($types as $type): ?>
-                                                <option value="<?= $type['value'] ?>" <?= $type['value'] === $minType ? 'selected' : '' ?>>
-                                                    <?= __('≥') ?> <?= $type['label'] ?>
+                                                <?php foreach ($types as $value => $label): ?>
+                                                <option value="<?= htmlspecialchars($value) ?>" <?= $value === $minType ? 'selected' : '' ?>>
+                                                    <?= __('≥') ?> <?= htmlspecialchars($label) ?>
                                                 </option>
                                                 <?php endforeach; ?>
                                             </select>
