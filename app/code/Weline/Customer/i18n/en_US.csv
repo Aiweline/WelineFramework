@@ -1,4 +1,4 @@
-请先登录,"Please log in first"
+﻿请先登录,"Please log in first"
 请输入原密码,"Please enter your current password"
 原密码错误,"Current password is incorrect"
 新密码长度不能少于6位,"New password must be at least 6 characters"
@@ -142,11 +142,3 @@ Session标识,"Session ID"
 确认密码,确认密码
 再次输入密码,再次输入密码
 安全设置,安全设置
-我的账户,我的账户
-"您好, %{1}","您好, %{1}"
-用户,用户
-账户及心愿单,账户及心愿单
-"您好, 登录","您好, 登录"
-重置令牌,"Reset Tokens"
-删除客户,"Delete Customer"
-客户管理,"Customer Management"

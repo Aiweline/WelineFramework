@@ -1,4 +1,4 @@
-无效的筛选配置,"Invalid filter configuration"
+﻿无效的筛选配置,"Invalid filter configuration"
 筛选配置已保存,"Filter configuration saved"
 "保存失败: %1","Save failed: %1"
 无效的价格区间配置,"Invalid price range configuration"
@@ -82,5 +82,3 @@ EAV属性筛选,"EAV attribute filter"
 收起筛选,"Show Less"
 "共 %{count} 件商品","共 %{count} 件商品"
 该分类下暂无商品,该分类下暂无商品
-子分类,Subcategories
-上级分类,"Parent Category"

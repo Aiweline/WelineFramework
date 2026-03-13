@@ -1,4 +1,4 @@
-请求方法不允许,请求方法不允许
+﻿请求方法不允许,请求方法不允许
 无效的产品ID,无效的产品ID
 请先登录,请先登录
 产品不存在,产品不存在
@@ -161,15 +161,3 @@ Tax,Tax
 "Close cart","Close cart"
 "Shipping and taxes calculated at checkout","Shipping and taxes calculated at checkout"
 Checkout,Checkout
-在购物车商品列表前渲染内容。,在购物车商品列表前渲染内容。
-在购物车商品列表后渲染内容。,在购物车商品列表后渲染内容。
-购物车总计前,购物车总计前
-在购物车总计区域前渲染内容。,在购物车总计区域前渲染内容。
-购物车总计后,购物车总计后
-在购物车总计区域后渲染内容。,在购物车总计区域后渲染内容。
-购物车侧边栏,购物车侧边栏
-购物车页面侧边栏区域，可用于展示促销信息、推荐商品等。,购物车页面侧边栏区域，可用于展示促销信息、推荐商品等。
-在迷你购物车商品列表前渲染内容。,在迷你购物车商品列表前渲染内容。
-在迷你购物车商品列表后渲染内容。,在迷你购物车商品列表后渲染内容。
-Discount,Discount
-"Looks like you haven't added anything to your cart yet.","Looks like you haven't added anything to your cart yet."

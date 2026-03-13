@@ -1,4 +1,4 @@
-"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
+﻿"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
 "系统定时任务：%{1} ,未安装！","系统定时任务：%{1} ,未安装！"
 系统-其他定时任务：,系统-其他定时任务：
 "检测到 crontab 命令不可用，正在尝试自动安装依赖...","Crontab command not found"
@@ -59,38 +59,3 @@ ID,ID
 上次运行,上次运行
 下次运行,下次运行
 锁定,锁定
-h,h
-一共有,一共有
-条数据,条数据
-调度任务,调度任务
-进程ID,进程ID
-模组,模组
-执行类名,执行类名
-调度状态,调度状态
-运行时长,运行时长
-阻塞时长（单位：秒）,阻塞时长（单位：秒）
-阻塞超时解锁时长,阻塞超时解锁时长
-阻塞解锁次数,阻塞解锁次数
-上次运行时间,上次运行时间
-上次运行日期,上次运行日期
-预计下次运行日期,预计下次运行日期
-运行次数,运行次数
-运行时错误,运行时错误
-运行时错误日期,运行时错误日期
-创建时间,"Create time"
-更新时间,"Update time"
-次,次
-任务停止,任务停止
-计划任务调度管理器,计划任务调度管理器
-系统,系统
-"Weline Admin 管理面板","Weline Admin 管理面板"
-"系统-其他定时任务： ","系统-其他定时任务： "
-"系统-定时计划任务： ","系统-定时计划任务： "
-"请指定要执行的任务！php bin/w cron:task:run demo -f","请指定要执行的任务！php bin/w cron:task:run demo -f"
-"系统定时任务安装失败：%{1} 遇到权限问题，请按照上述步骤添加权限！或者使用管理员运行：php bin/w cron:install","系统定时任务安装失败：%{1} 遇到权限问题，请按照上述步骤添加权限！或者使用管理员运行：php bin/w cron:install"
-"系统计划任务：%{1} ,运行失败!任务正在运行!稍后重试~！使用php bin/w cron:listing 检查！","系统计划任务：%{1} ,运行失败!任务正在运行!稍后重试~！使用php bin/w cron:listing 检查！"
-"系统计划任务：%{1} ,运行失败!任务未安装!请执行：php bin/w cron:install 安装计划任务后重试！","系统计划任务：%{1} ,运行失败!任务未安装!请执行：php bin/w cron:install 安装计划任务后重试！"
-"系统计划任务 %{1} 移除失败！可能权限不足，考虑使用管理员运行！php bin/w cron:remove","系统计划任务 %{1} 移除失败！可能权限不足，考虑使用管理员运行！php bin/w cron:remove"
-"系统计划任务 %{1} 尚未安装！请执行：php bin/w cron:install 安装计划任务！","Cron job %{1} not installed. Run: php bin/w cron:install"
-"crontab 自动安装失败，请手动执行: php bin/w env:install crontab -y","Crontab auto-install failed. Run manually: php bin/w env:install crontab -y"
-"若因 crontab 未安装导致失败，请执行: php bin/w env:install crontab -y 后重试","If failed due to missing crontab"

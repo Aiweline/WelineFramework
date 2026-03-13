@@ -1,4 +1,4 @@
-分类管理,"Category Management"
+﻿分类管理,"Category Management"
 博客管理,"Blog Management"
 新建分类,"Create Category"
 名称和URL别名不能为空,"Name and URL slug cannot be empty"
@@ -311,82 +311,3 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 发布时间：,"Published At:"
 摘要：,Summary:
 返回博客列表,"Back to Blog List"
-快速新建站点,快速新建站点
-选择域名（可选）,选择域名（可选）
-从域名池选择后可自动填充站点名称、代码和URL,从域名池选择后可自动填充站点名称、代码和URL
-站点URL,站点URL
-例如：https://example.com,例如：https://example.com
-请输入有效的站点URL,请输入有效的站点URL
-"未配置 AI 默认模型","未配置 AI 默认模型"
-"AI 默认模型配置无效（模型代码 %{1} 不存在）","AI 默认模型配置无效（模型代码 %{1} 不存在）"
-"AI 默认模型 ""%{1}"" 未激活","AI 默认模型 ""%{1}"" 未激活"
-加密密钥,加密密钥
-留空自动生成,留空自动生成
-生成,生成
-用于数据加密传输，建议自动生成,用于数据加密传输，建议自动生成
-用户类型,用户类型
-前台用户,前台用户
-后台用户,后台用户
-启用站点,启用站点
-执行出错，请查看终端输出。,执行出错，请查看终端输出。
-请选择页面和画像,请选择页面和画像
-该页面+画像的配额已存在,该页面+画像的配额已存在
-所选页面不存在,所选页面不存在
-所选分类必须属于该页面关联的站点,所选分类必须属于该页面关联的站点
-请先在「趋势站点配额」中配置：首页、画像、每日篇数、默认分类。,请先在「趋势站点配额」中配置：首页、画像、每日篇数、默认分类。
-配额未关联有效首页,配额未关联有效首页
-默认分类不存在或不属于该页面关联的站点,默认分类不存在或不属于该页面关联的站点
-"选择 PageBuilder 首页，AI 生成文章将使用该首页的语言设置。","选择 PageBuilder 首页，AI 生成文章将使用该首页的语言设置。"
-该首页关联站点下的博客分类，用于自动发文归属；未设置则跳过该绑定。,该首页关联站点下的博客分类，用于自动发文归属；未设置则跳过该绑定。
-"AI 生成进度","AI 生成进度"
-正在连接…,正在连接…
-配额数,配额数
-正在生成第,正在生成第
-篇,篇
-已生成,已生成
-生成失败,生成失败
-可能原因：请检查配额、默认分类与画像关键词。,可能原因：请检查配额、默认分类与画像关键词。
-连接中断或请求失败，请重试。,连接中断或请求失败，请重试。
-连接中断，请重试,连接中断，请重试
-请求失败，请重试,"Request failed, please retry"
-"从趋势增长词中取词，调用 AI 生成文章（草稿）","Pick trending keywords and generate articles via AI (as draft)"
-"在 serpapi.com 注册并获取 API Key，用于拉取 Google Trends 数据。","Register at serpapi.com and get API Key for Google Trends data."
-"1. 访问 https://serpapi.com 注册账号；","1. Visit https://serpapi.com to register;"
-新建画像,"New Profile"
-新建配额,"New Quota"
-"自动发文完成：本次发布 %{1} 篇","Auto publish done: %{1} posts published"
-"趋势同步完成：写入 %{1} 条增长词记录","Trend sync done: %{1} growth records written"
-请输入文章内容（支持HTML）,请输入文章内容（支持HTML）
-支持HTML格式，可以使用富文本编辑器,支持HTML格式，可以使用富文本编辑器
-封面图片URL,"Cover Image URL"
-例如：https://example.com/image.jpg,例如：https://example.com/image.jpg
-文章封面图片的完整URL地址,文章封面图片的完整URL地址
-"当前第 %{page} 页","Page %{page}"
-文章管理,"Post Management"
-博客列表,"Blog List"
-全部,All
-关于我们,"About Us"
-联系我们,"Contact Us"
-隐私政策,"Privacy Policy"
-服务条款,"Terms of Service"
-标签：,Tags:
-分享：,Share:
-相关文章,"Related Posts"
-暂无文章,"No Posts"
-欢迎访问我们的博客，这里有最新的资讯和文章。,"Welcome to our blog."
-快速链接,"Quick Links"
-没有支持当前页面类型的样式模板,"No templates support this page type"
-所有类型,"All Types"
-自定义页面,"Custom Page"
-查看趋势增长词日志,"View trending keyword logs"
-查看增长词日志列表,"View trending keyword log list"
-标记已使用,"Mark as Used"
-标记增长词为已使用,"Mark trending keyword as used"
-标记未使用,"Mark as Unused"
-标记增长词为未使用,"Mark trending keyword as unused"
-删除日志,"Delete Log"
-删除增长词日志,"Delete trending keyword log"
-清理指定天数前的旧日志,"Clear logs older than specified days"
-手动生成SEO文章,"Manually Generate SEO Articles"
-"手动触发 AI 生成 SEO 博客文章","Manually trigger AI to generate SEO blog articles"
-审批并发布草稿文章,"Approve and publish draft article"
