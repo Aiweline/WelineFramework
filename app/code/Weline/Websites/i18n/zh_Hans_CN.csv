@@ -100,11 +100,20 @@
 "DNS 记录更新成功","DNS 记录更新成功"
 删除记录失败,删除记录失败
 "DNS 记录删除成功","DNS 记录删除成功"
+"[CF] batchAddDnsRecords 开始：domain=%{1}, 记录数=%{2}","[CF] batchAddDnsRecords 开始：domain=%{1}, 记录数=%{2}"
+"[CF] batchAddDnsRecords 完成：domain=%{1}, 成功=%{2}, 失败=%{3}","[CF] batchAddDnsRecords 完成：domain=%{1}, 成功=%{2}, 失败=%{3}"
+"[CF] batchAddDnsRecords 失败详情：%{1}","[CF] batchAddDnsRecords 失败详情：%{1}"
 "Cloudflare 不支持通过 API 修改 Nameserver。请在域名注册商处将 Nameserver 切换到 Cloudflare 分配的服务器。","Cloudflare 不支持通过 API 修改 Nameserver。请在域名注册商处将 Nameserver 切换到 Cloudflare 分配的服务器。"
 "Cloudflare 需要指定域名才能获取分配的 Nameserver","Cloudflare 需要指定域名才能获取分配的 Nameserver"
+"[CF] getProviderNameservers：domain=%{1}","[CF] getProviderNameservers：domain=%{1}"
+"[CF] 域名已在 Zone 中，ns=%{1}","[CF] 域名已在 Zone 中，ns=%{1}"
 "域名已在 Cloudflare 中，使用已分配的 Nameserver","域名已在 Cloudflare 中，使用已分配的 Nameserver"
+"[CF] 域名不在 Zone 中，自动添加","[CF] 域名不在 Zone 中，自动添加"
 "域名已添加到 Cloudflare","域名已添加到 Cloudflare"
+"[CF] getProviderNameservers 失败：%{1}","[CF] getProviderNameservers 失败：%{1}"
 "无法获取 Cloudflare Nameserver","无法获取 Cloudflare Nameserver"
+"[CF] addZone 请求：domain=%{1}","[CF] addZone 请求：domain=%{1}"
+"[CF] addZone 失败：无法获取 Account ID","[CF] addZone 失败：无法获取 Account ID"
 "无法自动获取 Cloudflare Account ID。","无法自动获取 Cloudflare Account ID。"
 【解决方案】,【解决方案】
 "方案一：创建 Token 时添加「Account → Account Settings → Read」权限","方案一：创建 Token 时添加「Account → Account Settings → Read」权限"
@@ -113,7 +122,10 @@
 "2. 进入任意已添加的域名","2. 进入任意已添加的域名"
 "3. 在右下角「API」区域找到「Account ID」","3. 在右下角「API」区域找到「Account ID」"
 "4. 复制并填入本系统的账户配置中","4. 复制并填入本系统的账户配置中"
+"[CF] 创建 Zone：account_id=%{1}, type=full","[CF] 创建 Zone：account_id=%{1}, type=full"
 添加域名失败,添加域名失败
+"[CF] addZone 失败：%{1}, errors=%{2}","[CF] addZone 失败：%{1}, errors=%{2}"
+"[CF] addZone 成功：zone_id=%{1}, ns=%{2}","[CF] addZone 成功：zone_id=%{1}, ns=%{2}"
 "域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}","域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}"
 "获取 Cloudflare Account ID 失败：%{1}","获取 Cloudflare Account ID 失败：%{1}"
 "Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限","Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限"
@@ -140,7 +152,7 @@
 "5. 协议签署完成后可查看 APP ID 和 APP Key","5. 协议签署完成后可查看 APP ID 和 APP Key"
 "6. 将 APP ID 填入上方「APP ID」字段","6. 将 APP ID 填入上方「APP ID」字段"
 "7. 将 APP Key 填入上方「APP Key」字段","7. 将 APP Key 填入上方「APP Key」字段"
-"8. API 域名保持默认（api.gname.com）即可","8. API 域名保持默认（api.gname.com）即可"
+"8. API 域名建议使用 www.gname.com（与官方文档一致；若遇非 JSON 响应可改为 api.gname.com 重试）","8. API 域名建议使用 www.gname.com（与官方文档一致；若遇非 JSON 响应可改为 api.gname.com 重试）"
 "GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）","GName API 连接失败：%{1}（错误码：%{2}，请求ID：%{3}，AppID：%{4}，API地址：%{5}）"
 "GName API 连接失败：%{1}","GName API 连接失败：%{1}"
 域名不能为空,域名不能为空
@@ -152,7 +164,13 @@
 "API 请求失败","API 请求失败"
 获取域名列表失败：%{1}（错误码：%{2}）,获取域名列表失败：%{1}（错误码：%{2}）
 获取域名详情失败：%{1}（错误码：%{2}）,获取域名详情失败：%{1}（错误码：%{2}）
+"[GName] modifyDns 请求：domain=%{1}, dns=%{2}","[GName] modifyDns 请求：domain=%{1}, dns=%{2}"
+"[GName] xgdns 响应：code=%{1}, msg=%{2}","[GName] xgdns 响应：code=%{1}, msg=%{2}"
+"[GName] xgdns 失败，回退到 api/domain/dns","[GName] xgdns 失败，回退到 api/domain/dns"
+"[GName] dns 回退响应：code=%{1}, msg=%{2}","[GName] dns 回退响应：code=%{1}, msg=%{2}"
+"[GName] NS 切换成功：%{1} → %{2}","[GName] NS 切换成功：%{1} → %{2}"
 "DNS 修改成功","DNS 修改成功"
+"[GName] NS 切换失败：%{1}, code=%{2}, msg=%{3}","[GName] NS 切换失败：%{1}, code=%{2}, msg=%{3}"
 "DNS 修改失败：%{1}（错误码：%{2}）","DNS 修改失败：%{1}（错误码：%{2}）"
 获取联系人模板列表失败：%{1}（错误码：%{2}）,获取联系人模板列表失败：%{1}（错误码：%{2}）
 "获取 TLD 价格列表失败：%{1}（错误码：%{2}）","获取 TLD 价格列表失败：%{1}（错误码：%{2}）"
@@ -162,8 +180,10 @@
 安全限制：禁止使用注册接口执行可用性检查，以避免误购买,安全限制：禁止使用注册接口执行可用性检查，以避免误购买
 "GName API 请求失败：%{1}","GName API 请求失败：%{1}"
 网络错误,网络错误
-"GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
+"HTTP 状态: %{1} | 请求 URL: %{2} | 响应内容摘要: %{3}","HTTP 状态: %{1} | 请求 URL: %{2} | 响应内容摘要: %{3}"
 空响应,空响应
+"GName API 返回了非 JSON 响应（可能是 Cloudflare 验证页面或错误页面）。","GName API 返回了非 JSON 响应（可能是 Cloudflare 验证页面或错误页面）。"
+"GName API 响应解析失败：%{1}","GName API 响应解析失败：%{1}"
 域名已在当前账号下,域名已在当前账号下
 域名已在当前账号下，已按成功处理：%{message},域名已在当前账号下，已按成功处理：%{message}
 "GName 购买结果二次确认失败：%{domain}，错误：%{error}","GName 购买结果二次确认失败：%{domain}，错误：%{error}"
@@ -175,6 +195,7 @@
 "DNS 记录添加失败：%{1}（错误码：%{2}）","DNS 记录添加失败：%{1}（错误码：%{2}）"
 "DNS 记录更新失败：%{1}（错误码：%{2}）","DNS 记录更新失败：%{1}（错误码：%{2}）"
 "DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
+"[GName] updateNameservers：domain=%{1}, ns=%{2}","[GName] updateNameservers：domain=%{1}, ns=%{2}"
 "GName 默认 DNS 服务器","GName 默认 DNS 服务器"
 （试运行模式，不会实际删除）,（试运行模式，不会实际删除）
 未发现非法域名记录,未发现非法域名记录
@@ -237,6 +258,7 @@
 导入失败：%{error},导入失败：%{error}
 同步失败：%{error},同步失败：%{error}
 请选择要删除的域名,请选择要删除的域名
+"ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。","ID %{1}（%{2}）：该根域名正在被网站使用，不能删除。请先删除相关网站或解除域名绑定后再删除该域名。"
 "删除完成：%{1} 个根域，%{2} 条池记录，%{3} 条 DNS 记录","删除完成：%{1} 个根域，%{2} 条池记录，%{3} 条 DNS 记录"
 "（%{1} 个失败）","（%{1} 个失败）"
 删除失败：%{1},删除失败：%{1}
@@ -336,11 +358,40 @@
 注册商适配器不存在,注册商适配器不存在
 "NS 切换失败","NS 切换失败"
 "切换完成：成功 %{1}，跳过（已是该账户）%{2}，失败 %{3}","切换完成：成功 %{1}，跳过（已是该账户）%{2}，失败 %{3}"
+"开始 DNS/CDN 切换，共 %{1} 个域名","开始 DNS/CDN 切换，共 %{1} 个域名"
+"[DnsSwitchSSE] 开始切换，domain_ids=%{1}, target=%{2}","[DnsSwitchSSE] 开始切换，domain_ids=%{1}, target=%{2}"
+目标账户验证通过：%{1}(%{2}),目标账户验证通过：%{1}(%{2})
+"[DnsSwitchSSE] 域名 ID %{1} 不存在","[DnsSwitchSSE] 域名 ID %{1} 不存在"
+已是该账户，跳过,已是该账户，跳过
+"[DnsSwitchSSE] 开始处理 %{1}（%{2}/%{3}）","[DnsSwitchSSE] 开始处理 %{1}（%{2}/%{3}）"
+"同步当前 DNS 记录到本地","同步当前 DNS 记录到本地"
+"DNS 记录同步完成","DNS 记录同步完成"
+"[DnsSwitchSSE] %{1} 记录同步完成","[DnsSwitchSSE] %{1} 记录同步完成"
+"[DnsSwitchSSE] %{1} 记录同步异常（非致命）：%{2}","[DnsSwitchSSE] %{1} 记录同步异常（非致命）：%{2}"
+"获取目标 Nameserver（%{1}）","获取目标 Nameserver（%{1}）"
+"[DnsSwitchSSE] %{1} 获取目标 NS 失败：%{2}","[DnsSwitchSSE] %{1} 获取目标 NS 失败：%{2}"
+"获取到 NS：%{1}","获取到 NS：%{1}"
+"[DnsSwitchSSE] %{1} 目标 NS=%{2}","[DnsSwitchSSE] %{1} 目标 NS=%{2}"
+注册商账户不存在,注册商账户不存在
+"注册商适配器 %{1} 不存在","注册商适配器 %{1} 不存在"
+"在注册商 %{1} 切换 NS","在注册商 %{1} 切换 NS"
+"[DnsSwitchSSE] %{1} NS 切换失败：%{2}","[DnsSwitchSSE] %{1} NS 切换失败：%{2}"
+"NS 切换成功","NS 切换成功"
+"[DnsSwitchSSE] %{1} NS 切换成功","[DnsSwitchSSE] %{1} NS 切换成功"
+"设置 DNS 记录迁移标记，由定时任务推送到 %{1}","设置 DNS 记录迁移标记，由定时任务推送到 %{1}"
+域名状态已更新,域名状态已更新
+域名池状态已更新（switching）,域名池状态已更新（switching）
+"域名 %{1} 切换完成","域名 %{1} 切换完成"
+"[DnsSwitchSSE] %{1} 切换完成","[DnsSwitchSSE] %{1} 切换完成"
+"全部完成：成功 %{1}，跳过 %{2}，失败 %{3}","全部完成：成功 %{1}，跳过 %{2}，失败 %{3}"
+"[DnsSwitchSSE] 全部完成：success=%{1}, skipped=%{2}, failed=%{3}","[DnsSwitchSSE] 全部完成：success=%{1}, skipped=%{2}, failed=%{3}"
+"[DnsSwitchSSE] 致命异常：%{1}","[DnsSwitchSSE] 致命异常：%{1}"
 请选择要取消拉取的域名,请选择要取消拉取的域名
 "批量取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录","批量取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录"
 批量取消拉取失败：%{1},批量取消拉取失败：%{1}
 该账户下没有已同步的域名,该账户下没有已同步的域名
 "取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录","取消拉取完成：删除 %{1} 个根域，%{2} 个域名池记录，%{3} 条 DNS 记录"
+"（跳过 %{1} 个：正在被网站使用，请先删除相关网站或解除绑定）","（跳过 %{1} 个：正在被网站使用，请先删除相关网站或解除绑定）"
 取消拉取失败：%{1},取消拉取失败：%{1}
 请输入域名,请输入域名
 无法解析根域名，请检查输入,无法解析根域名，请检查输入
@@ -414,18 +465,59 @@
 执行失败,执行失败
 "DNS/CDN 自动切换","DNS/CDN 自动切换"
 "域名就绪后自动切换 DNS/CDN 服务商并迁移记录","域名就绪后自动切换 DNS/CDN 服务商并迁移记录"
-"DNS/CDN 自动切换异常：%{domain} - %{error}","DNS/CDN 自动切换异常：%{domain} - %{error}"
+"[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}","[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}"
+"[DnsCdnAutoSwitch] 开始处理域名：%{1}","[DnsCdnAutoSwitch] 开始处理域名：%{1}"
+"[DnsCdnAutoSwitch] 域名 %{1} 切换成功","[DnsCdnAutoSwitch] 域名 %{1} 切换成功"
+"[DnsCdnAutoSwitch] 域名 %{1} 跳过（生命周期未就绪）","[DnsCdnAutoSwitch] 域名 %{1} 跳过（生命周期未就绪）"
+"[DnsCdnAutoSwitch] 域名 %{1} 切换失败：%{2}","[DnsCdnAutoSwitch] 域名 %{1} 切换失败：%{2}"
+"[DnsCdnAutoSwitch] 域名 %{1} 异常：%{2}","[DnsCdnAutoSwitch] 域名 %{1} 异常：%{2}"
+"[DnsCdnAutoSwitch] 执行完毕：%{1}","[DnsCdnAutoSwitch] 执行完毕：%{1}"
+"[DnsCdnAutoSwitch] %{1} 目标 DNS 账户未设置，取消切换","[DnsCdnAutoSwitch] %{1} 目标 DNS 账户未设置，取消切换"
 "目标 DNS 账户未设置，取消切换","目标 DNS 账户未设置，取消切换"
+"[DnsCdnAutoSwitch] %{1} 目标 DNS 账户 ID=%{2}，检查生命周期","[DnsCdnAutoSwitch] %{1} 目标 DNS 账户 ID=%{2}，检查生命周期"
+"[DnsCdnAutoSwitch] %{1} 生命周期状态=%{2}","[DnsCdnAutoSwitch] %{1} 生命周期状态=%{2}"
+"[DnsCdnAutoSwitch] %{1} 无生命周期数据，视为可切换","[DnsCdnAutoSwitch] %{1} 无生命周期数据，视为可切换"
+"[DnsCdnAutoSwitch] %{1} Saas 查询失败（%{2}），视为可切换","[DnsCdnAutoSwitch] %{1} Saas 查询失败（%{2}），视为可切换"
+"[DnsCdnAutoSwitch] %{1} 未关联注册商账户","[DnsCdnAutoSwitch] %{1} 未关联注册商账户"
+"[DnsCdnAutoSwitch] %{1} 目标 DNS 账户 ID %{2} 不存在","[DnsCdnAutoSwitch] %{1} 目标 DNS 账户 ID %{2} 不存在"
 "目标 DNS 账户 ID %{1} 不存在","目标 DNS 账户 ID %{1} 不存在"
+"[DnsCdnAutoSwitch] %{1} 目标适配器 %{2} 不支持 DNS 管理","[DnsCdnAutoSwitch] %{1} 目标适配器 %{2} 不支持 DNS 管理"
 "目标账户 %{1} 不支持 DNS 管理","目标账户 %{1} 不支持 DNS 管理"
+"[DnsCdnAutoSwitch] %{1} 源账户 ID=%{2}，目标=%{3}(%{4})","[DnsCdnAutoSwitch] %{1} 源账户 ID=%{2}，目标=%{3}(%{4})"
+"[DnsCdnAutoSwitch] %{1} Step1: 标记 DomainPool switching","[DnsCdnAutoSwitch] %{1} Step1: 标记 DomainPool switching"
+"[DnsCdnAutoSwitch] %{1} Step2: 同步当前 DNS 记录到本地","[DnsCdnAutoSwitch] %{1} Step2: 同步当前 DNS 记录到本地"
+"[DnsCdnAutoSwitch] %{1} 注册商账户 ID %{2} 不存在","[DnsCdnAutoSwitch] %{1} 注册商账户 ID %{2} 不存在"
 "注册商账户 ID %{1} 不存在","注册商账户 ID %{1} 不存在"
-"注册商适配器 %{1} 不存在","注册商适配器 %{1} 不存在"
+"[DnsCdnAutoSwitch] %{1} 注册商适配器 %{2} 不存在","[DnsCdnAutoSwitch] %{1} 注册商适配器 %{2} 不存在"
+"[DnsCdnAutoSwitch] %{1} Step3: 获取目标 NS（%{2}）","[DnsCdnAutoSwitch] %{1} Step3: 获取目标 NS（%{2}）"
+"[DnsCdnAutoSwitch] %{1} 获取目标 NS 失败：%{2}","[DnsCdnAutoSwitch] %{1} 获取目标 NS 失败：%{2}"
+"[DnsCdnAutoSwitch] %{1} 获取到目标 NS=%{2}","[DnsCdnAutoSwitch] %{1} 获取到目标 NS=%{2}"
+"[DnsCdnAutoSwitch] %{1} Step4: 在注册商 %{2} 切换 NS","[DnsCdnAutoSwitch] %{1} Step4: 在注册商 %{2} 切换 NS"
+"[DnsCdnAutoSwitch] %{1} NS 切换失败：%{2}","[DnsCdnAutoSwitch] %{1} NS 切换失败：%{2}"
+"[DnsCdnAutoSwitch] %{1} NS 切换成功","[DnsCdnAutoSwitch] %{1} NS 切换成功"
+"[DnsCdnAutoSwitch] %{1} Step5: 推送 DNS 记录到 %{2}","[DnsCdnAutoSwitch] %{1} Step5: 推送 DNS 记录到 %{2}"
+"[DnsCdnAutoSwitch] %{1} 推送结果：success=%{2}, added=%{3}, failed=%{4}","[DnsCdnAutoSwitch] %{1} 推送结果：success=%{2}, added=%{3}, failed=%{4}"
+"[DnsCdnAutoSwitch] %{1} Step6: 更新域名状态","[DnsCdnAutoSwitch] %{1} Step6: 更新域名状态"
+"[DnsCdnAutoSwitch] %{1} Step7: 更新 DomainPool 状态","[DnsCdnAutoSwitch] %{1} Step7: 更新 DomainPool 状态"
+"[DnsCdnAutoSwitch] %{1} 全部完成，dns_provider=%{2}, cdn=%{3}","[DnsCdnAutoSwitch] %{1} 全部完成，dns_provider=%{2}, cdn=%{3}"
 域名自动解析,域名自动解析
 "自动为未解析到本服务器的域名添加 DNS 记录","自动为未解析到本服务器的域名添加 DNS 记录"
 "自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}","自动解析成功后拉取到本地失败: account_id=%{1}, 错误=%{2}"
 "域名池解析检查失败: root=%{1}, 错误=%{2}","域名池解析检查失败: root=%{1}, 错误=%{2}"
+"[DnsMigration] 开始处理 DNS 记录迁移，待处理=%{1}","[DnsMigration] 开始处理 DNS 记录迁移，待处理=%{1}"
+"[DnsMigration] %{1} 目标 DNS 账户未设置，跳过","[DnsMigration] %{1} 目标 DNS 账户未设置，跳过"
+"[DnsMigration] %{1} 目标账户 ID %{2} 不存在，跳过","[DnsMigration] %{1} 目标账户 ID %{2} 不存在，跳过"
+"[DnsMigration] %{1} 推送 DNS 记录到账户 %{2}(%{3})","[DnsMigration] %{1} 推送 DNS 记录到账户 %{2}(%{3})"
+"[DnsMigration] %{1} 推送成功，added=%{2}","[DnsMigration] %{1} 推送成功，added=%{2}"
+"[DnsMigration] %{1} 推送失败：%{2}","[DnsMigration] %{1} 推送失败：%{2}"
+"[DnsMigration] %{1}","[DnsMigration] %{1}"
+域名生命周期编排,域名生命周期编排
+"轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程","轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程"
+"域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条","域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条"
+域名生命周期轮询失败：%{error},域名生命周期轮询失败：%{error}
 "根域 NS 归属检测","根域 NS 归属检测"
 "定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商","定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商"
+"子域名入池失败: %{1}, %{2}","子域名入池失败: %{1}, %{2}"
 域名池证书自动申请,域名池证书自动申请
 没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
 "本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程","本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程"
@@ -447,6 +539,23 @@
 "证书申请异常: %{1}","证书申请异常: %{1}"
 "[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}","[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}"
 "泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效","泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效"
+域名池证书有效性校验,域名池证书有效性校验
+"检查域名池中标记为有效证书的记录，证书丢失时回退 HTTPS 状态，已建站则立即重新申请","检查域名池中标记为有效证书的记录，证书丢失时回退 HTTPS 状态，已建站则立即重新申请"
+没有需要校验的域名池证书,没有需要校验的域名池证书
+本次校验域名数：%{1},本次校验域名数：%{1}
+"[%{1}] 证书丢失或无 PEM，回退 HTTPS 状态","[%{1}] 证书丢失或无 PEM，回退 HTTPS 状态"
+"[DomainPoolCertificateVerify] 域名 %{1} 证书丢失，回退 HTTPS 状态","[DomainPoolCertificateVerify] 域名 %{1} 证书丢失，回退 HTTPS 状态"
+"[%{1}] 域名已建站，立即重新申请证书","[%{1}] 域名已建站，立即重新申请证书"
+"证书校验完成：检查 %{1}，正常 %{2}，失效 %{3}，重新申请 %{4}（成功 %{5}，失败 %{6}）","证书校验完成：检查 %{1}，正常 %{2}，失效 %{3}，重新申请 %{4}（成功 %{5}，失败 %{6}）"
+域名池证书校验任务异常：%{1},域名池证书校验任务异常：%{1}
+"[%{1}] DNS/CDN 账户为空，无法重新申请证书","[%{1}] DNS/CDN 账户为空，无法重新申请证书"
+"[DomainPoolCertificateVerify] 域名 %{1} 需重新申请证书但 DNS/CDN 账户为空","[DomainPoolCertificateVerify] 域名 %{1} 需重新申请证书但 DNS/CDN 账户为空"
+"[%{1}] 证书重新申请成功","[%{1}] 证书重新申请成功"
+"[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请成功","[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请成功"
+"[%{1}] 证书重新申请失败：%{2}","[%{1}] 证书重新申请失败：%{2}"
+"[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请失败：%{2}","[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请失败：%{2}"
+"[%{1}] 证书重新申请异常：%{2}","[%{1}] 证书重新申请异常：%{2}"
+"[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请异常：%{2}","[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请异常：%{2}"
 域名池解析状态检测,域名池解析状态检测
 "定期检测未建站就绪域名的 DNS 解析，自动添加 A 记录，标记待申请证书并由证书任务统一申请，更新可建站状态","定期检测未建站就绪域名的 DNS 解析，自动添加 A 记录，标记待申请证书并由证书任务统一申请，更新可建站状态"
 "共获取 %{1} 个待处理域名","共获取 %{1} 个待处理域名"
@@ -476,8 +585,6 @@
 "域名池解析检测任务异常: %{1}","域名池解析检测任务异常: %{1}"
 域名解析状态检测,域名解析状态检测
 "定期检测域名 DNS 解析状态，验证是否指向本服务器","定期检测域名 DNS 解析状态，验证是否指向本服务器"
-域名自动同步,域名自动同步
-"定期从域名商 API 同步域名数据到本地数据库","定期从域名商 API 同步域名数据到本地数据库"
 网站域名健康检查,网站域名健康检查
 "定期检查所有网站域名的可访问性，自动同步 HTTPS 状态","定期检查所有网站域名的可访问性，自动同步 HTTPS 状态"
 "健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个","健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个"
@@ -618,6 +725,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 申请中,申请中
 有效,有效
 申请错误,申请错误
+清除域名池证书状态失败：%{1},清除域名池证书状态失败：%{1}
 "域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。","域名 %{domain} 解析已不再指向本服务器。当前解析 IP：%{resolved}，本服务器 IP：%{expected}。请检查 DNS 解析配置。"
 未解析,未解析
 域名注册服务,域名注册服务
@@ -712,8 +820,10 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 关闭,关闭
 新建域名,新建域名
 描述,描述
-DNS账户,DNS账户
-CDN账户,CDN账户
+"DNS 供应商/账户","DNS 供应商/账户"
+"选择 DNS 服务商及账户，用于解析与证书","选择 DNS 服务商及账户，用于解析与证书"
+"CDN 供应商/账户","CDN 供应商/账户"
+"可选，如 Cloudflare 等","可选，如 Cloudflare 等"
 HTTPS处理方式,HTTPS处理方式
 联系邮箱,联系邮箱
 "支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本","支持 PEM/CRT/KEY/PFX/P12 上传，或直接粘贴文本"
@@ -743,7 +853,8 @@ id属性不能为空,id属性不能为空
 可建站,可建站
 证书到期,证书到期
 创建失败,创建失败
-创建成功,创建成功
+域名已添加并已选,域名已添加并已选
+系统将自动完成解析与证书，可建站后网站即可访问。,系统将自动完成解析与证书，可建站后网站即可访问。
 请求失败,请求失败
 基本信息,基本信息
 从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充,从域名池选择已就绪的域名（可多选）；选择后网站代码与网站名称将自动填充
@@ -851,6 +962,7 @@ DNS服务商,DNS服务商
 "-- 请先选择 --","-- 请先选择 --"
 选择账户,选择账户
 "-- 请先选择供应商 --","-- 请先选择供应商 --"
+正在切换…,正在切换…
 批量设置账户,批量设置账户
 "为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。","为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。"
 "DNS 管理账户","DNS 管理账户"
@@ -970,12 +1082,14 @@ DNS管理,DNS管理
 添加完成,添加完成
 添加错误,添加错误
 正在创建域名...,正在创建域名...
+创建成功,创建成功
 "请先选择要切换 DNS 的根域名","请先选择要切换 DNS 的根域名"
 个根域名,个根域名
 加载账户列表失败,加载账户列表失败
 "-- 请选择账户 --","-- 请选择账户 --"
 请先选择要切换的根域名,请先选择要切换的根域名
-"正在切换 DNS 服务账户…","正在切换 DNS 服务账户…"
+切换异常,切换异常
+"SSE 连接中断","SSE 连接中断"
 请先选择要设置的域名,请先选择要设置的域名
 正在设置账户...,正在设置账户...
 设置成功,设置成功
@@ -1170,6 +1284,14 @@ SEO账户管理请前往：,SEO账户管理请前往：
 建站进度,建站进度
 例如：茶叶电商网站,例如：茶叶电商网站
 请填写要购买的域名,请填写要购买的域名
+"8. API 域名保持默认（api.gname.com）即可","8. API 域名保持默认（api.gname.com）即可"
+"GName API 响应解析失败 (HTTP %{1}): %{2}","GName API 响应解析失败 (HTTP %{1}): %{2}"
+"DNS/CDN 自动切换异常：%{domain} - %{error}","DNS/CDN 自动切换异常：%{domain} - %{error}"
+域名自动同步,域名自动同步
+"定期从域名商 API 同步域名数据到本地数据库","定期从域名商 API 同步域名数据到本地数据库"
+DNS账户,DNS账户
+CDN账户,CDN账户
+"正在切换 DNS 服务账户…","正在切换 DNS 服务账户…"
 站点URL不能为空,站点URL不能为空
 添加网站,添加网站
 网站地址,网站地址

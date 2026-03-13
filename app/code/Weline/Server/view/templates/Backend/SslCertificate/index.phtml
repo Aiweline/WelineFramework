@@ -135,6 +135,8 @@ $stats = $stats ?? [];
                                 <th><?= __('域名') ?></th>
                                 <th><?= __('状态') ?></th>
                                 <th><?= __('HTTPS') ?></th>
+                                <th><?= __('强制HTTPS') ?></th>
+                                <th><?= __('根域→www') ?></th>
                                 <th><?= __('到期时间') ?></th>
                                 <th><?= __('颁发机构') ?></th>
                                 <th><?= __('服务商') ?></th>
@@ -151,6 +153,9 @@ $stats = $stats ?? [];
                                 $issuer = $cert[\Weline\Server\Model\SslCertificate::schema_fields_ISSUER];
                                 $provider = $cert[\Weline\Server\Model\SslCertificate::schema_fields_PROVIDER] ?? '';
                                 $autoRenew = $cert[\Weline\Server\Model\SslCertificate::schema_fields_AUTO_RENEW];
+                                $certId = (int) ($cert[\Weline\Server\Model\SslCertificate::schema_fields_ID] ?? 0);
+                                $forceHttps = (int) ($cert[\Weline\Server\Model\SslCertificate::schema_fields_FORCE_HTTPS] ?? 1);
+                                $forceRootToWww = (int) ($cert[\Weline\Server\Model\SslCertificate::schema_fields_FORCE_ROOT_TO_WWW] ?? 0);
                                 $expiryStatus = $cert['_expiry_status'] ?? 'unknown';
                                 $daysLeft = $cert['_days_left'] ?? null;
                                 $isProtectedDomain = \in_array(\strtolower($domain), ['localhost', '127.0.0.1', '::1', '0.0.0.0'], true);
@@ -193,6 +198,24 @@ $stats = $stats ?? [];
                                                    <?= $httpsEnabled ? 'checked' : '' ?>
                                                    <?= $status !== 'active' ? 'disabled' : '' ?>
                                                    onchange="toggleHttps('<?= htmlspecialchars($domain) ?>', this.checked)">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="force_https_<?= $certId ?>"
+                                                   <?= $forceHttps ? 'checked' : '' ?>
+                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
+                                                   onchange="updateCertPolicy(<?= $certId ?>, 'force_https', this.checked)">
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox"
+                                                   id="force_www_<?= $certId ?>"
+                                                   <?= $forceRootToWww ? 'checked' : '' ?>
+                                                   <?= $status !== 'active' ? 'disabled' : '' ?>
+                                                   onchange="updateCertPolicy(<?= $certId ?>, 'force_root_to_www', this.checked)">
                                         </div>
                                     </td>
                                     <td>
@@ -393,6 +416,27 @@ php bin/w ssl:auto sync -e admin@example.com</code></pre>
             } else {
                 BackendToast.error(result.message);
                 var el = document.getElementById('https_' + btoa(domain).replace(/[^a-zA-Z0-9]/g, ''));
+                if (el) el.checked = !enabled;
+            }
+        } catch (e) {
+            BackendToast.error(e.message);
+        }
+    };
+
+    window.updateCertPolicy = async function(certId, field, enabled) {
+        try {
+            var response = await fetch(baseUrl + 'update-policy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'cert_id=' + certId + '&field=' + encodeURIComponent(field) + '&value=' + (enabled ? 1 : 0)
+            });
+            var result = await response.json();
+            if (result.success) {
+                BackendToast.success(result.message);
+                BackendToast.warning('<?= __('请重启或热重载服务器使策略生效') ?>');
+            } else {
+                BackendToast.error(result.message);
+                var el = document.getElementById(field === 'force_https' ? 'force_https_' + certId : 'force_www_' + certId);
                 if (el) el.checked = !enabled;
             }
         } catch (e) {

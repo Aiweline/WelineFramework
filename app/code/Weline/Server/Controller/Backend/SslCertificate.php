@@ -130,6 +130,44 @@ class SslCertificate extends BaseController
         
         return $this->fetchJson($result);
     }
+
+    /**
+     * 更新证书策略（force_https / force_root_to_www）
+     */
+    public function postUpdatePolicy(): string
+    {
+        $certId = (int) $this->request->getPost('cert_id');
+        $field = (string) $this->request->getPost('field');
+        $value = (int) $this->request->getPost('value');
+
+        if ($certId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('无效的证书 ID')]);
+        }
+
+        $allowed = [CertModel::schema_fields_FORCE_HTTPS, CertModel::schema_fields_FORCE_ROOT_TO_WWW];
+        if (!\in_array($field, $allowed, true)) {
+            return $this->fetchJson(['success' => false, 'message' => __('不支持的策略字段')]);
+        }
+
+        try {
+            $cert = $this->certModel->clearQuery()->load($certId);
+            if (!$cert->getCertId()) {
+                return $this->fetchJson(['success' => false, 'message' => __('证书不存在')]);
+            }
+
+            $cert->setData($field, $value ? 1 : 0)->save();
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('策略已更新'),
+                'domain' => $cert->getDomain(),
+                'field' => $field,
+                'value' => $value ? 1 : 0,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
     
     /**
      * 申请证书
