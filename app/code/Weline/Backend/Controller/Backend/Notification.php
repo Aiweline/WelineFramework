@@ -23,7 +23,7 @@ class Notification extends BackendController
     #[Acl('Weline_Backend::notification_index', '通知列表', 'ri-list-check', '查看通知列表')]
     public function index(): string
     {
-        $userId = (int) $this->session->getLoginUserId();
+        $userId = (int) $this->getLoginUserId();
         $page = (int) $this->request->getGet('page', 1);
         $limit = 15;
 
@@ -54,7 +54,7 @@ class Notification extends BackendController
     #[Acl('Weline_Backend::notification_detail', '通知详情', 'ri-file-text-line', '查看通知详情')]
     public function detail(): string
     {
-        $userId = (int) $this->session->getLoginUserId();
+        $userId = (int) $this->getLoginUserId();
         $notificationId = (int) $this->request->getGet('id', 0);
 
         if (!$notificationId) {
@@ -87,7 +87,7 @@ class Notification extends BackendController
      */
     public function markRead(): void
     {
-        $userId = (int) $this->session->getLoginUserId();
+        $userId = (int) $this->getLoginUserId();
         $notificationId = (int) $this->request->getBodyParam('notification_id', 0);
 
         if (!$notificationId || !$userId) {
@@ -104,7 +104,7 @@ class Notification extends BackendController
      */
     public function markAllRead(): void
     {
-        $userId = (int) $this->session->getLoginUserId();
+        $userId = (int) $this->getLoginUserId();
 
         if (!$userId) {
             $this->jsonResponse(401, false, __('未登录'));
@@ -120,7 +120,7 @@ class Notification extends BackendController
      */
     public function markTopicRead(): void
     {
-        $userId = (int) $this->session->getLoginUserId();
+        $userId = (int) $this->getLoginUserId();
         $topicCode = trim((string) $this->request->getBodyParam('topic_code', ''));
 
         if (!$userId) {
