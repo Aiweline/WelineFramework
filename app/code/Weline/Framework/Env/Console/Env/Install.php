@@ -348,7 +348,10 @@ class Install extends CommandAbstract
 
         foreach ($unsatisfiedRec as $item) {
             $name = $item['name'] ?? '';
-            if (strtolower($name) !== $targetLower) {
+            $installId = $item['install_id'] ?? '';
+            $nameMatch = strtolower($name) === $targetLower;
+            $idMatch = $installId !== '' && strtolower($installId) === $targetLower;
+            if (!$nameMatch && !$idMatch) {
                 continue;
             }
             $modulePath = $item['module_path'] ?? '';
