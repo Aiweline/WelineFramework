@@ -761,7 +761,7 @@ CNF;
                 return ['success' => false, 'message' => __('导出私钥失败') . ': ' . \implode(', ', $errors)];
             }
             
-            // 保存文件
+            // 保存主文件
             if (!$certPem || !\file_put_contents($certPath, $certPem)) {
                 return ['success' => false, 'message' => __('保存证书文件失败')];
             }
@@ -769,11 +769,18 @@ CNF;
                 return ['success' => false, 'message' => __('保存私钥文件失败')];
             }
             
-            // 设置文件权限
+            // 补全所有文件：cert.pem、chain.pem、csr.pem、domain.key
+            @\file_put_contents($certDir . 'cert.pem', $certPem);
+            @\file_put_contents($certDir . 'chain.pem', $certPem);
+            @\file_put_contents($certDir . 'domain.key', $keyPem);
+            $csrPem = '';
+            if (\openssl_csr_export($csr, $csrPem)) {
+                @\file_put_contents($certDir . 'csr.pem', $csrPem);
+            }
+            
             @\chmod($certPath, 0644);
             @\chmod($keyPath, 0600);
             
-            // 更新数据库记录
             $this->updateCertificateRecord(
                 $domain,
                 $certPath,
@@ -841,6 +848,7 @@ CNF;
                 ->setCertPem($certContents['cert_pem'])
                 ->setKeyPem($certContents['key_pem'])
                 ->setChainPem($certContents['chain_pem'])
+                ->setCsrPem($certContents['csr_pem'])
                 ->setCertType($certType)
                 ->setIssuer($issuer)
                 ->setProvider($provider)
@@ -1437,15 +1445,18 @@ CNF;
         $keyPem = \is_file($keyPath) ? (string) @\file_get_contents($keyPath) : '';
         $chainPem = ($chainPath !== '' && \is_file($chainPath)) ? (string) @\file_get_contents($chainPath) : '';
 
-        // 如果 chain_pem 为空，但 cert_pem（fullchain）内包含多张证书，自动提取中间证书链
         if ($chainPem === '' && $certPem !== '') {
             $chainPem = $this->extractChainFromFullchain($certPem);
         }
+
+        $csrPath = \dirname($certPath) . DS . 'csr.pem';
+        $csrPem = \is_file($csrPath) ? (string) @\file_get_contents($csrPath) : '';
 
         return [
             'cert_pem' => $certPem,
             'key_pem' => $keyPem,
             'chain_pem' => $chainPem,
+            'csr_pem' => $csrPem,
         ];
     }
 
@@ -1500,37 +1511,48 @@ CNF;
         $certPem = (string) ($cert[SslCertificate::schema_fields_CERT_PEM] ?? '');
         $keyPem = (string) ($cert[SslCertificate::schema_fields_KEY_PEM] ?? '');
         $chainPem = (string) ($cert[SslCertificate::schema_fields_CHAIN_PEM] ?? '');
+        $csrPem = (string) ($cert[SslCertificate::schema_fields_CSR_PEM] ?? '');
         if ($domain === '' || $certPem === '' || $keyPem === '') {
             return false;
         }
 
-        // 如果 chain_pem 为空，尝试从 cert_pem（fullchain）中提取中间证书链
         if ($chainPem === '') {
             $chainPem = $this->extractChainFromFullchain($certPem);
         }
 
         $certDir = $this->getCertificateDir($domain);
+
+        // 1. fullchain.pem（核心：SSL 握手用）
+        if (@\file_put_contents($certDir . 'fullchain.pem', $certPem) === false) {
+            return false;
+        }
+        // 2. privkey.pem（核心：SSL 握手用）
+        if (@\file_put_contents($certDir . 'privkey.pem', $keyPem) === false) {
+            return false;
+        }
+        // 3. chain.pem（中间证书链，浏览器验证需要）
+        if ($chainPem !== '') {
+            @\file_put_contents($certDir . 'chain.pem', $chainPem);
+        }
+        // 4. cert.pem（叶子证书）
+        $leafPem = $this->extractLeafCertFromFullchain($certPem);
+        if ($leafPem !== '') {
+            @\file_put_contents($certDir . 'cert.pem', $leafPem);
+        }
+        // 5. domain.key（原始域名密钥，与 privkey.pem 内容相同）
+        @\file_put_contents($certDir . 'domain.key', $keyPem);
+        // 6. csr.pem（证书签名请求）
+        if ($csrPem !== '') {
+            @\file_put_contents($certDir . 'csr.pem', $csrPem);
+        }
+
+        @\chmod($certDir . 'fullchain.pem', 0644);
+        @\chmod($certDir . 'privkey.pem', 0600);
+        @\chmod($certDir . 'domain.key', 0600);
+
         $certPath = $certDir . 'fullchain.pem';
         $keyPath = $certDir . 'privkey.pem';
         $chainPath = $certDir . 'chain.pem';
-
-        if (@\file_put_contents($certPath, $certPem) === false) {
-            return false;
-        }
-        if (@\file_put_contents($keyPath, $keyPem) === false) {
-            return false;
-        }
-        if ($chainPem !== '') {
-            @\file_put_contents($chainPath, $chainPem);
-        }
-        // 补写 cert.pem（叶子证书）确保 4 文件齐全
-        $leafCertPath = $certDir . 'cert.pem';
-        $leafPem = $this->extractLeafCertFromFullchain($certPem);
-        if ($leafPem !== '') {
-            @\file_put_contents($leafCertPath, $leafPem);
-        }
-        @\chmod($certPath, 0644);
-        @\chmod($keyPath, 0600);
 
         try {
             $certId = (int) ($cert[SslCertificate::schema_fields_ID] ?? 0);
@@ -1556,6 +1578,42 @@ CNF;
         }
 
         return true;
+    }
+
+    /**
+     * 从数据库恢复指定域名的证书文件到磁盘（供 WLS Worker 动态加载调用）。
+     *
+     * 查找该域名在证书管理表中的记录，若有有效 PEM 数据则恢复全部 6 个文件到 app/etc/ssl/{domain}/。
+     */
+    public function restoreCertificateFromDb(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+
+        try {
+            $certModel = ObjectManager::getInstance(SslCertificate::class, [], false);
+            $cert = $certModel->clearQuery()->loadByDomain($domain);
+            if (!$cert->getCertId()) {
+                return false;
+            }
+
+            $certPem = $cert->getCertPem();
+            $keyPem = $cert->getKeyPem();
+            if ($certPem === '' || $keyPem === '') {
+                return false;
+            }
+
+            $result = $this->restoreCertificateFilesFromData($cert->getData());
+            if ($result) {
+                w_log_info(__('[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}', [$domain]));
+            }
+            return $result;
+        } catch (\Throwable $e) {
+            w_log_error(__('[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}', [$domain, $e->getMessage()]));
+            return false;
+        }
     }
 
     /**
@@ -1849,7 +1907,8 @@ CNF;
                     ->setAutoRenew(true)
                     ->setCertPem($certContents['cert_pem'])
                     ->setKeyPem($certContents['key_pem'])
-                    ->setChainPem($certContents['chain_pem']);
+                    ->setChainPem($certContents['chain_pem'])
+                    ->setCsrPem($certContents['csr_pem']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
                 $cert->setDomain($normalizedDomain)
                     ->setProvider($provider);
