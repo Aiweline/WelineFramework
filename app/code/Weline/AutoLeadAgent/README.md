@@ -203,7 +203,7 @@ fetch('/api/v1/auto-lead-agent/token', {
 ### 待完成（P4-P5）
 
 - ⏳ WASM 扩展完善（mcp_protocol.cpp、agent_brain.cpp、wasm-bridge.js）
-- ⏳ 支持 inotify 监控（Linux，若适用）
+- ✅ inotify 监控（Linux，Weline Server FileWatcher 已支持）
 
 ### 文档
 
