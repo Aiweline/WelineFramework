@@ -14,18 +14,15 @@
     'use strict';
 
     /**
-     * i18n 翻译（优先使用 __WelineThemeConfig.i18n 或 Weline.i18n.translate）
+     * i18n 翻译：使用 __() 函数，系统会从模块 i18n/*.csv 收集词并注入
+     * 规范：JS 内不直接写词，词写到 CSV，详见 theme-development / i18n-internationalization 技能
      */
-    function t(key, fallback) {
-        const cfg = window.__WelineThemeConfig?.i18n;
-        if (cfg && typeof cfg[key] === 'string') {
-            return cfg[key];
-        }
+    const __ = (typeof window.__ === 'function') ? window.__ : function(text, params) {
         if (window.Weline?.i18n?.translate) {
-            return window.Weline.i18n.translate(key, {}) || fallback || key;
+            return window.Weline.i18n.translate(text, params || {});
         }
-        return fallback || key;
-    }
+        return text;
+    };
 
     // ========================================
     // BackendToast - 后台通知提示
@@ -165,9 +162,9 @@
         show(message, options = {}) {
             return new Promise((resolve) => {
                 const {
-                    title = t('confirm_action', '确认操作'),
-                    confirmText = t('confirm', '确定'),
-                    cancelText = t('cancel', '取消'),
+                    title = __('确认操作'),
+                    confirmText = __('确定'),
+                    cancelText = __('取消'),
                     type = 'warning'
                 } = options;
                 
@@ -282,8 +279,8 @@
                     message = '',
                     placeholder = '',
                     defaultValue = '',
-                    confirmText = t('confirm', '确定'),
-                    cancelText = t('cancel', '取消'),
+                    confirmText = __('确定'),
+                    cancelText = __('取消'),
                     type = 'info'
                 } = options;
 
@@ -425,7 +422,7 @@
         alert(title, message = '', options = {}) {
             return new Promise((resolve) => {
                 const {
-                    confirmText = t('confirm', '确定'),
+                    confirmText = __('确定'),
                     type = 'danger',
                     icon = 'mdi-close-circle'
                 } = options;

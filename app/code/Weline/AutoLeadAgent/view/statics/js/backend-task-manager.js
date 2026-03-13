@@ -20,6 +20,17 @@ var AutoLeadAgentTaskManager = (function () {
     // 任务运行状态面板
     var taskRunningPanel = null;
 
+    /** 友好提示（优先 BackendToast，避免 alert） */
+    function showTaskToast(type, message, duration) {
+        if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast[type]) {
+            BackendToast[type](message, duration || 10000);
+        } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+            ConfigUtils.safeToast(type, message);
+        } else {
+            console.warn('[TaskManager]', type + ':', message);
+        }
+    }
+
     function getRootElement() {
         return document.querySelector('.auto-lead-agent-index');
     }
@@ -211,11 +222,14 @@ var AutoLeadAgentTaskManager = (function () {
                 var taskId = this.getAttribute('data-task-id');
                 if (!taskId) return;
                 
-                if (!confirm('确定要删除任务 #' + taskId + ' 吗？\n\n删除后无法恢复，请谨慎操作。')) {
-                    return;
+                var confirmMsg = '确定要删除任务 #' + taskId + ' 吗？删除后无法恢复，请谨慎操作。';
+                if (typeof BackendConfirm !== 'undefined' && BackendConfirm && BackendConfirm.show) {
+                    BackendConfirm.show(confirmMsg, { title: '确认删除', type: 'danger' }).then(function (confirmed) {
+                        if (confirmed) deleteTask(taskId);
+                    });
+                } else {
+                    showTaskToast('warning', '确认组件未加载，请刷新页面后重试');
                 }
-                
-                deleteTask(taskId);
             });
         });
     }
@@ -254,18 +268,14 @@ var AutoLeadAgentTaskManager = (function () {
                     container.innerHTML = '<div class="alert alert-info mb-0">暂无任务</div>';
                 }
                 // 显示成功消息
-                if (typeof showToast === 'function') {
-                    showToast('success', data.message || '任务删除成功');
-                } else {
-                    alert(data.message || '任务删除成功');
-                }
+                showTaskToast('success', data.message || '任务删除成功');
             } else {
-                alert(data.message || '删除失败');
+                showTaskToast('error', data.message || '删除失败');
             }
         })
         .catch(function(error) {
             console.error('Delete task error:', error);
-            alert('删除任务失败：' + error.message);
+            showTaskToast('error', '删除任务失败：' + error.message);
         });
     }
 
@@ -677,8 +687,7 @@ var AutoLeadAgentTaskManager = (function () {
                 });
                 $(modalEl).modal('show');
             } else {
-                // Fallback 简单弹窗
-                alert('自动寻客：请在页面上方点击"新建寻找客户任务"按钮开始使用。');
+                showTaskToast('info', '自动寻客：请在页面上方点击"新建寻找客户任务"按钮开始使用。');
                 // 即使fallback也尝试加载
                 setTimeout(function() {
                     loadSearchEngines();
@@ -795,7 +804,7 @@ var AutoLeadAgentTaskManager = (function () {
         }
 
         if (!sourceType) {
-            alert('请选择来源类型');
+            showTaskToast('warning', '请选择来源类型');
             if (sourceTypeSelect) {
                 sourceTypeSelect.focus();
             }
@@ -803,7 +812,7 @@ var AutoLeadAgentTaskManager = (function () {
         }
         
         if (!sourceId) {
-            alert('请选择具体项');
+            showTaskToast('warning', '请选择具体项');
             if (sourceIdSelect) {
                 sourceIdSelect.focus();
             }
@@ -824,12 +833,12 @@ var AutoLeadAgentTaskManager = (function () {
         
         // 验证
         if (selectedEngines.length === 0) {
-            alert('请至少选择一个搜索引擎');
+            showTaskToast('warning', '请至少选择一个搜索引擎');
             return;
         }
         
         if (selectedWebsites.length === 0) {
-            alert('请至少选择一个目标网站');
+            showTaskToast('warning', '请至少选择一个目标网站');
             return;
         }
 
@@ -1060,12 +1069,12 @@ var AutoLeadAgentTaskManager = (function () {
         
         // 验证
         if (selectedEngines.length === 0) {
-            alert('请至少选择一个搜索引擎');
+            showTaskToast('warning', '请至少选择一个搜索引擎');
             return;
         }
         
         if (selectedWebsites.length === 0) {
-            alert('请至少选择一个目标网站');
+            showTaskToast('warning', '请至少选择一个目标网站');
             return;
         }
         
@@ -1116,15 +1125,15 @@ var AutoLeadAgentTaskManager = (function () {
                         loadTaskList();
                     }, 1500);
                 } else {
-                    alert(result.message || '任务创建成功，但无法获取任务ID');
+                    showTaskToast('warning', result.message || '任务创建成功，但无法获取任务ID');
                     window.location.reload();
                 }
             } else {
-                alert((result && result.message) ? result.message : '创建搜索任务失败');
+                showTaskToast('error', (result && result.message) ? result.message : '创建搜索任务失败');
             }
         }).catch(function (error) {
             console.error('AutoLeadAgentTaskManager.createTask error:', error);
-            alert('创建搜索任务失败：' + (error.message || ''));
+            showTaskToast('error', '创建搜索任务失败：' + (error.message || ''));
         });
     }
 
@@ -1175,7 +1184,7 @@ var AutoLeadAgentTaskManager = (function () {
             // 检查TaskRunner是否可用
             if (typeof AutoLeadAgentTaskRunner === 'undefined') {
                 console.error('TaskRunner not loaded');
-                alert('AI模型执行器未加载，请刷新页面后重试');
+                showTaskToast('error', 'AI模型执行器未加载，请刷新页面后重试');
                 return;
             }
             
@@ -1193,7 +1202,7 @@ var AutoLeadAgentTaskManager = (function () {
                 })
                 .catch(function(error) {
                     console.error('Task error:', error);
-                    alert('任务执行失败：' + (error.message || '未知错误'));
+                    showTaskToast('error', '任务执行失败：' + (error.message || '未知错误'));
                 });
         })
         .catch(function(error) {
@@ -1214,17 +1223,17 @@ var AutoLeadAgentTaskManager = (function () {
                     })
                     .catch(function(error) {
                         console.error('Task error:', error);
-                        alert('任务执行失败：' + (error.message || '未知错误'));
+                        showTaskToast('error', '任务执行失败：' + (error.message || '未知错误'));
                     });
             } else {
-                alert('AI模型执行器未加载，请刷新页面后重试');
+                showTaskToast('error', 'AI模型执行器未加载，请刷新页面后重试');
             }
         });
     }
 
     function continueTask(taskId) {
         if (!taskId) {
-            alert('任务ID参数无效');
+            showTaskToast('warning', '任务ID参数无效');
             return;
         }
 
@@ -1258,11 +1267,11 @@ var AutoLeadAgentTaskManager = (function () {
                 // 刷新任务列表，立即反映任务状态的变化（如从 pending → running）
                 loadTaskList();
             } else {
-                alert((result && result.message) ? result.message : '继续任务失败');
+                showTaskToast('error', (result && result.message) ? result.message : '继续任务失败');
             }
         }).catch(function (error) {
             console.error('AutoLeadAgentTaskManager.continueTask error:', error);
-            alert('继续任务失败：' + (error.message || ''));
+            showTaskToast('error', '继续任务失败：' + (error.message || ''));
         });
     }
 

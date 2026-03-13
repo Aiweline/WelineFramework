@@ -284,7 +284,27 @@ public function validate()
 
 ## JavaScript 中的用法
 
-`__()` 函数会自动注入到页面中，可以直接在 JavaScript 中使用。
+### 核心机制与规范 ⭐⭐⭐ 【强制】
+
+**翻译词必须写在模块 `i18n/*.csv` 中，禁止在 JS 内直接写死词。**
+
+**实现机制（系统自动完成）：**
+1. **编译时**：`JsTranslationsExtractor` 从 JS 中提取 `__('源文')` 的源文，`TemplateCompile.mergeJsWordsToI18n` 将其增量写入模块 `i18n/zh_Hans_CN.csv`
+2. **资源编译**：`I18n\Observer\ResourceCompiler` 收集各模块 JS 翻译词，生成 `modules.map.json`（含翻译）
+3. **请求生命周期**：`I18n\Observer\TemplateCompile` 从 modules.map 加载当前页面模块翻译，注入 `window.Weline.i18n.setDictionary(moduleTranslations)`
+4. **JS 端**：`__()` 或 `Weline.i18n.translate(源文)` 从 dictionary 查译
+
+**正确做法：**
+- ✅ JS 内使用 `__('确认操作')`、`__('确定')`、`__('取消')`
+- ✅ 将词写入模块 `i18n/zh_Hans_CN.csv` 和 `i18n/en_US.csv`
+- ✅ 系统会收集并注入，无需在 JS 内写 fallback 或自定义 t()
+
+**错误做法：**
+- ❌ `t('confirm_action', '确认操作')` 或自定义封装带硬编码词
+- ❌ 在 JS 内直接写 `'确认操作'` 作为默认值
+- ❌ 在 `__WelineThemeConfig.i18n` 中手动注入（i18n 模块自动处理）
+
+相关实现：`Weline\I18n\Observer\TemplateCompile`、`Weline\I18n\Helper\JsTranslationsExtractor`、`Weline\I18n\Observer\ResourceCompiler`。
 
 ### 基本用法
 

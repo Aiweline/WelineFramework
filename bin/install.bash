@@ -196,8 +196,7 @@ ensure_weline_user() {
   [[ "$(id -u)" -ne 0 ]] && return 0
   if id "$WELINE_USER" &>/dev/null; then
     echo "User $WELINE_USER already exists."
-    return 0
-  fi
+  else
   echo "Creating user $WELINE_USER (project owner, with sudo)..."
   run_privileged useradd -m -s /bin/bash "$WELINE_USER" || return 1
   if getent group wheel &>/dev/null; then
@@ -217,6 +216,13 @@ ensure_weline_user() {
   else
     echo "请为用户 $WELINE_USER 设置登录密码（用于 SSH、sudo 等）："
     run_privileged passwd "$WELINE_USER"
+  fi
+  fi
+  # 配置 weline 免密 sudo，避免 apt/yum 非交互时等待密码导致脚本退出
+  if ! run_privileged sudo -u "$WELINE_USER" sudo -n true 2>/dev/null; then
+    echo "Configuring passwordless sudo for $WELINE_USER..."
+    { echo "Defaults:$WELINE_USER !requiretty"; echo "$WELINE_USER ALL=(ALL) NOPASSWD: ALL"; } | run_privileged tee /etc/sudoers.d/weline >/dev/null
+    run_privileged chmod 440 /etc/sudoers.d/weline
   fi
 }
 
@@ -1007,24 +1013,22 @@ install_pgsql_linux() {
     fi
   elif [[ -f /etc/redhat-release ]] || [[ -f /etc/rocky-release ]] || [[ -f /etc/almalinux-release ]] || [[ "$os_id" == "amzn" ]] || [[ "$os_id" == "rhel" ]] || [[ "$os_id" == "centos" ]] || [[ "$os_id" == "ol" ]] || [[ "$os_id" == "rocky" ]] || [[ "$os_id" == "almalinux" ]]; then
     echo "Installing PostgreSQL (dnf/yum)..."
+    if [[ "$(id -u)" -ne 0 ]] && ! sudo -n true 2>/dev/null; then
+      echo "ERROR: 当前用户无免密 sudo，PostgreSQL 安装需要 sudo 权限。" >&2
+      echo "  请以 root 执行安装，或运行: echo '$(whoami) ALL=(ALL) NOPASSWD: ALL' | sudo tee /etc/sudoers.d/$(whoami)" >&2
+      return 1
+    fi
     local pg_installed=0
     if command -v dnf &>/dev/null; then
-      run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null && pg_installed=1
-      [[ "$pg_installed" -eq 0 ]] && run_privileged dnf install -y postgresql-server postgresql 2>/dev/null && pg_installed=1
+      run_privileged dnf install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>&1 && pg_installed=1 || true
+      [[ "$pg_installed" -eq 0 ]] && { echo "尝试发行版默认 postgresql-server postgresql..."; run_privileged dnf install -y postgresql-server postgresql 2>&1 && pg_installed=1; }
     elif command -v yum &>/dev/null; then
-      run_privileged yum install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>/dev/null && pg_installed=1
-      [[ "$pg_installed" -eq 0 ]] && run_privileged yum install -y postgresql-server postgresql 2>/dev/null && pg_installed=1
+      run_privileged yum install -y "postgresql${INSTALL_PGSQL_VERSION}-server" "postgresql${INSTALL_PGSQL_VERSION}" 2>&1 && pg_installed=1 || true
+      [[ "$pg_installed" -eq 0 ]] && { echo "尝试发行版默认 postgresql-server postgresql..."; run_privileged yum install -y postgresql-server postgresql 2>&1 && pg_installed=1; }
     fi
     if [[ "$pg_installed" -eq 0 ]]; then
-      echo "尝试指定版本 postgresql${INSTALL_PGSQL_VERSION} 失败，改为安装发行版默认 postgresql-server postgresql..."
-      if command -v dnf &>/dev/null; then
-        run_privileged dnf install -y postgresql-server postgresql || return 1
-      elif command -v yum &>/dev/null; then
-        run_privileged yum install -y postgresql-server postgresql || return 1
-      else
-        echo "ERROR: dnf or yum required for PostgreSQL install." >&2
-        return 1
-      fi
+      echo "ERROR: PostgreSQL 安装失败。请检查上方错误信息，或手动执行: sudo dnf install -y postgresql-server postgresql" >&2
+      return 1
     fi
   elif [[ -f /etc/alpine-release ]]; then
     echo "Installing PostgreSQL (apk)..."

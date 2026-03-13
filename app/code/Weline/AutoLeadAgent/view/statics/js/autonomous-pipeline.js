@@ -253,13 +253,19 @@ var AutonomousPipeline = (function () {
         var matrix = PlatformStrategies.generateKeywordMatrix(profile);
 
         // 如果端侧 AI 模型可用，用模型增强关键词
-        if (typeof HFModelManager !== 'undefined' && HFModelManager && HFModelManager.isLoaded &&
-            typeof AgentPrompts !== 'undefined' && AgentPrompts) {
+        var prompts = typeof AutoLeadAgentPrompts !== 'undefined' ? AutoLeadAgentPrompts : null;
+        var model = (typeof ModelInference !== 'undefined' && ModelInference) ? ModelInference : null;
+        var hfLoaded = typeof HFModelManager !== 'undefined' && HFModelManager && HFModelManager.isLoaded;
+        if ((model || hfLoaded) && prompts) {
             try {
                 log('info', '  使用 AI 模型增强关键词分析...');
-                var profileText = JSON.stringify(profile, null, 2);
-                var prompt = AgentPrompts.generateKeywordGenerationPrompt(profile, profile.language || 'zh');
-                var aiResult = await HFModelManager.generate(prompt, { maxTokens: 512 });
+                var kwPrompt = prompts.generateKeywordGenerationPrompt(profile, profile.language || 'zh');
+                var aiResult = null;
+                if (model && typeof model.callModel === 'function') {
+                    aiResult = await model.callModel(kwPrompt, { maxTokens: 512 });
+                } else if (hfLoaded) {
+                    aiResult = await HFModelManager.generate(kwPrompt, { maxTokens: 512 });
+                }
                 if (aiResult) {
                     // 尝试解析 JSON
                     var jsonMatch = aiResult.match(/\{[\s\S]*\}/);

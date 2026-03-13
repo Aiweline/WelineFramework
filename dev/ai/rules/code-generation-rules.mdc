@@ -49,6 +49,8 @@ alwaysApply: true
 - ❌ **禁止全局变量/函数**：`var myData = []`、`function handleClick()` 等
 - ✅ **必须使用 IIFE 闭包**：`(function() { 'use strict'; ... })();`
 - ✅ **显式暴露 API**：需要全局访问时用 `window.MyModule = { ... };`
+- ❌ **禁止在 JS 内直接写翻译词**：不得用 `t('key','确认操作')` 或硬编码中文作 fallback
+- ✅ **必须使用 `__()` 并将词写入 CSV**：`__('确认操作')`，词写在模块 `i18n/*.csv`，系统会收集注入（详见 i18n-internationalization、theme-development 技能）
 
 ### 组件强制规范
 - ✅ **CSS 独立作用域**：所有类名带组件前缀

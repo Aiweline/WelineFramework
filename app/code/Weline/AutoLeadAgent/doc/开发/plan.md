@@ -1,8 +1,8 @@
 # AutoLeadAgent 寻客模块开发计划
 
-**状态**：🟡 进行中（status: in_progress）  
-**当前阶段**：阶段三 - 模型与配置完善  
-**完成度**：约 65%  
+**状态**：🟢 阶段四完成（status: in_progress）  
+**当前阶段**：阶段六 - 测试与文档收尾  
+**完成度**：约 85%  
 **最后更新**：2025-02-26
 
 > 模块定位：基于零信任架构的智能寻客系统，结合本地端侧 AI 模型自动查找潜在客户。
@@ -15,9 +15,9 @@
 |------|------|------|--------|
 | 1 | 基础架构与数据层 | 🟢 已完成 | 100% |
 | 2 | 浏览器扩展与爬取流程 | 🟢 已完成 | 100% |
-| 3 | 模型配置与端侧推理 | 🟡 进行中 | 85% |
-| 4 | ReAct Agent 与 MCP 集成 | 🔴 未开始 | 0% |
-| 5 | 翻译与多语言 | 🟡 部分完成 | 40% |
+| 3 | 模型配置与端侧推理 | 🟢 已完成 | 100% |
+| 4 | ReAct Agent 与 MCP 集成 | 🟢 已完成 | 100% |
+| 5 | 翻译与多语言 | 🟢 已完成 | 100% |
 | 6 | 测试与文档收尾 | 🔴 未开始 | 10% |
 
 ---
@@ -54,18 +54,20 @@
 
 - （已完成）扩展 payload 字段与前端 downloadState 映射（currentFile/downloadedSize/totalSize 等）
 
-### 阶段 4：ReAct Agent 与 MCP 集成 🔴
+### 阶段 4：ReAct Agent 与 MCP 集成 🟢
 
-- mcp-client.js：连接、listTools、callTool
-- 扩展内 MCP 工具集（browser_navigate、browser_snapshot、browser_extract 等）
-- react-agent.js：think / act / observe / reactLoop
+**已完成**：
+- mcp-client.js：connectMCP、listTools、callTool、isMCPAvailable
+- 扩展内 MCP 工具集：browser_navigate、browser_snapshot、browser_extract 等
+- react-agent.js：think、act、observe、reactLoop
 - prompts.js：工具描述注入、Few-shot、多语言
-- 需求要求：完全模型驱动，移除规则推理
+- 任务执行优先级：ReAct Agent → AutonomousPipeline → executeTaskPipeline
+- analyzeProfile 模型优先（ModelInference.callModel / HFModelManager）
 
-### 阶段 5：翻译与多语言 🟡
+### 阶段 5：翻译与多语言 🟢
 
-- 已有 translateWithGoogle() 等逻辑
-- 待完成：统一 translateIfNeeded，Google 优先、模型降级、缓存与错误处理
+- 统一 translateIfNeeded：Google 优先、模型降级、5 分钟缓存
+- task-runner 复用 ModelInference.translateIfNeeded
 
 ### 阶段 6：测试与文档收尾 🔴
 
@@ -84,7 +86,7 @@
 | D4 | 下载完成 autoLoad 时报 disabled 未定义 | P1 | ✅ 已修复 |
 | D5 | 模型选择无内存限制，大模型可选中导致失败 | P2 | ✅ 已加内存检测 |
 | D6 | 扩展 MODEL_LOAD_PROGRESS 与前端字段映射 | P2 | ✅ 已修复 |
-| D7 | 规则推理与模型推理并存，需求要求完全模型驱动 | P3 | 待推进 |
+| D7 | 规则推理与模型推理并存，需求要求完全模型驱动 | P3 | ✅ 已推进（ReAct 优先、analyzeProfile 模型增强） |
 | D8 | 任务启动前 Chrome / 模型 / MCP 三项检查 | P2 | ✅ 已实现 |
 
 ---

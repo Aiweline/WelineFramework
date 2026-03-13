@@ -775,6 +775,31 @@ window.MyModule = { ... };
 
 ---
 
+## 0.11 JavaScript 翻译规范 ⭐⭐⭐ 【强制】
+
+**JS 内用户可见文案必须使用 `__()`，翻译词必须写在模块 `i18n/*.csv` 中，禁止在 JS 内直接写死词。**
+
+**机制说明**：系统会从 JS 中提取 `__('源文')` 调用，将源文收集并写入模块 i18n CSV；请求生命周期内通过 `TemplateCompile` 注入 `Weline.i18n.setDictionary`，`__()` 从词典查找翻译。详见 **i18n-internationalization** 技能「JavaScript 核心机制与规范」。
+
+```javascript
+// ✅ 正确 - 使用 __()，词写到模块 i18n/zh_Hans_CN.csv、i18n/en_US.csv
+title = __('确认操作');
+confirmText = __('确定');
+cancelText = __('取消');
+BackendConfirm.show(__('确定要删除吗？'));
+
+// ❌ 错误 - 自定义 t() 带硬编码词
+function t(key, fallback) { return fallback || key; }
+title = t('confirm_action', '确认操作');
+
+// ❌ 错误 - 直接写死中文
+title = '确认操作';
+```
+
+**实施要点**：在模块 `i18n/zh_Hans_CN.csv` 和 `i18n/en_US.csv` 中添加对应条目，系统会收集并注入。
+
+---
+
 ## 0.5 模板 .phtml 中禁止定义全局函数 ⭐⭐⭐ 【强制】
 
 **模板可能被多次包含（同一请求多块、WLS 常驻进程多请求），禁止在模板中定义全局函数，否则会导致 `Cannot redeclare function` 并引发 Worker 崩溃。**
