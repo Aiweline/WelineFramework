@@ -137,7 +137,7 @@ if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
   # 配置 weline 免密 sudo，避免安装阶段 apt/yum 等待密码导致非交互失败
   if ! sudo -u "$WELINE_USER" sudo -n true 2>/dev/null; then
     echo "Configuring passwordless sudo for $WELINE_USER..."
-    echo "$WELINE_USER ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/weline
+    { echo "Defaults:$WELINE_USER !requiretty"; echo "$WELINE_USER ALL=(ALL) NOPASSWD: ALL"; } > /etc/sudoers.d/weline
     chmod 440 /etc/sudoers.d/weline
   fi
   # 准备克隆目录：若当前目录为 /root 等 weline 无法访问的路径，则使用 /home/weline（一层目录）

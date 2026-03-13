@@ -484,11 +484,11 @@ var HFModelManager = (function () {
                                 friendlyErrorMsg += '• Qwen/Qwen2.5-3B-Instruct（中等模型）\n\n';
                                 friendlyErrorMsg += '提示：如果 Chrome Built-in AI 可用，系统会自动使用它。';
 
-                                // 尝试显示 Toast 提示（如果可用）
-                                if (typeof window !== 'undefined' && typeof window.safeToast === 'function') {
-                                    window.safeToast('error', friendlyErrorMsg, 15000); // 显示15秒
-                                } else if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                                    window.alert(friendlyErrorMsg);
+                                // 尝试显示 Toast 提示（避免 alert）
+                                if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast.error) {
+                                    BackendToast.error(friendlyErrorMsg, 15000);
+                                } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+                                    ConfigUtils.safeToast('error', friendlyErrorMsg);
                                 }
 
                                 throw new Error(friendlyErrorMsg);
@@ -542,11 +542,11 @@ var HFModelManager = (function () {
                         detailedError += '• Qwen/Qwen2.5-3B-Instruct（中等模型）\n\n';
                         detailedError += '提示：如果 Chrome Built-in AI 可用，系统会自动使用它。';
 
-                        // 尝试显示 Toast 提示（如果可用）
-                        if (typeof window !== 'undefined' && typeof window.safeToast === 'function') {
-                            window.safeToast('error', detailedError, 15000); // 显示15秒
-                        } else if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                            window.alert(detailedError);
+                        // 尝试显示 Toast 提示（避免 alert）
+                        if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast.error) {
+                            BackendToast.error(detailedError, 15000);
+                        } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+                            ConfigUtils.safeToast('error', detailedError);
                         }
 
                         throw new Error(detailedError);
@@ -590,8 +590,10 @@ var HFModelManager = (function () {
                 friendlyErrorMsg += '3. 如果 Chrome Built-in AI 可用，系统会自动使用它\n\n';
                 friendlyErrorMsg += '提示：请选择带有 "WebLLM compatible" 标签的模型。';
 
-                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                    window.alert(friendlyErrorMsg);
+                if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast.error) {
+                    BackendToast.error(friendlyErrorMsg, 15000);
+                } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+                    ConfigUtils.safeToast('error', friendlyErrorMsg);
                 }
 
                 throw error;
@@ -619,8 +621,10 @@ var HFModelManager = (function () {
                                 friendlyErrorMsg += '2. 如果需要使用此模型，可能需要服务器端推理\n\n';
                                 friendlyErrorMsg += '提示：Chrome Built-in AI 可能可以提供本地推理能力。';
 
-                                if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-                                    window.alert(friendlyErrorMsg);
+                                if (typeof BackendToast !== 'undefined' && BackendToast && BackendToast.error) {
+                                    BackendToast.error(friendlyErrorMsg, 15000);
+                                } else if (typeof ConfigUtils !== 'undefined' && ConfigUtils && ConfigUtils.safeToast) {
+                                    ConfigUtils.safeToast('error', friendlyErrorMsg);
                                 }
                             }
                         }

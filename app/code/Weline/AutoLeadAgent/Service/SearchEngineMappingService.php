@@ -34,7 +34,16 @@ class SearchEngineMappingService
      * @var bool
      */
     private static bool $cacheLoaded = false;
-    
+
+    /**
+     * 清除缓存（用于单元测试隔离）
+     */
+    public static function clearCache(): void
+    {
+        self::$mappingCache = [];
+        self::$cacheLoaded = false;
+    }
+
     /**
      * 映射模型
      * 
@@ -172,6 +181,43 @@ class SearchEngineMappingService
      * @var array
      */
     private array $defaultSearchEngines = ['Google', 'Bing', 'DuckDuckGo'];
+
+    /**
+     * 获取映射（默认 + 数据库，带缓存）
+     *
+     * @return array 地区 => [语言 => 搜索引擎数组]
+     */
+    private function getMapping(): array
+    {
+        if (self::$cacheLoaded && !empty(self::$mappingCache)) {
+            return self::$mappingCache;
+        }
+
+        $mapping = $this->defaultMapping;
+
+        try {
+            $model = $this->mappingModel ?? ObjectManager::getInstance(SearchEngineMapping::class);
+            $model->clear()->where(SearchEngineMapping::schema_fields_IS_ACTIVE, 1)->select()->fetch();
+            $items = $model->getItems();
+            foreach ($items as $item) {
+                $region = $item->getData(SearchEngineMapping::schema_fields_REGION);
+                $language = $item->getData(SearchEngineMapping::schema_fields_LANGUAGE);
+                $engines = $item->getSearchEnginesArray();
+                if ($region && $language && !empty($engines)) {
+                    if (!isset($mapping[$region])) {
+                        $mapping[$region] = [];
+                    }
+                    $mapping[$region][$language] = $engines;
+                }
+            }
+        } catch (\Throwable $e) {
+            // 数据库异常时使用默认映射
+        }
+
+        self::$mappingCache = $mapping;
+        self::$cacheLoaded = true;
+        return $mapping;
+    }
 
     /**
      * 根据地区和语言获取搜索引擎列表

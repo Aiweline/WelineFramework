@@ -370,7 +370,65 @@ ${text.substring(0, 500)}
     }
 
     /**
-     * Google 翻译（复用 task-runner.js 中的函数）
+     * 检测 Google 翻译服务是否可访问（5 分钟缓存）
+     * @returns {Promise<boolean>}
+     */
+    var _googleAccessibleCache = null;
+    var _googleAccessibleCacheTime = 0;
+    var GOOGLE_ACCESSIBLE_TTL = 300000; // 5 分钟
+
+    async function isGoogleAccessible() {
+        var now = Date.now();
+        if (_googleAccessibleCache !== null && (now - _googleAccessibleCacheTime) < GOOGLE_ACCESSIBLE_TTL) {
+            return _googleAccessibleCache;
+        }
+        try {
+            var controller = new AbortController();
+            var timeoutId = setTimeout(function () { controller.abort(); }, 2000);
+            await fetch('https://translate-pa.googleapis.com', {
+                method: 'HEAD',
+                mode: 'no-cors',
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            _googleAccessibleCache = true;
+            _googleAccessibleCacheTime = now;
+            return true;
+        } catch (e) {
+            _googleAccessibleCache = false;
+            _googleAccessibleCacheTime = now;
+            return false;
+        }
+    }
+
+    /**
+     * 翻译缓存（避免重复翻译相同内容）
+     * key: text|targetLang|sourceLang, value: 翻译结果
+     */
+    var _translationCache = {};
+    var _translationCacheMaxSize = 500;
+
+    function getTranslationCacheKey(text, targetLang, sourceLang) {
+        return (text || '').trim() + '|' + (targetLang || 'en') + '|' + (sourceLang || 'auto');
+    }
+
+    function getCachedTranslation(text, targetLang, sourceLang) {
+        var key = getTranslationCacheKey(text, targetLang, sourceLang);
+        return _translationCache[key];
+    }
+
+    function setCachedTranslation(text, targetLang, sourceLang, translated) {
+        var keys = Object.keys(_translationCache);
+        if (keys.length >= _translationCacheMaxSize) {
+            var toDel = keys[0];
+            delete _translationCache[toDel];
+        }
+        var key = getTranslationCacheKey(text, targetLang, sourceLang);
+        _translationCache[key] = translated;
+    }
+
+    /**
+     * Google 翻译（优先使用全局 translateWithGoogle，否则本地实现）
      * @param {string} text 文本
      * @param {string} targetLang 目标语言
      * @param {string} sourceLang 源语言
@@ -474,7 +532,7 @@ ${text}
     }
 
     /**
-     * 统一翻译接口（优先 Google 翻译，降级模型翻译）
+     * 统一翻译接口：Google 优先、模型降级、缓存
      * @param {string} text 文本
      * @param {string} targetLang 目标语言
      * @param {string} sourceLang 源语言
@@ -486,34 +544,52 @@ ${text}
         }
 
         sourceLang = sourceLang || 'auto';
+        targetLang = targetLang || 'en';
 
-        // 如果源语言和目标语言相同，不需要翻译
+        // 源语言与目标语言相同，不翻译
         if (sourceLang !== 'auto' && sourceLang === targetLang) {
             return text;
         }
 
-        try {
-            // 优先尝试 Google 翻译
-            const googleTranslated = await translateWithGoogle(text, targetLang, sourceLang);
-            if (googleTranslated && googleTranslated.trim() !== '') {
-                return googleTranslated;
-            }
-        } catch (error) {
-            console.warn('[ModelInference] Google Translate failed, falling back to model:', error);
+        // 1. 查缓存
+        var cached = getCachedTranslation(text, targetLang, sourceLang);
+        if (cached !== undefined) {
+            return cached;
         }
 
-        // 降级使用模型翻译
-        try {
-            const modelTranslated = await generateTranslation(text, targetLang, sourceLang);
-            if (modelTranslated && modelTranslated.trim() !== '') {
-                return modelTranslated;
+        var result = text;
+
+        // 2. Google 可访问时优先 Google，否则直接走模型
+        var useGoogle = await isGoogleAccessible();
+        if (useGoogle) {
+            try {
+                var googleTranslated = await translateWithGoogle(text, targetLang, sourceLang);
+                if (googleTranslated && googleTranslated.trim() !== '') {
+                    result = googleTranslated;
+                }
+            } catch (error) {
+                // 失败时继续尝试模型
             }
-        } catch (error) {
-            console.warn('[ModelInference] Model translation failed:', error);
         }
 
-        // 都失败时返回原始文本
-        return text;
+        // 3. Google 未用或失败时，降级模型翻译
+        if (result === text) {
+            try {
+                var modelTranslated = await generateTranslation(text, targetLang, sourceLang);
+                if (modelTranslated && modelTranslated.trim() !== '') {
+                    result = modelTranslated;
+                }
+            } catch (error) {
+                // 保持 result = text
+            }
+        }
+
+        // 4. 写入缓存（仅当成功翻译且结果与原文不同）
+        if (result !== text) {
+            setCachedTranslation(text, targetLang, sourceLang, result);
+        }
+
+        return result;
     }
 
     // 导出公共 API
