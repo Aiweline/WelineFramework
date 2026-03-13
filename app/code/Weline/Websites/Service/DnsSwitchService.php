@@ -11,18 +11,21 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrarAccount;
 
 /**
- * DNS 切换统一服务
+ * DNS/CDN 切换统一服务
  *
- * 封装 DNS/CDN 切换的完整编排逻辑，所有入口（购买后自动、手动、定时任务）
- * 统一调用本服务，保证标记一致。
+ * 封装 DNS/CDN 切换的完整编排逻辑，所有入口（SSE 手动切换、定时任务、购买后自动）
+ * 统一调用本服务，保证行为与标记一致。
  *
  * 职责：
  *  1. 从源（注册商）同步 DNS 记录到本地
  *  2. 在目标 DNS 服务商添加域名（Zone）并获取 NS
  *  3. 在注册商处修改 NS 指向目标
- *  4. 将本地记录推送到目标 DNS 服务商
- *  5. 正确设置 Domain 标记（dns_switch_pending / dns_migration_pending / dns_provider / dns_account_id / nameservers）
- *  6. 更新 DomainPool 状态
+ *  4. 可选：等待 NS 生效（公网或注册商侧校验）
+ *  5. 将本地记录推送到目标 DNS 服务商
+ *  6. 同步/校验 DNS 记录，更新 Domain 与 DomainPool
+ *  7. 可选：CDN 账户设置与 HEAD 校验
+ *
+ * @see executeDnsSwitch 主入口，通过 options 控制是否等待 NS、进度回调、CDN 等
  */
 class DnsSwitchService
 {
@@ -41,23 +44,34 @@ class DnsSwitchService
     }
 
     /**
-     * 执行 DNS 切换（同步操作，适用于手动 / Cron）
+     * 执行 DNS/CDN 切换（统一入口，适用于 SSE 手动、定时任务、购买后自动）
      *
      * @param Domain $domain 域名模型（必须已持久化）
      * @param DomainRegistrarAccount $targetAccount 目标 DNS 服务商账户
-     * @param callable|null $onStep 进度回调 fn(string $event, array $data): void
-     * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int}
+     * @param callable|null $onStep 进度回调 fn(string $event, array $data): void，用于 SSE 等
+     * @param array $options 可选：wait_for_ns (bool), wait_max_seconds (int), wait_interval_seconds (int),
+     *                       is_alive (callable), cdn_account_id (int), cdn_account (DomainRegistrarAccount|null),
+     *                       verify_cdn (bool), after_sync_records (callable(Domain, array $dnsRecords): void)
+     * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int, client_aborted?: bool}
      */
     public function executeDnsSwitch(
         Domain $domain,
         DomainRegistrarAccount $targetAccount,
-        ?callable $onStep = null
+        ?callable $onStep = null,
+        array $options = []
     ): array {
         $domainName = $domain->getDomain();
         $targetCode = (string) $targetAccount->getRegistrarCode();
         $targetCredentials = $targetAccount->getCredentials();
         $targetAccountId = (int) $targetAccount->getAccountId();
         $logCh = 'dns_cdn_switch';
+        $waitForNs = (bool) ($options['wait_for_ns'] ?? false);
+        $waitMaxSeconds = (int) ($options['wait_max_seconds'] ?? 30 * 60);
+        $waitIntervalSeconds = (int) ($options['wait_interval_seconds'] ?? 15);
+        $isAlive = $options['is_alive'] ?? null;
+        $cdnAccount = $options['cdn_account'] ?? null;
+        $verifyCdn = (bool) ($options['verify_cdn'] ?? false);
+        $afterSyncRecords = $options['after_sync_records'] ?? null;
 
         $notify = static function (string $event, array $data) use ($onStep): void {
             if ($onStep !== null) {
@@ -100,6 +114,7 @@ class DnsSwitchService
             return $this->fail($nsMsg);
         }
         $targetNs = $nsResult['nameservers'];
+        $targetNsNormalized = $this->normalizeNameservers($targetNs);
         $notify('add_zone_done', ['domain' => $domainName, 'nameservers' => $targetNs, 'message' => __('目标 NS：%{1}', [\implode(', ', $targetNs)])]);
         w_log_info(__('[DnsSwitchService] %{1} Step2: 目标 NS=%{2}', [$domainName, \implode(', ', $targetNs)]), [], $logCh);
 
@@ -118,9 +133,41 @@ class DnsSwitchService
         $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换成功')]);
         w_log_info(__('[DnsSwitchService] %{1} Step3: NS 切换成功', [$domainName]), [], $logCh);
 
+        // 提交后即时用注册商接口校验（可选）
+        $registrarNs = $this->getRegistrarNameservers($sourceAdapter, $domainName, $sourceAccount->getCredentials());
+        if ($registrarNs !== null) {
+            $regNsNorm = $this->normalizeNameservers($registrarNs);
+            if ($regNsNorm === $targetNsNormalized) {
+                $notify('registrar_ns_updated', ['message' => __('注册商侧已更新为目标 NS，提交已生效')]);
+            } else {
+                $notify('registrar_ns_current', ['nameservers' => $regNsNorm, 'message' => __('注册商侧当前 NS：%{1}', [\implode(', ', $regNsNorm)])]);
+            }
+        }
+
+        // ── Step 3b: 可选等待 NS 生效（公网或注册商侧） ──
+        if ($waitForNs) {
+            $waitResult = $this->waitForNameservers(
+                $domainName,
+                $targetNsNormalized,
+                $sourceAdapter,
+                $sourceAccount->getCredentials(),
+                $waitMaxSeconds,
+                $waitIntervalSeconds,
+                $isAlive,
+                $notify
+            );
+            if ($waitResult['aborted'] ?? false) {
+                return \array_merge($this->fail(__('已由用户断开')), ['client_aborted' => true]);
+            }
+            if (!($waitResult['verified'] ?? false)) {
+                return $this->fail(__('等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录', [(string) (\round($waitMaxSeconds / 60))]));
+            }
+        }
+
         // ── Step 4: 推送 DNS 记录到目标 ──
         $notify('push_records', ['domain' => $domainName, 'message' => __('推送 DNS 记录到 %{1}', [$targetCode])]);
-        $pushResult = $this->resolveService->pushRecordsToProvider($domain, $targetAccount, null);
+        $recordsToPush = $options['records_to_push'] ?? null;
+        $pushResult = $this->resolveService->pushRecordsToProvider($domain, $targetAccount, $recordsToPush);
         $pushSuccess = $pushResult['success'] ?? false;
         $pushAdded = $pushResult['added'] ?? 0;
         $pushFailed = $pushResult['failed'] ?? 0;
@@ -130,26 +177,57 @@ class DnsSwitchService
             'added' => $pushAdded,
             'failed' => $pushFailed,
             'message' => __('推送完成：成功 %{1}，失败 %{2}', [(string) $pushAdded, (string) $pushFailed]),
+            'errors' => $pushResult['errors'] ?? [],
         ]);
         w_log_info(__('[DnsSwitchService] %{1} Step4: push success=%{2}, added=%{3}, failed=%{4}', [
             $domainName, $pushSuccess ? 'true' : 'false', (string) $pushAdded, (string) $pushFailed,
         ]), [], $logCh);
 
-        // ── Step 5: 更新 Domain 标记 ──
+        // ── Step 5: 同步/校验 DNS 记录 ──
+        $notify('sync_verify', ['domain' => $domainName, 'message' => __('同步并校验 DNS 记录')]);
+        $sync = $this->resolveService->syncDnsRecords($domain);
+        $syncError = (string) ($sync['error'] ?? '');
+        if ($syncError !== '') {
+            w_log_error(__('[DnsSwitchService] %{1} 同步/校验记录失败：%{2}', [$domainName, $syncError]), [], $logCh);
+            return $this->fail(__('同步/校验记录失败：%{1}', [$syncError]));
+        }
+        $dnsDetails = $this->resolveService->getDnsDetails($domain);
+        $dnsRecords = \is_array($dnsDetails['records'] ?? null) ? $dnsDetails['records'] : [];
+        $notify('sync_verify_done', ['domain' => $domainName, 'record_count' => \count($dnsRecords)]);
+        if ($afterSyncRecords !== null && $dnsRecords !== []) {
+            $afterSyncRecords($domain, $dnsRecords);
+        }
+
+        // ── Step 6: 更新 Domain 标记（含 CDN） ──
         $domain->setNameservers($targetNs);
         $domain->setDnsProvider($targetCode);
         $domain->setDnsAccountId($targetAccountId);
         $domain->setDnsSwitchPending(0);
         $domain->setDnsMigrationPending($pushSuccess ? 0 : 1);
+        if ($cdnAccount !== null && $cdnAccount->getAccountId()) {
+            $domain->setCdnProvider((string) $cdnAccount->getRegistrarCode());
+            $domain->setCdnAccountId((int) $cdnAccount->getAccountId());
+        } elseif ($this->dnsDetector->isCdnProvider($targetCode)) {
+            $domain->setCdnProvider($targetCode);
+            $domain->setCdnAccountId($targetAccountId);
+        }
         $domain->forceCheck(false)->save();
-        w_log_info(__('[DnsSwitchService] %{1} Step5: 域名标记已更新', [$domainName]), [], $logCh);
+        w_log_info(__('[DnsSwitchService] %{1} Step6: 域名标记已更新', [$domainName]), [], $logCh);
 
-        // ── Step 6: 更新 DomainPool 状态 ──
-        $cdnProvider = $this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '';
+        // ── Step 7: 更新 DomainPool 状态 ──
+        $cdnProvider = $cdnAccount !== null ? (string) $cdnAccount->getRegistrarCode() : ($this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '');
         $this->updateDomainPoolStatus($domainName, $targetCode, $cdnProvider);
-        w_log_info(__('[DnsSwitchService] %{1} Step6: DomainPool 状态已更新', [$domainName]), [], $logCh);
 
-        $notify('complete', ['domain' => $domainName, 'message' => __('DNS 切换完成')]);
+        // ── Step 8: 可选 CDN HEAD 校验 ──
+        if ($verifyCdn) {
+            $notify('verify_cdn', ['domain' => $domainName, 'message' => __('步骤 5/5：校验 CDN 响应…')]);
+            $cdnCode = $cdnProvider !== '' ? $cdnProvider : $targetCode;
+            $cdnOk = $this->verifyCdnByHead($domainName, $cdnCode);
+            $notify('verify_cdn_done', ['domain' => $domainName, 'ok' => $cdnOk]);
+        }
+
+        $notify('complete', ['domain' => $domainName, 'message' => __('DNS/CDN 切换完成')]);
+        w_log_info(__('[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成', [$domainName]), [], $logCh);
 
         return [
             'success' => true,
@@ -159,6 +237,108 @@ class DnsSwitchService
             'push_added' => $pushAdded,
             'push_failed' => $pushFailed,
         ];
+    }
+
+    /**
+     * 等待 NS 生效：公网解析或注册商侧已更新即通过
+     *
+     * @return array{verified: bool, aborted: bool}
+     */
+    private function waitForNameservers(
+        string $domainName,
+        array $targetNsNormalized,
+        object $sourceAdapter,
+        array $sourceCredentials,
+        int $maxWaitSeconds,
+        int $intervalSeconds,
+        ?callable $isAlive,
+        callable $notify
+    ): array {
+        $elapsed = 0;
+        while ($elapsed < $maxWaitSeconds) {
+            \sleep($intervalSeconds);
+            if ($isAlive !== null && !$isAlive()) {
+                return ['verified' => false, 'aborted' => true];
+            }
+            $elapsed += $intervalSeconds;
+            $liveNs = $this->resolveService->getLiveNameservers($domainName);
+            $liveNormalized = $this->normalizeNameservers($liveNs);
+            $notify('wait_ns_progress', [
+                'elapsed' => $elapsed,
+                'live' => $liveNormalized,
+                'target' => $targetNsNormalized,
+            ]);
+            if ($liveNormalized === $targetNsNormalized) {
+                $notify('wait_ns_verified', ['by' => 'public']);
+                return ['verified' => true, 'aborted' => false];
+            }
+            $registrarNsNow = $this->getRegistrarNameservers($sourceAdapter, $domainName, $sourceCredentials);
+            if ($registrarNsNow !== null) {
+                $regNormNow = $this->normalizeNameservers($registrarNsNow);
+                if ($regNormNow === $targetNsNormalized) {
+                    $notify('wait_ns_verified', ['by' => 'registrar']);
+                    return ['verified' => true, 'aborted' => false];
+                }
+            }
+        }
+        return ['verified' => false, 'aborted' => false];
+    }
+
+    private function normalizeNameservers(array $nameservers): array
+    {
+        $out = [];
+        foreach ($nameservers as $ns) {
+            $n = \strtolower(\trim((string) $ns));
+            if ($n !== '') {
+                $out[] = \rtrim($n, '.');
+            }
+        }
+        $out = \array_values(\array_unique($out));
+        \sort($out);
+        return $out;
+    }
+
+    /**
+     * @return array<string>|null
+     */
+    private function getRegistrarNameservers(object $sourceAdapter, string $domainName, array $credentials): ?array
+    {
+        if (!\method_exists($sourceAdapter, 'getDomainDetail')) {
+            return null;
+        }
+        try {
+            $detail = $sourceAdapter->getDomainDetail($domainName, $credentials);
+            $ns = $detail['nameservers'] ?? null;
+            return \is_array($ns) ? $ns : null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    private function verifyCdnByHead(string $domain, string $providerCode): bool
+    {
+        $url = 'https://' . $domain . '/';
+        $ctx = \stream_context_create([
+            'http' => [
+                'method' => 'HEAD',
+                'timeout' => 10,
+                'ignore_errors' => true,
+            ],
+            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+        ]);
+        $headers = @\get_headers($url, false, $ctx);
+        if ($headers === false || $headers === []) {
+            return false;
+        }
+        $headerStr = \implode(' ', $headers);
+        $providerLower = \strtolower($providerCode);
+        if (\strpos($providerLower, 'cloudflare') !== false && \stripos($headerStr, 'server') !== false && \stripos($headerStr, 'cloudflare') !== false) {
+            return true;
+        }
+        if (\strpos($providerLower, 'cdn') !== false && (\stripos($headerStr, 'cf-') !== false || \stripos($headerStr, 'x-cache') !== false)) {
+            return true;
+        }
+        return false;
     }
 
     /**
