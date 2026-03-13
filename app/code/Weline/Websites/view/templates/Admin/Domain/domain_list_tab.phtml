@@ -800,36 +800,53 @@ $accounts = $accounts ?? [];
 
 <!-- 切换 DNS 服务账户弹窗（选择供应商 + 账户，同步记录→改 NS→定时任务推送记录） -->
 <div class="modal fade" id="welineSwitchDnsAccountModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
                     <i class="mdi mdi-dns me-2"></i><?= __('切换 DNS 服务账户') ?>
                 </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close" id="weline-switch-dns-close-btn" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-info small">
-                    <i class="mdi mdi-information-outline me-1"></i>
-                    <?= __('将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。') ?>
-                </div>
-                <p class="text-muted small mb-3" id="weline-switch-dns-selected-info"></p>
+                <!-- 表单区域 -->
+                <div id="weline-switch-dns-form-area">
+                    <div class="alert alert-info small">
+                        <i class="mdi mdi-information-outline me-1"></i>
+                        <?= __('将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。') ?>
+                    </div>
+                    <p class="text-muted small mb-3" id="weline-switch-dns-selected-info"></p>
 
-                <div class="mb-3">
-                    <label class="form-label"><?= __('选择供应商') ?></label>
-                    <select class="form-select" id="weline-switch-dns-provider" onchange="WelineDomainList.onSwitchDnsProviderChange()">
-                        <option value=""><?= __('-- 请先选择 --') ?></option>
-                    </select>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('选择供应商') ?></label>
+                        <select class="form-select" id="weline-switch-dns-provider" onchange="WelineDomainList.onSwitchDnsProviderChange()">
+                            <option value=""><?= __('-- 请先选择 --') ?></option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label"><?= __('选择账户') ?></label>
+                        <select class="form-select" id="weline-switch-dns-account">
+                            <option value=""><?= __('-- 请先选择供应商 --') ?></option>
+                        </select>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label"><?= __('选择账户') ?></label>
-                    <select class="form-select" id="weline-switch-dns-account">
-                        <option value=""><?= __('-- 请先选择供应商 --') ?></option>
-                    </select>
+                <!-- SSE 进度面板 -->
+                <div id="weline-switch-dns-progress-area" style="display:none;">
+                    <div class="weline-dns-switch-progress-header mb-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="fw-bold" id="weline-dns-switch-progress-title"><?= __('正在切换…') ?></span>
+                            <span class="badge" id="weline-dns-switch-progress-badge" style="background:var(--backend-color-primary,#0d6efd);color:var(--backend-color-text-on-primary,#fff);">0/0</span>
+                        </div>
+                        <div class="progress" style="height:6px;background:var(--backend-color-bg-tertiary,#e9ecef);border-radius:3px;">
+                            <div class="progress-bar" id="weline-dns-switch-progress-bar" role="progressbar" style="width:0%;background:var(--backend-color-primary,#0d6efd);transition:width .3s;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    <div id="weline-dns-switch-log" class="weline-dns-switch-log-panel"></div>
+                    <div id="weline-dns-switch-summary" class="mt-3" style="display:none;"></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-secondary" id="weline-switch-dns-cancel-btn" data-bs-dismiss="modal"><?= __('取消') ?></button>
                 <button type="button" class="btn btn-primary" id="weline-switch-dns-submit" onclick="WelineDomainList.doSwitchDnsAccount()">
                     <i class="mdi mdi-swap-horizontal me-1"></i><?= __('确认切换') ?>
                 </button>
@@ -837,6 +854,39 @@ $accounts = $accounts ?? [];
         </div>
     </div>
 </div>
+<style>
+.weline-dns-switch-log-panel {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 13px;
+    line-height: 1.7;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #333);
+}
+.weline-dns-switch-log-panel .weline-dns-log-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 2px 0;
+}
+.weline-dns-switch-log-panel .weline-dns-log-time {
+    color: var(--backend-color-text-tertiary, #999);
+    flex-shrink: 0;
+    font-family: monospace;
+    font-size: 12px;
+}
+.weline-dns-switch-log-panel .weline-dns-log-icon {
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+}
+.weline-dns-switch-log-panel .weline-dns-log-msg {
+    word-break: break-word;
+}
+</style>
 
 <!-- 批量设置账户弹窗 -->
 <div class="modal fade" id="welineBatchSetAccountsModal" tabindex="-1" aria-hidden="true">
@@ -980,6 +1030,7 @@ $accounts = $accounts ?? [];
         getDnsAccounts: '<?= $this->getUrl('*/admin/domain/get-dns-accounts') ?>',
         createManualDomain: '<?= $this->getUrl('*/admin/domain/create-manual-domain') ?>',
         switchDnsAccount: '<?= $this->getUrl('*/admin/domain/switch-dns-account') ?>',
+        dnsSwitchSse: '<?= $this->getUrl('*/admin/domain/dns-switch-sse') ?>',
         deleteDomains: '<?= $this->getUrl('*/admin/domain/delete-domains') ?>'
     };
 
@@ -2589,6 +2640,13 @@ $accounts = $accounts ?? [];
         document.getElementById('weline-switch-dns-provider').value = '';
         document.getElementById('weline-switch-dns-account').innerHTML = '<option value=""><?= __('-- 请先选择供应商 --') ?></option>';
 
+        document.getElementById('weline-switch-dns-form-area').style.display = 'block';
+        document.getElementById('weline-switch-dns-progress-area').style.display = 'none';
+        document.getElementById('weline-switch-dns-submit').style.display = '';
+        document.getElementById('weline-switch-dns-cancel-btn').disabled = false;
+        document.getElementById('weline-switch-dns-cancel-btn').textContent = '<?= __('取消') ?>';
+        document.getElementById('weline-switch-dns-close-btn').style.display = '';
+
         loadDnsAccountsForSwitch();
         if (!switchDnsAccountModal) {
             switchDnsAccountModal = new bootstrap.Modal(document.getElementById('welineSwitchDnsAccountModal'));
@@ -2652,30 +2710,152 @@ $accounts = $accounts ?? [];
             toast('<?= __('请选择目标 DNS 服务账户') ?>', 'warning');
             return;
         }
+
+        var formArea = document.getElementById('weline-switch-dns-form-area');
+        var progressArea = document.getElementById('weline-switch-dns-progress-area');
+        var logPanel = document.getElementById('weline-dns-switch-log');
+        var progressBar = document.getElementById('weline-dns-switch-progress-bar');
+        var progressBadge = document.getElementById('weline-dns-switch-progress-badge');
+        var progressTitle = document.getElementById('weline-dns-switch-progress-title');
+        var summaryEl = document.getElementById('weline-dns-switch-summary');
         var submitBtn = document.getElementById('weline-switch-dns-submit');
-        var fd = new FormData();
-        fd.append('domain_ids', JSON.stringify(switchDnsAccountSelectedIds));
-        fd.append('target_account_id', targetAccountId);
+        var cancelBtn = document.getElementById('weline-switch-dns-cancel-btn');
+        var closeBtn = document.getElementById('weline-switch-dns-close-btn');
 
-        toast('<?= __('正在切换 DNS 服务账户…') ?>', 'info');
-        submitBtn.disabled = true;
+        formArea.style.display = 'none';
+        progressArea.style.display = 'block';
+        logPanel.innerHTML = '';
+        summaryEl.style.display = 'none';
+        submitBtn.style.display = 'none';
+        cancelBtn.disabled = true;
+        closeBtn.style.display = 'none';
 
-        fetch(urls.switchDnsAccount, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                submitBtn.disabled = false;
-                if (data.code === 200) {
-                    toast(data.msg || '<?= __('切换完成') ?>', 'success');
-                    if (switchDnsAccountModal) switchDnsAccountModal.hide();
-                    loadDomains(currentPage);
-                } else {
-                    toast(data.msg || '<?= __('切换失败') ?>', 'error');
+        var modalEl = document.getElementById('welineSwitchDnsAccountModal');
+        if (switchDnsAccountModal) {
+            switchDnsAccountModal._config.backdrop = 'static';
+            switchDnsAccountModal._config.keyboard = false;
+        }
+
+        var sseUrl = urls.dnsSwitchSse
+            + '?domain_ids=' + encodeURIComponent(JSON.stringify(switchDnsAccountSelectedIds))
+            + '&target_account_id=' + encodeURIComponent(targetAccountId);
+
+        var totalDomains = switchDnsAccountSelectedIds.length;
+        var completedDomains = 0;
+
+        var eventIcons = {
+            'init': '<i class="mdi mdi-information-outline" style="color:var(--backend-color-primary,#0d6efd);"></i>',
+            'sync_records': '<i class="mdi mdi-sync" style="color:var(--backend-color-info,#0dcaf0);"></i>',
+            'sync_records_done': '<i class="mdi mdi-check" style="color:var(--backend-color-success,#198754);"></i>',
+            'add_zone': '<i class="mdi mdi-cloud-outline" style="color:var(--backend-color-info,#0dcaf0);"></i>',
+            'add_zone_done': '<i class="mdi mdi-check" style="color:var(--backend-color-success,#198754);"></i>',
+            'switch_ns': '<i class="mdi mdi-swap-horizontal" style="color:var(--backend-color-warning,#ffc107);"></i>',
+            'switch_ns_done': '<i class="mdi mdi-check-circle" style="color:var(--backend-color-success,#198754);"></i>',
+            'push_records': '<i class="mdi mdi-upload" style="color:var(--backend-color-info,#0dcaf0);"></i>',
+            'update_domain': '<i class="mdi mdi-database-edit" style="color:var(--backend-color-info,#0dcaf0);"></i>',
+            'update_pool': '<i class="mdi mdi-database-check" style="color:var(--backend-color-info,#0dcaf0);"></i>',
+            'domain_done': '<i class="mdi mdi-check-all" style="color:var(--backend-color-success,#198754);"></i>',
+            'step_error': '<i class="mdi mdi-alert-circle" style="color:var(--backend-color-danger,#dc3545);"></i>',
+            'step_skip': '<i class="mdi mdi-skip-next" style="color:var(--backend-color-text-tertiary,#999);"></i>',
+            'error': '<i class="mdi mdi-close-circle" style="color:var(--backend-color-danger,#dc3545);"></i>',
+            'done': '<i class="mdi mdi-flag-checkered" style="color:var(--backend-color-success,#198754);"></i>'
+        };
+
+        var appendLog = function(eventType, data) {
+            var icon = eventIcons[eventType] || '<i class="mdi mdi-circle-small"></i>';
+            var time = (data && data.time) ? data.time : '';
+            var msg = (data && data.message) ? data.message : (typeof data === 'string' ? data : JSON.stringify(data));
+            var domainTag = (data && data.domain) ? '<strong>[' + data.domain + ']</strong> ' : '';
+            var item = document.createElement('div');
+            item.className = 'weline-dns-log-item';
+            item.innerHTML = '<span class="weline-dns-log-time">' + time + '</span>'
+                + '<span class="weline-dns-log-icon">' + icon + '</span>'
+                + '<span class="weline-dns-log-msg">' + domainTag + msg + '</span>';
+            logPanel.appendChild(item);
+            logPanel.scrollTop = logPanel.scrollHeight;
+        };
+
+        var updateProgress = function(current, total) {
+            var pct = total > 0 ? Math.round(current / total * 100) : 0;
+            progressBar.style.width = pct + '%';
+            progressBar.setAttribute('aria-valuenow', pct);
+            progressBadge.textContent = current + '/' + total;
+        };
+
+        var es = new EventSource(sseUrl);
+
+        var allEvents = ['init','sync_records','sync_records_done','add_zone','add_zone_done',
+            'switch_ns','switch_ns_done','push_records','update_domain','update_pool',
+            'domain_done','step_error','step_skip','error','done'];
+
+        allEvents.forEach(function(evtName) {
+            es.addEventListener(evtName, function(e) {
+                var data = {};
+                try { data = JSON.parse(e.data); } catch(_) { data = { message: e.data }; }
+
+                appendLog(evtName, data);
+
+                if (evtName === 'domain_done' || evtName === 'step_error' || evtName === 'step_skip') {
+                    completedDomains++;
+                    updateProgress(completedDomains, totalDomains);
                 }
-            })
-            .catch(function() {
-                submitBtn.disabled = false;
-                toast('<?= __('请求失败') ?>', 'error');
+
+                if (evtName === 'init' && data.total) {
+                    totalDomains = data.total;
+                    updateProgress(0, totalDomains);
+                }
+
+                if (evtName === 'done') {
+                    es.close();
+                    progressTitle.textContent = '<?= __('切换完成') ?>';
+                    updateProgress(totalDomains, totalDomains);
+                    progressBar.style.background = 'var(--backend-color-success, #198754)';
+
+                    var s = (data.success || 0);
+                    var sk = (data.skipped || 0);
+                    var f = (data.failed || 0);
+                    summaryEl.innerHTML = '<div class="alert mb-0" style="background:var(--backend-color-bg-tertiary,#e9ecef);color:var(--backend-color-text-primary,#333);border:1px solid var(--backend-color-border-default,#dee2e6);">'
+                        + '<i class="mdi mdi-check-circle me-1" style="color:var(--backend-color-success,#198754);"></i>'
+                        + '<strong>' + (data.message || '') + '</strong>'
+                        + '</div>';
+                    summaryEl.style.display = 'block';
+
+                    cancelBtn.disabled = false;
+                    cancelBtn.textContent = '<?= __('关闭') ?>';
+                    closeBtn.style.display = '';
+                    if (switchDnsAccountModal) {
+                        switchDnsAccountModal._config.backdrop = true;
+                        switchDnsAccountModal._config.keyboard = true;
+                    }
+                    loadDomains(currentPage);
+                }
+
+                if (evtName === 'error') {
+                    es.close();
+                    progressTitle.textContent = '<?= __('切换异常') ?>';
+                    progressBar.style.background = 'var(--backend-color-danger, #dc3545)';
+                    cancelBtn.disabled = false;
+                    cancelBtn.textContent = '<?= __('关闭') ?>';
+                    closeBtn.style.display = '';
+                    if (switchDnsAccountModal) {
+                        switchDnsAccountModal._config.backdrop = true;
+                        switchDnsAccountModal._config.keyboard = true;
+                    }
+                }
             });
+        });
+
+        es.onerror = function() {
+            es.close();
+            appendLog('error', { message: '<?= __('SSE 连接中断') ?>', time: new Date().toLocaleTimeString() });
+            cancelBtn.disabled = false;
+            cancelBtn.textContent = '<?= __('关闭') ?>';
+            closeBtn.style.display = '';
+            if (switchDnsAccountModal) {
+                switchDnsAccountModal._config.backdrop = true;
+                switchDnsAccountModal._config.keyboard = true;
+            }
+        };
     }
 
     // ========== 批量设置账户相关函数 ==========

@@ -272,6 +272,7 @@ class DomainAutoResolve implements CronTaskInterface
      */
     private function processDnsMigrationPending(): string
     {
+        $logCh = 'dns_cdn_switch';
         try {
             $domainModel = ObjectManager::getInstance(Domain::class);
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
@@ -286,17 +287,20 @@ class DomainAutoResolve implements CronTaskInterface
                 return '';
             }
 
+            $total = \count($rows);
+            w_log_info(__('[DnsMigration] 开始处理 DNS 记录迁移，待处理=%{1}', [(string) $total]), [], $logCh);
+
             $success = 0;
             $failed = 0;
 
             foreach ($rows as $row) {
                 $domain = clone $domainModel;
                 $domain->setData($row);
-                $domainId = $domain->getDomainId();
                 $domainName = $domain->getDomain();
                 $targetAccountId = (int) $domain->getDnsAccountId();
 
                 if ($targetAccountId <= 0) {
+                    w_log_warning(__('[DnsMigration] %{1} 目标 DNS 账户未设置，跳过', [$domainName]), [], $logCh);
                     $domain->setDnsMigrationPending(0);
                     $domain->forceCheck(false)->save();
                     $failed++;
@@ -306,25 +310,38 @@ class DomainAutoResolve implements CronTaskInterface
                 $targetAccount = clone $accountModel;
                 $targetAccount->load($targetAccountId);
                 if (!$targetAccount->getAccountId()) {
+                    w_log_warning(__('[DnsMigration] %{1} 目标账户 ID %{2} 不存在，跳过', [$domainName, (string) $targetAccountId]), [], $logCh);
                     $domain->setDnsMigrationPending(0);
                     $domain->forceCheck(false)->save();
                     $failed++;
                     continue;
                 }
 
+                w_log_info(__('[DnsMigration] %{1} 推送 DNS 记录到账户 %{2}(%{3})', [
+                    $domainName, (string) $targetAccountId, $targetAccount->getRegistrarCode(),
+                ]), [], $logCh);
+
                 $pushResult = $resolveService->pushRecordsToProvider($domain, $targetAccount, null);
                 if ($pushResult['success'] ?? false) {
                     $domain->setDnsMigrationPending(0);
                     $domain->forceCheck(false)->save();
                     $success++;
+                    w_log_info(__('[DnsMigration] %{1} 推送成功，added=%{2}', [
+                        $domainName, (string) ($pushResult['added'] ?? 0),
+                    ]), [], $logCh);
                 } else {
                     $failed++;
+                    w_log_error(__('[DnsMigration] %{1} 推送失败：%{2}', [
+                        $domainName, \implode('; ', $pushResult['errors'] ?? []),
+                    ]), [], $logCh);
                 }
             }
 
-            return \sprintf('DNS记录迁移: 待处理%d, 成功%d, 失败%d', \count($rows), $success, $failed);
+            $msg = \sprintf('DNS记录迁移: 待处理%d, 成功%d, 失败%d', $total, $success, $failed);
+            w_log_info(__('[DnsMigration] %{1}', [$msg]), [], $logCh);
+            return $msg;
         } catch (\Throwable $e) {
-            w_log_error('DNS迁移任务异常: ' . $e->getMessage(), [], 'domain_auto_resolve');
+            w_log_error('[DnsMigration] 任务异常: ' . $e->getMessage(), [], $logCh);
             return '';
         }
     }

@@ -199,9 +199,9 @@ function _loadSniCertsFromMap(): array
  * 解析顺序：
  *  1. 进程内存缓存（$sniServerCerts，由 IPC ssl_cert_reload 维护）
  *  2. 磁盘证书目录（app/etc/ssl/{domain}/fullchain.pem + privkey.pem）
+ *  3. 数据库回退：从证书管理表查询并恢复完整文件到磁盘
  *
  * 命中后自动写入内存缓存，后续同域名请求零开销。
- * 未命中说明该域名确实没有可用证书（尚未申请或文件丢失），属于正常情况。
  *
  * @param string $domain 小写域名
  * @param array<string, array{local_cert: string, local_pk: string}> &$cache 进程级缓存（引用传递）
@@ -224,7 +224,44 @@ function _resolveSniCert(string $domain, array &$cache): ?array
         return $entry;
     }
 
+    // 3. 数据库回退：磁盘无证书时从 DB 恢复
+    $restored = _restoreCertFromDb($domain);
+    if ($restored) {
+        \clearstatcache(true, $certFile);
+        \clearstatcache(true, $keyFile);
+        if (\is_file($certFile) && \is_file($keyFile)) {
+            $entry = ['local_cert' => $certFile, 'local_pk' => $keyFile];
+            $cache[$domain] = $entry;
+            WlsLogger::info_("证书已从数据库恢复到磁盘：{$domain}");
+            return $entry;
+        }
+    }
+
     return null;
+}
+
+/**
+ * 从证书管理表恢复域名证书文件到磁盘（全部 6 个文件）。
+ * 仅在 _resolveSniCert 磁盘未命中时调用，避免每次请求都查库。
+ */
+function _restoreCertFromDb(string $domain): bool
+{
+    static $attempted = [];
+    if (isset($attempted[$domain])) {
+        return false;
+    }
+    $attempted[$domain] = true;
+
+    try {
+        /** @var \Weline\Server\Service\SslCertificateService $sslService */
+        $sslService = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Server\Service\SslCertificateService::class
+        );
+        return $sslService->restoreCertificateFromDb($domain);
+    } catch (\Throwable $e) {
+        WlsLogger::warning_("证书数据库恢复失败：{$domain} - {$e->getMessage()}");
+        return false;
+    }
 }
 
 /**

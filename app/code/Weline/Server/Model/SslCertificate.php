@@ -43,6 +43,8 @@ class SslCertificate extends Model
     public const schema_fields_KEY_PEM = 'key_pem';
     #[Col('text', nullable: true, comment: '证书链PEM内容')]
     public const schema_fields_CHAIN_PEM = 'chain_pem';
+    #[Col('text', nullable: true, comment: 'CSR PEM内容')]
+    public const schema_fields_CSR_PEM = 'csr_pem';
     #[Col('varchar', 100, default: "Let's Encrypt", comment: '颁发机构')]
     public const schema_fields_ISSUER = 'issuer';
     #[Col('varchar', 30, default: 'letsencrypt', comment: '证书申请服务商')]
@@ -223,7 +225,18 @@ class SslCertificate extends Model
     {
         return (string) ($this->getData(self::schema_fields_CHAIN_PEM) ?? '');
     }
-    
+
+    public function setCsrPem(string $pem): self
+    {
+        $this->setData(self::schema_fields_CSR_PEM, $pem);
+        return $this;
+    }
+
+    public function getCsrPem(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CSR_PEM) ?? '');
+    }
+
     public function setIssuer(string $issuer): self
     {
         $this->setData(self::schema_fields_ISSUER, $issuer);
@@ -425,7 +438,8 @@ class SslCertificate extends Model
         unset(
             $data[self::schema_fields_CERT_PEM],
             $data[self::schema_fields_KEY_PEM],
-            $data[self::schema_fields_CHAIN_PEM]
+            $data[self::schema_fields_CHAIN_PEM],
+            $data[self::schema_fields_CSR_PEM]
         );
         return $data;
     }

@@ -378,21 +378,34 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
-        // 兼容新旧 API：优先官方文档的 xgdns，失败后回退到历史端点。
+        w_log_info(__('[GName] modifyDns 请求：domain=%{1}, dns=%{2}', [$domain, $dnsServers]), [], 'dns_cdn_switch');
+
         $response = $this->makeRequest('api/domain/xgdns', [
             'ym' => $domain,
             'dns' => $dnsServers,
         ], $credentials);
+
+        w_log_info(__('[GName] xgdns 响应：code=%{1}, msg=%{2}', [
+            (string) ($response['code'] ?? '?'),
+            (string) ($response['msg'] ?? ''),
+        ]), [], 'dns_cdn_switch');
+
         if ((int) ($response['code'] ?? 0) !== 1) {
+            w_log_info(__('[GName] xgdns 失败，回退到 api/domain/dns'), [], 'dns_cdn_switch');
             $response = $this->makeRequest('api/domain/dns', [
                 'ym' => $domain,
                 'dns' => $dnsServers,
             ], $credentials);
+            w_log_info(__('[GName] dns 回退响应：code=%{1}, msg=%{2}', [
+                (string) ($response['code'] ?? '?'),
+                (string) ($response['msg'] ?? ''),
+            ]), [], 'dns_cdn_switch');
         }
 
         $code = (int) ($response['code'] ?? 0);
 
         if ($code === 1) {
+            w_log_info(__('[GName] NS 切换成功：%{1} → %{2}', [$domain, $dnsServers]), [], 'dns_cdn_switch');
             return [
                 'success' => true,
                 'message' => $response['msg'] ?? __('DNS 修改成功'),
@@ -400,6 +413,7 @@ class GnameRegistrar implements DomainRegistrarInterface
         }
 
         $errorMsg = $response['msg'] ?? __('未知错误');
+        w_log_error(__('[GName] NS 切换失败：%{1}, code=%{2}, msg=%{3}', [$domain, (string) $code, $errorMsg]), [], 'dns_cdn_switch');
         return [
             'success' => false,
             'message' => __('DNS 修改失败：%{1}（错误码：%{2}）', [$errorMsg, $code]),
@@ -1120,6 +1134,7 @@ class GnameRegistrar implements DomainRegistrarInterface
     public function updateNameservers(string $domain, array $nameservers, array $credentials): array
     {
         $dnsStr = \implode(',', \array_filter(\array_map('trim', $nameservers)));
+        w_log_info(__('[GName] updateNameservers：domain=%{1}, ns=%{2}', [$domain, $dnsStr]), [], 'dns_cdn_switch');
         return $this->modifyDns($domain, $dnsStr, $credentials);
     }
 

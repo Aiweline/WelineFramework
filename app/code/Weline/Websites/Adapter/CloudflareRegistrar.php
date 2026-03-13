@@ -487,6 +487,9 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
     public function batchAddDnsRecords(string $domain, array $records, array $credentials): array
     {
+        $total = \count($records);
+        w_log_info(__('[CF] batchAddDnsRecords 开始：domain=%{1}, 记录数=%{2}', [$domain, (string) $total]), [], 'dns_cdn_switch');
+
         $added = 0;
         $failed = 0;
         $errors = [];
@@ -499,6 +502,11 @@ class CloudflareRegistrar implements DomainRegistrarInterface
                 $failed++;
                 $errors[] = ($record['host'] ?? '@') . ': ' . ($result['message'] ?? __('未知错误'));
             }
+        }
+
+        w_log_info(__('[CF] batchAddDnsRecords 完成：domain=%{1}, 成功=%{2}, 失败=%{3}', [$domain, (string) $added, (string) $failed]), [], 'dns_cdn_switch');
+        if ($errors !== []) {
+            w_log_warning(__('[CF] batchAddDnsRecords 失败详情：%{1}', [\implode('; ', $errors)]), [], 'dns_cdn_switch');
         }
 
         return [
@@ -534,10 +542,12 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         }
 
         $this->validateCredentials($credentials);
+        w_log_info(__('[CF] getProviderNameservers：domain=%{1}', [$domain]), [], 'dns_cdn_switch');
 
         $detail = $this->getDomainDetail($domain, $credentials);
 
         if (isset($detail['nameservers']) && !empty($detail['nameservers'])) {
+            w_log_info(__('[CF] 域名已在 Zone 中，ns=%{1}', [\implode(', ', $detail['nameservers'])]), [], 'dns_cdn_switch');
             return [
                 'success' => true,
                 'nameservers' => $detail['nameservers'],
@@ -545,6 +555,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        w_log_info(__('[CF] 域名不在 Zone 中，自动添加'), [], 'dns_cdn_switch');
         $addResult = $this->addZone($domain, $credentials);
 
         if ($addResult['success'] && !empty($addResult['nameservers'])) {
@@ -555,6 +566,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             ];
         }
 
+        w_log_error(__('[CF] getProviderNameservers 失败：%{1}', [$addResult['message'] ?? '']), [], 'dns_cdn_switch');
         return [
             'success' => false,
             'nameservers' => [],
@@ -581,14 +593,15 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     public function addZone(string $domain, array $credentials): array
     {
         $this->validateCredentials($credentials);
+        w_log_info(__('[CF] addZone 请求：domain=%{1}', [$domain]), [], 'dns_cdn_switch');
 
-        // 优先从配置获取，不行再调用 API 自动获取
         $accountId = $this->resolveAccountId($credentials);
         if ($accountId === '') {
             $accountId = $this->getAccountId($credentials);
         }
 
         if ($accountId === '') {
+            w_log_error(__('[CF] addZone 失败：无法获取 Account ID'), [], 'dns_cdn_switch');
             return [
                 'success' => false,
                 'message' => __('无法自动获取 Cloudflare Account ID。') . "\n\n" .
@@ -608,11 +621,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             'type' => 'full',
         ];
 
+        w_log_info(__('[CF] 创建 Zone：account_id=%{1}, type=full', [$accountId]), [], 'dns_cdn_switch');
         $response = $this->makeRequest('/zones', 'POST', $data, $credentials);
 
         if (!($response['success'] ?? false)) {
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? __('未知错误')) : __('添加域名失败');
+            w_log_error(__('[CF] addZone 失败：%{1}, errors=%{2}', [$errorMsg, \json_encode($errors, JSON_UNESCAPED_UNICODE)]), [], 'dns_cdn_switch');
             return [
                 'success' => false,
                 'message' => $errorMsg,
@@ -620,12 +635,14 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         }
 
         $zone = $response['result'] ?? [];
+        $ns = $zone['name_servers'] ?? [];
+        w_log_info(__('[CF] addZone 成功：zone_id=%{1}, ns=%{2}', [$zone['id'] ?? '', \implode(', ', $ns)]), [], 'dns_cdn_switch');
 
         return [
             'success' => true,
             'zone_id' => $zone['id'] ?? '',
-            'nameservers' => $zone['name_servers'] ?? [],
-            'message' => __('域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}', [\implode(', ', $zone['name_servers'] ?? [])]),
+            'nameservers' => $ns,
+            'message' => __('域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}', [\implode(', ', $ns)]),
         ];
     }
 
