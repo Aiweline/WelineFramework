@@ -173,6 +173,17 @@ try {
     w_log_error('[WLS Worker] Bootstrap error: ' . $e->getMessage());
 }
 
+// ========== Fiber 调度器初始化 ==========
+$fiberScheduler = new \Weline\Server\Scheduler\FiberScheduler();
+\Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
+\Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
+WlsLogger::info_("Fiber 调度器已初始化");
+
+// 活跃 Fiber 列表：connId => Fiber
+$activeFibers = [];
+// Fiber 关联的连接 ID（用于 Fiber 完成后的响应发送）
+$fiberResults = [];
+
 // ========== WLS 内存缓存配置（智能模式） ==========
 $wlsCacheConfig = [];
 if ($envConfig !== null && isset($envConfig['server']['cache'])) {
@@ -379,7 +390,7 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
         }
         WlsLogger::warning_("端口 {$port} 占用 (errno: {$lastErrno})，{$bindRetryDelay} 秒后重试 ({$attempt}/{$maxBindRetries})");
         if ($attempt < $maxBindRetries) {
-            \sleep($bindRetryDelay);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep($bindRetryDelay);
         }
     }
 
@@ -444,7 +455,7 @@ if ($useReusePort && $supportsReusePort && \function_exists('socket_create')) {
         }
         WlsLogger::warning_("端口 {$port} 占用 (errno: {$streamErrno})，{$streamRetryDelay} 秒后重试 ({$attempt}/{$maxStreamRetries})");
         if ($attempt < $maxStreamRetries) {
-            \sleep($streamRetryDelay);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep($streamRetryDelay);
         }
     }
 
@@ -498,7 +509,7 @@ if ($controlPort > 0) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -563,6 +574,31 @@ if ($controlPort > 0) {
                         $socket = null;
                     }
                     WlsLogger::info_("收到 drain 命令，已关闭监听 socket，开始排水...");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_FIBER_SET_CONFIG:
+                    $fiberIdleTtlSec = (int) ($msg['idle_ttl_sec'] ?? 0);
+                    $fiberMaxActive = (int) ($msg['max_active'] ?? 0);
+                    WlsLogger::info_("收到 fiber_set_config: idle_ttl_sec={$fiberIdleTtlSec}, max_active={$fiberMaxActive}");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_FIBER_RELEASE_IDLE:
+                    $fiberReleaseIdleRequested = true;
+                    WlsLogger::info_("收到 fiber_release_idle，下一轮循环执行释放");
+                    break;
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_FIBER_POOL_QUERY:
+                    $requestId = $msg['request_id'] ?? '';
+                    if ($requestId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::fiberPoolStats(
+                            $requestId,
+                            $workerId,
+                            \count($activeFibers),
+                            (int) $fiberIdleTtlSec,
+                            (int) $fiberMaxActive,
+                            0
+                        ));
+                    }
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
@@ -644,6 +680,12 @@ $memoryWarningThreshold = 0.8; // 80% 时告警
 
 // 最大请求数限制（可选的内存保护措施）
 $maxRequests = 10000; // 处理 10000 个请求后优雅重启（0=禁用）
+
+// Fiber 池配置（可由 IPC 下发：fiber_set_config）
+$fiberIdleTtlSec = 0;   // 挂起超过此秒数视为闲置并释放，0=不自动释放
+$fiberMaxActive = 0;    // 最大活跃挂起 Fiber 数，0=不限制
+$fiberReleaseIdleRequested = false;  // IPC 请求立即释放闲置时置 true
+$lastFiberIdleCheck = \time();       // 上次执行闲置检查的时间
 
 // 重载日志输出函数
 $logReload = function (string $method) use ($workerId, $instanceName) {
@@ -964,7 +1006,100 @@ while (true) {
     $write = [];
     $except = [];
     
-    $changed = @\stream_select($read, $write, $except, 0, 100000);
+    // Fiber 调度器感知：有待到期定时器时缩短 select timeout
+    $selectTimeoutSec = 0;
+    $selectTimeoutUsec = 100000; // 默认 100ms
+    $nextDelay = $fiberScheduler->getNextTimerDelay();
+    if ($nextDelay !== null) {
+        $delayUsec = (int) ($nextDelay * 1_000_000);
+        if ($delayUsec < $selectTimeoutUsec) {
+            $selectTimeoutUsec = \max(0, $delayUsec);
+        }
+    }
+    
+    $changed = @\stream_select($read, $write, $except, $selectTimeoutSec, $selectTimeoutUsec);
+    
+    // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
+    $fiberScheduler->tick(function (\Fiber $fiber) use (&$activeFibers) {
+        foreach ($activeFibers as $afData) {
+            if ($afData['fiber'] === $fiber && isset($afData['context'])) {
+                $afData['context']->restore();
+                return;
+            }
+        }
+    });
+    
+    // 检查 tick 后是否有挂起的 Fiber 已完成（terminate）
+    foreach ($activeFibers as $afConnId => $afData) {
+        $af = $afData['fiber'];
+        if ($af->isTerminated()) {
+            // 恢复该 Fiber 的上下文，确保 cleanup 操作在正确的请求环境中执行
+            if (isset($afData['context'])) {
+                $afData['context']->restore();
+            }
+
+            $afResponse = '';
+            try {
+                $afResponse = $af->getReturn() ?? '';
+            } catch (\Throwable) {
+                // Fiber 抛异常退出（如 RequestExitException），视为空响应
+            }
+            $fiberScheduler->unregisterFiber();
+            $afDuration = \round((\microtime(true) - $afData['handleStartTime']) * 1000, 2);
+            $afResponse = injectWlsProcessTimeHeader($afResponse, $afDuration);
+            
+            if (isset($connections[$afConnId]) && \is_resource($afData['conn'])) {
+                sendResponseAndCleanup(
+                    $afData['conn'], $afConnId, $afResponse, $afData['rawRequest'],
+                    $connections, $requestBuffers, $connectionLastActivity, $requestLogged,
+                    $ipcClient, $instanceName, $activeRequests, $afDuration, $ipcDraining
+                );
+            } else {
+                $activeRequests--;
+                \Weline\Framework\Http\Sse\SseContext::reset();
+            }
+            unset($activeFibers[$afConnId]);
+        } elseif ($af->isSuspended()) {
+            // Fiber 仍然挂起（可能是 resume 后再次 suspend），更新上下文快照与闲置时间
+            $afData['context'] = \Weline\Framework\Runtime\WlsFiberContext::capture();
+            $afData['suspended_at'] = \time();
+            $activeFibers[$afConnId] = $afData;
+        }
+    }
+
+    // 更新 Fiber 快照供健康检查 /_wls/health?detail=1&fibers=1 读取
+    \Weline\Server\Runtime\WorkerFiberSnapshot::setSnapshot(buildFiberSnapshotForHealth($activeFibers));
+
+    // Fiber 池：释放闲置过久的挂起 Fiber（自动周期或 IPC 触发的立即释放）
+    $now = \time();
+    $idleCheckInterval = 5;
+    $doReleaseIdle = $fiberReleaseIdleRequested || ($fiberIdleTtlSec > 0 && $now - $lastFiberIdleCheck >= $idleCheckInterval);
+    if ($doReleaseIdle && !empty($activeFibers)) {
+        $lastFiberIdleCheck = $now;
+        $fiberReleaseIdleRequested = false;
+        $releaseThreshold = $fiberIdleTtlSec > 0 ? $fiberIdleTtlSec : 0;
+        $toRelease = [];
+        foreach ($activeFibers as $afConnId => $afData) {
+            $suspendedAt = $afData['suspended_at'] ?? $now;
+            if ($releaseThreshold === 0 || ($now - $suspendedAt) >= $releaseThreshold) {
+                $toRelease[$afConnId] = $afData;
+            }
+        }
+        foreach ($toRelease as $afConnId => $afData) {
+            $fiberScheduler->cancelTimersForFiber($afData['fiber']);
+            if (isset($afData['conn']) && \is_resource($afData['conn'])) {
+                @\fclose($afData['conn']);
+            }
+            unset($connections[$afConnId], $requestBuffers[$afConnId], $connectionLastActivity[$afConnId], $requestLogged[$afConnId]);
+            unset($activeFibers[$afConnId]);
+            $activeRequests--;
+            $fiberScheduler->unregisterFiber();
+        }
+        $released = \count($toRelease);
+        if ($released > 0) {
+            WlsLogger::info_("Fiber 池释放闲置: {$released} 个 (connIds 已关闭)");
+        }
+    }
     
     if ($changed === false) {
         continue;
@@ -1083,125 +1218,83 @@ while (true) {
             WlsLogger::info_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
         }
         
+        // Fiber 池：最大活跃挂起数限制，超限时直接 503
+        if ($fiberMaxActive > 0 && \count($activeFibers) >= $fiberMaxActive) {
+            $activeRequests--;
+            $body = 'Service Unavailable';
+            $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+            @\fwrite($conn, $resp);
+            @\fclose($conn);
+            unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+            WlsLogger::warning_("Fiber 池已满 (max_active={$fiberMaxActive})，拒绝请求 (connId: {$connId})");
+            continue;
+        }
+        
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
         
-        // 处理请求
+        // ========== Fiber 协作式请求处理 ==========
+        // 将 handleRequest 放入 Fiber，使 SchedulerSystem::sleep() 可以挂起
+        // 而不阻塞整个 Worker 事件循环
+        $fiberConnId = $connId;
+        $fiberConn = $conn;
+        $fiberRawRequest = $rawRequest;
         $handleStartTime = \microtime(true);
-        $response = handleRequest(
-            $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port, 
-            $requestCount, $activeRequests, \count($connections), $startTime,
-            $originToken,
-            $originTokenValidationEnabled,
-            $originTokenHeader,
-            $originTokenAllowLocal
-        );
-        $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
-        $response = injectWlsProcessTimeHeader($response, $handleDuration);
-        $responseStatus = 200;
-        if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
-            $responseStatus = (int)$statusMatches[1];
-        }
-        $responseBytes = 0;
-        $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
-        if (\str_contains($requestHost, ':')) {
-            $requestHost = (string)\explode(':', $requestHost, 2)[0];
-        }
         
-        $activeRequests--;
-        
-        // 检查是否是 SSE 模式（如果是，响应已经流式发送，不需要再发送）
-        $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
-        
-        if (!$isSseMode) {
-            // 普通请求：发送完整响应
-            // 注意：fwrite 不保证一次性写入所有数据，需要循环写入
-            $responseLength = \strlen($response);
-            $totalWritten = 0;
-            // H13: 增加重试次数以支持大文件（如 CKEditor.js ~1.1MB）
-            // 大文件在网络慢时需要更多重试次数
-            $maxRetries = 1000; // 增加到 1000 次（最多 1 秒阻塞）
-            $retryCount = 0;
-            $consecutiveZeroWrites = 0; // 连续 0 写入计数
-            $maxConsecutiveZeroWrites = 100; // 连续 100 次 0 写入才放弃
+        $requestFiber = new \Fiber(function () use (
+            $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+            $requestCount, &$activeRequests, &$connections, $startTime,
+            $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal,
+            $fiberConn, $fiberConnId, $handleStartTime,
+            &$connectionLastActivity, &$requestBuffers, &$requestLogged,
+            $ipcClient, &$fiberResults
+        ) {
+            $response = handleRequest(
+                $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+                $requestCount, $activeRequests, \count($connections), $startTime,
+                $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal
+            );
             
-            while ($totalWritten < $responseLength && $retryCount < $maxRetries) {
-                $chunk = \substr($response, $totalWritten);
-                $written = @\fwrite($conn, $chunk);
-                
-                if ($written === false) {
-                    // 写入失败，连接可能已断开，立即关闭并清理
-                    WlsLogger::warning_("响应写入失败，连接已断开 (已写入: {$totalWritten}/{$responseLength})");
-                    @\fclose($conn);
-                    unset($connections[$connId]);
-                    unset($requestBuffers[$connId]);
-                    unset($connectionLastActivity[$connId]);
-                    unset($requestLogged[$connId]);
-                    continue 2; // 跳出 while 循环和 foreach 循环
-                } elseif ($written === 0) {
-                    // 暂时无法写入（缓冲区满），短暂休眠后重试
-                    $retryCount++;
-                    $consecutiveZeroWrites++;
-                    
-                    // 如果连续多次无法写入，可能是网络问题
-                    if ($consecutiveZeroWrites >= $maxConsecutiveZeroWrites) {
-                        WlsLogger::warning_("响应写入阻塞过久: {$totalWritten}/{$responseLength} bytes (连续 {$consecutiveZeroWrites} 次写入 0)");
-                        break;
-                    }
-                    
-                    \usleep(1000); // 1ms
-                    continue;
-                }
-                
-                $totalWritten += $written;
-                $retryCount = 0; // 重置重试计数
-                $consecutiveZeroWrites = 0; // 重置连续 0 写入计数
-            }
-            
-            // 记录不完整写入的警告，并强制关闭连接
-            if ($totalWritten < $responseLength) {
-                WlsLogger::warning_("响应写入不完整: {$totalWritten}/{$responseLength} bytes (retries: {$retryCount}, zeroWrites: {$consecutiveZeroWrites})");
-                // H14: 写入不完整时必须关闭连接，否则 Keep-Alive 会导致 ERR_CONTENT_LENGTH_MISMATCH
-                @\fclose($conn);
-                unset($connections[$connId]);
-                unset($requestBuffers[$connId]);
-                unset($connectionLastActivity[$connId]);
-                unset($requestLogged[$connId]);
-                continue; // 跳过后续的 Keep-Alive 处理
-            }
-            $responseBytes = $totalWritten;
-        } else {
-            // SSE 模式：响应已流式发送，记录日志
-            WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+            // Fiber 执行完成，返回结果供主循环处理
+            return $response;
+        });
+        
+        $fiberScheduler->registerFiber();
+        
+        try {
+            $requestFiber->start();
+        } catch (\Weline\Framework\Runtime\RequestExitException) {
+            // System::exit() 在 Fiber 中被调用，正常结束请求
+        } catch (\Throwable $e) {
+            WlsLogger::error_("Fiber 启动异常: " . $e->getMessage());
         }
         
-        // 重置 SSE 上下文
-        \Weline\Framework\Http\Sse\SseContext::reset();
-        
-        // 更新连接最后活动时间（请求处理完成）
-        $connectionLastActivity[$connId] = \time();
-
-        // 上报轻量遥测（失败不影响主流程）
-        if ($ipcClient && $ipcClient->isConnected()) {
-            $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
-                $instanceName,
-                $requestHost,
-                $responseStatus,
-                (int)$handleDuration,
-                $responseBytes
-            ));
+        // Fiber 可能已完成（同步路径），也可能已挂起（异步路径）
+        if ($requestFiber->isTerminated()) {
+            // 同步路径：Fiber 已完成，直接处理响应
+            $response = $requestFiber->getReturn() ?? '';
+            $fiberScheduler->unregisterFiber();
+            $handleDuration = \round((\microtime(true) - $handleStartTime) * 1000, 2);
+            $response = injectWlsProcessTimeHeader($response, $handleDuration);
+            sendResponseAndCleanup(
+                $conn, $connId, $response, $rawRequest,
+                $connections, $requestBuffers, $connectionLastActivity, $requestLogged,
+                $ipcClient, $instanceName, $activeRequests, $handleDuration, $ipcDraining
+            );
+        } elseif ($requestFiber->isSuspended()) {
+            // 异步路径：Fiber 挂起了（调用了 SchedulerSystem::sleep）
+            // 保存当前请求上下文快照，等 tick() resume 前恢复
+            $activeFibers[$connId] = [
+                'fiber' => $requestFiber,
+                'conn' => $conn,
+                'rawRequest' => $rawRequest,
+                'handleStartTime' => $handleStartTime,
+                'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
+                'suspended_at' => \time(),
+            ];
+            WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
         }
         
-        // SSE 连接通常是长连接，但处理完成后应该关闭
-        // 普通请求根据 Keep-Alive 决定
-        $shouldClose = $isSseMode || !isKeepAlive($rawRequest) || $ipcDraining; // 排水模式强制关闭连接
-        if ($shouldClose) {
-            @\fclose($conn);
-            unset($connections[$connId]);
-            unset($requestBuffers[$connId]);
-            unset($connectionLastActivity[$connId]);
-            unset($requestLogged[$connId]);
-        }
     }
     
     // 重置连续错误计数（本轮循环成功完成）
@@ -1228,7 +1321,7 @@ while (true) {
         }
         
         // 短暂休眠后继续（避免错误风暴）
-        \usleep(10000); // 10ms
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(10000); // 10ms
         continue;
     }
 }
@@ -1298,6 +1391,126 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
     return \substr_replace($response, $headers, $pos + 2, 0);
 }
 
+/**
+ * 发送 HTTP 响应并清理连接状态
+ *
+ * 从 Fiber 化后的主循环中提取，同时用于同步路径和异步路径（Fiber resume 后）。
+ */
+function sendResponseAndCleanup(
+    mixed $conn,
+    int $connId,
+    string $response,
+    string $rawRequest,
+    array &$connections,
+    array &$requestBuffers,
+    array &$connectionLastActivity,
+    array &$requestLogged,
+    $ipcClient,
+    string $instanceName,
+    int &$activeRequests,
+    float $handleDuration,
+    bool $ipcDraining
+): void {
+    $responseStatus = 200;
+    if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
+        $responseStatus = (int) $statusMatches[1];
+    }
+    $responseBytes = 0;
+    $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
+    if (\str_contains($requestHost, ':')) {
+        $requestHost = (string) \explode(':', $requestHost, 2)[0];
+    }
+
+    $activeRequests--;
+
+    $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
+
+    if (!$isSseMode) {
+        $responseLength = \strlen($response);
+        $totalWritten = 0;
+        $maxRetries = 1000;
+        $retryCount = 0;
+        $consecutiveZeroWrites = 0;
+        $maxConsecutiveZeroWrites = 100;
+
+        while ($totalWritten < $responseLength && $retryCount < $maxRetries) {
+            $chunk = \substr($response, $totalWritten);
+            $written = @\fwrite($conn, $chunk);
+
+            if ($written === false) {
+                WlsLogger::warning_("响应写入失败，连接已断开 (已写入: {$totalWritten}/{$responseLength})");
+                @\fclose($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+                \Weline\Framework\Http\Sse\SseContext::reset();
+                return;
+            } elseif ($written === 0) {
+                $retryCount++;
+                $consecutiveZeroWrites++;
+                if ($consecutiveZeroWrites >= $maxConsecutiveZeroWrites) {
+                    WlsLogger::warning_("响应写入阻塞过久: {$totalWritten}/{$responseLength} bytes (连续 {$consecutiveZeroWrites} 次写入 0)");
+                    break;
+                }
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(1000); // 1ms — 写缓冲区级别的短等待
+                continue;
+            }
+
+            $totalWritten += $written;
+            $retryCount = 0;
+            $consecutiveZeroWrites = 0;
+        }
+
+        if ($totalWritten < $responseLength) {
+            WlsLogger::warning_("响应写入不完整: {$totalWritten}/{$responseLength} bytes");
+            @\fclose($conn);
+            unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+            \Weline\Framework\Http\Sse\SseContext::reset();
+            return;
+        }
+        $responseBytes = $totalWritten;
+    } else {
+        WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+    }
+
+    \Weline\Framework\Http\Sse\SseContext::reset();
+    $connectionLastActivity[$connId] = \time();
+
+    if ($ipcClient && $ipcClient->isConnected()) {
+        $ipcClient->send(\Weline\Server\IPC\ControlMessage::telemetry(
+            $instanceName,
+            $requestHost,
+            $responseStatus,
+            (int) $handleDuration,
+            $responseBytes
+        ));
+    }
+
+    $shouldClose = $isSseMode || !isKeepAlive($rawRequest) || $ipcDraining;
+    if ($shouldClose) {
+        @\fclose($conn);
+        unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+    }
+}
+
+/**
+ * 从当前 Worker 的 activeFibers 构建供健康检查使用的快照（conn_id, status, protocol）
+ * 仅由主循环调用，用于 WorkerFiberSnapshot::setSnapshot()。
+ *
+ * @param array<int, array{fiber: \Fiber, rawRequest?: string}> $activeFibers
+ * @return list<array{conn_id: int, status: string, protocol: string}>
+ */
+function buildFiberSnapshotForHealth(array $activeFibers): array
+{
+    $list = [];
+    foreach ($activeFibers as $connId => $afData) {
+        $fiber = $afData['fiber'] ?? null;
+        $raw = $afData['rawRequest'] ?? '';
+        $status = ($fiber instanceof \Fiber && $fiber->isSuspended()) ? 'idle' : 'busy';
+        $protocol = (\stripos($raw, 'text/event-stream') !== false) ? 'sse' : 'http';
+        $list[] = ['conn_id' => $connId, 'status' => $status, 'protocol' => $protocol];
+    }
+    return $list;
+}
+
 function handleRequest(
     string $rawRequest,
     ?\Weline\Framework\Runtime\WlsRuntime $runtime,
@@ -1360,8 +1573,9 @@ function handleRequest(
         }
         
         // 高性能健康检查：使用极简响应，避免 json_encode/memory_get_usage 开销
-        // 完整信息可通过 /_wls/health?detail=1 获取
+        // 完整信息可通过 /_wls/health?detail=1 获取；fibers=1 时附带每个 Fiber 的闲忙与协议
         $wantsDetail = \strpos($rawRequest, 'detail=1') !== false || \strpos($rawRequest, 'detail=true') !== false;
+        $wantsFibers = \strpos($rawRequest, 'fibers=1') !== false || \strpos($rawRequest, 'fibers=true') !== false;
         
         if ($wantsDetail) {
             // 详细模式：返回完整信息
@@ -1378,7 +1592,11 @@ function handleRequest(
                 'uptime' => \time() - $startTime,
                 'php_version' => PHP_VERSION,
                 'timestamp' => \time(),
+                'fiber_count' => \Weline\Server\Runtime\WorkerFiberSnapshot::getFiberCount(),
             ];
+            if ($wantsFibers) {
+                $health['fibers'] = \Weline\Server\Runtime\WorkerFiberSnapshot::getSnapshot();
+            }
             $body = \json_encode($health, JSON_UNESCAPED_UNICODE);
             $len = \strlen($body);
             return $keepAlive

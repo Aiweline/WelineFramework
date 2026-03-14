@@ -1,4 +1,4 @@
-﻿客服人员管理,Service-Agenten-Verwaltung
+﻿客服人员管理,客服人员管理
 加载客服人员失败：%{1},"Fehler beim Laden der Service-Agenten: %{1}"
 客服名称不能为空,"Agentenname darf nicht leer sein"
 邮箱格式不正确,"Ungültiges E-Mail-Format"

@@ -485,5 +485,20 @@ return [
         'name' => __('统一查询执行后'),
         'description' => __('统一查询执行后触发，可用于结果过滤和审计。'),
         'doc' => 'query/统一查询执行后.md',
-    ]
+    ],
+    
+    // ========== 调度器事件 ==========
+    'Weline_Framework::scheduler::wait' => [
+        'name' => __('调度器等待'),
+        'description' => __('由 SchedulerSystem 在 WLS 模式下 dispatch，通知调度器注册定时器或 fd 等待。Observer 根据 data.type 分支处理（sleep/usleep/waitFd 等）。FPM/CLI 下无 Observer 监听，不产生副作用。'),
+        'doc' => 'scheduler/调度器等待.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'type' => ['type' => 'string', 'required' => true, 'description' => '等待类型：sleep | usleep | waitFd'],
+            'fiber' => ['type' => 'Fiber', 'required' => true, 'description' => '当前挂起的 Fiber 实例'],
+            'seconds' => ['type' => 'int', 'required' => false, 'description' => 'type=sleep 时的秒数'],
+            'microseconds' => ['type' => 'int', 'required' => false, 'description' => 'type=usleep 时的微秒数'],
+        ],
+    ],
 ];

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Console\Server;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -183,17 +184,17 @@ class Stop implements CommandInterface
         if ($isPhpServer || $force) {
             // PHP CLI 服务器或强制模式：直接使用驱动层杀死（绕过 weline- 前缀校验）
             $result = Processer::getDriver()->killProcess($pid);
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             
             if (Processer::isRunningByPid($pid)) {
                 // 如果还在运行，尝试杀死进程树
                 Processer::getDriver()->killProcessTree($pid);
-                \usleep(300000);
+                SchedulerSystem::usleep(300000);
             }
         } else {
             // 普通模式：使用 Processer 的己方进程校验
             Processer::killByPid($pid, false);
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
         }
         
         return !Processer::isRunningByPid($pid);
