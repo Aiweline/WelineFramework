@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
@@ -825,7 +826,7 @@ class ServerInstanceManager
                 $locked = true;
                 break;
             }
-            \usleep(10000);
+            SchedulerSystem::usleep(10000);
         }
 
         if (!$locked) {
@@ -880,7 +881,7 @@ class ServerInstanceManager
                 $locked = true;
                 break;
             }
-            \usleep(10000);
+            SchedulerSystem::usleep(10000);
         }
 
         if (!$locked) {

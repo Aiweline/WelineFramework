@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Control;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
@@ -85,7 +86,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
                     ];
                 }
             }
-            \usleep(50000);
+            SchedulerSystem::usleep(50000);
         }
 
         @\fclose($conn);

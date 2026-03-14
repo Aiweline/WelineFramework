@@ -622,10 +622,8 @@ abstract class RequestAbstract extends RequestFilter
             return $currentScheme . '://' . $hostPart . $portSuffix . $pathPart;
         }
         
-        $host = $_SERVER['SERVER_NAME'] ?? '';
-        if ($host === '') {
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-        }
+        // 优先使用 HTTP_HOST（客户端发送的 Host 头通常带端口，如 localhost:9981），保证生成的后台 URL 携带当前后端端口
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
         if (\str_contains($host, ':')) {
             return $currentScheme . '://' . $host;
         }

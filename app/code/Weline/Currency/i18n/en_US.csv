@@ -1,4 +1,4 @@
-﻿API返回数据格式错误,"API returned data format error"
+﻿API返回数据格式错误,API返回数据格式错误
 "无法获取货币 %{1} 的汇率","Unable to get exchange rate for currency %{1}"
 "API返回的汇率数据异常: %{1}","API returned abnormal exchange rate data: %{1}"
 "API请求失败: %{1}","API request failed: %{1}"

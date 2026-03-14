@@ -91,6 +91,8 @@ BackendConfirm.show('确定删除吗？').then(confirmed => { if (confirmed) { .
 
 - **禁止**编辑 `generated/` 下任何文件；须改源文件后重新生成。
 - **禁止**使用 `error_log()`、echo/print 输出错误；须用 `Env::log_error()` 等。
+- **禁止**使用原生 `sleep()`/`usleep()`；须用 `\Weline\Framework\Runtime\SchedulerSystem::sleep()`/`::usleep()`。WLS 下会挂起 Fiber 而非阻塞 Worker；FPM/CLI 下坍缩为原生调用。
+- **禁止**使用原生 `exit()`/`die()` 终止请求；须用 `\Weline\Framework\Runtime\System::exit($code)`。WLS 下抛出 `RequestExitException`，FPM/CLI 下调用原生 exit。进程守卫 `exit('CLI only')` 除外。对于 `die($msg)` 验证类场景，应改为 `throw new \RuntimeException($msg)` 等异常。
 - **禁止**在模板标签内容中使用 PHP 变量或 `<?= ?>`；须用 `{{variable}}` 或先取到值再输出。
 - **禁止**在模板 .phtml 中定义全局函数或使用 `function_exists(...)` 打补丁；须用闭包（如 `$renderXxx = function(...) use (&$renderXxx) { ... };`）。详见 theme-development 技能「0.5 模板中禁止定义全局函数」。
 - **禁止**在 .phtml 中出现未闭合的 PHP 控制结构；`<?php if (): ?>` 必须成对出现 `<?php endif; ?>`，`<?php foreach (): ?>` 必须对应 `<?php endforeach; ?>`，否则编译后报 `ParseError: unexpected end of file, expecting elseif/else/endif`。详见 theme-development 技能「Phtml PHP 控制结构」。

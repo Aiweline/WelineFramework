@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+
 // 确保 SOCKET_EAGAIN 常量存在（Windows 兼容）
 if (!\defined('SOCKET_EAGAIN')) {
     \define('SOCKET_EAGAIN', 11);
@@ -366,7 +368,7 @@ class PassthroughCore
         if ($this->spinWaitMaxSeconds > 0 && !empty($this->workerPorts)) {
             $deadline = \microtime(true) + $this->spinWaitMaxSeconds;
             while (\microtime(true) < $deadline) {
-                \usleep($this->spinWaitIntervalMs * 1000);
+                SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));
                 $workerSocket = $this->connectToAvailableWorker($workerPort, $sni);
                 if ($workerSocket !== false) {
                     $this->stats['failover_routed']++;
@@ -915,7 +917,7 @@ class PassthroughCore
             }
             
             if ($written === 0) {
-                \usleep(1000);
+                SchedulerSystem::usleep(1000);
                 $retries++;
                 continue;
             }
@@ -1010,7 +1012,7 @@ class PassthroughCore
                     $errCode = \socket_last_error($clientSocket);
                     if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
                         \socket_clear_error($clientSocket);
-                        \usleep(1000);
+                        SchedulerSystem::usleep(1000);
                         $retries++;
                         continue;
                     }
@@ -1021,7 +1023,7 @@ class PassthroughCore
                 }
                 
                 if ($written === 0) {
-                    \usleep(1000);
+                    SchedulerSystem::usleep(1000);
                     $retries++;
                     continue;
                 }
@@ -1087,7 +1089,7 @@ class PassthroughCore
                 if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
                     \socket_clear_error($clientSocket);
                     $attempts++;
-                    \usleep(1000);
+                    SchedulerSystem::usleep(1000);
                     continue;
                 }
                 // 写入错误
@@ -1097,7 +1099,7 @@ class PassthroughCore
             
             if ($written === 0) {
                 $attempts++;
-                \usleep(1000);
+                SchedulerSystem::usleep(1000);
                 continue;
             }
             

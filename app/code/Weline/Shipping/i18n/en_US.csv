@@ -1,4 +1,4 @@
-﻿快递公司不存在,"Carrier does not exist"
+﻿快递公司不存在,快递公司不存在
 快递公司代码不能为空,"Carrier code cannot be empty"
 快递公司名称不能为空,"Carrier name cannot be empty"
 物流跟踪URL模板为必填项，所有快递公司必须支持追踪功能,"Tracking URL template is required, all carriers must support tracking"

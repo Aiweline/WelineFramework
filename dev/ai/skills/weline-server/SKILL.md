@@ -559,6 +559,67 @@ StateManager::registerResetCallback('my_reset', function () {
 - `MenuUrlValidator::$menuPathsCache` — 菜单路径验证静态缓存
 - `MenuRenderService` 实例清理 — 避免 Request 对象和 URL 前缀跨请求残留
 
+## Fiber 协作式调度（SchedulerSystem）
+
+### 概述
+
+WLS Worker 内置 Fiber 协作式调度器，使 SSE 长连接、sleep 等待等操作不再独占 Worker。
+
+### 架构
+
+```
+SchedulerSystem (Framework)  →  dispatch 事件  →  SchedulerWaitObserver (Server)
+                                                        ↓
+                                              FiberScheduler 注册定时器
+                                                        ↓
+Worker select 循环  →  tick()  →  resume 到期 Fiber
+```
+
+- **Framework 层**：`\Weline\Framework\Runtime\SchedulerSystem` — 封装 sleep/usleep
+- **Server 层**：`\Weline\Server\Scheduler\FiberScheduler` — 定时器与 tick
+- **Server 层**：`\Weline\Server\Observer\SchedulerWaitObserver` — 监听 `Weline_Framework::scheduler::wait`
+
+### 使用方式
+
+```php
+use Weline\Framework\Runtime\SchedulerSystem;
+
+// 替代 sleep()
+SchedulerSystem::sleep(5);
+
+// 替代 usleep()
+SchedulerSystem::usleep(500000);
+```
+
+- WLS 下：Fiber 挂起，Worker 继续处理其他连接；定时器到期后 Fiber 被 resume
+- FPM/CLI 下：直接调用原生 sleep/usleep，行为不变
+
+### System::exit()
+
+```php
+use Weline\Framework\Runtime\System;
+
+// 替代 exit()
+System::exit(0);
+```
+
+- WLS 下：抛出 `RequestExitException`，Worker 捕获后关闭连接，进程继续
+- FPM/CLI 下：调用原生 exit()
+
+### 禁止原语
+
+| 禁止 | 替代 |
+|------|------|
+| `sleep()` / `\sleep()` | `SchedulerSystem::sleep()` |
+| `usleep()` / `\usleep()` | `SchedulerSystem::usleep()` |
+| `exit()` / `die()` | `System::exit()` 或抛异常 |
+
+### 状态管理
+
+- `FiberScheduler` 由 Worker 持有，进程级实例
+- `SchedulerSystem::$schedulerActive` 在 Worker 启动时设为 true
+- 无需注册到 StateManager（调度器状态不随请求变化）
+
 ## 故障排查
 
 ### 查看日志

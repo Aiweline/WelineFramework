@@ -14,6 +14,7 @@ namespace Weline\Server\Controller\Frontend;
 
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * SseTest - SSE 前台测试控制器
@@ -217,7 +218,7 @@ HTML;
             ]);
             
             // 模拟处理耗时
-            usleep(500000); // 500ms
+            SchedulerSystem::usleep(500000); // 500ms — WLS 下挂起 Fiber，不阻塞 Worker
         }
         
         // 发送完成事件

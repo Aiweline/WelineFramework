@@ -64,6 +64,9 @@ class ServerQueryProvider implements QueryProviderInterface
             'memoryKeyDelete' => $this->memoryKeyDelete($params),
             'memoryPersist' => $this->memoryPersist(),
             'memoryGc' => $this->memoryGc($params),
+            'fiberStats' => $this->fiberStats($params),
+            'fiberSetConfig' => $this->fiberSetConfig($params),
+            'fiberReleaseIdle' => $this->fiberReleaseIdle($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Server 查询器不支持的操作：%{1}', $operation)
             ),
@@ -134,6 +137,17 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'domain', 'type' => 'string', 'required' => true, 'description' => __('域名')],
                     ],
                 ],
+                ['name' => 'fiberStats', 'description' => __('查询各 Worker Fiber 池统计（挂起数、配置）'), 'params' => [['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名，默认 default')]]],
+                [
+                    'name' => 'fiberSetConfig',
+                    'description' => __('下发 Fiber 池配置：闲置超时与最大活跃数'),
+                    'params' => [
+                        ['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')],
+                        ['name' => 'idle_ttl_sec', 'type' => 'int', 'required' => false, 'description' => __('挂起超过此秒数释放，0=不自动释放')],
+                        ['name' => 'max_active', 'type' => 'int', 'required' => false, 'description' => __('最大挂起 Fiber 数，0=不限制')],
+                    ],
+                ],
+                ['name' => 'fiberReleaseIdle', 'description' => __('通知各 Worker 立即释放闲置 Fiber'), 'params' => [['name' => 'instance', 'type' => 'string', 'required' => false, 'description' => __('实例名')]]],
             ],
         ];
     }
@@ -746,6 +760,70 @@ class ServerQueryProvider implements QueryProviderInterface
         return [
             'success' => $ok,
             'message' => $ok ? (string)__('内存服务垃圾回收已执行') : (string)__('内存服务垃圾回收执行失败'),
+        ];
+    }
+
+    /**
+     * 查询各 Worker 的 Fiber 池统计（挂起数、配置）
+     */
+    private function fiberStats(array $params): array
+    {
+        $instance = (string)($params['instance'] ?? 'default');
+        $result = $this->ipcControlGateway->command(
+            $instance,
+            ControlMessage::ACTION_FIBER_STATS,
+            '',
+            [],
+            12.0
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? ''),
+            'data' => (array)($result['data'] ?? []),
+        ];
+    }
+
+    /**
+     * 下发 Fiber 池配置（闲置超时、最大活跃数）
+     *
+     * @param array $params idle_ttl_sec (秒), max_active (0=不限制)
+     */
+    private function fiberSetConfig(array $params): array
+    {
+        $instance = (string)($params['instance'] ?? 'default');
+        $idleTtlSec = (int)($params['idle_ttl_sec'] ?? 0);
+        $maxActive = (int)($params['max_active'] ?? 0);
+        $result = $this->ipcControlGateway->command(
+            $instance,
+            ControlMessage::ACTION_FIBER_SET_CONFIG,
+            '',
+            ['idle_ttl_sec' => $idleTtlSec, 'max_active' => $maxActive],
+            8.0
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? ''),
+            'data' => (array)($result['data'] ?? []),
+        ];
+    }
+
+    /**
+     * 通知各 Worker 立即释放闲置 Fiber
+     */
+    private function fiberReleaseIdle(array $params): array
+    {
+        $instance = (string)($params['instance'] ?? 'default');
+        $result = $this->ipcControlGateway->command(
+            $instance,
+            ControlMessage::ACTION_FIBER_RELEASE_IDLE,
+            '',
+            [],
+            8.0
+        );
+        return [
+            'success' => (bool)($result['success'] ?? false),
+            'message' => (string)($result['message'] ?? ''),
+            'data' => (array)($result['data'] ?? []),
         ];
     }
 }

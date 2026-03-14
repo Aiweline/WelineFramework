@@ -1,4 +1,4 @@
-﻿优惠券代码不能为空,"Coupon code cannot be empty"
+﻿优惠券代码不能为空,优惠券代码不能为空
 优惠券无效或已过期,"Coupon is invalid or expired"
 加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Control;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\Storage\WlsSharedStorage;
 use Weline\Server\Session\Server\SessionProtocol;
@@ -270,7 +271,7 @@ class SharedStateAdminService
         $ping = $client->ping();
         if (!$ping) {
             // 常驻进程场景下，连接池可能处于刚重连状态，补一次轻量重试降低误报。
-            \usleep(20000);
+            SchedulerSystem::usleep(20000);
             $ping = $client->ping();
         }
         $statsResp = $client->request(SessionProtocol::CMD_STATS);

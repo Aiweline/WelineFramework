@@ -21,6 +21,7 @@ declare(strict_types=1);
 namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -207,7 +208,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         
         $pid = Processer::create($command, !$config->frontend, $config->frontend);
         if ($pid <= 0 && !$config->frontend) {
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             $pid = Processer::getProcessIdByPort($port);
         }
         if ($pid > 0) {
@@ -238,7 +239,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         }
         $pid = Processer::create($command, !$config->frontend, $config->frontend);
         if ($pid <= 0 && !$config->frontend) {
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             $pid = Processer::getProcessIdByPort($config->httpRedirectPort);
         }
         
@@ -266,7 +267,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         
         $pid = Processer::create($command, false, false);
         if ($pid <= 0) {
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             $pid = Processer::getPid($processName);
         }
         

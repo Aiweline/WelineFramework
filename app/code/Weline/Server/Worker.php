@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Server;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Connection\TcpConnection;
 use Weline\Server\Event\EventInterface;
@@ -1002,7 +1003,7 @@ class Worker
                             static::log(\__('Worker [%{1}] 退出，退出码：%{2}，正在重启...', [$worker->name, $exitCode]));
                             
                             // 等待一小段时间再重启
-                            usleep(100000);
+                            SchedulerSystem::usleep(100000);
                             static::forkOneWorker($worker);
                         }
                     }

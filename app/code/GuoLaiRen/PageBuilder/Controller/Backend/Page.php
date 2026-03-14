@@ -620,15 +620,14 @@ class Page extends BackendController
             // 创建页面
             $page = clone $this->pageModel;
             
-            // 处理handle字段：首页handle必须不为空
-            $pageHandle = $data['handle'] ?? '';
+            // 处理 handle：仅首页允许为空；子页面为空时用页面类型作为 handle（如 about）
+            $pageHandle = trim((string)($data['handle'] ?? ''));
             $pageType = $data['type'] ?? '';
-            if (empty($pageHandle) && $pageType === PageModel::TYPE_HOME) {
-                // 如果是首页且handle为空，自动生成一个
-                $pageName = $data['name'] ?? $data['title'] ?? '';
-                $pageHandle = $this->generateSlugFromName($pageName);
-                if (empty($pageHandle)) {
-                    $pageHandle = 'home-' . time();
+            if (empty($pageHandle)) {
+                if ($pageType === PageModel::TYPE_HOME) {
+                    $pageHandle = '';
+                } else {
+                    $pageHandle = PageModel::getDefaultHandleForType($pageType);
                 }
             }
             
@@ -1037,9 +1036,10 @@ class Page extends BackendController
                 throw new \Exception(__('页面不存在！'));
             }
             
-            // 保存更新前的 handle / website_id，用于保存后若变更则删除旧 URL 重写
+            // 保存更新前的 handle / website_id / style，用于保存后判断是否需要清理旧重写和缓存
             $oldHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $oldWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+            $oldStyleCode = $page->getData(PageModel::schema_fields_STYLE) ?? '';
             
             // 权限校验：编辑时也要验证站点归属
             $pageWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
@@ -1188,14 +1188,13 @@ class Page extends BackendController
                 }
             }
             
-            // 🔧 处理handle字段：首页handle必须不为空
-            $pageHandle = $data['handle'] ?? '';
-            if (empty($pageHandle) && $pageType === PageModel::TYPE_HOME) {
-                // 如果是首页且handle为空，自动生成一个
-                $pageName = $data['name'] ?? $data['title'] ?? $page->getData(PageModel::schema_fields_NAME) ?? '';
-                $pageHandle = $this->generateSlugFromName($pageName);
-                if (empty($pageHandle)) {
-                    $pageHandle = 'home-' . time();
+            // 🔧 处理 handle：仅首页允许为空；子页面为空时用页面类型作为 handle（如 about）
+            $pageHandle = trim((string)($data['handle'] ?? ''));
+            if (empty($pageHandle)) {
+                if ($pageType === PageModel::TYPE_HOME) {
+                    $pageHandle = '';
+                } else {
+                    $pageHandle = PageModel::getDefaultHandleForType($pageType);
                 }
             }
             
@@ -1265,18 +1264,30 @@ class Page extends BackendController
             // 更新后重新加载数据到 Model（使用整数类型的 pageId）
             $page->clear()->load($pageIdInt);
             
-            // 自动创建或更新 URL 重写规则（保存即更新重定向链接）
+            // 自动创建或更新 URL 重写规则（统一用 page_id，handle 变更时自动覆盖旧条目）
             $this->createOrUpdateUrlRewrite($page);
             
-            // 若 handle 或 website_id 变更，删除旧的重写规则，避免旧路径仍指向旧 handle
+            // 清理旧格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
             $newHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $newWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            if (($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId) && $oldHandle !== '' && $oldHandle !== null) {
-                $oldPage = clone $this->pageModel;
-                $oldPage->clearData()
-                    ->setData(PageModel::schema_fields_HANDLE, $oldHandle)
-                    ->setData(PageModel::schema_fields_WEBSITE_ID, $oldWebsiteId);
-                $this->deleteUrlRewrite($oldPage);
+            if ($oldHandle !== '' && $oldHandle !== null) {
+                try {
+                    $oldUrlIdentify = "pagebuilder_page_{$oldWebsiteId}_{$oldHandle}";
+                    /**@var UrlRewrite $cleanupRewrite */
+                    $cleanupRewrite = ObjectManager::getInstance(UrlRewrite::class);
+                    $cleanupRewrite = clone $cleanupRewrite;
+                    $cleanupRewrite->clear()
+                        ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $oldUrlIdentify)
+                        ->delete()
+                        ->fetch();
+                } catch (\Throwable $e) {
+                    // 忽略
+                }
+            }
+            
+            // handle / website_id / style 有变更时清除路由与重写缓存
+            if ($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId || $oldStyleCode !== $styleToSave) {
+                $this->clearRouterAndPageBuilderCache();
             }
             
             // 处理多语言内容翻译
@@ -1547,9 +1558,13 @@ class Page extends BackendController
         try {
             if (class_exists(\Weline\Framework\Cache\CacheManager::class)) {
                 $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-                $pool = $cacheManager->pool('router');
-                if (method_exists($pool, 'clear')) {
-                    $pool->clear();
+                $routerPool = $cacheManager->pool('router');
+                if (method_exists($routerPool, 'clear')) {
+                    $routerPool->clear();
+                }
+                $rewritePool = $cacheManager->pool('url_rewrite');
+                if (method_exists($rewritePool, 'clear')) {
+                    $rewritePool->clear();
                 }
             }
         } catch (\Throwable $e) {
@@ -1566,27 +1581,35 @@ class Page extends BackendController
     private function deleteUrlRewrite(PageModel $page): void
     {
         try {
-            $handle = $page->getData(PageModel::schema_fields_HANDLE);
-            if (empty($handle)) {
+            $pageId = $page->getId();
+            /**@var UrlRewrite $urlRewriteModel */
+            $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+            
+            if (!empty($pageId)) {
+                $urlRewriteModel->clear()
+                    ->where(UrlRewrite::schema_fields_URL_IDENTIFY, "pagebuilder_page_{$pageId}")
+                    ->delete()
+                    ->fetch();
+                
+                $fallback = clone $urlRewriteModel;
+                $fallback->clear()
+                    ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->delete()
+                    ->fetch();
                 return;
             }
             
-            // 获取页面的 website_id
+            $handle = $page->getData(PageModel::schema_fields_HANDLE);
             $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            
-            // URL 指纹包含 website_id 以匹配新格式
-            $urlIdentify = "pagebuilder_page_{$websiteId}_{$handle}";
-            
-            /**@var UrlRewrite $urlRewriteModel */
-            $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+            if (empty($handle)) {
+                return;
+            }
+            $oldUrlIdentify = "pagebuilder_page_{$websiteId}_{$handle}";
             $urlRewriteModel->clear()
-                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $oldUrlIdentify)
                 ->delete()
                 ->fetch();
-                
         } catch (\Exception $e) {
-            // 静默失败
             if (DEV) {
                 w_log_error("Failed to delete URL rewrite for page: " . $e->getMessage());
             }
@@ -2538,42 +2561,45 @@ class Page extends BackendController
         try {
             $handle = $page->getData(PageModel::schema_fields_HANDLE);
             $pageId = $page->getId();
-            // 获取页面的 website_id
             $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             
-            if (empty($handle) || empty($pageId)) {
+            if (empty($pageId)) {
                 if (DEV) {
-                    w_log_info("createOrUpdateUrlRewrite: Missing handle or page ID. Handle: {$handle}, ID: {$pageId}");
+                    w_log_info("createOrUpdateUrlRewrite: Missing page ID.");
                 }
                 return false;
             }
             
-            // 原始路径（不带斜杠开头）
-            $originalPath = "pagebuilder/frontend/page/view?handle={$handle}";
+            $originalPath = "pagebuilder/frontend/page/view?page_id={$pageId}";
+            $rewritePath = !empty($handle) ? $handle : '';
+            $urlIdentify = "pagebuilder_page_{$pageId}";
             
-            // 重写路径（使用 handle 作为友好 URL，不带斜杠开头）
-            $rewritePath = $handle;
-            
-            // URL 指纹（用于唯一标识，包含 website_id 以支持不同站点同 handle）
-            $urlIdentify = "pagebuilder_page_{$websiteId}_{$handle}";
-            
-            // 查找是否已存在重写规则（按 website_id + url_identify）
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
+            
             $existingRewrite = clone $urlRewriteModel;
             $existingRewrite->clear()
-                ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
                 ->find()
                 ->fetch();
             
+            if (!$existingRewrite->getId()) {
+                $existingRewrite = clone $urlRewriteModel;
+                $existingRewrite->clear()
+                    ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->find()
+                    ->fetch();
+            }
+            
             if ($existingRewrite->getId()) {
-                // 更新现有规则
-                $existingRewrite->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                $existingRewrite
+                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                    ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
+                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
                     ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
                     ->save();
             } else {
-                // 创建新规则
                 $newRewrite = clone $urlRewriteModel;
                 $newRewrite->clearData()
                     ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
@@ -2586,7 +2612,6 @@ class Page extends BackendController
             
             return true;
         } catch (\Exception $e) {
-            // 记录错误但不影响页面保存
             if (DEV) {
                 w_log_error("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
             }

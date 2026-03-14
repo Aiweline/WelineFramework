@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Shared\Connection;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
@@ -117,7 +118,7 @@ class PooledConnection implements PooledConnectionInterface
                     $this->close();
                     return null;
                 }
-                \usleep(1000);
+                SchedulerSystem::usleep(1000);
                 continue;
             }
             $this->buffer .= $chunk;

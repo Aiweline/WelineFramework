@@ -11,6 +11,7 @@ namespace Weline\Framework\System\File\Io;
 
 use Weline\Framework\App\Exception;
 use Weline\Framework\Console\ConsoleException;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class File
 {
@@ -103,7 +104,7 @@ class File
                                strpos($error['message'], 'errno=13') !== false ||
                                strpos($error['message'], 'Resource temporarily unavailable') !== false)) {
                     w_log_warning(__("文件打开权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filename]));
-                    usleep($retryDelay);
+                    SchedulerSystem::usleep($retryDelay);
                     continue;
                 }
             }
@@ -127,7 +128,7 @@ class File
             $locked = flock($this->_file, LOCK_EX);
             if (!$locked) {
                 // 等待100毫秒后重试
-                usleep(100000);
+                SchedulerSystem::usleep(100000);
             }
         }
 

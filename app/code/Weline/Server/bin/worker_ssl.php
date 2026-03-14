@@ -856,7 +856,7 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
         }
         WlsLogger::warning_("端口 {$port} 占用 (errno: {$lastErrno})，{$bindRetryDelay} 秒后重试 ({$attempt}/{$maxBindRetries})");
         if ($attempt < $maxBindRetries) {
-            \sleep($bindRetryDelay);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep($bindRetryDelay);
         }
     }
 
@@ -2212,7 +2212,7 @@ while (true) {
         }
         
         // 短暂休眠后继续（避免错误风暴）
-        \usleep(10000); // 10ms
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(10000); // 10ms
         continue;
     }
 }
