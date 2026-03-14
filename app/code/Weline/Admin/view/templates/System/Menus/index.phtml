@@ -154,6 +154,21 @@ $search = $this->getData('search') ?? '';
     display: flex;
     align-items: center;
     gap: var(--backend-spacing-xs, 4px);
+    flex-wrap: wrap;
+}
+
+.weline-menu-tree-name-text {
+    font-weight: 500;
+}
+
+.weline-menu-tree-code {
+    font-size: 0.8em;
+    font-weight: 400;
+    color: var(--backend-color-text-secondary, #6c757d);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    padding: 2px 6px;
+    border-radius: var(--backend-border-radius, 4px);
+    font-family: var(--backend-font-mono, monospace);
 }
 
 .weline-menu-tree-meta {
@@ -366,7 +381,8 @@ $search = $this->getData('search') ?? '';
                                     </span>
                                     <div class="weline-menu-tree-info">
                                         <div class="weline-menu-tree-name">
-                                            <?= htmlspecialchars(__($item['title'] ?? $item['name'] ?? '')) ?>
+                                            <span class="weline-menu-tree-name-text"><?= htmlspecialchars(__($item['title'] ?? $item['name'] ?? '')) ?></span>
+                                            <span class="weline-menu-tree-code" title="<?= __('菜单代码') ?>"><?= htmlspecialchars($item['source'] ?? '') ?></span>
                                             <?php if ($hasChildren): ?>
                                                 <small class="text-muted">(<?= count($item['children']) ?>)</small>
                                             <?php endif; ?>

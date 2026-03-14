@@ -130,6 +130,37 @@ class Page extends Model
     }
     
     /**
+     * 根据页面类型返回默认 handle（仅子页面用；首页允许 handle 为空）
+     * 子页面 handle 为空时用类型对应的友好路径，如 about_page -> about
+     *
+     * @param string $type 页面类型
+     * @return string 用作 URL 的 handle，首页返回空字符串
+     */
+    public static function getDefaultHandleForType(string $type): string
+    {
+        if ($type === self::TYPE_HOME) {
+            return '';
+        }
+        $map = [
+            self::TYPE_ABOUT => 'about',
+            self::TYPE_CONTACT => 'contact',
+            self::TYPE_PRIVACY_POLICY => 'privacy',
+            self::TYPE_TERMS_OF_SERVICE => 'terms',
+            self::TYPE_REFUND_POLICY => 'refund',
+            self::TYPE_SHIPPING_POLICY => 'shipping',
+            self::TYPE_COOKIE_POLICY => 'cookies',
+            self::TYPE_BLOG => 'post',
+            self::TYPE_BLOG_CATEGORY => 'blog-category',
+            self::TYPE_BLOG_LIST => 'blog',
+            self::TYPE_CUSTOM => 'page',
+        ];
+        if (isset($map[$type])) {
+            return $map[$type];
+        }
+        return str_replace('_', '-', $type);
+    }
+
+    /**
      * 获取博客相关的页面类型
      */
     public static function getBlogPageTypes(): array

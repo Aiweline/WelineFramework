@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Shared\Connection;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
@@ -67,7 +68,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                     return $conn;
                 }
             }
-            \usleep(1000);
+            SchedulerSystem::usleep(1000);
         }
 
         return null;

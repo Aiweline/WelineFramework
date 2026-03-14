@@ -22,6 +22,7 @@ declare(strict_types=1);
 namespace Weline\Server\Strategy;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -120,7 +121,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         }
         
         // 等待 Worker 启动完成
-        \usleep(500000); // 500ms
+        SchedulerSystem::usleep(500000); // 500ms
         
         // 2. 启动 Dispatcher 进程（TCP 透传）
         $dispatcherPid = $this->startDispatcher($config);
@@ -223,7 +224,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep((int)($waitStep * 1000));
                 $waited += $waitStep;
                 
                 $detectedPid = Processer::getProcessIdByPort($port);
@@ -273,7 +274,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep((int)($waitStep * 1000));
                 $waited += $waitStep;
                 
                 $detectedPid = Processer::getProcessIdByPort($config->port);
@@ -322,7 +323,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep((int)($waitStep * 1000));
                 $waited += $waitStep;
                 
                 $detectedPid = Processer::getProcessIdByPort($config->httpRedirectPort);

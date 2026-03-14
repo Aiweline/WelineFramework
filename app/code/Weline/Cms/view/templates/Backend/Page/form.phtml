@@ -121,7 +121,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <input type="text" 
                                                class="form-control bg-white" 
                                                id="pageUrlDisplay" 
-                                              value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
+                                              value="<?= rtrim(rtrim($this->request->getBaseHost(), '/'), ':') . ( ($this->request->getPort() && $this->request->getPort() != 80 && $this->request->getPort() != 443) ? ':' . $this->request->getPort() : '' ) . '/' . htmlspecialchars(($page ? (($page->getData('handle') ?? '')) : '')) ?>"
                                                readonly>
                                         <button class="btn btn-outline-primary" 
                                                 type="button" 

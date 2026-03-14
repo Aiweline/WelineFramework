@@ -1,4 +1,4 @@
-﻿"模型类不存在: %{1}","Model class does not exist: %{1}"
+﻿"模型类不存在: %{1}","模型类不存在: %{1}"
 "数据删除失败: %{1}","Data deletion failed: %{1}"
 记录不存在,"Record does not exist"
 记录已永久删除,"Record permanently deleted"

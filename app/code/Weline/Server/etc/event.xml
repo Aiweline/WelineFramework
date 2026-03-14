@@ -62,6 +62,17 @@
     <!-- @see Weline\Server\Cron\AttackSignalMonitor -->
     <!-- @see Weline\Server\Service\AttackSignalFileService -->
     
+    <!-- ========== Fiber 调度器事件 ========== -->
+    
+    <!-- SchedulerSystem::sleep/usleep 在 WLS 模式下 dispatch，由调度器注册定时器 -->
+    <event name="Weline_Framework::scheduler::wait">
+        <observer name="Weline_Server::scheduler_wait"
+                  instance="Weline\Server\Observer\SchedulerWaitObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    
     <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
     
     <!--注册 SSL 证书服务能力-->
