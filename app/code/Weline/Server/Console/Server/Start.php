@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\System\Process\Processer;
 use Weline\Framework\App\Env;
@@ -284,7 +285,7 @@ class Start extends CommandAbstract
         if ($occupantCli) {
             $this->printer->note(__('端口 %{1} 已被 PHP 内置服务器占用，正在停止...', [$port]));
             ObjectManager::getInstance(CliStop::class)->execute(['force' => true, 'f' => true], []);
-            \sleep(2);
+            SchedulerSystem::sleep(2);
         }
         // 本实例已运行：未指定 -r 则提示并退出；指定 -r 则平滑重启（先维护模式+等待）或 -f 直接切换
         $maintenanceEnabledByUs = false;
@@ -303,7 +304,7 @@ class Start extends CommandAbstract
                 $waitStep = 200;
                 $waited = 0;
                 while ($waited < $maxWaitMs) {
-                    \usleep($waitStep * 1000);
+                    SchedulerSystem::usleep($waitStep * 1000);
                     $waited += $waitStep;
                     // 检查主要端口是否已释放
                     if (!Processer::isPortInUse($port)) {
@@ -327,7 +328,7 @@ class Start extends CommandAbstract
                 }
                 
                 $this->stopExistingServer($instanceName, $port, $count);
-                \sleep(1);
+                SchedulerSystem::sleep(1);
             }
         }
 
@@ -806,7 +807,7 @@ class Start extends CommandAbstract
         $lastControlPort = 0;
         
         while ($waited < $maxWaitMs) {
-            \usleep($waitStepMs * 1000);
+            SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             
             // 检查实例文件是否已更新
@@ -1040,7 +1041,7 @@ class Start extends CommandAbstract
                 return true;
             }
             
-            \usleep($checkInterval);
+            SchedulerSystem::usleep($checkInterval);
         }
         
         return false;
@@ -2327,7 +2328,7 @@ class Start extends CommandAbstract
             if (IS_WIN && !$released) {
                 $waited = 0;
                 while ($waited < 3000 && Processer::isPortInUse($port)) {
-                    \usleep(300000);
+                    SchedulerSystem::usleep(300000);
                     $waited += 300;
                 }
                 $released = !Processer::isPortInUse($port);
@@ -2337,7 +2338,7 @@ class Start extends CommandAbstract
                 return true;
             }
             if ($attempt < $maxAttempts) {
-                \usleep(500000);
+                SchedulerSystem::usleep(500000);
             }
         }
 
@@ -2352,7 +2353,7 @@ class Start extends CommandAbstract
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
-        \sleep(1);
+        SchedulerSystem::sleep(1);
         $released = Processer::killProcessByPort($port) || Processer::forceReleasePort($port);
         if (!Processer::isPortInUse($port)) {
             $this->printer->success(__('%{1} 端口 %{2} 可用 ✓', [$label, $port]));
@@ -2407,7 +2408,7 @@ class Start extends CommandAbstract
                 Processer::forceReleasePort($p);
             }
             if (IS_WIN) {
-                \usleep(500000);
+                SchedulerSystem::usleep(500000);
             }
             $stillInUse = [];
             foreach ($portsInUse as $p) {
@@ -2422,7 +2423,7 @@ class Start extends CommandAbstract
                 return true;
             }
             if ($round < $maxAttempts) {
-                \usleep(500000);
+                SchedulerSystem::usleep(500000);
             }
         }
 
@@ -2437,7 +2438,7 @@ class Start extends CommandAbstract
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
-        \sleep(1);
+        SchedulerSystem::sleep(1);
         foreach ($portsInUse as $p) {
             Processer::killProcessByPort($p);
             Processer::forceReleasePort($p);
@@ -2531,7 +2532,7 @@ class Start extends CommandAbstract
                     $this->printer->note(__('释放 WLS 进程占用的端口 %{1} (PID: %{2})...', [$portToRelease, $pid]));
                     Processer::killByPid($pid);
                     // 等待进程退出
-                    \usleep(100000); // 100ms
+                    SchedulerSystem::usleep(100000); // 100ms
                 }
             }
             
@@ -3079,7 +3080,7 @@ PHP;
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep($waitStep * 1000);
                 $waited += $waitStep;
                 
                 $pid = Processer::getProcessIdByPort($dispatcherPort);
@@ -3185,7 +3186,7 @@ PHP;
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep($waitStep * 1000);
                 $waited += $waitStep;
                 
                 $detectedPid = Processer::getProcessIdByPort($port);
@@ -3271,7 +3272,7 @@ PHP;
             $waited = 0;
             
             while ($waited < $maxWait) {
-                \usleep($waitStep * 1000);
+                SchedulerSystem::usleep($waitStep * 1000);
                 $waited += $waitStep;
                 
                 $detectedPid = Processer::getProcessIdByPort($port);
@@ -3915,7 +3916,7 @@ PHP;
                 break;
             }
             \pcntl_signal_dispatch();
-            \usleep(200000);
+            SchedulerSystem::usleep(200000);
         }
 
         if ($shutdown && Processer::isRunningByPid($pid)) {
@@ -3974,7 +3975,7 @@ PHP;
             if (!IS_WIN) {
                 \pcntl_signal_dispatch();
             }
-            \usleep(200000);
+            SchedulerSystem::usleep(200000);
         }
         \proc_close($proc);
         Processer::destroy($processName);
@@ -4183,7 +4184,7 @@ PHP;
                 @\fflush($fp);
                 return true;
             }
-            \usleep(100000); // 100ms
+            SchedulerSystem::usleep(100000); // 100ms
         }
         
         @\fclose($fp);

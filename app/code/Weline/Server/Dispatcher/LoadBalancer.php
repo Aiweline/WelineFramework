@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
 
@@ -486,7 +487,7 @@ class LoadBalancer
                     @\fclose($workerConn);
                     return null;
                 }
-                \usleep(1000); // 1ms
+                SchedulerSystem::usleep(1000); // 1ms
                 continue;
             }
             
@@ -518,7 +519,7 @@ class LoadBalancer
                     $connectionBroken = true;
                     break;
                 }
-                \usleep(100); // 短暂等待
+                SchedulerSystem::usleep(100); // 短暂等待
                 continue;
             }
             $response .= $chunk;

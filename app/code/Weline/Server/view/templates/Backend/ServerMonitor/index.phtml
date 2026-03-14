@@ -199,6 +199,7 @@ use Weline\Server\Model\ServerStatusLog;
                         <table class="table table-sm table-hover mb-0">
                             <thead>
                             <tr>
+                                <th></th>
                                 <th><?= __('角色') ?></th>
                                 <th><?= __('实例') ?></th>
                                 <th><?= __('PID') ?></th>
@@ -207,6 +208,7 @@ use Weline\Server\Model\ServerStatusLog;
                                 <th><?= __('运行时长') ?></th>
                                 <th><?= __('重启') ?></th>
                                 <th><?= __('连接/活跃') ?></th>
+                                <th><?= __('Fiber') ?></th>
                                 <th><?= __('总请求') ?></th>
                                 <th><?= __('内存') ?></th>
                                 <th><?= __('心跳') ?></th>
@@ -214,7 +216,7 @@ use Weline\Server\Model\ServerStatusLog;
                             </thead>
                             <tbody id="process-detail-body">
                             <tr>
-                                <td colspan="11" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
+                                <td colspan="13" class="text-center text-muted py-3"><?= __('等待状态刷新...') ?></td>
                             </tr>
                             </tbody>
                         </table>
@@ -616,15 +618,16 @@ function renderProcessDetails(services) {
         return;
     }
     if (!Array.isArray(services) || services.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="13" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
         return;
     }
     const rows = [];
+    let rowIndex = 0;
     services.forEach((serviceGroup) => {
-        const role = String(serviceGroup.role || '');
+        const role = String(serviceGroup.role || '').toLowerCase();
         const instances = Array.isArray(serviceGroup.instances) ? serviceGroup.instances : [];
         instances.forEach((item) => {
-            const roleBadge = getRoleBadge(role);
+            const roleBadge = getRoleBadge(serviceGroup.role || '');
             const stateBadge = getStateBadge(item.state || '');
             const uptime = formatSeconds(item.uptime || 0);
             const heartbeat = formatHeartbeat(item.heartbeat || 0);
@@ -632,8 +635,21 @@ function renderProcessDetails(services) {
             const connections = Number(item.connections || 0);
             const activeRequests = Number(item.active_requests || 0);
             const totalRequests = formatNumber(Number(item.total_requests || 0));
+            const healthDetail = item.health_detail || {};
+            const fiberCount = Number(healthDetail.fiber_count ?? 0);
+            const fibers = Array.isArray(healthDetail.fibers) ? healthDetail.fibers : [];
+            const isWorker = role === 'worker';
+            const canExpand = isWorker && fiberCount > 0;
+            const fibersJson = escapeHtml(JSON.stringify(fibers));
+            const expandCell = canExpand
+                ? `<td class="text-center align-middle"><button type="button" class="btn btn-sm btn-outline-secondary border-0 p-1 server-monitor-fiber-toggle" data-fibers-json="${fibersJson}" data-row-idx="${rowIndex}" aria-label="<?= __('展开 Fiber 列表') ?>"><i class="bi bi-chevron-down"></i></button></td>`
+                : `<td class="text-center"></td>`;
+            const fiberCell = isWorker
+                ? `<td class="process-detail-table-memory">${fiberCount}</td>`
+                : `<td class="text-muted">-</td>`;
             rows.push(`
-                <tr>
+                <tr class="server-monitor-process-row" data-row-idx="${rowIndex}">
+                    ${expandCell}
                     <td><span class="badge process-role-badge ${roleBadge.cls}">${escapeHtml(roleBadge.label)}</span></td>
                     <td>#${escapeHtml(String(item.instance_id ?? '-'))}</td>
                     <td>${escapeHtml(String(item.pid || '-'))}</td>
@@ -642,16 +658,65 @@ function renderProcessDetails(services) {
                     <td>${escapeHtml(uptime)}</td>
                     <td>${escapeHtml(String(item.restarts || 0))}</td>
                     <td>${formatNumber(connections)} / ${formatNumber(activeRequests)}</td>
+                    ${fiberCell}
                     <td>${totalRequests}</td>
                     <td class="process-detail-table-memory">${escapeHtml(memory)}</td>
                     <td>${escapeHtml(heartbeat)}</td>
                 </tr>
             `);
+            rowIndex++;
         });
     });
-    tbody.innerHTML = rows.length > 0
-        ? rows.join('')
-        : `<tr><td colspan="11" class="text-center text-muted py-3"><?= __('暂无进程明细数据') ?></td></tr>`;
+    tbody.innerHTML = rows.join('');
+    tbody.querySelectorAll('.server-monitor-fiber-toggle').forEach((btn) => {
+        btn.addEventListener('click', function () {
+            const row = this.closest('tr');
+            const fibersJson = this.getAttribute('data-fibers-json');
+            let fibers = [];
+            try {
+                fibers = fibersJson ? JSON.parse(fibersJson) : [];
+            } catch (e) {
+                fibers = [];
+            }
+            const next = row.nextElementSibling;
+            if (next && next.classList.contains('server-monitor-fiber-detail-row')) {
+                next.remove();
+                this.querySelector('i').classList.remove('bi-chevron-up');
+                this.querySelector('i').classList.add('bi-chevron-down');
+                return;
+            }
+            const detailRow = document.createElement('tr');
+            detailRow.className = 'server-monitor-fiber-detail-row bg-light';
+            const statusLabel = function (s) {
+                return s === 'idle' ? '<?= __("闲") ?>' : '<?= __("忙") ?>';
+            };
+            const protocolLabel = function (p) {
+                return (p === 'sse' ? 'SSE' : 'HTTP');
+            };
+            const fiberRows = fibers.length === 0
+                ? `<tr><td colspan="4" class="text-muted"><?= __('无 Fiber') ?></td></tr>`
+                : fibers.map((f) => `
+                    <tr>
+                        <td>${escapeHtml(String(f.conn_id ?? ''))}</td>
+                        <td><span class="badge ${(f.status === 'idle' ? 'bg-secondary' : 'bg-primary')}">${escapeHtml(statusLabel(f.status))}</span></td>
+                        <td>${escapeHtml(protocolLabel(f.protocol))}</td>
+                    </tr>
+                `).join('');
+            detailRow.innerHTML = `
+                <td colspan="13" class="p-0">
+                    <div class="p-2 border-start border-3 border-info">
+                        <table class="table table-sm table-borderless mb-0 small">
+                            <thead><tr><th><?= __('连接 ID') ?></th><th><?= __('状态') ?></th><th><?= __('协议') ?></th></tr></thead>
+                            <tbody>${fiberRows}</tbody>
+                        </table>
+                    </div>
+                </td>
+            `;
+            row.after(detailRow);
+            this.querySelector('i').classList.remove('bi-chevron-down');
+            this.querySelector('i').classList.add('bi-chevron-up');
+        });
+    });
 }
 
 function renderProcessHistory(logs) {

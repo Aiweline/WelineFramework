@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
@@ -2438,7 +2439,7 @@ CNF;
             $maxWait = 30;
             $certReady = false;
             for ($i = 0; $i < $maxWait; $i++) {
-                \sleep(2);
+                SchedulerSystem::sleep(2);
                 $order = $this->getResource($orderUrl, $accountUrl);
                 if ($order && $order['status'] === 'valid' && !empty($order['certificate'])) {
                     $certReady = true;
@@ -2513,7 +2514,7 @@ CNF;
         $validated = false;
         $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
-            \sleep(2);
+            SchedulerSystem::sleep(2);
             $auth = $this->getResource($authUrl, $accountUrl);
             $lastAuth = $auth;
             if ($auth && ($auth['status'] ?? '') === 'valid') {
@@ -2594,7 +2595,7 @@ CNF;
             $onProgress((string)__('TXT 记录已添加，等待 DNS 传播（%{1} 秒）...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
         }
         for ($w = 0; $w < $dnsWaitSeconds; $w += 5) {
-            \sleep(\min(5, $dnsWaitSeconds - $w));
+            SchedulerSystem::sleep(\min(5, $dnsWaitSeconds - $w));
             if ($onProgress && $w > 0) {
                 $onProgress((string)__('等待 DNS 传播中...（%{1}s）', [$w + 5]), ['progress' => 45]);
             }
@@ -2611,7 +2612,7 @@ CNF;
         $validated = false;
         $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
-            \sleep(2);
+            SchedulerSystem::sleep(2);
             if ($onProgress && $i > 0 && $i % 5 === 0) {
                 $onProgress((string)__('等待 CA 验证中...（%{1}s）', [$i * 2]), ['progress' => (int) \min(90, 50 + $i)]);
             }

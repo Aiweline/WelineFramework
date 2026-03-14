@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Console\Server;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 
 /**
@@ -27,7 +28,7 @@ class Server
             if ($pid > 0) {
                 return $pid;
             }
-            sleep(1);
+            SchedulerSystem::sleep(1);
             return self::getProcessIdByPort($port);
         } else {
             if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
@@ -60,7 +61,7 @@ class Server
                             }
                         });
 
-                        sleep(1);
+                        SchedulerSystem::sleep(1);
 
                         if (Processer::isRunningByPid($pid)) {
                             return $pid;

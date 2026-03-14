@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Connection\Pool;
 
 use PDO;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
 
 /**
@@ -100,7 +101,7 @@ class ConnectionPool
 
         // 池已满：短暂等待重试，避免无限创建临时连接
         for ($i = 0; $i < self::POOL_FULL_RETRIES; $i++) {
-            usleep(self::POOL_FULL_WAIT_US);
+            SchedulerSystem::usleep(self::POOL_FULL_WAIT_US);
             if (!$pool['pool']->isEmpty()) {
                 $item = $pool['pool']->dequeue();
                 $connection = is_array($item) ? $item['connection'] : $item;

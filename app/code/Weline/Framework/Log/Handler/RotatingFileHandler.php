@@ -168,15 +168,34 @@ class RotatingFileHandler implements HandlerInterface
 
     /**
      * 获取日志文件路径
+     *
+     * 支持层级通道名，如 wls/fiber_scheduler 会写入 var/log/wls/fiber_scheduler.log
      */
     private function getFilePath(string $channel): string
     {
-        if (str_ends_with($channel, '.log')) {
-            return $this->logPath . $channel;
+        $relativePath = str_ends_with($channel, '.log')
+            ? $this->sanitizeChannelAsPath($channel)
+            : $this->sanitizeChannelAsPath($channel . '.log');
+        return $this->logPath . $relativePath;
+    }
+
+    /**
+     * 将通道名转换为安全的相对路径（支持层级）
+     */
+    private function sanitizeChannelAsPath(string $channel): string
+    {
+        $separator = DIRECTORY_SEPARATOR;
+        $slash = '/';
+        $parts = array_filter(
+            preg_split('/[\\\\\/]+/', $channel),
+            fn(string $p) => $p !== '' && $p !== '.' && $p !== '..'
+        );
+        $sanitized = [];
+        foreach ($parts as $part) {
+            $sanitized[] = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $part);
         }
-        
-        $sanitizedChannel = preg_replace('/[^a-zA-Z0-9_-]/', '_', $channel);
-        return $this->logPath . $sanitizedChannel . '.log';
+        $path = implode($slash, $sanitized);
+        return str_replace($slash, $separator, $path);
     }
 
     /**

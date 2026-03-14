@@ -162,6 +162,22 @@ class RequestContext
     {
         return self::$requestId;
     }
+
+    /**
+     * 获取请求 ID（getId 别名，供 WlsFiberContext 使用）
+     */
+    public static function getId(): ?string
+    {
+        return self::$requestId;
+    }
+
+    /**
+     * 设置请求 ID（Fiber 恢复上下文时使用）
+     */
+    public static function setId(?string $id): void
+    {
+        self::$requestId = $id;
+    }
     
     /**
      * 获取请求开始时间

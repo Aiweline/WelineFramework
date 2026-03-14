@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\Framework\System\OS;
 
 use Exception;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 跨平台文件和路径操作辅助类
@@ -477,7 +478,7 @@ class FileHelper
                         if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                        strpos($error['message'], 'errno=13') !== false)) {
                             w_log_warning(__("文件写入权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
-                            usleep($retryDelay);
+                            SchedulerSystem::usleep($retryDelay);
                             continue;
                         }
                     }
@@ -490,7 +491,7 @@ class FileHelper
                         if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                        strpos($error['message'], 'errno=13') !== false)) {
                             w_log_warning(__("文件写入异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
-                            usleep($retryDelay);
+                            SchedulerSystem::usleep($retryDelay);
                             continue;
                         }
                     }
@@ -542,7 +543,7 @@ class FileHelper
                     if ($error && (strpos($error['message'], 'Permission denied') !== false || 
                                    strpos($error['message'], 'errno=13') !== false)) {
                         w_log_warning(__("文件读取权限错误，重试第 %{1} 次: %{2}", [($i + 1), $filePath]));
-                        usleep($retryDelay);
+                        SchedulerSystem::usleep($retryDelay);
                         continue;
                     }
                 }
@@ -553,7 +554,7 @@ class FileHelper
             } catch (Exception $e) {
                 if ($i < $maxRetries - 1) {
                     w_log_warning(__("文件读取异常，重试第 %{1} 次: %{2} - %{3}", [($i + 1), $filePath, $e->getMessage()]));
-                    usleep($retryDelay);
+                    SchedulerSystem::usleep($retryDelay);
                     continue;
                 }
                 w_log_error(__("文件读取最终失败: %{1} - %{2}", [$filePath, $e->getMessage()]));

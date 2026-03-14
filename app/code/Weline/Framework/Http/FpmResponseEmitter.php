@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\Runtime\System;
+
 /**
  * FPM 响应发射器
  * 
@@ -35,7 +37,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         echo $body;
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     
@@ -50,7 +52,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         }
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     
@@ -92,7 +94,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         }
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     
@@ -118,7 +120,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         \readfile($filePath);
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     
@@ -132,7 +134,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         }
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     
@@ -157,7 +159,7 @@ class FpmResponseEmitter implements ResponseEmitterInterface
         echo "</body></html>";
         
         if ($terminate) {
-            exit(0);
+            System::exit(0);
         }
     }
     

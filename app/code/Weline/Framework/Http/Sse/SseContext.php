@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Sse;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+
 /**
  * SSE 上下文（进程级单例）
  * 
@@ -45,11 +47,14 @@ class SseContext
     /**
      * 设置当前连接
      * 
-     * @param resource $conn 连接资源
+     * @param resource|null $conn 连接资源（null 表示清除当前连接）
      */
     public static function setConnection($conn): void
     {
         self::$connection = $conn;
+        if ($conn === null) {
+            return;
+        }
         self::$sseEnabled = false;
         self::$headersSent = false;
     }
@@ -138,7 +143,7 @@ class SseContext
                 
                 if ($result === 0) {
                     // 暂时无法写入，等待一下
-                    \usleep(1000);
+                    SchedulerSystem::usleep(1000);
                     $retries++;
                     continue;
                 }

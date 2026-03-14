@@ -11,6 +11,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\System\Process\Processer;
 
@@ -56,7 +57,7 @@ class MultiStart extends CommandAbstract
             if (Processer::isPortInUse($port)) {
                 $this->printer->warning(__('端口 %{1} 已被占用，尝试释放...', [$port]));
                 Processer::killProcessByPort($port);
-                \sleep(1);
+                SchedulerSystem::sleep(1);
                 
                 if (Processer::isPortInUse($port)) {
                     $this->printer->error(__('无法释放端口 %{1}', [$port]));
@@ -95,7 +96,7 @@ class MultiStart extends CommandAbstract
         echo "\n";
         
         // 等待进程启动
-        \sleep(2);
+        SchedulerSystem::sleep(2);
         
         // 验证进程状态
         $this->printer->note(__('验证进程状态...'));

@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Env;
@@ -48,7 +49,7 @@ class Restart extends CommandAbstract
             $stopCommand->execute($args, $data);
             
             // 等待进程完全停止
-            \sleep(2);
+            SchedulerSystem::sleep(2);
         } else {
             $this->printer->note(__('服务器未运行，正在启动...'));
         }

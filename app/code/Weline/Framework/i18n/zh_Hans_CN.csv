@@ -776,6 +776,8 @@ ACL分发,ACL分发
 【已废弃】统一查询执行提供者,【已废弃】统一查询执行提供者
 统一查询执行后,统一查询执行后
 统一查询执行后触发，可用于结果过滤和审计。,统一查询执行后触发，可用于结果过滤和审计。
+调度器等待,调度器等待
+"由 SchedulerSystem 在 WLS 模式下 dispatch，通知调度器注册定时器或 fd 等待。Observer 根据 data.type 分支处理（sleep/usleep/waitFd 等）。FPM/CLI 下无 Observer 监听，不产生副作用。","由 SchedulerSystem 在 WLS 模式下 dispatch，通知调度器注册定时器或 fd 等待。Observer 根据 data.type 分支处理（sleep/usleep/waitFd 等）。FPM/CLI 下无 Observer 监听，不产生副作用。"
 请求错误,请求错误
 未授权,未授权
 禁止访问,禁止访问

@@ -172,8 +172,6 @@ class Timer
      */
     public static function sleep(float $seconds): void
     {
-        // 如果使用了协程，可以在这里实现真正的异步睡眠
-        // 目前降级为同步睡眠
-        usleep((int)($seconds * 1000000));
+        \Weline\Framework\Runtime\SchedulerSystem::usleep((int) ($seconds * 1_000_000));
     }
 }
