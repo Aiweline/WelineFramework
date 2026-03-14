@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 
 /**
@@ -642,7 +643,7 @@ class FileWatcher
                 $this->triggerCallbacks($changes);
             }
 
-            \usleep((int) ($this->checkInterval * 1_000_000));
+            SchedulerSystem::usleep((int) ($this->checkInterval * 1_000_000));
         }
     }
     

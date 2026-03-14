@@ -1,4 +1,4 @@
-﻿加载Feed列表失败：%{1},"Failed to load feed list: %{1}"
+﻿加载Feed列表失败：%{1},加载Feed列表失败：%{1}
 Feed不存在,"Feed does not exist"
 内容,Content
 产品,Product

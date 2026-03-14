@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\View\Taglib\Cache;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+
 /**
  * L3 文件缓存
  * 
@@ -101,7 +103,7 @@ final class FileCache implements CacheInterface
 
             // 短暂等待后重试
             if ($i < $maxRetries - 1) {
-                usleep($retryDelay);
+                SchedulerSystem::usleep($retryDelay);
                 $retryDelay *= 2; // 指数退避
             }
         }

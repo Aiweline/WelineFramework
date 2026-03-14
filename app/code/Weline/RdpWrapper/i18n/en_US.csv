@@ -1,4 +1,4 @@
-﻿RDP远程桌面管理,"RDP Remote Desktop Management"
+﻿RDP远程桌面管理,RDP远程桌面管理
 "RDP Wrapper 仅支持 Windows 系统","RDP Wrapper only supports Windows systems"
 "RDP Wrapper 已安装","RDP Wrapper is already installed"
 安装脚本不存在：%{path},"Install script not found: %{path}"

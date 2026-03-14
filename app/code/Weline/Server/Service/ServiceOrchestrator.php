@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
@@ -97,6 +98,12 @@ class ServiceOrchestrator
 
     /** 启动后冷却期（秒）- 在此期间忽略 reload_all:code 请求，避免 FileWatcher 误触发 */
     private float $startupReloadCooldown = 10.0;
+
+    /**
+     * 待聚合的 Fiber 池统计请求（CLI 请求 fiber_stats 后等待各 Worker 回复）
+     * @var array{replyClientId: int, request_id: string, waiting: array<int, true>, replies: array<int, array>}|null
+     */
+    private ?array $pendingFiberStatsRequest = null;
 
     /** 是否已输出"服务器准备就绪"通知 */
     private bool $serverReadyNotified = false;
@@ -363,7 +370,7 @@ class ServiceOrchestrator
                 if ($sessionPort > 0) {
                     Processer::killProcessByPort($sessionPort);
                     Processer::forceReleasePort($sessionPort);
-                    \usleep(500000);
+                    SchedulerSystem::usleep(500000);
                 }
             }
 
@@ -905,7 +912,7 @@ class ServiceOrchestrator
                 return;
             }
 
-            \usleep(50000); // 50ms 轮询间隔
+            SchedulerSystem::usleep(50000); // 50ms 轮询间隔
         }
         $remainingCount = $this->controlServer?->getClientCount() ?? 0;
         WlsLogger::warning_("[IPC] 等待断开超时 ({$timeout}s)，剩余 {$remainingCount} 个连接");
@@ -1337,7 +1344,9 @@ class ServiceOrchestrator
         while ($this->running && !$this->shuttingDown) {
             // Poll IPC 消息（可能触发 stopAll 导致 shuttingDown=true）
             $this->controlServer?->poll(0, 100000);
-            
+
+            $this->completePendingFiberStatsIfTimeout();
+
             // 关键：poll 可能在回调中执行 stopAll，需要立即检查退出条件
             if (!$this->running || $this->shuttingDown) {
                 break;
@@ -1375,7 +1384,7 @@ class ServiceOrchestrator
             }
 
             // 短暂休眠避免 CPU 空转
-            \usleep(50000);
+            SchedulerSystem::usleep(50000);
         }
 
         WlsLogger::info_('[Orchestrator] 退出主循环');
@@ -1508,7 +1517,7 @@ class ServiceOrchestrator
 
         if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
             $this->killInstanceProcess($instance);
-            \usleep(200000);
+            SchedulerSystem::usleep(200000);
         }
         $this->scheduleResurrection($instance);
     }
@@ -1942,7 +1951,7 @@ class ServiceOrchestrator
             if (!Processer::isPortInUse($port)) {
                 return true;
             }
-            \usleep(100000);
+            SchedulerSystem::usleep(100000);
         } while (\microtime(true) < $deadline);
 
         Processer::clearPortCache($port);
@@ -2005,6 +2014,11 @@ class ServiceOrchestrator
             case ControlMessage::TYPE_COMMAND:
                 $this->handleCommand($msg, $clientId);
                 return;
+
+            case ControlMessage::TYPE_FIBER_POOL_STATS:
+                $this->handleFiberPoolStatsReply($msg, $clientId);
+                return;
+
             case ControlMessage::TYPE_TELEMETRY:
                 $this->handleTelemetry($msg);
                 return;
@@ -2553,7 +2567,147 @@ class ServiceOrchestrator
                 ];
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, $data, 'Telemetry retrieved'));
                 break;
+
+            case ControlMessage::ACTION_FIBER_STATS:
+                $this->requestFiberPoolStats($clientId);
+                break;
+
+            case ControlMessage::ACTION_FIBER_SET_CONFIG:
+                $idleTtlSec = (int)($msg['idle_ttl_sec'] ?? 0);
+                $maxActive = (int)($msg['max_active'] ?? 0);
+                $sent = 0;
+                foreach ($this->getFiberEligibleInstances() as $instance) {
+                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberSetConfig($idleTtlSec, $maxActive));
+                        $sent++;
+                    }
+                }
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    ['workers_notified' => $sent, 'idle_ttl_sec' => $idleTtlSec, 'max_active' => $maxActive],
+                    __('已向 %{1} 个 Worker 下发 Fiber 池配置', [$sent])
+                ));
+                break;
+
+            case ControlMessage::ACTION_FIBER_RELEASE_IDLE:
+                $sent = 0;
+                foreach ($this->getFiberEligibleInstances() as $instance) {
+                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberReleaseIdle());
+                        $sent++;
+                    }
+                }
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
+                    true,
+                    ['workers_notified' => $sent],
+                    __('已通知 %{1} 个 Worker 释放闲置 Fiber', [$sent])
+                ));
+                break;
         }
+    }
+
+    /** Fiber 统计请求超时（秒），超时后返回已收集的 partial 结果 */
+    private const FIBER_STATS_TIMEOUT_SEC = 12;
+
+    /**
+     * 参与 Fiber 池控制的实例（Worker + Maintenance，与 routing_policy 一致）
+     *
+     * @return iterable<ServiceInstance>
+     */
+    private function getFiberEligibleInstances(): iterable
+    {
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if (\in_array($instance->role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+                yield $instance;
+            }
+        }
+    }
+
+    /**
+     * 向所有 Worker/Maintenance 请求 Fiber 池统计，结果通过 handleFiberPoolStatsReply 聚合后回传 CLI
+     */
+    private function requestFiberPoolStats(int $replyClientId): void
+    {
+        if ($this->pendingFiberStatsRequest !== null) {
+            $this->controlServer?->sendTo($replyClientId, ControlMessage::commandResult(
+                false,
+                [],
+                (string)__('已有 Fiber 统计请求进行中，请稍后再试')
+            ));
+            return;
+        }
+        $waiting = [];
+        $requestId = 'fiber_stats_' . \uniqid('', true);
+        foreach ($this->getFiberEligibleInstances() as $instance) {
+            if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberPoolQuery($requestId));
+                $waiting[$instance->ipcClientId] = true;
+            }
+        }
+        if ($waiting === []) {
+            $this->controlServer?->sendTo($replyClientId, ControlMessage::commandResult(true, ['workers' => [], 'total_suspended' => 0], __('无已连接 Worker')));
+            return;
+        }
+        $this->pendingFiberStatsRequest = [
+            'replyClientId' => $replyClientId,
+            'request_id' => $requestId,
+            'waiting' => $waiting,
+            'replies' => [],
+            'created_at' => \time(),
+        ];
+    }
+
+    /**
+     * 处理 Worker 上报的 Fiber 池统计，聚合完成后回传 CLI
+     */
+    private function handleFiberPoolStatsReply(array $msg, int $clientId): void
+    {
+        if ($this->pendingFiberStatsRequest === null) {
+            return;
+        }
+        $req = &$this->pendingFiberStatsRequest;
+        if (($msg['request_id'] ?? '') !== $req['request_id']) {
+            return;
+        }
+        unset($req['waiting'][$clientId]);
+        $req['replies'][$clientId] = [
+            'worker_id' => $msg['worker_id'] ?? 0,
+            'suspended' => $msg['suspended'] ?? 0,
+            'idle_ttl_sec' => $msg['idle_ttl_sec'] ?? 0,
+            'max_active' => $msg['max_active'] ?? 0,
+            'released_count' => $msg['released_count'] ?? 0,
+        ];
+        if ($req['waiting'] !== []) {
+            return;
+        }
+        $replyClientId = $req['replyClientId'];
+        $workers = \array_values($req['replies']);
+        $this->pendingFiberStatsRequest = null;
+        $totalSuspended = \array_sum(\array_column($workers, 'suspended'));
+        $data = ['workers' => $workers, 'total_suspended' => $totalSuspended];
+        $this->controlServer?->sendTo($replyClientId, ControlMessage::commandResult(true, $data, __('已聚合 %{1} 个 Worker 的 Fiber 池统计', [\count($workers)])));
+    }
+
+    /**
+     * 若存在超时的 Fiber 统计请求，则返回已收集的 partial 结果（主循环中调用，避免无消息时永久挂起）
+     */
+    private function completePendingFiberStatsIfTimeout(): void
+    {
+        if ($this->pendingFiberStatsRequest === null) {
+            return;
+        }
+        $req = $this->pendingFiberStatsRequest;
+        if (\time() - $req['created_at'] < self::FIBER_STATS_TIMEOUT_SEC) {
+            return;
+        }
+        $this->pendingFiberStatsRequest = null;
+        $workers = \array_values($req['replies']);
+        $totalSuspended = \array_sum(\array_column($workers, 'suspended'));
+        $this->controlServer?->sendTo($req['replyClientId'], ControlMessage::commandResult(
+            true,
+            ['workers' => $workers, 'total_suspended' => $totalSuspended, 'timeout_partial' => true],
+            (string)__('Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据', [\count($workers)])
+        ));
     }
 
     private function handleTelemetry(array $msg): void
@@ -2714,7 +2868,7 @@ class ServiceOrchestrator
                     'message' => 'Failed to enable maintenance mode: ' . $enableResult['message'],
                 ];
             }
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             $this->controlServer?->poll(0, 100000);
         }
 
@@ -2789,7 +2943,7 @@ class ServiceOrchestrator
                 if ($currentWorker === null || $currentWorker->ipcClientId === null) {
                     break;
                 }
-                \usleep(100000);
+                SchedulerSystem::usleep(100000);
             }
 
             $this->registry->removeInstance('worker', $instanceId);
@@ -2812,7 +2966,7 @@ class ServiceOrchestrator
                     $ready = true;
                     break;
                 }
-                \usleep(100000);
+                SchedulerSystem::usleep(100000);
             }
 
             if (!$ready) {

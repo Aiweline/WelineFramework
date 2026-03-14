@@ -18,6 +18,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Compiler\SqliteCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * SQLite 查询构建器
@@ -1193,7 +1194,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $jitter = rand(0, intval($delay * 0.1));
         $delay += $jitter;
         
-        usleep($delay * 1000); // 转换为微秒
+        SchedulerSystem::usleep($delay * 1000); // 转换为微秒
     }
 
     /**

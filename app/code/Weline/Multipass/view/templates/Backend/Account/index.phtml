@@ -204,8 +204,8 @@ $userType = $this->getData('user_type') ?? 'backend';
     
     var selectedUserId = null;
     var selectedUserType = '<?= $userType ?>';
-    var getUserListUrl = '<?= $this->getUrlBuilder()->getBackendUrl('multipass/backend/account/get-user-list?user_type=' . $userType . '&search=') ?>';
-    var generateTokenUrl = '<?= $this->getUrlBuilder()->getBackendUrl('multipass/backend/account/generate-token') ?>';
+    var getUserListUrl = '<?= $this->getBackendUrl('multipass/backend/account/get-user-list', ['user_type' => $userType, 'search' => '']) ?>';
+    var generateTokenUrl = '<?= $this->getBackendUrl('multipass/backend/account/generate-token') ?>';
     
     function searchUsers() {
         var search = document.getElementById('user-search').value.trim();

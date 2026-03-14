@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Console\Server;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\App\System;
 use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\Console\Console\Deploy\Mode\Set;
@@ -54,7 +55,7 @@ class Start implements CommandInterface
         if ($mainStop->stopWelineServerOnPort($port)) {
             $this->printer->note(__('已停止占用端口 %{1} 的 Weline Server，以便启动 CLI 服务器', [$port]));
             $this->printer->note(__('等待端口释放...'));
-            sleep(2);
+                SchedulerSystem::sleep(2);
         }
         
         // 检查服务是否已经运行
@@ -86,7 +87,7 @@ class Start implements CommandInterface
                     } else {
                         $this->printer->warning(__('端口被占用但无法确定进程ID，尝试强制清理端口'));
                         // 等待一下让端口释放
-                        sleep(3);
+                        SchedulerSystem::sleep(3);
                     }
                 }
                 
@@ -95,7 +96,7 @@ class Start implements CommandInterface
                 
                 // 等待端口完全释放
                 $this->printer->note(__('等待端口释放...'));
-                sleep(2);
+                SchedulerSystem::sleep(2);
                 
                 // 触发服务器停止事件（强制重启时）
                 $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -333,7 +334,7 @@ class Start implements CommandInterface
             if ($pid) {
                 $this->printer->note(__('端口 %{1} 仍被占用（PID：%{2}），正在停止以便启动 CLI 服务器...', [$port, $pid]));
                 $this->stopExistingServer($pid);
-                sleep(2);
+                SchedulerSystem::sleep(2);
             } else {
                 $this->printer->warning(__('端口 %{1} 被占用但无法获取进程ID，请手动停止后重试', [$port]));
                 return;
@@ -363,12 +364,12 @@ class Start implements CommandInterface
             Processer::killByPid($pid, true);
         }
         
-        \usleep(500000);
+        SchedulerSystem::usleep(500000);
         
         if (Processer::isRunningByPid($pid)) {
             // 如果还在运行，尝试杀死进程树
             Processer::getDriver()->killProcessTree($pid);
-            \usleep(300000);
+            SchedulerSystem::usleep(300000);
         }
         
         return !Processer::isRunningByPid($pid);

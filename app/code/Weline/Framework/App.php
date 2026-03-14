@@ -17,6 +17,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\System;
 
 class App
 {
@@ -105,7 +106,7 @@ class App
         // 检测项目根目录
         if (!defined('BP')) {
             echo('请告知根目录BP(常量)的位置。');
-            exit(0);
+            System::exit(0);
         }
         // 静态文件路径
         if (!defined('PUB')) {

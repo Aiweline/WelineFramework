@@ -14,6 +14,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
@@ -177,7 +178,7 @@ class Reload extends CommandAbstract
                 }
             }
             
-            \usleep(50000); // 50ms
+            SchedulerSystem::usleep(50000); // 50ms
         }
         
         @\fclose($conn);

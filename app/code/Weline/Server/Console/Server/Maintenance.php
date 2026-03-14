@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
@@ -271,7 +272,7 @@ class Maintenance extends CommandAbstract
                 }
             }
             
-            \usleep(50000);
+            SchedulerSystem::usleep(50000);
         }
         
         @\fclose($conn);
@@ -330,7 +331,7 @@ class Maintenance extends CommandAbstract
                 }
             }
             
-            \usleep(50000);
+            SchedulerSystem::usleep(50000);
         }
         
         @\fclose($conn);
