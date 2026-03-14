@@ -21,6 +21,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\IPC\ControlMessage;
@@ -612,7 +613,7 @@ class Dispatcher
                     $this->running = false;
                     break;
                 }
-                \usleep(10000);
+                SchedulerSystem::usleep(10000);
             }
         }
         

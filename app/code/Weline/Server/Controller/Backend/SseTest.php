@@ -14,6 +14,7 @@ namespace Weline\Server\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * SseTest - SSE 测试控制器
@@ -21,6 +22,7 @@ use Weline\Framework\Http\Sse\SseWriter;
  * 测试路由：
  * - GET /admin/server/sse-test/stream - 测试 SSE 流式输出
  * - GET /admin/server/sse-test/index - SSE 测试页面
+ * - GET /admin/server/sse-test/concurrent-test - SSE 与静态请求并发测试页（3 轮）
  */
 class SseTest extends BackendController
 {
@@ -78,6 +80,7 @@ class SseTest extends BackendController
         <button id="startBtn" onclick="startSSE()">开始测试</button>
         <button id="stopBtn" onclick="stopSSE()" disabled>停止</button>
         <button onclick="clearOutput()">清空输出</button>
+        <a href="{$this->_url->getBackendUrl('server/sse-test/concurrent-test')}" style="margin-left:0.5rem;">SSE 并发测试（3 轮）</a>
         <div id="output"></div>
     </div>
     <script>
@@ -210,7 +213,7 @@ HTML;
             ]);
             
             // 模拟处理耗时
-            usleep(500000); // 500ms
+            SchedulerSystem::usleep(500000); // 500ms — WLS 下挂起 Fiber，不阻塞 Worker
         }
         
         // 发送完成事件
@@ -218,5 +221,149 @@ HTML;
             'message' => '所有任务处理完成！',
             'timestamp' => date('Y-m-d H:i:s'),
         ]);
+    }
+
+    /**
+     * SSE 与静态请求并发测试页
+     *
+     * 点击「开始」后：共 3 轮，每轮同时发起 1 个 SSE 连接 + 循环请求若干静态资源，
+     * 用于验证 SSE 连接时其他请求是否无阻塞。
+     */
+    public function getConcurrentTest(): string
+    {
+        $streamUrl = $this->_url->getBackendUrl('server/sse-test/stream');
+        $staticUrls = [
+            $this->_url->getBackendUrl('server/sse-test/index'),
+            $this->_url->getBackendUrl('server/sse-test/concurrent-test'),
+            $this->_url->getBackendUrl(''),
+        ];
+        $streamUrlJson = \json_encode($streamUrl, JSON_UNESCAPED_SLASHES);
+        $staticUrlsJson = \json_encode($staticUrls, JSON_UNESCAPED_SLASHES);
+
+        return <<<HTML
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>SSE 并发测试</title>
+    <style>
+        .wls-sse-concurrent { max-width: 900px; margin: 0 auto; padding: 1rem; }
+        .wls-sse-concurrent h1 { color: var(--backend-color-primary); margin-bottom: 1rem; }
+        .wls-sse-concurrent .status { padding: 0.75rem; border-radius: var(--backend-border-radius); background: var(--backend-color-surface); margin-bottom: 1rem; }
+        .wls-sse-concurrent button { padding: 0.5rem 1rem; border-radius: var(--backend-border-radius); cursor: pointer; margin-right: 0.5rem; }
+        .wls-sse-concurrent button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .wls-sse-concurrent table { width: 100%; border-collapse: collapse; background: var(--backend-color-card-bg); border: 1px solid var(--backend-color-border-default); border-radius: var(--backend-border-radius); }
+        .wls-sse-concurrent th, .wls-sse-concurrent td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid var(--backend-color-border-light); }
+        .wls-sse-concurrent th { background: var(--backend-color-surface); color: var(--backend-color-text-primary); }
+        .wls-sse-concurrent #log { margin-top: 1rem; padding: 0.75rem; background: var(--backend-color-surface); border-radius: var(--backend-border-radius); font-family: monospace; font-size: 0.85rem; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <div class="wls-sse-concurrent">
+        <h1>SSE 连接时无阻塞 — 并发测试</h1>
+        <div class="status" id="status">就绪。点击「开始」将执行 3 轮：每轮 1 个 SSE 连接 + 持续请求静态资源。</div>
+        <button id="startBtn" type="button">开始</button>
+        <table id="resultTable">
+            <thead><tr><th>轮次</th><th>SSE 时长 (ms)</th><th>静态请求次数</th><th>平均响应 (ms)</th></tr></thead>
+            <tbody id="resultBody"></tbody>
+        </table>
+        <div id="log"></div>
+    </div>
+    <script>
+    (function () {
+        'use strict';
+        var streamUrl = {$streamUrlJson};
+        var staticUrls = {$staticUrlsJson};
+        var totalRounds = 3;
+        var pollIntervalMs = 150;
+
+        var statusEl = document.getElementById('status');
+        var startBtn = document.getElementById('startBtn');
+        var resultBody = document.getElementById('resultBody');
+        var logEl = document.getElementById('log');
+
+        function log(msg) {
+            var line = document.createElement('div');
+            line.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function runOneRound(roundIndex) {
+            return new Promise(function (resolve) {
+                var sseStart = 0;
+                var sseEnd = 0;
+                var requestCount = 0;
+                var totalTime = 0;
+                var intervalId = null;
+                var es = new EventSource(streamUrl);
+
+                es.onopen = function () {
+                    sseStart = performance.now();
+                    log('第' + (roundIndex + 1) + '轮 SSE 已连接，开始请求静态资源');
+                    intervalId = setInterval(function () {
+                        staticUrls.forEach(function (url) {
+                            var t0 = performance.now();
+                            fetch(url, { method: 'GET', credentials: 'same-origin' })
+                                .then(function (r) {
+                                    requestCount++;
+                                    totalTime += (performance.now() - t0);
+                                })
+                                .catch(function () { requestCount++; });
+                        });
+                    }, pollIntervalMs);
+                };
+
+                es.addEventListener('done', function () {
+                    es.close();
+                    sseEnd = performance.now();
+                    if (intervalId) clearInterval(intervalId);
+                    var sseDuration = Math.round(sseEnd - sseStart);
+                    var avg = requestCount > 0 ? Math.round(totalTime / requestCount) : 0;
+                    log('第' + (roundIndex + 1) + '轮 SSE 结束，静态请求 ' + requestCount + ' 次，平均 ' + avg + ' ms');
+                    resolve({ round: roundIndex + 1, sseDuration: sseDuration, requestCount: requestCount, avgMs: avg });
+                });
+
+                es.onerror = function () {
+                    if (es.readyState === EventSource.CLOSED) return;
+                    es.close();
+                    if (intervalId) clearInterval(intervalId);
+                    sseEnd = sseStart > 0 ? performance.now() : sseStart;
+                    resolve({ round: roundIndex + 1, sseDuration: Math.round((sseEnd - sseStart) || 0), requestCount: requestCount, avgMs: requestCount > 0 ? Math.round(totalTime / requestCount) : 0 });
+                };
+            });
+        }
+
+        function appendRow(row) {
+            var tr = document.createElement('tr');
+            tr.innerHTML = '<td>' + row.round + '</td><td>' + row.sseDuration + '</td><td>' + row.requestCount + '</td><td>' + row.avgMs + '</td>';
+            resultBody.appendChild(tr);
+        }
+
+        startBtn.addEventListener('click', function () {
+            startBtn.disabled = true;
+            resultBody.innerHTML = '';
+            logEl.innerHTML = '';
+            statusEl.textContent = '执行中：共 ' + totalRounds + ' 轮…';
+
+            var chain = Promise.resolve();
+            for (var r = 0; r < totalRounds; r++) {
+                (function (roundIndex) {
+                    chain = chain.then(function () { return runOneRound(roundIndex); }).then(function (res) { appendRow(res); });
+                })(r);
+            }
+            chain.then(function () {
+                startBtn.disabled = false;
+                statusEl.textContent = '3 轮已完成。若每轮静态请求次数较多且平均响应较低，则 SSE 连接时无阻塞。';
+            }).catch(function (e) {
+                startBtn.disabled = false;
+                statusEl.textContent = '出错: ' + (e && e.message ? e.message : String(e));
+            });
+        });
+    })();
+    </script>
+</body>
+</html>
+HTML;
     }
 }

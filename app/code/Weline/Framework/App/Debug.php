@@ -4,6 +4,7 @@ namespace Weline\Framework\App;
 
 use Weline\Framework\Console\Cli;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\System;
 
 class Debug
 {
@@ -61,7 +62,7 @@ class Debug
                 $printer->printing(w_var_export($value, true));
             }
             if (isset($_ENV['w-debug'][$env_key . '_target_stop']) && $_ENV['w-debug'][$env_key . '_target_stop']) {
-                exit();
+                System::exit();
             }
         }
         
@@ -70,7 +71,7 @@ class Debug
             $value = null;
         }
         if (!empty($_ENV['w-debug'][$env_key . '_target_stop'])) {
-            exit();
+            System::exit();
         }
         if (!$value) {
             if (array_key_exists($env_key, $_ENV['w-debug'])) {

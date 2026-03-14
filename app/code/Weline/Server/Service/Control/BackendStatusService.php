@@ -105,7 +105,7 @@ class BackendStatusService
         }
 
         \stream_set_timeout($conn, 1);
-        $request = "GET /_wls/health?detail=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+        $request = "GET /_wls/health?detail=1&fibers=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
         @\fwrite($conn, $request);
         $response = @\stream_get_contents($conn);
         @\fclose($conn);
@@ -133,6 +133,8 @@ class BackendStatusService
             'uptime' => (int)($json['uptime'] ?? 0),
             'php_version' => (string)($json['php_version'] ?? ''),
             'timestamp' => (int)($json['timestamp'] ?? 0),
+            'fiber_count' => (int)($json['fiber_count'] ?? 0),
+            'fibers' => \is_array($json['fibers'] ?? null) ? $json['fibers'] : [],
         ];
     }
 

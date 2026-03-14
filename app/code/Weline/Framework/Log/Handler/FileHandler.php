@@ -124,24 +124,50 @@ class FileHandler implements HandlerInterface
 
     /**
      * 获取日志文件路径
+     *
+     * 支持层级通道名，如 wls/fiber_scheduler 会写入 var/log/wls/fiber_scheduler.log
      */
     private function getFilePath(LogLevel $level, string $channel): string
     {
-        // 如果通道名看起来像文件名，直接使用
+        // 如果通道名以 .log 结尾，作为相对路径使用（支持层级如 wls/fiber_scheduler.log）
         if (str_ends_with($channel, '.log')) {
-            return $this->logPath . $channel;
+            $relativePath = $this->sanitizeChannelAsPath($channel);
+            return $this->logPath . $relativePath;
         }
 
         // 特殊通道映射到独立文件
         if ($channel !== 'app' && $channel !== 'default') {
-            // 通道名作为子目录或文件前缀
-            $sanitizedChannel = preg_replace('/[^a-zA-Z0-9_-]/', '_', $channel);
-            return $this->logPath . $sanitizedChannel . '.log';
+            // 支持层级通道名：wls/fiber_scheduler -> var/log/wls/fiber_scheduler.log
+            $relativePath = $this->sanitizeChannelAsPath($channel . '.log');
+            return $this->logPath . $relativePath;
         }
 
         // 使用级别默认文件
         $fileName = $this->levelFiles[$level->name] ?? 'app.log';
         return $this->logPath . $fileName;
+    }
+
+    /**
+     * 将通道名转换为安全的相对路径（支持层级）
+     *
+     * wls/fiber_scheduler -> wls/fiber_scheduler
+     * wls/fiber_scheduler.log -> wls/fiber_scheduler.log
+     * 防止路径遍历：../ 等会被过滤
+     */
+    private function sanitizeChannelAsPath(string $channel): string
+    {
+        $separator = DIRECTORY_SEPARATOR;
+        $slash = '/';
+        $parts = array_filter(
+            preg_split('/[\\\\\/]+/', $channel),
+            fn(string $p) => $p !== '' && $p !== '.' && $p !== '..'
+        );
+        $sanitized = [];
+        foreach ($parts as $part) {
+            $sanitized[] = preg_replace('/[^a-zA-Z0-9_.-]/', '_', $part);
+        }
+        $path = implode($slash, $sanitized);
+        return str_replace($slash, $separator, $path);
     }
 
     /**

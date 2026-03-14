@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
@@ -182,7 +183,7 @@ class Stop extends CommandAbstract
             // IPC 失败，强制杀死 Master
             $this->printer->warning(__('IPC 超时，强制终止 Master...'));
             Processer::killByPid($masterPid, true);
-            \usleep(500000);
+            SchedulerSystem::usleep(500000);
             
             // 清理可能残留的子进程
             $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
@@ -535,7 +536,7 @@ class Stop extends CommandAbstract
         $confirmed = 0;
         
         while (\microtime(true) < $deadline) {
-            \usleep(200000); // 200ms
+            SchedulerSystem::usleep(200000); // 200ms
             echo $this->printer->colorize('.', self::IPC_COLOR_INFO);
             // 快速路径 + 真实进程校验双确认，避免“索引先删、进程未退”的假退出。
             if (Processer::hasExitedFast($masterPid) && !Processer::processExists($masterPid)) {

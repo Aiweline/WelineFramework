@@ -19,6 +19,7 @@ declare(strict_types=1);
 namespace Weline\Server\IPC;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
@@ -137,7 +138,7 @@ class MasterResurrector
 
         for ($retry = 0; $retry < $this->maxRetries; $retry++) {
             // 延迟等待（给更高优先级的进程机会）
-            \sleep($delay);
+            SchedulerSystem::sleep($delay);
 
             // 检查 Master 是否已被复活
             if ($this->isMasterAlive()) {
@@ -147,7 +148,7 @@ class MasterResurrector
             // 尝试启动 Master
             if ($this->startMaster()) {
                 // 等待 Master 启动完成
-                \sleep(2);
+                SchedulerSystem::sleep(2);
 
                 if ($this->isMasterAlive()) {
                     return true;

@@ -165,7 +165,28 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         $pageType = $page ? ($page->getData('type') ?? '') : '';
                         $isHomePage = ($pageType === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME);
                         // 首页类型且没有handle时，直接使用网站地址
-                        $initialPageUrl = ($isHomePage && empty($handleForDisplay)) ? $baseUrlForDisplay : ($baseUrlForDisplay . '/' . ltrim($handleForDisplay, '/'));
+                        // 如果网站URL或当前请求的baseUrl中有端口，则优先显示端口
+                        function appendPortIfExists($url) {
+                            $parsedUrl = parse_url($url);
+                            $scheme = isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '';
+                            $host = $parsedUrl['host'] ?? '';
+                            $port = isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '';
+                            $path = isset($parsedUrl['path']) ? $parsedUrl['path'] : '';
+                            // 保留用户信息
+                            $user = $parsedUrl['user'] ?? '';
+                            $pass = isset($parsedUrl['pass']) ? ':' . $parsedUrl['pass']  : '';
+                            $pass = ($user || $pass) ? "$pass@" : '';
+                            $auth = $user ? "$user$pass" : '';
+                            // 保留query和fragment
+                            $query = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
+                            $fragment = isset($parsedUrl['fragment']) ? '#' . $parsedUrl['fragment'] : '';
+                            return "$scheme$auth$host$port$path$query$fragment";
+                        }
+                        $displayedBaseUrlWithPort = appendPortIfExists($baseUrlForDisplay);
+
+                        $initialPageUrl = ($isHomePage && empty($handleForDisplay)) 
+                            ? $displayedBaseUrlWithPort 
+                            : ($displayedBaseUrlWithPort . '/' . ltrim($handleForDisplay, '/'));
                         ?>
                         <div style="min-width: 150px; flex: 2 1 200px;">
                             <label class="form-label mb-1 small">

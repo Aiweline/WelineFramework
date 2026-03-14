@@ -124,11 +124,32 @@ class ControlMessage
     /** 热重载 SSL 证书映射（不重启进程） */
     public const ACTION_SSL_CERT_RELOAD = 'ssl_cert_reload';
 
+    /** 查询 Fiber 池统计（各 Worker 挂起数、配置等） */
+    public const ACTION_FIBER_STATS = 'fiber_stats';
+
+    /** 设置 Fiber 池配置（idle_ttl_sec / max_active），下发到各 Worker */
+    public const ACTION_FIBER_SET_CONFIG = 'fiber_set_config';
+
+    /** 立即释放各 Worker 上闲置的 Fiber */
+    public const ACTION_FIBER_RELEASE_IDLE = 'fiber_release_idle';
+
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
 
     /** Master → Dispatcher：解封指定 IP 或清空全部封禁 */
     public const TYPE_SECURITY_UNBLOCK = 'security_unblock';
+
+    /** Master → Worker：下发 Fiber 池配置（闲置超时、最大活跃数） */
+    public const TYPE_FIBER_SET_CONFIG = 'fiber_set_config';
+
+    /** Master → Worker：立即释放闲置 Fiber */
+    public const TYPE_FIBER_RELEASE_IDLE = 'fiber_release_idle';
+
+    /** Master → Worker：查询 Fiber 池统计（Worker 回复 TYPE_FIBER_POOL_STATS） */
+    public const TYPE_FIBER_POOL_QUERY = 'fiber_pool_query';
+
+    /** Worker → Master：Fiber 池统计上报 */
+    public const TYPE_FIBER_POOL_STATS = 'fiber_pool_stats';
 
     // ========== 复活优先级 ==========
 
@@ -596,6 +617,71 @@ class ControlMessage
             'line'        => $line,
             'level'       => $level,
             'process_tag' => $processTag,
+        ]);
+    }
+
+    /**
+     * 构建 fiber_set_config 消息（Master → Worker）
+     *
+     * @param int $idleTtlSec 挂起超过此秒数视为闲置并可释放，0=不自动释放
+     * @param int $maxActive 最大活跃挂起 Fiber 数，0=不限制
+     */
+    public static function fiberSetConfig(int $idleTtlSec = 0, int $maxActive = 0): string
+    {
+        return self::encode([
+            'type'          => self::TYPE_FIBER_SET_CONFIG,
+            'idle_ttl_sec'  => $idleTtlSec,
+            'max_active'    => $maxActive,
+        ]);
+    }
+
+    /**
+     * 构建 fiber_release_idle 消息（Master → Worker）
+     */
+    public static function fiberReleaseIdle(): string
+    {
+        return self::encode(['type' => self::TYPE_FIBER_RELEASE_IDLE]);
+    }
+
+    /**
+     * 构建 fiber_pool_query 消息（Master → Worker），Worker 回复 TYPE_FIBER_POOL_STATS
+     *
+     * @param string $requestId 请求 ID，Worker 回传以便 Master 聚合
+     */
+    public static function fiberPoolQuery(string $requestId): string
+    {
+        return self::encode([
+            'type'       => self::TYPE_FIBER_POOL_QUERY,
+            'request_id' => $requestId,
+        ]);
+    }
+
+    /**
+     * 构建 fiber_pool_stats 消息（Worker → Master）
+     *
+     * @param string $requestId 对应 query 的 request_id
+     * @param int $workerId Worker ID
+     * @param int $suspendedCount 当前挂起 Fiber 数
+     * @param int $idleTtlSec 当前配置的闲置超时（秒）
+     * @param int $maxActive 当前配置的最大活跃数
+     * @param int $releasedCount 本次释放数量（仅 release_idle 时可选）
+     */
+    public static function fiberPoolStats(
+        string $requestId,
+        int $workerId,
+        int $suspendedCount,
+        int $idleTtlSec = 0,
+        int $maxActive = 0,
+        int $releasedCount = 0
+    ): string {
+        return self::encode([
+            'type'           => self::TYPE_FIBER_POOL_STATS,
+            'request_id'     => $requestId,
+            'worker_id'      => $workerId,
+            'suspended'      => $suspendedCount,
+            'idle_ttl_sec'   => $idleTtlSec,
+            'max_active'     => $maxActive,
+            'released_count' => $releasedCount,
         ]);
     }
 }

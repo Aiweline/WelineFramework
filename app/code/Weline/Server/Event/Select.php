@@ -12,6 +12,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Event;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+
 /**
  * Select - stream_select 事件驱动
  * 
@@ -238,11 +240,11 @@ class Select implements EventInterface
                 if (!empty($this->timers)) {
                     $minTime = $this->getMinTimerTime();
                     if ($minTime > 0) {
-                        usleep((int)($minTime * 1000000));
+                        SchedulerSystem::usleep((int) ($minTime * 1_000_000));
                     }
                 } else {
                     // 没有任何事件，短暂睡眠避免 CPU 空转
-                    usleep(10000); // 10ms
+                    SchedulerSystem::usleep(10000); // 10ms
                 }
                 continue;
             }
