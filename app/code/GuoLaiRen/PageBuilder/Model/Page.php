@@ -232,6 +232,22 @@ class Page extends Model
         $parent->clear()->load($parentId);
         return $parent->getId() ? $parent : null;
     }
+
+    /**
+     * 获取所属站点根页面（主页，parent_id=0 的顶级页）
+     * 子页面主题继承自此根页面，不可单独切换
+     */
+    public function getRootPage(): ?Page
+    {
+        $current = $this;
+        while (true) {
+            $parent = $current->getParentPage();
+            if ($parent === null) {
+                return $current->getId() ? $current : null;
+            }
+            $current = $parent;
+        }
+    }
     
     /**
      * 获取子页面列表
@@ -295,6 +311,65 @@ class Page extends Model
             ];
         }
         
+        return $result;
+    }
+
+    /**
+     * 页头导航允许的页面类型（关于我们、博客、联系我们、条款、隐私政策等）
+     * 用于 header 菜单，只展示这些类型中当前站点已存在的页面。
+     */
+    public static function getHeaderMenuTypes(): array
+    {
+        return [
+            self::TYPE_HOME,
+            self::TYPE_ABOUT,
+            self::TYPE_BLOG_LIST,
+            self::TYPE_CONTACT,
+            self::TYPE_TERMS_OF_SERVICE,
+            self::TYPE_PRIVACY_POLICY,
+        ];
+    }
+
+    /**
+     * 获取页头导航页面列表（仅当前站点下已存在的指定类型页面，按固定顺序）
+     *
+     * @param int $limit 数量上限
+     * @return array 页面列表，包含 title, handle, url, type
+     */
+    public function getHeaderNavigationPages(int $limit = 10): array
+    {
+        $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+        $allowedTypes = self::getHeaderMenuTypes();
+
+        $pages = clone $this;
+        $items = $pages->clear()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_STATUS, self::STATUS_PUBLISHED)
+            // ->where(self::schema_fields_PARENT_ID, 0)
+            ->where(self::schema_fields_TYPE, $allowedTypes, 'IN')
+            ->order(self::schema_fields_TYPE, 'ASC')
+            ->limit($limit * 2)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $byType = [];
+        foreach ($items as $item) {
+            $type = $item->getData(self::schema_fields_TYPE);
+            $byType[$type] = [
+                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'handle' => $item->getData(self::schema_fields_HANDLE),
+                'url' => '/' . ($item->getData(self::schema_fields_HANDLE) ?: ''),
+                'type' => $type,
+                'page_id' => $item->getId(),
+            ];
+        }
+
+        $result = [];
+        foreach ($allowedTypes as $type) {
+            if (isset($byType[$type]) && count($result) < $limit) {
+                $result[] = $byType[$type];
+            }
+        }
         return $result;
     }
     
