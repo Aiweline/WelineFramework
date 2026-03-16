@@ -27,4 +27,4 @@
 4. 访问验证
 5. HTTPS 证书申请
 
-轮询任务：`Weline\Saas\Cron\DomainLifecycleOrchestration`
+轮询任务：`Weline\Websites\Cron\DomainLifecycleOrchestration`（每分钟执行，推进未完成的生命周期订单）
