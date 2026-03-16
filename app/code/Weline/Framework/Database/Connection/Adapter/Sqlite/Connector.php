@@ -32,12 +32,6 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
-    /** @inheritDoc */
-    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface
-    {
-        return parent::whereRaw($sql, $where_logic);
-    }
-
     public function __construct(
         private readonly ConfigProvider $configProvider
     ) {

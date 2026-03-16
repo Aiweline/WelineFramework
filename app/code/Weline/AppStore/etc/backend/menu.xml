@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+/**
+ * Weline AppStore - 后台菜单配置
+ *
+ * @author Aiweline
+ * @email aiweline@qq.com
+ */
+-->
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- 应用商城（顶级菜单） -->
+    <menu source="Weline_AppStore::appstore"
+          name="appstore"
+          title="应用商城"
+          icon="bi-bag"
+          order="60">
+
+        <!-- 商城首页 -->
+        <menu source="Weline_AppStore::index"
+              name="index"
+              title="商城首页"
+              action="*/backend/index"
+              icon="bi-house"
+              order="0"/>
+
+        <!-- 我的模块 -->
+        <menu source="Weline_AppStore::installed"
+              name="installed"
+              title="我的模块"
+              action="*/backend/installed"
+              icon="bi-puzzle"
+              order="1"/>
+
+        <!-- 账户绑定 -->
+        <menu source="Weline_AppStore::account"
+              name="account"
+              title="账户绑定"
+              action="*/backend/account"
+              icon="bi-link-45deg"
+              order="2"/>
+
+        <!-- 许可证管理 -->
+        <menu source="Weline_AppStore::license"
+              name="license"
+              title="许可证管理"
+              action="*/backend/license"
+              icon="bi-key"
+              order="3"/>
+
+        <!-- 下载历史 -->
+        <menu source="Weline_AppStore::download_history"
+              name="download_history"
+              title="下载历史"
+              action="*/backend/download-history"
+              icon="bi-clock-history"
+              order="4"/>
+    </menu>
+</menus>

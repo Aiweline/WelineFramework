@@ -149,35 +149,32 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                 // 忽略错误
                             }
                         }
-                        // 显示用 base：使用框架 getDisplayBaseUrl()，随当前请求端口（如 WLS :9981）
-                        $currentBase = $this->request->getDisplayBaseUrl();
-                        $baseUrlForDisplay = $currentBase;
-                        if ($pageWebsiteUrl !== '') {
-                            $siteHost = parse_url($pageWebsiteUrl, PHP_URL_HOST);
-                            $currHost = parse_url($currentBase, PHP_URL_HOST);
-                            if ($siteHost !== false && $currHost !== false && strcasecmp($siteHost, $currHost) === 0) {
-                                $baseUrlForDisplay = $currentBase;
-                            } else {
-                                $baseUrlForDisplay = rtrim($pageWebsiteUrl, '/');
-                            }
+                        // 展示用 base：一律用站点库里的 URL（域名不变）；仅当同 host 且当前请求带端口时，在展示地址上注入端口便于打开
+                        $baseUrlForDisplay = $pageWebsiteUrl !== '' ? rtrim($pageWebsiteUrl, '/') : rtrim($this->request->getBaseHost(), '/');
+                        $currentOrigin = rtrim($this->request->getBaseHost(), '/');
+                        $currentPortForDisplay = parse_url($currentOrigin, PHP_URL_PORT);
+                        $currHost = parse_url($currentOrigin, PHP_URL_HOST);
+                        $siteHost = parse_url($baseUrlForDisplay, PHP_URL_HOST);
+                        $isLocal = function ($h) { return $h !== false && in_array(strtolower($h), ['localhost', '127.0.0.1'], true); };
+                        $sameHostForPort = ($currHost !== false && $siteHost !== false && (strcasecmp($currHost, $siteHost) === 0 || ($isLocal($currHost) && $isLocal($siteHost))));
+                        if ($sameHostForPort && $currentPortForDisplay !== null && $currentPortForDisplay !== '' && $currentPortForDisplay !== '80' && $currentPortForDisplay !== '443') {
+                            $parsed = parse_url($baseUrlForDisplay);
+                            $baseUrlForDisplay = ($parsed['scheme'] ?? 'http') . '://' . ($parsed['host'] ?? '') . ':' . $currentPortForDisplay . ($parsed['path'] ?? '') . (isset($parsed['query']) ? '?' . $parsed['query'] : '') . (isset($parsed['fragment']) ? '#' . $parsed['fragment'] : '');
+                            $baseUrlForDisplay = rtrim(preg_replace('#/+#', '/', $baseUrlForDisplay), '/');
                         }
                         $handleForDisplay = $page ? ($page->getData('handle') ?? '') : '';
                         $pageType = $page ? ($page->getData('type') ?? '') : '';
                         $isHomePage = ($pageType === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME);
-                        // 首页类型且没有handle时，直接使用网站地址
-                        // 如果网站URL或当前请求的baseUrl中有端口，则优先显示端口
                         function appendPortIfExists($url) {
                             $parsedUrl = parse_url($url);
                             $scheme = isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '';
                             $host = $parsedUrl['host'] ?? '';
                             $port = isset($parsedUrl['port']) ? ':' . $parsedUrl['port'] : '';
                             $path = isset($parsedUrl['path']) ? $parsedUrl['path'] : '';
-                            // 保留用户信息
                             $user = $parsedUrl['user'] ?? '';
                             $pass = isset($parsedUrl['pass']) ? ':' . $parsedUrl['pass']  : '';
                             $pass = ($user || $pass) ? "$pass@" : '';
                             $auth = $user ? "$user$pass" : '';
-                            // 保留query和fragment
                             $query = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
                             $fragment = isset($parsedUrl['fragment']) ? '#' . $parsedUrl['fragment'] : '';
                             return "$scheme$auth$host$port$path$query$fragment";
@@ -2319,7 +2316,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         // ==================== 访问地址更新逻辑 ====================
-        // 获取网站URL映射（提前获取，用于更新访问地址）
+        // 展示用：一律用站点库里的 URL（域名不变）；同 host 且当前请求带端口时，仅在展示时注入端口
         <?php 
         $websitesForUrl = $this->getData('websites') ?? [];
         $websiteUrlMap = [];
@@ -2330,21 +2327,43 @@ document.addEventListener('DOMContentLoaded', function() {
                 $websiteUrlMap[$wsId] = rtrim($wsUrl, '/');
             }
         }
+        $currentOriginForJs = rtrim($this->request->getBaseHost(), '/');
+        $currentPortForJs = parse_url($currentOriginForJs, PHP_URL_PORT);
         ?>
         const websiteUrlMap = <?= json_encode($websiteUrlMap) ?>;
-        const defaultBaseUrl = '<?= htmlspecialchars($this->request->getDisplayBaseUrl(), ENT_QUOTES, 'UTF-8') ?>';
+        const currentOriginForPort = '<?= htmlspecialchars($currentOriginForJs, ENT_QUOTES, 'UTF-8') ?>';
+        const currentPortForDisplay = <?= json_encode($currentPortForJs !== null && $currentPortForJs !== '' ? (string)$currentPortForJs : '') ?>;
 
-        // 同 host 时用 defaultBaseUrl（框架 getDisplayBaseUrl，随当前请求端口），否则用站点 URL
-        function getDisplayBaseUrl(websiteId) {
-            if (!websiteId || !websiteUrlMap[websiteId]) return defaultBaseUrl;
+        function isSameHostOrLocal(siteHost, currHost) {
+            if (!siteHost || !currHost) return false;
+            var s = siteHost.toLowerCase(), c = currHost.toLowerCase();
+            if (s === c) return true;
+            return (s === 'localhost' || s === '127.0.0.1') && (c === 'localhost' || c === '127.0.0.1');
+        }
+        function injectPortForDisplay(url, port) {
+            if (!url || !port || port === '80' || port === '443') return url;
             try {
-                var siteHost = new URL(websiteUrlMap[websiteId]).hostname;
-                var currHost = new URL(defaultBaseUrl).hostname;
-                if (siteHost && currHost && siteHost.toLowerCase() === currHost.toLowerCase())
-                    return defaultBaseUrl;
-            } catch (e) {}
+                var u = new URL(url);
+                u.port = port;
+                return u.origin + (u.pathname || '') + (u.search || '') + (u.hash || '');
+            } catch (e) { return url; }
+        }
+        function getDisplayBaseUrl(websiteId) {
+            if (!websiteId || !websiteUrlMap[websiteId]) return currentOriginForPort;
             return websiteUrlMap[websiteId];
         }
+        function getDisplayBaseUrlWithPort(websiteId) {
+            var base = getDisplayBaseUrl(websiteId);
+            if (!currentPortForDisplay) return base;
+            try {
+                var siteHost = new URL(base).hostname;
+                var currHost = new URL(currentOriginForPort).hostname;
+                if (isSameHostOrLocal(siteHost, currHost)) return injectPortForDisplay(base, currentPortForDisplay);
+            } catch (e) {}
+            return base;
+        }
+        window.getDisplayBaseUrlWithPort = getDisplayBaseUrlWithPort;
+        window.currentOriginForPort = currentOriginForPort;
         
         // 更新访问地址显示的函数
         function updatePageUrlDisplay() {
@@ -2358,8 +2377,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // 获取当前选中的网站ID
             const websiteId = websiteSelect ? parseInt(websiteSelect.value) || 0 : 0;
             
-            // 获取网站基础URL（同 host 时用当前请求 base 以保留端口）
-            const baseUrl = getDisplayBaseUrl(websiteId);
+            // 展示用 base（站点 URL；同 host 且当前请求带端口时注入端口便于打开）
+            const baseUrl = getDisplayBaseUrlWithPort(websiteId);
             
             // 获取当前handle
             const handle = handleInputEl ? handleInputEl.value.trim() : '';
@@ -5758,7 +5777,7 @@ window.openFrontendPreview = function() {
         return;
     }
     
-    // 获取网站URL映射
+    // 展示/预览用：站点库里的 URL；同 host 且当前请求带端口时由 getDisplayBaseUrlWithPort 注入端口
     <?php 
     $websites = $this->getData('websites') ?? [];
     $websiteUrls = [];
@@ -5770,14 +5789,14 @@ window.openFrontendPreview = function() {
         }
     }
     ?>
-    const websiteUrls = <?= json_encode($websiteUrls) ?>;
+    const websiteUrlsPreview = <?= json_encode($websiteUrls) ?>;
     
     // 获取当前选中的网站ID
     const websiteSelect = document.getElementById('website_id');
     const websiteId = websiteSelect ? parseInt(websiteSelect.value, 10) || 0 : 0;
     
-    // 获取网站基础URL（同 host 时用当前请求 base 以保留端口）
-    const baseUrl = typeof getDisplayBaseUrl === 'function' ? getDisplayBaseUrl(websiteId) : (websiteUrls[websiteId] || '<?= htmlspecialchars($this->request->getDisplayBaseUrl(), ENT_QUOTES, 'UTF-8') ?>');
+    // 预览打开用 base（站点 URL；同 host 时注入当前端口便于打开，跨 script 用 window）
+    const baseUrl = typeof window.getDisplayBaseUrlWithPort === 'function' ? window.getDisplayBaseUrlWithPort(websiteId) : (websiteUrlsPreview[websiteId] || window.currentOriginForPort || '<?= htmlspecialchars(rtrim($this->request->getBaseHost(), '/'), ENT_QUOTES, 'UTF-8') ?>');
     
     // 构建预览URL：handle 放 query 并 encodeURIComponent，配合 website_id 解码
     let previewUrl = baseUrl;

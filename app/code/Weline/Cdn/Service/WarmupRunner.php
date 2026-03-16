@@ -47,13 +47,23 @@ class WarmupRunner
         $warmupUrlModel = $this->objectManager->getInstance(WarmupUrl::class);
 
         // 获取待处理的URL（启用状态、未达到目标次数）
-        $urls = $warmupUrlModel->reset()
+        $candidates = $warmupUrlModel->reset()
             ->where(WarmupUrl::schema_fields_ENABLED, 1)
-            ->whereRaw(WarmupUrl::schema_fields_PROCESSED_COUNT . ' < ' . WarmupUrl::schema_fields_TARGET_COUNT)
-            ->limit($limit)
+            ->limit(max($limit * 3, $limit))
             ->select()
             ->fetch()
             ->getItems();
+        $urls = [];
+        foreach ($candidates as $candidate) {
+            $processedCount = (int)$candidate->getData(WarmupUrl::schema_fields_PROCESSED_COUNT);
+            $targetCount = (int)$candidate->getData(WarmupUrl::schema_fields_TARGET_COUNT);
+            if ($processedCount < $targetCount) {
+                $urls[] = $candidate;
+                if (count($urls) >= $limit) {
+                    break;
+                }
+            }
+        }
 
         foreach ($urls as $warmupUrl) {
             $processed++;
