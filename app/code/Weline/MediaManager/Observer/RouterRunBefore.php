@@ -1,7 +1,6 @@
 <?php
-/**
- * 本文件必须保存为 UTF-8 无 BOM，否则会触发 "headers already sent"。
- */
+
+declare(strict_types=1);
 
 namespace Weline\MediaManager\Observer;
 
@@ -14,8 +13,10 @@ class RouterRunBefore implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
-        // 防止本观察者或所调用代码产生意外输出导致后续 "headers already sent"
-        $ob = !headers_sent() && ob_start();
+        if (headers_sent()) {
+            return;
+        }
+        $ob = ob_start();
         try {
             $this->handleStaticPaths();
         } finally {
