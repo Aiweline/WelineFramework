@@ -185,7 +185,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             ? $displayedBaseUrlWithPort
                             : ($displayedBaseUrlWithPort . '/' . ltrim($handleForDisplay, '/'));
                         $currentPageId = ($page && $page->getId()) ? (int)$page->getId() : 0;
-                        $initialPageUrlById = $currentPageId > 0 ? ($displayedBaseUrlWithPort . '?page_id=' . $currentPageId) : '';
+                        $initialPageUrlById = ''; // 不展示按 ID 访问的 URL
                         ?>
                         <div style="min-width: 150px; flex: 2 1 200px;" id="pageUrlDisplayContainer" data-page-id="<?= $currentPageId ?>">
                             <label class="form-label mb-1 small">
