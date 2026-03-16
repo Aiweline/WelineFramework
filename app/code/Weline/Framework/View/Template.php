@@ -204,6 +204,17 @@ class Template extends DataObject
     }
 
     /**
+     * @DESC          # 获取当前请求的 form_key 值（用于 JS 等）
+     * @return string
+     */
+    public function getFormKeyValue(): string
+    {
+        $this->init();
+        $path = $this->request->getUrlBuilder()->getCurrentUrl();
+        return ObjectManager::getInstance(FormKey::class)->getKey($path, '');
+    }
+
+    /**
      * @DESC         |获取视图文件
      *
      * 参数区：

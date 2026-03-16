@@ -195,7 +195,8 @@ class MenuCollector
         $field = Acl::schema_fields_ACL_ORIGIN;
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')");
+            ->where($field, '', '=', 'OR')
+            ->where($field, Acl::acl_origin_user, '!=');
         
         if (!empty($modulesFilter)) {
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
@@ -458,7 +459,8 @@ class MenuCollector
         $children = $this->acl->reset()
             ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
-            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')")
+            ->where($field, '', '=', 'OR')
+            ->where($field, Acl::acl_origin_user, '!=')
             ->select()
             ->fetchArray();
         foreach ($children as $child) {

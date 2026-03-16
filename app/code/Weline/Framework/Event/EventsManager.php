@@ -10,6 +10,7 @@
 namespace Weline\Framework\Event;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Config\XmlReader;
 use Weline\Framework\App\Exception;
@@ -28,9 +29,10 @@ class EventsManager
     private XmlReader $reader;
 
     /**
-     * @var EventRegistry
+     * 事件注册表（依赖接口，便于测试与扩展）
+     * @var EventRegistryInterface
      */
-    private EventRegistry $eventRegistry;
+    private EventRegistryInterface $eventRegistry;
     
     /**
      * 性能优化：缓存事件观察者查找结果
@@ -44,7 +46,7 @@ class EventsManager
 
     public function __construct(
         XmlReader $reader,
-        EventRegistry $eventRegistry
+        EventRegistryInterface $eventRegistry
     )
     {
         $this->reader = $reader;
@@ -106,6 +108,12 @@ class EventsManager
         // 性能优化：检查缓存
         if (isset($this->observerCache[$eventName])) {
             return $this->observerCache[$eventName];
+        }
+
+        // 性能优化：注册表明确无观察者时直接返回，避免 getRegistry + 动态模式匹配 + scanEvents 回退
+        if (!$this->eventRegistry->hasObservers($eventName)) {
+            $this->observerCache[$eventName] = [];
+            return [];
         }
         
         // 优先从 generated/events.php 读取观察者（性能优化）
@@ -207,21 +215,34 @@ class EventsManager
      */
     public function dispatch(string $eventName, mixed &$data = []): static
     {
-        // 获取事件监听器（观察者）
-        $observers = $this->getEventObservers($eventName);
-        
-        // 检查是否有监听器，没有则直接跳过
-        if (empty($observers)) {
+        $traceStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+
+        // 快速检测是否有观察者（仅基于注册表，避免为「无监听事件」触发昂贵的扫描）
+        if (!$this->eventRegistry->hasObservers($eventName)) {
+            if ($traceStart > 0) {
+                RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
+            }
             return $this;
         }
-        
+
+        // 获取事件监听器（观察者）
+        $observers = $this->getEventObservers($eventName);
+
+        // 检查是否有监听器，没有则直接跳过
+        if (empty($observers)) {
+            if ($traceStart > 0) {
+                RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
+            }
+            return $this;
+        }
+
         if (is_array($data)) {
             $data['observers'] = $observers;
             $this->events[$eventName] = (new Event($data))->setName($eventName);
         } else {
             $this->events[$eventName] = (new Event(['data' => &$data, 'observers' => $observers]))->setName($eventName);
         }
-        
+
         $this->events[$eventName]->dispatch();
 
         // 将 Observer 修改的 Event 数据回写到调用方的 $data（通过引用）
@@ -241,7 +262,10 @@ class EventsManager
                 }
             }
         }
-        
+
+        if ($traceStart > 0) {
+            RequestLifecycleTrace::recordSpan('event::' . $eventName, (microtime(true) - $traceStart) * 1000, 'event');
+        }
         return $this;
     }
 
