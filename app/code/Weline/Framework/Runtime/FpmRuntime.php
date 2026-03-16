@@ -20,6 +20,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core as Router;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 /**
  * FPM 运行时
@@ -78,13 +79,20 @@ class FpmRuntime implements RuntimeInterface
         $_SERVER['WELINE_IS_MEDIA'] = false;
         
         try {
-            // 触发 run_before 事件
+            $runBeforeStart = microtime(true);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('run_before');
+            }
             $this->eventManager->dispatch('Weline_Framework::App::run_before');
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
+            }
             
             $result = '';
             
             if (!CLI) {
-                // URL 解析
+                $urlParserStart = microtime(true);
                 $parse = null;
                 if ($_SERVER['WELINE_PARSER_URL']) {
                     $parse = Url::parser();
@@ -93,21 +101,41 @@ class FpmRuntime implements RuntimeInterface
                 if (\is_array($parse)) {
                     $this->processUrlParse($parse);
                 }
+                if (RequestLifecycleTrace::isEnabled()) {
+                    RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
+                }
                 
-                // 路由处理
+                $routerStartBegin = microtime(true);
+                if (RequestLifecycleTrace::isEnabled()) {
+                    RequestLifecycleTrace::pushCurrentParent('router_start');
+                }
                 $result = ObjectManager::getInstance(Router::class)->start();
+                if (RequestLifecycleTrace::isEnabled()) {
+                    RequestLifecycleTrace::popCurrentParent();
+                    RequestLifecycleTrace::recordSpan('router_start', (microtime(true) - $routerStartBegin) * 1000, 'framework');
+                }
             }
             
-            // 触发 run_after 事件
+            $runAfterStart = microtime(true);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('run_after');
+            }
             $data = new \Weline\Framework\DataObject\DataObject(['result' => $result]);
             $this->eventManager->dispatch('Weline_Framework::App::run_after', $data);
             $result = $data->getData('result');
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
+            }
             
             if (\is_array($result)) {
                 return \json_encode($result);
             }
             
-            return (string) $result;
+            $resultStr = (string) $result;
+            // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
+            $resultStr = TelemetryBroadcaster::broadcast($resultStr, $request);
+            return $resultStr;
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
             // 捕获响应终止异常，在 FPM 模式下直接发送响应

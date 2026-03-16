@@ -67,23 +67,30 @@ class DomainPool extends BaseController
             $model = clone $this->domainPoolModel;
             $model->clearQuery()
                 ->where(DomainPoolModel::schema_fields_STATUS, DomainPoolModel::STATUS_ACTIVE);
-            
-            // 编辑时：返回当前站点域名 + 其他可建站域名；或通过 pool_ids 显式包含指定域名，便于默认勾选
+            $selectedPoolIds = [];
+            if ($websiteId > 0) {
+                $websiteDomainModel = \Weline\Framework\Manager\ObjectManager::getInstance(WebsiteDomain::class);
+                $selectedRows = $websiteDomainModel->clearQuery()
+                    ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
+                    ->where(WebsiteDomain::schema_fields_POOL_ID, 0, '>')
+                    ->select()
+                    ->fetchArray();
+                $selectedPoolIds = array_values(array_unique(array_map(
+                    static fn(array $row): int => (int)($row[WebsiteDomain::schema_fields_POOL_ID] ?? 0),
+                    $selectedRows
+                )));
+                $selectedPoolIds = array_values(array_filter($selectedPoolIds, static fn(int $id): bool => $id > 0));
+            }
+            $forceIncludePoolIds = array_values(array_unique(array_merge($includePoolIds, $selectedPoolIds)));
+            $needPhpFilterSiteReady = false;
             if ($siteReadyOnly) {
-                $wdTable = WebsiteDomain::schema_table;
-                $idField = DomainPoolModel::schema_fields_ID;
-                $conditions = [];
-                if ($websiteId > 0) {
-                    $conditions[] = '((' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0'
-                        . ' OR ' . $idField . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0)))'
-                        . ' OR ' . $idField . ' IN (SELECT pool_id FROM ' . $wdTable . ' WHERE website_id = ' . $websiteId . ' AND pool_id > 0))';
+                if (empty($forceIncludePoolIds)) {
+                    $model->where(DomainPoolModel::schema_fields_SITE_READY, 1)
+                        ->where(DomainPoolModel::schema_fields_SITE_CREATED, 0);
                 } else {
-                    $conditions[] = '(' . DomainPoolModel::schema_fields_SITE_READY . ' = 1 AND (' . DomainPoolModel::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPoolModel::schema_fields_SITE_CREATED . ' = 0))';
+                    // 有“强制包含池子”时，先查基础集合再在 PHP 中合并过滤，避免 whereRaw
+                    $needPhpFilterSiteReady = true;
                 }
-                if (!empty($includePoolIds)) {
-                    $conditions[] = $idField . ' IN (' . implode(',', array_map('intval', $includePoolIds)) . ')';
-                }
-                $model->whereRaw('(' . implode(' OR ', $conditions) . ')', 'AND');
             }
             
             // 按根域名ID筛选
@@ -101,12 +108,24 @@ class DomainPool extends BaseController
             $model->order(DomainPoolModel::schema_fields_ROOT_DOMAIN, 'ASC')
                 ->order(DomainPoolModel::schema_fields_DOMAIN, 'ASC');
             
-            // 限制数量
+            // 限制数量（PHP 二次筛选场景下多取一些，再按最终规则裁剪）
             if ($limit > 0) {
-                $model->limit($limit);
+                $queryLimit = $needPhpFilterSiteReady ? min(max($limit * 5, $limit), 5000) : $limit;
+                $model->limit($queryLimit);
             }
             
             $domains = $model->select()->fetchArray();
+            if ($needPhpFilterSiteReady) {
+                $domains = array_values(array_filter($domains, function (array $domain) use ($forceIncludePoolIds): bool {
+                    $poolId = (int)($domain[DomainPoolModel::schema_fields_ID] ?? 0);
+                    $siteReady = (int)($domain[DomainPoolModel::schema_fields_SITE_READY] ?? 0) === 1;
+                    $siteCreated = (int)($domain[DomainPoolModel::schema_fields_SITE_CREATED] ?? 0) === 1;
+                    return ($siteReady && !$siteCreated) || in_array($poolId, $forceIncludePoolIds, true);
+                }));
+                if ($limit > 0) {
+                    $domains = array_slice($domains, 0, $limit);
+                }
+            }
             
             // 是否按根域名分组
             if ($grouped) {

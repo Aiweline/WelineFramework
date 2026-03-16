@@ -20,6 +20,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 /**
  * PostgreSQL 查询构建器
@@ -2144,6 +2145,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     public function fetch(string $model_class = ''): mixed
     {
+        $traceOperation = $this->fetch_type ?: 'query';
+        $traceTable = $this->table !== '' ? $this->table : 'unknown';
+        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
+        $dbTraceStart = 0.0;
+        $dbTraceSql = '';
+        if (RequestLifecycleTrace::isEnabled()) {
+            $dbTraceStart = microtime(true);
+            try {
+                $dbTraceSql = $this->getSqlWithBounds($this->sql);
+            } catch (\Throwable) {
+                $dbTraceSql = $this->sql;
+            }
+        }
+        try {
         // 在执行前检查是否包含多个 SQL 命令
         // PostgreSQL 的 prepared statement 不支持多个 SQL 命令
         if (!empty($this->sql)) {
@@ -2683,6 +2698,25 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         // 处理结果
         return $this->processFetchResult($model_class);
+        } finally {
+            if ($dbTraceStart > 0.0) {
+                $duration = (microtime(true) - $dbTraceStart) * 1000;
+                if ($duration < 0) {
+                    $duration = 0;
+                }
+                RequestLifecycleTrace::recordSpan(
+                    $dbTraceLabel,
+                    $duration,
+                    'db',
+                    null,
+                    [
+                        'sql' => $dbTraceSql,
+                        'operation' => $traceOperation,
+                        'table' => $traceTable,
+                    ]
+                );
+            }
+        }
     }
     
     /**

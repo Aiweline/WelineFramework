@@ -21,6 +21,7 @@ use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemePreviewGenerator;
 
 /**
  * 主题管理控制器
@@ -35,31 +36,56 @@ class Index extends BackendController
         /** @var WelineTheme $themeModel */
         $themeModel = ObjectManager::getInstance(WelineTheme::class);
         
-        // 获取所有主题
+        // 获取所有主题（包含 preview_image 字段）
         $themes = $themeModel->select()->fetch()->getItems();
         
         // 为每个主题获取父主题信息
         foreach ($themes as &$theme) {
             // 确保 $theme 是数组格式
             if (is_object($theme)) {
-                $theme = $theme->getData();
+                $themeData = $theme->getData();
+            } else {
+                $themeData = $theme;
             }
             
-            $themeObj = ObjectManager::getInstance(WelineTheme::class);
-            $themeObj->setData($theme);
-            $parentTheme = $themeObj->getParentTheme();
-            
-            if ($parentTheme && $parentTheme->getId()) {
-                $theme['parent_id'] = $parentTheme->getId();
-                $theme['parent_theme_name'] = $parentTheme->getName();
+            // 获取父主题信息
+            if (!empty($themeData['parent_id'])) {
+                /** @var WelineTheme $parentTheme */
+                $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+                $parentTheme->load($themeData['parent_id']);
+                
+                if ($parentTheme->getId()) {
+                    $theme['parent_id'] = $parentTheme->getId();
+                    $theme['parent_theme_name'] = $parentTheme->getName();
+                } else {
+                    $theme['parent_id'] = null;
+                    $theme['parent_theme_name'] = null;
+                }
             } else {
                 $theme['parent_id'] = null;
                 $theme['parent_theme_name'] = null;
             }
         }
         unset($theme); // 解除引用
+
+        /** @var WelineTheme $activeQuery */
+        $activeQuery = ObjectManager::getInstance(WelineTheme::class);
+        $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE_FRONTEND, 1);
+        $activeFrontend = $activeQuery->getId() ? $activeQuery->getId() : null;
+        $activeQuery->clearQuery();
+        $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE_BACKEND, 1);
+        $activeBackend = $activeQuery->getId() ? $activeQuery->getId() : null;
+        if (!$activeFrontend && !$activeBackend) {
+            $activeQuery->clearQuery();
+            $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE, 1);
+            if ($activeQuery->getId()) {
+                $activeFrontend = $activeBackend = $activeQuery->getId();
+            }
+        }
         
         $this->assign('themes', $themes);
+        $this->assign('active_frontend_id', $activeFrontend);
+        $this->assign('active_backend_id', $activeBackend);
         $this->assign('page_title', __('主题管理'));
         
         return $this->fetch('Weline_Theme::templates/backend/index.phtml');
@@ -126,6 +152,7 @@ class Index extends BackendController
                 'parent_id' => $theme->getParentId(),
                 'parent_theme' => $parentTheme,
                 'config' => $theme->getConfig(),
+                'preview_image' => $theme->getPreviewImage(),
                 'preview_url_frontend' => $previewUrlFrontend,
                 'preview_url_backend' => $previewUrlBackend,
             ]
@@ -195,11 +222,15 @@ class Index extends BackendController
 
 
     /**
-     * 激活主题（异步）
+     * 激活主题（异步），按区域：frontend 前台 / backend 后台
      */
     public function postActivate()
     {
         $themeId = $this->request->getPost('theme_id');
+        $area = $this->request->getPost('area');
+        if (!in_array($area, ['frontend', 'backend'], true)) {
+            $area = null;
+        }
         
         if (!$themeId) {
             return $this->fetchJson($this->error(__('请选择主题')));
@@ -214,21 +245,34 @@ class Index extends BackendController
         }
 
         try {
-            // 先取消激活所有主题（只更新 is_active，避免 UPDATE 整行触发 module_name 唯一约束冲突）
-            $theme->clearQuery();
-            $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)->update(['is_active' => 0])->fetch();
-
-            // 仅将指定主题的 is_active 置为 1，不调用 save() 以免 UPDATE 整行导致 module_name 重复冲突
-            $theme->clearQuery();
-            $theme->where(WelineTheme::schema_fields_ID, $themeId)->update(['is_active' => 1])->fetch();
-
-            // 清除主题缓存
+            if ($area === 'frontend') {
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_IS_ACTIVE_FRONTEND, 1)
+                    ->update([WelineTheme::schema_fields_IS_ACTIVE_FRONTEND => 0])->fetch();
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_ID, $themeId)
+                    ->update([WelineTheme::schema_fields_IS_ACTIVE_FRONTEND => 1])->fetch();
+                $theme->_cache->delete('theme_frontend');
+            } elseif ($area === 'backend') {
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_IS_ACTIVE_BACKEND, 1)
+                    ->update([WelineTheme::schema_fields_IS_ACTIVE_BACKEND => 0])->fetch();
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_ID, $themeId)
+                    ->update([WelineTheme::schema_fields_IS_ACTIVE_BACKEND => 1])->fetch();
+                $theme->_cache->delete('theme_backend');
+            } else {
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)->update(['is_active' => 0])->fetch();
+                $theme->clearQuery();
+                $theme->where(WelineTheme::schema_fields_ID, $themeId)->update(['is_active' => 1])->fetch();
+            }
             $theme->_cache->delete('theme');
             $theme->_cache->delete('theme_parent_' . $themeId);
 
             return $this->fetchJson($this->success(__('主题激活成功')));
         } catch (\Exception $e) {
-            return $this->fetchJson($this->error(__('激活失败：%{1}', $e->getMessage())));
+            return $this->fetchJson($this->error(__('激活失败：%{1}', [$e->getMessage()])));
         }
     }
 
@@ -282,6 +326,120 @@ class Index extends BackendController
         } catch (\Exception $e) {
             // 解析失败，默认不登录
             return false;
+        }
+    }
+
+    /**
+     * 生成主题预览图片（AJAX调用）
+     */
+    public function postGeneratePreviewImage()
+    {
+        $themeId = $this->request->getPost('theme_id');
+        $area = $this->request->getPost('area', 'frontend');
+        $force = (bool)$this->request->getPost('force', false);
+
+        if (!$themeId) {
+            return $this->fetchJson($this->error(__('请选择主题')));
+        }
+
+        /** @var WelineTheme $theme */
+        $theme = ObjectManager::getInstance(WelineTheme::class);
+        $theme->load($themeId);
+
+        if (!$theme->getId()) {
+            return $this->fetchJson($this->error(__('主题不存在')));
+        }
+
+        try {
+            $imagePath = ThemePreviewGenerator::generatePreviewImage($theme, $area, $force);
+
+            if ($imagePath) {
+                // 更新数据库中的 preview_image 字段
+                $relativePath = str_replace(Env::path_VAR_DIR . DS, '', $imagePath);
+                $theme->setPreviewImage($relativePath)->save();
+
+                return $this->fetchJson($this->success(__('预览图生成成功'), [
+                    'image_url' => '/' . $relativePath,
+                    'image_path' => $imagePath,
+                ]));
+            } else {
+                return $this->fetchJson($this->error(__('预览图生成失败')));
+            }
+        } catch (\Exception $e) {
+            Env::log_error(__('生成预览图失败：%{1}', [$e->getMessage()]));
+            return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
+        }
+    }
+
+    /**
+     * 批量生成所有主题的预览图片（AJAX调用）
+     */
+    public function postGenerateAllPreviews()
+    {
+        try {
+            /** @var WelineTheme $themeModel */
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $themes = $themeModel->select()->fetch()->getItems();
+
+            $total = count($themes);
+            $success = 0;
+            $failed = 0;
+            $messages = [];
+
+            foreach ($themes as $theme) {
+                $themeId = is_object($theme) ? $theme->getId() : ($theme['id'] ?? 0);
+                $themeName = is_object($theme) ? $theme->getName() : ($theme['name'] ?? 'Unknown');
+
+                if (!$themeId) {
+                    continue;
+                }
+
+                try {
+                    // 生成 frontend 预览图
+                    $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
+                    // 生成 backend 预览图
+                    $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
+
+                    if ($result1 || $result2) {
+                        $success++;
+                        // 更新数据库中的 preview_image 字段
+                        if ($result1) {
+                            $relativePath1 = str_replace(Env::path_VAR_DIR . DS, '', $result1);
+                            $themeObj1 = clone $themeModel;
+                            $themeObj1->load($themeId);
+                            $themeObj1->setPreviewImage($relativePath1)->save();
+                        }
+                        if ($result2) {
+                            $relativePath2 = str_replace(Env::path_VAR_DIR . DS, '', $result2);
+                            $themeObj2 = clone $themeModel;
+                            $themeObj2->load($themeId);
+                            $themeObj2->setPreviewImage($relativePath2)->save();
+                        }
+                    } else {
+                        $failed++;
+                        $messages[] = __('%{1}: 生成失败', [$themeName]);
+                    }
+                } catch (\Exception $e) {
+                    $failed++;
+                    $messages[] = __('%{1}: %{2}', [$themeName, $e->getMessage()]);
+                }
+            }
+
+            $result = [
+                'total' => $total,
+                'success' => $success,
+                'failed' => $failed,
+            ];
+
+            if ($failed > 0) {
+                $result['messages'] = $messages;
+                return $this->fetchJson($this->warning(__('部分预览图生成失败'), $result));
+            }
+
+            return $this->fetchJson($this->success(__('所有预览图生成成功'), $result));
+        } catch (\Exception $e) {
+            Env::log_error(__('批量生成预览图失败：%{1}', [$e->getMessage()]));
+            return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
         }
     }
 

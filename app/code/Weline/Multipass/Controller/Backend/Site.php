@@ -9,10 +9,12 @@ declare(strict_types=1);
 
 namespace Weline\Multipass\Controller\Backend;
 
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Multipass\Model\MultipassSite;
 
+#[Acl('Weline_Multipass::site_management', 'Multipass站点管理', 'mdi mdi-server', '管理Multipass认证站点配置', 'Weline_Multipass::menu_multipass_management')]
 class Site extends BackendController
 {
     private MultipassSite $siteModel;
@@ -125,7 +127,7 @@ class Site extends BackendController
     }
     
     /**
-     * 保存站点
+     * 保存站点（AJAX）
      */
     public function save()
     {
@@ -138,9 +140,26 @@ class Site extends BackendController
             $isEnabled = $this->request->getParam('is_enabled') ? 1 : 0;
             
             // 验证
-            if (empty($siteName) || empty($siteUrl)) {
-                $this->getMessageManager()->addError(__('站点名称和URL不能为空'));
-                return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+            if (empty($siteName)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点名称不能为空'),
+                ]);
+            }
+            
+            if (empty($siteUrl)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点URL不能为空'),
+                ]);
+            }
+            
+            // 验证URL格式
+            if (!filter_var($siteUrl, FILTER_VALIDATE_URL)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点URL格式不正确'),
+                ]);
             }
             
             // 获取或创建站点
@@ -148,8 +167,10 @@ class Site extends BackendController
             if ($siteId) {
                 $site->load($siteId);
                 if (!$site->getId()) {
-                    $this->getMessageManager()->addError(__('站点不存在'));
-                    return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+                    return $this->fetchJson([
+                        'success' => false,
+                        'message' => __('站点不存在'),
+                    ]);
                 }
             }
             
@@ -167,16 +188,25 @@ class Site extends BackendController
                 MultipassSite::schema_fields_IS_ENABLED => $isEnabled,
             ])->save(!$siteId);
             
-            $this->getMessageManager()->addSuccess(__('站点保存成功'));
-            return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('站点保存成功'),
+                'site' => [
+                    'site_id' => $site->getId(),
+                    'site_name' => $site->getSiteName(),
+                    'site_url' => $site->getSiteUrl(),
+                ],
+            ]);
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('保存失败: ') . $e->getMessage());
-            return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('保存失败: ') . $e->getMessage(),
+            ]);
         }
     }
     
     /**
-     * 删除站点
+     * 删除站点（AJAX）
      */
     public function delete()
     {
@@ -184,25 +214,33 @@ class Site extends BackendController
             $siteId = (int)$this->request->getParam('site_id');
             
             if (!$siteId) {
-                $this->getMessageManager()->addError(__('站点ID不能为空'));
-                return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点ID不能为空'),
+                ]);
             }
             
             $site = clone $this->siteModel;
             $site->load($siteId);
             
             if (!$site->getId()) {
-                $this->getMessageManager()->addError(__('站点不存在'));
-                return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('站点不存在'),
+                ]);
             }
             
             $site->delete();
             
-            $this->getMessageManager()->addSuccess(__('站点删除成功'));
-            return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('站点删除成功'),
+            ]);
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('删除失败: ') . $e->getMessage());
-            return $this->redirect($this->getBackendUrl('*/backend/site/index'));
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('删除失败: ') . $e->getMessage(),
+            ]);
         }
     }
     

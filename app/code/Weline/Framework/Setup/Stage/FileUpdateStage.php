@@ -96,7 +96,7 @@ class FileUpdateStage extends AbstractStage
         if ($this->prepared) {
             return;
         }
-        
+
         // 备份原始文件内容
         foreach ($this->fileData as $filePath => $content) {
             if (is_file($filePath)) {

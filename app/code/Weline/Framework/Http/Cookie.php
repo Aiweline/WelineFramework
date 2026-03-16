@@ -113,8 +113,8 @@ class Cookie
         // 设置ETag和Last-Modified头部
         header('ETag: "static-file-etag"');
         header('Last-Modified: ' . gmdate('D, d M Y H:i:s', time()) . ' GMT');
-        // 设置文件的MIME类型
-        header('Content-Type: application/octet-stream');
+        // 不在这里设置 Content-Type，交给实际响应阶段按文件扩展名/内容类型设置。
+        // 否则当静态文件未命中或后续未覆盖时，会错误地把响应固定为 application/octet-stream。
         // 设置文件的处理方式（在浏览器中显示）
         header('Content-Disposition: inline');
         // 显式设置不发送任何cookie

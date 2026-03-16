@@ -50,6 +50,8 @@ DI编译失败：%{1},DI编译失败：%{1}
 菜单相关缓存已清理！,菜单相关缓存已清理！
 菜单缓存清理失败：%{1},菜单缓存清理失败：%{1}
 菜单收集和系统更新完成！菜单已生效。,菜单收集和系统更新完成！菜单已生效。
+"对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。","对比后端用户/角色数据与 getAclContext 结果，排查没角色或没权限。"
+"指定用户ID，不传则查 1 和 3","指定用户ID，不传则查 1 和 3"
 "请指定 --username=、--user_id= 或 --email= 之一","请指定 --username=、--user_id= 或 --email= 之一"
 "请指定 --role_id= 或 --role= 选择要分配的角色","Specify --role_id= or --role= to select role"
 用户不存在,"User does not exist"

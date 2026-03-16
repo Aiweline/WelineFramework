@@ -81,7 +81,7 @@ class WidgetScanner
             return [];
         }
         $result = [];
-        
+
         // 从已收集的 extends 信息中提取部件配置
         // 获取所有扩展 Weline_Widget 的模块信息
         $extendedBy = ExtendsData::getExtendedBy('Weline_Widget');
@@ -130,7 +130,6 @@ class WidgetScanner
                 if (!$isWidgetFile || empty($widgetFile) || !file_exists($widgetFile)) {
                     continue;
                 }
-                    
                 try {
                     $widgets = include $widgetFile;
                     if (is_array($widgets)) {
@@ -238,6 +237,129 @@ class WidgetScanner
         }
 
         return $result;
+    }
+
+    /**
+     * 按 (type, name, config) 逐个 yield，不构建完整数组，供流式写入注册表以控制内存（128MB 内）
+     *
+     * @return \Generator<int, array{0: string, 1: string, 2: array}, void, void>
+     */
+    public function scanAllWidgetsGenerator(): \Generator
+    {
+        if (PHP_SAPI !== 'cli') {
+            return;
+        }
+        $seen = [];
+        $key = static fn(string $t, string $n): string => $t . "\0" . $n;
+
+        // 1) 从 Extends 信息
+        $extendedBy = ExtendsData::getExtendedBy('Weline_Widget');
+        $modules = Env::getInstance()->getModuleList();
+        foreach ($extendedBy as $sourceModule => $extensions) {
+            $module = $modules[$sourceModule] ?? null;
+            if (!$module || !($module['status'] ?? false)) {
+                continue;
+            }
+            $basePath = $module['base_path'] ?? '';
+            if ($basePath === '') {
+                continue;
+            }
+            foreach ($extensions as $extension) {
+                $filePath = $extension['file_path'] ?? '';
+                $sourceFile = $extension['source_file'] ?? '';
+                $isWidgetFile = false;
+                $widgetFile = '';
+                if (!empty($filePath) && (str_ends_with($filePath, 'widget.php') || str_ends_with($filePath, '/widget.php'))) {
+                    $isWidgetFile = true;
+                    $widgetFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'module' . DIRECTORY_SEPARATOR . 'Weline_Widget' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $filePath);
+                }
+                if (!empty($sourceFile) && str_ends_with($sourceFile, 'widget.php')) {
+                    $isWidgetFile = true;
+                    $widgetFile = $sourceFile;
+                }
+                if (!$isWidgetFile || $widgetFile === '' || !file_exists($widgetFile)) {
+                    continue;
+                }
+                try {
+                    $widgets = include $widgetFile;
+                    if (!is_array($widgets)) {
+                        continue;
+                    }
+                    foreach ($widgets as $k => $widgetConfig) {
+                        $config = $this->processWidgetEntry($widgetConfig, $sourceModule, $basePath, $k);
+                        if (!$config) {
+                            continue;
+                        }
+                        $type = $config['type'] ?? '';
+                        $name = $config['code'] ?? '';
+                        if ($type === '' || $name === '' || !in_array($type, self::ALLOWED_TYPES, true)) {
+                            continue;
+                        }
+                        if (isset($seen[$key($type, $name)])) {
+                            continue;
+                        }
+                        $seen[$key($type, $name)] = true;
+                        yield [$type, $name, $config];
+                    }
+                } catch (\Exception $e) {
+                    w_log_error("读取模块 {$sourceModule} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
+                }
+            }
+        }
+
+        // 2) 模块列表中的 widget.php
+        foreach ($modules as $moduleName => $module) {
+            $basePath = $module['base_path'] ?? '';
+            if ($basePath === '' || !($module['status'] ?? false)) {
+                continue;
+            }
+            $widgetFile = rtrim($basePath, '/\\') . DIRECTORY_SEPARATOR . 'extends' . DIRECTORY_SEPARATOR . 'module' . DIRECTORY_SEPARATOR . 'Weline_Widget' . DIRECTORY_SEPARATOR . $moduleName . DIRECTORY_SEPARATOR . 'widget.php';
+            if (!file_exists($widgetFile)) {
+                continue;
+            }
+            try {
+                $widgets = include $widgetFile;
+                if (!is_array($widgets)) {
+                    continue;
+                }
+                foreach ($widgets as $k => $widgetConfig) {
+                    $config = $this->processWidgetEntry($widgetConfig, $moduleName, $basePath, $k);
+                    if (!$config) {
+                        continue;
+                    }
+                    $type = $config['type'] ?? '';
+                    $name = $config['code'] ?? '';
+                    if (isset($seen[$key($type, $name)])) {
+                        continue;
+                    }
+                    if ($type === '' || $name === '' || !in_array($type, self::ALLOWED_TYPES, true)) {
+                        continue;
+                    }
+                    $seen[$key($type, $name)] = true;
+                    yield [$type, $name, $config];
+                }
+            } catch (\Exception $e) {
+                w_log_error("读取模块 {$moduleName} 的集中部件配置文件时出错: " . $e->getMessage(), [], 'WidgetScanner');
+            }
+        }
+
+        // 3) 旧分散定义
+        foreach ($modules as $moduleName => $module) {
+            $basePath = $module['base_path'] ?? '';
+            if ($basePath === '' || !($module['status'] ?? false)) {
+                continue;
+            }
+            $widgets = $this->scanLegacyWidgets($moduleName, $basePath);
+            foreach ($widgets as $widget) {
+                $type = $widget['type'] ?? '';
+                $name = $widget['code'] ?? '';
+                if ($type === '' || $name === '' || isset($seen[$key($type, $name)])) {
+                    continue;
+                }
+                $seen[$key($type, $name)] = true;
+                yield [$type, $name, $widget];
+            }
+        }
     }
 
     /**

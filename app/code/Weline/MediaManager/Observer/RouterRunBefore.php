@@ -1,5 +1,7 @@
 <?php
-
+/**
+ * 本文件必须保存为 UTF-8 无 BOM，否则会触发 "headers already sent"。
+ */
 
 namespace Weline\MediaManager\Observer;
 
@@ -12,7 +14,20 @@ class RouterRunBefore implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
-        $request_uri = $_SERVER['REQUEST_URI']??'';
+        // 防止本观察者或所调用代码产生意外输出导致后续 "headers already sent"
+        $ob = !headers_sent() && ob_start();
+        try {
+            $this->handleStaticPaths();
+        } finally {
+            if ($ob) {
+                ob_end_clean();
+            }
+        }
+    }
+
+    private function handleStaticPaths(): void
+    {
+        $request_uri = $_SERVER['REQUEST_URI'] ?? '';
         # 移除查询字符串
         $path_original = parse_url($request_uri, PHP_URL_PATH);
         $path = $path_original !== false ? strtolower($path_original) : '';
@@ -79,7 +94,9 @@ class RouterRunBefore implements ObserverInterface
             if (is_file($theme_file_path)) {
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
-                $core->StaticFile($path_original, true);
+                // 主题资源路径本身是 /Vendor/Module/view/theme/...，应走 APP_CODE_PATH 解析链路
+                //（is_media=false），否则会按 BP 直拼导致找不到文件并回退为 HTML 响应。
+                $core->StaticFile($path_original, false);
                 exit;
             }
         }
