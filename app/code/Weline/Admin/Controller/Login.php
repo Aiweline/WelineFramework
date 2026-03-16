@@ -143,11 +143,11 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     public function postPost(): void
     {
         # 已经登录直接进入后台
-        if ($this->session->isLoggedIn()) {
-            // 有来源网址就跳回来源网址
-            $this->redirectReferer();
-            $this->redirect($this->getBackendUrlSameOrigin('admin'));
-        }
+        // if ($this->session->isLoggedIn()) {
+        //     // 有来源网址就跳回来源网址
+        //     $this->redirectReferer();
+        //     $this->redirect($this->getBackendUrlSameOrigin('admin'));
+        // }
         # 验证 form 表单
         // if (empty($this->request->getParam('form_key')) || ($this->session->get('form_key') !== $this->request->getParam('form_key'))) {
         //     MessageManager::error(__('异常的登录操作！'));
