@@ -623,4 +623,11 @@ return [
         'description' => __('在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。'),
         'doc' => 'frontend/account/sidebar-content.md',
     ],
+
+    // ==================== Theme Backend Partials - Topbar ====================
+    'Weline_Theme::backend::partials::topbar::logo' => [
+        'name' => __('后台 Topbar Logo'),
+        'description' => __('覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。'),
+        'doc' => 'backend/partials/topbar/logo.md',
+    ],
 ];

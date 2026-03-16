@@ -44,6 +44,12 @@ class EventsManager
      */
     private static array $moduleStatusCache = [];
 
+    /**
+     * 扫描观察者时的重入保护：避免 dispatch → getEventObservers → scanEvents → reader->read()
+     * 过程中再次触发事件导致递归扫描各模块 event.xml，造成内存或死循环。
+     */
+    private static bool $scanningObservers = false;
+
     public function __construct(
         XmlReader $reader,
         EventRegistryInterface $eventRegistry
@@ -74,29 +80,36 @@ class EventsManager
 
     public function scanEvents()
     {
+        if (self::$scanningObservers) {
+            return $this->eventsObservers;
+        }
         if (empty($this->eventsObservers)) {
-            // 先收集所有模块的观察者，不做排序
-            foreach ($this->reader->read() as $module_and_file => $eventObservers) {
-                foreach ($eventObservers as $event_name => $eventObserver) {
-                    if (isset($this->eventsObservers[$event_name])) {
-                        $this->eventsObservers[$event_name] = array_merge($this->eventsObservers[$event_name], $eventObserver);
-                    } else {
-                        $this->eventsObservers[$event_name] = $eventObserver;
+            self::$scanningObservers = true;
+            try {
+                foreach ($this->reader->read() as $module_and_file => $eventObservers) {
+                    foreach ($eventObservers as $event_name => $eventObserver) {
+                        if (isset($this->eventsObservers[$event_name])) {
+                            $this->eventsObservers[$event_name] = array_merge($this->eventsObservers[$event_name], $eventObserver);
+                        } else {
+                            $this->eventsObservers[$event_name] = $eventObserver;
+                        }
                     }
                 }
-            }
-            
-            // 所有模块的观察者合并完成后，对每个事件的观察者数组按sort值排序
-            // 使用整数比较，实现"越小越优先"
-            // 只有当观察者数量大于1时才排序，节省性能
-            foreach ($this->eventsObservers as $event_name => $eventObserver) {
-                if (count($this->eventsObservers[$event_name]) > 1) {
-                    usort($this->eventsObservers[$event_name], function ($a, $b) {
-                        $sortA = (int)($a['sort'] ?? 10000);
-                        $sortB = (int)($b['sort'] ?? 10000);
-                        return $sortA <=> $sortB;
-                    });
+
+                // 所有模块的观察者合并完成后，对每个事件的观察者数组按sort值排序
+                // 使用整数比较，实现"越小越优先"
+                // 只有当观察者数量大于1时才排序，节省性能
+                foreach ($this->eventsObservers as $event_name => $eventObserver) {
+                    if (count($this->eventsObservers[$event_name]) > 1) {
+                        usort($this->eventsObservers[$event_name], function ($a, $b) {
+                            $sortA = (int)($a['sort'] ?? 10000);
+                            $sortB = (int)($b['sort'] ?? 10000);
+                            return $sortA <=> $sortB;
+                        });
+                    }
                 }
+            } finally {
+                self::$scanningObservers = false;
             }
         }
 
@@ -137,6 +150,7 @@ class EventsManager
             }
             
             // 如果还没有找到，回退到扫描所有模块的 event.xml（确保新增/未写入缓存的观察者也能生效）
+            // 重入保护：若当前正在 scanEvents() 中，不再递归扫描，避免事件链触发“收集各模块 event.xml”导致内存/循环
             if (empty($observers)) {
                 $evenObserverLists = $this->scanEvents();
                 $observers = $evenObserverLists[$eventName] ?? [];

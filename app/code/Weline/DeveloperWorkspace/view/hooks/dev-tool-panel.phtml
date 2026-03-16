@@ -818,6 +818,147 @@ $panelType = $panelType ?? 'frontend';
         color: #a67c6b !important;
     }
 
+    /* DB 链路表格：列宽固定、表头不截断、对齐统一 */
+    #dev-tool-panel .dev-tool-trace-db-wrap {
+        max-height: 320px;
+        overflow: auto;
+        font-size: 12px;
+        border: 1px solid #e8e6e3;
+        border-radius: 6px;
+        background: #fafaf9;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table thead {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #f0eeeb;
+        box-shadow: 0 1px 0 #e8e6e3;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table th {
+        padding: 8px 10px;
+        text-align: left;
+        font-weight: 600;
+        color: #5c574f;
+        white-space: nowrap;
+        border-bottom: 1px solid #e8e6e3;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table th.col-op { width: 40px; min-width: 40px; text-align: center; }
+    #dev-tool-panel .dev-tool-trace-db-table th.col-table { width: 90px; min-width: 90px; }
+    #dev-tool-panel .dev-tool-trace-db-table th.col-parent { width: 110px; min-width: 110px; }
+    #dev-tool-panel .dev-tool-trace-db-table th.col-duration { width: 70px; min-width: 70px; text-align: right; }
+    #dev-tool-panel .dev-tool-trace-db-table td {
+        padding: 6px 10px;
+        border-top: 1px solid #eeece9;
+        vertical-align: top;
+        color: #5c574f;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table td.col-op { word-break: keep-all; text-align: center; font-weight: 600; color: #5c574f; }
+    #dev-tool-panel .dev-tool-trace-db-table td.col-table {
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.35;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-expand-btn {
+        cursor: pointer;
+        margin-left: 2px;
+        color: #667eea;
+        font-size: 10px;
+        user-select: none;
+    }
+    /* 编码阶段内嵌的 DB 行（融合显示） */
+    #dev-tool-panel .dev-tool-trace-db-inline {
+        margin: 2px 0;
+    }
+    #dev-tool-panel .dev-tool-trace-db-inline .dev-tool-db-inline-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 0;
+        border-bottom: 1px solid #eeece9;
+        min-height: 24px;
+    }
+    #dev-tool-panel .dev-tool-trace-db-inline .dev-tool-db-expand-row .dev-tool-db-sql-block {
+        margin-top: 4px;
+    }
+    /* 展开行占满整行：全宽显示，不挤在格子里 */
+    #dev-tool-panel .dev-tool-trace-db-table tr.dev-tool-db-expand-row td {
+        padding: 10px 0;
+        background: #f5f4f0;
+        border-top: none;
+        border-bottom: 1px solid #e8e6e3;
+        vertical-align: top;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-sql-block {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin: 0 0 8px 0;
+        padding: 10px 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 11px;
+        background: #fff;
+        border: none;
+        border-top: 1px solid #e8e6e3;
+        border-bottom: 1px solid #e8e6e3;
+        border-radius: 0;
+        max-height: 160px;
+        overflow: auto;
+        font-family: 'Courier New', monospace;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-sql-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 0 2px;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-btn {
+        padding: 4px 10px;
+        font-size: 11px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        color: #5c574f;
+        cursor: pointer;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-btn:hover { background: #f0eeeb; }
+    #dev-tool-panel .dev-tool-trace-db-table .dev-tool-db-explain-result {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+        margin-top: 8px;
+        padding: 10px 12px;
+        font-size: 11px;
+        background: #fff;
+        border: none;
+        border-top: 1px solid #e8e6e3;
+        border-bottom: 1px solid #e8e6e3;
+        border-radius: 0;
+        max-height: 180px;
+        overflow: auto;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table td.col-parent {
+        color: #7d7870;
+        font-size: 11px;
+        word-break: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.35;
+    }
+    #dev-tool-panel .dev-tool-trace-db-table td.col-duration {
+        text-align: right;
+        white-space: nowrap;
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+    }
+
     .api-request-item {
         padding: 8px;
         margin-bottom: 6px;
@@ -2660,6 +2801,19 @@ const DevToolPanel = (function() {
         return { operation: '—', table: '—' };
     }
 
+    /** 操作列缩写：单字母显示，hover 用 title 显示完整操作名 */
+    function opToShort(op) {
+        var s = String(op || '').toLowerCase().trim();
+        if (!s) return '—';
+        if (s === 'select' || s === 'find') return 'S';
+        if (s === 'insert') return 'I';
+        if (s === 'update') return 'U';
+        if (s === 'delete') return 'D';
+        if (s === 'fetch') return 'F';
+        if (s === 'execute' || s === 'exec') return 'E';
+        return s.charAt(0).toUpperCase();
+    }
+
     function getTimeClass(ms, fast = 100, slow = 500) {
         if (ms < fast) return 'fast';
         if (ms < slow) return 'medium';
@@ -2674,6 +2828,7 @@ const DevToolPanel = (function() {
                 category: s.category || '',
                 parent: s.parent || null,
                 db_duration_ms: Number(s.db_duration_ms || 0),
+                meta: (s.meta && typeof s.meta === 'object') ? s.meta : {},
                 children: []
             };
         });
@@ -2685,7 +2840,35 @@ const DevToolPanel = (function() {
         return nodes.filter(function(n) { return !n.parent; });
     }
 
-    function renderTraceNode(node, depth, totalMsRef) {
+    function renderTraceNode(node, depth, totalMsRef, inlineDb) {
+        if (node.category === 'db' && inlineDb) {
+            var meta = node.meta || {};
+            var parsed = parseDbSpanName(node.name);
+            var operation = String(meta.operation || parsed.operation || '');
+            var table = String(meta.table || parsed.table || '');
+            var sql = String(meta.sql || '');
+            var dur = formatTime(Number(node.duration_ms) || 0);
+            var hasSql = sql.length > 0;
+            var indent = ' style="padding-left:' + (depth * 14) + 'px"';
+            var html = '<div class="dev-tool-trace-db-inline" data-has-sql="' + (hasSql ? '1' : '0') + '"' + indent + '>';
+            html += '<div class="performance-item dev-tool-db-inline-row">';
+            html += '<span class="trace-toggle-placeholder"></span>';
+            html += '<span class="performance-label" style="font-size:11px;color:#667eea;">DB</span>';
+            html += '<span style="font-size:11px;color:#5c574f;margin-right:6px;">' + escapeHtml(opToShort(operation)) + '</span>';
+            html += '<span style="font-size:11px;color:#7d7870;">' + escapeHtml(table || '—') + '</span>';
+            html += '<span class="performance-value" style="margin-left:auto;font-size:11px;">' + dur + '</span>';
+            if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0" title="' + escapeHtml(operation || '') + '">▶</span>';
+            html += '</div>';
+            if (hasSql) {
+                html += '<div class="dev-tool-db-expand-row" style="display:none;padding-left:' + (depth * 14 + 18) + 'px;">';
+                html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeHtml(sql) + '">' + escapeHtml(sql) + '</pre>';
+                html += '<div class="dev-tool-db-sql-actions"><button type="button" class="dev-tool-db-btn dev-tool-db-copy">复制 SQL</button>';
+                html += '<button type="button" class="dev-tool-db-btn dev-tool-db-explain">EXPLAIN</button></div>';
+                html += '<div class="dev-tool-db-explain-result" style="display:none;"></div></div>';
+            }
+            html += '</div>';
+            return html;
+        }
         if (!node.parent) totalMsRef.value += node.duration_ms;
         var timeClass = getTimeClass(node.duration_ms);
         var category = node.category ? ' <span style="opacity:0.7;font-size:11px">[' + escapeHtml(node.category) + ']</span>' : '';
@@ -2709,7 +2892,7 @@ const DevToolPanel = (function() {
         html += '</div>';
         if (hasChildren) {
             html += '<div class="trace-children" style="display:none">';
-            node.children.forEach(function(ch) { html += renderTraceNode(ch, depth + 1, totalMsRef); });
+            node.children.forEach(function(ch) { html += renderTraceNode(ch, depth + 1, totalMsRef, inlineDb); });
             html += '</div>';
         }
         return html;
@@ -2744,9 +2927,10 @@ const DevToolPanel = (function() {
             html += '2) 本页为 HTML 响应（WLS/CLI/FPM 均支持）。<br>刷新页面后再试。';
             html += '</div>';
         } else {
-            var roots = buildTraceTree(codeSpans);
+            var allSpans = codeSpans.concat(dbSpans);
+            var roots = buildTraceTree(allSpans);
             var totalMsRef = { value: 0 };
-            roots.forEach(function(node) { html += renderTraceNode(node, 0, totalMsRef); });
+            roots.forEach(function(node) { html += renderTraceNode(node, 0, totalMsRef, true); });
             html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
             html += '<span class="performance-label">合计</span>';
             html += '<span class="performance-value">' + formatTime(totalMsRef.value) + '</span>';
@@ -2764,14 +2948,14 @@ const DevToolPanel = (function() {
         } else {
             let totalDb = 0;
             dbSpans.forEach(function(s) { totalDb += Number(s.duration_ms || 0); });
-            html += '<div style="max-height:320px;overflow:auto;font-size:11px;border:1px solid #eee;border-radius:4px;">';
-            html += '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">';
-            html += '<thead><tr style="background:#fafafa;">';
-            html += '<th style="padding:4px 6px;text-align:left;width:70px;">操作</th>';
-            html += '<th style="padding:4px 6px;text-align:left;width:100px;">表</th>';
-            html += '<th style="padding:4px 6px;text-align:left;">SQL</th>';
-            html += '<th style="padding:4px 6px;text-align:left;width:90px;">父阶段</th>';
-            html += '<th style="padding:4px 6px;text-align:right;width:80px;white-space:nowrap;">耗时</th></tr></thead>';
+            html += '<div class="dev-tool-trace-db-wrap">';
+            html += '<table class="dev-tool-trace-db-table">';
+            html += '<colgroup><col class="col-op"><col class="col-table"><col class="col-parent"><col class="col-duration"></colgroup>';
+            html += '<thead><tr>';
+            html += '<th class="col-op">操作</th>';
+            html += '<th class="col-table">表</th>';
+            html += '<th class="col-parent">父阶段</th>';
+            html += '<th class="col-duration">耗时</th></tr></thead>';
             html += '<tbody>';
             dbSpans.forEach(function(s) {
                 const meta = (s && typeof s.meta === 'object' && s.meta !== null) ? s.meta : {};
@@ -2782,20 +2966,25 @@ const DevToolPanel = (function() {
                 const parent = String(s.parent || '');
                 const durationNum = Number(s.duration_ms);
                 const dur = (durationNum >= 0 && durationNum < 1e9) ? formatTime(durationNum) : '—';
-                const sqlPreview = formatSqlPreview(sql, 140);
-                html += '<tr>';
-                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;">' + escapeHtml(operation || '—') + '</td>';
-                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;">' + escapeHtml(table || '—') + '</td>';
-                if (sql) {
-                    html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;word-break:break-word;overflow:hidden;">';
-                    html += '<details><summary style="cursor:pointer;">' + escapeHtml(sqlPreview) + '</summary><pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11px;">' + escapeHtml(sql) + '</pre></details>';
-                    html += '</td>';
-                } else {
-                    html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;color:#999;">(无 SQL 文本)</td>';
-                }
-                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;color:#777;">' + escapeHtml(parent) + '</td>';
-                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;text-align:right;white-space:nowrap;">' + dur + '</td>';
+                const hasSql = sql.length > 0;
+                html += '<tr class="dev-tool-db-data-row" data-has-sql="' + (hasSql ? '1' : '0') + '">';
+                html += '<td class="col-op" title="' + escapeHtml(operation || '—') + '">' + escapeHtml(opToShort(operation));
+                if (hasSql) html += ' <span class="dev-tool-db-expand-btn" role="button" tabindex="0">▶</span>';
+                html += '</td>';
+                html += '<td class="col-table">' + escapeHtml(table || '—') + '</td>';
+                html += '<td class="col-parent">' + escapeHtml(parent) + '</td>';
+                html += '<td class="col-duration">' + dur + '</td>';
                 html += '</tr>';
+                if (hasSql) {
+                    html += '<tr class="dev-tool-db-expand-row" style="display:none;"><td colspan="4">';
+                    html += '<pre class="dev-tool-db-sql-block" data-sql="' + escapeHtml(sql) + '">' + escapeHtml(sql) + '</pre>';
+                    html += '<div class="dev-tool-db-sql-actions">';
+                    html += '<button type="button" class="dev-tool-db-btn dev-tool-db-copy">复制 SQL</button>';
+                    html += '<button type="button" class="dev-tool-db-btn dev-tool-db-explain">EXPLAIN</button>';
+                    html += '</div>';
+                    html += '<div class="dev-tool-db-explain-result" style="display:none;"></div>';
+                    html += '</td></tr>';
+                }
             });
             html += '</tbody></table></div>';
             html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
@@ -2848,6 +3037,85 @@ const DevToolPanel = (function() {
                     dbView.style.display = 'block';
                 });
             }
+
+            // DB 表 + 编码内嵌 DB：行展开（手风琴）、复制 SQL、EXPLAIN（统一委托到 content）
+            content.addEventListener('click', function(ev) {
+                var target = ev.target;
+                var inTable = target.closest('.dev-tool-trace-db-wrap');
+                var inInline = target.closest('.dev-tool-trace-db-inline');
+                if (!inTable && !inInline) return;
+                if (target.classList.contains('dev-tool-db-expand-btn') || (target.closest('.dev-tool-db-data-row') && !target.closest('.dev-tool-db-sql-actions')) || (inInline && target.closest('.dev-tool-db-inline-row') && !target.closest('.dev-tool-db-sql-actions'))) {
+                    var dataRow, next, isExpand, btn, allExpandRows;
+                    if (inTable) {
+                        dataRow = target.classList.contains('dev-tool-db-expand-btn') ? target.closest('tr') : target.closest('.dev-tool-db-data-row');
+                        if (!dataRow || dataRow.getAttribute('data-has-sql') !== '1') return;
+                        next = dataRow.nextElementSibling;
+                        isExpand = next && next.classList.contains('dev-tool-db-expand-row') && next.style.display !== 'none';
+                        allExpandRows = content.querySelectorAll('.dev-tool-trace-db-wrap .dev-tool-db-expand-row');
+                        allExpandRows.forEach(function(r) { r.style.display = 'none'; });
+                        content.querySelectorAll('.dev-tool-trace-db-wrap .dev-tool-db-expand-btn').forEach(function(b) { b.textContent = '▶'; });
+                        if (!isExpand && next) { next.style.display = 'table-row'; btn = dataRow.querySelector('.dev-tool-db-expand-btn'); if (btn) btn.textContent = '▼'; }
+                    } else {
+                        var inline = target.closest('.dev-tool-trace-db-inline');
+                        if (!inline || inline.getAttribute('data-has-sql') !== '1') return;
+                        next = inline.querySelector('.dev-tool-db-expand-row');
+                        if (!next) return;
+                        isExpand = next.style.display !== 'none';
+                        content.querySelectorAll('.dev-tool-trace-db-wrap .dev-tool-db-expand-row').forEach(function(r) { r.style.display = 'none'; });
+                        content.querySelectorAll('.dev-tool-trace-db-inline .dev-tool-db-expand-row').forEach(function(r) { r.style.display = 'none'; });
+                        content.querySelectorAll('.dev-tool-trace-db-wrap .dev-tool-db-expand-btn').forEach(function(b) { b.textContent = '▶'; });
+                        content.querySelectorAll('.dev-tool-trace-db-inline .dev-tool-db-expand-btn').forEach(function(b) { b.textContent = '▶'; });
+                        if (!isExpand) { next.style.display = 'block'; btn = inline.querySelector('.dev-tool-db-expand-btn'); if (btn) btn.textContent = '▼'; }
+                    }
+                    ev.preventDefault();
+                } else if (target.classList.contains('dev-tool-db-copy')) {
+                    var container = target.closest('td') || target.closest('.dev-tool-trace-db-inline');
+                    var pre = container ? container.querySelector('.dev-tool-db-sql-block') : null;
+                    if (pre && pre.getAttribute('data-sql')) {
+                        var sql = pre.getAttribute('data-sql');
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(sql).then(function() { target.textContent = '已复制'; setTimeout(function() { target.textContent = '复制 SQL'; }, 1200); });
+                        } else { target.textContent = '已复制'; setTimeout(function() { target.textContent = '复制 SQL'; }, 1200); }
+                    }
+                } else if (target.classList.contains('dev-tool-db-explain')) {
+                    var container = target.closest('td') || target.closest('.dev-tool-trace-db-inline');
+                    var pre = container ? container.querySelector('.dev-tool-db-sql-block') : null;
+                    var resultEl = container ? container.querySelector('.dev-tool-db-explain-result') : null;
+                    var sql = pre ? pre.getAttribute('data-sql') : '';
+                    if (!sql || !resultEl) return;
+                    var url = getDevToolApiUrl('db/explain');
+                    if (!url) { resultEl.style.display = 'block'; resultEl.innerHTML = '<span style="color:#999;">无法获取 API 地址</span>'; return; }
+                    resultEl.style.display = 'block';
+                    resultEl.innerHTML = '<span style="color:#888;">执行中…</span>';
+                    target.disabled = true;
+                    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sql: sql }) })
+                        .then(function(r) { return r.json(); })
+                        .then(function(data) {
+                            target.disabled = false;
+                            if (data && data.code === 200 && data.data && Array.isArray(data.data.rows)) {
+                                var rows = data.data.rows;
+                                if (rows.length === 0) { resultEl.innerHTML = '<span style="color:#888;">无结果</span>'; return; }
+                                var table = '<table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr>';
+                                var keys = Object.keys(rows[0]);
+                                keys.forEach(function(k) { table += '<th style="padding:4px 6px;text-align:left;border:1px solid #e0e0e0;">' + escapeHtml(k) + '</th>'; });
+                                table += '</tr></thead><tbody>';
+                                rows.forEach(function(row) {
+                                    table += '<tr>';
+                                    keys.forEach(function(k) { table += '<td style="padding:4px 6px;border:1px solid #eee;">' + escapeHtml(String(row[k] != null ? row[k] : '')) + '</td>'; });
+                                    table += '</tr>';
+                                });
+                                table += '</tbody></table>';
+                                resultEl.innerHTML = table;
+                            } else {
+                                resultEl.innerHTML = '<span style="color:#a67c6b;">' + escapeHtml((data && data.msg) ? data.msg : '请求失败') + '</span>';
+                            }
+                        })
+                        .catch(function(e) {
+                            target.disabled = false;
+                            resultEl.innerHTML = '<span style="color:#a67c6b;">' + escapeHtml(e.message || '请求失败') + '</span>';
+                        });
+                }
+            });
         }
     }
 

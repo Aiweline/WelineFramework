@@ -27,6 +27,11 @@ use Weline\Framework\Manager\ObjectManager;
 class MenuCollector
 {
     /**
+     * 收集过程重入保护：事件/钩子链中若再次触发 before_route_collection 不再执行全量收集，避免循环或内存溢出。
+     */
+    private static bool $collecting = false;
+
+    /**
      * 历史父级 source 兼容映射。
      * 统一在收集阶段归一化，避免旧模块菜单父级失效。
      *
@@ -84,21 +89,38 @@ class MenuCollector
      */
     private function collectInternal(array $modulesFilter = []): array
     {
+        if (self::$collecting) {
+            return [[], [], [], 0, []];
+        }
+        self::$collecting = true;
+        try {
+            return $this->doCollectInternal($modulesFilter);
+        } finally {
+            self::$collecting = false;
+        }
+    }
+
+    /**
+     * @return array{0: array, 1: array, 2: array, 3: int, 4: array}
+     */
+    private function doCollectInternal(array $modulesFilter = []): array
+    {
         $modules_info = [];
         $disabledModules = $this->getDisabledModules();
 
         [$file_menus, $modules_xml_menus] = $this->buildFileMenus($modulesFilter, $disabledModules, $modules_info);
-        $db_menus = $this->buildDbAclMenus($modulesFilter);
-        $this->validateMenuParentChain($file_menus, $db_menus);
+        $file_sources = array_keys($file_menus);
 
         // 保护：未指定模块且文件端为空时，不执行破坏性操作
         if (empty($modulesFilter) && empty($file_menus)) {
             return [$modules_xml_menus, [], $modules_info, count($file_menus), []];
         }
 
-        $diff = $this->computeDiff($file_menus, $db_menus, $disabledModules);
+        // 流式遍历 DB，不构建完整 db_menus，直接产出 diff 与 seen_db_sources，避免大表内存溢出
+        [$diff, $seen_db_sources] = $this->streamDbAndComputeDiff($file_menus, $file_sources, $modulesFilter, $disabledModules);
+        $this->validateMenuParentChain($file_menus, $seen_db_sources);
 
-        $this->executeBatch($diff, $file_menus, $db_menus);
+        $this->executeBatch($diff, $file_menus);
 
         return [$modules_xml_menus, [], $modules_info, count($file_menus), $diff];
     }
@@ -107,9 +129,11 @@ class MenuCollector
      * 框架约定校验：menu.xml 中声明的 parent_source 必须可追溯到真实菜单节点。
      * 若父级不存在，直接中断收集，避免产生“断层菜单 ACL”。
      *
+     * @param array<string, array> $fileMenus
+     * @param array<string, true> $seenDbSources 流式收集时仅保留 DB 中出现的 source_id 集合，不保留整行
      * @throws \Exception
      */
-    private function validateMenuParentChain(array $fileMenus, array $dbMenus): void
+    private function validateMenuParentChain(array $fileMenus, array $seenDbSources): void
     {
         if (empty($fileMenus)) {
             return;
@@ -119,7 +143,7 @@ class MenuCollector
         foreach ($fileMenus as $source => $menu) {
             $knownSources[$source] = true;
         }
-        foreach ($dbMenus as $source => $menu) {
+        foreach ($seenDbSources as $source => $_) {
             $knownSources[$source] = true;
         }
 
@@ -187,62 +211,59 @@ class MenuCollector
     }
 
     /**
-     * 构建数据库端 ACL 菜单状态（source_id => row）
-     * 读取 weline_acl 中 type=menus 且 acl_origin 为 NULL、空或 != 'user' 的记录（系统来源，含旧数据）。
+     * 流式遍历 DB 菜单行，直接计算 diff，不构建完整 db_menus，避免大表内存溢出。
+     * 只保留：seen_db_sources（source_id 集合）、to_update（仅变更项）、removed 列表（用于展开子节点后得到 to_delete/to_disable）。
+     *
+     * @return array{0: array{to_add: string[], to_update: array, to_delete: string[], to_disable: string[]}, 1: array<string, true>}
      */
-    private function buildDbAclMenus(array $modulesFilter): array
-    {
+    private function streamDbAndComputeDiff(
+        array $file_menus,
+        array $file_sources,
+        array $modulesFilter,
+        array $disabledModules
+    ): array {
         $field = Acl::schema_fields_ACL_ORIGIN;
         $this->acl->reset();
         $this->acl->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->where($field, '', '=', 'OR')
             ->where($field, Acl::acl_origin_user, '!=');
-        
+
         if (!empty($modulesFilter)) {
             $this->acl->where(Acl::schema_fields_MODULE, $modulesFilter, 'in');
         }
-        
-        $rows = $this->acl->select()->fetchArray();
-        $db_menus = [];
-        foreach ($rows as $row) {
-            $sourceId = $row[Acl::schema_fields_SOURCE_ID] ?? '';
-            if ($sourceId !== '') {
-                $db_menus[$sourceId] = $row;
-            }
-        }
-        return $db_menus;
-    }
 
-    /**
-     * 计算 diff：to_add, to_update, to_delete, to_disable
-     *
-     * @return array{to_add: string[], to_update: array<string, array>, to_delete: string[], to_disable: string[]}
-     */
-    private function computeDiff(array $file_menus, array $db_menus, array $disabledModules): array
-    {
-        $file_sources = array_keys($file_menus);
-        $db_sources = array_keys($db_menus);
+        $this->acl->select();
+        $query = $this->acl->getQuery();
 
-        $to_add = array_diff($file_sources, $db_sources);
-        $intersect = array_intersect($file_sources, $db_sources);
-
+        $seen_db_sources = [];
         $to_update = [];
-        foreach ($intersect as $source) {
-            $file = $file_menus[$source];
-            $db = $db_menus[$source];
-            if ($this->menuDataChanged($file, $db)) {
-                $to_update[$source] = $file;
+        $removed = []; // [source_id => module]，用于后续展开子节点并区分 to_delete / to_disable
+
+        foreach ($query->fetchIterator('', 1) as $row) {
+            $sourceId = (string)($row[Acl::schema_fields_SOURCE_ID] ?? '');
+            if ($sourceId === '') {
+                continue;
+            }
+            $seen_db_sources[$sourceId] = true;
+
+            if (!isset($file_menus[$sourceId])) {
+                $removed[$sourceId] = (string)($row[Acl::schema_fields_MODULE] ?? '');
+                continue;
+            }
+
+            if ($this->menuDataChanged($file_menus[$sourceId], $row)) {
+                $to_update[$sourceId] = $file_menus[$sourceId];
             }
         }
 
-        $removed = array_diff($db_sources, $file_sources);
+        $to_add = array_values(array_diff($file_sources, array_keys($seen_db_sources)));
+
         $sourcesToDelete = [];
         $sourcesToDisable = [];
-        foreach ($removed as $source) {
-            $module = $db_menus[$source][Acl::schema_fields_MODULE] ?? '';
+        foreach ($removed as $source => $module) {
             $children = [];
-            $this->collectChildAclSources($source, $children);
-            // 排除仍在当前 menu.xml 中定义的子项，避免父节点被移除时误删仍有效的子菜单
+            $visited = [];
+            $this->collectChildAclSources($source, $children, $visited);
             $children = array_values(array_diff($children, $file_sources));
             $all = array_merge([$source], $children);
             if ($this->shouldSoftDisableRemovedMenu($module, $disabledModules)) {
@@ -260,12 +281,14 @@ class MenuCollector
             }
         }
 
-        return [
-            'to_add' => array_values($to_add),
+        $diff = [
+            'to_add' => $to_add,
             'to_update' => $to_update,
             'to_delete' => $sourcesToDelete,
             'to_disable' => $sourcesToDisable,
         ];
+
+        return [$diff, $seen_db_sources];
     }
 
     /**
@@ -315,7 +338,7 @@ class MenuCollector
     /**
      * 批量执行：DELETE → soft disable → UPDATE → INSERT
      */
-    private function executeBatch(array $diff, array $file_menus, array $db_menus): void
+    private function executeBatch(array $diff, array $file_menus): void
     {
         $to_delete = $diff['to_delete'];
         $to_disable = $diff['to_disable'];
@@ -451,23 +474,33 @@ class MenuCollector
     }
 
     /**
-     * 递归收集子 ACL 菜单的 source_id
+     * 递归收集子 ACL 菜单的 source_id。
+     * 使用 $visited 防止 parent_source 成环时无限递归（脏数据或异常配置）。
+     * 使用迭代器读取子节点，减少单次查询内存占用。
+     *
+     * @param array<string, true> $visited 本轮已访问的 parent_source，避免环
      */
-    private function collectChildAclSources(string $parentSource, array &$sources): void
+    private function collectChildAclSources(string $parentSource, array &$sources, array &$visited = []): void
     {
+        if (isset($visited[$parentSource])) {
+            return;
+        }
+        $visited[$parentSource] = true;
+
         $field = Acl::schema_fields_ACL_ORIGIN;
-        $children = $this->acl->reset()
-            ->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
+        $this->acl->reset();
+        $this->acl->where(Acl::schema_fields_PARENT_SOURCE, $parentSource)
             ->where(Acl::schema_fields_TYPE, Acl::type_MENUS)
             ->where($field, '', '=', 'OR')
             ->where($field, Acl::acl_origin_user, '!=')
-            ->select()
-            ->fetchArray();
-        foreach ($children as $child) {
+            ->select();
+
+        $query = $this->acl->getQuery();
+        foreach ($query->fetchIterator('', 1) as $child) {
             $s = $child[Acl::schema_fields_SOURCE_ID] ?? '';
             if ($s !== '' && !in_array($s, $sources, true)) {
                 $sources[] = $s;
-                $this->collectChildAclSources($s, $sources);
+                $this->collectChildAclSources($s, $sources, $visited);
             }
         }
     }
