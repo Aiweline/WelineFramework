@@ -27,6 +27,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 
@@ -218,8 +219,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             return;
         }
 
-        // CLI 下无浏览器 Session，不创建 getBackendSession()、不查 getAclContext()，避免几百毫秒
-        if (\PHP_SAPI === 'cli') {
+        // 纯 CLI（如 console 命令）下无浏览器 Session，跳过 getBackendSession/getAclContext；WLS 虽为 cli 但处理 HTTP 请求，必须走 Session 分支
+        if (\PHP_SAPI === 'cli' && !Runtime::isPersistent()) {
             $user = null;
             $role = null;
             $sessionAclContext = null;
