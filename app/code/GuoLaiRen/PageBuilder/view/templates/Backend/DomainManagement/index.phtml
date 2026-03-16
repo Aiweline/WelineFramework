@@ -4271,7 +4271,10 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 
         items.forEach(function(item) {
             var statusBadge = '';
-            if (item.status === 'available') {
+            var isRegistering = !!(item.is_registering);
+            if (isRegistering && (item.lifecycle_stage_label || '')) {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn" title="' + escapeHtml(item.lifecycle_stage_label) + '">' + escapeHtml(item.lifecycle_stage_label) + '</span>';
+            } else if (item.status === 'available') {
                 statusBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __('可用') ?></span>';
             } else if (item.status === 'allocated') {
                 statusBadge = '<span class="pb-dm-badge pb-dm-badge--info"><?= __('已分配') ?></span>';
@@ -4296,14 +4299,13 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">CDN</span><span class="pb-dm-provider-badge ' + (cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none') + '">' + escapeHtml(cdnName) + '</span></div>' +
                 '</div>';
             var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
-            var isRegistering = !!(item.is_registering);
 
             var poolId = item.pool_id || 0;
             var resolvedDisplay = (item.resolved_ip || '-');
             if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
                 resolvedDisplay += ' / ' + item.resolved_ipv6;
             }
-            var registeringTitle = '<?= __('正在注册中') ?>';
+            var registeringTitle = (item.lifecycle_stage_label && item.lifecycle_stage_label.trim()) ? item.lifecycle_stage_label : '<?= __('正在注册中') ?>';
             var checkBtn = poolId > 0
                 ? (isRegistering
                     ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-dns"></i> <?= __('检查') ?></button>'
