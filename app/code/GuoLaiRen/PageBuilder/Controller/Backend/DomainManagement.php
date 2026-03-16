@@ -1951,12 +1951,16 @@ class DomainManagement extends BaseController
                 }
             }
 
-            $msg = __('解析完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
+            $summary = __('解析完成：成功 %{1} 个，失败 %{2} 个', [$success, $failed]);
             if ($autoTransferToPool) {
-                $msg .= '，' . __('域名池新增 %{1} 个，跳过 %{2} 个', [$poolAdded, $poolSkipped]);
+                $summary .= '，' . __('域名池新增 %{1} 个，跳过 %{2} 个', [$poolAdded, $poolSkipped]);
             }
+            // 所有错误必须完整写入 msg，便于 BackendToast 等组件识别并展示
             if ($errors !== []) {
-                $msg .= '。' . __('失败详情：%{1}', [\implode('；', $errors)]);
+                $errorText = \implode('；', $errors);
+                $msg = __('失败 %{1} 个，具体错误：%{2}', [$failed, $errorText]) . '。' . $summary;
+            } else {
+                $msg = $summary;
             }
 
             return $this->fetchJson([

@@ -2872,9 +2872,11 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 setBtnLoading(btn, false, '<i class="mdi mdi-server"></i> <?= __('批量解析到本地') ?>');
                 if (res.success) {
                     var msg = res.msg || res.message || '<?= __('解析完成') ?>';
-                    BackendToast.success(msg);
-                    if (res.data && res.data.errors && res.data.errors.length > 0) {
-                        console.log('<?= __('解析错误') ?>:', res.data.errors);
+                    var hasFailed = res.data && res.data.failed > 0;
+                    if (hasFailed) {
+                        BackendToast.warning(msg);
+                    } else {
+                        BackendToast.success(msg);
                     }
                     loadDomainList();
                 } else {
