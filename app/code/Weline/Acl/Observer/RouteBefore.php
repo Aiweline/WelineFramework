@@ -319,8 +319,16 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         $hasUser = $user !== null || $sessionAclContext !== null;
         if (!$hasUser) {
             $sidHint = \strlen((string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '')) > 0 ? \substr((string) $_COOKIE[WlsStrategy::SESSION_NAME], 0, 8) . '...' : 'none';
-            $sessIdHint = \PHP_SAPI !== 'cli' ? (\strlen($this->getBackendSession()->getSession()->getId()) > 0 ? \substr($this->getBackendSession()->getSession()->getId(), 0, 8) . '...' : 'empty') : 'cli';
-            w_auth_log('acl_not_logged_in', 'Session 无 user_id，重定向登录', ['uri' => $uri, 'cookie_sid_hint' => $sidHint, 'session_id_hint' => $sessIdHint]);
+            $backendSess = $this->getBackendSession()->getSession();
+            $actualSid = $backendSess->getId();
+            $sessIdHint = \strlen($actualSid) > 0 ? \substr($actualSid, 0, 8) . '...' : 'empty';
+            $sessionKeys = \method_exists($backendSess, 'all') ? \count($backendSess->all()) : 0;
+            w_auth_log('acl_not_logged_in', 'Session 无 user_id，重定向登录', [
+                'uri' => $uri,
+                'cookie_sid_hint' => $sidHint,
+                'session_id_hint' => $sessIdHint,
+                'session_keys' => $sessionKeys,
+            ]);
         }
         // 根因说明：not_logged_in = Session 无 user_id（getUserId() 为空），非「数据库查不到用户」。数据库查不到时会有 _user_not_found 且走 no_role 分支并提示「用户不存在或已被删除」；若 var/log 中见 getAclContext 的 acl 日志则为 DB 问题。
         if (!$hasUser) {
