@@ -1,0 +1,293 @@
+<?php
+/**
+ * WeShop Motor Theme - Category Layout
+ * 摩托车主题商品列表布局（对应 Theme/view/theme/frontend/layouts/category 结构）
+ */
+$this->setLayout('base');
+$category = $this->getData('category') ?? [];
+$products = $this->getData('products') ?? [];
+$filters = $this->getData('filters') ?? [];
+$pagination = $this->getData('pagination') ?? '';
+$sortOptions = $this->getData('sort_options') ?? [];
+$currentSort = $this->getData('current_sort') ?? 'position';
+$viewMode = $this->getData('view_mode') ?? 'grid';
+?>
+<main class="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Category Banner -->
+    <?php if ($category['image'] ?? null): ?>
+        <div class="relative w-full h-48 md:h-64 rounded overflow-hidden mb-8">
+            <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('<?= $category['image'] ?>');">
+                <div class="absolute inset-0 bg-motor-black/60"></div>
+            </div>
+            <div class="relative z-10 h-full flex items-center justify-center">
+                <h1 class="font-heading text-3xl md:text-4xl font-bold text-white uppercase tracking-tight text-center">
+                    <?= htmlspecialchars($category['name'] ?? __('Products')) ?>
+                </h1>
+            </div>
+        </div>
+    <?php endif; ?>
+
+    <div class="flex flex-col lg:flex-row gap-8">
+        <!-- Sidebar Filters -->
+        <aside class="w-full lg:w-64 xl:w-72 flex-shrink-0">
+            <div class="sticky top-28">
+                <w:hook name="WeShop_Catalog::listing::filters_before"/>
+
+                <!-- Mobile Filter Toggle -->
+                <button type="button" class="lg:hidden w-full flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-900 rounded mb-4 font-heading font-bold uppercase tracking-wide" onclick="document.getElementById('motor-filters').classList.toggle('hidden')">
+                    <span class="flex items-center gap-2">
+                        <span class="material-symbols-outlined">tune</span>
+                        <?= __('Filters') ?>
+                    </span>
+                    <span class="material-symbols-outlined">expand_more</span>
+                </button>
+
+                <div id="motor-filters" class="hidden lg:block bg-white dark:bg-gray-900 rounded p-4 border border-gray-200 dark:border-gray-800">
+                    <h3 class="font-heading text-sm font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">filter_list</span>
+                        <?= __('Filters') ?>
+                    </h3>
+                    <form id="filter-form" method="get" action="">
+                        <div class="flex flex-col space-y-4">
+                            <?php foreach ($filters as $filter): ?>
+                                <details class="border-b border-gray-200 dark:border-gray-800 pb-4 group" <?= $filter['is_open'] ? 'open' : '' ?>>
+                                    <summary class="flex cursor-pointer list-none items-center justify-between py-2">
+                                        <span class="text-xs font-bold uppercase tracking-widest text-gray-500"><?= htmlspecialchars($filter['label']) ?></span>
+                                        <span class="material-symbols-outlined text-gray-400 group-open:rotate-180 transition-transform text-lg">expand_more</span>
+                                    </summary>
+                                    <div class="space-y-2 pt-2">
+                                        <?php if ($filter['type'] === 'checkbox'): ?>
+                                            <?php foreach ($filter['options'] as $option): ?>
+                                                <label class="flex items-center gap-3 text-sm cursor-pointer group/item">
+                                                    <input type="checkbox"
+                                                           name="<?= $filter['code'] ?>[]"
+                                                           value="<?= $option['value'] ?>"
+                                                           <?= $option['selected'] ? 'checked' : '' ?>
+                                                           class="w-4 h-4 accent-primary">
+                                                    <span class="group-hover/item:text-primary transition-colors"><?= htmlspecialchars($option['label']) ?></span>
+                                                    <?php if ($option['count'] ?? null): ?>
+                                                        <span class="text-xs text-gray-400">(<?= $option['count'] ?>)</span>
+                                                    <?php endif; ?>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php elseif ($filter['type'] === 'range'): ?>
+                                            <div class="pt-2 px-1">
+                                                <input type="range"
+                                                       name="<?= $filter['code'] ?>"
+                                                       min="<?= $filter['min'] ?>"
+                                                       max="<?= $filter['max'] ?>"
+                                                       value="<?= $filter['current'] ?? $filter['max'] ?>"
+                                                       class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary">
+                                                <div class="flex justify-between text-xs text-gray-500 mt-2">
+                                                    <span><?= $this->formatPrice($filter['min']) ?></span>
+                                                    <span><?= $this->formatPrice($filter['max']) ?>+</span>
+                                                </div>
+                                            </div>
+                                        <?php elseif ($filter['type'] === 'rating'): ?>
+                                            <?php foreach ($filter['options'] as $option): ?>
+                                                <label class="flex items-center gap-3 text-sm cursor-pointer group/item">
+                                                    <input type="radio"
+                                                           name="<?= $filter['code'] ?>"
+                                                           value="<?= $option['value'] ?>"
+                                                           <?= $option['selected'] ? 'checked' : '' ?>
+                                                           class="w-4 h-4 accent-primary">
+                                                    <span class="flex items-center gap-1 text-primary">
+                                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                            <span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' <?= $i <= $option['value'] ? 1 : 0 ?>;">star</span>
+                                                        <?php endfor; ?>
+                                                    </span>
+                                                    <span class="text-gray-500 text-xs"><?= __('& up') ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        <?php endif; ?>
+                                    </div>
+                                </details>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <div class="mt-6 grid grid-cols-2 gap-3">
+                            <button type="submit" class="motor-btn-primary py-3 text-xs font-bold uppercase tracking-wide">
+                                <?= __('Apply') ?>
+                            </button>
+                            <a href="<?= $this->getUrl('catalog/category/view', ['id' => $category['category_id'] ?? 0]) ?>" class="py-3 text-center text-xs font-bold uppercase tracking-wide border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded hover:border-primary hover:text-primary transition-colors">
+                                <?= __('Clear') ?>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+                <w:hook name="WeShop_Catalog::listing::filters_after"/>
+            </div>
+        </aside>
+
+        <!-- Product Grid -->
+        <div class="flex-1">
+            <w:hook name="WeShop_Catalog::listing::header_before"/>
+            <?php if (!($category['image'] ?? null)): ?>
+                <h1 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight mb-2">
+                    <?= htmlspecialchars($category['name'] ?? __('Products')) ?>
+                </h1>
+            <?php endif; ?>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                <p class="text-sm text-gray-500 font-semibold uppercase tracking-wide">
+                    <?= __('Showing %1 products', count($products)) ?>
+                </p>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <label for="sort" class="text-xs font-bold uppercase tracking-widest text-gray-500"><?= __('Sort') ?>:</label>
+                        <select id="sort" name="sort" class="bg-white dark:bg-gray-900 border-2 border-gray-300 dark:border-gray-700 rounded px-3 py-2 text-sm font-semibold focus:border-primary focus:outline-none transition-colors" onchange="window.location.href=this.value">
+                            <?php foreach ($sortOptions as $option): ?>
+                                <option value="<?= $option['url'] ?>" <?= $option['value'] === $currentSort ? 'selected' : '' ?>><?= htmlspecialchars($option['label']) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="hidden sm:flex items-center border-2 border-gray-300 dark:border-gray-700 rounded overflow-hidden">
+                        <button type="button" class="p-2 <?= $viewMode === 'grid' ? 'bg-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800' ?> transition-colors" onclick="motorSetViewMode('grid')">
+                            <span class="material-symbols-outlined text-lg">grid_view</span>
+                        </button>
+                        <button type="button" class="p-2 <?= $viewMode === 'list' ? 'bg-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800' ?> transition-colors" onclick="motorSetViewMode('list')">
+                            <span class="material-symbols-outlined text-lg">view_list</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <w:hook name="WeShop_Catalog::listing::header_after"/>
+
+            <w:hook name="WeShop_Catalog::listing::products_before"/>
+            <div id="product-grid" class="grid <?= $viewMode === 'list' ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' ?> gap-6">
+                <?php foreach ($products as $product): ?>
+                    <div class="motor-card flex flex-col rounded overflow-hidden group">
+                        <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="relative">
+                            <div class="aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                <img src="<?= $product['image'] ?? '' ?>" alt="<?= htmlspecialchars($product['name']) ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            </div>
+                            <?php if ($product['discount_percent'] ?? 0 > 0): ?>
+                                <div class="absolute top-3 left-3">
+                                    <span class="motor-badge">-<?= $product['discount_percent'] ?>%</span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($product['is_new'] ?? false): ?>
+                                <div class="absolute top-3 right-3">
+                                    <span class="motor-badge bg-gray-900 dark:bg-white dark:text-gray-900"><?= __('NEW') ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <button type="button" class="absolute bottom-3 right-3 w-10 h-10 bg-white dark:bg-gray-900 rounded-full shadow-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity motor-wishlist-btn" data-product-id="<?= $product['product_id'] ?>">
+                                <span class="material-symbols-outlined text-lg text-gray-500 hover:text-primary transition-colors">favorite_border</span>
+                            </button>
+                        </a>
+
+                        <div class="flex flex-col gap-2 p-4 bg-white dark:bg-gray-900">
+                            <?php if ($product['brand'] ?? null): ?>
+                                <span class="text-xs font-bold uppercase tracking-widest text-gray-400"><?= htmlspecialchars($product['brand']) ?></span>
+                            <?php endif; ?>
+                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="font-bold text-sm text-text-primary-light dark:text-text-primary-dark group-hover:text-primary transition-colors line-clamp-2">
+                                <?= htmlspecialchars($product['name']) ?>
+                            </a>
+
+                            <?php $rating = $product['rating'] ?? 0; ?>
+                            <div class="flex items-center gap-2">
+                                <div class="flex text-primary">
+                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' <?= $i <= $rating ? 1 : 0 ?>;">star</span>
+                                    <?php endfor; ?>
+                                </div>
+                                <span class="text-xs text-gray-400">(<?= $product['review_count'] ?? 0 ?>)</span>
+                            </div>
+
+                            <div class="flex items-baseline gap-2 mt-1">
+                                <?php if ($product['special_price'] ?? null): ?>
+                                    <span class="text-lg font-bold text-primary"><?= $this->formatPrice($product['special_price']) ?></span>
+                                    <span class="text-sm text-gray-400 line-through"><?= $this->formatPrice($product['price']) ?></span>
+                                <?php else: ?>
+                                    <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                                <?php endif; ?>
+                            </div>
+
+                            <button type="button" class="mt-2 w-full motor-btn-primary py-3 text-xs font-bold uppercase tracking-wide opacity-0 group-hover:opacity-100 transition-all motor-add-cart" data-product-id="<?= $product['product_id'] ?>">
+                                <span class="flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined text-base">shopping_cart</span>
+                                    <?= __('Add to Cart') ?>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <w:hook name="WeShop_Catalog::listing::products_after"/>
+
+            <?php if ($pagination): ?>
+                <div class="mt-10 flex justify-center">
+                    <?= $pagination ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</main>
+
+<?= $this->getChildHtml('content') ?>
+
+<script>
+(function() {
+    'use strict';
+    window.motorSetViewMode = function(mode) {
+        var url = new URL(window.location.href);
+        url.searchParams.set('view', mode);
+        window.location.href = url.toString();
+    };
+    document.querySelectorAll('.motor-add-cart').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var productId = this.dataset.productId;
+            var btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span>';
+            fetch('<?= $this->getUrl('cart/add') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product_id: productId, qty: 1 })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">check</span><?= __('Added') ?></span>';
+                setTimeout(function() {
+                    btn.innerHTML = '<span class="flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">shopping_cart</span><?= __('Add to Cart') ?></span>';
+                }, 2000);
+                if (data.cart_count) {
+                    document.querySelectorAll('.cart-count').forEach(function(el) {
+                        el.textContent = data.cart_count;
+                    });
+                }
+            })
+            .catch(function(error) {
+                btn.disabled = false;
+                btn.innerHTML = '<span class="flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">error</span><?= __('Error') ?></span>';
+                console.error('Error:', error);
+            });
+        });
+    });
+    document.querySelectorAll('.motor-wishlist-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var productId = this.dataset.productId;
+            var icon = this.querySelector('.material-symbols-outlined');
+            fetch('<?= $this->getUrl('wishlist/add') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ product_id: productId })
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    icon.style.fontVariationSettings = "'FILL' 1";
+                    icon.classList.add('text-primary');
+                    icon.classList.remove('text-gray-500');
+                }
+            })
+            .catch(function(error) {
+                console.error('Error:', error);
+            });
+        });
+    });
+})();
+</script>
