@@ -79,6 +79,8 @@ class Session implements SessionInterface
         $this->started = true;
         $this->dirty = false;
 
+        self::sessionLog('start', 'sid=' . ($this->sessionId !== '' ? substr($this->sessionId, 0, 8) . '...' : 'new'));
+
         self::$instancesForShutdown[$this->sessionId ?: spl_object_id($this)] = $this;
         if (!self::$shutdownRegistered) {
             self::$shutdownRegistered = true;
@@ -100,6 +102,10 @@ class Session implements SessionInterface
      */
     public static function flushRequestSessions(): void
     {
+        $count = count(self::$instancesForShutdown);
+        if ($count > 0 && function_exists('w_log_info')) {
+            w_log_info('[Session] flushRequestSessions count=' . $count, [], 'session');
+        }
         $keep = [];
         foreach (self::$instancesForShutdown as $session) {
             if (!$session instanceof self) {
@@ -128,6 +134,7 @@ class Session implements SessionInterface
     public function destroy(): void
     {
         if ($this->sessionId !== '') {
+            self::sessionLog('destroy', 'sid=' . substr($this->sessionId, 0, 8) . '...');
             $this->strategy->destroy($this->sessionId);
         }
 
@@ -144,13 +151,14 @@ class Session implements SessionInterface
     {
         $this->ensureStarted();
 
+        $oldId = $this->sessionId;
         $this->sessionId = $this->strategy->regenerate(
             $this->sessionId,
             $this->data,
             $deleteOldSession,
             $this->defaultTtl
         );
-        
+        self::sessionLog('regenerate', 'delete_old=' . ($deleteOldSession ? '1' : '0') . ' sid=' . substr($this->sessionId, 0, 8) . '...');
         $this->dirty = false;
     }
 
@@ -178,8 +186,9 @@ class Session implements SessionInterface
     public function get(string $key): mixed
     {
         $this->ensureStarted();
-        
-        return $this->data[$key] ?? null;
+        $value = $this->data[$key] ?? null;
+        self::sessionLog('get', 'key=' . $key . ' found=' . (array_key_exists($key, $this->data) ? '1' : '0'));
+        return $value;
     }
 
     /**
@@ -188,9 +197,11 @@ class Session implements SessionInterface
     public function set(string $key, mixed $value): void
     {
         $this->ensureStarted();
-        
         $this->data[$key] = $value;
         $this->dirty = true;
+        $vType = gettype($value);
+        $vLen = is_string($value) ? strlen($value) : (is_array($value) ? count($value) : null);
+        self::sessionLog('set', 'key=' . $key . ' value_type=' . $vType . ($vLen !== null ? ' len=' . $vLen : ''));
     }
 
     /**
@@ -209,10 +220,10 @@ class Session implements SessionInterface
     public function delete(string $key): void
     {
         $this->ensureStarted();
-        
         if (\array_key_exists($key, $this->data)) {
             unset($this->data[$key]);
             $this->dirty = true;
+            self::sessionLog('delete', 'key=' . $key);
         }
     }
 
@@ -259,6 +270,7 @@ class Session implements SessionInterface
     {
         if ($this->dirty && $this->sessionId !== '') {
             $ok = $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
+            self::sessionLog('save', 'sid=' . substr($this->sessionId, 0, 8) . '... dirty=1 ok=' . ($ok ? '1' : '0'));
             if ($ok) {
                 $this->dirty = false;
             } else {
@@ -316,6 +328,17 @@ class Session implements SessionInterface
         $this->sessionId = '';
         $this->started = false;
         $this->dirty = false;
+    }
+
+    /**
+     * 写入 Session 操作日志到 var/log/session.log（开发/线上均记录，便于排查）
+     */
+    private static function sessionLog(string $op, string $detail): void
+    {
+        if (!function_exists('w_log_info')) {
+            return;
+        }
+        w_log_info('[Session] ' . $op . ' ' . $detail, [], 'session');
     }
 
     // ==================== 兼容方法（过渡期使用） ====================
