@@ -99,17 +99,45 @@ class LoggerFactory
 
     /**
      * 创建日志实例
+     * 运行模式由配置 log.runtime 提供默认值，再经事件 Weline_Framework_Log::resolve_runtime 解析（如 WLS 进程内改为 wls）。
      */
     private static function createLogger(string $channel): LoggerInterface
     {
         $config = self::getConfig();
-        
-        // 判断运行模式
-        if (self::isWlsMode()) {
+        $runtime = self::resolveRuntime($config);
+
+        if ($runtime === 'wls') {
             return self::createWlsLogger($channel, $config);
         }
 
         return self::createFpmLogger($channel, $config);
+    }
+
+    /**
+     * 通过配置 + 事件解析当前日志运行模式（fpm | wls）
+     * 不依赖常量，由配置与 Weline_Server 等观察者按环境改写。
+     */
+    private static function resolveRuntime(array $config): string
+    {
+        $runtime = $config['runtime'] ?? 'fpm';
+        $data = ['runtime' => $runtime];
+
+        if (
+            \class_exists(\Weline\Framework\Manager\ObjectManager::class, false)
+            && \class_exists(\Weline\Framework\Event\EventsManager::class, false)
+        ) {
+            try {
+                $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Framework\Event\EventsManager::class
+                );
+                $eventsManager->dispatch('Weline_Framework_Log::resolve_runtime', $data);
+            } catch (\Throwable) {
+                // 事件不可用时沿用配置默认
+            }
+        }
+
+        $resolved = $data['runtime'] ?? $runtime;
+        return $resolved === 'wls' ? 'wls' : 'fpm';
     }
 
     /**
@@ -153,13 +181,15 @@ class LoggerFactory
     }
 
     /**
-     * 创建 WlsLogger 适配器
+     * 创建 WlsLogger 适配器（WLS 下 w_log_* 统一走 WlsLogger）
      */
     private static function createWlsLoggerAdapter(string $channel, array $config): LoggerInterface
     {
-        // 暂时回退到 FpmLogger，后续可以创建 WlsLoggerAdapter
-        // TODO: 创建 WlsLoggerAdapter 以包装现有的 WlsLogger
-        return self::createFpmLogger($channel, $config);
+        $adapterClass = 'Weline\\Server\\Log\\WlsLoggerAdapter';
+        if (!class_exists($adapterClass)) {
+            return self::createFpmLogger($channel, $config);
+        }
+        return new $adapterClass($channel);
     }
 
     /**
@@ -200,14 +230,6 @@ class LoggerFactory
     }
 
     /**
-     * 判断是否为 WLS 模式
-     */
-    private static function isWlsMode(): bool
-    {
-        return defined('WELINE_SERVER_MODE') && WELINE_SERVER_MODE === true;
-    }
-
-    /**
      * 获取日志配置
      */
     private static function getConfig(): array
@@ -236,18 +258,19 @@ class LoggerFactory
      */
     public static function reset(): void
     {
-        // 关闭所有处理器
         foreach (self::$channelInstances as $logger) {
             if ($logger instanceof FpmLogger) {
                 $logger->flush();
             }
+            if ($logger instanceof \Weline\Server\Log\WlsLoggerAdapter) {
+                $logger->flush();
+            }
         }
-        
+
         self::$defaultInstance = null;
         self::$channelInstances = [];
         self::$config = null;
-        
-        // 同时重置过滤器
+
         LogFilter::reset();
     }
 
@@ -258,6 +281,9 @@ class LoggerFactory
     {
         foreach (self::$channelInstances as $logger) {
             if ($logger instanceof FpmLogger) {
+                $logger->flush();
+            }
+            if ($logger instanceof \Weline\Server\Log\WlsLoggerAdapter) {
                 $logger->flush();
             }
         }
