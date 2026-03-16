@@ -176,6 +176,20 @@ class PageRenderService
             $this->loadBlogData($page);
         }
         
+        // 若主题提供 layout.phtml（含完整 <head> 与文档结构），优先使用，避免 head 为空、样式错位
+        $layoutPhtmlPath = $this->pathResolver->getTemplatePath($styleCode) . '/layout.phtml';
+        if (($mode === self::MODE_LIVE || $mode === self::MODE_PREVIEW) && is_file($layoutPhtmlPath)) {
+            $this->assign('lang', $currentLocale ?: 'en');
+            $layoutHtml = $this->fetch("GuoLaiRen_PageBuilder::templates/style/{$styleCode}/layout.phtml");
+            $layoutHtml = $this->injectHeaderCustomCode($layoutHtml, $page);
+            $layoutHtml = $this->injectFooterCustomCode($layoutHtml, $page);
+            if ($mode === self::MODE_PREVIEW) {
+                $previewBoot = '<script>(function(){ try { window.__PAGEBUILDER_PREVIEW__ = true; var url = new URL(window.location.href); if (!url.searchParams.get("preview")) { url.searchParams.set("preview", "1"); window.history.replaceState({}, document.title, url.toString()); } } catch(e) {} })();</script>';
+                $layoutHtml = preg_replace('/(<body[^>]*>)/i', '$1' . "\n" . $previewBoot, $layoutHtml, 1);
+            }
+            return $layoutHtml;
+        }
+        
         // 渲染 header/content/footer
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
         
@@ -1240,10 +1254,7 @@ class PageRenderService
         $headEnd = (!empty($headerCustomCode) ? "\n    " . $headerCustomCode : '') . "\n</head>";
         $bodyEnd = (!empty($footerCustomCode) ? "\n    " . $footerCustomCode : '') . "\n</body>";
 
-        return '<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
+        $headContent = '    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
     ' . $baseCssLink . '
@@ -1251,13 +1262,27 @@ class PageRenderService
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    </style>' . $headEnd . '
+    </style>';
+        $html = '<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+' . $headContent . $headEnd . '
 <body>
     ' . $previewBoot . '
     ' . $headerResult['html'] . '
     ' . $contentResult['html'] . '
     ' . $footerResult['html'] . $bodyEnd . '
 </html>';
+        // 防止 head 被误清空：若最终仍出现空 head 则强制注入最小 head 内容
+        if (preg_match('/<head[^>]*>\s*<\/head>/is', $html)) {
+            $html = preg_replace(
+                '/<head[^>]*>\s*<\/head>/is',
+                '<head>' . trim($headContent) . '</head>',
+                $html,
+                1
+            );
+        }
+        return $html;
     }
 
     /**
