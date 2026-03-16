@@ -2690,7 +2690,11 @@ CNF;
         if (!($addResult['success'] ?? false)) {
             $addErr = (string) ($addResult['message'] ?? __('未知错误'));
             if ($onProgress) {
-                $onProgress((string)__('添加 TXT 记录失败：%{1}', [$addErr]), ['step' => 'add_txt_fail']);
+                $extra = ['step' => 'add_txt_fail'];
+                if (isset($addResult['dns_response'])) {
+                    $extra['dns_response'] = $addResult['dns_response'];
+                }
+                $onProgress((string)__('添加 TXT 记录失败：%{1}', [$addErr]), $extra);
             }
             return ['validated' => false, 'error' => $addErr];
         }
