@@ -11,7 +11,6 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
@@ -65,28 +64,27 @@ class ThemePathResolver implements ThemePathResolverInterface
     {
         // 防止循环引用
         $themeId = $theme->getId();
-        if ($themeId && in_array($themeId, $visited)) {
+        if ($themeId && in_array($themeId, $visited, true)) {
             return $modulePath;
         }
         if ($themeId) {
             $visited[] = $themeId;
         }
-        
-        // 1. 先查找模块自己的 theme 目录（模块级主题继承）
-        $moduleThemePath = $this->buildModuleThemePath($modulePath);
-        if (is_file($moduleThemePath)) {
-            return $moduleThemePath;
+
+        // 1. 当前主题 design（design 为 themePath/frontend/ 或 themePath/backend/，不含 view/theme）
+        $themePathBuilt = $this->buildThemePath($modulePath, $theme->getPath());
+        if (is_file($themePathBuilt)) {
+            return $themePathBuilt;
         }
-        
-        // 2. 构建当前主题的文件路径
-        $themePath = $this->buildThemePath($modulePath, $theme->getPath());
-        
-        // 如果当前主题中存在该文件，直接返回（同名文件以激活主题为准）
-        if (is_file($themePath)) {
-            return $themePath;
+        // 兼容：请求 .../homepage/default.phtml 时，若主题只有 .../layouts/homepage.phtml 则使用它
+        if (str_ends_with($themePathBuilt, DS . 'default.phtml')) {
+            $fallback = dirname($themePathBuilt, 2) . DS . basename(dirname($themePathBuilt)) . '.phtml';
+            if (is_file($fallback)) {
+                return $fallback;
+            }
         }
-        
-        // 3. 递归查找父主题
+
+        // 2. 递归查找父主题（design 继承链）
         $parentId = $theme->getParentId();
         if ($parentId) {
             try {
@@ -101,16 +99,16 @@ class ThemePathResolver implements ThemePathResolverInterface
                 // 如果父主题加载失败，继续查找基础模块文件
             }
         }
-        
-        // 4. 如果主题没有继承（没有父主题），且是布局或部分文件，尝试使用默认文件
-        if (!$parentId && $this->isThemeFile($modulePath)) {
-            $defaultThemePath = $this->getDefaultThemePath($modulePath);
-            if ($defaultThemePath && is_file($defaultThemePath)) {
-                return $defaultThemePath;
+
+        // 3. 继承链耗尽后回退到“顶层”：当前文件所属模块的 view/theme
+        if (!$parentId) {
+            $topLayerPath = $this->getTopLayerPath($modulePath);
+            if ($topLayerPath && is_file($topLayerPath)) {
+                return $topLayerPath;
             }
         }
-        
-        // 5. 如果主题继承链中都没有找到，返回基础模块文件
+
+        // 4. 如果继承链与顶层都没有找到，返回基础模块文件
         return $modulePath;
     }
 
@@ -120,68 +118,31 @@ class ThemePathResolver implements ThemePathResolverInterface
      * @param string $modulePath 模块文件路径
      * @return string 模块主题文件路径
      */
-    private function buildModuleThemePath(string $modulePath): string
-    {
-        // 检查是否是 theme 目录下的文件
-        if (strpos($modulePath, DS . 'theme' . DS) === false) {
-            return $modulePath;
-        }
-        
-        // 查找 view/theme/ 的位置
-        $themePos = strpos($modulePath, DS . 'view' . DS . 'theme' . DS);
-        if ($themePos === false) {
-            return $modulePath;
-        }
-        
-        // 提取 view/theme/ 之后的部分
-        $themeRelativePath = substr($modulePath, $themePos + strlen(DS . 'view' . DS . 'theme' . DS));
-        
-        // 尝试查找当前请求的模块
-        if (!CLI) {
-            try {
-                $request = ObjectManager::getInstance(Request::class);
-                $currentModulePath = $request->getModulePath();
-                if ($currentModulePath) {
-                    $currentModuleThemePath = rtrim($currentModulePath, DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
-                    if (is_file($currentModuleThemePath)) {
-                        return $currentModuleThemePath;
-                    }
-                }
-            } catch (\Throwable $e) {
-                // 如果获取 Request 失败，继续后续逻辑
-            }
-        }
-        
-        // 如果当前模块没有，尝试查找 Weline_Frontend 模块（前端默认模块）
-        $modules = Env::getInstance()->getModuleList();
-        if (isset($modules['Weline_Frontend'])) {
-            $frontendModule = $modules['Weline_Frontend'];
-            $frontendThemePath = rtrim($frontendModule['base_path'], DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
-            if (is_file($frontendThemePath)) {
-                return $frontendThemePath;
-            }
-        }
-        
-        return $modulePath;
-    }
-
     /**
      * 构建主题文件路径
-     * 
-     * @param string $modulePath 模块文件路径
-     * @param string $themePath 主题路径
-     * @return string 主题文件路径
+     *
+     * design 主题目录结构为 themePath/frontend/ 或 themePath/backend/，不包含 view/theme。
+     * 从模块路径中提取 theme 之后的 frontend/... 或 backend/...，拼成 themePath + 该相对路径。
+     *
+     * @param string $modulePath 模块文件路径（如 .../view/theme/frontend/layouts/homepage/default.phtml）
+     * @param string $themePath 主题根路径（如 .../app/design/WeShop/motor/）
+     * @return string 主题文件路径（如 .../app/design/WeShop/motor/frontend/layouts/homepage/default.phtml）
      */
     public function buildThemePath(string $modulePath, string $themePath): string
     {
-        // 替换 app/code 为 app/design/{theme}
+        $ds = DS;
+        $needle = $ds . 'theme' . $ds;
+        $pos = strpos($modulePath, $needle);
+        if ($pos !== false) {
+            $afterTheme = substr($modulePath, $pos + strlen($needle));
+            $themeFilePath = rtrim(str_replace(['/', '\\'], $ds, $themePath), $ds) . $ds . str_replace(['/', '\\'], $ds, $afterTheme);
+            return $themeFilePath;
+        }
+        // 兼容：找不到 theme/ 时按原逻辑替换 app/code
         $themeFilePath = str_replace(APP_CODE_PATH, $themePath, $modulePath);
-        
-        // 如果没替换成功，尝试替换 vendor
         if ($themeFilePath === $modulePath) {
             $themeFilePath = str_replace(VENDOR_PATH, $themePath, $modulePath);
         }
-        
         return $themeFilePath;
     }
 
@@ -191,41 +152,66 @@ class ThemePathResolver implements ThemePathResolverInterface
      * @param string $modulePath 模块文件路径
      * @return bool
      */
-    private function isThemeFile(string $modulePath): bool
+    private function isThemeViewPath(string $modulePath): bool
     {
-        return (strpos($modulePath, DS . 'theme' . DS . 'frontend' . DS . 'layouts') !== false) ||
-               (strpos($modulePath, DS . 'theme' . DS . 'backend' . DS . 'layouts') !== false) ||
-               (strpos($modulePath, DS . 'theme' . DS . 'frontend' . DS . 'partials') !== false) ||
-               (strpos($modulePath, DS . 'theme' . DS . 'backend' . DS . 'partials') !== false);
+        $path = str_replace(['/', '\\'], DS, $modulePath);
+        return str_contains($path, DS . 'view' . DS . 'theme' . DS . 'frontend' . DS) ||
+               str_contains($path, DS . 'view' . DS . 'theme' . DS . 'backend' . DS);
     }
 
     /**
-     * 获取默认主题文件路径（从 Weline_Theme 模块）
+     * 获取“顶层”回退路径：modulePath 所属模块的 view/theme 同相对路径
      * 
      * @param string $modulePath 模块文件路径
-     * @return string|null 默认主题文件路径，如果不存在则返回null
+     * @return string|null 顶层路径，不可解析时返回 null
      */
-    private function getDefaultThemePath(string $modulePath): ?string
+    private function getTopLayerPath(string $modulePath): ?string
     {
-        if (!$this->isThemeFile($modulePath)) {
+        $path = str_replace(['/', '\\'], DS, $modulePath);
+        if (!$this->isThemeViewPath($path)) {
             return null;
         }
-        
-        $themePos = strpos($modulePath, DS . 'view' . DS . 'theme' . DS);
+
+        $themePos = strpos($path, DS . 'view' . DS . 'theme' . DS);
         if ($themePos === false) {
             return null;
         }
-        
-        $themeRelativePath = substr($modulePath, $themePos + strlen(DS . 'view' . DS . 'theme' . DS));
-        
+
+        $themeRelativePath = substr($path, $themePos + strlen(DS . 'view' . DS . 'theme' . DS));
+
         $modules = Env::getInstance()->getModuleList();
-        if (!isset($modules['Weline_Theme'])) {
+        $ownerBasePath = $this->resolveOwnerModuleBasePath($path, $modules);
+        if (!$ownerBasePath) {
             return null;
         }
-        
-        $themeModule = $modules['Weline_Theme'];
-        $defaultThemePath = rtrim($themeModule['base_path'], DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
-        
-        return $defaultThemePath;
+
+        return rtrim($ownerBasePath, DS) . DS . 'view' . DS . 'theme' . DS . $themeRelativePath;
+    }
+
+    /**
+     * 解析 modulePath 所属模块 base_path（最长前缀匹配）
+     *
+     * @param string $modulePath 标准化后的绝对路径
+     * @param array $modules Env::getModuleList() 返回结果
+     * @return string|null
+     */
+    private function resolveOwnerModuleBasePath(string $modulePath, array $modules): ?string
+    {
+        $ownerBasePath = null;
+        $ownerLen = 0;
+        foreach ($modules as $moduleInfo) {
+            $basePath = (string)($moduleInfo['base_path'] ?? '');
+            if ($basePath === '') {
+                continue;
+            }
+            $basePath = rtrim(str_replace(['/', '\\'], DS, $basePath), DS);
+            $prefix = $basePath . DS;
+            if (($modulePath === $basePath || str_starts_with($modulePath, $prefix)) && strlen($basePath) > $ownerLen) {
+                $ownerBasePath = $basePath;
+                $ownerLen = strlen($basePath);
+            }
+        }
+
+        return $ownerBasePath;
     }
 }

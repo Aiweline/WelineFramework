@@ -162,6 +162,7 @@ class AclOrphanCleanupService
     {
         $field = Acl::schema_fields_ACL_ORIGIN;
         return $this->acl->reset()
-            ->whereRaw("({$field} IS NULL OR {$field} = '' OR {$field} != '" . addslashes(Acl::acl_origin_user) . "')");
+            ->where($field, '', '=', 'OR')
+            ->where($field, Acl::acl_origin_user, '!=');
     }
 }

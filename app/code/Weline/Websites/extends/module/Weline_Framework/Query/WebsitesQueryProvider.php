@@ -896,10 +896,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $pool->where(DomainPool::schema_fields_STATUS, (string)$status);
         }
         if ($excludeSiteCreated) {
-            $pool->whereRaw(
-                '(' . DomainPool::schema_fields_SITE_CREATED . ' IS NULL OR ' . DomainPool::schema_fields_SITE_CREATED . ' = 0)',
-                'AND'
-            );
+            $pool->where(DomainPool::schema_fields_SITE_CREATED, 0);
         }
         $rows = $pool->order(DomainPool::schema_fields_DOMAIN, 'ASC')
             ->pagination(1, $limit)

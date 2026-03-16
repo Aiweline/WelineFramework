@@ -10,6 +10,7 @@
 namespace Weline\Framework\App;
 
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Output\PrintInterface;
@@ -590,11 +591,6 @@ class Env extends DataObject
     }
 
     /**
-     * 维护模式标志文件路径（用于 WLS 跨进程通信）
-     */
-    private const MAINTENANCE_FLAG_FILE = 'var/maintenance.flag';
-    
-    /**
      * WLS 维护模式缓存（进程内缓存，避免每次请求都检查文件）
      * @var bool|null
      */
@@ -613,35 +609,63 @@ class Env extends DataObject
     private const MAINTENANCE_CHECK_INTERVAL = 1.0;
     
     /**
+     * 事件名：WLS 下由 Server 模块通过 IPC 查询 Orchestrator 并回写 data['result']
+     */
+    private const EVENT_MAINTENANCE_CHECK = 'Weline_Server::integration::maintenance_check';
+
+    /**
+     * 事件名：WLS 下由 Server 模块通过 IPC 通知 Orchestrator 开/关维护，并设置 data['handled']
+     */
+    private const EVENT_MAINTENANCE_SET = 'Weline_Server::integration::maintenance_set';
+
+    /**
      * 检查维护模式状态（带缓存优化）
      * 
+     * WLS 下优先通过事件由 Server 模块走 IPC 查询 Orchestrator 状态；
+     * FPM/CLI 下直接使用配置（getConfig 分支）。
      * 性能说明：
-     * - 使用进程内缓存，每秒最多只检查一次文件
-     * - file_exists() 本身很快（~1微秒），但缓存后可降至 ~0.1 微秒
-     * - 在 10000 QPS 场景下，从 10000 次/秒降至 1 次/秒的文件检查
+     * - 使用进程内缓存，每秒最多只检查一次 IPC 查询
+     * - 在 10000 QPS 场景下，从 10000 次/秒降至 1 次/秒的检查
      * 
      * @return bool
      */
     private function checkMaintenanceMode(): bool
     {
         $now = \microtime(true);
-        
-        // 获取配置的刷新间隔（允许通过配置自定义）
-        $interval = ($this->config['server'] ?? [])['maintenance_check_interval'] 
+
+        $interval = ($this->config['server'] ?? [])['maintenance_check_interval']
                     ?? self::MAINTENANCE_CHECK_INTERVAL;
-        
-        // 如果缓存有效（未超过刷新间隔），直接返回缓存值
-        if (self::$maintenanceCached !== null 
+
+        if (self::$maintenanceCached !== null
             && ($now - self::$maintenanceLastCheck) < $interval
         ) {
             return self::$maintenanceCached;
         }
-        
-        // 缓存过期，检查文件并更新缓存
+
         self::$maintenanceLastCheck = $now;
-        self::$maintenanceCached = \file_exists(BP . self::MAINTENANCE_FLAG_FILE);
-        
+
+        if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            $data = ['result' => null];
+            try {
+                $this->getEventsManager()->dispatch(self::EVENT_MAINTENANCE_CHECK, $data);
+            } catch (\Throwable) {
+                $data = ['result' => null];
+            }
+            if (isset($data['result']) && \is_bool($data['result'])) {
+                self::$maintenanceCached = $data['result'];
+                return self::$maintenanceCached;
+            }
+        }
+
+        // IPC 查询失败时，不再使用文件标志，退回到当前配置值（通常来自 env.php）
+        $configValue = $this->config['system']['maintenance'] ?? $this->config['maintenance'] ?? false;
+        self::$maintenanceCached = (bool)$configValue;
         return self::$maintenanceCached;
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return ObjectManager::getInstance(EventsManager::class);
     }
     
     /**
@@ -806,9 +830,22 @@ class Env extends DataObject
      */
     public function setConfig(string $key, $value = null): bool
     {
-        // 维护模式特殊处理：同时管理文件标志（支持 WLS 跨进程通信）
+        // 维护模式特殊处理：WLS 下通过事件走 IPC 通知 Orchestrator；FPM/CLI 仅更新配置
         if ($key === 'maintenance' || $key === 'system.maintenance') {
-            $this->setMaintenanceFlag((bool) $value);
+            $enabled = (bool) $value;
+            if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
+                $data = ['value' => $enabled, 'handled' => false];
+                try {
+                    $this->getEventsManager()->dispatch(self::EVENT_MAINTENANCE_SET, $data);
+                } catch (\Throwable) {
+                    $data['handled'] = false;
+                }
+                if (!empty($data['handled'])) {
+                    self::$maintenanceCached = $enabled;
+                    self::$maintenanceLastCheck = \microtime(true);
+                    // 已由 IPC 通知 Orchestrator，后续状态以 Orchestrator 为准
+                }
+            }
         }
         if ($key === 'cache') {
             self::$mergedCacheConfig = null;
@@ -847,40 +884,6 @@ class Env extends DataObject
         }
     }
     
-    /**
-     * 设置维护模式文件标志（用于 WLS 跨进程通信）
-     * 
-     * @param bool $enabled 是否开启维护模式
-     * @return void
-     */
-    private function setMaintenanceFlag(bool $enabled): void
-    {
-        $flagPath = BP . self::MAINTENANCE_FLAG_FILE;
-        $flagDir = \dirname($flagPath);
-        
-        if ($enabled) {
-            // 确保目录存在
-            if (!\is_dir($flagDir)) {
-                @\mkdir($flagDir, 0755, true);
-            }
-            // 创建标志文件
-            @\file_put_contents($flagPath, \json_encode([
-                'enabled' => true,
-                'started_at' => \time(),
-                'pid' => \getmypid(),
-            ]));
-        } else {
-            // 删除标志文件
-            if (\file_exists($flagPath)) {
-                @\unlink($flagPath);
-            }
-        }
-        
-        // 同步刷新本进程缓存（对于当前进程立即生效）
-        self::$maintenanceCached = $enabled;
-        self::$maintenanceLastCheck = \microtime(true);
-    }
-
     /**
      * @DESC         |读取log路径
      *

@@ -1,0 +1,302 @@
+<?php
+/**
+ * Multipass站点管理 - 内容模板
+ * @var \Weline\Framework\View\Template $this
+ */
+$sites = $this->getData('sites') ?? [];
+?>
+<style>
+.weline-multipass-site-card {
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 15px;
+    background: var(--backend-color-card-bg, #fff);
+    transition: all 0.3s ease;
+}
+.weline-multipass-site-card:hover {
+    border-color: var(--backend-color-primary, #0d6efd);
+    box-shadow: var(--backend-shadow-md, 0 4px 12px rgba(0,0,0,0.1));
+}
+.weline-multipass-site-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.weline-multipass-site-status.enabled {
+    background: var(--backend-color-success-bg, #d1e7dd);
+    color: var(--backend-color-success, #198754);
+}
+.weline-multipass-site-status.disabled {
+    background: var(--backend-color-danger-bg, #f8d7da);
+    color: var(--backend-color-danger, #dc3545);
+}
+.weline-multipass-site-type {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.weline-multipass-site-type.backend {
+    background: var(--backend-color-primary-bg, #cfe2ff);
+    color: var(--backend-color-primary, #0d6efd);
+}
+.weline-multipass-site-type.frontend {
+    background: var(--backend-color-warning-bg, #fff3cd);
+    color: var(--backend-color-warning, #ffc107);
+}
+.weline-multipass-secret-key {
+    font-family: monospace;
+    background: var(--backend-color-card-bg-secondary, #f8f9fa);
+    padding: 8px 12px;
+    border-radius: 4px;
+    word-break: break-all;
+    font-size: 12px;
+}
+</style>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Multipass站点管理') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@url('admin')"><?= __('首页') ?></a></li>
+                    <li class="breadcrumb-item"><?= __('Multipass站点管理') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><?= __('站点列表') ?></h5>
+                <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#addSiteOffcanvas">
+                    <i class="mdi mdi-plus"></i> <?= __('添加站点') ?>
+                </button>
+            </div>
+            <div class="card-body">
+                <?php if (empty($sites)): ?>
+                <div class="text-center py-5">
+                    <i class="mdi mdi-server-off" style="font-size: 48px; color: var(--backend-color-text-muted, #6c757d);"></i>
+                    <p class="mt-3 text-muted"><?= __('暂无站点配置，请点击右上角「添加站点」按钮创建') ?></p>
+                </div>
+                <?php else: ?>
+                <div class="row">
+                    <?php foreach ($sites as $site): ?>
+                    <div class="col-md-6 col-lg-4">
+                        <div class="weline-multipass-site-card">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h6 class="mb-1"><?= htmlspecialchars($site->getData('site_name') ?? '') ?></h6>
+                                    <span class="weline-multipass-site-type <?= $site->getData('user_type') ?? 'frontend' ?>">
+                                        <i class="mdi mdi-<?= ($site->getData('user_type') ?? 'frontend') === 'backend' ? 'account-cog' : 'account' ?>"></i>
+                                        <?= ($site->getData('user_type') ?? 'frontend') === 'backend' ? __('后端') : __('前端') ?>
+                                    </span>
+                                </div>
+                                <span class="weline-multipass-site-status <?= ($site->getData('is_enabled') ?? 0) ? 'enabled' : 'disabled' ?>">
+                                    <?= ($site->getData('is_enabled') ?? 0) ? __('已启用') : __('已禁用') ?>
+                                </span>
+                            </div>
+                            <div class="mb-2">
+                                <small class="text-muted"><?= __('站点URL') ?></small>
+                                <div class="text-truncate">
+                                    <a href="<?= htmlspecialchars($site->getData('site_url') ?? '') ?>" target="_blank">
+                                        <?= htmlspecialchars($site->getData('site_url') ?? '') ?>
+                                    </a>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <small class="text-muted"><?= __('密钥') ?></small>
+                                <div class="weline-multipass-secret-key">
+                                    <?= htmlspecialchars(substr($site->getData('secret_key') ?? '', 0, 20)) ?>...
+                                    <button type="button" class="btn btn-sm btn-link p-0 ms-2" onclick="copySecretKey('<?= htmlspecialchars($site->getData('secret_key') ?? '') ?>')">
+                                        <i class="mdi mdi-content-copy"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-outline-primary" onclick="editSite(<?= htmlspecialchars(json_encode($site->getData())) ?>)">
+                                    <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteSite(<?= $site->getData('site_id') ?>, '<?= htmlspecialchars($site->getData('site_name') ?? '') ?>')">
+                                    <i class="mdi mdi-delete"></i> <?= __('删除') ?>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑站点 Offcanvas -->
+<div class="offcanvas offcanvas-end" tabindex="-1" id="addSiteOffcanvas" style="width: 450px;">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="offcanvasTitle"><?= __('添加站点') ?></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <form id="siteForm">
+            <input type="hidden" name="site_id" id="site_id" value="">
+            
+            <div class="mb-3">
+                <label class="form-label"><?= __('站点名称') ?> <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" name="site_name" id="site_name" required placeholder="<?= __('例如：主站、CRM系统') ?>">
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label"><?= __('站点URL') ?> <span class="text-danger">*</span></label>
+                <input type="url" class="form-control" name="site_url" id="site_url" required placeholder="<?= __('例如：https://example.com') ?>">
+                <small class="form-text text-muted"><?= __('接收Multipass登录的目标站点地址') ?></small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label"><?= __('密钥') ?></label>
+                <div class="input-group">
+                    <input type="text" class="form-control" name="secret_key" id="secret_key" placeholder="<?= __('留空自动生成') ?>">
+                    <button type="button" class="btn btn-outline-secondary" onclick="generateKey()">
+                        <i class="mdi mdi-refresh"></i> <?= __('生成') ?>
+                    </button>
+                </div>
+                <small class="form-text text-muted"><?= __('用于加密Token的密钥，需与目标站点配置一致') ?></small>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label"><?= __('用户类型') ?></label>
+                <select class="form-select" name="user_type" id="user_type">
+                    <option value="frontend"><?= __('前端用户') ?></option>
+                    <option value="backend"><?= __('后端用户') ?></option>
+                </select>
+                <small class="form-text text-muted"><?= __('该站点用于登录哪类用户') ?></small>
+            </div>
+            
+            <div class="mb-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="is_enabled" id="is_enabled" value="1" checked>
+                    <label class="form-check-label" for="is_enabled"><?= __('启用站点') ?></label>
+                </div>
+            </div>
+            
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-primary">
+                    <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    
+    var saveUrl = '<?= $this->getBackendUrl('multipass/backend/site/save') ?>';
+    var deleteUrl = '<?= $this->getBackendUrl('multipass/backend/site/delete') ?>';
+    var listUrl = '<?= $this->getBackendUrl('multipass/backend/site/index') ?>';
+    
+    function generateRandomKey(length) {
+        var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        var result = '';
+        for (var i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+    }
+    
+    window.generateKey = function() {
+        document.getElementById('secret_key').value = generateRandomKey(32);
+    };
+    
+    window.copySecretKey = function(key) {
+        var textarea = document.createElement('textarea');
+        textarea.value = key;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        BackendToast.success('<?= __('密钥已复制到剪贴板') ?>');
+    };
+    
+    window.editSite = function(siteData) {
+        document.getElementById('offcanvasTitle').textContent = '<?= __('编辑站点') ?>';
+        document.getElementById('site_id').value = siteData.site_id || '';
+        document.getElementById('site_name').value = siteData.site_name || '';
+        document.getElementById('site_url').value = siteData.site_url || '';
+        document.getElementById('secret_key').value = siteData.secret_key || '';
+        document.getElementById('user_type').value = siteData.user_type || 'frontend';
+        document.getElementById('is_enabled').checked = siteData.is_enabled == 1;
+        
+        var offcanvas = new bootstrap.Offcanvas(document.getElementById('addSiteOffcanvas'));
+        offcanvas.show();
+    };
+    
+    window.deleteSite = function(siteId, siteName) {
+        BackendConfirm.show('<?= __('确定要删除站点 "%{1}" 吗？此操作不可恢复。', [siteName]) ?>')
+            .then(function(confirmed) {
+                if (confirmed) {
+                    var formData = new FormData();
+                    formData.append('site_id', siteId);
+                    
+                    window.Weline.Api.post(deleteUrl, formData)
+                        .then(function(res) {
+                            var data = (res && res.data) !== undefined ? res.data : res;
+                            if (data.success || data.code === 200) {
+                                BackendToast.success('<?= __('站点删除成功') ?>');
+                                setTimeout(function() { window.location.reload(); }, 1000);
+                            } else {
+                                BackendToast.error(data.message || data.msg || '<?= __('删除失败') ?>');
+                            }
+                        })
+                        .catch(function() {
+                            BackendToast.error('<?= __('请求失败') ?>');
+                        });
+                }
+            });
+    };
+    
+    document.getElementById('siteForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        var formData = new FormData(this);
+        
+        window.Weline.Api.post(saveUrl, formData)
+            .then(function(res) {
+                var data = (res && res.data) !== undefined ? res.data : res;
+                if (data.success || data.code === 200) {
+                    BackendToast.success('<?= __('站点保存成功') ?>');
+                    setTimeout(function() { window.location.reload(); }, 1000);
+                } else {
+                    BackendToast.error(data.message || data.msg || '<?= __('保存失败') ?>');
+                }
+            })
+            .catch(function() {
+                BackendToast.error('<?= __('请求失败') ?>');
+            });
+    });
+    
+    document.getElementById('addSiteOffcanvas').addEventListener('hidden.bs.offcanvas', function() {
+        document.getElementById('offcanvasTitle').textContent = '<?= __('添加站点') ?>';
+        document.getElementById('siteForm').reset();
+        document.getElementById('site_id').value = '';
+        document.getElementById('is_enabled').checked = true;
+    });
+})();
+</script>

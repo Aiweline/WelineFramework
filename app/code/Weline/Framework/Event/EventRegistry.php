@@ -14,8 +14,10 @@ namespace Weline\Framework\Event;
 /**
  * 事件注册表管理
  * 管理 generated/events.php 文件的读取和写入
+ *
+ * 实现 EventRegistryInterface，供 EventsManager 等依赖抽象而非具体类（DIP）。
  */
-class EventRegistry
+class EventRegistry implements EventRegistryInterface
 {
     private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'events.php';
 
@@ -1012,6 +1014,35 @@ class EventRegistry
         $regex = '/^' . $regex . '$/';
         
         return (bool) preg_match($regex, $eventName);
+    }
+
+    /**
+     * 快速判断某个事件是否存在至少一个观察者（仅基于注册表，不回退扫描 XML）。
+     *
+     * 用于在性能敏感路径（如 AbstractModel::save 动态模型事件）上，
+     * 避免为「没有任何观察者」的事件触发昂贵的事件系统初始化。
+     */
+    public function hasObservers(string $eventName): bool
+    {
+        $registry = $this->getRegistry();
+
+        // 1. 精确事件：直接检查 observers 是否非空
+        if (!empty($registry['events'][$eventName]['observers'] ?? [])) {
+            return true;
+        }
+
+        // 2. 动态事件：仅当某个动态模式匹配且该模式本身有观察者时，视为「有观察者」
+        $dynamicPatterns = $registry['dynamic_patterns'] ?? [];
+        foreach ($dynamicPatterns as $pattern => $patternInfo) {
+            if (empty($patternInfo['observers'] ?? [])) {
+                continue;
+            }
+            if ($this->matchPattern($pattern, $eventName)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
