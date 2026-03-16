@@ -18,7 +18,8 @@
  * logo.width => Logo宽度:number:40|px
  * 
  * group:navigation => 导航设置
- * navigation.items => 导航项配置:textarea:Features=>#features\r\nServices=>#services\r\nAbout=>#stats\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
+ * navigation.items => 导航项配置:textarea:Features=>#features\r\nServices=>#services\r\nAbout=>#stats\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Open Account
  * navigation.cta_url => CTA按钮链接:text:#hero
@@ -48,28 +49,52 @@ $logoText = $config['logo.text'] ?? 'VaultPay';
 $logoWidth = $config['logo.width'] ?? 40;
 
 // 导航配置
+$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Features=>#features\nServices=>#services\nAbout=>#stats\nFAQ=>#faq\nContact=>/contact";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Open Account';
 $ctaUrl = $config['navigation.cta_url'] ?? '#hero';
 
-// 解析导航项
+// 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
 $navItems = [];
-$lines = preg_split('/[\r\n]+/', $navItemsRaw);
-foreach ($lines as $line) {
-    $line = trim($line);
-    if (empty($line)) continue;
-    
-    $parts = explode('=>', $line, 2);
-    $name = trim($parts[0] ?? '');
-    $url = trim($parts[1] ?? '#');
-    
-    if (!empty($name)) {
-        $navItems[] = [
-            'name' => $name,
-            'url' => $url ?: '#',
-        ];
+$page = $this->getData('page');
+if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
+    $headerPages = $page->getHeaderNavigationPages(10);
+    foreach ($headerPages as $navPage) {
+        $type = $navPage['type'] ?? '';
+        $labelKey = 'navigation.label_' . $type;
+        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
+        $title = $navPage['title'] ?? '';
+        $url = $navPage['url'] ?? '/';
+        if (isset($navPage['type']) && $navPage['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
+            $title = __('Home');
+            $url = '/';
+        }
+        $navItems[] = ['name' => $configuredLabel !== '' ? $configuredLabel : $title, 'url' => $url];
     }
+}
+if ($useCustomLinks || empty($navItems)) {
+    $navItems = [];
+    $lines = preg_split('/[\r\n]+/', $navItemsRaw);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) {
+            $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
+        }
+    }
+}
+if (empty($navItems)) {
+    $navItems = [
+        ['name' => 'Features', 'url' => '#features'],
+        ['name' => 'Services', 'url' => '#services'],
+        ['name' => 'About', 'url' => '#stats'],
+        ['name' => 'FAQ', 'url' => '#faq'],
+        ['name' => 'Contact', 'url' => '/contact'],
+    ];
 }
 
 $instanceId = 'fh-nav-' . uniqid();
@@ -78,6 +103,8 @@ $instanceId = 'fh-nav-' . uniqid();
 <nav class="fh-nav" id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
+            background: <?= htmlspecialchars($navBg) ?>;
+            backdrop-filter: blur(10px);
             padding: 0 20px;
             height: 80px;
             display: flex;

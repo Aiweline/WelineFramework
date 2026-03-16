@@ -81,6 +81,11 @@ class Router implements RouterInterface
                     return;
                 }
             }
+            // 无站点（如 localhost）时也重写到 PageBuilder，由控制器尝试加载 website_id=0 的首页，避免根路径预览为空
+            $path = '/pagebuilder/frontend/page/view';
+            $rule['module'] = 'GuoLaiRen_PageBuilder';
+            $rule['handle'] = '';
+            $_GET['handle'] = '';
             return;
         }
         

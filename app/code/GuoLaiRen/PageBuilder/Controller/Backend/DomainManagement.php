@@ -3482,10 +3482,15 @@ class DomainManagement extends BaseController
     public function postBatchRemoveSync(): string
     {
         try {
-            $domainIds = $this->request->getParam('domain_ids', []);
-
-            if (\is_string($domainIds)) {
-                $domainIds = \json_decode($domainIds, true) ?: [];
+            // 使用 null 默认值避免 getParam 对 "[142]" 做 (array) 强转得到 ["[142]"]，导致 intval 后变空
+            $domainIds = $this->request->getParam('domain_ids', null);
+            if ($domainIds === null || $domainIds === '') {
+                $domainIds = [];
+            } elseif (\is_string($domainIds)) {
+                $domainIds = \json_decode($domainIds, true);
+                $domainIds = \is_array($domainIds) ? $domainIds : [];
+            } elseif (!\is_array($domainIds)) {
+                $domainIds = [];
             }
             $domainIds = \array_filter(\array_map('intval', $domainIds));
 

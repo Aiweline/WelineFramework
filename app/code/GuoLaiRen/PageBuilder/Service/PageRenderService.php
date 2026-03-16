@@ -21,6 +21,7 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\Template;
@@ -129,7 +130,7 @@ class PageRenderService
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
         // 获取当前语言
-        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
+        $currentLocale = $locale ?: State::getLang();
         
         // 构建样式配置
         $finalSettings = $this->buildStyleSettings($page, $styleCode, $currentLocale, $tempStyleCode);
@@ -138,17 +139,19 @@ class PageRenderService
         $isVirtualPage = !$page->getId();
         
         // 获取布局配置（通过 LayoutOwnerResolver 统一处理 layout_page_id 和 header/footer 继承）
-        // 可视化编辑模式下允许访问草稿状态首页的 header/footer
-        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer，避免页面 DB 为 default 时仍显示 default 头部
-        $forBackend = ($mode === self::MODE_VISUAL);
+        // live 与 visual 使用同一套布局数据源（forBackend=true），保证前台渲染与预览/可视化一致；仅 visual 注入编辑脚本
+        // 预览时传入 tempStyleCode，使“无自定义布局”时按当前预览样式加载默认 header/footer
+        $forBackend = ($mode === self::MODE_VISUAL || $mode === self::MODE_LIVE);
         $layoutConfig = $this->layoutOwnerResolver->getFullLayoutConfig($page, $forBackend, $tempStyleCode);
-        
         // 获取布局拥有者页面ID（用于可视化编辑时传递给脚本）
         $layoutOwnerPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageId($page);
         $this->assign('layout_owner_page_id', $layoutOwnerPageId);
         
-        // 获取布局页面信息（如果使用外部布局页面）
-        $layoutPageInfo = $isVirtualPage ? null : $this->layoutOwnerResolver->getLayoutPageInfo($page);
+        // 获取布局页面信息：使用外部布局时返回该页面信息，使用自身布局时返回当前页面信息，保证模板始终有值
+        $layoutPageInfo = null;
+        if (!$isVirtualPage) {
+            $layoutPageInfo = $this->layoutOwnerResolver->getLayoutPageInfo($page);
+        }
         $this->assign('layout_page_info', $layoutPageInfo);
         
         // 获取本地化内容（虚拟页面跳过数据库查询）
@@ -176,77 +179,53 @@ class PageRenderService
             $this->loadBlogData($page);
         }
         
-        // 若主题提供 layout.phtml（含完整 <head> 与文档结构），优先使用，避免 head 为空、样式错位
-        $layoutPhtmlPath = $this->pathResolver->getTemplatePath($styleCode) . '/layout.phtml';
-        if (($mode === self::MODE_LIVE || $mode === self::MODE_PREVIEW) && is_file($layoutPhtmlPath)) {
-            $this->assign('lang', $currentLocale ?: 'en');
-            $layoutHtml = $this->fetch("GuoLaiRen_PageBuilder::templates/style/{$styleCode}/layout.phtml");
-            $layoutHtml = $this->injectHeaderCustomCode($layoutHtml, $page);
-            $layoutHtml = $this->injectFooterCustomCode($layoutHtml, $page);
-            if ($mode === self::MODE_PREVIEW) {
-                $previewBoot = '<script>(function(){ try { window.__PAGEBUILDER_PREVIEW__ = true; var url = new URL(window.location.href); if (!url.searchParams.get("preview")) { url.searchParams.set("preview", "1"); window.history.replaceState({}, document.title, url.toString()); } } catch(e) {} })();</script>';
-                $layoutHtml = preg_replace('/(<body[^>]*>)/i', '$1' . "\n" . $previewBoot, $layoutHtml, 1);
-            }
-            return $layoutHtml;
-        }
-        
-        // 渲染 header/content/footer
+        // live/preview 与 MODE_VISUAL 走同一套渲染逻辑：用 renderRegion 按区域渲染组件，仅最后包装不同（live 用 renderLiveOrPreviewDocument，visual 用 renderVisualMode）
+        // 不再用 layout.phtml 分支，避免与可视化渲染路径不一致
         $stylePath = "GuoLaiRen_PageBuilder::templates/style/{$styleCode}";
-        
-        // 获取页面类型
         $pageType = $page->getData(Page::schema_fields_TYPE);
-        
-        // 获取页面类型对应的布局信息
         $layoutInfo = $this->getLayoutInfoForPageType($styleCode, $pageType);
         $this->assign('page_type', $pageType);
         $this->assign('layout_info', $layoutInfo);
-        
-        // 如果页面没有自定义布局配置，加载该页面类型的默认布局配置
-        // 注意：需要检查区域是否真的有有效组件，而不仅仅是非空数组
         $hasCustomHeader = $this->regionHasValidComponents($layoutConfig['header'] ?? null);
         $hasCustomContent = $this->regionHasValidComponents($layoutConfig['content'] ?? null);
         $hasCustomFooter = $this->regionHasValidComponents($layoutConfig['footer'] ?? null);
         $hasCustomLayout = $hasCustomHeader || $hasCustomContent || $hasCustomFooter;
-        
-        // 如果 header、content 或 footer 没有有效组件，尝试从默认配置加载
+        // 可视化模式：不拿默认配置覆盖 header/footer，只用刚读取的布局数据，避免渲染出旧数据
+        $allowDefaultHeaderFooter = ($mode !== self::MODE_VISUAL);
         if (!$hasCustomHeader || !$hasCustomContent || !$hasCustomFooter) {
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-            
-            // 如果 header 为空，使用默认 header
-            if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
+            if ($allowDefaultHeaderFooter && !$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
                 $layoutConfig['header'] = $defaultLayoutConfig['header'];
                 $this->assign('using_default_header', true);
             }
-            
-            // 如果 content 为空，使用默认 content
             if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
                 $layoutConfig['content'] = $defaultLayoutConfig['content'];
                 $this->assign('using_default_content', true);
             }
-            
-            // 如果 footer 为空，使用默认 footer
-            if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
+            if ($allowDefaultHeaderFooter && !$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
                 $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
                 $this->assign('using_default_footer', true);
             }
-            
-            // 更新布局配置
             $this->assign('layout_config', $layoutConfig);
         }
-        
         if (!$hasCustomLayout && $pageType) {
-            // 加载页面类型的默认布局配置
             $defaultLayoutConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-            
-            if (!empty($defaultLayoutConfig['header']) || 
-                !empty($defaultLayoutConfig['content']) || 
-                !empty($defaultLayoutConfig['footer'])) {
-                $layoutConfig = $defaultLayoutConfig;
+            $hasDefault = !empty($defaultLayoutConfig['header']) || !empty($defaultLayoutConfig['content']) || !empty($defaultLayoutConfig['footer']);
+            if ($hasDefault) {
+                // 与可视化一致：只填充空区域，不整块替换，避免覆盖已读取的 header/footer
+                if (!$hasCustomHeader && !empty($defaultLayoutConfig['header'])) {
+                    $layoutConfig['header'] = $defaultLayoutConfig['header'];
+                }
+                if (!$hasCustomContent && !empty($defaultLayoutConfig['content'])) {
+                    $layoutConfig['content'] = $defaultLayoutConfig['content'];
+                }
+                if (!$hasCustomFooter && !empty($defaultLayoutConfig['footer'])) {
+                    $layoutConfig['footer'] = $defaultLayoutConfig['footer'];
+                }
                 $this->assign('layout_config', $layoutConfig);
                 $this->assign('using_default_layout', true);
             }
         }
-        
         // 检查是否使用组件化渲染
         $useComponentRendering = !empty($layoutConfig) && (
             !empty($layoutConfig['header']) || 
@@ -483,7 +462,10 @@ class PageRenderService
         foreach (['header', 'content', 'footer'] as $region) {
             if (!empty($layoutConfig[$region])) {
                 foreach ($layoutConfig[$region] as $component) {
-                    $code = $component['code'] ?? '';
+                    $code = $component['code'] ?? $component['component'] ?? '';
+                    if (!is_string($code)) {
+                        continue;
+                    }
                     if (in_array($code, $blogComponents) || strpos($code, 'blog') !== false) {
                         return true;
                     }
@@ -778,30 +760,58 @@ class PageRenderService
         if (empty($config)) {
             return [];
         }
-        
-        // 如果已经是正确的组件数组格式 [{code: ..., ...}, ...]
-        if (is_array($config) && isset($config[0]) && isset($config[0]['code'])) {
-            return $config;
-        }
-        
-        // 如果是 PageLayout.exportConfig() 格式的 header/footer: {component: ..., config: ...}
-        if (is_array($config) && isset($config['component'])) {
+        // 必须先识别 PageLayout.exportConfig() 单对象格式，否则会被下面的「首元素为字符串」误判为字符串数组导致 config 丢失
+        if (is_array($config) && isset($config['component']) && !isset($config[0])) {
             $component = $config['component'];
             if (empty($component)) {
                 return [];
             }
+            $rawConfig = $config['config'] ?? [];
             return [
                 [
                     'code' => $component,
                     'enabled' => true,
-                    'config' => $config['config'] ?? [],
+                    'config' => $this->ensureComponentConfigArray($rawConfig),
                 ]
             ];
         }
-        
+        // 数组且元素为字符串（如 ['header-nav']）→ 转为 [{code, enabled, config}]
+        if (is_array($config)) {
+            $first = reset($config);
+            if (is_string($first)) {
+                $out = [];
+                foreach ($config as $c) {
+                    $out[] = ['code' => $c, 'enabled' => true, 'config' => []];
+                }
+                return $out;
+            }
+        }
+        // 如果已经是正确的组件数组格式 [{code: ..., ...}, ...]
+        if (is_array($config) && isset($config[0]) && is_array($config[0]) && isset($config[0]['code'])) {
+            $out = [];
+            foreach ($config as $item) {
+                $item['config'] = $this->ensureComponentConfigArray($item['config'] ?? []);
+                $out[] = $item;
+            }
+            return $out;
+        }
+        // 组件数组但使用 component 键：[{component: ..., config: ...}]，统一为 code 并保留 config
+        if (is_array($config) && isset($config[0]) && is_array($config[0]) && isset($config[0]['component'])) {
+            return array_map(function($item) {
+                return [
+                    'code' => $item['component'] ?? '',
+                    'enabled' => $item['enabled'] ?? true,
+                    'config' => $this->ensureComponentConfigArray($item['config'] ?? []),
+                ];
+            }, $config);
+        }
         // 如果是带有 code 的单组件配置 {code: ..., config: ...}
         if (is_array($config) && isset($config['code'])) {
-            return [$config];
+            $item = $config;
+            if (array_key_exists('config', $item)) {
+                $item['config'] = $this->ensureComponentConfigArray($item['config'] ?? []);
+            }
+            return [$item];
         }
         
         // content 区域可能直接是组件数组（不需要转换）
@@ -818,7 +828,7 @@ class PageRenderService
                         return [
                             'code' => $item['component'] ?? '',
                             'enabled' => $item['enabled'] ?? true,
-                            'config' => $item['config'] ?? [],
+                            'config' => $this->ensureComponentConfigArray($item['config'] ?? []),
                         ];
                     }, $config);
                 }
@@ -826,6 +836,43 @@ class PageRenderService
         }
         
         return [];
+    }
+    
+    /**
+     * 保证组件 config 为数组（模板期望 array；若为 JSON 字符串则解码）
+     */
+    private function ensureComponentConfigArray($config): array
+    {
+        if (is_array($config)) {
+            return $config;
+        }
+        if (is_string($config)) {
+            $decoded = json_decode($config, true);
+            return is_array($decoded) ? $decoded : [];
+        }
+        return [];
+    }
+    
+    /**
+     * 保证 layout_config 内各区域组件项的 code 均为字符串（供 layout.phtml 等模板 htmlspecialchars(code) 使用）
+     */
+    private function ensureLayoutConfigComponentCodesString(array $layoutConfig): array
+    {
+        foreach (['header', 'content', 'footer'] as $region) {
+            if (empty($layoutConfig[$region]) || !is_array($layoutConfig[$region])) {
+                continue;
+            }
+            foreach ($layoutConfig[$region] as $i => $comp) {
+                if (!is_array($comp)) {
+                    continue;
+                }
+                $code = $comp['code'] ?? $comp['component'] ?? '';
+                if (!is_string($code)) {
+                    $layoutConfig[$region][$i]['code'] = '';
+                }
+            }
+        }
+        return $layoutConfig;
     }
     
     /**
@@ -872,12 +919,16 @@ class PageRenderService
         
         $componentIndex = 0;
         foreach ($components as $componentConfig) {
-            $code = $componentConfig['code'] ?? '';
+            $code = $componentConfig['code'] ?? $componentConfig['component'] ?? '';
+            if (!is_string($code)) {
+                $componentIndex++;
+                continue;
+            }
             $enabled = $componentConfig['enabled'] ?? true;
-            $config = $componentConfig['config'] ?? [];
+            $config = $this->ensureComponentConfigArray($componentConfig['config'] ?? []);
             $componentTemplateCode = $componentConfig['template_code'] ?? '';
             
-            if (!$enabled || empty($code)) {
+            if (!$enabled || $code === '') {
                 $componentIndex++;
                 continue;
             }
@@ -1144,7 +1195,7 @@ class PageRenderService
         string $styleCode,
         string $mode
     ): string {
-        // 预览标记脚本（preview 和 visual 模式都需要）
+        // 预览标记脚本（preview 和 visual 模式需要）
         $previewBoot = '';
         if ($mode !== self::MODE_LIVE) {
             $previewBoot = '<script>(function(){
@@ -1164,7 +1215,7 @@ class PageRenderService
             return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
         }
         
-        // preview 和 live 模式：输出完整 HTML 文档，主题样式放入 <head>，避免 head 为空、样式错位
+        // preview 和 live 模式：输出完整 HTML 文档
         return $this->renderLiveOrPreviewDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page, $styleCode);
     }
     
