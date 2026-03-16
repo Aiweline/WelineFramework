@@ -216,19 +216,18 @@ class MigrationService
     }
     
     /**
-     * 获取模块的所有迁移文件
-     * 
+     * 获取模块的所有迁移文件（基于已注册模块的 base_path，不扫描未知路径）
+     *
      * @param string $moduleName 模块名称
      * @return array
      */
     public function getModuleMigrations(string $moduleName): array
     {
-        $migrationPath = "app/code/{$moduleName}/Setup/Db/Migration/";
-        
-        if (!is_dir($migrationPath)) {
+        $migrationPath = $this->getMigrationPath($moduleName);
+        if ($migrationPath === '' || !is_dir($migrationPath)) {
             return [];
         }
-        
+
         $files = glob($migrationPath . "*.php");
         $migrations = [];
         
@@ -257,17 +256,15 @@ class MigrationService
     public function getPendingMigrations(string $moduleName): array
     {
         $allMigrations = $this->getModuleMigrations($moduleName);
-        $installedMigrations = $this->migrationModel->getInstalledMigrations($moduleName);
-        
-        $installedFiles = array_column($installedMigrations, 'migration_file');
-        
+        $installedFiles = $this->migrationModel->getInstalledMigrationFiles($moduleName);
+
         $pending = [];
         foreach ($allMigrations as $migration) {
-            if (!in_array($migration['filename'], $installedFiles)) {
+            if (!in_array($migration['filename'], $installedFiles, true)) {
                 $pending[] = $migration;
             }
         }
-        
+
         return $pending;
     }
     

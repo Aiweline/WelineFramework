@@ -18,6 +18,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Compiler\SqliteCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
@@ -61,6 +62,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function fetch(string $model_class = ''): mixed
     {
+        $traceOperation = $this->fetch_type ?: 'query';
+        $traceTable = $this->table !== '' ? $this->table : 'unknown';
+        $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
+        $dbTraceStart = 0.0;
+        $dbTraceSql = '';
+        if (RequestLifecycleTrace::isEnabled()) {
+            $dbTraceStart = microtime(true);
+            try {
+                $dbTraceSql = $this->getSqlWithBounds($this->sql);
+            } catch (\Throwable) {
+                $dbTraceSql = $this->sql;
+            }
+        }
+        try {
         // Development SQL logging - log SQL with actual values
         try {
             if (Env::get('log.dev_sql.enabled', false)) {
@@ -286,6 +301,25 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         if ($this->table_alias !== 'main_table') $this->alias('main_table');
         //        $this->reset();
         return $result;
+        } finally {
+            if ($dbTraceStart > 0.0) {
+                $duration = (microtime(true) - $dbTraceStart) * 1000;
+                if ($duration < 0) {
+                    $duration = 0;
+                }
+                RequestLifecycleTrace::recordSpan(
+                    $dbTraceLabel,
+                    $duration,
+                    'db',
+                    null,
+                    [
+                        'sql' => $dbTraceSql,
+                        'operation' => $traceOperation,
+                        'table' => $traceTable,
+                    ]
+                );
+            }
+        }
     }
 
     public function truncate(string $backup_file = '', string $table = ''): static

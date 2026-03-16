@@ -19,6 +19,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Core
 {
@@ -250,15 +251,21 @@ class Core
      */
     public function start()
     {
-        # ----------事件：路由开始前 开始------------
-        // 性能优化：使用静态变量缓存 EventsManager 实例
+        # ----------事件：路由开始前（控制器链路二层）------------
         static $eventManager = null;
         if ($eventManager === null) {
             $eventManager = ObjectManager::getInstance(EventsManager::class);
         }
         $eventData = ['router' => $this];
+        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::pushCurrentParent('controller_chain::router_before_start');
+        }
         $eventManager->dispatch('Weline_Framework_Router::before_start', $eventData);
-        # ----------事件：路由开始前 结束------------
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
+        }
         
         # 获取URL
         $this->url = $url = $this->processUrl();
@@ -878,27 +885,39 @@ class Core
         }
         
         /**@var \Weline\Framework\Controller\Core $dispatch */
-//        $dispatch->assign($this->request->getData());
-        /**@var EventsManager $eventManager */
-        
         $eventManager = ObjectManager::getInstance(EventsManager::class);
-        
         $eventData = ['route' => $this];
-        
+
+        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::pushCurrentParent('controller_chain::route_before');
+        }
         $eventManager->dispatch('Weline_Framework_Router::route_before', $eventData);
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
+        }
+
+        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
         $dispatch->__setModuleInfo($this->router);
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
+        }
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
             $dispatch_class = $dispatch::class;
             throw new Exception(__('%{1}: 控制器方法 %{2} 不存在!', [$dispatch_class, $method]));
         }
-        // 开启输出缓冲区以捕获控制器输出
         ob_start();
-        
+
+        // 将 action_execute 设为当前父节点，控制器内通过 RequestLifecycleTrace::recordSpan() 打的子 span 会挂到本节点下，便于拆分 1.x s 耗时
+        $actionSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::pushCurrentParent('controller_chain::action_execute');
+        }
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
-            
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
             $currentHeaders = headers_list();
             foreach ($currentHeaders as $header) {
@@ -912,10 +931,18 @@ class Core
                 }
             }
             
-            # ----------事件：处理url之前 开始------------
+            # ----------事件：route_after（控制器链路二层）------------
+            $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('controller_chain::route_after');
+            }
             $resultData = new DataObject(['result' => $result, 'route' => $this]);
             $eventData = ['data' => $resultData];
             $eventManager->dispatch('Weline_Framework_Router::route_after', $eventData);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
+            }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             $output = ob_get_clean();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
@@ -942,6 +969,11 @@ class Core
                 ob_end_clean();
             }
             throw $e;
+        } finally {
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('controller_chain::action_execute', (microtime(true) - $actionSpanStart) * 1000, 'controller');
+            }
         }
 
 //        file_put_contents(__DIR__.'/'.$cache_key.'.html', $result);

@@ -7,12 +7,20 @@ use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\Role;
 use Weline\Acl\Model\RoleAccess;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\StateManager;
 
 class AclService implements AclServiceInterface
 {
     private Role $roleModel;
     private RoleAccess $roleAccessModel;
     private Acl $aclModel;
+
+    /** 请求级缓存：路由是否受 ACL 保护，同请求内避免重复查库，WLS 下由 StateManager 重置 */
+    private static array $routeProtectedCache = [];
+    /** 请求级缓存：角色 ACL 条目列表，同请求内避免重复查库，WLS 下由 StateManager 重置 */
+    private static array $roleAclEntriesCache = [];
+    private static bool $stateManagerRegistered = false;
 
     public function __construct(
         Role       $roleModel,
@@ -24,6 +32,24 @@ class AclService implements AclServiceInterface
         $this->aclModel = $aclModel;
     }
 
+    private static function registerStateManager(): void
+    {
+        if (self::$stateManagerRegistered) {
+            return;
+        }
+        if (class_exists(StateManager::class)) {
+            StateManager::registerResetCallback('AclService', [self::class, 'resetRequestCache']);
+            self::$stateManagerRegistered = true;
+        }
+    }
+
+    /** WLS 请求结束后清空请求级缓存 */
+    public static function resetRequestCache(): void
+    {
+        self::$routeProtectedCache = [];
+        self::$roleAclEntriesCache = [];
+    }
+
     /**
      * @inheritDoc
      */
@@ -32,13 +58,17 @@ class AclService implements AclServiceInterface
         if ($roleId <= 0) {
             return [];
         }
-        /** @var Role $role */
-        $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
-        if (!$role->getId()) {
-            return [];
+        self::registerStateManager();
+        if (isset(self::$roleAclEntriesCache[$roleId])) {
+            return self::$roleAclEntriesCache[$roleId];
         }
-        // 复用现有 RoleAccess 查询，但只返回数组
-        return $this->roleAccessModel->getRoleAccessListArray($role);
+        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+        $entries = $this->roleAccessModel->getRoleAccessListArrayByRoleId($roleId);
+        if ($t0 > 0) {
+            RequestLifecycleTrace::recordSpan('acl::AclService::getRoleAclEntries_db', (microtime(true) - $t0) * 1000, 'observer');
+        }
+        self::$roleAclEntriesCache[$roleId] = $entries;
+        return $entries;
     }
 
     /**
@@ -90,14 +120,22 @@ class AclService implements AclServiceInterface
         if ($routePath === '') {
             return false;
         }
-
+        self::registerStateManager();
+        if (array_key_exists($routePath, self::$routeProtectedCache)) {
+            return self::$routeProtectedCache[$routePath];
+        }
+        $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $row = $this->aclModel->clear()
             ->where(Acl::schema_fields_ROUTE, $routePath)
             ->limit(1)
             ->find()
             ->fetch();
-
-        return (bool)$row->getId();
+        if ($t0 > 0) {
+            RequestLifecycleTrace::recordSpan('acl::AclService::isRouteProtected_db', (microtime(true) - $t0) * 1000, 'observer');
+        }
+        $protected = (bool)$row->getId();
+        self::$routeProtectedCache[$routePath] = $protected;
+        return $protected;
     }
 
     /**
@@ -145,13 +183,7 @@ class AclService implements AclServiceInterface
         if ($roleId <= 0) {
             return [];
         }
-        /** @var Role $role */
-        $role = ObjectManager::getInstance(Role::class, [], false)->load($roleId);
-        if (!$role->getId()) {
-            return [];
-        }
-
-        $rows = $this->roleAccessModel->getRoleAccessListArray($role);
+        $rows = $this->getRoleAclEntries($roleId);
         if (empty($rows)) {
             return [];
         }

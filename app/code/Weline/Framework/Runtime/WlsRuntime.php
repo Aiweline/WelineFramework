@@ -186,10 +186,16 @@ class WlsRuntime implements RuntimeInterface
             // 语言/货币已在 init() 前通过 parseUrlLangCurrency() 从 URL 提取，run_before 可直接使用
             
             $t1 = \microtime(true);
-            // 触发 run_before 事件
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('run_before');
+            }
             $this->eventManager->dispatch('Weline_Framework::App::run_before');
             $t2 = \microtime(true);
             $timing['run_before_ms'] = \round(($t2 - $t1) * 1000, 2);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('run_before', $timing['run_before_ms'], 'framework');
+            }
             
             // 如果run_before事件耗时过长，记录警告
             if ($timing['run_before_ms'] > 100) {
@@ -220,6 +226,9 @@ class WlsRuntime implements RuntimeInterface
             
             $t3 = \microtime(true);
             $timing['url_parser_ms'] = \round(($t3 - $t2) * 1000, 2);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan('url_parser', $timing['url_parser_ms'], 'framework');
+            }
             
             // WLS 模式：URL 解析后 $_SERVER 已被正确填充，重新调用 Router.__init() 刷新缓存键
             // 必须在此时调用，因为此时 WELINE_* 等关键变量已由 Url::parser() 设置到 $_SERVER
@@ -227,22 +236,41 @@ class WlsRuntime implements RuntimeInterface
             $this->router->__init();
             $routerInitEnd = \microtime(true);
             $timing['router_init_ms'] = \round(($routerInitEnd - $routerInitStart) * 1000, 2);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
+            }
             
-            // 路由处理（含控制器、视图，通常为主要耗时）
+            // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
             $routerStartStart = \microtime(true);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('router_start');
+            }
             $result = $this->router->start();
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+            }
             $routerStartEnd = \microtime(true);
             $timing['router_start_call_ms'] = \round(($routerStartEnd - $routerStartStart) * 1000, 2);
             $t4 = \microtime(true);
             $timing['router_start_ms'] = \round(($t4 - $t3) * 1000, 2);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
+            }
             
             // 触发 run_after 事件
             $runAfterStart = \microtime(true);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('run_after');
+            }
             $data = new \Weline\Framework\DataObject\DataObject(['result' => $result]);
             $this->eventManager->dispatch('Weline_Framework::App::run_after', $data);
             $result = $data->getData('result');
             $runAfterEnd = \microtime(true);
             $timing['run_after_ms'] = \round(($runAfterEnd - $runAfterStart) * 1000, 2);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('run_after', $timing['run_after_ms'], 'framework');
+            }
             $t5 = \microtime(true);
             
             // 如果run_after事件耗时过长，记录警告
@@ -286,7 +314,10 @@ class WlsRuntime implements RuntimeInterface
                 return \json_encode($result);
             }
             
-            return (string) $result;
+            $resultStr = (string) $result;
+            // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
+            $resultStr = TelemetryBroadcaster::broadcast($resultStr, $request);
+            return $resultStr;
             
         } catch (\Weline\Framework\Http\StaticFileException $staticEx) {
             // 静态文件异常：转换为文件响应

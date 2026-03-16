@@ -12,8 +12,10 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\LayoutPathResolver;
@@ -27,11 +29,41 @@ use Weline\Theme\Model\WelineTheme;
  */
 class ControllerFetchFileBefore implements ObserverInterface
 {
+    /** 请求级缓存，WLS 下由 StateManager 重置 */
+    private static array $themeByAreaCache = [];
+    private static array $layoutConfigCache = [];
+    private static array $colorsCache = [];
+    private static array $resolvedLayoutPathCache = [];
+    /** 请求级布局 meta/params 缓存，用于“源未改不重编译”时复用 */
+    private static array $layoutParamsRequestCache = [];
+    private static bool $stateManagerRegistered = false;
+
     private WelineTheme $welineTheme;
 
     public function __construct(WelineTheme $welineTheme)
     {
         $this->welineTheme = $welineTheme;
+    }
+
+    private static function registerStateManager(): void
+    {
+        if (self::$stateManagerRegistered) {
+            return;
+        }
+        if (class_exists(StateManager::class)) {
+            StateManager::registerResetCallback('Theme_ControllerFetchFileBefore', [self::class, 'resetRequestCache']);
+            self::$stateManagerRegistered = true;
+        }
+    }
+
+    /** WLS 请求结束后清空请求级缓存 */
+    public static function resetRequestCache(): void
+    {
+        self::$themeByAreaCache = [];
+        self::$layoutConfigCache = [];
+        self::$colorsCache = [];
+        self::$resolvedLayoutPathCache = [];
+        self::$layoutParamsRequestCache = [];
     }
 
     public function execute(Event &$event): void
@@ -60,7 +92,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         
         // 获取当前主题：优先使用预览主题（URL 参数或 Session），否则使用激活主题
         $theme = $this->resolveThemeForLayout($request, $area);
-        
+
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
 
@@ -84,16 +116,9 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $layoutOption = isset($parts[1]) && !empty(trim($parts[1])) ? trim($parts[1]) : null; // 布局选项：auth（代码中明确指定，优先级最高）
             }
 
-            // 从主题配置中动态获取布局配置
-            // 直接使用 ThemeData 读取布局配置
-            // 设置当前主题和区域
-            ThemeData::setCurrentTheme($theme);
-            ThemeData::setCurrentArea($area);
-            
-            // 解析 scope（优先从预览模式获取，其次从请求参数获取，最后使用 default）
+            // 先解析 scope 和 configCacheKey，再按需 performanceLoad（有 layoutConfig 缓存则跳过）
             $scope = 'default';
             try {
-                // 检查预览模式
                 if (class_exists(\Weline\Theme\Helper\PreviewManager::class)) {
                     if (\Weline\Theme\Helper\PreviewManager::isPreviewMode()) {
                         $previewScope = \Weline\Theme\Helper\PreviewManager::getPreviewScope($area);
@@ -102,13 +127,10 @@ class ControllerFetchFileBefore implements ObserverInterface
                         }
                     }
                 }
-                
-                // 如果不在预览模式，尝试从请求参数获取
                 if ($scope === 'default' && $request) {
                     $paramName = 'scope_' . $area;
                     $scopeParam = $request->getParam($paramName) ?? $request->getParam('scope');
                     if ($scopeParam) {
-                        // 处理 scope 格式（可能是 frontend/default）
                         if (str_contains($scopeParam, '/')) {
                             [$maybeArea, $rest] = explode('/', $scopeParam, 2);
                             if ($maybeArea === $area) {
@@ -122,9 +144,21 @@ class ControllerFetchFileBefore implements ObserverInterface
             } catch (\Throwable $e) {
                 // 忽略错误，使用默认 scope
             }
-            
-            // 直接使用 ThemeData 读取布局配置
-            $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
+
+            self::registerStateManager();
+            $themeId = $theme->getId() ?: 0;
+            $configCacheKey = "{$themeId}_{$area}_{$scope}";
+            $didPerformanceLoad = false;
+            if (isset(self::$layoutConfigCache[$configCacheKey])) {
+                $layoutConfig = self::$layoutConfigCache[$configCacheKey];
+            } else {
+                ThemeData::setCurrentTheme($theme);
+                ThemeData::setCurrentArea($area);
+                ThemeData::performanceLoad();
+                $didPerformanceLoad = true;
+                $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
+                self::$layoutConfigCache[$configCacheKey] = $layoutConfig;
+            }
 
             // 配置来自元数据配置的布局
             if(isset($layoutConfig[$layoutType]) && $layoutOption !== $layoutConfig[$layoutType]){
@@ -159,17 +193,62 @@ class ControllerFetchFileBefore implements ObserverInterface
                 'theme' => $theme, // 主题对象本身，供模板直接使用
             ];
             $template->setData('theme', $themeData);
-            
-            // 性能极客模式：在事件中统一读取所有CSS颜色变量，转换为colors数组，供所有模板直接使用
-            // 避免每个模板都重复读取和处理，提升性能
-            $colors = self::loadThemeColors($area, $scope, $theme);
+
+            if (isset(self::$colorsCache[$configCacheKey])) {
+                $colors = self::$colorsCache[$configCacheKey];
+            } else {
+                $colors = self::loadThemeColors($area, $scope, $theme);
+                self::$colorsCache[$configCacheKey] = $colors;
+            }
             $template->setData('colors', $colors);
-            
-            // 构建布局模板路径
+
             $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
-            // 检查布局模板是否存在（支持主题继承）
-            $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+            $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
+            if (array_key_exists($pathCacheKey, self::$resolvedLayoutPathCache)) {
+                $resolvedLayoutPath = self::$resolvedLayoutPathCache[$pathCacheKey];
+            } else {
+                $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
+                self::$resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+            }
             if ($resolvedLayoutPath) {
+                $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
+                // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
+                $sourcePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
+                $lang = class_exists(Cookie::class) ? Cookie::getLang() : 'zh_Hans_CN';
+                $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
+                if ($sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
+                    && filemtime($sourcePath) <= filemtime($compiledPath)
+                    && isset(self::$layoutParamsRequestCache[$paramsCacheKey])) {
+                    ThemeData::setCurrentTheme($theme);
+                    ThemeData::setCurrentArea($area);
+                    $themeData = [
+                        'area' => $area,
+                        'colorMode' => $welineThemeColorMode,
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'theme' => $theme,
+                    ];
+                    $template->setData('theme', $themeData);
+                    $template->setData('colors', self::$colorsCache[$configCacheKey] ?? []);
+                    $template->setData('meta', self::$layoutParamsRequestCache[$paramsCacheKey]);
+                    $eventData->setData('contentTemplate', $fileName);
+                    $eventData->setData('fileName', $resolvedLayoutPath);
+                    $eventData->setData('layoutType', $layoutType);
+                    $eventData->setData('layoutOption', $layoutOption);
+                    $template->setData('contentTemplate', $fileName);
+                    $template->setData('fileName', $resolvedLayoutPath);
+                    if (!$template->getData('title') && !empty(self::$layoutParamsRequestCache[$paramsCacheKey]['title'])) {
+                        $template->assign('title', self::$layoutParamsRequestCache[$paramsCacheKey]['title']);
+                    }
+                    return;
+                }
+
+                ThemeData::setCurrentTheme($theme);
+                ThemeData::setCurrentArea($area);
+                if (!$didPerformanceLoad) {
+                    ThemeData::performanceLoad();
+                }
+
                 // 将原模板路径保存为变量，供布局模板使用
                 // 布局模板可以通过 $this->getData('contentTemplate') 获取原模板路径
                 // 然后使用 $this->fetch($contentTemplate) 渲染原模板内容
@@ -236,8 +315,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 }else{
                     $metaData = $layoutParams;
                 }
-                // 关于主题的元数据传递给模板数据
-                ThemeData::performanceLoad();
+                // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
                 // get() 方法用于获取 .value 格式的配置值，对于非 .value 格式会调用 MetaData::get()
                 // MetaData::get() 会返回 MetaData 对象，创建对象时会进行数据库查询，可能导致阻塞
@@ -250,7 +328,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
-                
+                self::$layoutParamsRequestCache[$paramsCacheKey] = $metaData;
+
                 // 如果控制器没有设置标题，则从 meta 中获取默认标题并设置
                 if (!$template->getData('title') && !empty($metaData['title'])) {
                     $template->assign('title', $metaData['title']);
@@ -289,6 +368,10 @@ class ControllerFetchFileBefore implements ObserverInterface
      */
     private function resolveThemeForLayout(?Request $request, string $area): WelineTheme
     {
+        self::registerStateManager();
+        if (isset(self::$themeByAreaCache[$area])) {
+            return self::$themeByAreaCache[$area];
+        }
         $previewThemeId = 0;
         $previewThemeArea = '';
         if ($request) {
@@ -305,13 +388,18 @@ class ControllerFetchFileBefore implements ObserverInterface
         if ($previewThemeArea === '' && $previewThemeId) {
             $previewThemeArea = $area;
         }
+        $theme = null;
         if ($previewThemeId && $previewThemeArea === $area) {
             $this->welineTheme->load($previewThemeId);
             if ($this->welineTheme->getId()) {
-                return $this->welineTheme;
+                $theme = $this->welineTheme;
             }
         }
-        return $this->welineTheme->getActiveTheme();
+        if ($theme === null) {
+            $theme = $this->welineTheme->getActiveTheme();
+        }
+        self::$themeByAreaCache[$area] = $theme;
+        return $theme;
     }
 
     /**

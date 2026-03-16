@@ -2108,6 +2108,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         $stageNumber++;
 
+        // 步骤 7 前释放步 1–6 可能残留的引用；步骤 7 多观察者+迁移需略高上限，仅本阶段临时 192M
+        gc_collect_cycles();
+        $prevLimit = ini_get('memory_limit');
+        @ini_set('memory_limit', '192M');
+
         // 清理其他
         $this->printing->note($stageNumber . '、触发模块升级后事件...', '系统');
         /**@var EventsManager $eventsManager */
@@ -2157,7 +2162,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 禁用的模块不触发菜单收集等操作，但可以触发其他清理操作
             // 如果需要，可以在这里添加禁用模块的特殊处理逻辑
         }
-        
+
+        if (isset($prevLimit) && $prevLimit !== '') {
+            @ini_set('memory_limit', $prevLimit);
+        }
+
         // 生成 modules.json 用于 E2E 测试用例收集
         $stageNumber++;
         $this->printing->note($stageNumber . '、生成模块信息文件...', '系统');

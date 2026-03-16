@@ -640,9 +640,12 @@ trait TraitTemplate
     protected function fetchFile(string $filename): mixed
     {
         $cache_key = $filename . Cookie::getLangLocal();
-        $cache_filename = $this->viewCache->get($cache_key);
-        if ($cache_filename && is_file($cache_filename)) {
-            return $cache_filename;
+        $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
+        if (!$skipCache) {
+            $cache_filename = $this->viewCache->get($cache_key);
+            if ($cache_filename && is_file($cache_filename)) {
+                return $cache_filename;
+            }
         }
         /*---------观察者模式 检测文件是否被继承-----------*/
         $fileData = new DataObject(['filename' => $filename, 'type' => 'compile', 'object' => $this]);

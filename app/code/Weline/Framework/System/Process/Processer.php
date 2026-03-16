@@ -562,10 +562,11 @@ class Processer
         
         # ===== Linux/Mac 后台模式：proc_open + nohup =====
         if (!IS_WIN && $availableFunctions['proc_open']) {
+            $escapedBp = \escapeshellarg(BP);
             if ($enableLog) {
-                $command = 'cd ' . BP . ' && nohup ' . $pname . ' >> "' . $logFile . '" 2>&1 & echo $!';
+                $command = 'cd ' . $escapedBp . ' && nohup ' . $pname . ' >> "' . $logFile . '" 2>&1 & echo $!';
             } else {
-                $command = 'cd ' . BP . ' && nohup ' . $pname . ' > /dev/null 2>&1 & echo $!';
+                $command = 'cd ' . $escapedBp . ' && nohup ' . $pname . ' > /dev/null 2>&1 & echo $!';
             }
             
             if ($enableLog) {
@@ -596,13 +597,34 @@ class Processer
                     @\fclose($procPipes[0]);
                     $procPipes[0] = null;
                 }
-                // $block=false 时不再等待子 shell 输出 PID，立即关闭管道并返回 0，避免 CLI 卡在“使用说明”后不退出
-                if ($block && isset($procPipes[1])) {
-                    \stream_set_blocking($procPipes[1], true);
-                    $output = \stream_get_contents($procPipes[1]);
-                    $output = \trim($output);
-                    if (\is_numeric($output)) {
-                        $pid = (int)$output;
+                // 非阻塞模式也短暂读取一次 PID 回显，提升后台拉起稳定性（避免“已启动但无法确认”的抖动）
+                if (isset($procPipes[1])) {
+                    if ($block) {
+                        \stream_set_blocking($procPipes[1], true);
+                        $output = \stream_get_contents($procPipes[1]);
+                        $output = \trim($output);
+                        if (\is_numeric($output)) {
+                            $pid = (int)$output;
+                        }
+                    } else {
+                        \stream_set_blocking($procPipes[1], false);
+                        $start = \microtime(true);
+                        $buffer = '';
+                        while ((\microtime(true) - $start) < 0.35) {
+                            $chunk = \fread($procPipes[1], 64);
+                            if ($chunk !== false && $chunk !== '') {
+                                $buffer .= $chunk;
+                                if (\str_contains($buffer, "\n")) {
+                                    break;
+                                }
+                            } else {
+                                \usleep(10_000);
+                            }
+                        }
+                        $output = \trim($buffer);
+                        if (\is_numeric($output)) {
+                            $pid = (int)$output;
+                        }
                     }
                 }
                 if ($block && $pid <= 0) {

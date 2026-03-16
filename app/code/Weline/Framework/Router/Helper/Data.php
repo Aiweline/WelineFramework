@@ -10,7 +10,6 @@
 namespace Weline\Framework\Router\Helper;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\System\File\Io\File;
 
 class Data
 {
@@ -110,18 +109,45 @@ class Data
     
     /**
      * 写入路由到文件（内部方法）
-     * 
+     * 使用流式写入避免大路由数组时 var_export 一次性占用过多内存导致内存耗尽。
+     *
      * @param string $path 文件路径
      * @param array $routers 路由数组
      * @throws \Weline\Framework\App\Exception
      */
     private function writeRoutersToFile(string $path, array &$routers): void
     {
-        $file = new File();
-        $file->open($path, $file::mode_w_add);
-        $text = '<?php return ' . var_export($routers, true) . ';';
-        $file->write($text);
-        $file->close();
+        $this->writeArrayToPhpFile($path, $routers);
+    }
+
+    /**
+     * 将大数组流式写入为 PHP return 文件，逐项 fwrite，避免整表 var_export 占用过多内存。
+     *
+     * @param string $path 文件路径
+     * @param array $data 数组数据
+     * @throws \Weline\Framework\App\Exception
+     */
+    private function writeArrayToPhpFile(string $path, array &$data): void
+    {
+        $dir = dirname($path);
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        $fh = fopen($path, 'wb');
+        if ($fh === false) {
+            throw new \Weline\Framework\App\Exception(__('无法打开文件：%{1}', [$path]));
+        }
+        fwrite($fh, "<?php return [\n");
+        $first = true;
+        foreach ($data as $key => $value) {
+            if (!$first) {
+                fwrite($fh, ",\n");
+            }
+            $first = false;
+            fwrite($fh, var_export($key, true) . ' => ' . var_export($value, true));
+        }
+        fwrite($fh, "\n];\n");
+        fclose($fh);
     }
     
     /**
@@ -133,13 +159,9 @@ class Data
      *
      * @throws \Weline\Framework\App\Exception
      */
-    public function updateModules(array &$modules)
+    public function updateModules(array &$modules): void
     {
-        $file = new File();
-        $file->open(Env::path_MODULES_FILE, $file::mode_w_add);
-        $text = '<?php return ' . var_export($modules, true) . ';';
-        $file->write($text);
-        $file->close();
+        $this->writeArrayToPhpFile(Env::path_MODULES_FILE, $modules);
     }
 
     /**
@@ -256,13 +278,8 @@ class Data
             }
         }
         
-        // 如果有清除操作，重新写入文件
         if ($cleared) {
-            $file = new File();
-            $file->open($path, $file::mode_w_add);
-            $text = '<?php return ' . var_export($routers, true) . ';';
-            $file->write($text);
-            $file->close();
+            $this->writeArrayToPhpFile($path, $routers);
         }
     }
 }
