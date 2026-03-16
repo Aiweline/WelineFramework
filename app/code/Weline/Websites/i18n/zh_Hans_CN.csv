@@ -196,6 +196,49 @@
 "DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
 "[GName] updateNameservers：domain=%{1}, ns=%{2}","[GName] updateNameservers：domain=%{1}, ns=%{2}"
 "GName 默认 DNS 服务器","GName 默认 DNS 服务器"
+"GoDaddy 域名注册商，全球最大的域名注册商之一，支持域名注册、续费、转入、DNS 管理和域名交易。","GoDaddy 域名注册商，全球最大的域名注册商之一，支持域名注册、续费、转入、DNS 管理和域名交易。"
+"API Key","API Key"
+"GoDaddy 平台分配的 API Key","GoDaddy 平台分配的 API Key"
+"API Secret","API Secret"
+使用测试环境,使用测试环境
+否（生产环境）,否（生产环境）
+"是（测试环境 OTE）","是（测试环境 OTE）"
+"Shopper ID","Shopper ID"
+"可选：GoDaddy 账户 ID（用于子账户操作）","可选：GoDaddy 账户 ID（用于子账户操作）"
+"GoDaddy API 配置获取指南","GoDaddy API 配置获取指南"
+"【获取 API Key 和 Secret】","【获取 API Key 和 Secret】"
+"1. 登录 GoDaddy 账号：https://www.godaddy.com/","1. 登录 GoDaddy 账号：https://www.godaddy.com/"
+"2. 访问 API Keys 页面：https://developer.godaddy.com/keys","2. 访问 API Keys 页面：https://developer.godaddy.com/keys"
+"3. 点击「Create New API Key」按钮","3. 点击「Create New API Key」按钮"
+"4. 选择环境：","4. 选择环境："
+"• Production（生产环境）：用于真实操作，需要账户完成实名认证","• Production（生产环境）：用于真实操作，需要账户完成实名认证"
+"• OTE（测试环境）：用于开发测试，可免费申请","• OTE（测试环境）：用于开发测试，可免费申请"
+"5. 复制生成的 Key 和 Secret","5. 复制生成的 Key 和 Secret"
+"6. 将 Key 填入上方「API Key」字段","6. 将 Key 填入上方「API Key」字段"
+"7. 将 Secret 填入上方「API Secret」字段","7. 将 Secret 填入上方「API Secret」字段"
+【注意事项】,【注意事项】
+"• API Secret 只显示一次，请务必保存","• API Secret 只显示一次，请务必保存"
+"• Production API Key 需要账户完成实名认证","• Production API Key 需要账户完成实名认证"
+"• 测试环境（OTE）需要先在 https://developer.godaddy.com/ 注册测试账户","• 测试环境（OTE）需要先在 https://developer.godaddy.com/ 注册测试账户"
+"• API 调用频率限制：Production 60次/分钟，OTE 5次/分钟","• API 调用频率限制：Production 60次/分钟，OTE 5次/分钟"
+"GoDaddy API 连接失败：%{1}","GoDaddy API 连接失败：%{1}"
+域名可注册,域名可注册
+域名已被注册,域名已被注册
+溢价域名，需查询具体价格,溢价域名，需查询具体价格
+域名购买成功，订单ID：%{1},域名购买成功，订单ID：%{1}
+域名购买需要确认，请检查订单状态,域名购买需要确认，请检查订单状态
+域名购买失败：%{1},域名购买失败：%{1}
+"域名未在 GoDaddy 账户中找到","域名未在 GoDaddy 账户中找到"
+"DNS 记录添加失败：%{1}","DNS 记录添加失败：%{1}"
+"DNS 记录更新失败：%{1}","DNS 记录更新失败：%{1}"
+"找不到指定的 DNS 记录","找不到指定的 DNS 记录"
+"DNS 记录删除失败：%{1}","DNS 记录删除失败：%{1}"
+"Nameservers 修改成功","Nameservers 修改成功"
+"Nameservers 修改失败：%{1}","Nameservers 修改失败：%{1}"
+"GoDaddy 默认 DNS 服务器","GoDaddy 默认 DNS 服务器"
+"GoDaddy API Key 不能为空","GoDaddy API Key 不能为空"
+"GoDaddy API Secret 不能为空","GoDaddy API Secret 不能为空"
+服务器返回空响应,服务器返回空响应
 （试运行模式，不会实际删除）,（试运行模式，不会实际删除）
 未发现非法域名记录,未发现非法域名记录
 "发现 %{1} 条非法域名记录：","发现 %{1} 条非法域名记录："
@@ -573,8 +616,6 @@
 "账号 ID（更新时必填）","账号 ID（更新时必填）"
 注册商代码,注册商代码
 账号名称,账号名称
-"API Key","API Key"
-"API Secret","API Secret"
 额外配置,额外配置
 状态,状态
 删除注册商账号,删除注册商账号

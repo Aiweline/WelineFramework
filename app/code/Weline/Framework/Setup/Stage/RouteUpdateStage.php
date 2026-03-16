@@ -276,7 +276,7 @@ class RouteUpdateStage extends AbstractStage
             
             // 一次性写入所有路由文件
             $this->routerHelper->flushBatchRouters();
-            
+
             $this->committed = true;
             $this->clearErrors();
         } catch (\Exception $e) {

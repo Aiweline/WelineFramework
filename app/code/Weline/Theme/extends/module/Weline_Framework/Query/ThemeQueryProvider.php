@@ -53,6 +53,7 @@ class ThemeQueryProvider implements QueryProviderInterface
             'parent_id' => $theme->getData(WelineTheme::schema_fields_PARENT_ID),
             'is_active' => $theme->getData(WelineTheme::schema_fields_IS_ACTIVE),
             'config' => $theme->getData(WelineTheme::schema_fields_CONFIG),
+            'preview_image' => $theme->getData(WelineTheme::schema_fields_PREVIEW_IMAGE),
         ];
     }
 

@@ -23,6 +23,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Debug;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 /**
  * QueryAst - 查询抽象语法树类
@@ -615,23 +616,6 @@ abstract class QueryAst implements QueryInterface
     }
 
     /**
-     * 原生 SQL 条件
-     *
-     * 用于无法通过结构化 where() 表达的复杂条件（如 OR 分组、SQL 函数、字段对比等）。
-     * 条件会被括号包裹后直接嵌入 WHERE 子句，不做字段名引用处理。
-     *
-     * @param string $sql 原生 SQL 条件表达式
-     * @param string $where_logic 与下一个 where 条件的连接符，默认 AND
-     * @return QueryInterface
-     */
-    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface
-    {
-        // 单元素数组在 buildWheres 中被作为原生 SQL 处理（case 1），默认 AND 连接
-        $this->wheres[] = [$sql];
-        return $this;
-    }
-
-    /**
      * 添加子查询到 WHERE 条件
      * 
      * @param string $field 字段名
@@ -899,6 +883,7 @@ abstract class QueryAst implements QueryInterface
 
     public function fetch(string $model_class = ''): mixed
     {
+        $dbTraceStart = 0.0;
         if ($this->PDOStatement === null) {
             return false;
         }
@@ -939,6 +924,17 @@ abstract class QueryAst implements QueryInterface
                 $this->fetch_type = 'update';
             } elseif (str_starts_with($sqlUpper, 'DELETE')) {
                 $this->fetch_type = 'delete';
+            }
+        }
+        if (RequestLifecycleTrace::isEnabled()) {
+            $dbTraceStart = microtime(true);
+        }
+        $dbTraceSql = '';
+        if ($dbTraceStart > 0) {
+            try {
+                $dbTraceSql = $this->getSqlWithBounds($this->sql);
+            } catch (\Throwable) {
+                $dbTraceSql = $this->sql;
             }
         }
         if ($this->batch and $this->fetch_type == 'insert') {
@@ -987,6 +983,21 @@ abstract class QueryAst implements QueryInterface
             }
         }
         $this->batch = false;
+        if ($dbTraceStart > 0) {
+            $op = $this->fetch_type ?: 'query';
+            $table = $this->table !== '' ? $this->table : 'unknown';
+            RequestLifecycleTrace::recordSpan(
+                'db::' . $op . '::' . $table,
+                (microtime(true) - $dbTraceStart) * 1000,
+                'db',
+                null,
+                [
+                    'sql' => $dbTraceSql,
+                    'operation' => $op,
+                    'table' => $table,
+                ]
+            );
+        }
         $data = [];
         if ($model_class) {
             // 确保 $origin_data 是数组或对象，而不是字符串

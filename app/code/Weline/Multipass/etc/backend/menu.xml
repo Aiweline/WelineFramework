@@ -11,6 +11,13 @@
          parent="Weline_Backend::business_operations" 
          icon="mdi mdi-key-link" 
          order="25000">
+        <!-- 站点管理子菜单 -->
+        <menu source="Weline_Multipass::site_management" 
+             name="multipass_site_management" 
+             title="站点管理" 
+             action="multipass/backend/site/index"
+             icon="mdi mdi-server" 
+             order="5"/>
         <!-- Multipass账户管理子菜单 -->
         <menu source="Weline_Multipass::account_management" 
              name="multipass_account_management" 

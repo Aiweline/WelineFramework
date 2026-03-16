@@ -96,6 +96,18 @@ final class FpmStrategy implements SessionStrategyInterface
             return '';
         }
 
+        // 会话已激活时，不能直接调用 session_name()，否则会触发 warning。
+        // - 相同会话：直接复用
+        // - 目标会话不同：先关闭当前会话，后续再切换
+        if (\session_status() === PHP_SESSION_ACTIVE) {
+            $currentId = \session_id();
+            if ($sessionId === null || $sessionId === '' || $currentId === $sessionId) {
+                $data = $_SESSION ?? [];
+                return $currentId ?: '';
+            }
+            \session_write_close();
+        }
+
         \session_name(self::SESSION_NAME);
 
         if ($sessionId !== null && $sessionId !== '') {
