@@ -614,7 +614,6 @@ class Worker
         pcntl_signal(SIGUSR1, [static::class, 'signalHandler'], false);
         pcntl_signal(SIGUSR2, [static::class, 'signalHandler'], false);
         pcntl_signal(SIGCHLD, [static::class, 'signalHandler'], false);
-        pcntl_signal(SIGPIPE, SIG_IGN, false);
     }
     
     /**

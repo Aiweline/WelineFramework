@@ -99,6 +99,11 @@ if ($isFrontend) {
         ->setProcessTag('Dispatcher:' . $port);
 }
 
+// Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
+if (\function_exists('pcntl_signal') && \defined('SIGPIPE')) {
+    \pcntl_signal(SIGPIPE, SIG_IGN);
+}
+
 // 使用 WlsRuntime 完整初始化框架
 $runtimeError = null;
 try {

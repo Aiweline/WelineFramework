@@ -897,6 +897,7 @@ class AiService
                 'locale' => $params['locale'] ?? null,
                 'user_id' => $params['user_id'] ?? 0,
                 'created_time' => time(),
+                'status' => AiUsageLog::STATUS_SUCCESS,
             ]);
             $this->usageLog->save();
         } catch (\Exception $e) {
@@ -1106,7 +1107,8 @@ class AiService
             'cost' => $cost,
             'prompt_length' => strlen($prompt),
             'response_length' => strlen($response),
-            'created_at' => date('Y-m-d H:i:s')
+            'created_at' => date('Y-m-d H:i:s'),
+            'status' => AiUsageLog::STATUS_SUCCESS,
         ]);
         $usageLog->save();
     }
