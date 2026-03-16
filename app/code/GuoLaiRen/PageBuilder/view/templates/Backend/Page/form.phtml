@@ -825,6 +825,14 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <i class="mdi mdi-content-copy"></i> 链接
                                     </button>
                                     
+                                    <!-- 编辑按钮 -->
+                                    <a href="<?= $this->getBackendUrl('*/backend/page/edit', ['id' => $relPage->getId()]) ?>" 
+                                       target="_blank" 
+                                       class="btn btn-sm btn-outline-success"
+                                       title="<?= __('编辑页面') ?>">
+                                        <i class="mdi mdi-pencil-outline"></i> <?= __('编辑') ?>
+                                    </a>
+                                    
                                     <?php if ($isPublished): ?>
                                     <!-- 预览按钮（使用站点链接） -->
                                     <a href="<?= $pageUrl ?>" 
