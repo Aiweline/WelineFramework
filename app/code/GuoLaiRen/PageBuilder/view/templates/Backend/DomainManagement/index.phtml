@@ -4382,11 +4382,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         modal.classList.add('pb-dm-form-modal--open');
         fetch(API.getServerPort).then(function(r) { return r.json(); }).then(function(res) {
             var port = (res.port !== undefined) ? parseInt(res.port, 10) : 80;
+            var canUseHttp01 = res.can_use_http01 === true;
             httpsRequestPort = port;
             if (alertEl && alertText) {
-                if (port !== 80) {
+                if (!canUseHttp01) {
                     alertEl.className = 'pb-dm-alert pb-dm-alert-warning';
-                    alertText.textContent = '<?= __('当前服务运行在非80端口，只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。') ?>';
+                    alertText.textContent = '<?= __('当前服务未监听 80 端口（或未启用 80 重定向），只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。') ?>';
                 } else {
                     alertEl.className = 'pb-dm-alert pb-dm-alert-info';
                     alertText.textContent = '<?= __('将自动尝试文件验证（HTTP-01）。请确保域名已正确解析到本服务器。') ?>';

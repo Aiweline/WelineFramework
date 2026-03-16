@@ -4,29 +4,31 @@
 <header id="page-topbar">
     <div class="navbar-header">
         <div class="d-flex">
-            <!-- LOGO -->
+            <!-- LOGO（可由 Weline_Theme::backend::partials::topbar::logo 覆盖，如 Backend 模块实现则使用其配置） -->
             <div class="navbar-brand-box text-center">
-                <a href="@admin-url('admin')" class="logo logo-dark">
-                                <span class="logo-sm">
-                                    <img src="@static(Weline_Admin::assets/images/logo-sm.png)" alt="logo-sm-dark"
-                                         height="50">
-                                </span>
+<?php
+$logoHook = $this->getHook('Weline_Theme::backend::partials::topbar::logo');
+if ((string) $logoHook !== '') {
+    echo $logoHook;
+} else {
+?>
+                <a href="<?= $this->getBackendUrl('admin') ?>" class="logo logo-dark">
+                    <span class="logo-sm">
+                        <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-sm.png') ?>" alt="logo-sm-dark" height="50">
+                    </span>
                     <span class="logo-lg">
-                                    <img src="@static(Weline_Admin::assets/images/logo-dark.png)" alt="logo-dark"
-                                         height="70">
-                                </span>
+                        <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-dark.png') ?>" alt="logo-dark" height="70">
+                    </span>
                 </a>
-
-                <a href="@admin-url('admin')" class="logo logo-light">
-                                <span class="logo-sm">
-                                    <img src="@static(Weline_Admin::assets/images/logo-sm.png)" alt="logo-sm-light"
-                                         height="50">
-                                </span>
+                <a href="<?= $this->getBackendUrl('admin') ?>" class="logo logo-light">
+                    <span class="logo-sm">
+                        <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-sm.png') ?>" alt="logo-sm-light" height="50">
+                    </span>
                     <span class="logo-lg">
-                                    <img src="@static(Weline_Admin::assets/images/logo-light.png)" alt="logo-light"
-                                         height="70">
-                                </span>
+                        <img src="<?= $this->getViewFileUrl('Weline_Admin::assets/images/logo-light.png') ?>" alt="logo-light" height="70">
+                    </span>
                 </a>
+<?php } ?>
             </div>
 
             <button type="button" class="btn btn-sm px-3 font-size-24 header-item waves-effect" id="vertical-menu-btn">

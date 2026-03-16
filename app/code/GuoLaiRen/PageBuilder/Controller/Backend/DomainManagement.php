@@ -109,7 +109,7 @@ class DomainManagement extends BaseController
      */
     public function postGetConfigFields(): string
     {
-        $registrarCode = trim($this->request->getPost('registrar_code', '') ?? '');
+        $registrarCode = trim($this->request->getParam('registrar_code', '') ?? '');
         if ($registrarCode === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('缺少域名商代码')]);
         }
@@ -127,7 +127,7 @@ class DomainManagement extends BaseController
      */
     public function postGetRegistrarInfo(): string
     {
-        $registrarCode = trim($this->request->getPost('registrar_code', '') ?? '');
+        $registrarCode = trim($this->request->getParam('registrar_code', '') ?? '');
         if ($registrarCode === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('缺少域名商代码')]);
         }
@@ -145,15 +145,15 @@ class DomainManagement extends BaseController
      */
     public function postSaveAccount(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $registrarCode = trim($this->request->getPost('registrar_code', '') ?? '');
-        $accountName = trim($this->request->getPost('account_name', '') ?? '');
-        $apiKey = trim($this->request->getPost('api_key', '') ?? '');
-        $apiSecret = trim($this->request->getPost('api_secret', '') ?? '');
-        $region = trim($this->request->getPost('region', '') ?? '');
-        $status = trim($this->request->getPost('status', 'active') ?? '');
+        $accountId = (int) $this->request->getParam('account_id', 0);
+        $registrarCode = trim($this->request->getParam('registrar_code', '') ?? '');
+        $accountName = trim($this->request->getParam('account_name', '') ?? '');
+        $apiKey = trim($this->request->getParam('api_key', '') ?? '');
+        $apiSecret = trim($this->request->getParam('api_secret', '') ?? '');
+        $region = trim($this->request->getParam('region', '') ?? '');
+        $status = trim($this->request->getParam('status', 'active') ?? '');
 
-        $extraFields = $this->request->getPost('extra_config', []);
+        $extraFields = $this->request->getParam('extra_config', []);
         if (\is_string($extraFields)) {
             $extraFields = json_decode($extraFields, true) ?: [];
         }
@@ -237,7 +237,7 @@ class DomainManagement extends BaseController
      */
     public function postDeleteAccount(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
+        $accountId = (int) $this->request->getParam('account_id', 0);
         if ($accountId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('账号 ID 无效')]);
         }
@@ -255,7 +255,7 @@ class DomainManagement extends BaseController
      */
     public function postTestConnection(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
+        $accountId = (int) $this->request->getParam('account_id', 0);
         if ($accountId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('账号 ID 无效')]);
         }
@@ -273,11 +273,11 @@ class DomainManagement extends BaseController
      */
     public function postGetDomains(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $status = \trim($this->request->getPost('status', '') ?? '');
-        $search = \trim($this->request->getPost('search', '') ?? '');
-        $page = \max(1, (int) $this->request->getPost('page', 1));
-        $limit = \max(1, \min(500, (int) $this->request->getPost('limit', 100)));
+        $accountId = (int) $this->request->getParam('account_id', 0);
+        $status = \trim($this->request->getParam('status', '') ?? '');
+        $search = \trim($this->request->getParam('search', '') ?? '');
+        $page = \max(1, (int) $this->request->getParam('page', 1));
+        $limit = \max(1, \min(500, (int) $this->request->getParam('limit', 100)));
 
         try {
             // 获取要查询的账户列表
@@ -565,18 +565,22 @@ class DomainManagement extends BaseController
 
     /**
      * AJAX: 手动拉取选中的域名到本地
+     * 参数支持 POST 与 JSON Body，避免 getParam 对 domains 数组做类型过滤导致丢失。
      */
     public function postPullDomains(): string
     {
         $accountId = (int) $this->request->getPost('account_id', 0);
-        $domains = $this->request->getPost('domains', []);
-        $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $domains = $this->request->getPost('domains');
+        $autoResolve = $this->request->getPost('auto_resolve', '0') === '1' || $this->request->getPost('auto_resolve', '') === 1;
 
         if (\is_string($domains)) {
             $domains = \json_decode($domains, true) ?: [];
         }
+        if (!\is_array($domains)) {
+            $domains = [];
+        }
 
-        if (!\is_array($domains) || $domains === []) {
+        if ($domains === []) {
             return $this->fetchJson(['success' => false, 'msg' => __('请选择要拉取的域名')]);
         }
 
@@ -671,7 +675,7 @@ class DomainManagement extends BaseController
      */
     public function postSyncDomains(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
+        $accountId = (int) $this->request->getParam('account_id', 0);
 
         try {
             if ($accountId > 0) {
@@ -690,9 +694,9 @@ class DomainManagement extends BaseController
      */
     public function postBatchOperate(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
-        $operation = \trim($this->request->getPost('operation', '') ?? '');
-        $params = $this->request->getPost('params', []);
+        $domainIds = $this->request->getParam('domain_ids', []);
+        $operation = \trim($this->request->getParam('operation', '') ?? '');
+        $params = $this->request->getParam('params', []);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -720,7 +724,7 @@ class DomainManagement extends BaseController
      */
     public function postGetSyncStatus(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
+        $accountId = (int) $this->request->getParam('account_id', 0);
 
         try {
             $lastSyncTime = $this->aggregator->getDomainLastSyncTime($accountId);
@@ -738,12 +742,24 @@ class DomainManagement extends BaseController
     }
 
     /**
+     * 将 domains 输入统一为一行一个的字符串（兼容数组和字符串两种格式）
+     */
+    private function normalizeDomainsInput(mixed $input): string
+    {
+        if (\is_array($input)) {
+            return trim(implode("\n", array_map(static fn($d): string => trim((string) $d), $input)));
+        }
+        return trim((string) $input);
+    }
+
+    /**
      * AJAX: 检查域名可用性
+     * ParameterBag::getRequest 已自动回退 Body，FPM/WLS 均可正常读取。
      */
     public function postCheckAvailability(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $domainsRaw = trim($this->request->getPost('domains', '') ?? '');
+        $accountId = (int) ($this->request->getPost('account_id', 0) ?: $this->request->getPost('accountId', 0));
+        $domainsRaw = $this->normalizeDomainsInput($this->request->getPost('domains', ''));
 
         if ($accountId <= 0 || $domainsRaw === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('请选择域名商账号并输入域名')]);
@@ -767,20 +783,20 @@ class DomainManagement extends BaseController
      */
     public function postBatchPurchase(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $domainsRaw = $this->request->getPost('domains', '');
-        $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $accountId = (int) $this->request->getParam('account_id', 0);
+        $domainsRaw = $this->request->getParam('domains', '');
+        $autoResolve = $this->request->getParam('auto_resolve', '0') === '1';
         $options = [
-            'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
-            'subdomains' => $this->request->getPost('subdomains', '@,www'),
-            'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
-            'dns_provider' => (string) $this->request->getPost('dns_provider', ''),
-            'dns_account_id' => (int) $this->request->getPost('dns_account_id', 0),
-            'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
-            'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
-            'cdn_provider' => (string) $this->request->getPost('cdn_provider', ''),
-            'cdn_account_id' => (int) $this->request->getPost('cdn_account_id', 0),
-            'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
+            'resolve_to_local' => (string) $this->request->getParam('resolve_to_local', $autoResolve ? 'yes' : 'no'),
+            'subdomains' => $this->request->getParam('subdomains', '@,www'),
+            'dns_choice' => (string) $this->request->getParam('dns_choice', 'follow_registrar'),
+            'dns_provider' => (string) $this->request->getParam('dns_provider', ''),
+            'dns_account_id' => (int) $this->request->getParam('dns_account_id', 0),
+            'dns_nameservers' => (string) $this->request->getParam('dns_nameservers', ''),
+            'cdn_choice' => (string) $this->request->getParam('cdn_choice', 'follow_registrar'),
+            'cdn_provider' => (string) $this->request->getParam('cdn_provider', ''),
+            'cdn_account_id' => (int) $this->request->getParam('cdn_account_id', 0),
+            'start_lifecycle' => (string) $this->request->getParam('start_lifecycle', '1'),
         ];
 
         if ($accountId <= 0) {
@@ -822,21 +838,21 @@ class DomainManagement extends BaseController
      */
     public function postPurchase(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $domain = trim($this->request->getPost('domain', '') ?? '');
-        $years = (int) $this->request->getPost('years', 1);
-        $autoResolve = $this->request->getPost('auto_resolve', '0') === '1';
+        $accountId = (int) $this->request->getParam('account_id', 0);
+        $domain = trim($this->request->getParam('domain', '') ?? '');
+        $years = (int) $this->request->getParam('years', 1);
+        $autoResolve = $this->request->getParam('auto_resolve', '0') === '1';
         $options = [
-            'resolve_to_local' => (string) $this->request->getPost('resolve_to_local', $autoResolve ? 'yes' : 'no'),
-            'subdomains' => $this->request->getPost('subdomains', '@,www'),
-            'dns_choice' => (string) $this->request->getPost('dns_choice', 'follow_registrar'),
-            'dns_provider' => (string) $this->request->getPost('dns_provider', ''),
-            'dns_account_id' => (int) $this->request->getPost('dns_account_id', 0),
-            'dns_nameservers' => (string) $this->request->getPost('dns_nameservers', ''),
-            'cdn_choice' => (string) $this->request->getPost('cdn_choice', 'follow_registrar'),
-            'cdn_provider' => (string) $this->request->getPost('cdn_provider', ''),
-            'cdn_account_id' => (int) $this->request->getPost('cdn_account_id', 0),
-            'start_lifecycle' => (string) $this->request->getPost('start_lifecycle', '1'),
+            'resolve_to_local' => (string) $this->request->getParam('resolve_to_local', $autoResolve ? 'yes' : 'no'),
+            'subdomains' => $this->request->getParam('subdomains', '@,www'),
+            'dns_choice' => (string) $this->request->getParam('dns_choice', 'follow_registrar'),
+            'dns_provider' => (string) $this->request->getParam('dns_provider', ''),
+            'dns_account_id' => (int) $this->request->getParam('dns_account_id', 0),
+            'dns_nameservers' => (string) $this->request->getParam('dns_nameservers', ''),
+            'cdn_choice' => (string) $this->request->getParam('cdn_choice', 'follow_registrar'),
+            'cdn_provider' => (string) $this->request->getParam('cdn_provider', ''),
+            'cdn_account_id' => (int) $this->request->getParam('cdn_account_id', 0),
+            'start_lifecycle' => (string) $this->request->getParam('start_lifecycle', '1'),
         ];
 
         if ($accountId <= 0 || $domain === '') {
@@ -857,7 +873,7 @@ class DomainManagement extends BaseController
      */
     public function postGetLifecycleStatus(): string
     {
-        $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
+        $domain = \strtolower(\trim((string) $this->request->getParam('domain', '')));
         if ($domain === '') {
             return $this->fetchJson(['success' => false, 'message' => __('请输入根域名')]);
         }
@@ -886,8 +902,8 @@ class DomainManagement extends BaseController
      */
     public function postRepairLifecycleOrder(): string
     {
-        $domain = \strtolower(\trim((string) $this->request->getPost('domain', '')));
-        $accountId = (int) $this->request->getPost('account_id', 0);
+        $domain = \strtolower(\trim((string) $this->request->getParam('domain', '')));
+        $accountId = (int) $this->request->getParam('account_id', 0);
         if ($domain === '') {
             return $this->fetchJson(['success' => false, 'message' => __('请输入根域名')]);
         }
@@ -915,12 +931,12 @@ class DomainManagement extends BaseController
      */
     public function postGetDomainPool(): string
     {
-        $siteReadyOnly = $this->request->getPost('site_ready_only', 'false') === 'true';
-        $parentDomainId = (int) $this->request->getPost('parent_domain_id', 0);
-        $search = \trim($this->request->getPost('search', '') ?? '');
-        $resolveFilter = \trim($this->request->getPost('resolve_status', '') ?? '');
-        $page = \max(1, (int) $this->request->getPost('page', 1));
-        $limit = \max(1, \min(100, (int) $this->request->getPost('limit', 50)));
+        $siteReadyOnly = $this->request->getParam('site_ready_only', 'false') === 'true';
+        $parentDomainId = (int) $this->request->getParam('parent_domain_id', 0);
+        $search = \trim($this->request->getParam('search', '') ?? '');
+        $resolveFilter = \trim($this->request->getParam('resolve_status', '') ?? '');
+        $page = \max(1, (int) $this->request->getParam('page', 1));
+        $limit = \max(1, \min(100, (int) $this->request->getParam('limit', 50)));
         
         try {
             $model = ObjectManager::getInstance(DomainPool::class);
@@ -1088,9 +1104,9 @@ class DomainManagement extends BaseController
      */
     public function postAddSubdomain(): string
     {
-        $parentDomainId = (int) $this->request->getPost('parent_domain_id', 0);
-        $subdomain = \trim($this->request->getPost('subdomain', '') ?? '');
-        $description = \trim($this->request->getPost('description', '') ?? '');
+        $parentDomainId = (int) $this->request->getParam('parent_domain_id', 0);
+        $subdomain = \trim($this->request->getParam('subdomain', '') ?? '');
+        $description = \trim($this->request->getParam('description', '') ?? '');
         
         if ($subdomain === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('子域名不能为空')]);
@@ -1150,8 +1166,9 @@ class DomainManagement extends BaseController
      */
     public function postCheckResolve(): string
     {
-        $poolId = (int) $this->request->getPost('pool_id', 0);
-        $domainId = (int) $this->request->getPost('domain_id', 0);
+        // getParam 会从 Body(POST/JSON) > $_POST > $_GET 依次读取，FormData 与 JSON 均可
+        $poolId = (int) $this->request->getParam('pool_id', 0);
+        $domainId = (int) $this->request->getParam('domain_id', 0);
 
         try {
             $resolveService = ObjectManager::getInstance(DomainPoolResolveService::class);
@@ -1161,13 +1178,19 @@ class DomainManagement extends BaseController
                 $pool->loadByPoolId($poolId);
 
                 if (!$pool->getPoolId()) {
-                    return $this->fetchJson(['success' => false, 'msg' => __('域名池记录不存在')]);
+                    return $this->fetchJson([
+                        'success' => false,
+                        'msg' => __('域名池记录不存在'),
+                        'data' => ['pool_id' => $poolId],
+                    ]);
                 }
 
                 $result = $resolveService->checkResolve($pool);
+                $resolved = $result['resolved'] ?? false;
+                $result['pool_id'] = $poolId;
                 return $this->fetchJson([
-                    'success' => true,
-                    'msg' => $result['resolved'] ? __('解析正常') : __('解析异常'),
+                    'success' => $resolved,
+                    'msg' => $resolved ? __('解析正常') : __('解析异常'),
                     'data' => $result,
                 ]);
             }
@@ -1203,7 +1226,7 @@ class DomainManagement extends BaseController
                 }
 
                 return $this->fetchJson([
-                    'success' => true,
+                    'success' => $allResolved,
                     'msg' => $allResolved ? __('所有子域名解析正常') : __('部分子域名解析异常'),
                     'data' => [
                         'domain' => $domainName,
@@ -1227,7 +1250,7 @@ class DomainManagement extends BaseController
      */
     public function postDeletePoolDomain(): string
     {
-        $poolId = (int) $this->request->getPost('pool_id', 0);
+        $poolId = (int) $this->request->getParam('pool_id', 0);
         if ($poolId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('请提供 pool_id')]);
         }
@@ -1254,54 +1277,50 @@ class DomainManagement extends BaseController
     private const HTTPS_PROVIDERS = ['letsencrypt', 'litessl'];
 
     /**
-     * 获取 WLS 当前监听端口（用于判断 HTTP-01 vs DNS-01）
-     * 优先使用当前请求的 SERVER_PORT（反映实际访问端口），否则回退到 env.server.port
+     * 获取 WLS 端口与是否可用 HTTP-01（用于证书申请提示）
+     * 以 env.server 为准：主端口 80 或 443 且启用了 80 重定向时，可用 HTTP-01。
      */
     public function getGetServerPort(): string
     {
+        $config = Env::getInstance()->getConfig('server');
         $port = 80;
-        $serverBag = $this->request->getServerBag();
-        if ($serverBag && method_exists($serverBag, 'getPort')) {
-            $reqPort = $serverBag->getPort();
-            if ($reqPort > 0) {
-                $port = $reqPort;
+        if (\is_array($config) && isset($config['port'])) {
+            $portVal = $config['port'];
+            $portVal = \is_array($portVal) ? ($portVal[0] ?? 80) : $portVal;
+            $portInt = (int) $portVal;
+            if ($portInt > 0) {
+                $port = $portInt;
             }
         }
+        $canUseHttp01 = $this->computeCanUseHttp01($config, $port);
+        return $this->fetchJson(['success' => true, 'port' => $port, 'can_use_http01' => $canUseHttp01]);
+    }
+
+    /**
+     * 是否可使用 HTTP-01：主端口 80 或（主端口 443 且启用了 80 重定向）
+     */
+    private function computeCanUseHttp01(?array $config, int $port): bool
+    {
         if ($port === 80) {
-            $config = Env::getInstance()->getConfig('server');
-            if (\is_array($config) && isset($config['port'])) {
-                $portVal = $config['port'];
-                $portVal = \is_array($portVal) ? ($portVal[0] ?? 80) : $portVal;
-                $portInt = (int) $portVal;
-                if ($portInt > 0) {
-                    $port = $portInt;
-                }
-            }
+            return true;
         }
-        return $this->fetchJson(['success' => true, 'port' => $port]);
+        if (!\is_array($config)) {
+            return false;
+        }
+        $redirectPort = (int) ($config['http_redirect_port'] ?? 80);
+        $redirectEnabled = ($port === 443) && ($redirectPort > 0);
+        return $redirectEnabled && $redirectPort === 80;
     }
 
     /**
      * SSE 流式输出证书申请过程
-     * GET: pool_id, provider, domain
+     * GET: pool_id, provider, domain, challenge_strategy
      */
     public function getRequestHttpsStream(): void
     {
-        $poolId = (int) $this->request->getGet('pool_id', 0);
-        $providerRaw = $this->request->getGet('provider', '');
-        $provider = \is_array($providerRaw)
-            ? (string) ($providerRaw[0] ?? 'letsencrypt')
-            : (string) ($providerRaw ?: 'letsencrypt');
-        if ($provider === '' || $provider === 'Array') {
-            $provider = 'letsencrypt';
-        }
-        $domainRaw = $this->request->getGet('domain', '');
-        $domain = \is_array($domainRaw)
-            ? \trim((string) ($domainRaw[0] ?? ''))
-            : \trim((string) $domainRaw);
-        if ($domain === 'Array') {
-            $domain = '';
-        }
+        $poolId = (int) $this->request->getParam('pool_id', 0);
+        $provider = (string) ($this->request->getParam('provider', 'letsencrypt') ?: 'letsencrypt');
+        $domain = \trim((string) $this->request->getParam('domain', ''));
 
         $pool = ObjectManager::getInstance(DomainPool::class, [], false);
         if ($poolId > 0) {
@@ -1349,7 +1368,7 @@ class DomainManagement extends BaseController
             $onProgress = function (string $message, array $extra = []) use ($sse): void {
                 $sse->sendEvent('progress', \array_merge(['message' => $message], $extra));
             };
-            $challengeRaw = $this->request->getGet('challenge_strategy', '') ?: $this->request->getParam('challenge_strategy', '');
+            $challengeRaw = $this->request->getParam('challenge_strategy', 'auto');
             $challengeStrategy = \is_array($challengeRaw)
                 ? \trim((string) ($challengeRaw[0] ?? 'auto'))
                 : \trim((string) ($challengeRaw ?: 'auto'));
@@ -1593,6 +1612,8 @@ class DomainManagement extends BaseController
                 },
                 'cdn_account' => $cdnAccount,
                 'verify_cdn' => $cdnAccountId > 0 || ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class)->isCdnProvider($targetAccount->getRegistrarCode()),
+                'verify_cdn_wait_max_seconds' => 5 * 60,
+                'verify_cdn_wait_interval_seconds' => 15,
                 'records_to_push' => $resolveService->getRecordsForPush($domain),
                 'after_sync_records' => function (Domain $d, array $dnsRecords): void {
                     $this->syncDnsProviderToPool($d->getDomain(), (string) $d->getDnsProvider(), (string) ($d->getCdnProvider() ?? ''));
@@ -1627,11 +1648,11 @@ class DomainManagement extends BaseController
      */
     public function postRequestHttps(): string
     {
-        $poolId = (int) $this->request->getPost('pool_id', 0);
+        $poolId = (int) $this->request->getParam('pool_id', 0);
         if ($poolId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('请提供 pool_id')]);
         }
-        $provider = (string) ($this->request->getPost('provider', '') ?: 'letsencrypt');
+        $provider = (string) ($this->request->getParam('provider', '') ?: 'letsencrypt');
         if (!\in_array($provider, self::HTTPS_PROVIDERS, true)) {
             $provider = 'letsencrypt';
         }
@@ -1721,7 +1742,7 @@ class DomainManagement extends BaseController
      */
     public function postGenerateSubdomains(): string
     {
-        $domainId = (int) $this->request->getPost('domain_id', 0);
+        $domainId = (int) $this->request->getParam('domain_id', 0);
         
         if ($domainId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('domain_id 不能为空')]);
@@ -1756,7 +1777,7 @@ class DomainManagement extends BaseController
      */
     public function postBatchTransferToPool(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
+        $domainIds = $this->request->getParam('domain_ids', []);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -1831,9 +1852,9 @@ class DomainManagement extends BaseController
      */
     public function postBatchResolveToLocal(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
-        $autoTransferToPool = $this->request->getPost('auto_transfer_to_pool', '0') === '1';
-        $prefixes = $this->request->getPost('prefixes', ['@', 'www']);
+        $domainIds = $this->request->getParam('domain_ids', []);
+        $autoTransferToPool = $this->request->getParam('auto_transfer_to_pool', '0') === '1';
+        $prefixes = $this->request->getParam('prefixes', ['@', 'www']);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -1951,12 +1972,12 @@ class DomainManagement extends BaseController
      */
     public function postAddDnsRecord(): string
     {
-        $domainId = (int) $this->request->getPost('domain_id', 0);
-        $type = (string) $this->request->getPost('type', 'A');
-        $host = (string) $this->request->getPost('host', '@');
-        $value = (string) $this->request->getPost('value', '');
-        $ttl = (int) $this->request->getPost('ttl', 600);
-        $priority = (int) $this->request->getPost('priority', 0);
+        $domainId = (int) $this->request->getParam('domain_id', 0);
+        $type = (string) $this->request->getParam('type', 'A');
+        $host = (string) $this->request->getParam('host', '@');
+        $value = (string) $this->request->getParam('value', '');
+        $ttl = (int) $this->request->getParam('ttl', 600);
+        $priority = (int) $this->request->getParam('priority', 0);
 
         if ($domainId <= 0 || $value === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('域名 ID 和记录值不能为空')]);
@@ -2025,13 +2046,13 @@ class DomainManagement extends BaseController
      */
     public function postBatchAddDnsRecords(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
-        $type = (string) $this->request->getPost('type', 'A');
-        $host = (string) $this->request->getPost('host', '@');
-        $value = (string) $this->request->getPost('value', '');
-        $ttl = (int) $this->request->getPost('ttl', 600);
-        $priority = (int) $this->request->getPost('priority', 0);
-        $useServerIp = (bool) $this->request->getPost('use_server_ip', false);
+        $domainIds = $this->request->getParam('domain_ids', []);
+        $type = (string) $this->request->getParam('type', 'A');
+        $host = (string) $this->request->getParam('host', '@');
+        $value = (string) $this->request->getParam('value', '');
+        $ttl = (int) $this->request->getParam('ttl', 600);
+        $priority = (int) $this->request->getParam('priority', 0);
+        $useServerIp = (bool) $this->request->getParam('use_server_ip', false);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -2134,7 +2155,7 @@ class DomainManagement extends BaseController
      */
     public function getGetDnsRecords(): string
     {
-        $domainId = (int) $this->request->getGet('domain_id', 0);
+        $domainId = (int) $this->request->getParam('domain_id', 0);
 
         if ($domainId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('域名 ID 不能为空')]);
@@ -2408,8 +2429,8 @@ class DomainManagement extends BaseController
      */
     public function postDeleteDnsRecord(): string
     {
-        $domainId = (int) $this->request->getPost('domain_id', 0);
-        $recordId = (string) $this->request->getPost('record_id', '');
+        $domainId = (int) $this->request->getParam('domain_id', 0);
+        $recordId = (string) $this->request->getParam('record_id', '');
 
         if ($domainId <= 0 || $recordId === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('域名 ID 和记录 ID 不能为空')]);
@@ -2487,9 +2508,9 @@ class DomainManagement extends BaseController
      */
     public function postBatchChangeNameservers(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
-        $nameservers = $this->request->getPost('nameservers', '');
-        $targetProvider = $this->request->getPost('target_provider', '');
+        $domainIds = $this->request->getParam('domain_ids', []);
+        $nameservers = $this->request->getParam('nameservers', '');
+        $targetProvider = $this->request->getParam('target_provider', '');
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -2659,7 +2680,7 @@ class DomainManagement extends BaseController
             $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
             $accountModel->clearData(true);
             $accountModel->clearQuery();
-            if ($this->request->getGet('active_only', '0') === '1') {
+            if ($this->request->getParam('active_only', '0') === '1') {
                 $accountModel->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
             }
             $allAccounts = $accountModel->select()->fetchArray();
@@ -2712,8 +2733,8 @@ class DomainManagement extends BaseController
      */
     public function postGetAccountNameservers(): string
     {
-        $accountId = (int) $this->request->getPost('account_id', 0);
-        $domains = $this->request->getPost('domains', []);
+        $accountId = (int) $this->request->getParam('account_id', 0);
+        $domains = $this->request->getParam('domains', []);
 
         if ($accountId <= 0) {
             return $this->fetchJson(['success' => false, 'msg' => __('请选择目标账户')]);
@@ -2799,8 +2820,8 @@ class DomainManagement extends BaseController
      */
     public function postBatchSwitchToAccount(): string
     {
-        $domainIds = $this->request->getPost('domain_ids', []);
-        $targetAccountId = (int) $this->request->getPost('target_account_id', 0);
+        $domainIds = $this->request->getParam('domain_ids', []);
+        $targetAccountId = (int) $this->request->getParam('target_account_id', 0);
 
         if (\is_string($domainIds)) {
             $domainIds = \json_decode($domainIds, true) ?: [];
@@ -2946,8 +2967,8 @@ class DomainManagement extends BaseController
     public function postDetectDnsProvider(): string
     {
         try {
-            $domainIds = $this->request->getPost('domain_ids', []);
-            $forceRefresh = (bool) $this->request->getPost('force_refresh', false);
+            $domainIds = $this->request->getParam('domain_ids', []);
+            $forceRefresh = (bool) $this->request->getParam('force_refresh', false);
 
             if (\is_string($domainIds)) {
                 $domainIds = \json_decode($domainIds, true) ?: [];
@@ -3234,9 +3255,9 @@ class DomainManagement extends BaseController
     public function postBatchSetAccounts(): string
     {
         try {
-            $domainIds = $this->request->getPost('domain_ids', []);
-            $dnsAccountId = $this->request->getPost('dns_account_id');
-            $cdnAccountId = $this->request->getPost('cdn_account_id');
+            $domainIds = $this->request->getParam('domain_ids', []);
+            $dnsAccountId = $this->request->getParam('dns_account_id');
+            $cdnAccountId = $this->request->getParam('cdn_account_id');
 
             if (\is_string($domainIds)) {
                 $domainIds = \json_decode($domainIds, true) ?: [];
@@ -3435,7 +3456,7 @@ class DomainManagement extends BaseController
     public function postBatchRemoveSync(): string
     {
         try {
-            $domainIds = $this->request->getPost('domain_ids', []);
+            $domainIds = $this->request->getParam('domain_ids', []);
 
             if (\is_string($domainIds)) {
                 $domainIds = \json_decode($domainIds, true) ?: [];
@@ -3547,7 +3568,7 @@ class DomainManagement extends BaseController
     public function postRemoveSyncByAccount(): string
     {
         try {
-            $accountId = (int) $this->request->getPost('account_id', 0);
+            $accountId = (int) $this->request->getParam('account_id', 0);
 
             if ($accountId <= 0) {
                 return $this->fetchJson([
