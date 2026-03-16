@@ -55,13 +55,14 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         // 防御：从无权限重定向到登录页时，若 Session 仍为“已登录”（RouteBefore 的 destroy 未在下一请求生效），则在此强制清空并直接展示登录页，避免再 redirect 回后台形成循环
         $noAccessReasonParam = (string) $this->request->getParam('no_access_reason', '');
         if ($noAccessReasonParam !== '' && $this->session->isLoggedIn()) {
+            w_auth_log('login_index_force_clear', '无权限重定向到登录页，强制清空 Session 避免循环', ['reason' => $noAccessReasonParam]);
             $this->session->logout();
             $this->session->getSession()->destroy();
             // 不 redirect，直接 fall through 展示登录页
         } elseif ($this->session->isLoggedIn()) {
-            // 优先跳回上次访问的地址，找不到才跳转 admin
-            $this->redirectReferer();
             $targetPath = $this->resolveDefaultRedirectTarget();
+            w_auth_log('login_index_already_logged_in', '已登录，重定向后台', ['target_path' => $targetPath, 'user_id' => $this->session->getUserId()]);
+            $this->redirectReferer();
             $this->redirect($this->getBackendUrlSameOrigin($targetPath));
         }
         //        $this->session->delete('backend_disable_login');
@@ -69,6 +70,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         // 无权限重定向原因：仅当次请求通过 GET 传入，显示一次即不再保留，刷新后不显示
         $noAccessReason = $this->request->getParam('no_access_reason');
         if ($noAccessReason !== null && $noAccessReason !== '') {
+            w_auth_log('login_index_no_access_display', '登录页展示无权限原因', ['reason' => $noAccessReason]);
             [$title, $msg] = $this->getNoAccessMessageByReason((string) $noAccessReason);
             $this->assign('no_access_message', \Weline\Framework\Manager\MessageManager::process_message($msg, $title, 'warning'));
         } else {
@@ -146,7 +148,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     {
         # 已经登录直接进入后台
         if ($this->session->isLoggedIn()) {
-            // 有来源网址就跳回来源网址
+            w_auth_log('login_post_already_logged_in', 'POST 时已登录，直接重定向后台', ['user_id' => $this->session->getUserId()]);
             $this->redirectReferer();
             $this->redirect($this->getBackendUrlSameOrigin('admin'));
         }
@@ -159,16 +161,19 @@ class Login extends \Weline\Framework\App\Controller\BackendController
 
         $adminUsernameUser = $this->helper->getRequestBackendUser();
         if (!$adminUsernameUser->getId() or $adminUsernameUser->getIsDeleted()) {
+            w_auth_log('login_post_user_not_found', '账户不存在或已删除', ['username' => $this->request->getParam('username')]);
             MessageManager::error(__('账户不存在！'));
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
         if (!$adminUsernameUser->getIsEnabled()) {
+            w_auth_log('login_post_disabled', '账户被禁用', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername()]);
             MessageManager::error(__('账户被禁用！'));
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
         if ($adminUsernameUser->getAttemptTimes() > 6) {
+            w_auth_log('login_post_locked', '尝试次数超限，账户锁定', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'attempt_times' => $adminUsernameUser->getAttemptTimes()]);
             $adminUsernameUser->setSessionId($this->session->getId())->setAttemptIp($this->request->clientIP())->save();
             $s = $this->session;
             $s->set('backend_disable_login', true);
@@ -199,6 +204,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         # 验证验证码
         if ($adminUsernameUser->getAttemptTimes() > 3 && ($this->session->get('backend_verification_code') !== $this->request->getParam('code'))) {
+            w_auth_log('login_post_captcha_error', '验证码错误', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername()]);
             MessageManager::error(__('验证码错误！'));
             $adminUsernameUser->setSessionId($this->session->getId())
                 ->setAttemptIp($this->request->clientIP())
@@ -225,6 +231,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $hasRole = (bool)($userRole && $userRole->getRoleId());
                 $isSuperAdminById = (int) $adminUsernameUser->getId() === 1;
                 if (!$hasRole && !$isSuperAdminById) {
+                    w_auth_log('login_post_no_role', '账户未分配角色，拒绝登录', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername()]);
                     $this->session->logout();
                     MessageManager::error(__('您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。'));
                     $this->redirect($this->_url->getBackendUrl('/admin/login'));
@@ -234,7 +241,9 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $aclRoleId = $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0);
                 $this->session->getSession()->set('backend_acl_role_id', $aclRoleId);
                 $this->session->getSession()->set('backend_acl_is_enabled', $adminUsernameUser->getIsEnabled() ? 1 : 0);
+                w_auth_log('login_post_success', '登录成功，写入 Session ACL 上下文', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'acl_role_id' => $aclRoleId, 'session_id_hint' => \substr($this->session->getId(), 0, 8) . '...']);
             } catch (\Exception $e) {
+                w_auth_log('login_post_exception', '登录过程异常', ['user_id' => $adminUsernameUser->getId(), 'message' => $e->getMessage()]);
                 throw $e;
             }
             $adminUsernameUser->setSessionId($this->session->getId())
@@ -265,6 +274,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 $this->session->delete('remember_expire_time');
             }
         } else {
+            w_auth_log('login_post_password_fail', '密码验证失败', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername()]);
             $adminUsernameUser->setSessionId($this->session->getId())
                 ->setAttemptIp($this->request->clientIP())
                 ->save();
@@ -300,6 +310,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $this->redirectReferer($adminUsernameUser);
 
         $targetPath = $this->resolveDefaultRedirectTarget($adminUsernameUser);
+        w_auth_log('login_post_redirect', '登录成功，即将 302 重定向', ['user_id' => $adminUsernameUser->getId(), 'target_path' => $targetPath]);
         // 跳转后台入口（使用当前请求同源 URL，确保 Cookie 能带上，避免跨 host 丢失 Session）
         $this->redirect($this->getBackendUrlSameOrigin($targetPath));
     }
@@ -458,6 +469,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         
         $userId = $this->session->getUserId();
+        w_auth_log('logout', '用户退出登录', ['user_id' => $userId]);
         $this->session->logout();
         $this->session->getSession()->delete('backend_acl_role_id');
         $this->session->getSession()->delete('backend_acl_is_enabled');
