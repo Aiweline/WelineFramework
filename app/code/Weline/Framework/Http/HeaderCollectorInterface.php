@@ -120,6 +120,15 @@ interface HeaderCollectorInterface
     ): static;
 
     /**
+     * 移除已收集的 Cookie（按名称），响应中不再发送该 Set-Cookie。
+     * 用于 not_logged_in 时避免用新 session 的 Set-Cookie 覆盖浏览器已有登录 cookie。
+     *
+     * @param string $name Cookie 名称
+     * @return static
+     */
+    public function removeCookie(string $name): static;
+
+    /**
      * 发送已收集的响应头（FPM 模式：调用 header()/setcookie()）
      *
      * @param bool $sendStatusCode 是否发送 HTTP 状态码，默认 true
