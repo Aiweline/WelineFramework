@@ -528,7 +528,8 @@ use Weline\Server\Model\ServerStatusLog;
     border-bottom: none;
 }
 .stat-row .label {
-    color: var(--w-muted-color);
+    /* 保障线上主题 --w-muted-color 过浅时仍可读 */
+    color: var(--w-muted-color, #6c757d);
 }
 .stat-row .value {
     font-weight: 600;

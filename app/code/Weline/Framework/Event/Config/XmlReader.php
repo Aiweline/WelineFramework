@@ -40,8 +40,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     }
 
     /**
-     * 获取 event.xml 文件列表（优化：不扫描目录，仅 base_path + 相对路径检查 file_exists）
-     * 避免 scanVendorModulesWithFiles 中的 scanDirTree 等重型目录遍历
+     * 获取 event.xml 文件列表：仅激活模块，用 base_path + etc/event.xml 直接定位，不扫描目录。
      *
      * @param \Closure|null $callback 保留签名兼容，此处未使用
      * @return array<string, string> 模块名 => 文件绝对路径
@@ -50,7 +49,6 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     {
         $result = [];
         $modules = Env::getInstance()->getActiveModules();
-        // 按 position 排序，app 优先于 composer
         $order = ['app' => 0, 'framework' => 1, 'system' => 2, 'composer' => 3];
         uasort($modules, static fn($a, $b) => ($order[$a['position'] ?? 'composer'] ?? 4) <=> ($order[$b['position'] ?? 'composer'] ?? 4));
         foreach ($modules as $module) {
@@ -62,241 +60,128 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             $filePath = $basePath . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
             if (is_file($filePath)) {
                 $result[$name] = $filePath;
-            } elseif ($name === 'Weline_Framework') {
-                // Weline_Framework 子模块（Event、Plugin 等）各自有 etc/event.xml
-                $subdirs = glob($basePath . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
-                if ($subdirs !== false) {
-                    foreach ($subdirs as $subdir) {
-                        $subPath = $subdir . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
-                        if (is_file($subPath)) {
-                            $subName = 'Weline_Framework_' . basename($subdir);
-                            $result[$subName] = $subPath;
-                        }
-                    }
-                }
             }
         }
         return $callback ? $callback($result) : $result;
     }
 
     /**
-     * @DESC         |读取事件配置
-     *
-     * 开发者模式读取真实配置
-     * 非开发者模式有缓存则读取缓存
-     * 参数区：
-     *
-     * @param bool $cache
-     *
-     * @return mixed
+     * 读取事件配置：仅激活模块，base_path 直接定位文件，逐文件解析合并，降低内存占用。
      */
     public function read(): array
     {
-        // 临时禁用缓存以便调试
-        // if ($event = $this->eventCache->get('event')) {
-        //     return $event;
-        // }
-        # 模块配置文件
-        try {
-            $configs = parent::read();
-        } catch (\Throwable $e) {
-            w_log_error('事件配置读取失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
-            throw $e;
-        }
-        // 合并掉所有相同名字的事件的观察者，方便获取
         $event_observers_list = [];
-        foreach ($configs as $module_and_file => $config) {
-            // 提取模块名（格式：ModuleName::path/to/file.xml）
-            $moduleName = explode('::', $module_and_file)[0] ?? '';
-            if (empty($moduleName)) {
-                // 使用文件路径作为唯一标识，避免重复输出
-                if (!isset(self::$loggedErrors[$module_and_file . '_empty_module'])) {
-                    w_log_warning(__('无法从文件路径提取模块名：%{1}', [$module_and_file]));
-                    self::$loggedErrors[$module_and_file . '_empty_module'] = true;
-                }
-                continue;
+        $fileList = $this->getFileList();
+        $parser = $this->parser;
+        foreach ($fileList as $moduleName => $filePath) {
+            try {
+                $config = $parser->load($filePath)->xmlToArray();
+            } catch (\Throwable $e) {
+                w_log_error('事件配置读取失败: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+                throw $e;
             }
-
-            $module_event_observers = [];
-            // 跳过没有正确格式的配置
-            if (!isset($config['config']) || !is_array($config['config'])) {
-                // 检查文件是否为空
-                $filePath = explode('::', $module_and_file, 2)[1] ?? '';
-                $isEmpty = false;
-                if ($filePath && file_exists($filePath)) {
-                    $fileContent = trim(file_get_contents($filePath));
-                    $isEmpty = empty($fileContent);
-                }
-                // 使用文件路径作为唯一标识，避免重复输出
-                $errorKey = $module_and_file . ($isEmpty ? '_empty' : '_invalid_format');
-                if (!isset(self::$loggedErrors[$errorKey])) {
-                    if ($isEmpty) {
-                        w_log_warning(__('跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）', [$module_and_file]));
-                    } else {
-                        w_log_warning(__('跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）', [$module_and_file]));
-                    }
-                    self::$loggedErrors[$errorKey] = true;
-                }
-                continue;
+            $module_and_file = $moduleName . '::' . $filePath;
+            $module_event_observers = $this->processOneFileConfig($config, $moduleName, $module_and_file, $filePath);
+            if ($module_event_observers !== null) {
+                $event_observers_list[$module_and_file] = $module_event_observers;
             }
-            if (!isset($config['config']['_attribute']) || !is_array($config['config']['_attribute'])) {
-                // 使用文件路径作为唯一标识，避免重复输出
-                if (!isset(self::$loggedErrors[$module_and_file . '_missing_attributes'])) {
-                    w_log_warning(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
-                    self::$loggedErrors[$module_and_file . '_missing_attributes'] = true;
-                }
-                continue;
-            }
-            if (
-                !isset($config['config']['_attribute']['noNamespaceSchemaLocation']) ||
-                'urn:Weline_Framework::Event/etc/xsd/event.xsd' !== $config['config']['_attribute']['noNamespaceSchemaLocation']
-            ) {
-                die(__('%{1} 事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"', [$module_and_file]));
-            }
-            // 检查 event 是否存在
-            if (!isset($config['config']['_value']['event'])) {
-                // 如果 event.xml 文件存在但没有 event 节点，说明该模块不定义事件，跳过处理
-                continue;
-            }
-
-            // 加载模块的 event.php 规约文件
-            $eventSpecs = $this->loadModuleEventSpecs($moduleName);
-            // 多个值
-            $firstEventKey = array_key_first($config['config']['_value']['event']);
-            if ($firstEventKey !== null && is_integer($firstEventKey)) {
-                foreach ($config['config']['_value']['event'] as $event) {
-                    if (!isset($event['_attribute']['name'])) {
-                        die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
-                    }
-                    
-                    $eventName = $event['_attribute']['name'];
-                    
-                    // 验证事件名是否在规约文件中存在（如果验证失败，只记录警告，不中断流程）
-                    try {
-                        $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
-                    } catch (\RuntimeException $e) {
-                        // 只记录警告，不中断流程
-                        // 使用框架的日志系统记录警告
-                        w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
-                    }
-                    
-                    // 检查 _value 是否存在
-                    if (!isset($event['_value']) || !is_array($event['_value'])) {
-                        die(__('%{1} 事件Event的_value格式错误', [$module_and_file]));
-                    }
-                    // 检查 observer 节点是否存在
-                    if (!isset($event['_value']['observer'])) {
-                        die(__('%{1} 事件Event缺少observer节点', [$module_and_file]));
-                    }
-                    // 处理 observer（可能是单个或多个）
-                    $observers = $event['_value']['observer'];
-                    // 检查是否是多个 observer（数组，第一个键是整数）
-                    $firstObserverKey = array_key_first($observers);
-                    if ($firstObserverKey !== null && is_integer($firstObserverKey)) {
-                        // 多个 observer
-                        foreach ($observers as $item_observer) {
-                            if (!isset($item_observer['_attribute'])) {
-                                die(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                            }
-                            if (!isset($item_observer['_attribute']['name'])) {
-                                die(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                            }
-                            if (!isset($item_observer['_attribute']['instance'])) {
-                                die(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                            }
-                            // 设置默认值
-                            $item_observer['_attribute']['disabled'] = $item_observer['_attribute']['disabled'] ?? 'false';
-                            $item_observer['_attribute']['shared'] = $item_observer['_attribute']['shared'] ?? 'true';
-                            $item_observer['_attribute']['sort'] = $item_observer['_attribute']['sort'] ?? 10000;
-                            $module_event_observers[$event['_attribute']['name']][] = $item_observer['_attribute'];
-                        }
-                    } else {
-                        // 单个 observer
-                        if (!isset($observers['_attribute'])) {
-                            die(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        if (!isset($observers['_attribute']['name'])) {
-                            die(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        if (!isset($observers['_attribute']['instance'])) {
-                            die(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        // 设置默认值
-                        $observers['_attribute']['disabled'] = $observers['_attribute']['disabled'] ?? 'false';
-                        $observers['_attribute']['shared'] = $observers['_attribute']['shared'] ?? 'true';
-                        $observers['_attribute']['sort'] = $observers['_attribute']['sort'] ?? 10000;
-                        $module_event_observers[$event['_attribute']['name']][] = $observers['_attribute'];
-                    }
-                }
-            } else {
-                // 单个 event
-                if (!isset($config['config']['_value']['event']['_attribute']['name'])) {
-                    die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
-                }
-                
-                $eventName = $config['config']['_value']['event']['_attribute']['name'];
-                
-                // 验证事件名是否在规约文件中存在（如果验证失败，只记录警告，不中断流程）
-                try {
-                    $this->validateEventSpec($eventName, $moduleName, $eventSpecs, $module_and_file);
-                } catch (\RuntimeException $e) {
-                    // 只记录警告，不中断流程
-                    // 使用框架的日志系统记录警告
-                    w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
-                }
-                
-                // 检查 _value 是否存在
-                if (!isset($config['config']['_value']['event']['_value']) || !is_array($config['config']['_value']['event']['_value'])) {
-                    die(__('%{1} 事件Event的_value格式错误', [$module_and_file]));
-                }
-                // 检查 observer 节点是否存在
-                if (!isset($config['config']['_value']['event']['_value']['observer'])) {
-                    die(__('%{1} 事件Event缺少observer节点', [$module_and_file]));
-                }
-                // 处理 observer（可能是单个或多个）
-                $observers = $config['config']['_value']['event']['_value']['observer'];
-                // 检查是否是多个 observer（数组，第一个键是整数）
-                $firstObserverKey = array_key_first($observers);
-                if ($firstObserverKey !== null && is_integer($firstObserverKey)) {
-                    // 多个 observer
-                    foreach ($observers as $item_observer) {
-                        if (!isset($item_observer['_attribute'])) {
-                            die(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        if (!isset($item_observer['_attribute']['name'])) {
-                            die(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        if (!isset($item_observer['_attribute']['instance'])) {
-                            die(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                        }
-                        // 设置默认值
-                        $item_observer['_attribute']['disabled'] = $item_observer['_attribute']['disabled'] ?? 'false';
-                        $item_observer['_attribute']['shared'] = $item_observer['_attribute']['shared'] ?? 'true';
-                        $item_observer['_attribute']['sort'] = $item_observer['_attribute']['sort'] ?? 10000;
-                        $module_event_observers[$config['config']['_value']['event']['_attribute']['name']][] = $item_observer['_attribute'];
-                    }
-                } else {
-                    // 单个 observer
-                    if (!isset($observers['_attribute'])) {
-                        die(__('%{1} 观察者Observer没有设置属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                    }
-                    if (!isset($observers['_attribute']['name'])) {
-                        die(__('%{1} 观察者Observer没有设置name属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                    }
-                    if (!isset($observers['_attribute']['instance'])) {
-                        die(__('%{1} 观察者Observer没有设置instance属性：<observer name="observerName" instance="instanceClass" disabled="false" shared="true" sort="100"/>', [$module_and_file]));
-                    }
-                    // 设置默认值
-                    $observers['_attribute']['disabled'] = $observers['_attribute']['disabled'] ?? 'false';
-                    $observers['_attribute']['shared'] = $observers['_attribute']['shared'] ?? 'true';
-                    $observers['_attribute']['sort'] = $observers['_attribute']['sort'] ?? 10000;
-                    $module_event_observers[$config['config']['_value']['event']['_attribute']['name']][] = $observers['_attribute'];
-                }
-            }
-            $event_observers_list[$module_and_file] = $module_event_observers;
         }
         $this->eventCache->set('event', $event_observers_list);
         return $event_observers_list;
+    }
+
+    /**
+     * 处理单个 event.xml 解析结果，返回该文件对应的事件观察者数组，无效则返回 null。
+     */
+    private function processOneFileConfig(array $config, string $moduleName, string $module_and_file, string $filePath): ?array
+    {
+        if (!isset($config['config']) || !is_array($config['config'])) {
+            $isEmpty = $filePath !== '' && file_exists($filePath) && empty(trim((string) file_get_contents($filePath)));
+            $errorKey = $module_and_file . ($isEmpty ? '_empty' : '_invalid_format');
+            if (!isset(self::$loggedErrors[$errorKey])) {
+                w_log_warning($isEmpty
+                    ? __('跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）', [$module_and_file])
+                    : __('跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）', [$module_and_file]));
+                self::$loggedErrors[$errorKey] = true;
+            }
+            return null;
+        }
+        if (!isset($config['config']['_attribute']) || !is_array($config['config']['_attribute'])) {
+            if (!isset(self::$loggedErrors[$module_and_file . '_missing_attributes'])) {
+                w_log_warning(__('跳过缺少属性的配置文件：%{1}', [$module_and_file]));
+                self::$loggedErrors[$module_and_file . '_missing_attributes'] = true;
+            }
+            return null;
+        }
+        if (
+            !isset($config['config']['_attribute']['noNamespaceSchemaLocation'])
+            || 'urn:Weline_Framework::Event/etc/xsd/event.xsd' !== $config['config']['_attribute']['noNamespaceSchemaLocation']
+        ) {
+            die(__('%{1} 事件必须设置：noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"', [$module_and_file]));
+        }
+        if (!isset($config['config']['_value']['event'])) {
+            return null;
+        }
+
+        $module_event_observers = [];
+        $eventSpecs = $this->loadModuleEventSpecs($moduleName);
+        $firstEventKey = array_key_first($config['config']['_value']['event']);
+        if ($firstEventKey !== null && is_int($firstEventKey)) {
+            foreach ($config['config']['_value']['event'] as $event) {
+                if (!isset($event['_attribute']['name'])) {
+                    die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
+                }
+                try {
+                    $this->validateEventSpec($event['_attribute']['name'], $moduleName, $eventSpecs, $module_and_file);
+                } catch (\RuntimeException $e) {
+                    w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
+                }
+                if (!isset($event['_value']) || !is_array($event['_value']) || !isset($event['_value']['observer'])) {
+                    die(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
+                }
+                $observers = $event['_value']['observer'];
+                $this->collectObservers($observers, $event['_attribute']['name'], $module_event_observers, $module_and_file);
+            }
+        } else {
+            $eventNode = $config['config']['_value']['event'];
+            if (!isset($eventNode['_attribute']['name'])) {
+                die(__('%{1} 事件Event未指定name属性：<event name="eventName">...</event>', [$module_and_file]));
+            }
+            try {
+                $this->validateEventSpec($eventNode['_attribute']['name'], $moduleName, $eventSpecs, $module_and_file);
+            } catch (\RuntimeException $e) {
+                w_log_warning('事件规约验证警告: ' . $e->getMessage(), [], 'event_spec_validation.log');
+            }
+            if (!isset($eventNode['_value']) || !is_array($eventNode['_value']) || !isset($eventNode['_value']['observer'])) {
+                die(__('%{1} 事件Event的_value格式错误或缺少observer节点', [$module_and_file]));
+            }
+            $observers = $eventNode['_value']['observer'];
+            $this->collectObservers($observers, $eventNode['_attribute']['name'], $module_event_observers, $module_and_file);
+        }
+        return $module_event_observers;
+    }
+
+    /**
+     * 将 observer 节点（单个或多个）合并到 $module_event_observers[$eventName]。
+     */
+    private function collectObservers(
+        array $observers,
+        string $eventName,
+        array &$module_event_observers,
+        string $module_and_file
+    ): void {
+        $firstKey = array_key_first($observers);
+        $list = ($firstKey !== null && is_int($firstKey)) ? $observers : [$observers];
+        foreach ($list as $item) {
+            if (!isset($item['_attribute']['name'], $item['_attribute']['instance'])) {
+                die(__('%{1} 观察者Observer没有设置name/instance属性：<observer name="..." instance="..."/>', [$module_and_file]));
+            }
+            $attr = $item['_attribute'];
+            $attr['disabled'] = $attr['disabled'] ?? 'false';
+            $attr['shared'] = $attr['shared'] ?? 'true';
+            $attr['sort'] = $attr['sort'] ?? 10000;
+            $module_event_observers[$eventName][] = $attr;
+        }
     }
 
     /**
@@ -370,10 +255,12 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
     private function findEventDefiningModule(string $eventName): ?string
     {
         try {
-            $env = Env::getInstance();
-            $modules = $env->getModuleList();
-            
-            foreach ($modules as $moduleName => $moduleInfo) {
+            $modules = Env::getInstance()->getActiveModules();
+            foreach ($modules as $module) {
+                $moduleName = $module['name'] ?? '';
+                if ($moduleName === '') {
+                    continue;
+                }
                 $eventSpecs = $this->loadModuleEventSpecs($moduleName);
                 if (empty($eventSpecs)) {
                     continue;

@@ -51,7 +51,8 @@ class DnsSwitchService
      * @param callable|null $onStep 进度回调 fn(string $event, array $data): void，用于 SSE 等
      * @param array $options 可选：wait_for_ns (bool), wait_max_seconds (int), wait_interval_seconds (int),
      *                       is_alive (callable), cdn_account_id (int), cdn_account (DomainRegistrarAccount|null),
-     *                       verify_cdn (bool), after_sync_records (callable(Domain, array $dnsRecords): void)
+     *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int),
+     *                       after_sync_records (callable(Domain, array $dnsRecords): void)
      * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int, client_aborted?: bool}
      */
     public function executeDnsSwitch(
@@ -233,11 +234,30 @@ class DnsSwitchService
         $cdnProvider = $cdnAccount !== null ? (string) $cdnAccount->getRegistrarCode() : ($this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '');
         $this->updateDomainPoolStatus($domainName, $targetCode, $cdnProvider);
 
-        // ── Step 8: 可选 CDN HEAD 校验 ──
+        // ── Step 8: 可选 CDN HEAD 校验（未通过则等待重试直至通过或超时） ──
         if ($verifyCdn) {
             $notify('verify_cdn', ['domain' => $domainName, 'message' => __('步骤 5/5：校验 CDN 响应…')]);
             $cdnCode = $cdnProvider !== '' ? $cdnProvider : $targetCode;
-            $cdnOk = $this->verifyCdnByHead($domainName, $cdnCode);
+            $cdnWaitMax = (int) ($options['verify_cdn_wait_max_seconds'] ?? 5 * 60);
+            $cdnWaitInterval = (int) ($options['verify_cdn_wait_interval_seconds'] ?? 15);
+            $cdnOk = false;
+            $cdnElapsed = 0;
+            while ($cdnElapsed < $cdnWaitMax) {
+                if ($isAlive !== null && !$isAlive()) {
+                    break;
+                }
+                $cdnOk = $this->verifyCdnByHead($domainName, $cdnCode);
+                if ($cdnOk) {
+                    break;
+                }
+                $notify('verify_cdn_retry', [
+                    'domain' => $domainName,
+                    'elapsed' => $cdnElapsed,
+                    'message' => __('CDN 校验未通过，%{1} 秒后重试（已等待 %{2} 秒）', [(string) $cdnWaitInterval, (string) $cdnElapsed]),
+                ]);
+                \sleep($cdnWaitInterval);
+                $cdnElapsed += $cdnWaitInterval;
+            }
             $notify('verify_cdn_done', ['domain' => $domainName, 'ok' => $cdnOk]);
         }
 

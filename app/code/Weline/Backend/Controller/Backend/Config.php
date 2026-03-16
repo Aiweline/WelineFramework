@@ -44,7 +44,7 @@ class Config extends BackendController
             ];
 
             $this->assign('configs', $configs);
-            $this->assign('page_title', __('后台配置'));
+            $this->assign('page_title', __('外观与 Logo'));
             
             return $this->fetch();
         } catch (\Exception $e) {
