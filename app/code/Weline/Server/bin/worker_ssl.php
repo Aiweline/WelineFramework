@@ -2300,6 +2300,41 @@ function getHeaderValue(string $rawRequest, string $headerName): ?string
 }
 
 /**
+ * 从 Cookie 头中解析指定 name 的值
+ */
+function getCookieValue(string $cookieHeader, string $name): ?string
+{
+    if ($cookieHeader === '') {
+        return null;
+    }
+    $name = \preg_quote($name, '/');
+    if (\preg_match('/\b' . $name . '=([^;\s]+)/', $cookieHeader, $m)) {
+        $v = \trim($m[1], '"');
+        return $v === '' ? null : $v;
+    }
+    return null;
+}
+
+/**
+ * 校验“开发模式+后台登录”下发放的健康检查放行 Cookie（与 PHP 端生成逻辑一致）
+ * 仅当 env 中配置了 wls.health_cookie_secret 时生效。
+ */
+function isHealthAllowCookieValid(string $cookieValue, array $env): bool
+{
+    $secret = $env['wls']['health_cookie_secret'] ?? null;
+    if ($secret === null || $secret === '') {
+        return false;
+    }
+    $slot = \floor(\time() / 3600);
+    $expected = \hash_hmac('sha256', 'wls_health_' . $slot, (string) $secret);
+    if (\hash_equals($expected, $cookieValue)) {
+        return true;
+    }
+    $expectedPrev = \hash_hmac('sha256', 'wls_health_' . ($slot - 1), (string) $secret);
+    return \hash_equals($expectedPrev, $cookieValue);
+}
+
+/**
  * 注入 WLS 处理耗时响应头。
  * 仅添加 header，不修改 body / Content-Length，避免 Content-Length mismatch 导致浏览器 loading 挂死。
  * 前端通过 Server-Timing API 读取：performance.getEntriesByType('navigation')[0].serverTiming
@@ -2364,13 +2399,24 @@ function handleRequest(
         $keepAlive = $isHttp11 && !$hasClose;
         // 可选：允许外网访问健康检查（仅测试/内网环境建议开启，生产建议关闭）
         $healthAllowRemote = false;
+        $env = [];
         if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
             $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+            $env = \is_array($env) ? $env : [];
             $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
                 ?? $env['wls']['health_allow_remote'] ?? false);
         }
+        // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 则放行
+        $healthAllowedByCookie = false;
         if (!$isLocal && !$healthAllowRemote) {
-            // 非本地请求且未配置允许：返回 403（极简响应）
+            $cookieHeader = getHeaderValue($rawRequest, 'Cookie') ?? '';
+            $allowCookie = getCookieValue($cookieHeader, 'wls_health_allow');
+            if ($allowCookie !== null && isHealthAllowCookieValid($allowCookie, $env)) {
+                $healthAllowedByCookie = true;
+            }
+        }
+        if (!$isLocal && !$healthAllowRemote && !$healthAllowedByCookie) {
+            // 非本地请求且未配置允许且无有效放行 Cookie：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
                 : "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: close\r\n\r\nForbidden";
