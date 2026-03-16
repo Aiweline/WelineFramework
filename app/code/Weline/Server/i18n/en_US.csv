@@ -1253,13 +1253,15 @@ DDoS攻击,DDoS攻击
 "正在注册/获取 ACME 账户...","正在注册/获取 ACME 账户..."
 账户注册失败,"Account registration failed"
 正在创建证书订单...,正在创建证书订单...
-创建订单失败,"Order creation failed"
+"CA 未返回订单地址","CA 未返回订单地址"
+创建订单失败：%{1},创建订单失败：%{1}
 正在获取授权信息...,正在获取授权信息...
 获取授权失败,"Authorization retrieval failed"
 获取授权详情失败,"Authorization details retrieval failed"
 域名验证失败：%{1},域名验证失败：%{1}
 域名验证失败,"Domain validation failed"
 "（DNS 传播可能需要更长时间，请 2–5 分钟后重试）","（DNS 传播可能需要更长时间，请 2–5 分钟后重试）"
+"（CA 无法解析该域名：公网 DNS 超时或未生效，请确认域名 A/AAAA 已正确解析到本机，或改用 DNS-01 验证）","(CA could not resolve the domain: public DNS timed out or not yet effective; ensure A/AAAA records point to this server, or use DNS-01 validation)"
 "正在生成 CSR...","正在生成 CSR..."
 "正在提交 CSR 至 CA...","正在提交 CSR 至 CA..."
 "提交 CSR 失败","CSR submission failed"
@@ -1282,10 +1284,12 @@ DDoS攻击,DDoS攻击
 获取账户指纹失败,获取账户指纹失败
 "正在通过 DNS 供应商添加 TXT 记录...","正在通过 DNS 供应商添加 TXT 记录..."
 "添加 TXT 记录失败：%{1}","添加 TXT 记录失败：%{1}"
-"TXT 记录已添加，等待 DNS 传播（%{1} 秒）...","TXT 记录已添加，等待 DNS 传播（%{1} 秒）..."
-"等待 DNS 传播中...（%{1}s）","等待 DNS 传播中...（%{1}s）"
+"检查 TXT 记录是否在公网生效（最多 %{1} 秒）...","检查 TXT 记录是否在公网生效（最多 %{1} 秒）..."
+"检查 TXT 生效中...（%{1}s）","检查 TXT 生效中...（%{1}s）"
+"TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname）。请确认域名 NS 已指向当前 DNS 服务商后重试。","TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname）。请确认域名 NS 已指向当前 DNS 服务商后重试。"
+"TXT 已生效，等待 %{1} 秒后通知 CA...","TXT 已生效，等待 %{1} 秒后通知 CA..."
 "正在通知 CA 进行验证...","正在通知 CA 进行验证..."
-"等待 CA 验证 DNS 记录（最多 4 分钟）...","等待 CA 验证 DNS 记录（最多 4 分钟）..."
+"等待 CA 验证 DNS 记录（最多 %{1} 分钟）...","Waiting for CA to verify DNS record (up to %{1} min)..."
 "等待 CA 验证中...（%{1}s）","等待 CA 验证中...（%{1}s）"
 "CA 验证完成，正在清理 TXT 记录...","CA 验证完成，正在清理 TXT 记录..."
 "CA 验证未通过，正在清理临时 TXT 记录...","CA 验证未通过，正在清理临时 TXT 记录..."

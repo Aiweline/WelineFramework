@@ -399,6 +399,15 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
         if (!($response['success'] ?? false)) {
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? __('未知错误')) : __('添加记录失败');
+            // Cloudflare 返回“记录已存在/identical record”时，视为成功（搬迁时目标已存在即达成目的）
+            if (\stripos($errorMsg, 'already exists') !== false || \stripos($errorMsg, 'identical record') !== false) {
+                $existing = $this->getDnsRecordByNameAndType($zoneId, $name, $recordType, $credentials);
+                return [
+                    'success' => true,
+                    'record_id' => $existing,
+                    'message' => $existing !== '' ? __('DNS 记录已存在，复用现有记录') : __('DNS 记录已存在（与现有记录相同）'),
+                ];
+            }
             return [
                 'success' => false,
                 'message' => $errorMsg,
@@ -410,6 +419,20 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
             'record_id' => $response['result']['id'] ?? '',
             'message' => __('DNS 记录添加成功'),
         ];
+    }
+
+    /**
+     * 按 name 与 type 查询一条 DNS 记录的 id（用于“已存在”时复用）
+     */
+    private function getDnsRecordByNameAndType(string $zoneId, string $name, string $type, array $credentials): string
+    {
+        $response = $this->makeRequest("/zones/{$zoneId}/dns_records", 'GET', ['name' => $name, 'type' => $type], $credentials);
+        if (!($response['success'] ?? false)) {
+            return '';
+        }
+        $result = $response['result'] ?? [];
+        $first = \is_array($result) && isset($result[0]) ? $result[0] : null;
+        return $first && isset($first['id']) ? (string) $first['id'] : '';
     }
 
     public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array
