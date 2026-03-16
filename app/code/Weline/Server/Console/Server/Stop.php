@@ -120,6 +120,30 @@ class Stop extends CommandAbstract
         $this->stopInstance($name, true);
         return true;
     }
+
+    /**
+     * 按端口强杀占用该端口的 WLS 进程（实例文件不存在或未匹配时兜底，确保“系统创建的 WLS 进程”可被结束）
+     *
+     * @return bool 若识别到 WLS 进程并已发送终止则 true，否则 false
+     */
+    public function killWlsProcessOnPort(int $port): bool
+    {
+        $pid = Processer::getProcessIdByPort($port);
+        if ($pid <= 0 || !Processer::isRunningByPid($pid)) {
+            return false;
+        }
+        $pname = Processer::getNameByPid($pid);
+        $cmdLine = Processer::getProcessCommandLine($pid);
+        $isWls = \str_contains($pname, 'weline-wls') || \str_contains($pname, 'weline-master')
+            || \str_contains($cmdLine, 'weline-wls') || \str_contains($cmdLine, 'weline-master')
+            || \str_contains($cmdLine, 'bin/worker') || \str_contains($cmdLine, 'bin/dispatcher');
+        if (!$isWls) {
+            return false;
+        }
+        $this->printer->note(__('检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…', [$port, $pid]));
+        Processer::killByPid($pid, true);
+        return true;
+    }
     
     /**
      * 停止单个实例
@@ -160,11 +184,13 @@ class Stop extends CommandAbstract
         if (!$instanceInfo->isMasterRunning()) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
-            // 清理可能残留的进程和文件
+            // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
             $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
+            $this->cleanupResidualProcesses($name, ['count' => $instanceInfo->workerCount]);
             $manager->deleteInstance($name);
-            // 释放启动锁
+            $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
+            $this->cleanupAllWlsProcesses($name);
             $this->printer->success(__('实例文件已清理 ✓'));
             return;
         }
@@ -180,13 +206,13 @@ class Stop extends CommandAbstract
         if ($ipcSuccess) {
             $this->printer->success(__('所有子进程已完整退出 ✓'));
         } else {
-            // IPC 失败，强制杀死 Master
-            $this->printer->warning(__('IPC 超时，强制终止 Master...'));
+            // IPC 失败，强制杀死 Master 并彻底清理该实例下所有进程（含 Worker/Dispatcher 等）
+            $this->printer->warning(__('IPC 超时，强制终止 Master 并清理该实例下所有进程...'));
             Processer::killByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
-            // 清理可能残留的子进程
             $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
+            $this->cleanupResidualProcesses($name, ['count' => $instanceInfo->workerCount]);
         }
         
         // 删除实例文件
@@ -198,7 +224,7 @@ class Stop extends CommandAbstract
         // 释放启动锁
         $this->releaseStartLock($name);
         
-        // 最后清理所有 weline-wls 前缀的残留进程
+        // 最后按名前缀再扫一遍，确保该实例下所有 weline-wls 进程已退出（含未登记或逃逸进程）
         $this->cleanupAllWlsProcesses($name);
         
         echo "\n";
