@@ -164,6 +164,9 @@ class Response implements ResponseInterface
      */
     public function noRouter(int|string $code = 404, string $msg = ''): never
     {
+        // 响应内容前必须落库：Session 先持久化，再发 403/404 等响应体
+        $this->flushSessionBeforeTerminate();
+
         if (empty($msg)) {
             switch ($code) {
                 case 403:
@@ -179,13 +182,10 @@ class Response implements ResponseInterface
                     $msg = 'Unknown Error';
             }
         }
-        
+
         $eventData = ['code' => $code, 'msg' => $msg];
         $this->getEvenManager()->dispatch('Weline_Framework_Http::http_response_no_router_before', $eventData);
         $statusCode = \is_int($code) ? $code : (int) $code;
-
-        // 终止前落盘 Session（含 MessageManager 消息），避免跨请求残留
-        $this->flushSessionBeforeTerminate();
 
         // 始终抛出异常，由 Runtime 层统一处理
         throw new NoRouterException($statusCode, $msg);
@@ -210,30 +210,30 @@ class Response implements ResponseInterface
      */
     public function redirect(string $url, int $code = 302): never
     {
+        // 302 前必须落库：Session 先持久化到存储（含 WLS Session 服务），再触发事件与发送重定向，确保下次请求能读到登录态
+        $this->flushSessionBeforeTerminate();
+
         // 重定向监控：记录重定向信息
         $redirectCount = ($_SERVER['REDIRECT_COUNT'] ?? 0) + 1;
         $_SERVER['REDIRECT_COUNT'] = $redirectCount;
         $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
-        
+
         // 如果重定向次数过多，记录警告
         if ($redirectCount > 5) {
             w_log_warning("[Redirect Warning] Too many redirects: {$redirectCount}, current URI: {$currentUri}, redirect to: {$url}");
         }
-        
+
         // 如果重定向次数超过10次，停止重定向循环
         if ($redirectCount > 10) {
             w_log_error("[Redirect Error] Redirect loop detected! Stopping redirect. Current URI: {$currentUri}, Attempted redirect to: {$url}");
             throw new \RuntimeException("Redirect loop detected after {$redirectCount} redirects");
         }
-        
+
         // 触发重定向前事件
         $data = new DataObject(['url' => $url, 'code' => $code]);
         $this->getEvenManager()->dispatch('Framework_Http::response_redirect_before', $data);
         $url = $data->getData('url');
         $code = (int) $data->getData('code');
-
-        // 重定向前落盘 Session（含 MessageManager 消息），确保下次请求能读到
-        $this->flushSessionBeforeTerminate();
 
         // 始终抛出异常，由 Runtime 层统一处理
         throw new RedirectException($url, $code);
