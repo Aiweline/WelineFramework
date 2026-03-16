@@ -80,6 +80,7 @@ class SseTerminal implements TaglibInterface
             $t_stop = addslashes(__('停止'));
             $t_start = addslashes(__('开始'));
             $t_copied = addslashes(__('已复制'));
+            $t_dns_response = addslashes(__('【DNS 供应商返回】'));
 
             // 解析属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
@@ -333,6 +334,11 @@ function start(url) {
                     eventCallbacks[eventName](e);
                 } else {
                     log(msg, type);
+                }
+                if (data.dns_response) {
+                    var dr = data.dns_response;
+                    var drStr = typeof dr === 'string' ? dr : JSON.stringify(dr, null, 2);
+                    log('$t_dns_response ' + drStr, 'debug');
                 }
                 
                 if (data.progress !== undefined) {
