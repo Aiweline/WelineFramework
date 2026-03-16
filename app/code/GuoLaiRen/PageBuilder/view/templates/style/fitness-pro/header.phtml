@@ -99,8 +99,8 @@ foreach ($lines as $line) {
 
 <?php if ($navDisplay === 'yes'): ?>
 <style>
-    .fp-header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; }
-    .fp-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    .fp-header-outer { width: 100vw; margin-left: calc(-50vw + 50%); position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; box-sizing: border-box; }
+    .fp-header-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
     .fp-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
     .fp-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
     .fp-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
@@ -118,8 +118,8 @@ foreach ($lines as $line) {
     }
 </style>
 
-<header class="fp-header">
-    <div class="fp-header-container">
+<header class="fp-header-outer">
+    <div class="fp-header-inner">
         <?php if ($logoDisplay === 'yes'): ?>
         <a href="/" class="fp-logo">
             <span class="fp-logo-icon">

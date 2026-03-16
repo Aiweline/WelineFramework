@@ -76,23 +76,23 @@ if (empty($navLinks)) {
 $instanceId = 'ss-nav-' . uniqid();
 ?>
 
-<nav class="ss-header" id="<?= $instanceId ?>">
+<div class="ss-nav-outer" id="<?= $instanceId ?>">
     <style>
-        #<?= $instanceId ?> { position: relative; background: <?= htmlspecialchars($navBg) ?>; backdrop-filter: blur(10px); padding: 15px 0; }
-        #<?= $instanceId ?> .ss-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+        #<?= $instanceId ?> { width: 100vw; margin-left: calc(-50vw + 50%); box-sizing: border-box; position: relative; background: <?= htmlspecialchars($navBg) ?>; backdrop-filter: blur(10px); padding: 15px 0; }
+        #<?= $instanceId ?> .ss-nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
         #<?= $instanceId ?> .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= $textPrimary ?>; }
-        #<?= $instanceId ?> .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-        #<?= $instanceId ?> .ss-logo-icon svg { width: 18px; height: 18px; fill: #fff; }
-        #<?= $instanceId ?> .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
-        #<?= $instanceId ?> .ss-nav { display: flex; align-items: center; gap: 32px; }
-        #<?= $instanceId ?> .ss-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
-        #<?= $instanceId ?> .ss-nav-link { color: <?= $textPrimary ?>; opacity: 0.8; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: all 0.3s ease; }
-        #<?= $instanceId ?> .ss-nav-link:hover { color: <?= $navLinkHoverColor ?>; opacity: 1; }
-        #<?= $instanceId ?> .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #fff; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; text-decoration: none; }
-        #<?= $instanceId ?> .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16,185,129,0.4); }
-        @media (max-width: 768px) { #<?= $instanceId ?> .ss-nav-links { display: none; } }
+        #<?= $instanceId ?> .ss-nav-inner .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-logo-icon svg { width: 18px; height: 18px; fill: #fff; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-nav { display: flex; align-items: center; gap: 32px; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-nav-link { color: <?= $textPrimary ?>; opacity: 0.8; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: all 0.3s ease; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-nav-link:hover { color: <?= $navLinkHoverColor ?>; opacity: 1; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #fff; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; text-decoration: none; }
+        #<?= $instanceId ?> .ss-nav-inner .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16,185,129,0.4); }
+        @media (max-width: 768px) { #<?= $instanceId ?> .ss-nav-inner .ss-nav-links { display: none; } }
     </style>
-    <div class="ss-header-container">
+    <nav class="ss-nav-inner">
         <?php if ($logoDisplay === 'yes'): ?>
         <a href="/" class="ss-logo">
             <span class="ss-logo-icon">
@@ -118,5 +118,5 @@ $instanceId = 'ss-nav-' . uniqid();
             </a>
             <?php endif; ?>
         </nav>
-    </div>
-</nav>
+    </nav>
+</div>
