@@ -1891,6 +1891,8 @@ class DomainManagement extends BaseController
             $errors = [];
             $poolAdded = 0;
             $poolSkipped = 0;
+            /** @var array<int, array{domain_id: int, domain: string, result: array}> 解析 API 完整返回，便于排查失败原因 */
+            $resolve_results = [];
 
             foreach ($domainIds as $domainId) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -1898,6 +1900,12 @@ class DomainManagement extends BaseController
 
                 if (!$domain->getDomainId()) {
                     $failed++;
+                    $errors[] = __('域名 ID %{1} 不存在或加载失败', [$domainId]);
+                    $resolve_results[] = [
+                        'domain_id' => $domainId,
+                        'domain' => '',
+                        'result' => ['success' => false, 'errors' => [__('域名不存在或加载失败')]],
+                    ];
                     continue;
                 }
 
@@ -1927,7 +1935,12 @@ class DomainManagement extends BaseController
                         }
                         return (string) $e;
                     }, $errList);
-                    $errors[] = $domain->getDomain() . ': ' . \implode('; ', $errParts);
+                    $errors[] = $domain->getDomain() . ': ' . (\implode('; ', $errParts) ?: __('API 未返回具体错误，请查看 resolve_results'));
+                    $resolve_results[] = [
+                        'domain_id' => $domainId,
+                        'domain' => $domain->getDomain(),
+                        'result' => $result,
+                    ];
                     // 第三方 API 失败时，兜底使用实时 DNS 查询同步域名池（双保险）
                     $fallbackRecords = $this->collectLiveDnsRecordsForPoolSync($domain);
                     if ($fallbackRecords !== []) {
@@ -1957,6 +1970,7 @@ class DomainManagement extends BaseController
                     'auto_transfer_to_pool' => $autoTransferToPool,
                     'pool_added' => $poolAdded,
                     'pool_skipped' => $poolSkipped,
+                    'resolve_results' => $resolve_results,
                 ],
             ]);
         } catch (\Throwable $e) {
