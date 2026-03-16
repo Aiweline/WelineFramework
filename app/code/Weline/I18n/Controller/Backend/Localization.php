@@ -1250,39 +1250,34 @@ class Localization extends BaseController
     
     /**
      * 更新缺失的简码、ISO2、ISO3字段
-     * 对于已存在但简码为空的记录，自动计算并更新
+     * 对于已存在但简码/ISO2/ISO3 为空或 NULL 的记录，自动计算并更新
      */
     private function updateMissingLocaleCodes(): void
     {
         try {
-            // 使用独立的模型实例，避免影响主查询
             $localeModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            
-            // 查找简码为空或ISO2为空或ISO3为空的记录
-            // 使用OR条件查找任一字段为空的记录
-            $missingCodes = $localeModel->reset()
-                ->where($this->locale::schema_fields_SHORT_CODE, '', '=', 'OR')
-                ->where($this->locale::schema_fields_ISO2, '', '=', 'OR')
-                ->where($this->locale::schema_fields_ISO3, '', '=')
-                ->select()
-                ->fetch()
-                ->getItems();
-            
-            if (empty($missingCodes)) {
+            $all = $localeModel->reset()->select()->fetch()->getItems();
+            if (empty($all)) {
                 return;
             }
-            
+
             $updatedCount = 0;
-            foreach ($missingCodes as $locale) {
+            foreach ($all as $locale) {
                 $localeCode = $locale->getData($this->locale::schema_fields_CODE);
                 if (empty($localeCode)) {
                     continue;
                 }
-                
-                // 提取简码、ISO2和ISO3
+                $shortCode = $locale->getData($this->locale::schema_fields_SHORT_CODE);
+                $iso2 = $locale->getData($this->locale::schema_fields_ISO2);
+                $iso3 = $locale->getData($this->locale::schema_fields_ISO3);
+                // 任一为空或 null 即需要更新（trim 后空字符串视为空）
+                if ($shortCode !== null && $shortCode !== '' && trim((string)$shortCode) !== ''
+                    && $iso2 !== null && $iso2 !== '' && trim((string)$iso2) !== ''
+                    && $iso3 !== null && $iso3 !== '' && trim((string)$iso3) !== '') {
+                    continue;
+                }
+
                 $localeCodes = \Weline\I18n\Model\Locale::extractLocaleCodes($localeCode);
-                
-                // 更新记录（使用独立的模型实例）
                 $updateModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
                 $updateModel->reset()
                     ->where($this->locale::schema_fields_CODE, $localeCode)
@@ -1291,16 +1286,13 @@ class Localization extends BaseController
                     ->setData($this->locale::schema_fields_ISO3, $localeCodes['iso3'])
                     ->update()
                     ->fetch();
-                
                 $updatedCount++;
             }
-            
+
             if ($updatedCount > 0) {
                 Message::notes(__('已更新 %{1} 个区域的简码、ISO2、ISO3字段', [$updatedCount]));
             }
-            
         } catch (\Exception $e) {
-            // 静默处理错误，不影响主要功能
             w_log_error('Update missing locale codes failed: ' . $e->getMessage(), [], 'i18n');
         }
     }
