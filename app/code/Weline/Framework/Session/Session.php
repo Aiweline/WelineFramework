@@ -96,16 +96,22 @@ class Session implements SessionInterface
 
     /**
      * 请求结束时统一保存本请求内已启动的 Session。
+     * 仅从队列移除已成功落库或无需保存的 Session，落库失败则保留以便下次 flush（如 302 前）重试。
      */
     public static function flushRequestSessions(): void
     {
+        $keep = [];
         foreach (self::$instancesForShutdown as $session) {
-            if ($session instanceof self) {
-                $session->save();
-                $session->getStrategy()->writeClose();
+            if (!$session instanceof self) {
+                continue;
+            }
+            $session->save();
+            $session->getStrategy()->writeClose();
+            if ($session->isDirty()) {
+                $keep[] = $session;
             }
         }
-        self::$instancesForShutdown = [];
+        self::$instancesForShutdown = $keep;
     }
 
     /**
