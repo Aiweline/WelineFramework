@@ -61,6 +61,9 @@ if (\Weline\Server\Service\FileWatcher::supportsInotify()) {
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
 if (\function_exists('pcntl_signal')) {
     \pcntl_async_signals(true);
+    if (\defined('SIGPIPE')) {
+        \pcntl_signal(SIGPIPE, SIG_IGN);
+    }
     \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGTERM, function () use ($watcher) {
         echo "[FileWatcher] 收到 SIGTERM 信号，退出...\n";
