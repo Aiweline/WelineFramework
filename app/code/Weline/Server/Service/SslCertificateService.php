@@ -1194,15 +1194,43 @@ CNF;
     }
     
     /**
-     * 获取证书存储目录
+     * 获取证书存储目录（域名统一小写，与删除/扫描等逻辑一致，避免同域多写法导致“证书丢失”误判）
      */
     public function getCertificateDir(string $domain): string
     {
+        $domain = \strtolower(\trim($domain));
         $dir = $this->certBaseDir . $domain . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
         return $dir;
+    }
+
+    /**
+     * 解析时尝试的证书目录名列表（仅用于探测，不创建目录）
+     * 同一证书可能存于根域或 www 子域目录，需多变体查找避免误报“证书文件丢失”。
+     *
+     * @return list<string> 目录名（小写，不含路径），如 ['qipaisaas.com', 'www.qipaisaas.com', '*.qipaisaas.com']
+     */
+    protected function getCertificateDirCandidates(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [];
+        }
+        $root = $this->extractRootDomain($domain);
+        $candidates = [$domain];
+        if ($root !== $domain) {
+            $candidates[] = $root;
+        }
+        if ($root !== '' && 'www.' . $root !== $domain) {
+            $candidates[] = 'www.' . $root;
+        }
+        $wildcard = '*.' . $root;
+        if ($root !== '' && $wildcard !== $domain) {
+            $candidates[] = $wildcard;
+        }
+        return \array_values(\array_unique($candidates));
     }
 
     /**
@@ -1505,8 +1533,7 @@ CNF;
             return [$certPath, $keyPath];
         }
 
-        $certDir = $this->getCertificateDir($domain);
-        $candidates = [
+        $fileCandidates = [
             ['cert' => 'fullchain.pem', 'key' => 'privkey.pem'],
             ['cert' => 'cert.pem', 'key' => 'key.pem'],
             ['cert' => 'ssl.crt', 'key' => 'ssl.key'],
@@ -1514,11 +1541,16 @@ CNF;
             ['cert' => 'certificate.crt', 'key' => 'private.key'],
         ];
 
-        foreach ($candidates as $candidate) {
-            $candidateCertPath = $certDir . $candidate['cert'];
-            $candidateKeyPath = $certDir . $candidate['key'];
-            if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
-                return [$candidateCertPath, $candidateKeyPath];
+        // 尝试 DB 中的 domain 以及根域、www、泛域目录，避免证书在另一变体目录下被误判为丢失
+        $dirCandidates = $this->getCertificateDirCandidates($domain);
+        foreach ($dirCandidates as $dirName) {
+            $certDir = $this->certBaseDir . $dirName . DS;
+            foreach ($fileCandidates as $candidate) {
+                $candidateCertPath = $certDir . $candidate['cert'];
+                $candidateKeyPath = $certDir . $candidate['key'];
+                if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
+                    return [$candidateCertPath, $candidateKeyPath];
+                }
             }
         }
 
