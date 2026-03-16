@@ -466,16 +466,18 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             --base-main-color: <?= htmlspecialchars(tpmst_color($colors, 'base_main_color', '#ffed4e')) ?>;
         }
         
-        /* 导航栏 - 始终显示，半透明背景 */
+        /* 导航栏 - 始终显示，半透明背景，全宽铺满 */
         .tpmst-nav {
             display: block !important;
+            width: 100vw !important;
+            margin-left: calc(-50vw + 50%);
+            box-sizing: border-box;
             background: <?= htmlspecialchars($navBgHover) ?> !important;
             padding: 12px 24px;
             position: sticky;
             top: 0;
             left: 0;
             right: 0;
-            width: 100%;
             z-index: 9999;
             box-shadow: 0 2px 10px <?= htmlspecialchars(tpmst_color($colors, 'shadow_nav', 'rgba(0,0,0,0.5)')) ?>;
             transition: all 0.3s ease;
