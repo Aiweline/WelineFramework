@@ -51,7 +51,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
 
     public function index()
     {
-        if ($this->session->isLoggedIn()) {
+        // 防御：从无权限重定向到登录页时，若 Session 仍为“已登录”（RouteBefore 的 destroy 未在下一请求生效），则在此强制清空并直接展示登录页，避免再 redirect 回后台形成循环
+        $noAccessReasonParam = (string) $this->request->getParam('no_access_reason', '');
+        if ($noAccessReasonParam !== '' && $this->session->isLoggedIn()) {
+            $this->session->logout();
+            $this->session->getSession()->destroy();
+            // 不 redirect，直接 fall through 展示登录页
+        } elseif ($this->session->isLoggedIn()) {
             // 优先跳回上次访问的地址，找不到才跳转 admin
             $this->redirectReferer();
             $targetPath = $this->resolveDefaultRedirectTarget();
@@ -221,6 +227,10 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     $this->redirect($this->_url->getBackendUrl('/admin/login'));
                     return;
                 }
+                // 写入 ACL 上下文到 Session，路由校验时直接读 Session 免去每次请求 2 次 DB
+                $aclRoleId = $userRole && $userRole->getRoleId() ? (int) $userRole->getRoleId() : ($isSuperAdminById ? 1 : 0);
+                $this->session->getSession()->set('backend_acl_role_id', $aclRoleId);
+                $this->session->getSession()->set('backend_acl_is_enabled', $adminUsernameUser->getIsEnabled() ? 1 : 0);
             } catch (\Exception $e) {
                 throw $e;
             }
@@ -446,6 +456,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         
         $userId = $this->session->getUserId();
         $this->session->logout();
+        $this->session->getSession()->delete('backend_acl_role_id');
+        $this->session->getSession()->delete('backend_acl_is_enabled');
         if ($userId) {
             $backendUserToken = ObjectManager::getInstance(BackendUserToken::class);
             $backendUserToken->reset()

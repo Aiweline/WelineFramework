@@ -17,6 +17,8 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 
 class App
@@ -371,11 +373,19 @@ class App
             $eventManager = ObjectManager::getInstance(EventsManager::class);
         }
         
-        // 性能优化：只在有观察者时才调度事件
+        $runBeforeStart = microtime(true);
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::pushCurrentParent('run_before');
+        }
         $eventManager->dispatch('Weline_Framework::App::run_before');
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
+        }
         $result = '';
         # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
         if (!CLI) {
+            $urlParserStart = microtime(true);
             $parse = null;
             if ($_SERVER['WELINE_PARSER_URL']) {
                 $parse = Url::parser();
@@ -434,6 +444,13 @@ class App
                     $eventManager->dispatch('Weline_Framework::App::url_parsed_after');
                 }
             }
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
+            }
+            $routerStartBegin = microtime(true);
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::pushCurrentParent('router_start');
+            }
             if (PROD) {
                 try {
                     $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();
@@ -443,17 +460,32 @@ class App
             } else {
                 $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();
             }
+            if (RequestLifecycleTrace::isEnabled()) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan('router_start', (microtime(true) - $routerStartBegin) * 1000, 'framework');
+            }
+        }
+        $runAfterStart = microtime(true);
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::pushCurrentParent('run_after');
         }
         $data = new DataObject(['result' => $result]);
         $eventManager->dispatch('Weline_Framework::App::run_after', $data);
         $result = $data->getData('result');
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
+        }
         if(is_array($result)) {
             $result = json_encode($result);
             // 使用 ResponseTerminateException 替代 die()，由 Runtime 层统一处理
             throw new \Weline\Framework\Http\ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
         }
+        $resultStr = (string) $result;
+        // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
+        $resultStr = TelemetryBroadcaster::broadcast($resultStr);
         // 返回结果，由调用方（index.php 或 Runtime）决定如何处理
-        return $result;
+        return $resultStr;
     }
 
     /**

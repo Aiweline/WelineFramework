@@ -19,6 +19,24 @@
     </event>
     
     <!-- 
+        模板文件获取事件 - 解析主题文件路径
+        
+        功能：
+        1. 拦截模板文件获取事件
+        2. 根据当前主题（激活主题或预览主题）解析实际文件路径
+        3. 支持主题继承链查找（子主题 -> 父主题 -> 默认主题）
+        
+        注意：sort=0 确保最先执行，让其他 Observer 能拿到正确的主题文件路径
+    -->
+    <event name="Weline_Framework_View::fetch_file">
+        <observer name="Weline_Theme::template_fetch_file"
+                  instance="Weline\Theme\Observer\TemplateFetchFile"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    
+    <!-- 
         控制器模板获取前事件 - 根据 layoutType 自动加载主题布局
         
         功能：

@@ -23,6 +23,7 @@ use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Database\Schema\Attribute\Col;
 
 /**
@@ -99,6 +100,10 @@ abstract class AbstractModel extends DataObject
     public array $_unit_unique_fields = []; # 用于save保存数据时检查是否update还是insert  示例：['username','password']
     /*索引字段排序*/
     public array $_index_sort_keys = [];
+
+    /** 请求级 load 身份映射：同请求内相同 (class, pk) 只查一次库、只派发一次事件，WLS 下由 StateManager 重置 */
+    private static array $loadIdentityMap = [];
+    private static bool $loadIdentityMapRegistered = false;
     public array $_fields = [];
     # 装载join模型时字段数据，用于字段冲突
     public array $_join_model_fields = [];
@@ -575,13 +580,27 @@ abstract class AbstractModel extends DataObject
      */
     public function load(int|string $field_or_pk_value, $value = null): AbstractModel
     {
-        // 加载之前
+        $this->registerLoadIdentityMapResetter();
+        $cacheKey = static::class . '::' . (is_null($value) ? (string) $field_or_pk_value : $field_or_pk_value . '::' . $value);
+        if (isset(self::$loadIdentityMap[$cacheKey]) && is_array(self::$loadIdentityMap[$cacheKey])) {
+            $this->clearDataObject();
+            $this->setObjectData(self::$loadIdentityMap[$cacheKey]);
+            $this->_model_fields_data = self::$loadIdentityMap[$cacheKey];
+            $this->fetch_after();
+            $this->clearQuery();
+            return $this;
+        }
+
         $this->load_before();
-        // 清空之前的数据
         $this->clearDataObject();
-        // load之前事件
+        $tableName = $this->getOriginTableName();
+        $eventNameBefore = $tableName . '_model_load_before';
+        $eventNameAfter = $tableName . '_model_load_after';
         $eventData = ['model' => $this, 'field_or_pk_value' => $field_or_pk_value, 'value' => $value];
-        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_before', $eventData);
+        $eventManager = $this->getEvenManager();
+        if (!empty($eventManager->getEventObservers($eventNameBefore))) {
+            $eventManager->dispatch($eventNameBefore, $eventData);
+        }
         if (is_null($value)) {
             $data = $this->getQuery()->clearQuery()->where($this->getQuery()->table_alias . '.' . $this->_primary_key, $field_or_pk_value)->find()->fetch();
         } else {
@@ -591,15 +610,28 @@ abstract class AbstractModel extends DataObject
         if (is_array($data)) {
             $this->setObjectData($data);
             $this->_model_fields_data = $data;
+            self::$loadIdentityMap[$cacheKey] = $data;
         }
-        // load之之后事件
-        $this->getEvenManager()->dispatch($this->getOriginTableName() . '_model_load_after', $eventData);
-        // 加载之后
+        if (!empty($eventManager->getEventObservers($eventNameAfter))) {
+            $eventManager->dispatch($eventNameAfter, $eventData);
+        }
         $this->load_after();
-        # 触发fetch_after
         $this->fetch_after();
         $this->clearQuery();
         return $this;
+    }
+
+    private function registerLoadIdentityMapResetter(): void
+    {
+        if (self::$loadIdentityMapRegistered) {
+            return;
+        }
+        if (class_exists(StateManager::class)) {
+            StateManager::registerResetCallback('AbstractModel::loadIdentityMap', static function (): void {
+                self::$loadIdentityMap = [];
+            });
+            self::$loadIdentityMapRegistered = true;
+        }
     }
     /***************便捷查询 开始 *********************/
     //    function all(): mixed
@@ -762,6 +794,7 @@ abstract class AbstractModel extends DataObject
         $model_event_name = str_replace('\\', '_', $this::class);
         $evenData = new DataObject(['model' => &$this]);
         $this->getEvenManager()->dispatch($model_event_name . '_model_save_before', $evenData);
+
         $this->getQuery()->beginTransaction();
         $save_result = false; // 初始化默认值
         try {

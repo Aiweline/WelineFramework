@@ -12,6 +12,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Data\DataInterface;
 use Weline\Theme\Model\WelineTheme;
 
 /**
@@ -147,18 +148,27 @@ class LayoutPathResolver
         }
         
         [$moduleCode, $relativePath] = explode('::', $modulePath, 2);
-        
-        // 如果是 Weline_Theme 模块，使用模块路径
+        $relativePathForFile = str_replace('/', DS, $relativePath);
+
+        // Weline_Theme::theme/... 可能来自默认模块或当前主题目录，优先当前主题
         if ($moduleCode === 'Weline_Theme') {
+            $themePath = $theme->getPath();
+            if ($themePath !== '') {
+                $afterTheme = (strpos($relativePath, 'theme/') === 0) ? substr($relativePath, 6) : $relativePath;
+                $fullPath = rtrim($themePath, DS) . DS . 'view' . DS . str_replace('/', DS, $afterTheme);
+                if (is_file($fullPath)) {
+                    return $fullPath;
+                }
+            }
             $modules = Env::getInstance()->getModuleList();
             if (!isset($modules['Weline_Theme'])) {
                 return null;
             }
             $themeModule = $modules['Weline_Theme'];
-            return rtrim($themeModule['base_path'], DS) . DS . 'view' . DS . str_replace('/', DS, $relativePath);
+            return rtrim($themeModule['base_path'], DS) . DS . 'view' . DS . $relativePathForFile;
         }
-        
-        // 如果是主题路径，从主题目录查找
+
+        // 其他模块或主题路径，从主题目录查找
         $themePath = $theme->getPath();
         if (empty($themePath)) {
             return null;
@@ -175,6 +185,43 @@ class LayoutPathResolver
         }
         
         return null;
+    }
+
+    /**
+     * 根据布局模块路径计算对应的编译文件路径（com_*.phtml）
+     * 与 Framework Template 的 compile_dir + lang + file_dir + com_* 规则一致，用于判断是否可跳过重编译。
+     *
+     * @param string $modulePath 模块路径，如 Weline_Theme::theme/backend/layouts/default/default.phtml
+     * @param string $lang 语言目录，如 zh_Hans_CN
+     * @return string 编译文件完整路径
+     */
+    public static function getCompiledLayoutPath(string $modulePath, string $lang): string
+    {
+        if (strpos($modulePath, '::') === false) {
+            return '';
+        }
+        [, $relativePath] = explode('::', $modulePath, 2);
+        $relativePath = str_replace('/', DS, trim($relativePath, DS));
+        $parts = explode(DS, $relativePath);
+        $fileName = array_pop($parts);
+        $fileDir = $parts ? implode(DS, $parts) . DS : '';
+        $ext = pathinfo($fileName, PATHINFO_EXTENSION);
+        $baseName = $ext ? substr($fileName, 0, -\strlen($ext) - 1) : $fileName;
+        $comFileName = 'com_' . $baseName . ($ext ? '.' . $ext : '.phtml');
+
+        $modules = Env::getInstance()->getModuleList();
+        if (!isset($modules['Weline_Theme'])) {
+            return '';
+        }
+        $themeModule = $modules['Weline_Theme'];
+        if (PROD) {
+            $modulePathStr = $themeModule['path'] ?? 'Weline' . DS . 'Theme';
+            $compileDir = Env::path_framework_generated_complicate . $modulePathStr . DataInterface::dir . DS;
+        } else {
+            $basePath = rtrim($themeModule['base_path'], DS);
+            $compileDir = $basePath . DS . DataInterface::dir . DS . DataInterface::dir_type_TEMPLATE_COMPILE . DS;
+        }
+        return $compileDir . $lang . DS . $fileDir . $comFileName;
     }
 
     /**

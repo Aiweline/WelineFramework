@@ -497,6 +497,7 @@ class StateManager
         // WLS 下 State 被 ObjectManager 缓存后构造函数不再调用，$is_backend 可能残留上个请求的值。
         // 重置 static 变量 + 清除实例，确保下个请求重新创建 State 并正确判断 backend/frontend。
         self::registerStaticReset(\Weline\Framework\App\State::class, 'is_backend', false);
+        self::registerStaticReset(\Weline\Framework\App\State::class, 'langLocalCache', null);
         self::registerResetCallback('state_instance', function () {
             \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
         });

@@ -82,21 +82,74 @@ class WidgetRegistry
     }
 
     /**
-     * 刷新注册表（重新扫描并保存）
+     * 刷新注册表：用 yield 迭代器流式扫描并写入，不构建完整数组，128MB 内完成
      *
      * @return bool
      */
     public function refresh(): bool
     {
-        // 扫描所有部件
-        $scannedData = $this->scanner->scanAllWidgets();
-
-        // 保存注册表
-        return $this->saveRegistry($scannedData);
+        return $this->saveRegistryFromGenerator($this->scanner->scanAllWidgetsGenerator());
     }
 
     /**
-     * 保存注册表到文件
+     * 从 (type, name, config) 生成器流式写入注册表文件，不落盘完整数组
+     *
+     * @param \Generator<int, array{0: string, 1: string, 2: array}, void, void> $items
+     * @return bool
+     */
+    private function saveRegistryFromGenerator(\Generator $items): bool
+    {
+        try {
+            $registryDir = dirname(self::REGISTRY_FILE);
+            if (!is_dir($registryDir)) {
+                mkdir($registryDir, 0755, true);
+            }
+            $fh = fopen(self::REGISTRY_FILE, 'wb');
+            if ($fh === false) {
+                return false;
+            }
+            fwrite($fh, "<?php\n");
+            fwrite($fh, "/**\n * 部件注册表\n * 此文件由系统自动生成，请勿手动修改\n * 生成时间: " . date('Y-m-d H:i:s') . "\n */\n\nreturn [\n");
+            $currentType = null;
+            $firstType = true;
+            $firstName = true;
+            foreach ($items as [$type, $name, $config]) {
+                if ($type !== $currentType) {
+                    if ($currentType !== null) {
+                        fwrite($fh, "\n]");
+                        $firstType = false;
+                    }
+                    if (!$firstType) {
+                        fwrite($fh, ",\n");
+                    }
+                    fwrite($fh, var_export($type, true) . " => [\n");
+                    $currentType = $type;
+                    $firstName = true;
+                }
+                if (!$firstName) {
+                    fwrite($fh, ",\n");
+                }
+                $firstName = false;
+                fwrite($fh, '    ' . var_export($name, true) . ' => ' . var_export($config, true));
+            }
+            if ($currentType !== null) {
+                fwrite($fh, "\n]");
+            }
+            fwrite($fh, "\n];\n");
+            fclose($fh);
+
+            self::$staticCachedRegistry = null;
+            self::$staticCachedFileMtime = null;
+            \Weline\Widget\Service\WidgetData::clearCache();
+            return true;
+        } catch (\Exception $e) {
+            w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
+            return false;
+        }
+    }
+
+    /**
+     * 保存注册表到文件（兼容：传入完整数组时使用，如 Web 或测试）
      *
      * @param array $registry 注册表数据
      * @return bool
@@ -108,29 +161,35 @@ class WidgetRegistry
             if (!is_dir($registryDir)) {
                 mkdir($registryDir, 0755, true);
             }
-
-            $content = "<?php\n";
-            $content .= "/**\n";
-            $content .= " * 部件注册表\n";
-            $content .= " * 此文件由系统自动生成，请勿手动修改\n";
-            $content .= " * 生成时间: " . date('Y-m-d H:i:s') . "\n";
-            $content .= " */\n\n";
-            $content .= "return " . var_export($registry, true) . ";\n";
-
-            $result = file_put_contents(self::REGISTRY_FILE, $content, LOCK_EX);
-            
-            if ($result !== false) {
-                // 清除静态缓存
-                self::$staticCachedRegistry = null;
-                self::$staticCachedFileMtime = null;
-                
-                // 清除 WidgetData 的缓存
-                \Weline\Widget\Service\WidgetData::clearCache();
-                
-                return true;
+            $fh = fopen(self::REGISTRY_FILE, 'wb');
+            if ($fh === false) {
+                return false;
             }
-
-            return false;
+            fwrite($fh, "<?php\n");
+            fwrite($fh, "/**\n * 部件注册表\n * 此文件由系统自动生成，请勿手动修改\n * 生成时间: " . date('Y-m-d H:i:s') . "\n */\n\nreturn [\n");
+            $firstType = true;
+            foreach ($registry as $type => $widgets) {
+                if (!$firstType) {
+                    fwrite($fh, ",\n");
+                }
+                $firstType = false;
+                fwrite($fh, var_export($type, true) . " => [\n");
+                $firstName = true;
+                foreach (is_array($widgets) ? $widgets : [] as $name => $config) {
+                    if (!$firstName) {
+                        fwrite($fh, ",\n");
+                    }
+                    $firstName = false;
+                    fwrite($fh, '    ' . var_export($name, true) . ' => ' . var_export($config, true));
+                }
+                fwrite($fh, "\n]");
+            }
+            fwrite($fh, "\n];\n");
+            fclose($fh);
+            self::$staticCachedRegistry = null;
+            self::$staticCachedFileMtime = null;
+            \Weline\Widget\Service\WidgetData::clearCache();
+            return true;
         } catch (\Exception $e) {
             w_log_error("保存部件注册表失败: " . $e->getMessage(), [], 'WidgetRegistry');
             return false;

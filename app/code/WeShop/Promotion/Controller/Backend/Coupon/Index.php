@@ -20,12 +20,19 @@ class Index extends BackendController
         
         // 获取优惠券统计数据
         $totalCount = $couponModel->clear()->count();
-        $activeCount = $couponModel->clear()->where('is_active', 1)
-            ->whereRaw('end_date IS NULL OR end_date >= NOW()')
+        $activeCountWithEndDate = $couponModel->clear()
+            ->where('is_active', 1)
+            ->where('end_date', date('Y-m-d H:i:s'), '>=')
             ->count();
+        $activeCountNoEndDate = $couponModel->clear()
+            ->where('is_active', 1)
+            ->where('end_date', '')
+            ->count();
+        $activeCount = $activeCountWithEndDate + $activeCountNoEndDate;
         $totalUsed = $couponModel->clear()->sum('used_count');
         $expiredCount = $couponModel->clear()
-            ->whereRaw('end_date < NOW()')
+            ->where('end_date', '', '!=')
+            ->where('end_date', date('Y-m-d H:i:s'), '<')
             ->count();
         
         $this->assign('title', __('优惠券管理'));
