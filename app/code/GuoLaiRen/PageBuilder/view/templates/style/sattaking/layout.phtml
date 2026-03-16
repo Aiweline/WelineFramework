@@ -319,14 +319,9 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
         }
         
         .sk-region-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            position: relative;
             z-index: 1000;
-            background: <?= $navBgColor ?>;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
+            /* 背景由 header 组件自身提供，避免双层 */
         }
         
         .sk-region-content {

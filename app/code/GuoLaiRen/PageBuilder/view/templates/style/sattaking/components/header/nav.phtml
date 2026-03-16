@@ -37,7 +37,7 @@ if (!isset($colors) || !is_array($colors)) {
 // 颜色配置
 $navBg = $colors['nav_bg'] ?? 'rgba(10, 10, 26, 0.95)';
 $navText = $colors['nav_text'] ?? '#ffffff';
-$navLink = $colors['nav_link'] ?? '#b8b8d0';
+$navLink = $colors['nav_link'] ?? '#e8e0f5';
 $navLinkHover = $colors['nav_link_hover'] ?? '#a855f7';
 $accentPrimary = $colors['accent_primary'] ?? '#7c3aed';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%)';
@@ -100,75 +100,101 @@ if (empty($navItems)) {
 $instanceId = 'sk-nav-' . uniqid();
 ?>
 
-<nav class="sk-nav" id="<?= $instanceId ?>">
+<header class="sk-header-outer" id="<?= $instanceId ?>">
+    <div class="sk-nav-inner">
     <style>
         #<?= $instanceId ?> {
+            width: 100vw;
+            margin-left: calc(-50vw + 50%);
+            box-sizing: border-box;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
             background: <?= htmlspecialchars($navBg) ?>;
             backdrop-filter: blur(10px);
-            padding: 0 20px;
+            padding: 0 0;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+        }
+        #<?= $instanceId ?> .sk-nav-inner {
+            width: 100%;
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .sk-nav-logo {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
             font-size: 1.25rem;
             font-weight: 700;
             color: <?= $navText ?>;
+            text-decoration: none;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-logo img {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo:hover {
+            color: <?= $navText ?>;
+        }
+        
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo img {
             height: <?= $logoWidth ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .sk-nav-logo-icon {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo-icon {
             width: <?= $logoWidth ?>px;
             height: <?= $logoWidth ?>px;
             background: <?= $buttonPrimaryBg ?>;
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
         }
         
-        #<?= $instanceId ?> .sk-nav-logo-icon svg {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .sk-nav-menu {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .sk-nav-links {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .sk-nav-link {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
-            font-weight: 500;
+            font-weight: 600;
             transition: color 0.3s ease;
             position: relative;
+            text-decoration: none;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-link:hover {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .sk-nav-link::after {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -177,40 +203,60 @@ $instanceId = 'sk-nav-' . uniqid();
             height: 2px;
             background: <?= $accentPrimary ?>;
             transition: width 0.3s ease;
+            border-radius: 1px;
         }
         
-        #<?= $instanceId ?> .sk-nav-link:hover::after {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .sk-nav-cta {
-            padding: 10px 20px;
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta {
+            padding: 10px 24px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
             font-size: 0.9rem;
-            font-weight: 600;
-            border-radius: 8px;
+            font-weight: 700;
+            border-radius: 50px;
             transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .sk-nav-cta:hover {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4);
+            box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
         }
         
-        #<?= $instanceId ?> .sk-nav-toggle {
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-cta svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-toggle {
             display: none;
             flex-direction: column;
+            justify-content: center;
             gap: 5px;
-            padding: 8px;
+            width: 40px;
+            height: 40px;
+            padding: 0;
             cursor: pointer;
+            background: none;
+            border: none;
+            color: <?= $navText ?>;
         }
         
-        #<?= $instanceId ?> .sk-nav-toggle span {
-            width: 24px;
+        #<?= $instanceId ?> .sk-nav-inner .sk-nav-toggle span {
+            width: 22px;
             height: 2px;
-            background: <?= $navText ?>;
-            transition: all 0.3s ease;
+            background: currentColor;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            border-radius: 1px;
         }
         
         @media (max-width: 992px) {
@@ -227,6 +273,7 @@ $instanceId = 'sk-nav-' . uniqid();
                 gap: 0;
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
+                backdrop-filter: blur(16px);
             }
             
             #<?= $instanceId ?> .sk-nav-menu.active {
@@ -255,6 +302,7 @@ $instanceId = 'sk-nav-' . uniqid();
                 margin-top: 24px;
                 width: 100%;
                 text-align: center;
+                justify-content: center;
                 padding: 16px;
             }
             
@@ -283,30 +331,31 @@ $instanceId = 'sk-nav-' . uniqid();
             <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>">
         <?php else: ?>
             <span class="sk-nav-logo-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2 4 4 .5-2 5 .5 4h-6l.5-4-2-5 4-.5L12 2z"/><path d="M4 20h16"/></svg>
             </span>
         <?php endif; ?>
         <span><?= htmlspecialchars($logoText) ?></span>
     </a>
     <?php endif; ?>
     
-    <!-- Mobile Toggle -->
-    <button class="sk-nav-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .sk-nav-menu').classList.toggle('active');">
+    <button type="button" class="sk-nav-toggle" aria-label="<?= __('菜单') ?>" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .sk-nav-menu').classList.toggle('active');">
         <span></span>
         <span></span>
         <span></span>
     </button>
     
-    <!-- Navigation Menu -->
     <div class="sk-nav-menu">
         <div class="sk-nav-links">
             <?php foreach ($navItems as $item): ?>
             <a href="<?= htmlspecialchars($item['url']) ?>" class="sk-nav-link"><?= htmlspecialchars($item['name']) ?></a>
             <?php endforeach; ?>
         </div>
-        
         <?php if ($showCta): ?>
-        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-nav-cta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <?= htmlspecialchars($ctaText) ?>
+        </a>
         <?php endif; ?>
     </div>
-</nav>
+</div>
+</header>

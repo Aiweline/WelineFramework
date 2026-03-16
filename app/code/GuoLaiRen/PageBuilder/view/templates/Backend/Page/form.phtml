@@ -13,6 +13,7 @@ $parentId = $this->getData('parent_id') ?? 0;
 $i18n_enabled = $this->getData('i18n_enabled') ?? '0';
 $inheritedStyleCode = (string)($this->getData('inherited_style_code') ?? '');
 $inheritedStyleName = (string)($this->getData('inherited_style_name') ?? '');
+$isRootPage = $isEdit && $page && (int)($page->getData('parent_id') ?? 0) === 0;
 
 // 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
 if ($isEdit && $page && $page->getId()) {
@@ -592,11 +593,14 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             <?php endif; ?>
                         </div>
                         <?php if ($inheritedStyleCode !== ''): ?>
-                        <!-- 子页面：主题继承自主页，固定不可修改 -->
+                        <!-- 子页面：主题继承自主页，不可变更主题，但可做可视化配置 -->
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
+                        <?php endif; ?>
                         <div class="alert alert-secondary mb-0" id="inheritedStyleNotice">
                             <i class="mdi mdi-lock"></i>
                             <strong><?= __('子页面主题继承自主页，不可修改') ?></strong>
-                            <p class="mb-0 mt-2 small"><?= __('当前主题') ?>：<code><?= htmlspecialchars($inheritedStyleName ?: $inheritedStyleCode) ?></code></p>
+                            <p class="mb-0 mt-2 small"><?= __('当前主题') ?>：<code><?= htmlspecialchars($inheritedStyleName ?: $inheritedStyleCode) ?></code>。<?= __('主题不可变更，仍可使用上方「可视化配置」调整当前主题的样式与布局。') ?></p>
                         </div>
                         <input type="hidden" name="style" id="style" value="<?= htmlspecialchars($inheritedStyleCode) ?>">
                         <?php else: ?>
@@ -2693,6 +2697,8 @@ document.addEventListener('DOMContentLoaded', function() {
  */
 // 🚫 全局标志：正在应用继承配置，禁止自动保存
 window.isApplyingInheritance = false;
+// 是否为主页（根页面），用于改主题时提示子页面会随之变更
+window.isRootPageForStyleHint = <?= json_encode($isRootPage ?? false) ?>;
 
 document.addEventListener('DOMContentLoaded', function() {
     const parentIdSelect = document.getElementById('parent_id');
@@ -3522,6 +3528,8 @@ const pageIdForm = <?= ($isEdit && $page && $page->getId()) ? $page->getId() : '
 const styleSelect = document.getElementById('style');
 const styleDescContainer = document.getElementById('style-description-container');
 const styleDescText = document.getElementById('style-description-text');
+// 当前已提交的主题（用于下拉框取消时还原）
+window.committedPageStyle = '<?= $page ? htmlspecialchars(($page->getData('style') ?? '') ?? '') : '' ?>';
 
 
 /**
@@ -3897,35 +3905,49 @@ async function selectStyle(styleCode) {
     const styleSelect = document.getElementById('style');
     const oldStyle = styleSelect.value;
     
-    // 更新隐藏的select
-    styleSelect.value = styleCode;
-    
-    // 更新卡片选中状态
-    document.querySelectorAll('.style-card').forEach(card => {
-        if (card.dataset.styleCode === styleCode) {
-            card.classList.add('selected');
-        } else {
-            card.classList.remove('selected');
-        }
-    });
-    
-    // 启用可视化配置按钮
-    const visualBtn = document.getElementById('openVisualConfigBtn');
-    if (visualBtn) {
-        visualBtn.disabled = false;
-    }
-    
     // 🚫 如果正在应用继承配置，跳过自动保存
     if (window.isApplyingInheritance) {
         console.log('🚫 正在应用继承配置，跳过样式自动保存');
+        styleSelect.value = styleCode;
+        document.querySelectorAll('.style-card').forEach(card => {
+            if (card.dataset.styleCode === styleCode) card.classList.add('selected');
+            else card.classList.remove('selected');
+        });
+        const visualBtn = document.getElementById('openVisualConfigBtn');
+        if (visualBtn) visualBtn.disabled = false;
         return;
     }
     
-    // 如果是编辑模式，自动保存样式切换
     const pageIdForm = '<?= $isEdit && $page ? $page->getId() : '' ?>';
-    if (pageIdForm && styleCode !== oldStyle) {
-        await autoSaveStyleChange(styleCode);
+    const needConfirm = pageIdForm && styleCode !== oldStyle && window.isRootPageForStyleHint;
+    
+    function applyStyleChoice() {
+        styleSelect.value = styleCode;
+        document.querySelectorAll('.style-card').forEach(card => {
+            if (card.dataset.styleCode === styleCode) card.classList.add('selected');
+            else card.classList.remove('selected');
+        });
+        const visualBtn = document.getElementById('openVisualConfigBtn');
+        if (visualBtn) visualBtn.disabled = false;
+        if (pageIdForm && styleCode !== oldStyle) {
+            autoSaveStyleChange(styleCode);
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+            }
+        }
     }
+    
+    if (needConfirm && typeof BackendConfirm !== 'undefined') {
+        BackendConfirm.show('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？") ?>', {
+            title: '<?= __("确认修改主题") ?>',
+            confirmText: '<?= __("确定") ?>'
+        }).then(function(confirmed) {
+            if (confirmed) applyStyleChoice();
+        });
+        return;
+    }
+    
+    applyStyleChoice();
 }
 
 /**
@@ -4355,45 +4377,90 @@ if (styleSelect) {
         }
         
         const selectedStyle = this.value;
+        const oldStyle = window.committedPageStyle || '';
+        
+        // 仅编辑模式且为主页且真的换了主题时才弹确认
+        const needConfirm = <?= ($isEdit && $page && $page->getId() && $isRootPage) ? 'true' : 'false' ?> && selectedStyle && selectedStyle !== oldStyle;
+        
+        if (needConfirm && typeof BackendConfirm !== 'undefined') {
+            const self = this;
+            const selectedOption = this.options[this.selectedIndex];
+            BackendConfirm.show('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？") ?>', {
+                title: '<?= __("确认修改主题") ?>',
+                confirmText: '<?= __("确定") ?>'
+            }).then(async function(confirmed) {
+                if (!confirmed) {
+                    self.value = oldStyle;
+                    syncStyleUIFromSelect(self);
+                    return;
+                }
+                window.committedPageStyle = selectedStyle;
+                await doStyleChangeSave(self, selectedStyle, selectedOption);
+            });
+            return;
+        }
+        
         const selectedOption = this.options[this.selectedIndex];
-        
-        console.log('🎨 样式切换:', selectedStyle);
-        
-        // 显示样式描述
-        const descContainer = document.getElementById('style-description-container');
-        const descText = document.getElementById('style-description-text');
-        
-        if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
-            descText.textContent = selectedOption.dataset.description;
-            descContainer.style.display = 'block';
-        } else if (descContainer) {
-            descContainer.style.display = 'none';
-        }
-        
-        // 显示样式预览图
-        const previewContainer = document.getElementById('style-preview-container');
-        const previewImage = document.getElementById('style-preview-image');
-        
-        if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
-            const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
-            previewImage.src = baseUrl + selectedOption.dataset.previewImage;
-            previewContainer.style.display = 'block';
-            console.log('📷 显示预览图:', selectedOption.dataset.previewImage);
-        } else if (previewContainer) {
-            previewContainer.style.display = 'none';
-            console.log('ℹ️ 该样式没有预览图');
-        }
-        
-        // 加载样式配置
-        loadStyleConfig(selectedStyle);
-        
-        // 🔄 编辑模式下：自动保存样式切换
+        syncStyleUIFromSelect(this);
         <?php if ($isEdit && $page && $page->getId()): ?>
         if (selectedStyle) {
+            window.committedPageStyle = selectedStyle;
             await autoSaveStyleChange(selectedStyle);
+            if (window.isRootPageForStyleHint && typeof BackendToast !== 'undefined') {
+                BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+            }
         }
         <?php endif; ?>
     });
+}
+
+function syncStyleUIFromSelect(selectEl) {
+    const selectedOption = selectEl.options[selectEl.selectedIndex];
+    const descContainer = document.getElementById('style-description-container');
+    const descText = document.getElementById('style-description-text');
+    if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
+        descText.textContent = selectedOption.dataset.description;
+        descContainer.style.display = 'block';
+    } else if (descContainer) {
+        descContainer.style.display = 'none';
+    }
+    const previewContainer = document.getElementById('style-preview-container');
+    const previewImage = document.getElementById('style-preview-image');
+    if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
+        const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
+        previewImage.src = baseUrl + selectedOption.dataset.previewImage;
+        previewContainer.style.display = 'block';
+    } else if (previewContainer) {
+        previewContainer.style.display = 'none';
+    }
+    document.querySelectorAll('.style-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.styleCode === selectEl.value);
+    });
+    if (selectEl.value) loadStyleConfig(selectEl.value);
+}
+
+async function doStyleChangeSave(selectEl, selectedStyle, selectedOption) {
+    const descContainer = document.getElementById('style-description-container');
+    const descText = document.getElementById('style-description-text');
+    if (selectedOption && selectedOption.dataset.description && descContainer && descText) {
+        descText.textContent = selectedOption.dataset.description;
+        descContainer.style.display = 'block';
+    } else if (descContainer) descContainer.style.display = 'none';
+    const previewContainer = document.getElementById('style-preview-container');
+    const previewImage = document.getElementById('style-preview-image');
+    if (selectedOption && selectedOption.dataset.previewImage && previewContainer && previewImage) {
+        const baseUrl = '<?= $this->getUrl('pub/static/Weline/Admin/templates/GuoLaiRen/PageBuilder/') ?>';
+        previewImage.src = baseUrl + selectedOption.dataset.previewImage;
+        previewContainer.style.display = 'block';
+    } else if (previewContainer) previewContainer.style.display = 'none';
+    document.querySelectorAll('.style-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.styleCode === selectedStyle);
+    });
+    loadStyleConfig(selectedStyle);
+    await autoSaveStyleChange(selectedStyle);
+    if (typeof BackendToast !== 'undefined') {
+        BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+    }
 }
 
 /**

@@ -37,7 +37,7 @@ if (!isset($colors) || !is_array($colors)) {
 // 颜色配置
 $navBg = $colors['nav_bg'] ?? 'rgba(6, 13, 8, 0.95)';
 $navText = $colors['nav_text'] ?? '#ecfdf5';
-$navLink = $colors['nav_link'] ?? '#86efac';
+$navLink = $colors['nav_link'] ?? '#d1fae5';
 $navLinkHover = $colors['nav_link_hover'] ?? '#fbbf24';
 $accentPrimary = $colors['accent_primary'] ?? '#047857';
 $accentSecondary = $colors['accent_secondary'] ?? '#d97706';
@@ -101,21 +101,37 @@ if (empty($navItems)) {
 $instanceId = 'pa-nav-' . uniqid();
 ?>
 
-<nav class="pa-nav" id="<?= $instanceId ?>">
+<header class="pa-header-outer" id="<?= $instanceId ?>">
+    <div class="pa-nav-inner">
     <style>
         #<?= $instanceId ?> {
+            width: 100vw;
+            margin-left: calc(-50vw + 50%);
+            box-sizing: border-box;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
             background: <?= htmlspecialchars($navBg) ?>;
             backdrop-filter: blur(10px);
-            padding: 0 20px;
+            padding: 0 0;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+        }
+        #<?= $instanceId ?> .pa-nav-inner {
+            width: 100%;
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .pa-nav-logo {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -123,55 +139,65 @@ $instanceId = 'pa-nav-' . uniqid();
             font-weight: 800;
             color: <?= $navText ?>;
             letter-spacing: -0.02em;
+            text-decoration: none;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .pa-nav-logo img {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-logo:hover {
+            color: <?= $navText ?>;
+        }
+        
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-logo img {
             height: <?= intval($logoWidth) ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .pa-nav-logo-icon {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-logo-icon {
             width: <?= intval($logoWidth) ?>px;
             height: <?= intval($logoWidth) ?>px;
             background: <?= $buttonPrimaryBg ?>;
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
             box-shadow: 0 2px 12px rgba(4, 120, 87, 0.3);
         }
         
-        #<?= $instanceId ?> .pa-nav-logo-icon svg {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-logo-icon svg {
             width: 22px;
             height: 22px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .pa-nav-menu {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .pa-nav-links {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .pa-nav-link {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
-            font-weight: 500;
+            font-weight: 600;
             transition: color 0.3s ease;
             position: relative;
+            text-decoration: none;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .pa-nav-link:hover {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .pa-nav-link::after {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -180,13 +206,14 @@ $instanceId = 'pa-nav-' . uniqid();
             height: 2px;
             background: <?= $accentSecondary ?>;
             transition: width 0.3s ease;
+            border-radius: 1px;
         }
         
-        #<?= $instanceId ?> .pa-nav-link:hover::after {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .pa-nav-cta {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-cta {
             padding: 10px 24px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
@@ -197,26 +224,45 @@ $instanceId = 'pa-nav-' . uniqid();
             text-transform: uppercase;
             letter-spacing: 0.05em;
             box-shadow: 0 4px 15px rgba(4, 120, 87, 0.3);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         
-        #<?= $instanceId ?> .pa-nav-cta:hover {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-cta:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 25px rgba(4, 120, 87, 0.5);
+            box-shadow: 0 8px 25px rgba(4, 120, 87, 0.5);
         }
         
-        #<?= $instanceId ?> .pa-nav-toggle {
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-cta svg {
+            width: 16px;
+            height: 16px;
+            fill: currentColor;
+        }
+        
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-toggle {
             display: none;
             flex-direction: column;
+            justify-content: center;
             gap: 5px;
-            padding: 8px;
+            width: 40px;
+            height: 40px;
+            padding: 0;
             cursor: pointer;
+            background: none;
+            border: none;
+            color: <?= $navText ?>;
         }
         
-        #<?= $instanceId ?> .pa-nav-toggle span {
-            width: 24px;
+        #<?= $instanceId ?> .pa-nav-inner .pa-nav-toggle span {
+            width: 22px;
             height: 2px;
-            background: <?= $navText ?>;
-            transition: all 0.3s ease;
+            background: currentColor;
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            border-radius: 1px;
         }
         
         @media (max-width: 992px) {
@@ -233,7 +279,7 @@ $instanceId = 'pa-nav-' . uniqid();
                 gap: 0;
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
-                backdrop-filter: blur(12px);
+                backdrop-filter: blur(16px);
             }
             
             #<?= $instanceId ?> .pa-nav-menu.active {
@@ -260,6 +306,7 @@ $instanceId = 'pa-nav-' . uniqid();
                 margin-top: 24px;
                 width: 100%;
                 text-align: center;
+                justify-content: center;
                 padding: 16px;
             }
             
@@ -282,30 +329,31 @@ $instanceId = 'pa-nav-' . uniqid();
             <img src="<?= htmlspecialchars($logoImage) ?>" alt="<?= htmlspecialchars($logoText) ?>">
         <?php else: ?>
             <span class="pa-nav-logo-icon">
-                <svg viewBox="0 0 24 24"><path d="M12 2C9.24 2 7 4.24 7 7c0 1.77.94 3.41 2.47 4.3L12 24l2.53-12.7C16.06 10.41 17 8.77 17 7c0-2.76-2.24-5-5-5zm0 7.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 4.5 12 4.5s2.5 1.12 2.5 2.5S13.38 9.5 12 9.5z"/></svg>
+                <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2C7 2 2 8 2 12c0 2 1.5 4 4 5 0 2 1 4 2 6h8c1-2 2-4 2-6 2.5-1 4-3 4-5 0-4-5-10-10-15z"/></svg>
             </span>
         <?php endif; ?>
         <span><?= htmlspecialchars($logoText) ?></span>
     </a>
     <?php endif; ?>
     
-    <!-- Mobile Toggle -->
-    <button class="pa-nav-toggle" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .pa-nav-menu').classList.toggle('active');">
+    <button type="button" class="pa-nav-toggle" aria-label="<?= __('菜单') ?>" onclick="this.classList.toggle('active'); document.querySelector('#<?= $instanceId ?> .pa-nav-menu').classList.toggle('active');">
         <span></span>
         <span></span>
         <span></span>
     </button>
     
-    <!-- Navigation Menu -->
     <div class="pa-nav-menu">
         <div class="pa-nav-links">
             <?php foreach ($navItems as $item): ?>
             <a href="<?= htmlspecialchars($item['url']) ?>" class="pa-nav-link"><?= htmlspecialchars($item['name']) ?></a>
             <?php endforeach; ?>
         </div>
-        
         <?php if ($showCta): ?>
-        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="pa-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
+        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="pa-nav-cta">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <?= htmlspecialchars($ctaText) ?>
+        </a>
         <?php endif; ?>
     </div>
-</nav>
+</div>
+</header>

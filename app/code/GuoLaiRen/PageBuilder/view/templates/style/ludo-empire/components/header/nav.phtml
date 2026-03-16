@@ -95,21 +95,31 @@ if (empty($navItems)) {
 $instanceId = 'le-nav-' . uniqid();
 ?>
 
-<nav id="<?= $instanceId ?>">
+<div class="le-nav-outer" id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
+            width: 100vw;
+            margin-left: calc(-50vw + 50%);
             background: <?= htmlspecialchars($navBg) ?>;
             backdrop-filter: blur(10px);
-            padding: 0 20px;
+            padding: 0 0;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+        #<?= $instanceId ?> .le-nav-inner {
+            width: 100%;
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .le-nav-logo {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -119,12 +129,12 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-logo img {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-logo img {
             height: <?= intval($logoWidth) ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .le-nav-logo-icon {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-logo-icon {
             width: <?= intval($logoWidth) ?>px;
             height: <?= intval($logoWidth) ?>px;
             background: <?= $buttonPrimaryBg ?>;
@@ -135,25 +145,25 @@ $instanceId = 'le-nav-' . uniqid();
             position: relative;
         }
         
-        #<?= $instanceId ?> .le-nav-logo-icon svg {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .le-nav-menu {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .le-nav-links {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .le-nav-link {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
             font-weight: 600;
@@ -162,11 +172,11 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-link:hover {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .le-nav-link::after {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -178,11 +188,11 @@ $instanceId = 'le-nav-' . uniqid();
             border-radius: 1px;
         }
         
-        #<?= $instanceId ?> .le-nav-link:hover::after {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .le-nav-cta {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-cta {
             padding: 10px 24px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
@@ -196,18 +206,18 @@ $instanceId = 'le-nav-' . uniqid();
             text-decoration: none;
         }
         
-        #<?= $instanceId ?> .le-nav-cta:hover {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 8px 25px rgba(139, 92, 246, 0.4);
         }
         
-        #<?= $instanceId ?> .le-nav-cta svg {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-cta svg {
             width: 16px;
             height: 16px;
             fill: currentColor;
         }
         
-        #<?= $instanceId ?> .le-nav-toggle {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-toggle {
             display: none;
             flex-direction: column;
             gap: 5px;
@@ -217,7 +227,7 @@ $instanceId = 'le-nav-' . uniqid();
             border: none;
         }
         
-        #<?= $instanceId ?> .le-nav-toggle span {
+        #<?= $instanceId ?> .le-nav-inner .le-nav-toggle span {
             width: 24px;
             height: 2px;
             background: <?= $navText ?>;
@@ -290,6 +300,7 @@ $instanceId = 'le-nav-' . uniqid();
         }
     </style>
     
+    <div class="le-nav-inner">
     <?php if ($showLogo): ?>
     <a href="/" class="le-nav-logo">
         <?php if ($logoImage): ?>
@@ -323,4 +334,5 @@ $instanceId = 'le-nav-' . uniqid();
         </a>
         <?php endif; ?>
     </div>
-</nav>
+    </div>
+</div>

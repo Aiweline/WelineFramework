@@ -100,21 +100,36 @@ if (empty($navItems)) {
 $instanceId = 'fh-nav-' . uniqid();
 ?>
 
-<nav class="fh-nav" id="<?= $instanceId ?>">
+<header class="fh-header-outer" id="<?= $instanceId ?>">
     <style>
         #<?= $instanceId ?> {
+            width: 100vw;
+            margin-left: calc(-50vw + 50%);
+            box-sizing: border-box;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
             background: <?= htmlspecialchars($navBg) ?>;
             backdrop-filter: blur(10px);
-            padding: 0 20px;
+            padding: 0 0;
             height: 80px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: center;
+        }
+        #<?= $instanceId ?> .fh-nav-inner {
+            width: 100%;
             max-width: 1200px;
             margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
         
-        #<?= $instanceId ?> .fh-nav-logo {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo {
             display: flex;
             align-items: center;
             gap: 12px;
@@ -123,12 +138,12 @@ $instanceId = 'fh-nav-' . uniqid();
             color: <?= $navText ?>;
         }
         
-        #<?= $instanceId ?> .fh-nav-logo img {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo img {
             height: <?= $logoWidth ?>px;
             width: auto;
         }
         
-        #<?= $instanceId ?> .fh-nav-logo-icon {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo-icon {
             width: <?= $logoWidth ?>px;
             height: <?= $logoWidth ?>px;
             background: <?= $buttonPrimaryBg ?>;
@@ -138,25 +153,25 @@ $instanceId = 'fh-nav-' . uniqid();
             justify-content: center;
         }
         
-        #<?= $instanceId ?> .fh-nav-logo-icon svg {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-logo-icon svg {
             width: 24px;
             height: 24px;
             fill: #ffffff;
         }
         
-        #<?= $instanceId ?> .fh-nav-menu {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-menu {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .fh-nav-links {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-links {
             display: flex;
             align-items: center;
             gap: 32px;
         }
         
-        #<?= $instanceId ?> .fh-nav-link {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link {
             color: <?= $navLink ?>;
             font-size: 0.95rem;
             font-weight: 500;
@@ -164,11 +179,11 @@ $instanceId = 'fh-nav-' . uniqid();
             position: relative;
         }
         
-        #<?= $instanceId ?> .fh-nav-link:hover {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link:hover {
             color: <?= $navLinkHover ?>;
         }
         
-        #<?= $instanceId ?> .fh-nav-link::after {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link::after {
             content: '';
             position: absolute;
             bottom: -4px;
@@ -179,11 +194,11 @@ $instanceId = 'fh-nav-' . uniqid();
             transition: width 0.3s ease;
         }
         
-        #<?= $instanceId ?> .fh-nav-link:hover::after {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-link:hover::after {
             width: 100%;
         }
         
-        #<?= $instanceId ?> .fh-nav-cta {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-cta {
             padding: 10px 20px;
             background: <?= $buttonPrimaryBg ?>;
             color: #ffffff;
@@ -193,12 +208,12 @@ $instanceId = 'fh-nav-' . uniqid();
             transition: all 0.3s ease;
         }
         
-        #<?= $instanceId ?> .fh-nav-cta:hover {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-cta:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(37, 99, 235, 0.4);
         }
         
-        #<?= $instanceId ?> .fh-nav-toggle {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-toggle {
             display: none;
             flex-direction: column;
             gap: 5px;
@@ -206,7 +221,7 @@ $instanceId = 'fh-nav-' . uniqid();
             cursor: pointer;
         }
         
-        #<?= $instanceId ?> .fh-nav-toggle span {
+        #<?= $instanceId ?> .fh-nav-inner .fh-nav-toggle span {
             width: 24px;
             height: 2px;
             background: <?= $navText ?>;
@@ -309,4 +324,5 @@ $instanceId = 'fh-nav-' . uniqid();
         <a href="<?= htmlspecialchars($ctaUrl) ?>" class="fh-nav-cta"><?= htmlspecialchars($ctaText) ?></a>
         <?php endif; ?>
     </div>
-</nav>
+    </div>
+</header>
