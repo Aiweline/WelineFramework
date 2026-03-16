@@ -57,4 +57,9 @@
         <observer name="Weline_Framework_Manager::result_bridge_redirect" instance="Weline\Framework\Http\Observer\ResultBridgeRedirect" disabled="false" shared="true" sort="50"/>
     </event>
 
+    <!-- 日志运行模式解析：默认来自配置 log.runtime，观察者可改为 wls（如 WLS 进程内由 Weline_Server 设置） -->
+    <event name="Weline_Framework_Log::resolve_runtime">
+        <observer name="Weline_Framework_Log::resolve_runtime_default" instance="Weline\Framework\Log\Observer\ResolveRuntimeDefaultObserver" disabled="false" shared="true" sort="100"/>
+    </event>
+
 </config>

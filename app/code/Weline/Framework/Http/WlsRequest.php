@@ -433,12 +433,14 @@ class WlsRequest extends Request
      * FPM 模式下 ParameterBag 通过 php://input 读取请求体，
      * 但 WLS 模式下 php://input 不可用，需要从已解析的原始 HTTP 数据中注入。
      * 
+     * 使用 parsedGetParams/parsedPostParams（parseRawHttp 阶段保存的不可变数据），
+     * 而非 $_GET/$_POST（可能被 GlobalsEmulator::reset() 清空后尚未恢复）。
+     * 
      * @return \Weline\Framework\Http\Request\ParameterBag
      */
     public function getParameterBag(): \Weline\Framework\Http\Request\ParameterBag
     {
         if ($this->parameterBag === null) {
-            // WLS 模式：统一解析 body 数据
             $contentType = $this->parsedHeaders['Content-Type'] ?? ($_SERVER['CONTENT_TYPE'] ?? '');
             $parsed = self::parseRequestBody($this->body, $contentType, $this->parsedMethod);
             $bodyData = $parsed['post'];
@@ -446,13 +448,11 @@ class WlsRequest extends Request
                 $_FILES = $parsed['files'];
             }
             
-            // 直接通过构造函数注入数据，不调用 initFromGlobals()（避免读取 php://input）
             $this->parameterBag = new \Weline\Framework\Http\Request\ParameterBag(
-                $_GET,
-                $_POST,
+                $this->parsedGetParams ?: ($_GET ?? []),
+                $this->parsedPostParams ?: ($_POST ?? []),
                 $bodyData
             );
-            // 注入原始请求体字符串（供 getRawBody() 使用）
             $this->parameterBag->setRawBody($this->body);
         }
         return $this->parameterBag;

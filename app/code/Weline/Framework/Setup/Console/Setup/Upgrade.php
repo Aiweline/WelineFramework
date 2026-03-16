@@ -751,7 +751,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function generateOptimizationCache(array $args = []): void
     {
         $this->printing->note(__('正在生成优化缓存...'));
-        
+
         // 1. 生成类映射缓存
         $this->generateClassmapCache();
         
@@ -808,24 +808,24 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             APP_CODE_PATH,
             BP . 'generated' . DS . 'code' . DS,
         ];
-        
+
         foreach ($directories as $baseDir) {
             if (!is_dir($baseDir)) {
                 continue;
             }
-            
+
             $this->scanDirectoryForClasses($baseDir, $baseDir, $classMap);
         }
-        
+
         // 保存类映射缓存
         $classMapFile = BP . 'generated' . DS . 'classmap.php';
         $content = '<?php' . PHP_EOL;
         $content .= '// 类映射缓存 - 由 setup:upgrade 自动生成' . PHP_EOL;
         $content .= '// 生成时间: ' . date('Y-m-d H:i:s') . PHP_EOL;
         $content .= 'return ' . var_export($classMap, true) . ';' . PHP_EOL;
-        
+
         file_put_contents($classMapFile, $content, LOCK_EX);
-        
+
         $this->printing->note(__('  - 类映射缓存已生成，共 %{1} 个类', [count($classMap)]));
     }
     
@@ -950,7 +950,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $content .= '// PSR-4 映射缓存 - 由 setup:upgrade 自动生成' . PHP_EOL;
             $content .= '// 生成时间: ' . date('Y-m-d H:i:s') . PHP_EOL;
             $content .= 'return ' . var_export($modifiedPsr4, true) . ';' . PHP_EOL;
-            
+
             file_put_contents($psr4CacheFile, $content, LOCK_EX);
             
             $this->printing->note(__('  - PSR-4 映射缓存已生成，共 %{1} 个命名空间', [count($modifiedPsr4)]));
@@ -1122,6 +1122,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function executeModuleUpgrade(array $args = [], array $data = []): void
     {
+        $prevLimit = \ini_get('memory_limit') ?: '';
+        @\ini_set('memory_limit', '512M');
+
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         // 传递模块过滤信息，便于观察者按需执行（例如菜单、Widget 等）
@@ -1709,6 +1712,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         } else {
             $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新任务收集'));
         }
+        gc_collect_cycles();
         
         // 仅在将提交 route_update 时准备并收集路由；单独指定其他阶段（如 schema_diff）时跳过，避免 enableBatchMode 清空缓冲后不 flush 导致路由丢失
         $willCommitRoute = $shouldCommitStage(self::STAGE_ROUTE_UPDATE);
@@ -1744,6 +1748,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     $schemaDiffStage->commit();
                 }
             }
+            gc_collect_cycles();
         }
         
         // 先收集菜单（MenuCollector diff 写入 weline_acl type=menus），确保 ControllerAttributes 断言时 parent_source 已存在
@@ -1756,6 +1761,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } catch (\Throwable $e) {
                 $this->printing->warning(__('菜单预收集失败（可能影响 ACL 断言）：%{1}', [$e->getMessage()]));
             }
+            gc_collect_cycles();
         }
         
         // 收集路由注册任务（仅在将提交 route_update 时执行，避免污染路由缓冲）
@@ -1781,6 +1787,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } catch (\Throwable $e) {
                 $this->printing->warning(__('路由收集后 ACL 同步失败：%{1}', [$e->getMessage()]));
             }
+            gc_collect_cycles();
         }
         
         // ========== 准备所有阶段 ==========
@@ -1789,6 +1796,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         try {
             $stageManager->prepareAll(['skip_route_stage' => !$willCommitRoute]);
             $this->printing->success(__('✓ 所有阶段准备完成'));
+            gc_collect_cycles();
         } catch (Exception $e) {
             $this->printing->error(__('阶段准备失败：%{1}', [$e->getMessage()]));
             throw $e;
@@ -1800,6 +1808,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         try {
             $stageManager->validateAll();
             $this->printing->success(__('✓ 所有阶段验证通过'));
+            gc_collect_cycles();
         } catch (Exception $e) {
             $this->printing->error(__('阶段验证失败：%{1}', [$e->getMessage()]));
             // 回滚所有已准备的阶段
@@ -1853,6 +1862,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 } elseif ($stageFilter !== null && !$shouldCommitStage(self::STAGE_SCHEMA_DIFF)) {
                     $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_SCHEMA_DIFF]));
                 }
+                gc_collect_cycles();
             }
 
             // 第二步：提交模块安装/升级阶段（此时表已存在，Install 种子数据可正常写入）
@@ -1862,6 +1872,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } else {
                 $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_MODULE_SETUP]));
             }
+            gc_collect_cycles();
 
             // 检查是否有模块被安装或升级（仅当执行了 module_setup 时）
             if ($shouldCommitStage(self::STAGE_MODULE_SETUP) && $moduleSetupStage->hasModuleInstalledOrUpgraded()) {
@@ -1984,6 +1995,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                     $this->printing->note(__('   - 仅更新路由模式，跳过数据库更新阶段提交'));
                 }
             }
+            gc_collect_cycles();
             
             // 第四步：提交路由更新阶段
             if ($shouldCommitStage(self::STAGE_ROUTE_UPDATE)) {
@@ -1992,6 +2004,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } else {
                 $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_ROUTE_UPDATE]));
             }
+            gc_collect_cycles();
             
             // 第五步：提交文件更新阶段
             if ($shouldCommitStage(self::STAGE_FILE_UPDATE)) {
@@ -2000,10 +2013,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             } else {
                 $this->printing->note(__('   - 跳过阶段 %{1}', [self::STAGE_FILE_UPDATE]));
             }
+            gc_collect_cycles();
             // 一次性重载 Env（含 modules.php），避免本进程后续 getModuleList 仍用旧缓存导致 base_path 等错误
             Env::getInstance()->reload();
 
             $this->printing->success(__('✓ 所有阶段更新完成！'));
+            gc_collect_cycles();
         } catch (Exception $e) {
             $this->printing->error(__('阶段提交失败：%{1}', [$e->getMessage()]));
             throw $e;
@@ -2108,10 +2123,9 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
 
         $stageNumber++;
 
-        // 步骤 7 前释放步 1–6 可能残留的引用；步骤 7 多观察者+迁移需略高上限，仅本阶段临时 192M
+        // 步骤 7 前释放步 1–6 可能残留的引用
         gc_collect_cycles();
-        $prevLimit = ini_get('memory_limit');
-        @ini_set('memory_limit', '192M');
+
 
         // 清理其他
         $this->printing->note($stageNumber . '、触发模块升级后事件...', '系统');

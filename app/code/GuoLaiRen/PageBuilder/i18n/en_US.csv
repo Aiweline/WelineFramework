@@ -1,4 +1,4 @@
-﻿开始扫描样式模板...,开始扫描样式模板...
+开始扫描样式模板...,开始扫描样式模板...
 扫描样式：%{1},扫描样式：%{1}
 缺少必需文件：%{1},缺少必需文件：%{1}
 "✓ 已更新","✓ 已更新"
@@ -896,6 +896,7 @@ HTTPS,HTTPS
 "手动申请 HTTPS 证书","手动申请 HTTPS 证书"
 从域名池删除,从域名池删除
 "当前服务运行在非80端口，只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。","当前服务运行在非80端口，只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。"
+"当前服务未监听 80 端口（或未启用 80 重定向），只能通过 DNS 验证方式申请证书。请确保域名已关联 DNS 管理账户。","Service does not listen on port 80 (or 80 redirect is disabled); certificate can only be applied via DNS verification. Please ensure the domain is linked to a DNS management account."
 将自动尝试文件验证（HTTP-01）。请确保域名已正确解析到本服务器。,将自动尝试文件验证（HTTP-01）。请确保域名已正确解析到本服务器。
 申请HTTPS,申请HTTPS
 证书申请失败,证书申请失败

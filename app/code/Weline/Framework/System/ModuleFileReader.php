@@ -30,7 +30,7 @@ class ModuleFileReader extends DataObject
      */
     public function __construct(
         Scanner $scanner,
-        string  $path = 'etc' . DS . 'module.xml'
+        string  $path = 'etc' . DS . 'event.xml'
     )
     {
         $this->scanner = $scanner;
