@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 
-namespace Weline\Server\Console\Ssl;
+namespace Weline\Server\Console\Server\Ssl;
 
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
@@ -12,8 +12,8 @@ use Weline\Server\Service\SslCertificateService;
  */
 class Reload extends CommandAbstract
 {
-    /** @var string[] */
-    public const ALIASES = ['server:ssl:reload', 'cert:reload'];
+    /** @var string[] 兼容旧命令名 */
+    public const ALIASES = ['ssl:reload', 'cert:reload'];
 
     public function __construct(
         private readonly SslCertificateService $sslService
@@ -85,7 +85,7 @@ class Reload extends CommandAbstract
     public function help(): array|string
     {
         return CommandHelper::formatHelp(
-            'ssl:reload',
+            'server:ssl:reload',
             __('从证书管理中读取 PEM 内容，重载到本地证书目录，并刷新 WLS 的 SNI 证书映射'),
             [
                 '-d, --domain <domain>' => __('只重载指定域名的证书'),
@@ -96,9 +96,9 @@ class Reload extends CommandAbstract
                 __('默认行为') => __('重载所有启用了 HTTPS 的有效/异常证书记录；已过期证书仅通知不重载'),
             ],
             [
-                __('重载全部证书') => 'php bin/w ssl:reload',
-                __('重载单个域名') => 'php bin/w ssl:reload -d www.example.com',
-                __('清除不完整证书并重置') => 'php bin/w ssl:reload --clear',
+                __('重载全部证书') => 'php bin/w server:ssl:reload',
+                __('重载单个域名') => 'php bin/w server:ssl:reload -d www.example.com',
+                __('清除不完整证书并重置') => 'php bin/w server:ssl:reload --clear',
             ]
         );
     }

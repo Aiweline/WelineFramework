@@ -58,6 +58,22 @@
                   sort="0"/>
     </event>
 
+    <!-- 维护模式：WLS 下由 Env 通过事件请求状态/设置，本模块通过 IPC 与 Orchestrator 通信 -->
+    <event name="Weline_Server::integration::maintenance_check">
+        <observer name="Weline_Server::maintenance_check_ipc"
+                  instance="Weline\Server\Observer\MaintenanceCheckObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+    <event name="Weline_Server::integration::maintenance_set">
+        <observer name="Weline_Server::maintenance_set_ipc"
+                  instance="Weline\Server\Observer\MaintenanceSetObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+
     <!-- 攻击信号处理已改为 Cron 定时任务方式（非阻塞） -->
     <!-- @see Weline\Server\Cron\AttackSignalMonitor -->
     <!-- @see Weline\Server\Service\AttackSignalFileService -->

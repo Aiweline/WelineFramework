@@ -10,14 +10,15 @@ trait TablePrinter
 {
     /**
      * 打印表格
-     * 
-     * @param string $title 表格标题
-     * @param array $data 数据数组 [['key', 'value'], ...]
-     * @param bool $showBorder 是否显示边框
-     * @param int $maxWidth 最大总宽度（0表示自动检测终端宽度）
-     * @param bool $truncateUrls 是否截断URL（默认true，设为false时完整显示URL，允许超出终端宽度）
+     *
+     * @param string $title        表格标题
+     * @param array  $data         数据数组 [['key', 'value'], ...]
+     * @param bool   $showBorder   是否显示边框
+     * @param int    $maxWidth     最大总宽度（0表示自动检测终端宽度）
+     * @param bool   $truncateUrls 是否截断URL（默认true，设为false时完整显示URL，允许超出终端宽度）
+     * @param bool   $noOuterBorder 为 true 时左右无竖线边界（仅保留列间竖线与上下横线）
      */
-    protected function printTable(string $title, array $data, bool $showBorder = true, int $maxWidth = 0, bool $truncateUrls = true): void
+    protected function printTable(string $title, array $data, bool $showBorder = true, int $maxWidth = 0, bool $truncateUrls = true, bool $noOuterBorder = false): void
     {
         if (empty($data)) {
             return;
@@ -83,19 +84,30 @@ trait TablePrinter
             }
         }
         
+        $left = $noOuterBorder ? '' : '│';
+        $right = $noOuterBorder ? '' : '│';
+        $topL = $noOuterBorder ? '' : '┌';
+        $topR = $noOuterBorder ? '' : '┐';
+        $botL = $noOuterBorder ? '' : '└';
+        $botR = $noOuterBorder ? '' : '┘';
+        $sepL = $noOuterBorder ? '' : '├';
+        $sepR = $noOuterBorder ? '' : '┤';
+        $sepM = '┬';
+        $sepRow = '┼';
+
         if ($showBorder) {
             // 打印顶部边框
-            echo "┌" . str_repeat("─", $totalWidth) . "┐\n";
+            echo $topL . str_repeat("─", $totalWidth) . $topR . "\n";
             
             // 打印标题（居中）
             $titleWidth = $this->getDisplayWidth($title);
             $titlePadding = (int)floor(($totalWidth - $titleWidth) / 2);
             $titlePaddingRight = $totalWidth - $titlePadding - $titleWidth;
-            echo "│" . str_repeat(" ", $titlePadding) . $title . 
-                 str_repeat(" ", max(0, $titlePaddingRight)) . "│\n";
+            echo $left . str_repeat(" ", $titlePadding) . $title . 
+                 str_repeat(" ", max(0, $titlePaddingRight)) . $right . "\n";
             
             // 打印分隔线
-            echo "├" . str_repeat("─", $keyWidth) . "┬" . str_repeat("─", $valueWidth) . "┤\n";
+            echo $sepL . str_repeat("─", $keyWidth) . $sepM . str_repeat("─", $valueWidth) . $sepR . "\n";
         }
         
         // 打印数据行
@@ -133,13 +145,13 @@ trait TablePrinter
             $valuePadding = max(0, $valuePadding);
             
             if ($showBorder) {
-                // 格式：│ 内容 填充 │ 内容 填充 │
-                echo "│ " . $key . str_repeat(" ", $keyPadding) . " " . 
-                     "│ " . $value . str_repeat(" ", $valuePadding) . " │\n";
+                // 格式：左 内容 填充 │ 内容 填充 右
+                echo $left . " " . $key . str_repeat(" ", $keyPadding) . " " . 
+                     "│ " . $value . str_repeat(" ", $valuePadding) . " " . $right . "\n";
                 
                 // 如果不是最后一行，打印分隔线
                 if ($index < count($data) - 1) {
-                    echo "├" . str_repeat("─", $keyWidth) . "┼" . str_repeat("─", $valueWidth) . "┤\n";
+                    echo $sepL . str_repeat("─", $keyWidth) . $sepRow . str_repeat("─", $valueWidth) . $sepR . "\n";
                 }
             } else {
                 // 无边框模式，简洁输出
@@ -149,7 +161,7 @@ trait TablePrinter
         
         if ($showBorder) {
             // 打印底部边框
-            echo "└" . str_repeat("─", $keyWidth) . "┴" . str_repeat("─", $valueWidth) . "┘\n";
+            echo $botL . str_repeat("─", $keyWidth) . "┴" . str_repeat("─", $valueWidth) . $botR . "\n";
         }
     }
     
