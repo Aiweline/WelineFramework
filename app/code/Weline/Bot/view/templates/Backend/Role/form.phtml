@@ -1,0 +1,74 @@
+<?php
+/**
+ * 角色管理表单
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><lang>角色管理</lang></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@backend-url('*/backend/role/listing')"><lang>角色管理</lang></a></li>
+                    <li class="breadcrumb-item active">
+                        <if condition="role.role_id"><lang>编辑角色</lang><else/><lang>新增角色</lang></if>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <form action="@backend-url('*/backend/role/save')" method="post">
+                    <csrf/>
+                    <if condition="role.role_id">
+                        <input type="hidden" name="id" value="{{role.role_id}}">
+                    </if>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="bot-role-code"><lang>角色代码</lang></label>
+                            <input type="text" class="form-control" id="bot-role-code" name="code" value="{{role.code}}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="bot-role-name"><lang>角色名称</lang></label>
+                            <input type="text" class="form-control" id="bot-role-name" name="name" value="{{role.name}}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="bot-role-status"><lang>状态</lang></label>
+                            <select class="form-select" id="bot-role-status" name="status">
+                                <option value="enabled"><lang>启用</lang></option>
+                                <option value="disabled"><lang>禁用</lang></option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="bot-role-icon"><lang>图标</lang></label>
+                            <input type="text" class="form-control" id="bot-role-icon" name="icon" value="{{role.icon}}">
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label" for="bot-role-description"><lang>角色描述</lang></label>
+                            <textarea class="form-control" id="bot-role-description" name="description" rows="3">{{role.description}}</textarea>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="form-label" for="bot-role-system-prompt"><lang>系统提示词</lang></label>
+                            <textarea class="form-control" id="bot-role-system-prompt" name="system_prompt" rows="8">{{role.system_prompt}}</textarea>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                        <a href="@backend-url('*/backend/role/listing')" class="btn btn-light"><lang>返回列表</lang></a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd">
+    <!-- Bot 相关事件观察者 -->
+</config>
