@@ -919,8 +919,9 @@
                 try {
                     return await ApiModule.request(url, options);
                 } catch (err) {
-                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
-                        err.requestUrl = err.requestUrl || url;
+                    err.requestUrl = err.requestUrl || url;
+                    const isSilentHealth403 = (options && options.silent) && (err.status === 403) && (String(err.requestUrl || url).indexOf('_wls/health') !== -1);
+                    if ((window.DEV === true || window.WELINE_ENV === 'DEV') && !isSilentHealth403) {
                         console.error('[Weline.Api] 请求失败', {
                             requestUrl: err.requestUrl,
                             status: err.status,
@@ -936,8 +937,9 @@
                 try {
                     return await (ApiModule.get || ((u, o) => ApiModule.request(u, Object.assign({}, o, { method: 'GET' }))))(url, options);
                 } catch (err) {
-                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
-                        err.requestUrl = err.requestUrl || url;
+                    err.requestUrl = err.requestUrl || url;
+                    const isSilentHealth403 = (options && options.silent) && (err.status === 403) && (String(err.requestUrl || url).indexOf('_wls/health') !== -1);
+                    if ((window.DEV === true || window.WELINE_ENV === 'DEV') && !isSilentHealth403) {
                         console.error('[Weline.Api] 请求失败', { requestUrl: err.requestUrl, status: err.status, response: err.response, message: err.message });
                     }
                     throw err;
@@ -948,8 +950,9 @@
                 try {
                     return await (ApiModule.post || ((u, d, o) => ApiModule.request(u, Object.assign({}, o, { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, (o || {}).headers), body: typeof d === 'string' ? d : JSON.stringify(d || {}) }))))(url, data, options);
                 } catch (err) {
-                    if (window.DEV === true || window.WELINE_ENV === 'DEV') {
-                        err.requestUrl = err.requestUrl || url;
+                    err.requestUrl = err.requestUrl || url;
+                    const isSilentHealth403 = (options && options.silent) && (err.status === 403) && (String(err.requestUrl || url).indexOf('_wls/health') !== -1);
+                    if ((window.DEV === true || window.WELINE_ENV === 'DEV') && !isSilentHealth403) {
                         console.error('[Weline.Api] 请求失败', { requestUrl: err.requestUrl, status: err.status, response: err.response, message: err.message });
                     }
                     throw err;
