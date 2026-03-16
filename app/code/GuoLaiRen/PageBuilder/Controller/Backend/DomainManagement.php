@@ -986,6 +986,7 @@ class DomainManagement extends BaseController
                 }
             }
             $registeringRoots = [];
+            $lifecycleStages = [];
             foreach ($rootDomains as $root) {
                 $root = (string) $root;
                 if ($root === '') {
@@ -998,10 +999,15 @@ class DomainManagement extends BaseController
                 try {
                     $lifecycle = w_query('saas', 'getDomainLifecycleStatus', ['domain' => $root]);
                     if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
-                        $status = (string) ($lifecycle['data']['order']['status'] ?? '');
+                        $orderData = $lifecycle['data']['order'];
+                        $status = (string) ($orderData['status'] ?? '');
                         if ($status !== 'completed' && $status !== 'failed') {
                             $registeringRoots[$root] = true;
                         }
+                        $lifecycleStages[$rootLower] = [
+                            'lifecycle_stage' => (string) ($orderData['lifecycle_stage'] ?? ''),
+                            'lifecycle_stage_label' => (string) ($orderData['lifecycle_stage_label'] ?? ''),
+                        ];
                     }
                 } catch (\Throwable) {
                     // Saas 未安装或查询失败，视为非注册中
@@ -1080,6 +1086,8 @@ class DomainManagement extends BaseController
                     'dns_provider_name' => $dnsProviderName,
                     'cdn_provider_name' => $cdnProviderName,
                     'is_registering' => !empty($registeringRoots[$root]),
+                    'lifecycle_stage' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage'] ?? '',
+                    'lifecycle_stage_label' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage_label'] ?? '',
                 ];
             }
             
