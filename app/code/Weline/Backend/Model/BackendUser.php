@@ -20,6 +20,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
+use Weline\Framework\Runtime\StateManager;
 #[Table(comment: '管理员表')]
 #[Index(name: 'uk_email', columns: ['email'], type: 'UNIQUE', comment: '邮箱唯一')]
 #[Index(name: 'uk_username', columns: ['username'], type: 'UNIQUE', comment: '用户名唯一')]
@@ -57,6 +58,9 @@ class BackendUser extends Model implements AuthenticableInterface
     public array $_index_sort_keys = ['user_id', 'email', 'username'];
 
     private bool $_is_new_user = false;
+    /** 请求级 ACL 上下文缓存（user_id ⇒ context）；WLS 下由 StateManager 重置 */
+    private static array $aclContextCache = [];
+    private static bool $stateManagerRegistered = false;
 
     public function getAttemptTimes(): int
     {
@@ -200,6 +204,74 @@ class BackendUser extends Model implements AuthenticableInterface
         }
         $this->setData('user_role', $userRole);
         return $userRole;
+    }
+
+    /**
+     * 单查询获取 ACL 所需上下文（user_id, role_id, is_enabled），供路由权限等场景使用，避免完整 load 用户与角色。
+     *
+     * @return array{user_id: int, role_id: int, is_enabled: int}|null 未找到或已删除返回 null
+     */
+    public static function getAclContext(int $userId): ?array
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+        self::registerStateManager();
+        if (array_key_exists($userId, self::$aclContextCache)) {
+            return self::$aclContextCache[$userId];
+        }
+
+        // super admin 快速路径：user_id=1 直接返回约定上下文，避免每次 280ms 级别的主键 load
+        if ($userId === 1) {
+            $context = [
+                'user_id' => 1,
+                'role_id' => 1,
+                'is_enabled' => 1,
+            ];
+            self::$aclContextCache[1] = $context;
+            return $context;
+        }
+
+        $user = ObjectManager::make(self::class);
+        $ur = ObjectManager::make(UserRole::class);
+
+        // 用与 load/select 相同的路径：单表查询，避免 JOIN 在 CLI 等环境下表前缀不一致导致查不到或报错
+        $user->clear()->load($userId);
+
+        if (!$user->getId() || $user->getIsDeleted()) {
+            return null;
+        }
+        $ur->reset()->where(UserRole::schema_fields_USER_ID, $userId)->find()->fetch();
+
+        $roleId = (int) ($ur->getRoleId() ?? 0);
+        // 仅 user_id=1 在关联表无记录时视为超管（框架约定）
+        if ($userId === 1 && $roleId === 0) {
+            $roleId = 1;
+        }
+        $context = [
+            'user_id' => (int) $user->getId(),
+            'role_id' => $roleId,
+            'is_enabled' => (int) ($user->getIsEnabled() ? 1 : 0),
+        ];
+        self::$aclContextCache[$userId] = $context;
+        return $context;
+    }
+
+    /** 注册并实现 WLS 请求结束时的 ACL 上下文缓存重置，避免跨请求残留 */
+    private static function registerStateManager(): void
+    {
+        if (self::$stateManagerRegistered) {
+            return;
+        }
+        if (class_exists(StateManager::class)) {
+            StateManager::registerResetCallback('BackendUser::AclContext', [self::class, 'resetAclContextCache']);
+            self::$stateManagerRegistered = true;
+        }
+    }
+
+    public static function resetAclContextCache(): void
+    {
+        self::$aclContextCache = [];
     }
 
     public function getRoleModel(): Role

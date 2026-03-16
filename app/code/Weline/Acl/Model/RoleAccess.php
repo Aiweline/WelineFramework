@@ -182,6 +182,22 @@ class RoleAccess extends Model
     }
 
     /**
+     * 按角色 ID 获取角色 ACL 条目列表（不加载 Role 模型，减少一次 DB 查询）
+     * 用于 AclService 请求级缓存路径，与 getRoleAccessListArray 返回结构一致。
+     */
+    public function getRoleAccessListArrayByRoleId(int $roleId): array
+    {
+        if ($roleId <= 0) {
+            return [];
+        }
+        return $this->clear()
+            ->joinModel(Acl::class, 'a', 'main_table.source_id=a.source_id')
+            ->where('main_table.role_id', $roleId)
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
      * 获取权限树统计信息（按顶级节点分组）
      * 
      * @param Role $role 角色对象

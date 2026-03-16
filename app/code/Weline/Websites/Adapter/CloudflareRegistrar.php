@@ -381,12 +381,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
         $host = $record['host'] ?? '@';
         $name = $host === '@' ? $domain : ($host . '.' . $domain);
 
+        $recordType = \strtoupper((string) ($record['type'] ?? 'A'));
         $data = [
-            'type' => \strtoupper($record['type'] ?? 'A'),
+            'type' => $recordType,
             'name' => $name,
             'content' => $record['value'] ?? '',
             'ttl' => (int) ($record['ttl'] ?? 1),
-            'proxied' => $record['proxied'] ?? false,
+            'proxied' => $this->resolveProxiedValue($recordType, $record),
         ];
 
         if (\in_array($data['type'], ['MX', 'SRV'], true)) {
@@ -426,12 +427,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
         $host = $record['host'] ?? '@';
         $name = $host === '@' ? $domain : ($host . '.' . $domain);
 
+        $recordType = \strtoupper((string) ($record['type'] ?? 'A'));
         $data = [
-            'type' => \strtoupper($record['type'] ?? 'A'),
+            'type' => $recordType,
             'name' => $name,
             'content' => $record['value'] ?? '',
             'ttl' => (int) ($record['ttl'] ?? 1),
-            'proxied' => $record['proxied'] ?? false,
+            'proxied' => $this->resolveProxiedValue($recordType, $record),
         ];
 
         if (\in_array($data['type'], ['MX', 'SRV'], true)) {
@@ -745,6 +747,28 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
         ];
 
         return $statusMap[\strtolower($status)] ?? $status;
+    }
+
+    /**
+     * 计算 Cloudflare 的 proxied 标记：
+     * - 记录显式传入 proxied 时优先使用（便于上层按需覆盖）
+     * - 未显式传入时，CF 可代理的记录类型默认开启代理
+     */
+    private function resolveProxiedValue(string $recordType, array $record): bool
+    {
+        if (\array_key_exists('proxied', $record)) {
+            return (bool) $record['proxied'];
+        }
+
+        return $this->supportsCloudflareProxy($recordType);
+    }
+
+    /**
+     * Cloudflare 仅支持部分记录类型开启代理。
+     */
+    private function supportsCloudflareProxy(string $recordType): bool
+    {
+        return \in_array($recordType, ['A', 'AAAA', 'CNAME'], true);
     }
 
     /**

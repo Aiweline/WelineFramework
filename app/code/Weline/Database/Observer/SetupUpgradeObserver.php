@@ -10,21 +10,28 @@
 namespace Weline\Database\Observer;
 
 use Weline\Database\Service\MigrationService;
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 
 class SetupUpgradeObserver implements ObserverInterface
 {
-    private MigrationService $migrationService;
+    private ?MigrationService $migrationService = null;
     private Printing $printing;
-    
-    public function __construct(
-        MigrationService $migrationService,
-        Printing $printing
-    ) {
-        $this->migrationService = $migrationService;
+
+    public function __construct(Printing $printing)
+    {
         $this->printing = $printing;
+    }
+
+    private function getMigrationService(): MigrationService
+    {
+        if ($this->migrationService === null) {
+            $this->migrationService = ObjectManager::getInstance(MigrationService::class);
+        }
+        return $this->migrationService;
     }
     
     /**
@@ -73,7 +80,7 @@ class SetupUpgradeObserver implements ObserverInterface
                 
                 try {
                     // 获取模块的待执行迁移
-                    $pendingMigrations = $this->migrationService->getPendingMigrations($moduleName);
+                    $pendingMigrations = $this->getMigrationService()->getPendingMigrations($moduleName);
                     
                     if (empty($pendingMigrations)) {
                         $this->printing->info("模块 {$moduleName} 没有待执行的迁移");
@@ -82,13 +89,14 @@ class SetupUpgradeObserver implements ObserverInterface
                     
                     $this->printing->info("模块 {$moduleName} 发现 " . count($pendingMigrations) . " 个待执行的迁移");
                     
+                    $count = count($pendingMigrations);
                     // 执行模块迁移
                     $result = $this->executeModuleMigrations($moduleName, $pendingMigrations);
-                    
-                    $totalMigrations += count($pendingMigrations);
+                    unset($pendingMigrations);
+                    $totalMigrations += $count;
                     $totalSuccess += $result['success'];
                     $totalFailed += $result['failed'];
-                    
+                    gc_collect_cycles();
                 } catch (\Exception $e) {
                     $this->printing->error("模块 {$moduleName} 迁移执行异常: " . $e->getMessage());
                     $totalFailed++;
@@ -115,42 +123,20 @@ class SetupUpgradeObserver implements ObserverInterface
     }
     
     /**
-     * 获取激活的模块列表
-     * 
-     * @return array
+     * 从已注册的模块列表中获取带迁移目录的激活模块（不扫描磁盘，避免大量 glob 与内存占用）
+     *
+     * @return array<string>
      */
     private function getActiveModules(): array
     {
-        // 这里应该从框架的模块管理器中获取激活的模块
-        // 暂时返回一些示例模块
+        $active = Env::getInstance()->getActiveModules();
         $modules = [];
-        
-        // 扫描 app/code 目录下的所有模块
-        $codePath = 'app/code/';
-        if (is_dir($codePath)) {
-            $directories = glob($codePath . '*', GLOB_ONLYDIR);
-            
-            foreach ($directories as $dir) {
-                $vendorName = basename($dir);
-                $vendorPath = $dir . '/';
-                
-                if (is_dir($vendorPath)) {
-                    $moduleDirs = glob($vendorPath . '*', GLOB_ONLYDIR);
-                    
-                    foreach ($moduleDirs as $moduleDir) {
-                        $moduleName = basename($moduleDir);
-                        $fullModuleName = $vendorName . '_' . $moduleName;
-                        
-                        // 检查模块是否有迁移目录
-                        $migrationPath = $moduleDir . '/Setup/Db/Migration/';
-                        if (is_dir($migrationPath)) {
-                            $modules[] = $fullModuleName;
-                        }
-                    }
-                }
+        foreach ($active as $name => $info) {
+            $basePath = $info['base_path'] ?? '';
+            if ($basePath !== '' && is_dir($basePath . 'Setup/Db/Migration/')) {
+                $modules[] = $name;
             }
         }
-        
         return $modules;
     }
     
@@ -170,7 +156,7 @@ class SetupUpgradeObserver implements ObserverInterface
             try {
                 $this->printing->info("  执行迁移: {$migration['filename']}");
                 
-                $result = $this->migrationService->upgradeMigration(
+                $result = $this->getMigrationService()->upgradeMigration(
                     $moduleName,
                     $migration['file']
                 );
