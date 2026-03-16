@@ -312,6 +312,156 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * 生成页面内容（SSE 流式，用于编辑/添加页面）
+     *
+     * POST /pagebuilder/backend/ai-generate/page-content-stream
+     *
+     * 参数与 pageContent 相同。响应为 text/event-stream：
+     * - start: 开始
+     * - progress: 进度消息
+     * - done: 成功，data 为生成结果
+     * - error: 失败，message 为错误信息
+     */
+    public function pageContentStream(): void
+    {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', ['message' => __('仅支持POST请求')]);
+                $sse->close();
+                return;
+            }
+
+            $description = trim($this->request->getPost('description', ''));
+            $pageId = (int) $this->request->getPost('page_id', 0);
+
+            $page = null;
+            if ($pageId > 0) {
+                $page = clone $this->pageModel;
+                $page->load($pageId);
+                if (!$page->getId()) {
+                    $sse->sendEvent('error', ['message' => __('页面不存在')]);
+                    $sse->close();
+                    return;
+                }
+            }
+
+            if (empty($description) && $page && $page->getId()) {
+                $pageTitle = $page->getData('title') ?: '';
+                $pageMetaTitle = $page->getData('meta_title') ?: '';
+                $pageMetaDescription = $page->getData('meta_description') ?: '';
+                $pageContent = $page->getData('content') ?: '';
+                $descriptionParts = [];
+                if ($pageTitle) {
+                    $descriptionParts[] = __('页面标题：%{1}', [$pageTitle]);
+                }
+                if ($pageMetaTitle) {
+                    $descriptionParts[] = __('SEO标题：%{1}', [$pageMetaTitle]);
+                }
+                if ($pageMetaDescription) {
+                    $descriptionParts[] = __('SEO描述：%{1}', [$pageMetaDescription]);
+                }
+                if ($pageContent) {
+                    $contentText = strip_tags($pageContent);
+                    $contentSummary = mb_strlen($contentText) > 200 ? mb_substr($contentText, 0, 200) . '...' : $contentText;
+                    if ($contentSummary) {
+                        $descriptionParts[] = __('当前页面内容摘要：%{1}', [$contentSummary]);
+                    }
+                }
+                if (!empty($descriptionParts)) {
+                    $description = implode("\n", $descriptionParts) . "\n\n" . __('请基于以上信息优化和完善页面内容。');
+                }
+            }
+
+            if (empty($description)) {
+                $sse->sendEvent('error', ['message' => __('请输入页面描述，或确保页面有标题、SEO信息或内容')]);
+                $sse->close();
+                return;
+            }
+
+            $sse->sendEvent('start', ['message' => __('开始生成页面内容...')]);
+
+            $pageType = $this->request->getPost('page_type', '');
+            if (empty($pageType) && $page) {
+                $pageType = $page->getData('type') ?: 'page';
+            } else {
+                $pageType = $pageType ?: 'page';
+            }
+            $title = $this->request->getPost('title', '');
+            if (empty($title) && $page) {
+                $title = $page->getData('title') ?: '';
+            }
+            $metaTitle = $this->request->getPost('meta_title', '');
+            if (empty($metaTitle) && $page) {
+                $metaTitle = $page->getData('meta_title') ?: '';
+            }
+            $metaDescription = $this->request->getPost('meta_description', '');
+            if (empty($metaDescription) && $page) {
+                $metaDescription = $page->getData('meta_description') ?: '';
+            }
+            $metaKeywords = $this->request->getPost('meta_keywords', '');
+            if (empty($metaKeywords) && $page) {
+                $metaKeywords = $page->getData('meta_keywords') ?: '';
+            }
+            $handle = $this->request->getPost('handle', '');
+            if (empty($handle) && $page) {
+                $handle = $page->getData('handle') ?: '';
+            }
+            $styleCode = $this->request->getPost('style_code', '');
+            if (empty($styleCode) && $page) {
+                $styleCode = $page->getData('style') ?: '';
+            }
+            $targetLocale = $this->request->getPost('default_locale', '');
+            if (empty($targetLocale) && $page) {
+                $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
+            }
+
+            $prompt = $this->buildPageContentPrompt(
+                $description,
+                $pageType,
+                $title,
+                $metaTitle,
+                $metaDescription,
+                $metaKeywords,
+                $handle,
+                $styleCode,
+                $page,
+                $targetLocale
+            );
+
+            $sse->sendEvent('progress', ['message' => __('正在调用 AI 生成...')]);
+
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            $locale = State::getLang() ?: 'zh_Hans_CN';
+            $response = $aiService->generate(
+                $prompt,
+                null,
+                'pagebuilder_content_generation',
+                $locale,
+                [],
+                null,
+                true
+            );
+
+            $sse->sendEvent('progress', ['message' => __('解析生成结果...')]);
+
+            $data = $this->parseJsonResponse($response);
+            $sse->sendEvent('done', ['data' => $data]);
+        } catch (\Throwable $e) {
+            $errorMessage = $this->sanitizeErrorMessage($e->getMessage());
+            $sse->sendEvent('error', ['message' => $errorMessage]);
+        }
+
+        $sse->close();
+    }
+
+    /**
      * 生成模板配置内容（用于可视化编辑器）
      * 
      * POST /pagebuilder/backend/ai-generate/template-config
