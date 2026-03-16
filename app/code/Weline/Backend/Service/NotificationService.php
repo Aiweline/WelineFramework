@@ -81,7 +81,9 @@ class NotificationService
             $query->where(UserNotificationStatus::schema_fields_is_read, 0);
         }
 
-        $query->order('n.create_time', 'DESC')
+        // 未读优先，再按通知时间倒序
+        $query->order('main_table.' . UserNotificationStatus::schema_fields_is_read, 'ASC')
+            ->order('n.create_time', 'DESC')
             ->pagination($page, $limit)
             ->select()
             ->fetch();
