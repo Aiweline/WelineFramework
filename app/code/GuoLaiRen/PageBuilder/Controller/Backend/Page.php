@@ -1324,7 +1324,22 @@ class Page extends BackendController
             if ($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId || $oldStyleCode !== $styleToSave) {
                 $this->clearRouterAndPageBuilderCache();
             }
-            
+
+            // 若当前保存的是主页（根页面）且主题已变更，则同步更新该主页下所有子页面的主题
+            if ((int)$newParentId === 0 && $page->getId() && (string)$oldStyleCode !== (string)$styleToSave) {
+                $descendantIds = $page->getDescendantIds();
+                if (!empty($descendantIds)) {
+                    $childUpdater = clone $this->pageModel;
+                    $childUpdater->clear()
+                        ->where(PageModel::schema_fields_ID, $descendantIds, 'IN')
+                        ->update([PageModel::schema_fields_STYLE => $styleToSave], PageModel::schema_fields_ID)
+                        ->fetch();
+                    MessageManager::success(
+                        __('主页主题已更新，已同步 %{1} 个子页面的主题。', [count($descendantIds)])
+                    );
+                }
+            }
+
             // 处理多语言内容翻译
             if (!empty($selectedLocales)) {
                 foreach ($selectedLocales as $locale) {

@@ -355,14 +355,9 @@ $navBgColor = pa_color($colors, 'nav_bg', 'rgba(6, 13, 8, 0.95)');
         .pa-region { position: relative; }
         
         .pa-region-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
+            position: relative;
             z-index: 1000;
-            background: <?= $navBgColor ?>;
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            /* 背景由 header 组件自身提供，避免双层 */
         }
         
         .pa-region-content {

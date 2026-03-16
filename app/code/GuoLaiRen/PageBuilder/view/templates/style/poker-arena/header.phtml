@@ -107,6 +107,9 @@ foreach ($lines as $line) {
 <?php if ($navDisplay === 'yes'): ?>
 <style>
     .pa-header {
+        width: 100vw;
+        margin-left: calc(-50vw + 50%);
+        box-sizing: border-box;
         position: fixed;
         top: 0;
         left: 0;
@@ -208,7 +211,7 @@ foreach ($lines as $line) {
                 <?php if ($logoUrl): ?>
                     <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" style="width: 100%; height: 100%; object-fit: contain;">
                 <?php else: ?>
-                    <svg viewBox="0 0 24 24"><path d="M12 2C9.24 2 7 4.24 7 7c0 1.77.94 3.41 2.47 4.3L12 24l2.53-12.7C16.06 10.41 17 8.77 17 7c0-2.76-2.24-5-5-5zm0 7.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 4.5 12 4.5s2.5 1.12 2.5 2.5S13.38 9.5 12 9.5z"/></svg>
+                    <svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2C7 2 2 8 2 12c0 2 1.5 4 4 5 0 2 1 4 2 6h8c1-2 2-4 2-6 2.5-1 4-3 4-5 0-4-5-10-10-15z"/></svg>
                 <?php endif; ?>
             </span>
             <span class="pa-logo-text"><?= htmlspecialchars($logoText) ?></span>
@@ -224,7 +227,7 @@ foreach ($lines as $line) {
             
             <?php if ($showCta === 'yes'): ?>
             <a href="<?= htmlspecialchars($ctaUrl) ?>" class="pa-header-cta-btn">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C9.24 2 7 4.24 7 7c0 1.77.94 3.41 2.47 4.3L12 24l2.53-12.7C16.06 10.41 17 8.77 17 7c0-2.76-2.24-5-5-5z"/></svg>
+                <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M8 5v14l11-7z"/></svg>
                 <span><?= htmlspecialchars($ctaText) ?></span>
             </a>
             <?php endif; ?>

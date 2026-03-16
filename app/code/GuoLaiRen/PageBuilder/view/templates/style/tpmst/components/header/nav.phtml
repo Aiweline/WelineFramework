@@ -223,6 +223,12 @@ body {
     margin: 0 !important;
 }
    
+#<?= $componentId ?> {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    box-sizing: border-box;
+}
+
 #<?= $componentId ?> * {
     margin: 0;
     padding: 0;
@@ -388,7 +394,7 @@ body {
 }
 </style>
 
-<div id="<?= $componentId ?>" class="tpmst-header-nav-component">
+<header id="<?= $componentId ?>" class="tpmst-header-nav-component">
     <!-- 导航栏 - Logo居中布局 -->
     <nav class="tpmst-nav" id="<?= $componentId ?>-nav">
         <div class="tpmst-section-inner">
@@ -422,7 +428,7 @@ body {
             <?php endif; ?>
         </div>
     </nav>
-</div>
+</header>
 
 <script>
 /* TPMST Header Nav Component - Scoped JavaScript */
