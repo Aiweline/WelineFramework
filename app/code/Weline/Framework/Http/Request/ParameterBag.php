@@ -272,16 +272,22 @@ class ParameterBag
     /**
      * 获取 POST 参数
      * 
-     * @param string $key 参数名，空字符串返回所有
+     * 当 POST（$_POST / parsedPostParams）中找不到指定 key 时，
+     * 自动回退到 Body 参数（JSON / 其他格式的请求体解析结果）。
+     * 这确保了 WLS 模式下 JSON body 的数据能通过 getPost() 正常读取，
+     * 与 FPM 模式下 multipart/form-data 的行为一致。
+     * 
+     * @param string $key 参数名，空字符串返回所有（POST + Body 合并）
      * @param mixed $default 默认值
      * @return mixed
      */
     public function getRequest(string $key = '', mixed $default = null): mixed
     {
         if ($key === '') {
-            return $this->request;
+            // 返回 POST 与 Body 的合并结果（POST 优先）
+            return $this->request !== [] ? \array_merge($this->body, $this->request) : $this->body;
         }
-        return $this->request[$key] ?? $default;
+        return $this->request[$key] ?? $this->body[$key] ?? $default;
     }
     
     /**
@@ -300,14 +306,14 @@ class ParameterBag
     }
     
     /**
-     * 检查 POST 参数是否存在
+     * 检查 POST 参数是否存在（含 Body 回退）
      * 
      * @param string $key 参数名
      * @return bool
      */
     public function hasRequest(string $key): bool
     {
-        return isset($this->request[$key]);
+        return isset($this->request[$key]) || isset($this->body[$key]);
     }
     
     // ==================== Body 参数操作 ====================

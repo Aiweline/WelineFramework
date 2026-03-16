@@ -14,10 +14,6 @@
 无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。,无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。
 "模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器","模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器"
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
-致命错误：,致命错误：
-文件：,文件：
-行数：,行数：
-消息：,消息：
 系统SERVER缺少key：%{1},系统SERVER缺少key：%{1}
 系统错误：%{1},系统错误：%{1}
 "MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例","MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例"
@@ -253,7 +249,9 @@ SQL调试输出,SQL调试输出
 "子查询 %{1} 不存在","子查询 %{1} 不存在"
 "无法回退到普通插入：SQL 准备失败","无法回退到普通插入：SQL 准备失败"
 即将执行信息：,即将执行信息：
+"结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。","结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。"
 执行信息：,执行信息：
+"fetchIterator 不支持多语句 SQL，请使用单条 SELECT","fetchIterator 不支持多语句 SQL，请使用单条 SELECT"
 ：此索引的column需要array类型,：此索引的column需要array类型
 权限错误说明：,权限错误说明：
 "PostgreSQL 15+ 中，普通用户默认没有 public schema 的 CREATE 权限（安全改进）。","PostgreSQL 15+ 中，普通用户默认没有 public schema 的 CREATE 权限（安全改进）。"
@@ -578,16 +576,12 @@ SQL调试输出,SQL调试输出
 "推荐依赖 %{name} ◐（未满足，建议安装以获得最佳性能）","推荐依赖 %{name} ◐（未满足，建议安装以获得最佳性能）"
 未找到可执行的安装脚本,未找到可执行的安装脚本
 无法启动进程,无法启动进程
-无法从文件路径提取模块名：%{1},无法从文件路径提取模块名：%{1}
 跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）,跳过空的事件配置文件：%{1}（文件为空，如需使用请添加有效内容）
 跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）,跳过格式不正确的配置文件：%{1}（请检查XML格式是否正确）
 跳过缺少属性的配置文件：%{1},跳过缺少属性的配置文件：%{1}
 "%{1} 事件Event未指定name属性：<event name=""eventName"">...</event>","%{1} 事件Event未指定name属性：<event name=""eventName"">...</event>"
-"%{1} 事件Event的_value格式错误","%{1} 事件Event的_value格式错误"
-"%{1} 事件Event缺少observer节点","%{1} 事件Event缺少observer节点"
-"%{1} 观察者Observer没有设置属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>","%{1} 观察者Observer没有设置属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>"
-"%{1} 观察者Observer没有设置name属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>","%{1} 观察者Observer没有设置name属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>"
-"%{1} 观察者Observer没有设置instance属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>","%{1} 观察者Observer没有设置instance属性：<observer name=""observerName"" instance=""instanceClass"" disabled=""false"" shared=""true"" sort=""100""/>"
+"%{1} 事件Event的_value格式错误或缺少observer节点","%{1} 事件Event的_value格式错误或缺少observer节点"
+"%{1} 观察者Observer没有设置name/instance属性：<observer name=""..."" instance=""...""/>","%{1} 观察者Observer没有设置name/instance属性：<observer name=""..."" instance=""...""/>"
 清理完毕！,清理完毕！
 清除系统事件缓存！,清除系统事件缓存！
 刷新系统事件缓存！,刷新系统事件缓存！
@@ -1082,14 +1076,7 @@ dev=true,dev=true
 当前生产环境：确认切换实时翻译模式么？Y/n,当前生产环境：确认切换实时翻译模式么？Y/n
 "%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>","%{1} 拦截器Plugin未指定name属性：<plugin name=""pluginName"">...</plugin>"
 "%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>","%{1} 拦截器Plugin未指定class属性：<plugin class=""pluginClass"">...</plugin>"
-"%{1} 拦截器Interceptor没有设置属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
-"%{1} 拦截器Interceptor没有设置name属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置name属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
-"%{1} 拦截器Interceptor没有设置instance属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>","%{1} 拦截器Interceptor没有设置instance属性：<interceptor name=""interceptorName"" instance=""instanceClass"" disabled=""false"" sort=""0""/>"
-"%{1} 拦截器Plugin未指定name属性","%{1} 拦截器Plugin未指定name属性"
-"%{1} 拦截器Plugin未指定class属性","%{1} 拦截器Plugin未指定class属性"
-"%{1} 拦截器Interceptor没有设置属性","%{1} 拦截器Interceptor没有设置属性"
-"%{1} 拦截器Interceptor没有设置name属性","%{1} 拦截器Interceptor没有设置name属性"
-"%{1} 拦截器Interceptor没有设置instance属性","%{1} 拦截器Interceptor没有设置instance属性"
+"%{1} 拦截器Interceptor没有设置name/instance属性：<interceptor name=""..."" instance=""...""/>","%{1} 拦截器Interceptor没有设置name/instance属性：<interceptor name=""..."" instance=""...""/>"
 拦截器缓存清理成功！,拦截器缓存清理成功！
 插件缓存未就绪，跳过清理。,插件缓存未就绪，跳过清理。
 插件缓存清理！,插件缓存清理！

@@ -599,7 +599,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                   AND table_name = :table 
                   AND column_name = :column";
 
-        $pdo = $this->connection->getLink();
+        $pdo = $this->getLink();
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
             ':schema' => $schema,
@@ -1823,6 +1823,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     private const PGSQL_RESERVED_WORDS = ['order', 'key', 'table', 'fields', 'group', 'user'];
 
+    /** 单次 select/query 最大加载行数，防止大结果集耗尽内存 */
+    /** 单次 fetch 最大行数，避免 128M 等小内存下 OOM；超量请用 fetchIterator() 或 limit() */
+    private const MAX_FETCH_ROWS = 50_000;
+
     /**
      * 为表达式中未加引号的保留字加双引号，避免 syntax error
      * 匹配形如 CONCAT(a,b,order,c) 中作为标识符的 order
@@ -2721,18 +2725,36 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     
     /**
      * 🔧 处理 fetch 结果（不调用 nextRowset）
+     * find 只读一行；select/query 逐行读取并设上限，避免大结果集耗尽内存
      */
     protected function processFetchResult(string $model_class = ''): mixed
     {
         if ($this->PDOStatement === null) {
             return false;
         }
-        
-        // 🔧 修复：PostgreSQL 不支持 nextRowset()，只获取第一个结果集
-        $origin_data = $this->PDOStatement->fetchAll(PDO::FETCH_ASSOC);
+
+        $data = [];
+        if ($this->fetch_type === 'find') {
+            $row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC);
+            if ($row !== false) {
+                $data[] = $row;
+            }
+        } else {
+            while (($row = $this->PDOStatement->fetch(PDO::FETCH_ASSOC)) !== false) {
+                $data[] = $row;
+                if (count($data) >= self::MAX_FETCH_ROWS) {
+                    $this->PDOStatement->closeCursor();
+                    $this->PDOStatement = null;
+                    $this->batch = false;
+                    throw new DbException(
+                        __('结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。', [self::MAX_FETCH_ROWS])
+                    );
+                }
+            }
+        }
+        $this->PDOStatement->closeCursor();
+        $this->PDOStatement = null;
         $this->batch = false;
-        // 🔧 修复：延迟对象创建，先保持原始数组，根据 fetch_type 决定如何处理
-        $data = is_array($origin_data) ? $origin_data : [];
         
         switch ($this->fetch_type) {
             case 'find':
@@ -2853,8 +2875,98 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             Debug::target('fetch', $msg);
         }
         
-        $this->reset();        
+        $this->reset();
         return $result;
+    }
+
+    /**
+     * 从 limit 子句解析出数值（LIMIT n 或 LIMIT n OFFSET m）
+     */
+    protected function getLimitValue(): ?int
+    {
+        if ($this->limit === '') {
+            return null;
+        }
+        if (preg_match('/\bLIMIT\s+(\d+)/i', $this->limit, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * 智能获取结果：小结果集用 fetch 返回数组，大结果集用 fetchIterator 流式迭代
+     * 根据是否设置 LIMIT 及与阈值比较自动选择，调用方统一 foreach 即可。
+     * 仅用于列表查询（select()->where(...)->fetchSmart()），勿用于 find()。
+     *
+     * @param int $threshold 行数阈值，limit 存在且 ≤ 此值时用 fetch，否则用 fetchIterator
+     * @param string $model_class 模型类名，传空则返回关联数组
+     * @param int $iteratorBatchSize fetchIterator 时的批大小，仅在大结果集时生效
+     * @return array<int, array|object>|\Generator<int, array|object, mixed, void>
+     */
+    public function fetchSmart(
+        int $threshold = 5000,
+        string $model_class = '',
+        int $iteratorBatchSize = 1
+    ): array|\Generator {
+        $limit = $this->getLimitValue();
+        if ($limit !== null && $limit <= $threshold) {
+            return $this->fetch($model_class) ?: [];
+        }
+        return $this->fetchIterator($model_class, $iteratorBatchSize);
+    }
+
+    /**
+     * 流式迭代结果集，按行或按批 yield，用毕即关闭游标，降低内存占用
+     * 仅适用于 select/query 类语句；大结果集请用此方法替代 fetch()/fetchArray()
+     *
+     * @param string $model_class 模型类名，传空则 yield 关联数组
+     * @param int $batchSize 每批行数，1 表示逐行 yield，>1 时每批 yield 一个数组
+     * @return \Generator<int, array|object, mixed, void>
+     */
+    public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
+    {
+        $stmt = $this->PDOStatement;
+        $needExecute = ($stmt === null && !empty($this->sql));
+        if ($needExecute) {
+            if ($this->hasMultipleSqlCommands($this->sql)) {
+                throw new DbException(__('fetchIterator 不支持多语句 SQL，请使用单条 SELECT'));
+            }
+            $stmt = $this->preparePgsql($this->sql);
+            if ($stmt === false || !$stmt->execute($this->bound_values)) {
+                $err = $this->getLink()->errorInfo();
+                throw new DbException($err[2] ?? 'Execute failed');
+            }
+            $this->PDOStatement = $stmt;
+        }
+        if ($stmt === null) {
+            return;
+        }
+        try {
+            $batch = [];
+            while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
+                if ($model_class && is_array($row)) {
+                    $row = ObjectManager::make($model_class, ['data' => $row], '__construct');
+                }
+                if ($batchSize <= 1) {
+                    yield $row;
+                } else {
+                    $batch[] = $row;
+                    if (count($batch) >= $batchSize) {
+                        yield $batch;
+                        $batch = [];
+                    }
+                }
+            }
+            if ($batchSize > 1 && !empty($batch)) {
+                yield $batch;
+            }
+        } finally {
+            if ($this->PDOStatement !== null) {
+                $this->PDOStatement->closeCursor();
+                $this->PDOStatement = null;
+            }
+            $this->batch = false;
+        }
     }
     
     /**
