@@ -7,8 +7,4 @@ alwaysApply: true
 
 # WLS 状态管理（硬性）
 
-- **所有持有请求级数据的 static 变量，必须注册到 StateManager 重置。** 判断标准：该变量在不同请求间是否可能不同？是→必须注册；否→可不注册并注释「进程级缓存，无需跨请求重置」。
-- **禁止**在 WLS 下用 static 在请求间传递数据且不注册重置。
-- **禁止**清除进程级缓存（如 ObjectManager 反射缓存）。
-
-**判断标准、注册方式、已注册项**：`.cursor/skills/weline-server/SKILL.md` →「WLS 状态管理」章节。
+请求级 static 须注册 StateManager 重置；禁止用 static 跨请求传数据且不注册。详见 `.cursor/skills/weline-server/SKILL.md`「WLS 状态管理」。

@@ -14,10 +14,8 @@
 
 | 文档 | 说明 |
 |------|------|
-| **AI 提示词.md** | 角色定义、框架方法验证、必读文档、回答原则 |
-| **AI-常犯错误.md** | 代码生成常犯错误与正确写法（模块注册、数据库、接口、XML、路由等） |
-| **AI-前端.md** | 前端相关约束（若有） |
-| **AI-监督智能体.md** | 监督/审计相关说明（若有） |
+| **AI-开发与测试指南.md** | 合并版：角色与原则、框架方法验证、ORM/路由、测试（http:request/浏览器 MCP）、常犯错误与检查清单、监督与质量、前端响应式协议（PC/iPad/Mobile） |
+| **global-constraints.md** | 全局硬性禁止（generated、error_log、alert/confirm/prompt、硬编码文案、Upgrade 做字段 CRUD、routes.xml 等） |
 
 ---
 
@@ -27,8 +25,7 @@
 |----------|------|
 | code-generation-rules.mdc | 代码生成强制规则、前端/CSS/JS/通知规范、禁止 generated/ |
 | cursor-as-reference.mdc | .cursor 仅引用，主仓在 dev/ai |
-| skill-trigger-reminders.mdc | 场景→技能触发表（错误修复、计划、CSS/JS、通知、模块间查询、Session 等） |
-| auto-update-skills-on-error.mdc | 错误修复后必须更新 ERROR_LOG、COMMON_ERRORS、相关技能 |
+| skill-trigger-reminders.mdc | 场景→技能触发表（计划、CSS/JS、通知、模块间查询、Session 等） |
 | error-prevention-event.mdc | 事件 dispatch/数据格式/触发顺序 |
 | wls-state-management.mdc | WLS static 状态须注册 StateManager 重置 |
 
@@ -44,8 +41,12 @@
 - **database-model-standards** — #[Col]/#[Table]、链式 fetch、setup:upgrade
 - **friendly-notifications** — 禁止 alert/confirm/prompt，BackendToast/BackendConfirm
 - **unified-query-provider** — 模块间查询 w_query()、FrameworkQueryService
-- **create-event** / **create-hook** / **create-extends** — 事件、Hook、扩展点
-- **error-learning** / **error-tracking** — 错误记录与知识库更新
-- **create-plan** / **plan-code-auditor** / **post-plan-completion-check** — 计划与审计
+- **extension-points** — 事件、Hook、Extends 定义与实现（合并原 create-event/hook/extends/implement-extends）
+- **testing** — PHPUnit、http:req、前端 E2E、QA（合并原 php-unit-testing、http-request-testing、frontend-automation-testing、quality-assurance）
+- **planning** — 计划前分析、创建计划、完成后校验、审计（合并原 create-plan、pre-plan-analysis、post-plan-completion-check、plan-code-auditor）
+- **frontend-components** — Block、Taglib、Widget、DataTable（合并原 block/taglib/generate-component/datatable-component）
+- **config-and-env** — 配置与 PHP 扩展（合并原 config-management、php-extension-dependency）
+- **runtime-and-process** — 进程与 WLS（合并原 process-management、weline-server）
+- **context-compression** — 上下文压缩省 Token（必加载 alwaysApply）
 - **cursor-as-reference** — 规则与技能编辑位置（dev/ai）
 - 其余见 `skills/` 下各目录的 SKILL.md
