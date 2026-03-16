@@ -118,4 +118,11 @@ interface HeaderCollectorInterface
         bool $httpOnly = true,
         string $sameSite = 'Lax'
     ): static;
+
+    /**
+     * 发送已收集的响应头（FPM 模式：调用 header()/setcookie()）
+     *
+     * @param bool $sendStatusCode 是否发送 HTTP 状态码，默认 true
+     */
+    public function emit(bool $sendStatusCode = true): void;
 }

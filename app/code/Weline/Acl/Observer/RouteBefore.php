@@ -27,6 +27,7 @@ use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\StateManager;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 {
@@ -220,6 +221,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 $roleId = 0;
                 // 后续 hasUser 为 false，走未授权分支；需要带登录态时由调用方通过 event 传入 user/role
             } else {
+            // #region agent log
+            $__logFile = \dirname(__DIR__, 5) . '/debug-b1cda8.log';
+            // #endregion
             // 获取用户和角色（支持多种认证方式）
             $user = null;
             $role = null;
@@ -247,6 +251,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionCreate', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $userId = $backendSession->getUserId();
+                // #region agent log
+                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:sessionBranch','message'=>'userId and branch','data'=>['uri'=>$uri,'userId'=>$userId,'userIdSet'=>($userId!==null&&$userId!==''),'branch'=>'session'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'A']) . "\n", \FILE_APPEND | \LOCK_EX);
+                // #endregion
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionGetUserId', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
@@ -280,6 +287,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 } else {
                     $roleId = 0;
                 }
+                // #region agent log
+                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:afterRoleId','message'=>'roleId and aclContext','data'=>['uri'=>$uri,'userId'=>$userId,'roleId'=>$roleId??null,'aclContextFromDb'=>isset($sessionAclContext)&&($sessionAclContext['role_id']??-1)>=0],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
+                // #endregion
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::aclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
                 }
@@ -301,6 +311,17 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
 
             // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
             $hasUser = $user !== null || $sessionAclContext !== null;
+            // #region agent log
+            if (!$hasUser) {
+                $__f = $__logFile ?? \dirname(__DIR__, 5) . '/debug-b1cda8.log';
+                $__sid = (string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '');
+                $__sidHint = $__sid !== '' ? \substr($__sid, 0, 8) . '...' : 'none';
+                $__sessId = $this->getBackendSession()->getSession()->getId();
+                $__sessHint = $__sessId !== '' ? \substr($__sessId, 0, 8) . '...' : 'empty';
+                @file_put_contents($__f, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:not_logged_in','message'=>'dispatch not_logged_in','data'=>['uri'=>$uri,'reason'=>'not_logged_in','hasUser'=>false,'cookieSid'=>$__sidHint,'sessionStorageId'=>$__sessHint],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'A']) . "\n", \FILE_APPEND | \LOCK_EX);
+            }
+            // #endregion
+            // 根因说明：cookieSid 有值但存储读回空 = 登录写入的 Session 下一请求在 WLS Session 服务中读不到。WLS Session 服务本应提供统一 Session，需排查：登录响应前 write 是否已落盘到 Session Server、是否多实例 Session Server 导致读写不同步。
             if (!$hasUser) {
                 if ($request->isApiBackend()) {
                     $this->returnApiError(401, __('请先登录'), $request);
@@ -331,6 +352,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             
             // 如果没有角色，返回无权限
             if ($roleId <= 0) {
+                // #region agent log
+                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_role','message'=>'dispatch no_role','data'=>['uri'=>$uri,'userId'=>$sessionAclContext['user_id']??null,'roleId'=>$roleId,'reason'=>'no_role'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
+                // #endregion
                 if ($request->isApiBackend()) {
                     $this->returnApiError(403, __('用户没有分配角色'), $request);
                     return;
@@ -356,6 +380,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 }
                 // 没有任何 ACL 权限：直接按“无任何权限”处理
                 if (!$hasAny) {
+                    // #region agent log
+                    @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_any_permission','message'=>'dispatch no_any_permission','data'=>['uri'=>$uri,'roleId'=>$roleId,'reason'=>'no_any_permission'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'D']) . "\n", \FILE_APPEND | \LOCK_EX);
+                    // #endregion
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你没有任何权限！请联系管理员！'), $request);
                         return;
@@ -379,6 +406,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 if (!$allowed) {
+                    // #region agent log
+                    @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_permission_for_route','message'=>'dispatch no_permission_for_route','data'=>['uri'=>$uri,'roleId'=>$roleId,'method'=>$request->getMethod(),'reason'=>'no_permission_for_route'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'E']) . "\n", \FILE_APPEND | \LOCK_EX);
+                    // #endregion
                     // 无权限访问当前路由的处理逻辑维持原有分支语义：返回错误或尝试寻找可跳转入口
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
