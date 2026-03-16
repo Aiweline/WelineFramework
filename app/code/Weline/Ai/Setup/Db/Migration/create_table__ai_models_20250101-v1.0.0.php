@@ -8,28 +8,22 @@
 
 namespace Weline\Ai\Setup\Db\Migration;
 
-use Weline\Database\Interface\MigrationInterface;
+use Weline\Database\AbstractMigration;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
+use Weline\Framework\Manager\ObjectManager;
 
-class CreateTableAiModels20250101V100 implements MigrationInterface
+class CreateTableAiModels20250101V100 extends AbstractMigration
 {
-    private ConnectionFactory $connectionFactory;
-    
-    public function __construct(ConnectionFactory $connectionFactory)
-    {
-        $this->connectionFactory = $connectionFactory;
-    }
-    
     /**
      * 执行迁移安装
-     * 
+     *
      * @return bool
      */
     public function install(): bool
     {
         try {
-            $connection = $this->connectionFactory->getConnection();
+            $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
             
             // 创建AI模型表
             $table = $connection->newTable('ai_models')

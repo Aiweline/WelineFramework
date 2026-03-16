@@ -15,6 +15,7 @@ use Weline\Framework\Event\Console\Event\Data;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Debug\Printing;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Event extends \Weline\Framework\DataObject\DataObject
 {
@@ -220,11 +221,27 @@ class Event extends \Weline\Framework\DataObject\DataObject
                     continue;
                 }
                 
-                // 执行观察者
-                if ($needDebug) {
-                    $this->executeWithDebug($observer, $printToConsole, $needLog);
-                } else {
-                    $observer->execute($this);
+                $observerSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
+                $observerName = str_replace('\\', '::', get_class($observer));
+                $observerSpanName = 'observer::' . $observerName;
+                if (RequestLifecycleTrace::isEnabled()) {
+                    RequestLifecycleTrace::pushCurrentParent($observerSpanName);
+                }
+                try {
+                    // 执行观察者（其内派发的事件会挂到本观察者下，回到此处才算观察者结束）
+                    if ($needDebug) {
+                        $this->executeWithDebug($observer, $printToConsole, $needLog);
+                    } else {
+                        $observer->execute($this);
+                    }
+                } finally {
+                    if (RequestLifecycleTrace::isEnabled()) {
+                        RequestLifecycleTrace::popCurrentParent();
+                    }
+                }
+                if ($observerSpanStart > 0) {
+                    $observerDurationMs = (microtime(true) - $observerSpanStart) * 1000;
+                    RequestLifecycleTrace::recordSpan($observerSpanName, $observerDurationMs, 'observer', 'event::' . $this->getName());
                 }
             } catch (\Exception $e) {
                 // 实例化失败，跳过该观察者

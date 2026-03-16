@@ -73,12 +73,11 @@ class BackupService
             $rawTable = $this->toRawTableName($tableName);
             $conn = $connector ?? $this->connectionFactory->getConnector();
             $pkCols = $this->resolvePrimaryKeyColumns($rawTable, $conn, $modelClass);
-            $quotedCol = $conn->quoteIdentifier($columnName);
             $fields = array_merge($pkCols, [$columnName]);
             $query = $conn->getQuery()->clearQuery()
                 ->table($rawTable)
                 ->fields($fields)
-                ->whereRaw("{$quotedCol} IS NOT NULL")
+                ->where($columnName, '', '!=')
                 ->select();
             $data = $query->fetch();
 

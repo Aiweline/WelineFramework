@@ -74,6 +74,30 @@ class Migration extends Model implements ModelInterface
     }
 
     /**
+     * 仅获取已安装迁移的文件名列表（用于 getPendingMigrations，减少内存）
+     *
+     * @param string $moduleName 模块名称
+     * @return array<string>
+     */
+    public function getInstalledMigrationFiles(string $moduleName): array
+    {
+        $items = $this->reset()
+            ->where(self::schema_fields_MODULE, $moduleName)
+            ->where(self::schema_fields_STATUS, self::STATUS_INSTALLED)
+            ->select(self::schema_fields_FILE)
+            ->fetch()
+            ->getItems();
+        $files = [];
+        foreach ($items as $row) {
+            $data = is_array($row) ? $row : $row->getData();
+            if (isset($data[self::schema_fields_FILE])) {
+                $files[] = $data[self::schema_fields_FILE];
+            }
+        }
+        return $files;
+    }
+
+    /**
      * 检查迁移是否已存在
      *
      * @param string $moduleName 模块名称

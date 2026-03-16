@@ -510,8 +510,10 @@
                 // 设置 iframe 内链接拦截，使链接跳转到预览模式
                 setupIframeLinkInterception();
                 
-                // 初始化部件 hover 操作按钮
+                // 初始化部件 hover 操作按钮（多档延迟以兼容异步渲染的布局）
                 setTimeout(() => initWidgetHoverActions(), 100);
+                setTimeout(() => initWidgetHoverActions(), 400);
+                setTimeout(() => initWidgetHoverActions(), 1200);
             });
             
             // 添加超时机制：如果 5 秒后仍未加载完成，强制隐藏加载状态
@@ -4345,7 +4347,7 @@
                 outline-offset: 2px;
                 box-shadow: 0 0 0 4px rgba(74, 144, 217, 0.2);
             }
-            /* Hover 操作按钮容器 - 由嵌套距离（.show-actions）决定显示在哪一层 */
+            /* Hover 操作按钮容器 - hover 时显示，嵌套时仅显示当前悬停层 */
             .widget-hover-actions {
                 position: absolute;
                 top: 4px;
@@ -4361,6 +4363,10 @@
             }
             .widget-wrapper.show-actions .widget-hover-actions {
                 display: flex;
+            }
+            /* 部件 hover 时显示操作栏（删除、排序、拖拽等），仅直接子级工具栏显示 */
+            .widget-wrapper:hover > .widget-hover-actions {
+                display: flex !important;
             }
             /* 操作按钮 */
             .widget-hover-actions button {
@@ -4479,12 +4485,18 @@
         
         const iframeDoc = iframe.contentDocument;
         
-        // 查找所有已有的部件包装器并添加操作按钮
-        const widgetWrappers = iframeDoc.querySelectorAll('[data-layout-id]');
+        // 查找所有部件包装器（服务端输出 .widget-wrapper[data-layout-id]；无 class 时用 [data-layout-id] 且无父级同属性避免重复）
+        let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id]'));
+        if (widgetWrappers.length === 0) {
+            widgetWrappers = Array.from(iframeDoc.querySelectorAll('[data-layout-id]')).filter(function (el) {
+                var parent = el.parentElement;
+                return !parent || !parent.closest('[data-layout-id]');
+            });
+        }
         
-        widgetWrappers.forEach((wrapper, index) => {
+        widgetWrappers.forEach((wrapper) => {
             const layoutId = wrapper.getAttribute('data-layout-id');
-            const slotId = wrapper.getAttribute('data-slot-id') || 
+            const slotId = wrapper.getAttribute('data-slot-id') ||
                            wrapper.closest('[data-wslot]')?.getAttribute('data-wslot') ||
                            wrapper.closest('[data-slot]')?.getAttribute('data-slot') || '';
             const isExclusive = isExclusiveSlot(slotId, '');
