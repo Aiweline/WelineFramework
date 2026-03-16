@@ -13,7 +13,8 @@
  * logo.url => Logo图片URL:text:
  * logo.width => Logo宽度:number:36|px
  * group:navigation => 导航设置
- * navigation.links => 导航链接:textarea:Features=>#features\r\nPricing=>#pricing\r\nTestimonials=>#testimonials\r\nFAQ=>#faq|格式：名称=>链接，一行一个
+ * navigation.use_custom_links => 使用自定义导航链接:select:no|no,yes
+ * navigation.links => 导航链接:textarea:Features=>#features\r\nPricing=>#pricing\r\nTestimonials=>#testimonials\r\nFAQ=>#faq|格式：名称=>链接，一行一个（仅当开启自定义链接时生效）
  * navigation.show_cta => 显示CTA按钮:select:yes|yes,no
  * navigation.cta_text => CTA按钮文字:text:Start Free Trial
  * navigation.cta_url => CTA按钮链接:text:#pricing
@@ -27,6 +28,7 @@ $logoDisplay = $config['logo.display'] ?? 'yes';
 $logoText = $config['logo.text'] ?? 'SaaSFlow';
 $logoUrl = $config['logo.url'] ?? '';
 $logoWidth = $config['logo.width'] ?? '36';
+$useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navLinksRaw = $config['navigation.links'] ?? "Features=>#features\nPricing=>#pricing\nTestimonials=>#testimonials\nFAQ=>#faq";
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Start Free Trial';
@@ -36,15 +38,39 @@ $accentPrimary = $colors['accent_primary'] ?? '#10b981';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)';
 $textPrimary = $colors['text_primary'] ?? '#f1f5f9';
 $navLinkHoverColor = $colors['nav_link_hover'] ?? '#34d399';
+$navBg = $colors['nav_bg'] ?? 'rgba(11, 15, 25, 0.95)';
 
 $navLinks = [];
-foreach (preg_split('/[\r\n]+/', $navLinksRaw) as $line) {
-    $line = trim($line);
-    if (empty($line)) continue;
-    $parts = explode('=>', $line, 2);
-    $name = trim($parts[0] ?? '');
-    $url = trim($parts[1] ?? '#');
-    if (!empty($name)) $navLinks[] = ['name' => $name, 'url' => $url];
+$page = $this->getData('page');
+
+if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
+    $headerPages = $page->getHeaderNavigationPages(10);
+    foreach ($headerPages as $navPage) {
+        $type = $navPage['type'] ?? '';
+        $labelKey = 'navigation.label_' . $type;
+        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
+        $title = $navPage['title'] ?? '';
+        $url = $navPage['url'] ?? '/';
+        if (isset($navPage['type']) && $navPage['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
+            $title = __('Home');
+            $url = '/';
+        }
+        $navLinks[] = ['name' => $configuredLabel !== '' ? $configuredLabel : $title, 'url' => $url];
+    }
+}
+if ($useCustomLinks || empty($navLinks)) {
+    $navLinks = [];
+    foreach (preg_split('/[\r\n]+/', $navLinksRaw) as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        $parts = explode('=>', $line, 2);
+        $name = trim($parts[0] ?? '');
+        $url = trim($parts[1] ?? '#');
+        if (!empty($name)) $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+if (empty($navLinks)) {
+    $navLinks = [['name' => 'Features', 'url' => '#features'], ['name' => 'Pricing', 'url' => '#pricing'], ['name' => 'Testimonials', 'url' => '#testimonials'], ['name' => 'FAQ', 'url' => '#faq']];
 }
 
 $instanceId = 'ss-nav-' . uniqid();
@@ -52,7 +78,7 @@ $instanceId = 'ss-nav-' . uniqid();
 
 <nav class="ss-header" id="<?= $instanceId ?>">
     <style>
-        #<?= $instanceId ?> { padding: 15px 0; }
+        #<?= $instanceId ?> { position: relative; background: <?= htmlspecialchars($navBg) ?>; backdrop-filter: blur(10px); padding: 15px 0; }
         #<?= $instanceId ?> .ss-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
         #<?= $instanceId ?> .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= $textPrimary ?>; }
         #<?= $instanceId ?> .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }

@@ -144,6 +144,7 @@ class Env extends DataObject
     private bool $sandboxOverride = false;
 
     public const default_CONFIG = [
+        'seo' => true,
         'system' => [
             'env' => 'local',
             'deploy' => 'dev',
