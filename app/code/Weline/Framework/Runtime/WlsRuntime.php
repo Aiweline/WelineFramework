@@ -239,7 +239,8 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
             }
-            
+            // 请求早期统一启动 Session（与 App::run 一致）
+            \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
             // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
             $routerStartStart = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {

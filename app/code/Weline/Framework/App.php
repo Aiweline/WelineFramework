@@ -20,6 +20,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
+use Weline\Framework\Session\SessionFactory;
 
 class App
 {
@@ -428,6 +429,8 @@ class App
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
             }
+            // 请求早期统一启动 Session（从 Cookie + 存储加载），供各区域（后台/前台等）复用
+            SessionFactory::getInstance()->createSession()->start(null);
             $routerStartBegin = microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('router_start');
