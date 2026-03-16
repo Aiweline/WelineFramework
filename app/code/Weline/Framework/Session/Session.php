@@ -246,7 +246,8 @@ class Session implements SessionInterface
     /**
      * 落盘：将 dirty 数据写入 Storage。
      * 由 Response 终止时（sendResponse/redirect/noRouter）或 shutdown 统一调用，不在每次 set/delete 时调用。
-     * 持久化时机由 Storage 驱动决定，WLS session 服务周期性落盘。
+     * 约定：302 与响应体发送前必须先 flush，且 Storage 必须在 write 返回前完成落库（同步持久化），
+     * 以便下次请求（含 WLS 多 Worker）能读到 Session。
      */
     public function save(): void
     {
