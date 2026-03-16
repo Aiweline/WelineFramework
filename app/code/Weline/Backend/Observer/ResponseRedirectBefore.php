@@ -38,11 +38,14 @@ class ResponseRedirectBefore implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // WLS 兼容：Observer 可能为单例，使用当前请求的 Request
+        $this->request = ObjectManager::getInstance(Request::class);
+
         $data = $event->getData('data');
         $url = $data->getUrl();
         $code = $data->getCode();
         $originalUrl = $url;
-        
+
         // 只处理后台请求
         if (!$this->request->isBackend()) {
             return;
@@ -113,10 +116,16 @@ class ResponseRedirectBefore implements ObserverInterface
     protected function handlePermissionRedirect(DataObject $data, string $url, int $code): void
     {
         try {
+            // 登录成功后的重定向：当前请求为 admin/login/post 时，不要根据登录态把目标改成登录页，避免 WLS/时序下误判导致 admin↔login 循环
+            $currentPath = $this->request->getRouteUrlPath();
+            if ($currentPath === 'admin/login/post') {
+                return;
+            }
+
             // 检查用户是否已登录
             /** @var AuthenticatedSessionInterface $backendSession */
             $backendSession = SessionFactory::getInstance()->createBackendSession();
-            
+
             if (!$backendSession->isLoggedIn()) {
                 // 诊断：是否带 Session Cookie（便于排查 WLS 下登录后仍跳回登录页）
                 $sessId = (string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '');
