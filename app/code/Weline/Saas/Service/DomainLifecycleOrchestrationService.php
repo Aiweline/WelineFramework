@@ -290,6 +290,10 @@ class DomainLifecycleOrchestrationService
             ];
         }
 
+        $status = $order->getStatus();
+        $currentStep = (string) ($order->getCurrentStep() ?? '');
+        $stage = $this->getLifecycleStage($status, $currentStep);
+
         $rootDomain = $this->loadRootDomain($order->getDomain(), (int) $order->getData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID));
         $poolRows = $this->domainPoolModel->getDomainsByRoot($order->getDomain());
 
@@ -299,8 +303,10 @@ class DomainLifecycleOrchestrationService
                 'order' => [
                     'order_id' => $order->getOrderId(),
                     'domain' => $order->getDomain(),
-                    'status' => $order->getStatus(),
-                    'current_step' => $order->getCurrentStep(),
+                    'status' => $status,
+                    'current_step' => $currentStep,
+                    'lifecycle_stage' => $stage['key'],
+                    'lifecycle_stage_label' => $stage['label'],
                     'error_message' => (string) $order->getData(ProvisioningOrder::schema_fields_ERROR_MESSAGE),
                     'created_at' => (string) $order->getData(ProvisioningOrder::schema_fields_CREATED_AT),
                     'updated_at' => (string) $order->getData(ProvisioningOrder::schema_fields_UPDATED_AT),
@@ -310,6 +316,35 @@ class DomainLifecycleOrchestrationService
                 'steps' => $this->getOrderSteps($order->getOrderId()),
             ],
         ];
+    }
+
+    /**
+     * 根据订单 status / current_step 返回展示用阶段（key + 已翻译 label）
+     * 用于前端按阶段显示：正在注册 → 切换Dns中 → 解析域名记录中 → 申请HTTPS中 → 正常
+     */
+    public function getLifecycleStage(string $status, string $currentStep): array
+    {
+        $step = $currentStep !== '' ? $currentStep : $status;
+        $map = [
+            ProvisioningOrder::STEP_PURCHASE => ['key' => 'purchase', 'label' => __('正在注册')],
+            ProvisioningOrder::STEP_DNS => ['key' => 'dns', 'label' => __('切换Dns中')],
+            ProvisioningOrder::STEP_RESOLVE => ['key' => 'resolve', 'label' => __('解析域名记录中')],
+            ProvisioningOrder::STEP_VERIFY => ['key' => 'verify', 'label' => __('等待访问验证')],
+            ProvisioningOrder::STEP_CDN => ['key' => 'cdn', 'label' => __('切换CDN中')],
+            ProvisioningOrder::STEP_SSL => ['key' => 'ssl', 'label' => __('申请HTTPS中')],
+            ProvisioningOrder::STATUS_COMPLETED => ['key' => 'completed', 'label' => __('正常')],
+            ProvisioningOrder::STATUS_FAILED => ['key' => 'failed', 'label' => __('失败')],
+        ];
+        if (isset($map[$step])) {
+            return $map[$step];
+        }
+        if ($status === ProvisioningOrder::STATUS_COMPLETED) {
+            return $map[ProvisioningOrder::STATUS_COMPLETED];
+        }
+        if ($status === ProvisioningOrder::STATUS_FAILED) {
+            return $map[ProvisioningOrder::STATUS_FAILED];
+        }
+        return ['key' => 'unknown', 'label' => __('处理中')];
     }
 
     public function markCertificateIssued(string $domain): void
