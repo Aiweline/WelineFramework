@@ -1,0 +1,291 @@
+<?php
+/**
+ * WeShop Motor Theme - Product Detail Layout
+ * 摩托车主题商品详情布局（对应 Theme/view/theme/frontend/layouts/product 结构）
+ */
+$this->setLayout('base');
+$product = $this->getData('product') ?? [];
+$images = $this->getData('product_images') ?? [];
+$reviews = $this->getData('reviews') ?? [];
+$relatedProducts = $this->getData('related_products') ?? [];
+$breadcrumbs = $this->getData('breadcrumbs') ?? [];
+$reviewCount = $product['review_count'] ?? 0;
+?>
+<main class="px-4 sm:px-6 lg:px-8 xl:px-20 py-10 flex-1">
+    <div class="mx-auto max-w-7xl">
+        <w:hook name="WeShop_Product::detail::breadcrumb_before"/>
+        <div class="flex flex-wrap items-center gap-2 mb-8 text-xs uppercase tracking-wide">
+            <a class="text-gray-400 hover:text-primary transition-colors font-semibold" href="<?= $this->getUrl('') ?>">
+                <span class="material-symbols-outlined text-sm align-middle mr-1">home</span><?= __('Home') ?>
+            </a>
+            <?php foreach ($breadcrumbs as $crumb): ?>
+                <span class="text-gray-600">/</span>
+                <?php if ($crumb['url']): ?>
+                    <a class="text-gray-400 hover:text-primary transition-colors font-semibold" href="<?= $crumb['url'] ?>"><?= htmlspecialchars($crumb['name']) ?></a>
+                <?php else: ?>
+                    <span class="text-text-primary-light dark:text-text-primary-dark font-semibold"><?= htmlspecialchars($crumb['name']) ?></span>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        </div>
+        <w:hook name="WeShop_Product::detail::breadcrumb_after"/>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
+            <div class="flex flex-col gap-4">
+                <w:hook name="WeShop_Product::detail::gallery_before"/>
+                <div class="relative w-full aspect-square bg-gray-100 dark:bg-gray-800 rounded overflow-hidden motor-product-gallery" id="main-product-image">
+                    <?php if ($product['special_price'] ?? null): ?>
+                        <div class="absolute top-4 left-4 z-20">
+                            <span class="motor-badge text-sm">SALE</span>
+                        </div>
+                    <?php endif; ?>
+                    <img src="<?= $product['main_image'] ?? '' ?>" alt="<?= htmlspecialchars($product['name'] ?? '') ?>" class="w-full h-full object-cover" id="mainImage">
+                </div>
+                <div class="grid grid-cols-5 gap-3" id="product-thumbnails">
+                    <?php foreach ($images as $index => $image): ?>
+                        <button type="button"
+                                class="aspect-square bg-gray-100 dark:bg-gray-800 rounded overflow-hidden border-2 <?= $index === 0 ? 'border-primary' : 'border-transparent hover:border-gray-400' ?> transition-colors focus:outline-none focus:border-primary"
+                                data-image="<?= $image['url'] ?>"
+                                data-alt="<?= htmlspecialchars($image['alt'] ?? '') ?>"
+                                onclick="motorChangeImage(this)">
+                            <img src="<?= $image['url'] ?>" alt="<?= htmlspecialchars($image['alt'] ?? '') ?>" class="w-full h-full object-cover">
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+                <w:hook name="WeShop_Product::detail::gallery_after"/>
+            </div>
+
+            <div class="flex flex-col gap-6">
+                <w:hook name="WeShop_Product::detail::info_before"/>
+
+                <?php if ($product['brand'] ?? null): ?>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-bold uppercase tracking-widest text-gray-500"><?= __('Brand') ?>:</span>
+                        <a class="text-sm font-bold text-primary hover:underline uppercase tracking-wide" href="<?= $this->getUrl('catalog/brand', ['id' => $product['brand_id']]) ?>"><?= htmlspecialchars($product['brand']) ?></a>
+                    </div>
+                <?php endif; ?>
+
+                <h1 class="font-heading text-2xl md:text-3xl lg:text-4xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight leading-tight">
+                    <?= htmlspecialchars($product['name'] ?? '') ?>
+                </h1>
+
+                <w:hook name="WeShop_Review::product::rating"/>
+                <?php $rating = $product['rating'] ?? 0; ?>
+                <div class="flex items-center gap-3">
+                    <div class="flex text-primary">
+                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <?php if ($i <= $rating): ?>
+                                <span class="material-symbols-outlined text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+                            <?php elseif ($i - 0.5 <= $rating): ?>
+                                <span class="material-symbols-outlined text-lg">star_half</span>
+                            <?php else: ?>
+                                <span class="material-symbols-outlined text-lg">star</span>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                    </div>
+                    <span class="text-sm font-semibold text-gray-500 uppercase tracking-wide">
+                        <?= number_format($rating, 1) ?> (<?= number_format($reviewCount) ?> <?= __('Reviews') ?>)
+                    </span>
+                </div>
+
+                <div class="flex items-baseline gap-4 py-4 border-y border-border-light dark:border-border-dark">
+                    <?php if ($product['special_price'] ?? null): ?>
+                        <span class="font-heading text-3xl md:text-4xl font-bold text-primary"><?= $this->formatPrice($product['special_price']) ?></span>
+                        <span class="text-xl font-semibold text-gray-400 line-through"><?= $this->formatPrice($product['price']) ?></span>
+                        <?php $discount = round((1 - $product['special_price'] / $product['price']) * 100); ?>
+                        <span class="motor-badge">-<?= $discount ?>%</span>
+                    <?php else: ?>
+                        <span class="font-heading text-3xl md:text-4xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($product['short_description'] ?? null): ?>
+                    <p class="text-text-secondary-light dark:text-text-secondary-dark leading-relaxed">
+                        <?= htmlspecialchars($product['short_description']) ?>
+                    </p>
+                <?php endif; ?>
+
+                <w:hook name="WeShop_Product::detail::options_before"/>
+                <form id="product-form" action="<?= $this->getUrl('cart/add') ?>" method="post">
+                    <input type="hidden" name="product_id" value="<?= $product['product_id'] ?? 0 ?>">
+
+                    <?php $options = $product['options'] ?? []; ?>
+                    <?php foreach ($options as $option): ?>
+                        <div class="mb-4">
+                            <label class="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2" for="option_<?= $option['id'] ?>">
+                                <?= htmlspecialchars($option['label']) ?>
+                            </label>
+                            <select class="w-full bg-white dark:bg-gray-900 border-2 border-gray-300 dark:border-gray-700 rounded px-4 py-3 text-sm font-semibold focus:border-primary focus:outline-none transition-colors" id="option_<?= $option['id'] ?>" name="options[<?= $option['id'] ?>]">
+                                <?php foreach ($option['values'] as $value): ?>
+                                    <option value="<?= $value['id'] ?>"><?= htmlspecialchars($value['label']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endforeach; ?>
+
+                    <div class="mb-6">
+                        <label class="block text-xs font-bold uppercase tracking-widest text-gray-500 mb-2" for="quantity">
+                            <?= __('Quantity') ?>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <button type="button" class="w-12 h-12 border-2 border-gray-300 dark:border-gray-700 rounded flex items-center justify-center text-lg font-bold hover:border-primary hover:text-primary transition-colors" onclick="motorQtyChange(-1)">-</button>
+                            <input type="number" id="quantity" name="qty" value="1" min="1" max="99" class="w-20 h-12 border-2 border-gray-300 dark:border-gray-700 rounded text-center font-bold focus:border-primary focus:outline-none transition-colors bg-white dark:bg-gray-900">
+                            <button type="button" class="w-12 h-12 border-2 border-gray-300 dark:border-gray-700 rounded flex items-center justify-center text-lg font-bold hover:border-primary hover:text-primary transition-colors" onclick="motorQtyChange(1)">+</button>
+                        </div>
+                    </div>
+
+                    <w:hook name="WeShop_Product::detail::options_after"/>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2">
+                            <span class="material-symbols-outlined">shopping_cart</span>
+                            <?= __('Add to Cart') ?>
+                        </button>
+                        <button type="button" class="w-full sm:w-auto px-6 py-4 border-2 border-gray-300 dark:border-gray-700 text-text-primary-light dark:text-text-primary-dark rounded inline-flex items-center justify-center text-base font-bold uppercase tracking-wide gap-2 hover:border-primary hover:text-primary transition-colors" data-product-id="<?= $product['product_id'] ?? 0 ?>">
+                            <span class="material-symbols-outlined">favorite_border</span>
+                        </button>
+                    </div>
+                    <w:hook name="WeShop_Product::detail::after_add_to_cart"/>
+                </form>
+
+                <?php if ($product['highlights'] ?? null): ?>
+                    <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded">
+                        <h3 class="font-heading text-sm font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary">check_circle</span>
+                            <?= __('Product Highlights') ?>
+                        </h3>
+                        <ul class="space-y-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                            <?php foreach ($product['highlights'] as $highlight): ?>
+                                <li class="flex items-start gap-2">
+                                    <span class="material-symbols-outlined text-primary text-sm mt-0.5">done</span>
+                                    <?= htmlspecialchars($highlight) ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endif; ?>
+
+                <w:hook name="WeShop_Product::detail::info_after"/>
+            </div>
+        </div>
+
+        <div class="mt-12">
+            <w:hook name="WeShop_Product::detail::tabs_before"/>
+            <div class="border-b-2 border-gray-200 dark:border-gray-800">
+                <nav class="-mb-px flex space-x-8 font-heading" role="tablist">
+                    <button type="button" class="motor-tab py-4 px-1 border-b-2 font-bold text-sm uppercase tracking-wide text-primary border-primary" data-tab="description" role="tab">
+                        <?= __('Description') ?>
+                    </button>
+                    <button type="button" class="motor-tab py-4 px-1 border-b-2 font-bold text-sm uppercase tracking-wide text-gray-400 border-transparent hover:text-primary hover:border-gray-300 transition-colors" data-tab="specifications" role="tab">
+                        <?= __('Specifications') ?>
+                    </button>
+                    <button type="button" class="motor-tab py-4 px-1 border-b-2 font-bold text-sm uppercase tracking-wide text-gray-400 border-transparent hover:text-primary hover:border-gray-300 transition-colors" data-tab="reviews" role="tab">
+                        <?= __('Reviews') ?> (<?= $reviewCount ?>)
+                    </button>
+                </nav>
+            </div>
+
+            <div class="motor-tab-content py-8" id="tab-description">
+                <div class="prose prose-lg dark:prose-invert max-w-none">
+                    <?= $product['description'] ?? '' ?>
+                </div>
+            </div>
+
+            <div class="motor-tab-content py-8 hidden" id="tab-specifications">
+                <?php $specs = $product['specifications'] ?? []; ?>
+                <?php if (!empty($specs)): ?>
+                    <div class="grid md:grid-cols-2 gap-4">
+                        <?php foreach ($specs as $spec): ?>
+                            <div class="flex justify-between py-3 border-b border-gray-200 dark:border-gray-800">
+                                <span class="text-xs font-bold uppercase tracking-wider text-gray-500"><?= htmlspecialchars($spec['label']) ?></span>
+                                <span class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($spec['value']) ?></span>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <p class="text-gray-500"><?= __('No specifications available.') ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="motor-tab-content py-8 hidden" id="tab-reviews">
+                <w:hook name="WeShop_Review::product::reviews"/>
+            </div>
+            <w:hook name="WeShop_Product::detail::tabs_after"/>
+        </div>
+
+        <?php if (!empty($relatedProducts)): ?>
+            <div class="mt-16 pt-12 border-t-2 border-gray-200 dark:border-gray-800">
+                <w:hook name="WeShop_Product::detail::related_before"/>
+                <div class="flex items-center justify-between mb-8">
+                    <h2 class="font-heading text-xl md:text-2xl font-bold uppercase tracking-tight"><?= __('Related Products') ?></h2>
+                    <a href="<?= $this->getUrl('catalog/category') ?>" class="text-sm font-bold text-primary uppercase tracking-wide flex items-center gap-1 hover:underline">
+                        <?= __('View All') ?>
+                        <span class="material-symbols-outlined text-lg">arrow_forward</span>
+                    </a>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <?php foreach ($relatedProducts as $related): ?>
+                        <a href="<?= $this->getUrl('product/view', ['id' => $related['product_id']]) ?>" class="motor-card flex flex-col rounded overflow-hidden group">
+                            <div class="relative aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                <img src="<?= $related['image'] ?? '' ?>" alt="<?= htmlspecialchars($related['name']) ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
+                            </div>
+                            <div class="p-4 bg-white dark:bg-gray-900">
+                                <h3 class="font-bold text-sm text-text-primary-light dark:text-text-primary-dark truncate group-hover:text-primary transition-colors">
+                                    <?= htmlspecialchars($related['name']) ?>
+                                </h3>
+                                <div class="flex items-center gap-1 mt-1 text-primary">
+                                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <span class="material-symbols-outlined text-xs" style="font-variation-settings: 'FILL' <?= $i <= ($related['rating'] ?? 0) ? 1 : 0 ?>;">star</span>
+                                    <?php endfor; ?>
+                                </div>
+                                <p class="font-bold mt-2 text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($related['price']) ?></p>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+                <w:hook name="WeShop_Product::detail::related_after"/>
+            </div>
+        <?php endif; ?>
+    </div>
+</main>
+
+<?= $this->getChildHtml('content') ?>
+
+<script>
+(function() {
+    'use strict';
+    window.motorChangeImage = function(thumbnail) {
+        var mainImage = document.getElementById('mainImage');
+        var imageUrl = thumbnail.dataset.image;
+        mainImage.src = imageUrl;
+        var thumbnails = document.querySelectorAll('#product-thumbnails button');
+        thumbnails.forEach(function(thumb) {
+            thumb.classList.remove('border-primary');
+            thumb.classList.add('border-transparent');
+        });
+        thumbnail.classList.remove('border-transparent');
+        thumbnail.classList.add('border-primary');
+    };
+    window.motorQtyChange = function(delta) {
+        var qtyInput = document.getElementById('quantity');
+        var current = parseInt(qtyInput.value, 10) || 1;
+        var newVal = Math.max(1, Math.min(99, current + delta));
+        qtyInput.value = newVal;
+    };
+    var tabs = document.querySelectorAll('.motor-tab');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var tabName = this.dataset.tab;
+            tabs.forEach(function(t) {
+                t.classList.remove('text-primary', 'border-primary');
+                t.classList.add('text-gray-400', 'border-transparent');
+            });
+            this.classList.remove('text-gray-400', 'border-transparent');
+            this.classList.add('text-primary', 'border-primary');
+            document.querySelectorAll('.motor-tab-content').forEach(function(content) {
+                content.classList.add('hidden');
+            });
+            document.getElementById('tab-' + tabName).classList.remove('hidden');
+        });
+    });
+})();
+</script>
