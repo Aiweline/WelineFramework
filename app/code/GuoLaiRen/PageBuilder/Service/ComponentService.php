@@ -593,8 +593,8 @@ class ComponentService
         // 加载组件所属模板的颜色配置
         $colors = $this->loadTemplateColors($styleCode);
         
-        // 准备模板变量
-        $template->assign('page', null);
+        // 准备模板变量：预览时使用桩对象提供导航/页脚示例数据，避免 nav、footer 等组件渲染为空
+        $template->assign('page', new PreviewPageStub());
         $template->assign('style', $mergedConfig);
         $template->assign('style_settings', $mergedConfig);
         $template->assign('component_config', $mergedConfig);

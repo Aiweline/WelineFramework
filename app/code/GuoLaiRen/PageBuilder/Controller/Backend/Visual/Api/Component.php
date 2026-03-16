@@ -1390,20 +1390,29 @@ class Component extends BackendController
     {
         try {
             $componentCode = $this->request->getParam('component_code', '');
-            $styleCode = $this->request->getParam('style_code', '');
+            $styleCode = trim((string)$this->request->getParam('style_code', ''));
             
-            if (!$componentCode) {
+            if ($componentCode === '' || $componentCode === null) {
                 throw new \Exception('缺少组件代码');
             }
             
-            if (!$styleCode) {
-                throw new \Exception('缺少样式代码');
+            $metadata = null;
+            if ($styleCode !== '') {
+                $metadata = $this->layoutAssembler->getComponentMetadata($styleCode, $componentCode);
+            }
+            // style_code 为空时依次尝试常见模板，避免前端未传 style_code 时直接报“缺少样式代码”
+            if (!$metadata && $styleCode === '') {
+                $styleCandidates = ['tpmst', 'default', 'saas-starter', 'fitness-pro', 'fintech-hub'];
+                foreach ($styleCandidates as $candidate) {
+                    $metadata = $this->layoutAssembler->getComponentMetadata($candidate, $componentCode);
+                    if ($metadata) {
+                        break;
+                    }
+                }
             }
             
-            $metadata = $this->layoutAssembler->getComponentMetadata($styleCode, $componentCode);
-            
             if (!$metadata) {
-                throw new \Exception('组件不存在');
+                throw new \Exception('组件不存在: ' . $componentCode . ($styleCode !== '' ? " (模板: {$styleCode})" : ''));
             }
             
             return $this->fetchJson([
