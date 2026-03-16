@@ -65,7 +65,15 @@ final class WlsSharedStorage implements SessionStorageInterface
     public function write(string $sessionId, array $data, int $ttl): bool
     {
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
-        return $this->sessionMemoryService->write($sessionId, $data, $ttl);
+        $ok = $this->sessionMemoryService->write($sessionId, $data, $ttl);
+        if (!$ok) {
+            w_log_warning(
+                '[WlsSharedStorage] Session 落库失败，请检查 Session Server 是否运行、网络与鉴权。sessionId=' . \substr($sessionId, 0, 8) . '...',
+                ['connected' => $this->sessionClient->isConnected()],
+                'session'
+            );
+        }
+        return $ok;
     }
 
     /**
