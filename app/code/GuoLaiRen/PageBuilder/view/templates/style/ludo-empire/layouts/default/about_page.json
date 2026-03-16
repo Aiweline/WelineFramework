@@ -17,7 +17,10 @@
                 "config": {
                     "content.badge": "About Us",
                     "content.title": "The Story Behind LudoEmpire",
-                    "content.description": "We're on a mission to bring the classic board game experience to millions of players worldwide."
+                    "content.description": "We're on a mission to bring the classic board game experience to millions of players worldwide.",
+                    "content.story": "LudoEmpire was born from a simple idea: what if the beloved board game Ludo could be played online with the same excitement, fairness, and fun? Founded in 2024, we've grown from a small team of gaming enthusiasts to a platform serving millions of players across the globe.\n\nOur commitment to fair play, transparent gameplay, and community-driven development has made us one of the most trusted online Ludo platforms in the world.",
+                    "stats.items": "10M+|Active Players|Players who love our platform\n50M+|Games Played|Total games completed\n₹10Cr+|Prizes Awarded|Total winnings distributed\n4.8|App Rating|On Google Play Store",
+                    "values.items": "🎯 Fair Play|Every game is powered by certified RNG. We believe in equal opportunities for all players.\n🔒 Security First|Your data and money are protected with bank-grade encryption and security measures.\n🤝 Community|We're building more than a game - we're building a community of passionate Ludo players.\n🚀 Innovation|Constantly improving with new features, game modes, and experiences."
                 }
             }
         ],
