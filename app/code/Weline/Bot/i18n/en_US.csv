@@ -1,0 +1,61 @@
+﻿"Bot 智能体适配器","Bot 智能体适配器"
+"专为 Bot 智能体设计的场景适配器，支持角色上下文增强、工具调用格式化、记忆注入等能力。","Scenario adapter designed for Bot agents, supporting role context enhancement, tool call formatting, and memory injection."
+"IT 运维助手","IT Operations Assistant"
+"专为 IT 运维场景设计，支持服务器监控、日志分析、故障排查、自动化运维等能力。","Designed for IT operations scenarios, supporting server monitoring, log analysis, troubleshooting, and automated operations."
+"SEO 优化助手","SEO Optimization Assistant"
+"专为 SEO 场景设计，支持关键词分析、内容优化建议、Meta 标签生成、结构化数据建议等能力。","Designed for SEO scenarios, supporting keyword analysis, content optimization suggestions, Meta tag generation, and structured data recommendations."
+消息不能为空,"Message cannot be empty"
+角色不存在或已禁用,"Role does not exist or is disabled"
+会话不存在,"Session does not exist"
+成功,Success
+"会话 ID 无效","Invalid session ID"
+历史已清除,"History cleared"
+角色不存在,"Role does not exist"
+角色代码和名称不能为空,"Role code and name cannot be empty"
+角色代码已存在,"Role code already exists"
+保存成功,"Saved successfully"
+不能删除默认角色,"Cannot delete default role"
+删除成功,"Deleted successfully"
+状态已更新,"Status updated"
+任务不存在,任务不存在
+任务名称和提示词不能为空,任务名称和提示词不能为空
+任务已加入执行队列,任务已加入执行队列
+已归档,Archived
+已删除,Deleted
+技能不存在,技能不存在
+文件系统,Filesystem
+"Shell 命令","Shell 命令"
+浏览器,浏览器
+"API 请求","API 请求"
+数据库,数据库
+代码执行,代码执行
+聊天侧边栏扩展,聊天侧边栏扩展
+在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。,在聊天控制台的侧边栏区域触发，允许其他模块在侧边栏添加自定义内容，如快捷指令、历史会话列表等。
+消息工具栏扩展,消息工具栏扩展
+在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。,在聊天消息的工具栏区域触发，允许其他模块为消息添加自定义操作按钮，如复制、重新生成、收藏等。
+数据库查询,"Database Query"
+"执行数据库查询（仅限 SELECT）","执行数据库查询（仅限 SELECT）"
+"SQL 查询语句（仅支持 SELECT）","SQL Query (SELECT only)"
+返回行数限制,"Row Limit"
+偏移量,Offset
+文件读写操作,"File read/write operations"
+操作类型,"Action Type"
+文件路径,"File Path"
+"写入内容（仅 write 操作）","Content (write only)"
+写入模式,"Write Mode"
+文件编码,"File Encoding"
+文件写入成功,"File written successfully"
+文件删除成功,"File deleted successfully"
+"HTTP 请求","HTTP Request"
+"发送 HTTP 请求","发送 HTTP 请求"
+"请求 URL","Request URL"
+"HTTP 方法","HTTP Method"
+请求头,Headers
+请求体（JSON）,"Body (JSON)"
+超时时间（秒）,"Timeout (seconds)"
+是否跟随重定向,"Follow Redirects"
+"Shell 命令执行","Shell Execute"
+"执行 Shell 命令（受白名单限制）","Execute Shell commands (whitelisted)"
+要执行的命令,"Command to execute"
+工作目录,"Working Directory"
+检测到危险命令模式，禁止执行,"Dangerous command pattern detected, execution forbidden"
