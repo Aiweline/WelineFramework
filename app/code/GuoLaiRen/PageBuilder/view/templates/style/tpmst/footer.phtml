@@ -22,6 +22,13 @@
  * 
  * group:content => 内容配置
  * content.footer_links => 页脚链接:textarea:Home|#home,Blog|#blog,FAQ|#faqs,About|#about
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
  * content.copyright_text => 版权信息:text:© 2025 Teen Patti Master | All rights reserved
  * content.disclaimer_text => 免责声明:textarea:Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.
  * 
@@ -134,16 +141,29 @@ $footerTermsText = tpmst_getConfig($styleSettings, 'texts.footer_terms', 'Terms 
 $copyrightText = tpmst_getConfig($styleSettings, 'content.copyright_text', '© 2025 Teen Patti Master | All rights reserved');
 $disclaimerText = tpmst_getConfig($styleSettings, 'content.disclaimer_text', 'Please be cautious with in-game recharges as they involve real money. Only spend what you can afford, and ensure all transactions are secure. This game is strictly for users 18+. By downloading or playing, you confirm you meet the age requirement.');
 
-// 解析页脚链接
+// 页脚链接：直接来自当前站点下的所有已发布页面，菜单名优先用配置项（有配置则显示配置名，否则用页面标题）
 $footerLinks = [];
-if (!empty($footerLinksText)) {
+if ($page) {
+    $footerPages = $page->getNavigationPages([\GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG], 30);
+    foreach ($footerPages as $fp) {
+        $ft = $fp['type'] ?? '';
+        $labelKey = 'content.footer_label_' . $ft;
+        $configuredLabel = trim((string)(tpmst_getConfig($styleSettings, $labelKey, '') ?? ''));
+        $footerLinks[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : ($fp['title'] ?? ''),
+            'url' => $fp['url'] ?? '/',
+        ];
+    }
+}
+if (empty($footerLinks)) {
+    $footerLinksText = tpmst_getConfig($styleSettings, 'content.footer_links', 'Home|/,FAQ|/faq,Blog|/blog,About|/about,Privacy|/privacy');
     $links = explode(',', $footerLinksText);
     foreach ($links as $link) {
         $parts = explode('|', trim($link));
-        if (count($parts) === 2) {
+        if (count($parts) >= 2) {
             $footerLinks[] = [
                 'text' => trim($parts[0]),
-                'url' => trim($parts[1])
+                'url' => trim($parts[1]),
             ];
         }
     }
@@ -240,20 +260,15 @@ $fontSizeResponsive = tpmst_genResponsiveCSS($fontSize);
     <footer class="tpmst-footer">
         <div class="tpmst-footer-container">
             <div class="tpmst-footer-content">
-                <!-- 页脚链接 -->
+                <!-- 页脚链接：来自当前站点页面 -->
+                <?php if (!empty($footerLinks)): ?>
                 <p class="tpmst-footer-links d-none d-lg-block">
-                    <a href="/"><?= htmlspecialchars($footerHomeText) ?></a>
-                    <span class="tpmst-footer-separator">|</span>
-                    <a href="/teen-patti-master-faq/"><?= htmlspecialchars($footerFaqText) ?></a>
-                    <span class="tpmst-footer-separator">|</span>
-                    <a href="/blog/"><?= htmlspecialchars($footerBlogText) ?></a>
-                    <span class="tpmst-footer-separator">|</span>
-                    <a href="/teen-patti-master-about/"><?= htmlspecialchars($footerAboutText) ?></a>
-                    <span class="tpmst-footer-separator">|</span>
-                    <a href="/privacy-policy/"><?= htmlspecialchars($footerPrivacyText) ?></a>
-                    <span class="tpmst-footer-separator">|</span>
-                    <a href="/terms-conditions/"><?= htmlspecialchars($footerTermsText) ?></a>
+                    <?php foreach ($footerLinks as $idx => $fl): ?>
+                        <?php if ($idx > 0): ?><span class="tpmst-footer-separator">|</span><?php endif; ?>
+                        <a href="<?= htmlspecialchars($fl['url']) ?>"><?= htmlspecialchars($fl['text']) ?></a>
+                    <?php endforeach; ?>
                 </p>
+                <?php endif; ?>
                 
                 <!-- 版权信息和DMCA -->
                 <p class="tpmst-footer-copyright">

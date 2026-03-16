@@ -16,9 +16,30 @@ $templateCode = 'rummy-royal';
 
 // 获取页面布局配置（包含组件配置）
 $layoutConfig = $this->getData('layout_config') ?: [];
-$headerComponents = $layoutConfig['header'] ?? [];
-$contentComponents = $layoutConfig['content'] ?? [];
-$footerComponents = $layoutConfig['footer'] ?? [];
+$headerRaw = $layoutConfig['header'] ?? [];
+$contentRaw = $layoutConfig['content'] ?? [];
+$footerRaw = $layoutConfig['footer'] ?? [];
+// 规范化：exportConfig() 可能返回单对象 ['component'=>..., 'config'=>...] 或数组；项可能是字符串 code，统一为 [['code'=>..., 'enabled'=>..., 'config'=>...]]
+$normalize = function($raw) {
+    if (!is_array($raw)) {
+        return [];
+    }
+    if (!isset($raw[0]) && isset($raw['component'])) {
+        $raw = [['code' => $raw['component'], 'enabled' => true, 'config' => $raw['config'] ?? []]];
+    }
+    $out = [];
+    foreach ($raw as $item) {
+        if (is_string($item)) {
+            $out[] = ['code' => $item, 'enabled' => true, 'config' => []];
+        } elseif (is_array($item)) {
+            $out[] = ['code' => $item['code'] ?? '', 'enabled' => $item['enabled'] ?? true, 'config' => $item['config'] ?? []];
+        }
+    }
+    return $out;
+};
+$headerComponents = $normalize($headerRaw);
+$contentComponents = $normalize($contentRaw);
+$footerComponents = $normalize($footerRaw);
 
 // 如果没有配置，使用默认组件
 if (empty($headerComponents)) {

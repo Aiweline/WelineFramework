@@ -109,7 +109,6 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
         // - null: 缓存了"未找到"的结果
         // - false: 缓存未命中，需要查询数据库
         $rewriteData = $cache->get($cacheKey);
-        
         if (is_array($rewriteData) && isset($rewriteData['path'])) {
             $this->applyRewrite(
                 $event,
@@ -119,7 +118,8 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                 isset($rewriteData['website_id']) ? (int)$rewriteData['website_id'] : null
             );
             return;
-        } elseif ($rewriteData === null) {
+        }
+        if ($rewriteData === 'not_found') {
             return;
         }
         
@@ -151,6 +151,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
             if (!$rewrite->getId()) {
                 $rewrite = $this->findRewriteByWebsiteAndRewrite($websiteId, '/' . $path);
             }
+
             if ($rewrite->getId()) {
                 $rewritePath = $rewrite->getData('path');
                 $rewriteData = [
@@ -168,7 +169,7 @@ class RouterRewrite implements \Weline\Framework\Event\ObserverInterface
                     $rewriteData['website_id']
                 );
             } else {
-                $cache->set($cacheKey, null);
+                $cache->set($cacheKey, 'not_found');
             }
         }
     }

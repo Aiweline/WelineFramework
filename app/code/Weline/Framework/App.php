@@ -372,6 +372,7 @@ class App
             if ($_SERVER['WELINE_PARSER_URL']) {
                 $parse = Url::parser();
             }
+
             # url 重写 兼容原本携带的参数和当前重写原参数
             if (is_array($parse)) {
                 if ($_SERVER['REQUEST_METHOD'] && isset($parse['uri'])) {
@@ -430,6 +431,7 @@ class App
                 RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
             }
             // 请求早期统一启动 Session（从 Cookie + 存储加载），供各区域（后台/前台等）复用
+
             SessionFactory::getInstance()->createSession()->start(null);
             $routerStartBegin = microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {

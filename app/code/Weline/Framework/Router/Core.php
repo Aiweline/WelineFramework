@@ -810,13 +810,13 @@ class Core
         # 页头阻止XSS
         $this->header_xss();
 
-        # 全页缓存 - 后端请求不缓存
+        # 全页缓存 - 后端请求不缓存；开发模式跳过
         $cache_key = null;
         // 检查全页缓存是否启用（检查 router_cache 和 frontend_cache 配置）
         // 使用静态方法 Env::get()，使用点号分隔符访问嵌套配置
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
-        if (!$this->is_backend && $routerCacheEnabled && $frontendCacheEnabled) {
+        if (!$this->is_backend && PROD && $routerCacheEnabled && $frontendCacheEnabled) {
             // 性能优化：复用已读取的统一缓存数据
             if ($this->unifiedCacheData === null) {
                 $this->unifiedCacheData = $this->cache->get($this->unified_cache_key);
