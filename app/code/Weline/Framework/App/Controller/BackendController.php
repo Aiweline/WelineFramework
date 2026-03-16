@@ -43,7 +43,9 @@ class BackendController extends PcController
         if (!isset($this->session)) {
             $this->session = SessionFactory::getInstance()->createBackendSession();
         }
-        
+        // 尽早初始化底层 Session（读 Cookie 或生成新 ID，并加入 flush 队列），避免后续 302 前 flush 时尚未 start 导致落库遗漏
+        $this->session->start(null);
+
         parent::__init();
         
         $response = $this->request->getResponse();
