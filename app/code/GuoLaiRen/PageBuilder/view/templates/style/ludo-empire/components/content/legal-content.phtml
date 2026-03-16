@@ -12,9 +12,15 @@
  * 
  * group:content => 内容设置
  * content.badge => 徽章文字:text:Legal
+ * content.title => 标题:text:|留空使用页面标题
+ * content.last_updated => 最后更新:text:
+ * content.body => 引言/正文:textarea:
  * content.show_toc => 显示目录:select:yes|yes,no
  * content.show_last_updated => 显示更新日期:select:yes|yes,no
- * 
+ *
+ * group:toc => 章节（当页面内容为空时由配置渲染）
+ * toc.items => 章节:textarea:标题|段落内容，一行一节
+ *
  * @fields_end
  */
 
@@ -39,6 +45,42 @@ $showToc = ($config['content.show_toc'] ?? 'yes') !== 'no';
 $page = $this->getData('page') ?? null;
 $pageTitle = $page ? ($page->getData('title') ?? 'Legal Document') : 'Legal Document';
 $pageContent = $page ? ($page->getData('content') ?? '') : '';
+
+$title = trim($config['content.title'] ?? '') ?: $pageTitle;
+$lastUpdatedConfig = trim($config['content.last_updated'] ?? '');
+$lastUpdated = $lastUpdatedConfig ?: ($page ? ($page->getData('updated_at') ?? '') : '');
+if (!$lastUpdated) {
+    $lastUpdated = date('F j, Y');
+}
+
+if ($pageContent === '') {
+    $body = trim($config['content.body'] ?? '');
+    $tocRaw = $config['toc.items'] ?? '';
+    $sections = [];
+    foreach (preg_split('/[\r\n]+/', $tocRaw) as $line) {
+        $line = trim($line);
+        if ($line === '') continue;
+        $parts = explode('|', $line, 2);
+        $sTitle = trim($parts[0] ?? '');
+        $sContent = trim($parts[1] ?? '');
+        if ($sTitle !== '') {
+            $sections[] = ['title' => $sTitle, 'content' => $sContent];
+        }
+    }
+    if ($body !== '' || !empty($sections)) {
+        $pageContent = '';
+        if ($body !== '') {
+            $pageContent .= '<p>' . nl2br(htmlspecialchars($body)) . '</p>';
+        }
+        foreach ($sections as $s) {
+            $pageContent .= '<h2>' . htmlspecialchars($s['title']) . '</h2>';
+            $pageContent .= '<p>' . nl2br(htmlspecialchars($s['content'])) . '</p>';
+        }
+    }
+}
+if ($pageContent === '') {
+    $pageContent = '<p>' . __('Please add content to this page via the page editor or configure the component.') . '</p>';
+}
 
 $instanceId = 'le-legal-' . uniqid();
 ?>
@@ -141,16 +183,12 @@ $instanceId = 'le-legal-' . uniqid();
     <div class="le-legal-container">
         <div class="le-legal-header">
             <div class="le-legal-badge"><?= htmlspecialchars($badge) ?></div>
-            <h1 class="le-legal-title"><?= htmlspecialchars($pageTitle) ?></h1>
-            <p class="le-legal-updated">Last updated: <?= date('F j, Y') ?></p>
+            <h1 class="le-legal-title"><?= htmlspecialchars($title) ?></h1>
+            <p class="le-legal-updated"><?= __('Last updated') ?>: <?= htmlspecialchars(strtotime($lastUpdated) ? date('F j, Y', strtotime($lastUpdated)) : $lastUpdated) ?></p>
         </div>
         
         <div class="le-legal-content">
-            <?php if ($pageContent): ?>
-                <?= $pageContent ?>
-            <?php else: ?>
-                <p>Legal document content will be rendered here from the page content.</p>
-            <?php endif; ?>
+            <?= $pageContent ?>
         </div>
     </div>
 </section>

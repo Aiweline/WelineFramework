@@ -11,6 +11,8 @@ $isEdit = $page && $page->getId();
 $selectedLocales = $this->getData('selected_locales') ?? [];
 $parentId = $this->getData('parent_id') ?? 0;
 $i18n_enabled = $this->getData('i18n_enabled') ?? '0';
+$inheritedStyleCode = (string)($this->getData('inherited_style_code') ?? '');
+$inheritedStyleName = (string)($this->getData('inherited_style_name') ?? '');
 
 // 初始化可视化配置所需的 PHP 变量（必须在文件开头定义，避免在 JavaScript 中使用未定义变量）
 if ($isEdit && $page && $page->getId()) {
@@ -185,37 +187,18 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             ? $displayedBaseUrlWithPort
                             : ($displayedBaseUrlWithPort . '/' . ltrim($handleForDisplay, '/'));
                         $currentPageId = ($page && $page->getId()) ? (int)$page->getId() : 0;
-                        $initialPageUrlById = ''; // 不展示按 ID 访问的 URL
                         ?>
                         <div style="min-width: 150px; flex: 2 1 200px;" id="pageUrlDisplayContainer" data-page-id="<?= $currentPageId ?>">
                             <label class="form-label mb-1 small">
                                 <i class="mdi mdi-link-variant"></i> <?= __('访问地址') ?>
                             </label>
-                            <?php if ($initialPageUrlById !== ''): ?>
-                            <div class="mb-2">
-                                <span class="small text-muted"><?= __('按 ID 访问（可不带 handle）') ?></span>
-                                <div class="input-group input-group-sm mt-0">
-                                    <input type="text"
-                                           class="form-control bg-light"
-                                           id="pageUrlDisplayById"
-                                           value="<?= htmlspecialchars($initialPageUrlById) ?>"
-                                           readonly>
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrlById()" title="<?= __('复制') ?>">
-                                        <i class="mdi mdi-content-copy"></i>
-                                    </button>
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrlById()" title="<?= __('打开') ?>">
-                                        <i class="mdi mdi-open-in-new"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                            <!-- <div>
-                                <span class="small text-muted"><?= __('按 handle 访问') ?></span>
+                            <div>
+                                <span class="small text-muted"><?= __('按 handle 访问') ?><a href="{{initialPageUrlWithHandle}}">{{initialPageUrlWithHandle}}</a></span>
                                 <div class="input-group input-group-sm mt-0">
                                     <input type="text"
                                            class="form-control bg-light"
                                            id="pageUrlDisplay"
-                                           value="<?= htmlspecialchars($initialPageUrlWithHandle) ?>"
+                                           value="{{displayedBaseUrlWithPort}}"
                                            readonly>
                                     <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
                                         <i class="mdi mdi-content-copy"></i>
@@ -224,7 +207,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                         <i class="mdi mdi-open-in-new"></i>
                                     </button>
                                 </div>
-                            </div> -->
+                            </div>
                         </div>
                         
                         <!-- 所属站点 -->
@@ -585,8 +568,8 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <i class="mdi mdi-palette"></i> <?= __('样式与配置') ?>
                     </h4>
 
-                    <!-- 样式选择 -->
-                    <div class="mb-4">
+                    <!-- 样式选择：子页面继承自主页，不可切换 -->
+                    <div class="mb-4" id="pageStyleSection">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <label class="form-label mb-0">
                                 <?= __('选择样式模板') ?> <span class="text-danger">*</span>
@@ -608,6 +591,15 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             </div>
                             <?php endif; ?>
                         </div>
+                        <?php if ($inheritedStyleCode !== ''): ?>
+                        <!-- 子页面：主题继承自主页，固定不可修改 -->
+                        <div class="alert alert-secondary mb-0" id="inheritedStyleNotice">
+                            <i class="mdi mdi-lock"></i>
+                            <strong><?= __('子页面主题继承自主页，不可修改') ?></strong>
+                            <p class="mb-0 mt-2 small"><?= __('当前主题') ?>：<code><?= htmlspecialchars($inheritedStyleName ?: $inheritedStyleCode) ?></code></p>
+                        </div>
+                        <input type="hidden" name="style" id="style" value="<?= htmlspecialchars($inheritedStyleCode) ?>">
+                        <?php else: ?>
                         <?php if ($isEdit && $page && $page->getId()): ?>
                         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
                         <?php endif; ?>
@@ -659,6 +651,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             <?= __('选择页面的样式模板（Header、Content、Footer）') ?>
                         </div>
                         <div class="invalid-feedback"><?= __('请选择页面样式') ?></div>
+                        <?php endif; ?>
                     </div>
 
                     <!-- Google SEO JSON-LD 结构化数据（只读预览） -->
@@ -1355,7 +1348,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         o.value = item.website_id;
                         o.textContent = (item.name || '') + ' (' + (item.code || '') + ')';
                         sel.appendChild(o);
-                    }
+                    });
                     if (currentVal) sel.value = currentVal;
                 }
             }).catch(function() {});
@@ -2716,6 +2709,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 获取父页面数据（从PHP传递）
     const parentPageData = <?= json_encode($this->getData('parent_page_data')) ?>;
+    // 子页面主题继承自主页（根页面），不可修改
+    const inheritedStyleCode = <?= json_encode($inheritedStyleCode) ?>;
+    if (inheritedStyleCode && parentPageData) {
+        parentPageData.style = inheritedStyleCode;
+    }
     // 保存到 window 对象，以便在表单提交时使用
     window.parentPageData = parentPageData;
     
@@ -3562,10 +3560,18 @@ async function loadStyleList() {
         
         var opts = { method: 'GET', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin', silent: true };
         var res = await window.Weline.Api.request(apiUrl, opts);
-        const result = (res && res.data) || res;
+        if (typeof res === 'string') {
+            try { res = JSON.parse(res); } catch (e) { res = null; }
+        }
+        var result = res;
+        if (res && typeof res.data === 'string') {
+            try { result = JSON.parse(res.data); } catch (e) { result = res; }
+        } else if (res && res.data && typeof res.data === 'object' && res.data !== null && !Array.isArray(res.data) && Object.prototype.hasOwnProperty.call(res.data, 'success')) {
+            result = res.data;
+        }
         console.log('📦 解析响应数据:', result);
         
-        if (result.success && result.data) {
+        if (result && result.success !== false && result.data) {
             allStyles = result.data; // 保存到全局变量
             
             // 更新隐藏的select（用于表单提交）
@@ -4508,9 +4514,13 @@ async function autoSaveStyleChange(newStyle) {
         
         var opts = { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: formData, credentials: 'same-origin' };
         var res = await window.Weline.Api.request(form.action, opts);
-        const result = (res && res.data) || res;
+        let result = (res && res.data) || res;
+        // 兼容：接口返回 JSON 但 Content-Type 非 application/json 时 res.data 为字符串
+        if (typeof result === 'string') {
+            try { result = JSON.parse(result); } catch (e) { /* 保持 result 为字符串 */ }
+        }
         
-        if (result.success) {
+        if (result && result.success) {
             console.log('✅ 样式保存成功');
             
             // 显示成功提示

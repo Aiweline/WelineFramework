@@ -5140,8 +5140,8 @@ window.editComponentInPreview = async function(wrapper) {
         // 获取页面样式代码（作为后备）
         const styleSelect = document.getElementById('style');
         const pageStyleCode = styleSelect ? styleSelect.value : (window.currentStyle || 'tpmst');
-        // 使用组件的 style_code，如果没有则使用页面的
-        const styleCode = componentStyleCode || pageStyleCode;
+        // 使用组件的 style_code，如果没有则使用页面的，再空则用 tpmst 避免接口报缺样式代码
+        const styleCode = (componentStyleCode || pageStyleCode || 'tpmst').trim() || 'tpmst';
         
         // 获取组件元数据
         const metadataUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/metadata') ?>' + 
@@ -5149,10 +5149,18 @@ window.editComponentInPreview = async function(wrapper) {
             '&style_code=' + encodeURIComponent(styleCode);
         
         var metaRes = await window.Weline.Api.get(metadataUrl, { silent: true });
+        // 兼容多种返回结构：直接 body、或 { data: body }、或 { data: { data: body } }
         const metaResult = (metaRes && metaRes.data) || metaRes;
+        const payload = (metaResult && metaResult.data != null) ? metaResult.data : metaResult;
+        const metadata = (payload && payload.metadata != null) ? payload.metadata : (metaResult && metaResult.metadata) || null;
         
-        if (!metaResult.success) {
-            throw new Error(metaResult.message || '<?= __('获取组件信息失败') ?>');
+        if (!metadata || typeof metadata !== 'object') {
+            const errMsg = (payload && (payload.message || payload.msg)) || (metaResult && (metaResult.message || metaResult.msg)) || '<?= __('获取组件信息失败') ?>';
+            throw new Error(errMsg);
+        }
+        if (payload && payload.success === false) {
+            const errMsg = (payload.message || payload.msg) || '<?= __('获取组件信息失败') ?>';
+            throw new Error(errMsg);
         }
         
         // 获取当前布局配置中的组件配置
@@ -5169,8 +5177,6 @@ window.editComponentInPreview = async function(wrapper) {
                 currentConfig = componentInLayout.config || {};
             }
         }
-        
-        const metadata = metaResult.metadata;
         const fields = metadata.fields || {};
         
         // 检查是否有文字类型的配置项（用于判断是否显示AI按钮）

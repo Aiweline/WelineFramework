@@ -20,6 +20,7 @@ namespace GuoLaiRen\PageBuilder\Service\Component;
 
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\PreviewPageStub;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
@@ -103,6 +104,9 @@ class ComponentRenderer
         $index = $options['index'] ?? 0;
         $visualMode = $options['visual_mode'] ?? false;
         $page = $options['page'] ?? null;
+        if (($options['is_preview'] ?? false) && $page === null) {
+            $page = new PreviewPageStub();
+        }
         $styleSettings = $options['style_settings'] ?? [];
         $children = $options['children'] ?? [];
         

@@ -747,8 +747,8 @@ class Url implements UrlInterface
             
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
             self::$parserServer['WELINE_AREA'] = 'frontend';
-            self::$parserServer['WELINE_USER_CURRENCY'] = Cookie::getCurrency();
-            self::$parserServer['WELINE_USER_LANG'] = Cookie::getLang();
+            self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+            self::$parserServer['WELINE_USER_LANG'] = State::getLang();
             self::$parserServer['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
             self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
             self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
@@ -759,13 +759,17 @@ class Url implements UrlInterface
             $query = self::parse_url($url, 'query') ?: '';
             $uri = $path . $query;
         } else {
-            $uri = $_SERVER['REQUEST_URI'];
-            // 确保 REQUEST_URI 以 / 开头，避免拼接时出现双斜杠
-            $request_uri = $_SERVER['REQUEST_URI'];
+            // 1) 百分号解码：REQUEST_URI 先 rawurldecode（%2F→/ 等），便于后续网站匹配与重写查找
+            $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+            $request_uri = rawurldecode($request_uri);
+            $uri = $request_uri;
             if (!str_starts_with($request_uri, '/')) {
                 $request_uri = '/' . $request_uri;
             }
             $url = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . $request_uri;
+            // 后续必须执行：2) 网站信息解码（匹配 self::$parserSites，设置 WELINE_WEBSITE_ID 等）
+            // 3) 重写路由解码（decode_url → seo_decode 事件，查找 UrlRewrite 并改写为真实 path）
+            // 缺一会导致路由或网站上下文错误
         }
         # 静态文件不用再分析店铺
         if ($uri and str_contains($uri, '.')
@@ -968,9 +972,14 @@ class Url implements UrlInterface
         # 如果还有路由
         $area = $splits[0] ?? '';
         if (empty($area)) {
-            return $url;
-        }
-        
+            // path 为空（如 "/"）时不能直接 return：须继续走 Cookie/默认值填充、decode_url 重写解码、
+            // 并把 parserServer（含 WELINE_WEBSITE_ID）包装进 $data['server'] 返回，否则网站匹配不到站点 id/页面 id、查不到重写路由
+            $uri = str_starts_with($url, '/') ? $url : '/' . $url;
+            $has_area = false;
+            self::$parserServer['WELINE_AREA'] = 'frontend';
+            self::$parserServer['WELINE_AREA_ROUTE'] = '';
+            self::$parserServer['REQUEST_URI'] = $uri;
+        } else {
         $has_area = $data['has_area'] ?? false;
         
         // 使用 Env::getAreaByRoutePrefix() 动态识别区域
@@ -1046,6 +1055,7 @@ class Url implements UrlInterface
                 self::$parserServer['WELINE_AREA_ROUTE'] = '';
                 $uri = '/' . implode('/', $splits);
             }
+        }
         }
         $data['has_area'] = $has_area;
         $data['area'] = self::$parserServer['WELINE_AREA'];
@@ -1171,6 +1181,13 @@ class Url implements UrlInterface
         }
         if (empty($data['language'])) {
             $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? (($data['website'] ?? [])['default_language'] ?? null) ?? 'zh_Hans_CN';
+        }
+        // 重写路由解码前，把已解析的网站信息写入 $_SERVER，供 seo_decode 观察者（如 RouterRewrite）getCurrentWebsiteId() 使用
+        if (isset(self::$parserServer['WELINE_WEBSITE_ID'])) {
+            $_SERVER['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'];
+        }
+        if (isset(self::$parserServer['WELINE_WEBSITE_CODE'])) {
+            $_SERVER['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'];
         }
         $decode_url = self::decode_url($url);
         if($url !== $decode_url){

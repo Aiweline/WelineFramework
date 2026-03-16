@@ -364,8 +364,10 @@ class Page extends BackendController
         $parentId = $this->request->getGet('parent_id', 0);
         $this->assign('parent_id', $parentId);
         
-        // 如果指定了父页面，获取父页面的配置用于继承
+        // 如果指定了父页面，获取父页面的配置用于继承；子页面主题继承自主页（根页面），不可切换
         $parentPageData = null;
+        $inheritedStyleCode = '';
+        $inheritedStyleName = '';
         if ($parentId) {
             $parentPageModel = clone $this->pageModel;
             $parentPageModel->clear()->load($parentId);
@@ -380,9 +382,20 @@ class Page extends BackendController
                     'gtm_id' => $parentPageModel->getData('gtm_id'),
                     'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
                 ];
+                $rootPage = $parentPageModel->getRootPage();
+                if ($rootPage && $rootPage->getId()) {
+                    $inheritedStyleCode = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
+                    if ($inheritedStyleCode !== '') {
+                        $styleModel = clone $this->styleModel;
+                        $styleModel->clear()->where(Style::schema_fields_CODE, $inheritedStyleCode)->find()->fetch();
+                        $inheritedStyleName = $styleModel->getId() ? (string)($styleModel->getData(Style::schema_fields_NAME) ?? $inheritedStyleCode) : $inheritedStyleCode;
+                    }
+                }
             }
         }
         $this->assign('parent_page_data', $parentPageData);
+        $this->assign('inherited_style_code', $inheritedStyleCode);
+        $this->assign('inherited_style_name', $inheritedStyleName);
         
         // 读取AI功能配置
         /** @var SystemConfig $systemConfig */
@@ -674,10 +687,10 @@ class Page extends BackendController
             }
             
             $page->save(true);
-            
-            // 自动创建 URL 重写规则
+
+            // 创建时实时更新页面的重写路由（含首页空重写）
             $this->createOrUpdateUrlRewrite($page);
-            
+
             MessageManager::success(__('页面创建成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
         } catch (\Exception $exception) {
@@ -784,9 +797,11 @@ class Page extends BackendController
             ->getItems();
         $this->assign('parent_pages', $parentPages);
         
-        // 如果当前页面有父页面，获取父页面的配置用于继承锁定
+        // 如果当前页面有父页面，获取父页面的配置用于继承锁定；子页面主题继承自主页（根页面），不可切换
         $currentParentId = $page->getData(PageModel::schema_fields_PARENT_ID);
         $parentPageData = null;
+        $inheritedStyleCode = '';
+        $inheritedStyleName = '';
         if ($currentParentId && $currentParentId > 0) {
             $parentPageModel = clone $this->pageModel;
             $parentPageModel->clear()->load($currentParentId);
@@ -802,9 +817,20 @@ class Page extends BackendController
                     'fb_pixel_id' => $parentPageModel->getData('fb_pixel_id'),
                 ];
             }
+            $rootPage = $page->getRootPage();
+            if ($rootPage && $rootPage->getId()) {
+                $inheritedStyleCode = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
+                if ($inheritedStyleCode !== '') {
+                    $styleModel = clone $this->styleModel;
+                    $styleModel->clear()->where(Style::schema_fields_CODE, $inheritedStyleCode)->find()->fetch();
+                    $inheritedStyleName = $styleModel->getId() ? (string)($styleModel->getData(Style::schema_fields_NAME) ?? $inheritedStyleCode) : $inheritedStyleCode;
+                }
+            }
         }
         $this->assign('parent_page_data', $parentPageData);
         $this->assign('parent_id', $currentParentId ?? 0);
+        $this->assign('inherited_style_code', $inheritedStyleCode);
+        $this->assign('inherited_style_name', $inheritedStyleName);
         
         // 获取已翻译的语言数据
         $localDescriptions = clone $this->localDescriptionModel;
@@ -1148,8 +1174,17 @@ class Page extends BackendController
                 }
             }
             
-            // 🔧 确保 style 字段有值（使用处理后的值）
+            // 🔧 确保 style 字段有值（使用处理后的值）；子页面强制继承根页面主题，不可修改
             $styleToSave = !empty($currentStyleCode) ? $currentStyleCode : ($data['style'] ?? '');
+            if ($currentParentId && $currentParentId > 0) {
+                $rootPage = $page->getRootPage();
+                if ($rootPage && $rootPage->getId()) {
+                    $rootStyle = (string)($rootPage->getData(PageModel::schema_fields_STYLE) ?? '');
+                    if ($rootStyle !== '') {
+                        $styleToSave = $rootStyle;
+                    }
+                }
+            }
             
             // 处理parent_id：检查子页面不能分配给子页面
             $newParentId = (int)($data['parent_id'] ?? 0);
@@ -1264,7 +1299,7 @@ class Page extends BackendController
             // 更新后重新加载数据到 Model（使用整数类型的 pageId）
             $page->clear()->load($pageIdInt);
             
-            // 自动创建或更新 URL 重写规则（统一用 page_id，handle 变更时自动覆盖旧条目）
+            // 编辑时实时更新页面的重写路由（统一用 page_id，handle 变更时自动覆盖；首页含空重写）
             $this->createOrUpdateUrlRewrite($page);
             
             // 清理旧格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
@@ -1392,12 +1427,64 @@ class Page extends BackendController
         }
     }
 
+    /**
+     * 发布单个页面（AJAX：POST id，返回 JSON）
+     */
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_publish', '发布页面', 'mdi mdi-publish', '发布页面')]
     public function postPublish()
     {
-        // 功能建设中
-        MessageManager::warning(__('功能建设中，敬请期待！'));
-        $this->redirect('*/backend/page/index');
+        $bodyParams = $this->request->getBodyParams();
+        $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : []);
+        $pageId = (int)($data['id'] ?? $this->request->getPost('id') ?? 0);
+        if ($pageId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('页面ID不能为空')]);
+        }
+        $page = clone $this->pageModel;
+        $page->clear()->load($pageId);
+        if (!$page->getId()) {
+            return $this->fetchJson(['success' => false, 'message' => __('页面不存在')]);
+        }
+        $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+        $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+        if ($websiteId > 0 && !empty($accessibleWebsiteIds) && !in_array($websiteId, $accessibleWebsiteIds, true)) {
+            return $this->fetchJson(['success' => false, 'message' => __('您没有权限发布该页面所属的站点')]);
+        }
+        $page->setData(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
+        $page->save();
+        return $this->fetchJson(['success' => true, 'message' => __('页面已发布')]);
+    }
+
+    /**
+     * 一键发布本站：发布指定站点下所有页面（AJAX：POST website_id，返回 JSON）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_publish', '一键发布本站', 'mdi mdi-publish', '发布该站点下所有页面')]
+    public function postPublishSite()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        $data = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : []);
+        $websiteId = (int)($data['website_id'] ?? $this->request->getPost('website_id') ?? 0);
+        if ($websiteId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('请选择要发布的站点')]);
+        }
+        $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
+        if (!empty($accessibleWebsiteIds) && !in_array($websiteId, $accessibleWebsiteIds, true)) {
+            return $this->fetchJson(['success' => false, 'message' => __('您没有权限发布该站点')]);
+        }
+        $listModel = clone $this->pageModel;
+        $listModel->clear()
+            ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId);
+        $pages = $listModel->select()->fetch()->getItems();
+        $count = 0;
+        foreach ($pages as $page) {
+            $page->setData(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
+            $page->save();
+            $count++;
+        }
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('本站已发布，共 %{count} 个页面', ['count' => $count]),
+            'count' => $count,
+        ]);
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_delete', '删除页面', 'mdi mdi-delete', '删除页面')]
@@ -1590,7 +1677,11 @@ class Page extends BackendController
                     ->where(UrlRewrite::schema_fields_URL_IDENTIFY, "pagebuilder_page_{$pageId}")
                     ->delete()
                     ->fetch();
-                
+                // 首页可能还有一条空重写 pagebuilder_page_{id}_root
+                $urlRewriteModel->clear()
+                    ->where(UrlRewrite::schema_fields_URL_IDENTIFY, "pagebuilder_page_{$pageId}_root")
+                    ->delete()
+                    ->fetch();
                 $fallback = clone $urlRewriteModel;
                 $fallback->clear()
                     ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
@@ -1851,9 +1942,10 @@ class Page extends BackendController
                 array_unshift($pageTypes, PageModel::TYPE_HOME);
             }
             
-            // 页面类型配置：有 URL 前缀时用 prefix-type，无前缀时用 type（同一 website_id 下 handle 唯一即可）
+            // 页面类型配置：一键建站使用英文（类型名首字母大写 + 网站名），有 URL 前缀时用 prefix-type
             $prefix = $siteHandle !== '' ? $siteHandle : '';
-            $homeHandle = $prefix !== '' ? $prefix : ''; // 空前缀时首页 handle 在下面由 generateSlugFromName 生成
+            $homeHandle = $prefix !== '' ? $prefix : '';
+            $typeNames = $this->getQuickSiteEnglishTypeNames();
             $pageTypeConfigs = [
                 PageModel::TYPE_HOME => [
                     'name' => $siteName,
@@ -1862,54 +1954,54 @@ class Page extends BackendController
                     'is_home' => true,
                 ],
                 PageModel::TYPE_ABOUT => [
-                    'name' => __('关于我们'),
+                    'name' => $typeNames[PageModel::TYPE_ABOUT],
                     'handle' => $prefix !== '' ? $prefix . '-about' : 'about',
-                    'title' => __('关于我们') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_ABOUT] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_CONTACT => [
-                    'name' => __('联系我们'),
+                    'name' => $typeNames[PageModel::TYPE_CONTACT],
                     'handle' => $prefix !== '' ? $prefix . '-contact' : 'contact',
-                    'title' => __('联系我们') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_CONTACT] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_PRIVACY_POLICY => [
-                    'name' => __('隐私政策'),
+                    'name' => $typeNames[PageModel::TYPE_PRIVACY_POLICY],
                     'handle' => $prefix !== '' ? $prefix . '-privacy' : 'privacy',
-                    'title' => __('隐私政策') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_PRIVACY_POLICY] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_TERMS_OF_SERVICE => [
-                    'name' => __('服务条款'),
+                    'name' => $typeNames[PageModel::TYPE_TERMS_OF_SERVICE],
                     'handle' => $prefix !== '' ? $prefix . '-terms' : 'terms',
-                    'title' => __('服务条款') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_TERMS_OF_SERVICE] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_REFUND_POLICY => [
-                    'name' => __('退款政策'),
+                    'name' => $typeNames[PageModel::TYPE_REFUND_POLICY],
                     'handle' => $prefix !== '' ? $prefix . '-refund' : 'refund',
-                    'title' => __('退款政策') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_REFUND_POLICY] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_SHIPPING_POLICY => [
-                    'name' => __('配送政策'),
+                    'name' => $typeNames[PageModel::TYPE_SHIPPING_POLICY],
                     'handle' => $prefix !== '' ? $prefix . '-shipping' : 'shipping',
-                    'title' => __('配送政策') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_SHIPPING_POLICY] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_COOKIE_POLICY => [
-                    'name' => __('Cookie政策'),
+                    'name' => $typeNames[PageModel::TYPE_COOKIE_POLICY],
                     'handle' => $prefix !== '' ? $prefix . '-cookies' : 'cookies',
-                    'title' => __('Cookie政策') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_COOKIE_POLICY] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_LIST => [
-                    'name' => __('博客列表'),
+                    'name' => $typeNames[PageModel::TYPE_BLOG_LIST],
                     'handle' => $prefix !== '' ? $prefix . '-blog' : 'blog',
-                    'title' => __('博客列表') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_BLOG_LIST] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG => [
-                    'name' => __('博客文章详情'),
+                    'name' => $typeNames[PageModel::TYPE_BLOG],
                     'handle' => $prefix !== '' ? $prefix . '-post' : 'post',
-                    'title' => __('博客文章详情') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_BLOG] . ' - ' . $siteName,
                 ],
                 PageModel::TYPE_BLOG_CATEGORY => [
-                    'name' => __('博客分类'),
+                    'name' => $typeNames[PageModel::TYPE_BLOG_CATEGORY],
                     'handle' => $prefix !== '' ? $prefix . '-blog-category' : 'blog-category',
-                    'title' => __('博客分类') . ' - ' . $siteName,
+                    'title' => $typeNames[PageModel::TYPE_BLOG_CATEGORY] . ' - ' . $siteName,
                 ],
             ];
             
@@ -1988,6 +2080,31 @@ class Page extends BackendController
                     $homePageId = $savedPageId;
                 }
                 
+                // 应用该页面类型的默认布局与法律页默认内容，避免关于我们/联系我们/条款等页面空白
+                $componentService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\ComponentService::class);
+                $defaultLayout = $componentService->getDefaultLayoutConfigForPageType($styleCode, $pageType);
+                if ($defaultLayout && !empty($defaultLayout['layout_config']['content'])) {
+                    $page->setData(PageModel::schema_fields_LAYOUT_CONFIG, json_encode($defaultLayout['layout_config'], \JSON_UNESCAPED_UNICODE));
+                }
+                $legalTypes = [
+                    PageModel::TYPE_TERMS_OF_SERVICE,
+                    PageModel::TYPE_PRIVACY_POLICY,
+                    PageModel::TYPE_REFUND_POLICY,
+                    PageModel::TYPE_COOKIE_POLICY,
+                    PageModel::TYPE_SHIPPING_POLICY,
+                ];
+                if (in_array($pageType, $legalTypes, true)) {
+                    $__legalType = $pageType;
+                    $__legalTitle = $config['title'];
+                    ob_start();
+                    include BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/default-legal.phtml';
+                    $defaultContent = ob_get_clean();
+                    if ($defaultContent !== '' && $defaultContent !== false) {
+                        $page->setData(PageModel::schema_fields_CONTENT, $defaultContent);
+                    }
+                }
+                $page->save(true);
+                
                 // 创建URL重写
                 $urlRewriteSuccess = $this->createOrUpdateUrlRewrite($page);
                 
@@ -2034,6 +2151,25 @@ class Page extends BackendController
                 'message' => __('创建失败：') . $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * 一键建站时使用的英文类型名（首字母大写），用于页面 name/title：类型名 - 网站名
+     */
+    private function getQuickSiteEnglishTypeNames(): array
+    {
+        return [
+            PageModel::TYPE_ABOUT => 'About',
+            PageModel::TYPE_CONTACT => 'Contact',
+            PageModel::TYPE_PRIVACY_POLICY => 'Privacy Policy',
+            PageModel::TYPE_TERMS_OF_SERVICE => 'Terms of Service',
+            PageModel::TYPE_REFUND_POLICY => 'Refund Policy',
+            PageModel::TYPE_SHIPPING_POLICY => 'Shipping Policy',
+            PageModel::TYPE_COOKIE_POLICY => 'Cookie Policy',
+            PageModel::TYPE_BLOG_LIST => 'Blog List',
+            PageModel::TYPE_BLOG => 'Blog Post',
+            PageModel::TYPE_BLOG_CATEGORY => 'Blog Category',
+        ];
     }
     
     /**
@@ -2554,8 +2690,9 @@ class Page extends BackendController
      * 自动创建或更新页面的 URL 重写规则
      * @param PageModel $page 页面模型
      * @return bool 是否成功
-     * 
-     * 注意：URL 重写按 website_id 隔离，同 website_id 下 handle 唯一
+     *
+     * 注意：URL 重写按 website_id 隔离，同 website_id 下 (website_id, rewrite) 唯一。
+     * 首页需保存两条：有 handle 时一条 handle 重写、一条空重写，否则根路径 "/" 查不到网站。
      */
     private function createOrUpdateUrlRewrite(PageModel $page): bool
     {
@@ -2563,60 +2700,98 @@ class Page extends BackendController
             $handle = $page->getData(PageModel::schema_fields_HANDLE);
             $pageId = $page->getId();
             $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
-            
+            $isHomePage = ($page->getData(PageModel::schema_fields_TYPE) ?? '') === PageModel::TYPE_HOME;
+
             if (empty($pageId)) {
                 if (DEV) {
                     w_log_info("createOrUpdateUrlRewrite: Missing page ID.");
                 }
                 return false;
             }
-            
+
             $originalPath = "pagebuilder/frontend/page/view?page_id={$pageId}";
             $rewritePath = !empty($handle) ? $handle : '';
             $urlIdentify = "pagebuilder_page_{$pageId}";
-            
+
             /**@var UrlRewrite $urlRewriteModel */
             $urlRewriteModel = ObjectManager::getInstance(UrlRewrite::class);
-            
-            $existingRewrite = clone $urlRewriteModel;
-            $existingRewrite->clear()
-                ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-                ->find()
-                ->fetch();
-            
-            if (!$existingRewrite->getId()) {
-                $existingRewrite = clone $urlRewriteModel;
-                $existingRewrite->clear()
-                    ->where(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
-                    ->find()
-                    ->fetch();
+
+            $this->saveOneUrlRewrite(
+                $urlRewriteModel,
+                $urlIdentify,
+                "pagebuilder_page_{$pageId}",
+                $websiteId,
+                $originalPath,
+                $rewritePath,
+                true
+            );
+
+            // 首页且有 handle 时：再保存一条空重写，使根路径 "/" 能解析到本站首页
+            if ($isHomePage && $rewritePath !== '') {
+                $rootIdentify = "pagebuilder_page_{$pageId}_root";
+                $this->saveOneUrlRewrite(
+                    $urlRewriteModel,
+                    $rootIdentify,
+                    "pagebuilder_page_{$pageId}",
+                    $websiteId,
+                    $originalPath,
+                    '',
+                    false
+                );
             }
-            
-            if ($existingRewrite->getId()) {
-                $existingRewrite
-                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                    ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
-                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
-                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
-                    ->save();
-            } else {
-                $newRewrite = clone $urlRewriteModel;
-                $newRewrite->clearData()
-                    ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
-                    ->setData(UrlRewrite::schema_fields_URL_ID, "pagebuilder_page_{$pageId}")
-                    ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
-                    ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
-                    ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
-                    ->save(true);
-            }
-            
+
             return true;
         } catch (\Exception $e) {
             if (DEV) {
                 w_log_error("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
             }
             return false;
+        }
+    }
+
+    /**
+     * 保存或更新单条 URL 重写（按 url_identify 查找，主记录可再按 url_id 回退）
+     * @param bool $fallbackByUrlId 未按 url_identify 命中时是否按 url_id 再查（首页空重写条用 false）
+     */
+    private function saveOneUrlRewrite(
+        UrlRewrite $urlRewriteModel,
+        string $urlIdentify,
+        string $urlId,
+        int $websiteId,
+        string $originalPath,
+        string $rewritePath,
+        bool $fallbackByUrlId = true
+    ): void {
+        $existingRewrite = clone $urlRewriteModel;
+        $existingRewrite->clear()
+            ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+            ->find()
+            ->fetch();
+
+        if ($fallbackByUrlId && !$existingRewrite->getId()) {
+            $existingRewrite->clear()
+                ->where(UrlRewrite::schema_fields_URL_ID, $urlId)
+                ->find()
+                ->fetch();
+        }
+
+        if ($existingRewrite->getId()) {
+            $existingRewrite
+                ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
+                ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
+                ->save();
+        } else {
+            $newRewrite = clone $urlRewriteModel;
+            $newRewrite->clearData()
+                ->setData(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
+                ->setData(UrlRewrite::schema_fields_URL_ID, $urlId)
+                ->setData(UrlRewrite::schema_fields_URL_IDENTIFY, $urlIdentify)
+                ->setData(UrlRewrite::schema_fields_PATH, $originalPath)
+                ->setData(UrlRewrite::schema_fields_REWRITE, $rewritePath)
+                ->save(true);
         }
     }
 

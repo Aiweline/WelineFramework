@@ -15,9 +15,13 @@
                 "enabled": true,
                 "instance_id": "terms-default",
                 "config": {
+                    "content.title": "Terms of Service",
+                    "content.last_updated": "February 1, 2026",
+                    "content.body": "By accessing or using our platform, you agree to be bound by these Terms of Service. If you do not agree, please do not use our services.",
+                    "toc.items": "Acceptance of Terms|By accessing or using our platform, you agree to be bound by these Terms of Service. If you do not agree, please do not use our services.\nEligibility|You must be at least 18 years of age (or the age of majority in your jurisdiction) to use our services. By creating an account, you represent that you meet these requirements.\nAccount Registration|You must provide accurate and complete information during registration. You are responsible for maintaining the confidentiality of your account credentials and for all activities under your account.\nAcceptable Use|You agree to use the platform only for lawful purposes. We reserve the right to suspend or terminate accounts that violate these terms.\nIntellectual Property|All content, designs, and software on the platform are the intellectual property of the operator. Unauthorized reproduction or distribution is prohibited.\nLimitation of Liability|To the fullest extent permitted by law, we are not liable for any indirect, incidental, or consequential damages arising from your use of our services.\nModifications|We may update these terms from time to time. Continued use of the platform after changes constitutes acceptance of the revised terms.",
                     "layout.show_toc": "yes",
                     "layout.show_last_updated": "yes",
-                    "layout.content_width": "narrow"
+                    "layout.content_width": "medium"
                 }
             }
         ],

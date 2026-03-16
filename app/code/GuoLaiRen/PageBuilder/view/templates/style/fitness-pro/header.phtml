@@ -72,7 +72,7 @@ $logoUrl = fp_getConfig($styleSettings, 'logo.url', '');
 $logoWidth = fp_getConfig($styleSettings, 'logo.width', '36');
 
 $navDisplay = fp_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = fp_getConfig($styleSettings, 'navigation.bg_color', 'rgba(15, 10, 7, 0.95)');
+$navBgColor = fp_getConfig($styleSettings, 'navigation.bg_color', fp_color($colors, 'nav_bg', 'rgba(15, 10, 7, 0.95)'));
 $navTextColor = fp_getConfig($styleSettings, 'navigation.text_color', '#fef3c7');
 $navLinkHoverColor = fp_getConfig($styleSettings, 'navigation.link_hover_color', '#fb923c');
 $navLinksRaw = fp_getConfig($styleSettings, 'navigation.links', "Programs=>#programs\nResults=>#stats\nReviews=>#testimonials\nFAQ=>#faq");
