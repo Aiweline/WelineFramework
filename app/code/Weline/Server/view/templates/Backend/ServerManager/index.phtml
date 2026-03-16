@@ -96,8 +96,14 @@ $guideUrl = $this->getBackendUrl('*/backend/optimization-guide');
     font-weight: bold;
 }
 .stat-label {
-    color: var(--w-muted-color);
+    /* 保障线上主题 --w-muted-color 过浅时仍可读 */
+    color: var(--w-muted-color, #6c757d);
     font-size: 0.875rem;
+}
+/* 监听地址使用中性色，避免被主题/链接色染成洋红 */
+.server-manager .table code.listen-address {
+    color: var(--w-text-color, #212529);
+    background: var(--w-box-bg, #f8f9fa);
 }
 .optimization-card {
     padding: 1rem;
@@ -384,7 +390,7 @@ function renderContent(data) {
             html += `
                 <tr data-instance="${escapeHtml(name)}">
                     <td><strong>${escapeHtml(name)}</strong></td>
-                    <td><code>${escapeHtml(server.host || '127.0.0.1')}</code></td>
+                    <td><code class="listen-address">${escapeHtml(server.host || '127.0.0.1')}</code></td>
                     <td><code>${port} - ${endPort}</code></td>
                     <td>${count}</td>
                     <td>

@@ -1821,14 +1821,15 @@ class Page extends BackendController
     public function quickSite()
     {
         try {
-            // 获取参数
-            $styleCode = $this->request->getPost('style_code');
-            $siteName = trim($this->request->getPost('site_name', ''));
-            $siteHandle = trim($this->request->getPost('site_handle', ''));
-            $websiteId = (int)$this->request->getPost('website_id', 0);
-            $defaultLocale = $this->request->getPost('default_locale', 'zh_Hans_CN');
-            $pageTypesJson = $this->request->getPost('page_types', '[]');
-            $pageTypes = json_decode($pageTypesJson, true) ?: [];
+            // 获取参数（ParameterBag::getRequest 已自动回退 Body，FPM/WLS 均可正常读取）
+            $styleCode = $this->request->getPost('style_code', '');
+            $siteName = trim((string) $this->request->getPost('site_name', ''));
+            $siteHandle = trim((string) $this->request->getPost('site_handle', ''));
+            $websiteId = (int) $this->request->getPost('website_id', 0);
+            $defaultLocale = (string) $this->request->getPost('default_locale', 'zh_Hans_CN');
+            $pageTypesRaw = $this->request->getPost('page_types', '[]');
+            $pageTypes = \is_array($pageTypesRaw) ? $pageTypesRaw : (json_decode((string) $pageTypesRaw, true) ?: []);
+            $seoAccountId = $this->request->getPost('seo_account_id', '');
             
             // 验证参数
             if (empty($styleCode)) {
@@ -2002,7 +2003,7 @@ class Page extends BackendController
             $this->clearRouterAndPageBuilderCache();
             
             // 绑定 SEO 账户（如果提供了 seo_account_id）
-            $seoAccountId = (int)$this->request->getPost('seo_account_id', 0);
+            $seoAccountId = (int) $seoAccountId;
             if ($seoAccountId > 0 && $websiteId > 0) {
                 try {
                     $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);

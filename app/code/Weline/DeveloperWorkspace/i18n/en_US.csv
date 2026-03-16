@@ -1,4 +1,7 @@
-﻿开发文档,开发文档
+﻿仅开发模式可用,仅开发模式可用
+"参数 sql 不能为空","参数 sql 不能为空"
+"仅支持对 SELECT 语句执行 EXPLAIN","仅支持对 SELECT 语句执行 EXPLAIN"
+开发文档,开发文档
 "📚 开始扫描模块文档...","📚 StartScanModule documents..."
 "✅ 文档扫描完成！","✅ DocumentScanComplete！"
 "📊 扫描统计:","📊 ScanStatistics:"

@@ -214,15 +214,21 @@ class Request extends Request\RequestAbstract implements RequestInterface
     public function getParam(string $key, mixed $default = '', string $filter = '')
     {
         $filterType = $filter ?: gettype($default);
-        if ($result = $this->getData($key)) {
+
+        // 1) 优先从请求对象的 data（WLS parseRawHttp 阶段写入的 GET+POST 合并数据）
+        $result = $this->getData($key);
+        if ($result !== null) {
             return RequestFilter::filter($filterType, $result);
         }
 
-        // 使用 ParameterBag 获取参数
-        $data = $this->getParameterBag()->get($key, $default);
+        // 2) ParameterBag：body > POST > GET，兼容 FPM 和 WLS
+        $data = $this->getParameterBag()->get($key, null);
+        if ($data !== null) {
+            return RequestFilter::filter($filterType, $data);
+        }
 
-        # 如果设置了过滤器，则进行过滤，否则直接使用默认值的类型进行过滤
-        $data = RequestFilter::filter($filterType, $data);
+        // 3) 回退到默认值
+        $data = $default;
         return $this->checkResult($key, $data);
     }
 
@@ -285,7 +291,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
             return $this->getParameterBag()->getRequest();
         }
         $result = $this->getParameterBag()->getRequest($key, $default);
-        if ($default) {
+        if ($default !== null) {
             $result = $this->getDefaultTypeData($result, $default);
         }
 
@@ -303,7 +309,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
             return $this->getParameterBag()->getQuery();
         }
         $result = $this->getParameterBag()->getQuery($key, $default);
-        if ($default) {
+        if ($default !== null) {
             $result = $this->getDefaultTypeData($result, $default);
         }
         return $this->checkResult($key, $result);

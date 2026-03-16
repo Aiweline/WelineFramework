@@ -37,7 +37,7 @@
         <!-- 系统配置 -->
         <menu source="Weline_Backend::system_config_group" name="system_config_group" title="系统配置" icon="mdi mdi-tune" order="200">
             <menu source="Weline_Backend::basic_settings" name="basic_settings" title="基础设置" action="*/backend/settings/basic" icon="mdi mdi-cog" order="10"/>
-            <menu source="Weline_Backend::backend_config" name="backend_config" title="后台配置" action="*/backend/config" icon="mdi mdi-application-cog" order="20"/>
+            <menu source="Weline_Backend::backend_config" name="backend_config" title="外观与 Logo" action="*/backend/config" icon="mdi mdi-image-outline" order="20"/>
             <menu source="Weline_Backend::email_settings" name="email_settings" title="邮件设置" action="*/backend/settings/email" icon="mdi mdi-email-outline" order="30"/>
             <menu source="Weline_Backend::storage_settings" name="storage_settings" title="存储设置" action="*/backend/settings/storage" icon="mdi mdi-folder-cog-outline" order="40"/>
             <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="mdi mdi-bell-outline" order="50">

@@ -90,27 +90,27 @@ class SseTerminal implements TaglibInterface
             $html[] = '<?php ' . $code . ' ?>';
 
             // 组件容器
-            $html[] = '<div class="weline-sse-terminal ' . htmlspecialchars($class) . '" id="<?= htmlspecialchars($Taglib__id) ?>" style="' . htmlspecialchars($style) . '" data-component="sse-terminal">';
+            $html[] = '<div class="weline-sse-terminal ' . htmlspecialchars($class) . '" id="' . htmlspecialchars($id) . '" style="' . htmlspecialchars($style) . '" data-component="sse-terminal">';
             
             // 标题栏
             if ($showToolbar) {
                 $html[] = '  <div class="weline-sse-terminal-header">';
                 $html[] = '    <div class="weline-sse-terminal-title">';
                 $html[] = '      <span class="weline-sse-terminal-icon"><i class="mdi mdi-console"></i></span>';
-                $html[] = '      <span class="weline-sse-terminal-title-text"><?= htmlspecialchars($Taglib__title ?? \'' . addslashes($title) . '\') ?></span>';
+                $html[] = '      <span class="weline-sse-terminal-title-text">' . htmlspecialchars($title) . '</span>';
                 $html[] = '    </div>';
                 $html[] = '    <div class="weline-sse-terminal-status">';
                 $html[] = '      <span class="weline-sse-terminal-status-dot"></span>';
-                $html[] = '      <span class="weline-sse-terminal-status-text" id="<?= htmlspecialchars($Taglib__id) ?>_status">' . $t_disconnected . '</span>';
+                $html[] = '      <span class="weline-sse-terminal-status-text" id="' . htmlspecialchars($id) . '_status">' . $t_disconnected . '</span>';
                 $html[] = '    </div>';
                 $html[] = '    <div class="weline-sse-terminal-actions">';
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_toggle" title="' . $t_start . '">';
+                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
                 $html[] = '        <i class="mdi mdi-play"></i>';
                 $html[] = '      </button>';
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_copy" title="' . $t_copy . '">';
+                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_copy" title="' . $t_copy . '">';
                 $html[] = '        <i class="mdi mdi-content-copy"></i>';
                 $html[] = '      </button>';
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="<?= htmlspecialchars($Taglib__id) ?>_btn_clear" title="' . $t_clear . '">';
+                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_clear" title="' . $t_clear . '">';
                 $html[] = '        <i class="mdi mdi-delete-sweep"></i>';
                 $html[] = '      </button>';
                 $html[] = '    </div>';
@@ -118,13 +118,13 @@ class SseTerminal implements TaglibInterface
             }
             
             // 输出区域
-            $html[] = '  <div class="weline-sse-terminal-body" id="<?= htmlspecialchars($Taglib__id) ?>_body" style="height: <?= htmlspecialchars($Taglib__height ?? \'' . $height . '\') ?>">';
-            $html[] = '    <div class="weline-sse-terminal-content" id="<?= htmlspecialchars($Taglib__id) ?>_content"></div>';
+            $html[] = '  <div class="weline-sse-terminal-body" id="' . htmlspecialchars($id) . '_body" style="height: ' . htmlspecialchars($height) . '">';
+            $html[] = '    <div class="weline-sse-terminal-content" id="' . htmlspecialchars($id) . '_content"></div>';
             $html[] = '  </div>';
             
             // 进度条（可选）
-            $html[] = '  <div class="weline-sse-terminal-progress" id="<?= htmlspecialchars($Taglib__id) ?>_progress" style="display:none;">';
-            $html[] = '    <div class="weline-sse-terminal-progress-bar" id="<?= htmlspecialchars($Taglib__id) ?>_progress_bar"></div>';
+            $html[] = '  <div class="weline-sse-terminal-progress" id="' . htmlspecialchars($id) . '_progress" style="display:none;">';
+            $html[] = '    <div class="weline-sse-terminal-progress-bar" id="' . htmlspecialchars($id) . '_progress_bar"></div>';
             $html[] = '  </div>';
             
             $html[] = '</div>';
@@ -169,7 +169,7 @@ class SseTerminal implements TaglibInterface
             // JavaScript
             $html[] = '<script>(function(){';
             $html[] = '"use strict";';
-            $html[] = 'var id = <?= json_encode($Taglib__id) ?>;';
+            $html[] = 'var id = ' . json_encode($id) . ';';
             $html[] = 'var initialUrl = <?= json_encode($Taglib__url ?? \'\') ?>;';
             $html[] = 'var commonEvents = ' . \json_encode($eventsList) . ';';
             $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
