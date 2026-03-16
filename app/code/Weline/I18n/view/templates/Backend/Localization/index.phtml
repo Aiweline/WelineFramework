@@ -285,7 +285,7 @@ $search = $this->getData('search') ?? '';
                                                                 <?= htmlspecialchars($locale['short_code']) ?>
                                                             </span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                            <span class="badge bg-secondary bg-opacity-10 fw-medium px-2 py-1 rounded-pill">
                                                                 -
                                                             </span>
                                                         <?php endif; ?>
@@ -296,7 +296,7 @@ $search = $this->getData('search') ?? '';
                                                                 <?= htmlspecialchars($locale['iso2']) ?>
                                                             </span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                            <span class="badge bg-secondary bg-opacity-10 fw-medium px-2 py-1 rounded-pill">
                                                                 -
                                                             </span>
                                                         <?php endif; ?>
@@ -307,7 +307,7 @@ $search = $this->getData('search') ?? '';
                                                                 <?= htmlspecialchars($locale['iso3']) ?>
                                                             </span>
                                                         <?php else: ?>
-                                                            <span class="badge bg-secondary bg-opacity-10 text-secondary fw-medium px-2 py-1 rounded-pill">
+                                                            <span class="badge bg-secondary bg-opacity-10 fw-medium px-2 py-1 rounded-pill">
                                                                 -
                                                             </span>
                                                         <?php endif; ?>
@@ -337,7 +337,7 @@ $search = $this->getData('search') ?? '';
                                                     </td>
                                                     <td class="text-center">
                                                         <?php if ($locale['is_install'] && $locale['is_active']): ?>
-                                                            <span class="badge bg-success bg-opacity-10 text-success px-2 py-1 rounded-pill">
+                                                            <span class="badge bg-success bg-opacity-10 px-2 py-1 rounded-pill">
                                                                 <i class="ri-check-circle-fill me-1"></i>激活
                                                             </span>
                                                         <?php elseif ($locale['is_install']): ?>
@@ -474,4 +474,30 @@ $search = $this->getData('search') ?? '';
                     </div>
                 </div>
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<link href='@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)' rel='stylesheet' type='text/css'/>
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script src='@static(Weline_Admin::assets/libs/jqvmap/jquery.vmap.min.js)'></script>
+<script src='@static(Weline_Admin::assets/libs/jqvmap/maps/jquery.vmap.world.js)'></script>
+<script>
+(function($){
+    $(function(){
+        var $el = $('#world-map-markers');
+        if ($el.length && $.fn.vectorMap) {
+            $el.vectorMap({
+                map: 'world_en',
+                backgroundColor: 'transparent',
+                borderColor: 'var(--border-color, #dee2e6)',
+                borderOpacity: 0.25,
+                borderWidth: 1,
+                color: 'var(--backend-color-fill-muted, #d4dadd)',
+                hoverColor: 'var(--backend-color-primary, #0bb197)',
+                hoverOpacity: 0.7,
+                enableZoom: true,
+                showTooltip: true,
+                scaleColors: ['#d4dadd', '#0066a1'],
+                normalizeFunction: 'polynomial'
+            });
+        }
+    });
+})(window.jQuery);
+</script>
