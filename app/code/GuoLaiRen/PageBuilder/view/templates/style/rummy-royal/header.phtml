@@ -77,7 +77,7 @@ $logoWidth = rr_getConfig($styleSettings, 'logo.width', '44');
 
 // 导航配置
 $navDisplay = rr_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = rr_getConfig($styleSettings, 'navigation.bg_color', 'rgba(10, 5, 20, 0.95)');
+$navBgColor = rr_getConfig($styleSettings, 'navigation.bg_color', rr_color($colors, 'nav_bg', 'rgba(10, 5, 20, 0.95)'));
 $navTextColor = rr_getConfig($styleSettings, 'navigation.text_color', '#fef3c7');
 $navLinkHoverColor = rr_getConfig($styleSettings, 'navigation.link_hover_color', '#eab308');
 $navLinksRaw = rr_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");

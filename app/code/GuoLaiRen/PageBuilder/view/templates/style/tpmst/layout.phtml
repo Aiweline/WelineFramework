@@ -10,15 +10,28 @@
  */
 
 $page = $this->getData('page');
-$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$styleSettingsRaw = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$styleSettings = is_array($styleSettingsRaw) ? $styleSettingsRaw : [];
 $pageId = $page && $page->getId() ? $page->getId() : 0;
 $templateCode = 'tpmst';
 
 // 获取页面布局配置（包含组件配置）
-$layoutConfig = $this->getData('layout_config') ?: [];
-$headerComponents = $layoutConfig['header'] ?? [];
-$contentComponents = $layoutConfig['content'] ?? [];
-$footerComponents = $layoutConfig['footer'] ?? [];
+$layoutConfigRaw = $this->getData('layout_config');
+if (is_string($layoutConfigRaw)) {
+    $layoutConfig = json_decode($layoutConfigRaw, true) ?: [];
+} else {
+    $layoutConfig = is_array($layoutConfigRaw) ? $layoutConfigRaw : [];
+}
+// 规范化 header/footer：PageLayout::exportConfig() 返回单组件对象 ['component'=>..., 'config'=>...]，模板需要组件数组 [['code'=>..., 'enabled'=>..., 'config'=>...]]
+$headerRaw = $layoutConfig['header'] ?? [];
+$footerRaw = $layoutConfig['footer'] ?? [];
+$headerComponents = is_array($headerRaw) && !isset($headerRaw[0]) && isset($headerRaw['component'])
+    ? [['code' => $headerRaw['component'], 'enabled' => true, 'config' => $headerRaw['config'] ?? []]]
+    : (is_array($headerRaw) ? $headerRaw : []);
+$contentComponents = is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : [];
+$footerComponents = is_array($footerRaw) && !isset($footerRaw[0]) && isset($footerRaw['component'])
+    ? [['code' => $footerRaw['component'], 'enabled' => true, 'config' => $footerRaw['config'] ?? []]]
+    : (is_array($footerRaw) ? $footerRaw : []);
 
 // 如果没有配置，使用默认组件
 if (empty($headerComponents)) {
@@ -277,6 +290,7 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
         <header class="tpmst-region tpmst-region-header" data-region="header" data-multiple="false">
             <?php if (!empty($headerComponents)): ?>
                 <?php foreach ($headerComponents as $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
                     <?php if ($component['enabled'] ?? true): ?>
                     <div class="tpmst-component-wrapper" 
                          data-component="<?= htmlspecialchars($component['code']) ?>"
@@ -296,6 +310,7 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
         <main class="tpmst-region tpmst-region-content" data-region="content" data-multiple="true">
             <?php if (!empty($contentComponents)): ?>
                 <?php foreach ($contentComponents as $index => $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
                     <?php if ($component['enabled'] ?? true): ?>
                     <div class="tpmst-component-wrapper" 
                          data-component="<?= htmlspecialchars($component['code']) ?>"
@@ -316,6 +331,7 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
         <footer class="tpmst-region tpmst-region-footer" data-region="footer" data-multiple="false">
             <?php if (!empty($footerComponents)): ?>
                 <?php foreach ($footerComponents as $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
                     <?php if ($component['enabled'] ?? true): ?>
                     <div class="tpmst-component-wrapper" 
                          data-component="<?= htmlspecialchars($component['code']) ?>"

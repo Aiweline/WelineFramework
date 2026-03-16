@@ -275,6 +275,12 @@ class EventsManager
                     }
                 }
             }
+        } else {
+            // 标量（如 seo_decode 的 $url）：观察者 setData('data', $decoded) 后需回写给调用方
+            $modified = $this->events[$eventName]->getEvenData('data');
+            if ($modified !== null) {
+                $data = $modified;
+            }
         }
 
         if ($traceStart > 0) {

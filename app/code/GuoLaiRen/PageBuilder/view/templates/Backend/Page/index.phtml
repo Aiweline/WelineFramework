@@ -82,6 +82,14 @@
                                 <span><lang>新建页面</lang></span>
                             </a>
                         </acl>
+                        <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
+                            <button type="button" class="btn btn-action-publish-header" 
+                                    data-bs-toggle="modal" data-bs-target="#publishSiteModal"
+                                    title="<?= __('一键发布本站') ?>">
+                                <i class="mdi mdi-publish"></i>
+                                <span><lang>一键发布本站</lang></span>
+                            </button>
+                        </acl>
                     </div>
                 </div>
 
@@ -253,8 +261,8 @@
                                             ?>
                                             
                                             <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
-                                                <button class='btn btn-action-publish'
-                                                        onclick="BackendToast.info('<?= __('功能建设中，敬请期待！') ?>'); return false;"
+                                                <button type="button" class="btn btn-action-publish publish-page-btn"
+                                                        data-page-id="<?= (int)$page->getId() ?>"
                                                         title="<?= __('发布页面') ?>">
                                                     <i class="mdi mdi-publish"></i>
                                                     <span><?= __('发布') ?></span>
@@ -577,8 +585,8 @@
                                                                 ?>
                                                                 
                                                                 <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
-                                                                    <button class='btn btn-sm btn-primary d-inline-flex align-items-center'
-                                                                            onclick="BackendToast.info('<?= __('功能建设中，敬请期待！') ?>'); return false;"
+                                                                    <button type="button" class="btn btn-sm btn-primary d-inline-flex align-items-center publish-page-btn"
+                                                                            data-page-id="<?= (int)$childPage->getId() ?>"
                                                                             style="min-width: 70px; white-space: nowrap;"
                                                                             title="<?= __('发布页面') ?>">
                                                                         <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
@@ -755,6 +763,38 @@
                     </nav>
                     <?php endif; ?>
                 <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 一键发布本站 Modal -->
+<div class="modal fade" id="publishSiteModal" tabindex="-1" aria-labelledby="publishSiteModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="publishSiteModalLabel">
+                    <i class="mdi mdi-publish"></i> <?= __('一键发布本站') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3"><?= __('选择要发布的站点，将把该站点下所有页面设为已发布。') ?></p>
+                <label for="publishSiteWebsiteId" class="form-label"><?= __('选择站点') ?></label>
+                <select id="publishSiteWebsiteId" class="form-select">
+                    <option value=""><?= __('请选择站点') ?></option>
+                    <?php 
+                    $websitesForPublish = $this->getData('websites') ?? [];
+                    foreach ($websitesForPublish as $w): ?>
+                        <option value="<?= (int)$w['website_id'] ?>"><?= htmlspecialchars($w['name'] ?? '') ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="publishSiteConfirmBtn">
+                    <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
+                </button>
             </div>
         </div>
     </div>
@@ -2017,6 +2057,97 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // ============ 单页发布 ============
+    function publishPage(pageId, button) {
+        if (!pageId) {
+            if (typeof BackendToast !== 'undefined') BackendToast.warning('<?= __("页面ID不存在") ?>');
+            return;
+        }
+        var originalHtml = button.innerHTML;
+        var originalDisabled = button.disabled;
+        button.disabled = true;
+        button.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("发布中...") ?>';
+        var url = '<?= $this->getBackendUrl("*/backend/page/publish") ?>';
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ id: pageId }) };
+        window.Weline.Api.request(url, opts).then(function(res) {
+            var data = (res && res.data) || res;
+            if (data.success) {
+                if (typeof BackendToast !== 'undefined') BackendToast.success(data.message || '<?= __("页面已发布") ?>');
+                else showToast('success', '<?= __("发布成功") ?>', data.message || '');
+                setTimeout(function() { window.location.reload(); }, 800);
+            } else {
+                button.disabled = originalDisabled;
+                button.innerHTML = originalHtml;
+                if (typeof BackendToast !== 'undefined') BackendToast.error(data.message || '<?= __("发布失败") ?>');
+                else showToast('error', '<?= __("发布失败") ?>', data.message || '');
+            }
+        }).catch(function(error) {
+            button.disabled = originalDisabled;
+            button.innerHTML = originalHtml;
+            var errMsg = (error && error.message) ? error.message : '<?= __("网络错误，请重试") ?>';
+            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("发布失败") ?>: ' + errMsg);
+            else showToast('error', '<?= __("发布失败") ?>', errMsg);
+        });
+    }
+    document.querySelectorAll('.publish-page-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var pageId = this.getAttribute('data-page-id');
+            publishPage(pageId, this);
+        });
+    });
+    
+    // ============ 一键发布本站 ============
+    var publishSiteConfirmBtn = document.getElementById('publishSiteConfirmBtn');
+    var publishSiteModalEl = document.getElementById('publishSiteModal');
+    if (publishSiteConfirmBtn && publishSiteModalEl) {
+        publishSiteConfirmBtn.addEventListener('click', function() {
+            var sel = document.getElementById('publishSiteWebsiteId');
+            var websiteId = sel ? parseInt(sel.value, 10) : 0;
+            if (!websiteId) {
+                if (typeof BackendToast !== 'undefined') BackendToast.warning('<?= __("请选择要发布的站点") ?>');
+                return;
+            }
+            BackendConfirm.show('<?= __("确定要发布该站点下所有页面吗？") ?>', {
+                title: '<?= __("一键发布本站") ?>',
+                confirmText: '<?= __("发布") ?>',
+                cancelText: '<?= __("取消") ?>',
+                type: 'info'
+            }).then(function(confirmed) {
+                if (!confirmed) return;
+                var originalHtml = publishSiteConfirmBtn.innerHTML;
+                var originalDisabled = publishSiteConfirmBtn.disabled;
+                publishSiteConfirmBtn.disabled = true;
+                publishSiteConfirmBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-1"></i><?= __("发布中...") ?>';
+                var url = '<?= $this->getBackendUrl("*/backend/page/publishSite") ?>';
+                var opts = { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ website_id: websiteId }) };
+                window.Weline.Api.request(url, opts).then(function(res) {
+                    var data = (res && res.data) || res;
+                    if (data.success) {
+                        if (typeof BackendToast !== 'undefined') BackendToast.success(data.message || '<?= __("本站已发布") ?>');
+                        else showToast('success', '<?= __("发布成功") ?>', data.message || '');
+                        if (typeof bootstrap !== 'undefined' && publishSiteModalEl) {
+                            var modal = bootstrap.Modal.getInstance(publishSiteModalEl);
+                            if (modal) modal.hide();
+                        }
+                        setTimeout(function() { window.location.reload(); }, 1000);
+                    } else {
+                        publishSiteConfirmBtn.disabled = originalDisabled;
+                        publishSiteConfirmBtn.innerHTML = originalHtml;
+                        if (typeof BackendToast !== 'undefined') BackendToast.error(data.message || '<?= __("发布失败") ?>');
+                        else showToast('error', '<?= __("发布失败") ?>', data.message || '');
+                    }
+                }).catch(function(error) {
+                    publishSiteConfirmBtn.disabled = originalDisabled;
+                    publishSiteConfirmBtn.innerHTML = originalHtml;
+                    var errMsg = (error && error.message) ? error.message : '<?= __("网络错误，请重试") ?>';
+                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("发布失败") ?>: ' + errMsg);
+                    else showToast('error', '<?= __("发布失败") ?>', errMsg);
+                });
+            });
+        });
+    }
+    
     // 导出页面功能（带loading）
     const exportButtons = document.querySelectorAll('.export-page-btn');
     exportButtons.forEach(function(button) {
@@ -2551,4 +2682,3 @@ document.querySelectorAll('.delete-confirm-form').forEach(form => {
     });
 });
 </script>
-
