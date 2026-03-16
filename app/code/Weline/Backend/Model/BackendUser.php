@@ -239,6 +239,12 @@ class BackendUser extends Model implements AuthenticableInterface
         $user->clear()->load($userId);
 
         if (!$user->getId() || $user->getIsDeleted()) {
+            // 诊断：数据库查不到对应用户或已删除，会被 RouteBefore 当作「用户不存在」处理（非「未登录」）
+            w_log_warning(
+                '[ACL] getAclContext 返回 null：backend_user 表未查到 user_id=' . $userId . ' 或用户已删除（is_deleted=1），请检查表/连接/数据',
+                ['user_id' => $userId, 'loaded_id' => $user->getId(), 'is_deleted' => $user->getIsDeleted()],
+                'acl'
+            );
             return null;
         }
         $ur->reset()->where(UserRole::schema_fields_USER_ID, $userId)->find()->fetch();

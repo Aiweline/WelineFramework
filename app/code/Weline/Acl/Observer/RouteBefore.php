@@ -322,8 +322,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 @file_put_contents($__f, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:not_logged_in','message'=>'dispatch not_logged_in','data'=>['uri'=>$uri,'reason'=>'not_logged_in','hasUser'=>false,'cookieSid'=>$__sidHint,'sessionStorageId'=>$__sessHint],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'A']) . "\n", \FILE_APPEND | \LOCK_EX);
             }
             // #endregion
-            // 根因说明：cookieSid 有值但存储读回空 = 登录写入的 Session 下一请求在 WLS Session 服务中读不到。WLS Session 服务本应提供统一 Session，需排查：登录响应前 write 是否已落盘到 Session Server、是否多实例 Session Server 导致读写不同步。
+            // 根因说明：not_logged_in = Session 无 user_id（getUserId() 为空），非「数据库查不到用户」。数据库查不到时会有 _user_not_found 且走 no_role 分支并提示「用户不存在或已被删除」；若 var/log 中见 getAclContext 的 acl 日志则为 DB 问题。
             if (!$hasUser) {
+                w_log_warning(
+                    '[ACL] not_logged_in：Session 无 user_id（getUserId 为空），重定向登录。若为「数据库查不到用户」会先有 getAclContext 的 acl 日志',
+                    ['uri' => $uri],
+                    'acl'
+                );
                 if ($request->isApiBackend()) {
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
