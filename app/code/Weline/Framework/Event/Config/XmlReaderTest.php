@@ -19,6 +19,9 @@ class XmlReaderTest extends TestCore
     public function testRead()
     {
         $data = ObjectManager::getInstance(XmlReader::class)->read();
-        p($data);
+        if (empty($data)) {
+            $this->fail('读取事件配置失败');
+        }
+        $this->assertTrue(true);
     }
 }

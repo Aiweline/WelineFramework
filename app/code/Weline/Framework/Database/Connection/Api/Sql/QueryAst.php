@@ -1122,6 +1122,22 @@ abstract class QueryAst implements QueryInterface
         return $this->fetch() ?: [];
     }
 
+    /**
+     * 默认实现：基于 fetchArray() 迭代，适配器可覆盖为真正流式读取。
+     */
+    public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator
+    {
+        $rows = $this->fetchArray();
+        if ($batchSize <= 1) {
+            foreach ($rows as $row) {
+                yield $row;
+            }
+        } else {
+            foreach (array_chunk($rows, $batchSize) as $batch) {
+                yield $batch;
+            }
+        }
+    }
 
     public function clear(string $type = ''): QueryInterface
     {

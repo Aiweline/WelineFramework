@@ -718,6 +718,8 @@ CSS/JS提取功能测试,CSS/JS提取功能测试
 在账户页面的侧边栏导航中注入内容，允许其他模块添加自定义导航项。,在账户页面的侧边栏导航中注入内容，允许其他模块添加自定义导航项。
 账户侧边栏内容,账户侧边栏内容
 在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。,在账户页面的侧边栏内容区域注入内容，允许其他模块添加自定义内容。
+"后台 Topbar Logo","后台 Topbar Logo"
+"覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。","覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。"
 分类页,"Category Page"
 产品页,"Product Page"
 产品列表页,产品列表页

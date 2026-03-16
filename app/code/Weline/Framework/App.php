@@ -301,28 +301,9 @@ class App
         }
         ini_set('error_log', $phpErrorLogFile);
 
-        // 错误报告
+        // 错误报告（致命错误由 Framework\Exception\Handler\ShutdownHandler 或 Server\Log\Error 层统一输出 [E_ERROR] 格式，此处不再重复输出「致命错误」）
         if (DEV || CLI) {
             ini_set('error_reporting', E_ALL);
-            register_shutdown_function(function () {
-                $_error = error_get_last();
-                if ($_error && in_array($_error['type'], [1, 4, 16, 64, 256, 4096, E_ALL], true)) {
-                    if (CLI) {
-                        echo __('致命错误：') . PHP_EOL;
-                        echo __('文件：') . $_error['file'] . PHP_EOL;
-                        echo __('行数：') . $_error['line'] . PHP_EOL;
-                        echo __('消息：') . $_error['message'] . PHP_EOL;
-                    } else {
-                        echo '<b style="color: red">致命错误：</b></br>';
-                        echo '<pre>';
-                        echo __('文件：') . $_error['file'] . '</br>';
-                        echo __('行数：') . $_error['line'] . '</br>';
-                        echo __('消息：') . $_error['message'] . '</br>';
-                        echo '</pre>';
-                    }
-                    // debug_backtrace(DEBUG_BACKTRACE_PROVIDE_OBJECT, 5);
-                }
-            });
         }
     }
 

@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
-use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
@@ -115,6 +114,11 @@ class SslCertificateService
      * DNS 解析缓存 [domain => ip[]]
      */
     protected array $dnsResolveCache = [];
+
+    /**
+     * 上一次 ACME 请求失败时的错误详情（供创建订单等步骤返回给前端）
+     */
+    protected string $lastAcmeError = '';
     
     /**
      * SAN 条目缓存 [domain => ['dns' => [], 'ip' => []]]
@@ -141,6 +145,22 @@ class SslCertificateService
         // 确保目录存在
         if (!\is_dir($this->certBaseDir)) {
             @\mkdir($this->certBaseDir, 0755, true);
+        }
+    }
+
+    /**
+     * 等待指定秒数（WLS 下用 SchedulerSystem 不阻塞 Worker，否则用原生 sleep）
+     * 当 Framework 未加载导致 SchedulerSystem 不存在时回退到 sleep，避免 Class not found。
+     */
+    private function waitSeconds(int $seconds): void
+    {
+        if ($seconds <= 0) {
+            return;
+        }
+        if (\class_exists(\Weline\Framework\Runtime\SchedulerSystem::class, false)) {
+            \Weline\Framework\Runtime\SchedulerSystem::sleep($seconds);
+        } else {
+            \sleep($seconds);
         }
     }
     
@@ -2390,6 +2410,25 @@ CNF;
     }
 
     /**
+     * 是否可使用 HTTP-01 验证（ACME 需访问 http://domain/.well-known/...）
+     * 主端口 80 可直接用；主端口 443 时 WLS 会起 80 重定向监听，也可用 HTTP-01。
+     */
+    protected function canUseHttp01Challenge(): bool
+    {
+        $config = Env::getInstance()->getConfig('server');
+        if (!\is_array($config)) {
+            return true;
+        }
+        $port = (int)($config['port'] ?? 80);
+        if ($port === 80) {
+            return true;
+        }
+        $redirectPort = (int)($config['http_redirect_port'] ?? 80);
+        $redirectEnabled = ($port === 443) && ($redirectPort > 0);
+        return $redirectEnabled && $redirectPort === 80;
+    }
+
+    /**
      * 执行 ACME 验证并获取证书
      *
      * @param string $challengeStrategy auto|http01|dns01
@@ -2409,11 +2448,10 @@ CNF;
     ): array {
         $strategy = $challengeStrategy;
         if ($strategy === self::CHALLENGE_AUTO) {
-            $port = $this->getServerPort();
-            if ($port !== 80) {
-                $strategy = self::CHALLENGE_DNS01;
-            } else {
+            if ($this->canUseHttp01Challenge()) {
                 $strategy = self::CHALLENGE_HTTP01;
+            } else {
+                $strategy = self::CHALLENGE_DNS01;
             }
         }
         if ($onProgress) {
@@ -2451,9 +2489,11 @@ CNF;
             }
 
             $onProg(__('正在创建证书订单...'), ['step' => 'order']);
+            $this->lastAcmeError = '';
             $orderUrl = $this->createOrder($directory['newOrder'], [$domain], $accountUrl);
             if (!$orderUrl) {
-                return ['success' => false, 'message' => __('创建订单失败')];
+                $detail = $this->lastAcmeError !== '' ? $this->lastAcmeError : __('CA 未返回订单地址');
+                return ['success' => false, 'message' => __('创建订单失败：%{1}', [$detail])];
             }
 
             $onProg(__('正在获取授权信息...'), ['step' => 'authorizations']);
@@ -2475,8 +2515,11 @@ CNF;
                 if (!($challengeResult['validated'] ?? false)) {
                     $detail = $challengeResult['error'] ?? '';
                     $msg = $detail !== '' ? __('域名验证失败：%{1}', [$detail]) : __('域名验证失败');
-                    if (\str_contains(\strtolower($detail), 'txt record') || \str_contains(\strtolower($detail), 'no txt')) {
+                    $detailLower = \strtolower($detail);
+                    if (\str_contains($detailLower, 'txt record') || \str_contains($detailLower, 'no txt')) {
                         $msg .= ' ' . __('（DNS 传播可能需要更长时间，请 2–5 分钟后重试）');
+                    } elseif (\str_contains($detailLower, 'query timed out') || \str_contains($detailLower, 'looking up a for') || \str_contains($detailLower, 'looking up aaaa for')) {
+                        $msg .= ' ' . __('（CA 无法解析该域名：公网 DNS 超时或未生效，请确认域名 A/AAAA 已正确解析到本机，或改用 DNS-01 验证）');
                     }
                     return ['success' => false, 'message' => $msg];
                 }
@@ -2501,7 +2544,7 @@ CNF;
             $maxWait = 30;
             $certReady = false;
             for ($i = 0; $i < $maxWait; $i++) {
-                SchedulerSystem::sleep(2);
+                $this->waitSeconds(2);
                 $order = $this->getResource($orderUrl, $accountUrl);
                 if ($order && $order['status'] === 'valid' && !empty($order['certificate'])) {
                     $certReady = true;
@@ -2576,7 +2619,7 @@ CNF;
         $validated = false;
         $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
-            SchedulerSystem::sleep(2);
+            $this->waitSeconds(2);
             $auth = $this->getResource($authUrl, $accountUrl);
             $lastAuth = $auth;
             if ($auth && ($auth['status'] ?? '') === 'valid') {
@@ -2652,29 +2695,60 @@ CNF;
             return ['validated' => false, 'error' => $addErr];
         }
         $recordId = (string)($addResult['record_id'] ?? '');
-        $dnsWaitSeconds = 30;
+        // 先轮询公网 TXT 是否可见，避免 Gname 等未真正生效时白等 3+7 分钟
+        $txtFqdn = '_acme-challenge.' . $domain;
+        $pollMaxSeconds = 90;
+        $pollIntervalSeconds = 10;
+        $txtVisible = false;
         if ($onProgress) {
-            $onProgress((string)__('TXT 记录已添加，等待 DNS 传播（%{1} 秒）...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
+            $onProgress((string)__('检查 TXT 记录是否在公网生效（最多 %{1} 秒）...', [$pollMaxSeconds]), ['step' => 'dns_visibility']);
         }
-        for ($w = 0; $w < $dnsWaitSeconds; $w += 5) {
-            SchedulerSystem::sleep(\min(5, $dnsWaitSeconds - $w));
-            if ($onProgress && $w > 0) {
-                $onProgress((string)__('等待 DNS 传播中...（%{1}s）', [$w + 5]), ['progress' => 45]);
+        for ($p = 0; $p < $pollMaxSeconds; $p += $pollIntervalSeconds) {
+            $this->waitSeconds(\min($pollIntervalSeconds, $pollMaxSeconds - $p));
+            if ($onProgress && $p > 0) {
+                $onProgress((string)__('检查 TXT 生效中...（%{1}s）', [$p + $pollIntervalSeconds]), ['progress' => 40]);
+            }
+            $txtVisible = $this->isAcmeTxtVisible($txtFqdn, $challengeValue);
+            if ($txtVisible) {
+                break;
             }
         }
+        if (!$txtVisible) {
+            if ($recordId !== '') {
+                w_query('websites', 'removeAcmeTxtRecord', [
+                    'domain' => $domain,
+                    'record_id' => $recordId,
+                    'pool_id' => $poolId,
+                    'domain_id' => $domainId,
+                ]);
+            }
+            $err = (string)__('TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname）。请确认域名 NS 已指向当前 DNS 服务商后重试。');
+            if ($onProgress) {
+                $onProgress($err, ['step' => 'dns_visibility_fail']);
+            }
+            return ['validated' => false, 'error' => $err];
+        }
+        // TXT 已可见，短等后通知 CA（Gname 等 CA 查询可能仍慢，后续 CA 轮询保持）
+        $dnsWaitSeconds = 60;
+        if ($onProgress) {
+            $onProgress((string)__('TXT 已生效，等待 %{1} 秒后通知 CA...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
+        }
+        $this->waitSeconds($dnsWaitSeconds);
         if ($onProgress) {
             $onProgress((string)__('正在通知 CA 进行验证...'), ['step' => 'notify_ca']);
         }
         $this->notifyChallenge($dnsChallenge['url'] ?? '', $accountUrl);
 
+        // CA 查询 TXT 可能较慢（如 Gname），等待轮次调长以减少 query timed out（约 14 分钟）
+        $maxWait = 420;
+        $maxWaitMinutes = (int) ($maxWait * 2 / 60);
         if ($onProgress) {
-            $onProgress((string)__('等待 CA 验证 DNS 记录（最多 4 分钟）...'), ['step' => 'wait_validation']);
+            $onProgress((string)__('等待 CA 验证 DNS 记录（最多 %{1} 分钟）...', [$maxWaitMinutes]), ['step' => 'wait_validation']);
         }
-        $maxWait = 120;
         $validated = false;
         $lastAuth = null;
         for ($i = 0; $i < $maxWait; $i++) {
-            SchedulerSystem::sleep(2);
+            $this->waitSeconds(2);
             if ($onProgress && $i > 0 && $i % 5 === 0) {
                 $onProgress((string)__('等待 CA 验证中...（%{1}s）', [$i * 2]), ['progress' => (int) \min(90, 50 + $i)]);
             }
@@ -2736,6 +2810,31 @@ CNF;
         ];
         $thumbprint = \hash('sha256', \json_encode($jwk, \JSON_UNESCAPED_SLASHES), true);
         return \str_replace(['+', '/', '='], ['-', '_', ''], \base64_encode($thumbprint));
+    }
+
+    /**
+     * 检查 ACME TXT 记录是否在公网可见（用于添加后快速失败，避免 Gname 等未生效时长时间等待）
+     */
+    protected function isAcmeTxtVisible(string $txtFqdn, string $expectedValue): bool
+    {
+        $records = @\dns_get_record($txtFqdn, \DNS_TXT);
+        if (!\is_array($records)) {
+            return false;
+        }
+        foreach ($records as $r) {
+            $txt = $r['txt'] ?? null;
+            if ($txt === $expectedValue) {
+                return true;
+            }
+            if (\is_array($txt)) {
+                foreach ($txt as $t) {
+                    if ($t === $expectedValue) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -2801,6 +2900,7 @@ CNF;
     
     /**
      * 创建订单
+     * 失败时会将 CA 返回的错误信息写入 $this->lastAcmeError
      */
     protected function createOrder(string $url, array $domains, string $accountUrl): ?string
     {
@@ -2808,11 +2908,58 @@ CNF;
         foreach ($domains as $domain) {
             $identifiers[] = ['type' => 'dns', 'value' => $domain];
         }
-        
+
         $payload = ['identifiers' => $identifiers];
         $response = $this->signedRequest($url, $payload, $accountUrl);
-        
-        return $response['headers']['location'] ?? null;
+
+        $location = $response['headers']['location'] ?? null;
+        if ($location !== null && $location !== '') {
+            return $location;
+        }
+
+        $this->lastAcmeError = $this->extractAcmeErrorFromResponse($response);
+        return null;
+    }
+
+    /**
+     * 从 ACME 响应中解析错误信息（支持 JWS 格式的 payload）
+     */
+    protected function extractAcmeErrorFromResponse(array $response): string
+    {
+        $body = $response['body'] ?? null;
+        if (!\is_array($body)) {
+            $raw = $response['raw'] ?? '';
+            return \trim((string) $raw) !== '' ? \substr((string) $raw, 0, 200) : '';
+        }
+        if (isset($body['detail']) && \is_string($body['detail'])) {
+            return $body['detail'];
+        }
+        if (isset($body['payload']) && \is_string($body['payload'])) {
+            $decoded = $this->base64UrlDecode($body['payload']);
+            if ($decoded !== '') {
+                $inner = \json_decode($decoded, true);
+                if (\is_array($inner) && isset($inner['detail']) && \is_string($inner['detail'])) {
+                    return $inner['detail'];
+                }
+                if (\is_array($inner) && isset($inner['type']) && \is_string($inner['type'])) {
+                    return $inner['type'];
+                }
+            }
+        }
+        if (isset($body['type']) && \is_string($body['type'])) {
+            return $body['type'];
+        }
+        return '';
+    }
+
+    /**
+     * Base64 URL 解码
+     */
+    protected function base64UrlDecode(string $data): string
+    {
+        $data = \strtr($data, '-_', '+/');
+        $decoded = \base64_decode($data, true);
+        return $decoded !== false ? $decoded : '';
     }
     
     /**
