@@ -20,6 +20,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Session\SessionFactory;
 
 class Core
 {
@@ -887,6 +888,11 @@ class Core
         /**@var \Weline\Framework\Controller\Core $dispatch */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = ['route' => $this];
+
+        // 对齐 Laravel：后台请求在 route_before（ACL）前先启动 Session，从 Cookie + 存储加载登录态，避免「先鉴权再读 Session」导致顺序依赖
+        if ($this->request->isBackend() || $this->request->isApiBackend()) {
+            SessionFactory::getInstance()->createBackendSession()->start(null);
+        }
 
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         if (RequestLifecycleTrace::isEnabled()) {
