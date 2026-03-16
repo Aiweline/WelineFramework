@@ -1026,23 +1026,29 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
         try {
             $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
+            $dnsResponse = $result['dns_response'] ?? null;
             if ($result['success'] ?? false) {
                 if ($onProgress) {
-                    $onProgress((string)__('TXT 记录已在 %{1} 添加成功', [$providerName]), ['step' => 'add_done']);
+                    $onProgress((string)__('TXT 记录已在 %{1} 添加成功', [$providerName]), \array_merge(
+                        ['step' => 'add_done'],
+                        $dnsResponse !== null ? ['dns_response' => $dnsResponse] : []
+                    ));
                 }
                 return [
                     'success' => true,
                     'message' => (string)__('TXT 记录添加成功'),
                     'record_id' => (string)($result['record_id'] ?? ''),
+                    'dns_response' => $dnsResponse,
                 ];
             }
             return [
                 'success' => false,
                 'message' => (string)($result['message'] ?? __('添加 TXT 记录失败')),
                 'record_id' => '',
+                'dns_response' => $dnsResponse,
             ];
         } catch (\Throwable $e) {
-            return ['success' => false, 'message' => $e->getMessage(), 'record_id' => ''];
+            return ['success' => false, 'message' => $e->getMessage(), 'record_id' => '', 'dns_response' => null];
         }
     }
 
