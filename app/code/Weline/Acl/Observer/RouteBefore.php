@@ -22,6 +22,7 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -341,6 +342,8 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     $this->returnApiError(401, __('请先登录'), $request);
                     return;
                 }
+                // 避免 403 响应带上本请求新创建的 Session Cookie，否则会覆盖浏览器已有的登录 cookie，造成「已登录→进 admin→403→带新 sid→再进 login 有 session→302 admin→403」循环
+                HeaderCollector::getInstance()->removeCookie(WlsStrategy::SESSION_NAME);
                 /**@var EventsManager $eventsManager */
                 $eventsManager = ObjectManager::getInstance(EventsManager::class);
                 $noAccessData = ['data' => ['reason' => 'not_logged_in']];
