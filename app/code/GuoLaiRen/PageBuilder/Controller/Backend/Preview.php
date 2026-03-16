@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -346,7 +347,7 @@ class Preview extends BackendController
         }
 
         // 获取当前语言（从Cookie或URL参数）
-        $currentLocale = $locale ?: \Weline\Framework\Http\Cookie::getLang();
+        $currentLocale = $locale ?: State::getLang();
         
         // 检测渲染模式
         $isVisualEditor = $this->request->getGet('visual_editor') === '1';

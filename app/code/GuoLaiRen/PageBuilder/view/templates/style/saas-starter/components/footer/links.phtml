@@ -11,8 +11,9 @@
  * brand.name => 品牌名称:text:SaaSFlow
  * brand.description => 品牌描述:textarea:The modern platform for teams who ship fast.
  * group:links => 链接设置
+ * links.use_custom_links => 使用自定义链接组:select:no|no,yes
  * links.column1_title => 栏目1标题:text:Product
- * links.column1_items => 栏目1链接:textarea:Features=>#features\r\nPricing=>#pricing\r\nIntegrations=>/integrations\r\nChangelog=>/changelog|格式：名称=>链接
+ * links.column1_items => 栏目1链接:textarea:Features=>#features\r\nPricing=>#pricing\r\nIntegrations=>/integrations\r\nChangelog=>/changelog|格式：名称=>链接（仅当开启自定义链接时生效）
  * links.column2_title => 栏目2标题:text:Company
  * links.column2_items => 栏目2链接:textarea:About=>/about\r\nBlog=>/blog\r\nCareers=>/careers\r\nContact=>/contact|格式：名称=>链接
  * links.column3_title => 栏目3标题:text:Legal
@@ -35,12 +36,6 @@ $footerBorder = $colors['footer_border'] ?? 'rgba(255, 255, 255, 0.06)';
 
 $brandName = $config['brand.name'] ?? 'SaaSFlow';
 $brandDesc = $config['brand.description'] ?? 'The modern platform for teams who ship fast.';
-$col1Title = $config['links.column1_title'] ?? 'Product';
-$col1Raw = $config['links.column1_items'] ?? "Features=>#features\nPricing=>#pricing\nIntegrations=>/integrations\nChangelog=>/changelog";
-$col2Title = $config['links.column2_title'] ?? 'Company';
-$col2Raw = $config['links.column2_items'] ?? "About=>/about\nBlog=>/blog\nCareers=>/careers\nContact=>/contact";
-$col3Title = $config['links.column3_title'] ?? 'Legal';
-$col3Raw = $config['links.column3_items'] ?? "Privacy=>/privacy\nTerms=>/terms\nCookies=>/cookies";
 $copyrightText = $config['copyright.text'] ?? 'All rights reserved.';
 
 $parseLinks = function($raw) {
@@ -56,9 +51,59 @@ $parseLinks = function($raw) {
     return $links;
 };
 
-$col1Links = $parseLinks($col1Raw);
-$col2Links = $parseLinks($col2Raw);
-$col3Links = $parseLinks($col3Raw);
+// 按页面类型分组的底栏列（3列）：与 header 一致使用 getHeaderNavigationPages
+$footerColTypes = [
+    1 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME, \GuoLaiRen\PageBuilder\Model\Page::TYPE_ABOUT, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST],
+    2 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_CONTACT],
+    3 => [\GuoLaiRen\PageBuilder\Model\Page::TYPE_TERMS_OF_SERVICE, \GuoLaiRen\PageBuilder\Model\Page::TYPE_PRIVACY_POLICY],
+];
+$footerColDefaultTitles = [1 => 'Product', 2 => 'Company', 3 => 'Legal'];
+
+$useCustomLinks = ($config['links.use_custom_links'] ?? 'no') === 'yes';
+$page = $this->getData('page');
+$col1Links = [];
+$col2Links = [];
+$col3Links = [];
+$col1Title = $config['links.column1_title'] ?? 'Product';
+$col2Title = $config['links.column2_title'] ?? 'Company';
+$col3Title = $config['links.column3_title'] ?? 'Legal';
+
+if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
+    $navPages = $page->getHeaderNavigationPages(20);
+    $byCol = [1 => [], 2 => [], 3 => []];
+    foreach ($navPages as $item) {
+        $type = $item['type'] ?? '';
+        foreach ($footerColTypes as $colIndex => $types) {
+            if (in_array($type, $types, true)) {
+                $labelKey = 'links.footer_label_' . $type;
+                $label = isset($config[$labelKey]) && (string)$config[$labelKey] !== '' ? (string)$config[$labelKey] : ($item['title'] ?? '');
+                $url = $item['url'] ?? '/';
+                if (isset($item['type']) && $item['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
+                    $label = __('Home');
+                    $url = '/';
+                }
+                $byCol[$colIndex][] = ['name' => $label, 'url' => $url];
+                break;
+            }
+        }
+    }
+    if (!empty($navPages)) {
+        $col1Links = $byCol[1];
+        $col2Links = $byCol[2];
+        $col3Links = $byCol[3];
+        $col1Title = isset($config['links.column1_title']) && (string)$config['links.column1_title'] !== '' ? (string)$config['links.column1_title'] : $footerColDefaultTitles[1];
+        $col2Title = isset($config['links.column2_title']) && (string)$config['links.column2_title'] !== '' ? (string)$config['links.column2_title'] : $footerColDefaultTitles[2];
+        $col3Title = isset($config['links.column3_title']) && (string)$config['links.column3_title'] !== '' ? (string)$config['links.column3_title'] : $footerColDefaultTitles[3];
+    }
+}
+if ($useCustomLinks || (empty($col1Links) && empty($col2Links) && empty($col3Links))) {
+    $col1Title = $config['links.column1_title'] ?? 'Product';
+    $col1Links = $parseLinks($config['links.column1_items'] ?? "Features=>#features\nPricing=>#pricing\nIntegrations=>/integrations\nChangelog=>/changelog");
+    $col2Title = $config['links.column2_title'] ?? 'Company';
+    $col2Links = $parseLinks($config['links.column2_items'] ?? "About=>/about\nBlog=>/blog\nCareers=>/careers\nContact=>/contact");
+    $col3Title = $config['links.column3_title'] ?? 'Legal';
+    $col3Links = $parseLinks($config['links.column3_items'] ?? "Privacy=>/privacy\nTerms=>/terms\nCookies=>/cookies");
+}
 $currentYear = date('Y');
 $instanceId = 'ss-footer-' . uniqid();
 ?>
