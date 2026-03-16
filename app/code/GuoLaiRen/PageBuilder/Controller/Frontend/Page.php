@@ -184,23 +184,18 @@ class Page extends FrontendController
 
         $response->setHeader('Website-Id', (string)$websiteId);
         
-        // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页
-        if (($page === null || !$page->getId()) && empty($handle) && $websiteId > 0) {
+        // 如果 handle 为空且未按 page_id 加载到页面，尝试加载该站点的首页（含 website_id=0，便于 localhost 等直接预览）
+        if (($page === null || !$page->getId()) && empty($handle)) {
             $page = clone $this->pageModel;
             $page->clearData();
             $page->clear()
                 ->where(PageModel::schema_fields_WEBSITE_ID, $websiteId)
                 ->where(PageModel::schema_fields_TYPE, PageModel::TYPE_HOME);
-            
-            // 如果不是预览模式，只显示已发布的页面
             if (!$isPreview) {
                 $page->where(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
             }
-            
             $page->find()->fetch();
-            
-            // 如果没找到，尝试 website_id = 0 的全局首页
-            if (!$page->getId()) {
+            if (!$page->getId() && $websiteId !== 0) {
                 $page = clone $this->pageModel;
                 $page->clearData();
                 $page->clear()
@@ -285,61 +280,40 @@ class Page extends FrontendController
         // 如果是博客类型页面，加载博客数据
         $this->loadBlogData($page);
 
-        // 获取页面的样式代码
+        // 使用页面绑定的模板渲染（与 backend preview/full 一致）：从当前页取得 style，不依赖 Style 表记录
         $styleCode = $page->getData(PageModel::schema_fields_STYLE);
-        
-        if ($styleCode) {
-            // 验证样式是否存在
-            $style = clone $this->styleModel;
-            $style->clearData();
-            $style->clear()
-                ->where(Style::schema_fields_CODE, $styleCode)
+        if ($styleCode === null || $styleCode === '') {
+            $this->assign('style', []);
+            return $this->fetch();
+        }
+
+        // 确定渲染模式：preview 或 live
+        $renderMode = $isPreview ? PageRenderService::MODE_PREVIEW : PageRenderService::MODE_LIVE;
+        $tempStyleCode = null;
+        if ($isPreview && $previewStyleCode !== '') {
+            $previewStyle = clone $this->styleModel;
+            $previewStyle->clearData();
+            $previewStyle->clear()
+                ->where(Style::schema_fields_CODE, $previewStyleCode)
                 ->find()
                 ->fetch();
-            
-            if ($style->getId()) {
-                // 确定渲染模式：preview 或 live
-                $renderMode = $isPreview ? PageRenderService::MODE_PREVIEW : PageRenderService::MODE_LIVE;
-                
-                // 使用统一的 PageRenderService 渲染页面
-                // 这确保了可视化编辑器预览和正式上线页面的渲染逻辑完全一致
-                // 预览模式下允许通过 URL 的 style_code 临时覆盖模板，避免编辑器已切换模板但页面尚未保存时仍渲染旧模板
-                $tempStyleCode = null;
-                if ($isPreview && $previewStyleCode !== '') {
-                    $previewStyle = clone $this->styleModel;
-                    $previewStyle->clearData();
-                    $previewStyle->clear()
-                        ->where(Style::schema_fields_CODE, $previewStyleCode)
-                        ->find()
-                        ->fetch();
-                    if ($previewStyle->getId()) {
-                        $tempStyleCode = $previewStyleCode;
-                    }
-                }
-
-                $html = $this->pageRenderService->render(
-                    $page,
-                    $renderMode,
-                    $currentLocale,
-                    $tempStyleCode
-                );
-                
-                echo $html;
-                
-                // 如果是预览模式，添加语言切换悬浮按钮
-                if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {
-                    echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
-                }
-                
-                return;
+            if ($previewStyle->getId()) {
+                $tempStyleCode = $previewStyleCode;
             }
         }
-        
-        // 如果没有指定样式或样式不存在，设置空的样式配置
-        $this->assign('style', []);
-        
-        // 使用默认模板
-        return $this->fetch();
+
+        $html = $this->pageRenderService->render(
+            $page,
+            $renderMode,
+            $currentLocale,
+            $tempStyleCode
+        );
+
+        echo $html;
+        if ($isPreview && !empty($availableLocales) && count($availableLocales) > 1) {
+            echo $this->renderLanguageSwitcher($page, $availableLocales, $currentLocale);
+        }
+        return;
     }
     
     /**
