@@ -201,29 +201,31 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $referer = '';
         }
 
-        if (!in_array(strtolower($uri), $white_lists)) {
-            $t0 = microtime(true);
-            $routeProtected = $this->aclService->isRouteProtected($uri);
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteProtected', (microtime(true) - $t0) * 1000, 'observer', $parent);
-            }
-            // 未定义 ACL 的后台路由按白色 ACL 处理，不做登录/角色/权限校验
-            if (!$routeProtected) {
-                return;
-            }
+        if (in_array(strtolower($uri), $white_lists)) {
+            w_auth_log('acl_whitelist', 'URI 在白名单内，跳过权限校验', ['uri' => $uri]);
+            return;
+        }
 
-            // CLI 下无浏览器 Session，不创建 getBackendSession()、不查 getAclContext()，避免几百毫秒
-            if (\PHP_SAPI === 'cli') {
-                $user = null;
-                $role = null;
-                $sessionAclContext = null;
-                $access_sources = [];
-                $roleId = 0;
-                // 后续 hasUser 为 false，走未授权分支；需要带登录态时由调用方通过 event 传入 user/role
-            } else {
-            // #region agent log
-            $__logFile = \dirname(__DIR__, 5) . '/debug-b1cda8.log';
-            // #endregion
+        $t0 = microtime(true);
+        $routeProtected = $this->aclService->isRouteProtected($uri);
+        if (RequestLifecycleTrace::isEnabled()) {
+            RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteProtected', (microtime(true) - $t0) * 1000, 'observer', $parent);
+        }
+        // 未定义 ACL 的后台路由按白色 ACL 处理，不做登录/角色/权限校验
+        if (!$routeProtected) {
+            w_auth_log('acl_not_protected', '路由未受 ACL 保护，跳过校验', ['uri' => $uri]);
+            return;
+        }
+
+        // CLI 下无浏览器 Session，不创建 getBackendSession()、不查 getAclContext()，避免几百毫秒
+        if (\PHP_SAPI === 'cli') {
+            $user = null;
+            $role = null;
+            $sessionAclContext = null;
+            $access_sources = [];
+            $roleId = 0;
+            // 后续 hasUser 为 false，走未授权分支；需要带登录态时由调用方通过 event 传入 user/role
+        } else {
             // 获取用户和角色（支持多种认证方式）
             $user = null;
             $role = null;
@@ -251,13 +253,11 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionCreate', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $userId = $backendSession->getUserId();
-                // #region agent log
-                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:sessionBranch','message'=>'userId and branch','data'=>['uri'=>$uri,'userId'=>$userId,'userIdSet'=>($userId!==null&&$userId!==''),'branch'=>'session'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'A']) . "\n", \FILE_APPEND | \LOCK_EX);
-                // #endregion
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionGetUserId', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $tAcl = microtime(true);
+                $fromCache = false;
                 if ($userId !== null && $userId !== '') {
                     $rawSession = $backendSession->getSession();
                     $cachedRoleId = $rawSession->get('backend_acl_role_id');
@@ -269,6 +269,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                             'role_id' => $roleId,
                             'is_enabled' => (int) $cachedIsEnabled,
                         ];
+                        $fromCache = true;
                     } else {
                         try {
                             $sessionAclContext = BackendUser::getAclContext((int) $userId);
@@ -288,9 +289,13 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 } else {
                     $roleId = 0;
                 }
-                // #region agent log
-                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:afterRoleId','message'=>'roleId and aclContext','data'=>['uri'=>$uri,'userId'=>$userId,'roleId'=>$roleId??null,'aclContextFromDb'=>isset($sessionAclContext)&&($sessionAclContext['role_id']??-1)>=0],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
-                // #endregion
+                w_auth_log('acl_session_context', 'Session 分支获取用户/角色与 ACL 上下文', [
+                    'uri' => $uri,
+                    'userId' => $userId,
+                    'roleId' => $roleId ?? 0,
+                    'from_cache' => $fromCache ?? false,
+                    '_user_not_found' => (bool) ($sessionAclContext['_user_not_found'] ?? false),
+                ]);
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::aclContext', (microtime(true) - $tAcl) * 1000, 'observer', $parent);
                 }
@@ -308,23 +313,18 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionUserRole', (microtime(true) - $t0) * 1000, 'observer', $parent);
             }
-            }
+        }
 
-            // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
-            $hasUser = $user !== null || $sessionAclContext !== null;
-            // #region agent log
-            if (!$hasUser) {
-                $__f = $__logFile ?? \dirname(__DIR__, 5) . '/debug-b1cda8.log';
-                $__sid = (string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '');
-                $__sidHint = $__sid !== '' ? \substr($__sid, 0, 8) . '...' : 'none';
-                $__sessId = $this->getBackendSession()->getSession()->getId();
-                $__sessHint = $__sessId !== '' ? \substr($__sessId, 0, 8) . '...' : 'empty';
-                @file_put_contents($__f, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:not_logged_in','message'=>'dispatch not_logged_in','data'=>['uri'=>$uri,'reason'=>'not_logged_in','hasUser'=>false,'cookieSid'=>$__sidHint,'sessionStorageId'=>$__sessHint],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'A']) . "\n", \FILE_APPEND | \LOCK_EX);
-            }
-            // #endregion
-            // 根因说明：not_logged_in = Session 无 user_id（getUserId() 为空），非「数据库查不到用户」。数据库查不到时会有 _user_not_found 且走 no_role 分支并提示「用户不存在或已被删除」；若 var/log 中见 getAclContext 的 acl 日志则为 DB 问题。
-            if (!$hasUser) {
-                w_log_warning(
+        // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
+        $hasUser = $user !== null || $sessionAclContext !== null;
+        if (!$hasUser) {
+            $sidHint = \strlen((string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '')) > 0 ? \substr((string) $_COOKIE[WlsStrategy::SESSION_NAME], 0, 8) . '...' : 'none';
+            $sessIdHint = \PHP_SAPI !== 'cli' ? (\strlen($this->getBackendSession()->getSession()->getId()) > 0 ? \substr($this->getBackendSession()->getSession()->getId(), 0, 8) . '...' : 'empty') : 'cli';
+            w_auth_log('acl_not_logged_in', 'Session 无 user_id，重定向登录', ['uri' => $uri, 'cookie_sid_hint' => $sidHint, 'session_id_hint' => $sessIdHint]);
+        }
+        // 根因说明：not_logged_in = Session 无 user_id（getUserId() 为空），非「数据库查不到用户」。数据库查不到时会有 _user_not_found 且走 no_role 分支并提示「用户不存在或已被删除」；若 var/log 中见 getAclContext 的 acl 日志则为 DB 问题。
+        if (!$hasUser) {
+            w_log_warning(
                     '[ACL] not_logged_in：Session 无 user_id（getUserId 为空），重定向登录。若为「数据库查不到用户」会先有 getAclContext 的 acl 日志',
                     ['uri' => $uri],
                     'acl'
@@ -346,6 +346,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 ? $user->getIsEnabled()
                 : (bool) ($sessionAclContext['is_enabled'] ?? 1);
             if (!$isEnabled) {
+                w_auth_log('acl_user_disabled', '用户已被禁用', ['uri' => $uri, 'user_id' => $sessionAclContext['user_id'] ?? null, 'role_id' => $roleId]);
                 if ($request->isApiBackend()) {
                     $this->returnApiError(403, __('用户已被禁用'), $request);
                     return;
@@ -355,14 +356,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 $request->getResponse()->noRouter(DEV ? 403 : 404);
                 return;
             }
-            
+
             // 如果没有角色，或用户不存在（getAclContext 曾返回 null）
             if ($roleId <= 0) {
                 $userNotFound = (bool) ($sessionAclContext['_user_not_found'] ?? false);
                 $reason = $userNotFound ? 'user_not_found' : 'no_role';
-                // #region agent log
-                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_role','message'=>'dispatch no_role','data'=>['uri'=>$uri,'userId'=>$sessionAclContext['user_id']??null,'roleId'=>$roleId,'reason'=>$reason],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
-                // #endregion
+                w_auth_log('acl_no_role', '无角色或用户不存在', ['uri' => $uri, 'user_id' => $sessionAclContext['user_id'] ?? null, 'role_id' => $roleId, 'reason' => $reason]);
                 if ($request->isApiBackend()) {
                     $this->returnApiError(403, $userNotFound ? __('用户不存在或已被删除') : __('用户没有分配角色'), $request);
                     return;
@@ -388,9 +387,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 }
                 // 没有任何 ACL 权限：直接按“无任何权限”处理
                 if (!$hasAny) {
-                    // #region agent log
-                    @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_any_permission','message'=>'dispatch no_any_permission','data'=>['uri'=>$uri,'roleId'=>$roleId,'reason'=>'no_any_permission'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'D']) . "\n", \FILE_APPEND | \LOCK_EX);
-                    // #endregion
+                    w_auth_log('acl_no_any_permission', '角色没有任何 ACL 权限', ['uri' => $uri, 'role_id' => $roleId]);
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你没有任何权限！请联系管理员！'), $request);
                         return;
@@ -414,9 +411,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::isRouteAllowed', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 if (!$allowed) {
-                    // #region agent log
-                    @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_permission_for_route','message'=>'dispatch no_permission_for_route','data'=>['uri'=>$uri,'roleId'=>$roleId,'method'=>$request->getMethod(),'reason'=>'no_permission_for_route'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'E']) . "\n", \FILE_APPEND | \LOCK_EX);
-                    // #endregion
+                    w_auth_log('acl_no_permission_for_route', '角色无当前路由权限', ['uri' => $uri, 'role_id' => $roleId, 'method' => $request->getMethod()]);
                     // 无权限访问当前路由的处理逻辑维持原有分支语义：返回错误或尝试寻找可跳转入口
                     if ($request->isApiBackend()) {
                         $this->returnApiError(403, __('你无权进行该操作！你不具备：%{1} 操作权限！', [$request->getMethod()]), $request);
@@ -439,7 +434,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     return;
                 }
             }
-        }
+        w_auth_log('acl_allowed', '权限校验通过', ['uri' => $uri, 'role_id' => $roleId, 'user_id' => $sessionAclContext['user_id'] ?? ($user && method_exists($user, 'getId') ? $user->getId() : null)]);
     }
 
     /**

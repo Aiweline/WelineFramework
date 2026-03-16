@@ -75,7 +75,9 @@ final class FileStorage implements SessionStorageInterface
         if (!\is_array($data)) {
             return [];
         }
-
+        if (function_exists('w_log_info')) {
+            w_log_info('[FileStorage] read sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data), [], 'session');
+        }
         return $data;
     }
 
@@ -86,9 +88,10 @@ final class FileStorage implements SessionStorageInterface
     {
         $filePath = $this->getFilePath($sessionId);
         $content = \serialize($data);
-        
         $result = @\file_put_contents($filePath, $content, LOCK_EX);
-        
+        if (function_exists('w_log_info')) {
+            w_log_info('[FileStorage] write sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data) . ' ok=' . ($result !== false ? '1' : '0'), [], 'session');
+        }
         return $result !== false;
     }
 
@@ -98,12 +101,12 @@ final class FileStorage implements SessionStorageInterface
     public function destroy(string $sessionId): bool
     {
         $filePath = $this->getFilePath($sessionId);
-        
-        if (\file_exists($filePath)) {
-            return @\unlink($filePath);
+        $existed = \file_exists($filePath);
+        $ok = $existed ? @\unlink($filePath) : true;
+        if (function_exists('w_log_info')) {
+            w_log_info('[FileStorage] destroy sid=' . substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'), [], 'session');
         }
-        
-        return true;
+        return $ok;
     }
 
     /**
