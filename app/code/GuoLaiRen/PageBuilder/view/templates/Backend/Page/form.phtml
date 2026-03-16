@@ -165,7 +165,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         $handleForDisplay = $page ? ($page->getData('handle') ?? '') : '';
                         $pageType = $page ? ($page->getData('type') ?? '') : '';
                         $isHomePage = ($pageType === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME);
-                        function appendPortIfExists($url) {
+                        $appendPortIfExists = function ($url) {
                             $parsedUrl = parse_url($url);
                             $scheme = isset($parsedUrl['scheme']) ? $parsedUrl['scheme'] . '://' : '';
                             $host = $parsedUrl['host'] ?? '';
@@ -178,29 +178,52 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                             $query = isset($parsedUrl['query']) ? '?' . $parsedUrl['query'] : '';
                             $fragment = isset($parsedUrl['fragment']) ? '#' . $parsedUrl['fragment'] : '';
                             return "$scheme$auth$host$port$path$query$fragment";
-                        }
-                        $displayedBaseUrlWithPort = appendPortIfExists($baseUrlForDisplay);
+                        };
+                        $displayedBaseUrlWithPort = $appendPortIfExists($baseUrlForDisplay);
 
-                        $initialPageUrl = ($isHomePage && empty($handleForDisplay)) 
-                            ? $displayedBaseUrlWithPort 
+                        $initialPageUrlWithHandle = ($isHomePage && empty($handleForDisplay))
+                            ? $displayedBaseUrlWithPort
                             : ($displayedBaseUrlWithPort . '/' . ltrim($handleForDisplay, '/'));
+                        $currentPageId = ($page && $page->getId()) ? (int)$page->getId() : 0;
+                        $initialPageUrlById = $currentPageId > 0 ? ($displayedBaseUrlWithPort . '?page_id=' . $currentPageId) : '';
                         ?>
-                        <div style="min-width: 150px; flex: 2 1 200px;">
+                        <div style="min-width: 150px; flex: 2 1 200px;" id="pageUrlDisplayContainer" data-page-id="<?= $currentPageId ?>">
                             <label class="form-label mb-1 small">
                                 <i class="mdi mdi-link-variant"></i> <?= __('访问地址') ?>
                             </label>
-                            <div class="input-group input-group-sm">
-                                <input type="text" 
-                                       class="form-control bg-light" 
-                                       id="pageUrlDisplay" 
-                                       value="<?= htmlspecialchars($initialPageUrl) ?>"
-                                       readonly>
-                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
-                                    <i class="mdi mdi-content-copy"></i>
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrl()" title="<?= __('打开') ?>">
-                                    <i class="mdi mdi-open-in-new"></i>
-                                </button>
+                            <?php if ($initialPageUrlById !== ''): ?>
+                            <div class="mb-2">
+                                <span class="small text-muted"><?= __('按 ID 访问（可不带 handle）') ?></span>
+                                <div class="input-group input-group-sm mt-0">
+                                    <input type="text"
+                                           class="form-control bg-light"
+                                           id="pageUrlDisplayById"
+                                           value="<?= htmlspecialchars($initialPageUrlById) ?>"
+                                           readonly>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrlById()" title="<?= __('复制') ?>">
+                                        <i class="mdi mdi-content-copy"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrlById()" title="<?= __('打开') ?>">
+                                        <i class="mdi mdi-open-in-new"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+                            <div>
+                                <span class="small text-muted"><?= __('按 handle 访问') ?></span>
+                                <div class="input-group input-group-sm mt-0">
+                                    <input type="text"
+                                           class="form-control bg-light"
+                                           id="pageUrlDisplay"
+                                           value="<?= htmlspecialchars($initialPageUrlWithHandle) ?>"
+                                           readonly>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="copyPageUrl()" title="<?= __('复制') ?>">
+                                        <i class="mdi mdi-content-copy"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" onclick="openPageUrl()" title="<?= __('打开') ?>">
+                                        <i class="mdi mdi-open-in-new"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
@@ -1388,6 +1411,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                     <?= __('AI将根据您填写的描述和页面现有信息生成内容。主页类型页面不会生成content字段。') ?>
                 </div>
                 <?php endif; ?>
+                <div id="aiGenerateProgressMessage" class="mt-2 small text-muted" style="display:none;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -2365,42 +2389,41 @@ document.addEventListener('DOMContentLoaded', function() {
         window.getDisplayBaseUrlWithPort = getDisplayBaseUrlWithPort;
         window.currentOriginForPort = currentOriginForPort;
         
-        // 更新访问地址显示的函数
+        // 更新访问地址显示的函数（同时更新「按 ID 访问」与「按 handle 访问」）
         function updatePageUrlDisplay() {
             const urlInput = document.getElementById('pageUrlDisplay');
+            const urlByIdInput = document.getElementById('pageUrlDisplayById');
             const websiteSelect = document.getElementById('website_id');
             const handleInputEl = document.getElementById('handle');
             const pageTypeSelect = document.getElementById('type');
+            const container = document.getElementById('pageUrlDisplayContainer');
             
             if (!urlInput) return;
             
-            // 获取当前选中的网站ID
             const websiteId = websiteSelect ? parseInt(websiteSelect.value) || 0 : 0;
-            
-            // 展示用 base（站点 URL；同 host 且当前请求带端口时注入端口便于打开）
             const baseUrl = getDisplayBaseUrlWithPort(websiteId);
-            
-            // 获取当前handle
             const handle = handleInputEl ? handleInputEl.value.trim() : '';
-            
-            // 检查是否是首页类型
             const pageType = pageTypeSelect ? pageTypeSelect.value : '';
             const isHomePage = pageType === '<?= \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME ?>';
             
-            // 构建访问地址
+            // 按 handle 访问
             let pageUrl;
             if (isHomePage && !handle) {
-                // 首页类型且没有handle：直接使用网站地址
                 pageUrl = baseUrl;
             } else if (handle) {
-                // 有handle：网站地址 + handle
                 pageUrl = baseUrl + '/' + handle.replace(/^\//, '');
             } else {
-                // 没有handle：只显示网站地址
                 pageUrl = baseUrl;
             }
-            
             urlInput.value = pageUrl;
+            
+            // 按 ID 访问（仅当有 page_id 时更新）
+            if (urlByIdInput && container) {
+                const pageId = parseInt(container.getAttribute('data-page-id') || '0', 10);
+                if (pageId > 0) {
+                    urlByIdInput.value = baseUrl + '?page_id=' + pageId;
+                }
+            }
         }
         
         // 监听 handle 输入变化更新访问地址
@@ -5355,7 +5378,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ==================== 页面URL相关函数 ====================
-    // 复制页面URL
+    // 复制页面URL（按 handle）
     window.copyPageUrl = function(event) {
         const urlInput = document.getElementById('pageUrlDisplay');
         if (!urlInput) return;
@@ -5363,23 +5386,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const url = urlInput.value;
         if (!url) return;
         
-        // 获取按钮元素
         const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrl"]');
+        copyToClipboard(url, button, null, null,
+            '<?= __("地址已复制") ?>',
+            '<?= __("页面地址") ?>: ' + url);
+    };
+
+    // 复制页面URL（按 ID，可不带 handle）
+    window.copyPageUrlById = function(event) {
+        const urlInput = document.getElementById('pageUrlDisplayById');
+        if (!urlInput) return;
         
-        // 使用通用复制函数
-        copyToClipboard(url, button, null, null, 
-            '<?= __("地址已复制") ?>', 
+        const url = urlInput.value;
+        if (!url) return;
+        
+        const button = event ? event.target.closest('button') : document.querySelector('button[onclick*="copyPageUrlById"]');
+        copyToClipboard(url, button, null, null,
+            '<?= __("地址已复制") ?>',
             '<?= __("页面地址") ?>: ' + url);
     };
     
-    // 打开页面URL
+    // 打开页面URL（按 handle）
     window.openPageUrl = function() {
         const urlInput = document.getElementById('pageUrlDisplay');
         if (!urlInput || !urlInput.value) return;
         
-        // 在新窗口打开
         window.open(urlInput.value, '_blank');
         console.log('🌐 打开页面:', urlInput.value);
+    };
+
+    // 打开页面URL（按 ID）
+    window.openPageUrlById = function() {
+        const urlInput = document.getElementById('pageUrlDisplayById');
+        if (!urlInput || !urlInput.value) return;
+        
+        window.open(urlInput.value, '_blank');
+        console.log('🌐 打开页面(按ID):', urlInput.value);
     };
     
     // ==================== Toast 通知函数（已在全局定义） ====================
@@ -5610,21 +5652,15 @@ window.generatePageContent = function() {
     if (styleCode) formData.append('style_code', styleCode);
     if (defaultLocale) formData.append('default_locale', defaultLocale);
 
-    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content") ?>';
-    var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-    var req = window.Weline.Api.request(url, opts);
-    req.then(function(res) {
-        var data = (res && res.data) || res;
-        // 恢复关闭功能
+    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content-stream") ?>';
+    var progressEl = document.getElementById('aiGenerateProgressMessage');
+
+    function restoreModalAndButton() {
         const modalElement = document.getElementById('aiGenerateModal');
         const modal = bootstrap.Modal.getInstance(modalElement);
         const closeBtn = modalElement?.querySelector('.btn-close');
         const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
-        
-        if (modal && modal._restoreClose) {
-            modal._restoreClose();
-        }
-        
+        if (modal && modal._restoreClose) modal._restoreClose();
         if (closeBtn) {
             closeBtn.style.pointerEvents = '';
             closeBtn.style.opacity = '';
@@ -5637,120 +5673,129 @@ window.generatePageContent = function() {
             cancelBtn.style.cursor = '';
             cancelBtn.removeAttribute('aria-disabled');
         }
-        
-        // 恢复按钮状态
         submitBtn.disabled = false;
         if (spinner) spinner.classList.add('d-none');
         submitBtn.innerHTML = originalHtml;
+        if (progressEl) { progressEl.style.display = 'none'; progressEl.textContent = ''; }
+    }
 
-        if (data.success && data.data) {
-            // 填充生成的内容，并添加 AI 填充标识
-            if (data.data.title && document.getElementById('title')) {
-                const titleInput = document.getElementById('title');
-                titleInput.value = data.data.title;
-                titleInput.classList.add('ai-filled');
-            }
-            if (data.data.meta_title && document.getElementById('meta_title')) {
-                const metaTitleInput = document.getElementById('meta_title');
-                metaTitleInput.value = data.data.meta_title;
-                metaTitleInput.classList.add('ai-filled');
-            }
-            if (data.data.meta_description && document.getElementById('meta_description')) {
-                const metaDescInput = document.getElementById('meta_description');
-                metaDescInput.value = data.data.meta_description;
-                metaDescInput.classList.add('ai-filled');
-            }
-            if (data.data.meta_keywords && document.getElementById('meta_keywords')) {
-                const metaKeywordsInput = document.getElementById('meta_keywords');
-                metaKeywordsInput.value = data.data.meta_keywords;
-                metaKeywordsInput.classList.add('ai-filled');
-            }
-            if (data.data.content && document.getElementById('custom_content')) {
-                const contentEditor = window.pageEditors && window.pageEditors['custom_content'];
-                if (contentEditor) {
-                    contentEditor.setData(data.data.content);
-                    // 为 CKEditor 编辑器添加 AI 填充标识
-                    // 方法1: 通过编辑器实例获取可编辑元素
-                    setTimeout(() => {
-                        try {
-                            if (contentEditor.editing && contentEditor.editing.view) {
-                                const domRoot = contentEditor.editing.view.domRoots.get(contentEditor.editing.view.document);
-                                if (domRoot) {
-                                    domRoot.classList.add('ai-filled');
-                                }
-                            }
-                        } catch (e) {
-                            console.log('CKEditor DOM root access failed:', e);
+    function applyGeneratedData(data) {
+        if (data.title && document.getElementById('title')) {
+            const titleInput = document.getElementById('title');
+            titleInput.value = data.title;
+            titleInput.classList.add('ai-filled');
+        }
+        if (data.meta_title && document.getElementById('meta_title')) {
+            document.getElementById('meta_title').value = data.meta_title;
+            document.getElementById('meta_title').classList.add('ai-filled');
+        }
+        if (data.meta_description && document.getElementById('meta_description')) {
+            document.getElementById('meta_description').value = data.meta_description;
+            document.getElementById('meta_description').classList.add('ai-filled');
+        }
+        if (data.meta_keywords && document.getElementById('meta_keywords')) {
+            document.getElementById('meta_keywords').value = data.meta_keywords;
+            document.getElementById('meta_keywords').classList.add('ai-filled');
+        }
+        if (data.content && document.getElementById('custom_content')) {
+            const contentEditor = window.pageEditors && window.pageEditors['custom_content'];
+            if (contentEditor) {
+                contentEditor.setData(data.content);
+                setTimeout(function() {
+                    try {
+                        if (contentEditor.editing && contentEditor.editing.view) {
+                            var domRoot = contentEditor.editing.view.domRoots.get(contentEditor.editing.view.document);
+                            if (domRoot) domRoot.classList.add('ai-filled');
                         }
-                        
-                        // 方法2: 通过 DOM 查询找到编辑器容器
-                        const customContentElement = document.getElementById('custom_content');
-                        if (customContentElement) {
-                            const editorContainer = customContentElement.closest('.ck-editor');
-                            if (editorContainer) {
-                                const editableElement = editorContainer.querySelector('.ck-editor__editable');
-                                if (editableElement) {
-                                    editableElement.classList.add('ai-filled');
-                                }
-                            }
-                        }
-                    }, 100);
-                } else {
-                    const contentInput = document.getElementById('custom_content');
-                    contentInput.value = data.data.content;
-                    contentInput.classList.add('ai-filled');
+                    } catch (e) {}
+                    var editableElement = document.querySelector('#custom_content + .ck-editor .ck-editor__editable');
+                    if (editableElement) editableElement.classList.add('ai-filled');
+                }, 100);
+            } else {
+                document.getElementById('custom_content').value = data.content;
+                document.getElementById('custom_content').classList.add('ai-filled');
+            }
+        }
+    }
+
+    if (progressEl) { progressEl.style.display = 'block'; progressEl.textContent = '<?= __('连接中...') ?>'; }
+
+    fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(function(res) {
+        if (!res.ok) throw new Error(res.statusText || '<?= __('请求失败') ?>');
+        if (!res.body) throw new Error('<?= __('不支持流式响应') ?>');
+        var reader = res.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        var currentEvent = '';
+        var currentData = '';
+
+        function parseLine(line) {
+            if (line.indexOf('event:') === 0) {
+                currentEvent = line.replace(/^event:\s*/, '').trim();
+            } else if (line.indexOf('data:') === 0) {
+                currentData = line.replace(/^data:\s*/, '');
+            }
+        }
+
+        function finishEvent() {
+            if (currentEvent === 'start' || currentEvent === 'progress') {
+                try {
+                    var payload = currentData ? JSON.parse(currentData) : {};
+                    if (progressEl && payload.message) progressEl.textContent = payload.message;
+                } catch (e) {}
+            } else if (currentEvent === 'done') {
+                try {
+                    var payload = currentData ? JSON.parse(currentData) : {};
+                    var data = payload.data || payload;
+                    restoreModalAndButton();
+                    applyGeneratedData(data);
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal'));
+                    if (modal) modal.hide();
+                    BackendToast.success('<?= __('AI已成功生成页面内容，请检查并调整') ?>');
+                } catch (e) {
+                    restoreModalAndButton();
+                    BackendToast.error('<?= __('解析结果失败') ?>');
+                }
+            } else if (currentEvent === 'error') {
+                try {
+                    var payload = currentData ? JSON.parse(currentData) : {};
+                    var msg = payload.message || '<?= __('生成失败') ?>';
+                    restoreModalAndButton();
+                    BackendToast.error(msg);
+                } catch (e) {
+                    restoreModalAndButton();
+                    BackendToast.error(currentData || '<?= __('生成失败') ?>');
                 }
             }
+            currentEvent = '';
+            currentData = '';
+        }
 
-            // 关闭模态框
-            if (modal) modal.hide();
-
-            // 显示成功消息
-            BackendToast.success('<?= __('AI已成功生成页面内容，请检查并调整') ?>');
-        } else {
-            // 清理错误消息中的HTML标签（双重保险）
-            let errorMessage = data.message || '<?= __('生成失败') ?>';
-            if (errorMessage) {
-                // 创建临时div来去除HTML标签
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = errorMessage;
-                errorMessage = tempDiv.textContent || tempDiv.innerText || errorMessage;
+        function processChunk() {
+            buffer += decoder.decode(arguments.length ? arguments[0] : null, { stream: true });
+            var parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+            for (var i = 0; i < parts.length; i++) {
+                var lines = parts[i].split('\n');
+                currentEvent = '';
+                currentData = '';
+                for (var j = 0; j < lines.length; j++) {
+                    parseLine(lines[j]);
+                }
+                finishEvent();
             }
-            
-            BackendToast.error(errorMessage);
         }
-    })
-    .catch(error => {
-        // 恢复关闭功能
-        const modalElement = document.getElementById('aiGenerateModal');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        const closeBtn = modalElement?.querySelector('.btn-close');
-        const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
-        
-        if (modal && modal._restoreClose) {
-            modal._restoreClose();
-        }
-        
-        if (closeBtn) {
-            closeBtn.style.pointerEvents = '';
-            closeBtn.style.opacity = '';
-            closeBtn.removeAttribute('disabled');
-            closeBtn.removeAttribute('aria-disabled');
-        }
-        if (cancelBtn) {
-            cancelBtn.disabled = false;
-            cancelBtn.style.opacity = '';
-            cancelBtn.style.cursor = '';
-            cancelBtn.removeAttribute('aria-disabled');
-        }
-        
-        // 恢复按钮状态
-        submitBtn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        submitBtn.innerHTML = originalHtml;
 
+        return reader.read().then(function next(value) {
+            processChunk(value && value.value);
+            if (value && !value.done) return reader.read().then(next);
+        });
+    })
+    .catch(function(error) {
+        restoreModalAndButton();
         console.error('AI生成错误:', error);
-        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
+        BackendToast.error(error && error.message ? error.message : '<?= __('生成请求失败，请稍后重试') ?>');
     });
 };
 
