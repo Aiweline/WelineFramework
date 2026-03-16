@@ -451,6 +451,9 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
     }
     
     .page-header {
+        width: 100vw;
+        margin-left: calc(-50vw + 50%);
+        box-sizing: border-box;
         background: <?= $bgColor ?>;
         height: <?= $heightResponsive ?>;
         display: flex;
