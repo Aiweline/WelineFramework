@@ -1190,7 +1190,7 @@ class PageRenderService
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>' . htmlspecialchars($pageTitle) . '</title>
-    <link rel="stylesheet" href="' . $baseCssUrl . '">
+    <link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">
     ' . $dropZoneStyles . '
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
