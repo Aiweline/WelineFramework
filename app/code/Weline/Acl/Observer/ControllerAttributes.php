@@ -122,10 +122,15 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             $type = $eventData->getData('type');
             $this->collectMethodLevelAcl($className, $attribute, $eventData, $type);
         }
+        // 收集完成，释放事件大数组引用以降低内存峰值（后续仅用 pending_* 与 loaded_*）
+        $eventDataArray = [];
         
         // 第三阶段：一次性批量保存（注意顺序：先类级别，后方法级别，确保父子关系正确）
         $this->batchSaveClassLevelAcls($module);
         $this->batchSaveMethodLevelAcls($module);
+
+        // 该模块已全部落库，释放本模块在内存中的缓存，避免 setup:upgrade 路由收集阶段随模块数线性增长导致内存溢出
+        unset($this->loaded_controller_acl_names[$module], $this->pending_method_acls[$module]);
     }
     
 
@@ -500,12 +505,11 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if (!empty($sourceId)) {
                 // 如果已经见过这个 source_id
                 if (isset($seenSourceIds[$sourceId])) {
-                    // 开发环境：记录重复信息
+                    // 开发环境：记录重复信息（限制条数，避免 setup:upgrade 时内存溢出）
                     if (DEV) {
-                        // 只有在真正有重复时才记录
+                        $maxDupsToCollect = 10;
                         if (!isset($duplicateInfo[$sourceId])) {
-                            // 第一次发现重复，记录首次出现的信息
-                            $firstAcl = $seenSourceIds[$sourceId]; // 保存的是第一个 ACL 的引用
+                            $firstAcl = $seenSourceIds[$sourceId];
                             $duplicateInfo[$sourceId] = [
                                 'first' => [
                                     'index' => $firstAcl['index'] ?? 'unknown',
@@ -514,17 +518,20 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                                     'route' => $firstAcl['route'] ?? '',
                                     'router' => $firstAcl['router'] ?? '',
                                 ],
-                                'duplicates' => []
+                                'duplicates' => [],
+                                'duplicates_total' => 0,
                             ];
                         }
-                        // 记录重复出现的信息
-                        $duplicateInfo[$sourceId]['duplicates'][] = [
-                            'index' => $index,
-                            'class' => $acl['class'] ?? '',
-                            'method' => $acl['method'] ?? '',
-                            'route' => $acl['route'] ?? '',
-                            'router' => $acl['router'] ?? '',
-                        ];
+                        $duplicateInfo[$sourceId]['duplicates_total']++;
+                        if (count($duplicateInfo[$sourceId]['duplicates']) < $maxDupsToCollect) {
+                            $duplicateInfo[$sourceId]['duplicates'][] = [
+                                'index' => $index,
+                                'class' => $acl['class'] ?? '',
+                                'method' => $acl['method'] ?? '',
+                                'route' => $acl['route'] ?? '',
+                                'router' => $acl['router'] ?? '',
+                            ];
+                        }
                     }
                     // 找到已存在的记录并替换
                     foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
@@ -554,39 +561,48 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 $deduplicatedAcls[] = $acl;
             }
         }
+        unset($this->pending_class_level_acls[$module]);
         
         // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
+        // 限制输出规模，避免 setup:upgrade 时单模块重复过多导致内存溢出
         if (DEV && !empty($duplicateInfo)) {
-            $errorMessages = [];
-            $errorMessages[] = __('【ACL 重复检测】模块: %{1}', [$module]);
-            $errorMessages[] = __('发现以下重复的 source_id：');
+            $maxSourceIds = 30;
+            $lines = [__('【ACL 重复检测】模块: %{1}', [$module]), __('发现以下重复的 source_id：')];
+            $n = 0;
             foreach ($duplicateInfo as $sourceId => $info) {
-                $errorMessages[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
-                $errorMessages[] = __('  首次出现:');
-                $first = $info['first'] ?? [];
-                $errorMessages[] = __('    - 类: %{1}', [$first['class'] ?? '']);
-                $errorMessages[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
-                $errorMessages[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
-                $errorMessages[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
-                $duplicates = $info['duplicates'] ?? [];
-                $errorMessages[] = __('  重复出现 (%{1} 次):', [count($duplicates)]);
-                foreach ($duplicates as $dup) {
-                    $errorMessages[] = __('    - 索引 #%{1}:', [$dup['index']]);
-                    $errorMessages[] = __('      类: %{1}', [$dup['class']]);
-                    $errorMessages[] = __('      方法: %{1}', [$dup['method']]);
-                    $errorMessages[] = __('      路由: %{1}', [$dup['route']]);
-                    $errorMessages[] = __('      路由器: %{1}', [$dup['router']]);
+                if ($n >= $maxSourceIds) {
+                    $lines[] = "\n" . __('... 已省略更多重复（共 %{1} 个 source_id）', [count($duplicateInfo)]);
+                    break;
                 }
+                $lines[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
+                $first = $info['first'] ?? [];
+                $lines[] = __('  首次出现:');
+                $lines[] = __('    - 类: %{1}', [$first['class'] ?? '']);
+                $lines[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
+                $lines[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
+                $lines[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
+                $duplicates = $info['duplicates'] ?? [];
+                $totalDups = $info['duplicates_total'] ?? count($duplicates);
+                $lines[] = __('  重复出现 (%{1} 次):', [$totalDups]);
+                foreach ($duplicates as $dup) {
+                    $lines[] = __('    - 索引 #%{1}:', [$dup['index']]);
+                    $lines[] = __('      类: %{1}', [$dup['class']]);
+                    $lines[] = __('      方法: %{1}', [$dup['method']]);
+                    $lines[] = __('      路由: %{1}', [$dup['route']]);
+                    $lines[] = __('      路由器: %{1}', [$dup['router']]);
+                }
+                if ($totalDups > count($duplicates)) {
+                    $lines[] = __('    ... 已省略 %{1} 条', [$totalDups - count($duplicates)]);
+                }
+                $n++;
             }
-            $errorMessages[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
-            // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
-            pp(implode("\n", $errorMessages));
+            $lines[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
+            pp(implode("\n", $lines));
         }
 
         // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
         $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
         if (empty($deduplicatedAcls)) {
-            unset($this->pending_class_level_acls[$module]);
             return;
         }
         
@@ -659,31 +675,36 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
             if (!empty($sourceId)) {
                 // 如果已经见过这个 source_id
                 if (isset($seenSourceIds[$sourceId])) {
-                    // 开发环境：记录重复信息
+                    // 开发环境：记录重复信息（限制 source_id 与条数，避免 setup:upgrade 时内存溢出）
                     if (DEV) {
-                        // 只有在真正有重复时才记录
-                        if (!isset($duplicateInfo[$sourceId])) {
-                            // 第一次发现重复，记录首次出现的信息
-                            $firstAcl = $seenSourceIds[$sourceId]; // 保存的是第一个 ACL 的引用
-                            $duplicateInfo[$sourceId] = [
-                                'first' => [
-                                    'index' => $firstAcl['index'] ?? 'unknown',
-                                    'class' => $firstAcl['class'] ?? '',
-                                    'method' => $firstAcl['method'] ?? '',
-                                    'route' => $firstAcl['route'] ?? '',
-                                    'router' => $firstAcl['router'] ?? '',
-                                ],
-                                'duplicates' => []
-                            ];
+                        $maxSourceIdsToCollect = 50;
+                        $maxDupsToCollect = 10;
+                        if (count($duplicateInfo) < $maxSourceIdsToCollect) {
+                            if (!isset($duplicateInfo[$sourceId])) {
+                                $firstAcl = $seenSourceIds[$sourceId];
+                                $duplicateInfo[$sourceId] = [
+                                    'first' => [
+                                        'index' => $firstAcl['index'] ?? 'unknown',
+                                        'class' => $firstAcl['class'] ?? '',
+                                        'method' => $firstAcl['method'] ?? '',
+                                        'route' => $firstAcl['route'] ?? '',
+                                        'router' => $firstAcl['router'] ?? '',
+                                    ],
+                                    'duplicates' => [],
+                                    'duplicates_total' => 0,
+                                ];
+                            }
+                            $duplicateInfo[$sourceId]['duplicates_total']++;
+                            if (count($duplicateInfo[$sourceId]['duplicates']) < $maxDupsToCollect) {
+                                $duplicateInfo[$sourceId]['duplicates'][] = [
+                                    'index' => $index,
+                                    'class' => $acl['class'] ?? '',
+                                    'method' => $acl['method'] ?? '',
+                                    'route' => $acl['route'] ?? '',
+                                    'router' => $acl['router'] ?? '',
+                                ];
+                            }
                         }
-                        // 记录重复出现的信息
-                        $duplicateInfo[$sourceId]['duplicates'][] = [
-                            'index' => $index,
-                            'class' => $acl['class'] ?? '',
-                            'method' => $acl['method'] ?? '',
-                            'route' => $acl['route'] ?? '',
-                            'router' => $acl['router'] ?? '',
-                        ];
                     }
                     // 找到已存在的记录并替换
                     foreach ($deduplicatedAcls as $existingIndex => $existingAcl) {
@@ -713,39 +734,49 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 $deduplicatedAcls[] = $acl;
             }
         }
+        // 去重已完成，立即释放原始大数组，减轻内存峰值（后续仅用 $deduplicatedAcls）
+        unset($this->pending_method_level_acls[$module]);
         
         // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
+        // 限制输出规模，避免 setup:upgrade 时单模块重复过多导致内存溢出
         if (DEV && !empty($duplicateInfo)) {
-            $errorMessages = [];
-            $errorMessages[] = __('【ACL 重复检测】模块: %{1} (方法级别权限)', [$module]);
-            $errorMessages[] = __('发现以下重复的 source_id：');
+            $maxSourceIds = 30;
+            $lines = [__('【ACL 重复检测】模块: %{1} (方法级别权限)', [$module]), __('发现以下重复的 source_id：')];
+            $n = 0;
             foreach ($duplicateInfo as $sourceId => $info) {
-                $errorMessages[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
-                $errorMessages[] = __('  首次出现:');
-                $first = $info['first'] ?? [];
-                $errorMessages[] = __('    - 类: %{1}', [$first['class'] ?? '']);
-                $errorMessages[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
-                $errorMessages[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
-                $errorMessages[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
-                $duplicates = $info['duplicates'] ?? [];
-                $errorMessages[] = __('  重复出现 (%{1} 次):', [count($duplicates)]);
-                foreach ($duplicates as $dup) {
-                    $errorMessages[] = __('    - 索引 #%{1}:', [$dup['index']]);
-                    $errorMessages[] = __('      类: %{1}', [$dup['class']]);
-                    $errorMessages[] = __('      方法: %{1}', [$dup['method']]);
-                    $errorMessages[] = __('      路由: %{1}', [$dup['route']]);
-                    $errorMessages[] = __('      路由器: %{1}', [$dup['router']]);
+                if ($n >= $maxSourceIds) {
+                    $lines[] = "\n" . __('... 已省略更多重复（共 %{1} 个 source_id）', [count($duplicateInfo)]);
+                    break;
                 }
+                $lines[] = "\n" . __('重复的 source_id: %{1}', [$sourceId]);
+                $first = $info['first'] ?? [];
+                $lines[] = __('  首次出现:');
+                $lines[] = __('    - 类: %{1}', [$first['class'] ?? '']);
+                $lines[] = __('    - 方法: %{1}', [$first['method'] ?? '']);
+                $lines[] = __('    - 路由: %{1}', [$first['route'] ?? '']);
+                $lines[] = __('    - 路由器: %{1}', [$first['router'] ?? '']);
+                $duplicates = $info['duplicates'] ?? [];
+                $totalDups = $info['duplicates_total'] ?? count($duplicates);
+                $lines[] = __('  重复出现 (%{1} 次):', [$totalDups]);
+                foreach ($duplicates as $dup) {
+                    $lines[] = __('    - 索引 #%{1}:', [$dup['index']]);
+                    $lines[] = __('      类: %{1}', [$dup['class']]);
+                    $lines[] = __('      方法: %{1}', [$dup['method']]);
+                    $lines[] = __('      路由: %{1}', [$dup['route']]);
+                    $lines[] = __('      路由器: %{1}', [$dup['router']]);
+                }
+                if ($totalDups > count($duplicates)) {
+                    $lines[] = __('    ... 已省略 %{1} 条', [$totalDups - count($duplicates)]);
+                }
+                $n++;
             }
-            $errorMessages[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
-            // 仅在开发环境输出提示，不抛异常，允许重复存在但实际入库已做去重
-            pp(implode("\n", $errorMessages));
+            $lines[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
+            pp(implode("\n", $lines));
         }
 
         // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
         $deduplicatedAcls = $this->excludeMenuXmlSources($deduplicatedAcls);
         if (empty($deduplicatedAcls)) {
-            unset($this->pending_method_level_acls[$module]);
             return;
         }
         

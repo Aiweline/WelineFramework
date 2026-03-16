@@ -1084,11 +1084,27 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
     }
 
+    /**
+     * 解析用于 ACME DNS-01 的根域名 Domain（用于取 DNS 账户）。
+     * 优先按「申请证书的域名」对应的根域名加载 Domain，保证 DNS 切换后用的是当前 DNS 账户。
+     */
     private function resolveRootDomainForAcme(string $domain, int $poolId, int $domainId): ?Domain
     {
+        $domain = \strtolower(\trim($domain));
+        $parts = \explode('.', $domain);
+        $rootDomainName = \count($parts) >= 2 ? $parts[\count($parts) - 2] . '.' . $parts[\count($parts) - 1] : $domain;
+
         $domainModel = ObjectManager::getInstance(Domain::class, [], false);
 
+        // 1) 优先按证书域名对应的根域名加载：DNS 切换时更新的是该 Domain 行，保证用当前 DNS 账户
+        $domainModel->clearQuery();
+        $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomainName)->find()->fetch();
+        if ($domainModel->getDomainId()) {
+            return $domainModel;
+        }
+
         if ($domainId > 0) {
+            $domainModel->clearQuery();
             $domainModel->load($domainId);
             if ($domainModel->getDomainId()) {
                 return $domainModel;
@@ -1101,6 +1117,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $parentId = (int)$pool->getParentDomainId();
             $rootDomain = \trim((string)$pool->getRootDomain());
             if ($parentId > 0) {
+                $domainModel->clearQuery();
                 $domainModel->load($parentId);
                 if ($domainModel->getDomainId()) {
                     return $domainModel;
@@ -1115,10 +1132,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
         }
 
-        $parts = \explode('.', $domain);
-        $rootDomain = \count($parts) >= 2 ? $parts[\count($parts) - 2] . '.' . $parts[\count($parts) - 1] : $domain;
         $domainModel->clearQuery();
-        $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+        $domainModel->where(Domain::schema_fields_DOMAIN, $rootDomainName)->find()->fetch();
         return $domainModel->getDomainId() ? $domainModel : null;
     }
 
