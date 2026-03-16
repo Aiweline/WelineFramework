@@ -20,6 +20,7 @@ use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Url;
+use Weline\Framework\Session\Session;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -270,13 +271,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
-        // 登录成功后立即持久化 Session（避免 WLS 下重定向请求读不到登录态导致循环重定向）
+        // 登录成功后、302 前必须落库：先持久化本请求内所有 Session，再发 Cookie 与重定向
         $rawSession = $this->session->getSession();
         $rawSession->save();
-        // Session::start() 已注册 shutdown 时 save + writeClose，302 前会落盘；此处再显式 writeClose 一次，确保 302 前必已写入
-        if ($rawSession instanceof \Weline\Framework\Session\Session) {
+        if ($rawSession instanceof Session) {
             $rawSession->getStrategy()->writeClose();
         }
+        Session::flushRequestSessions();
         // WLS 下确保 Session Cookie 随 302 响应发出（双重保障，避免 Worker 合并逻辑遗漏）
         $sid = $this->session->getId();
         if ($sid !== '') {
