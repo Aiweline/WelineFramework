@@ -1004,11 +1004,20 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         $response = $this->makeRequest('api/resolution/add', $params, $credentials);
 
         $code = (int) ($response['code'] ?? 0);
+        $dnsResponse = [
+            'provider' => 'gname',
+            'code' => $code,
+            'msg' => $response['msg'] ?? '',
+            'data' => $response['data'] ?? null,
+        ];
+
         if ($code === 1) {
+            $recordId = (string) ($response['data']['id'] ?? $response['data']['jid'] ?? $response['data'] ?? '');
             return [
                 'success' => true,
-                'record_id' => (string) ($response['data']['id'] ?? $response['data'] ?? ''),
+                'record_id' => $recordId,
                 'message' => $response['msg'] ?? __('DNS 记录添加成功'),
+                'dns_response' => $dnsResponse,
             ];
         }
 
@@ -1029,6 +1038,7 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         return [
             'success' => false,
             'message' => __('DNS 记录添加失败：%{1}（错误码：%{2}）', [$errorMsg, $code]) . $hint,
+            'dns_response' => $dnsResponse,
         ];
     }
 
