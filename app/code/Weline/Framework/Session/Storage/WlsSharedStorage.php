@@ -56,7 +56,11 @@ final class WlsSharedStorage implements SessionStorageInterface
      */
     public function read(string $sessionId): array
     {
-        return $this->sessionMemoryService->read($sessionId);
+        $data = $this->sessionMemoryService->read($sessionId);
+        if (function_exists('w_log_info')) {
+            w_log_info('[WlsSharedStorage] read sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data), [], 'session');
+        }
+        return $data;
     }
 
     /**
@@ -66,6 +70,9 @@ final class WlsSharedStorage implements SessionStorageInterface
     {
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $ok = $this->sessionMemoryService->write($sessionId, $data, $ttl);
+        if (function_exists('w_log_info')) {
+            w_log_info('[WlsSharedStorage] write sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'), [], 'session');
+        }
         if (!$ok) {
             w_log_warning(
                 '[WlsSharedStorage] Session 落库失败，请检查 Session Server 是否运行、网络与鉴权。sessionId=' . \substr($sessionId, 0, 8) . '...',
@@ -81,7 +88,11 @@ final class WlsSharedStorage implements SessionStorageInterface
      */
     public function destroy(string $sessionId): bool
     {
-        return $this->sessionMemoryService->destroy($sessionId);
+        $ok = $this->sessionMemoryService->destroy($sessionId);
+        if (function_exists('w_log_info')) {
+            w_log_info('[WlsSharedStorage] destroy sid=' . substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'), [], 'session');
+        }
+        return $ok;
     }
 
     /**
