@@ -261,7 +261,24 @@ class Page extends Model
             ->fetch()
             ->getItems();
     }
-    
+
+    /**
+     * 获取当前页面下所有后代页面的 ID（递归：子页面 + 子页面的子页面 + …）
+     * 用于主页换主题时同步更新该站点下所有子页面的 theme
+     */
+    public function getDescendantIds(): array
+    {
+        $ids = [];
+        foreach ($this->getChildPages() as $child) {
+            $id = $child->getId();
+            if ($id) {
+                $ids[] = $id;
+                $ids = array_merge($ids, $child->getDescendantIds());
+            }
+        }
+        return array_values(array_unique($ids));
+    }
+
     /**
      * 获取同站点的导航页面列表
      * 
