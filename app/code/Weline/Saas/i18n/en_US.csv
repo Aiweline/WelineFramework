@@ -1,4 +1,4 @@
-域名不能为空,域名不能为空
+﻿域名不能为空,域名不能为空
 请选择域名商账号,请选择域名商账号
 跳过购买（使用已有域名）,跳过购买（使用已有域名）
 "开始购买域名: %{1}","开始购买域名: %{1}"
@@ -98,6 +98,14 @@ SSL,SSL
 "等待 HTTPS 生效","等待 HTTPS 生效"
 域名全流程已完成,域名全流程已完成
 "未找到该域名的生命周期订单。若通过域名购买功能购买，请确认购买时已勾选「启动全流程状态跟踪」，且 Weline_Saas 模块已启用。","未找到该域名的生命周期订单。若通过域名购买功能购买，请确认购买时已勾选「启动全流程状态跟踪」，且 Weline_Saas 模块已启用。"
+正在注册,Registering
+切换Dns中,"Switching DNS"
+解析域名记录中,"Resolving DNS records"
+等待访问验证,"Waiting for access verification"
+切换CDN中,"Switching CDN"
+申请HTTPS中,"Applying HTTPS"
+正常,Ready
+处理中,Processing
 该域名已有进行中的配置流程,"This domain already has a provisioning flow in progress"
 "配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤","配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤"
 购买失败,购买失败
@@ -127,11 +135,3 @@ SSL,SSL
 创建时间,创建时间
 暂无数据,"No data"
 "共 %{total} 条","Total %{total} records"
-正在注册,Registering
-切换Dns中,Switching DNS
-解析域名记录中,Resolving DNS records
-等待访问验证,Waiting for access verification
-切换CDN中,Switching CDN
-申请HTTPS中,Applying HTTPS
-正常,Ready
-处理中,Processing

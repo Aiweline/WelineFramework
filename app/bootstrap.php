@@ -53,6 +53,10 @@ try {
      * 初始化应用...
      */
     $result = \Weline\Framework\App::run();
+    // 输出前先发送通过 Response::setHeader() 收集的响应头（如 Website-Id 等），否则 FPM 下不会出现在响应中
+    if (!headers_sent()) {
+        \Weline\Framework\Http\HeaderCollector::getInstance()->emit(true);
+    }
     // 输出正常响应内容
     if (!empty($result)) {
         echo $result;

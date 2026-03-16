@@ -18,6 +18,13 @@
  * header.navigation.link_color => 链接颜色:color:#ffffff
  * header.navigation.link_hover_color => 链接悬停颜色:color:#ffd700
  * header.navigation.items => 导航项配置:textarea:Home=>\r\nAbout=>\r\nBlog=>\r\nFAQs=>|配置格式：名字=>url，一行一个。示例：Home=>#home\nAbout=>#about\n联系我们=>/contact\n外部链接=>https://example.com。注意：1) 每行一个导航项；2) 使用=>分隔名字和URL；3) URL为空时自动使用#作为链接；4) 支持锚点链接(#开头)、相对路径(/开头)和完整URL(http/https开头)
+ * group:header_nav_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * header.navigation.label_home_page => 首页菜单名:text:|留空使用页面标题
+ * header.navigation.label_about_page => 关于我们菜单名:text:
+ * header.navigation.label_blog_list => 博客菜单名:text:
+ * header.navigation.label_contact_page => 联系我们菜单名:text:
+ * header.navigation.label_terms_of_service => 条款菜单名:text:
+ * header.navigation.label_privacy_policy => 隐私政策菜单名:text:
  * header.download_button.text => 下载按钮文本:text:DOWNLOAD APP
  * header.download_button.display => 显示下载按钮:select:yes|yes,no
  * header.download_button.bg_color => 按钮背景颜色:color:#ff6b35
@@ -211,68 +218,56 @@ if (!function_exists('tpmst_makeTransparent')) {
 }
 $navBgHover = tpmst_makeTransparent($navBgColor, 0.7);
 
-// 获取导航项配置（支持textarea格式：名字=>url，一行一个）
-$defaultNavItems = "Home=>
-About=>
-Blog=>
-FAQs=>";
-$navItemsConfig = tpmst_getConfig($styleSettings, 'header.navigation.items', $defaultNavItems);
-
-// 如果配置值中包含 \n 转义符，转换为实际换行符
-if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
-    $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
-}
-
 // 生成 SEO 元信息
 $metaTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : '';
 $metaDescription = $page ? ($page->getData('meta_description') ?: '') : '';
 $metaKeywords = $page ? ($page->getData('meta_keywords') ?: '') : '';
 
+// 导航项：优先来自当前站点页面类型，菜单名优先用配置项（有配置则显示配置名，否则用页面标题）
 $navItems = [];
+if ($page) {
+    $headerPages = $page->getHeaderNavigationPages(10);
+    foreach ($headerPages as $navPage) {
+        $type = $navPage['type'] ?? '';
+        $labelKey = 'header.navigation.label_' . $type;
+        $configuredLabel = trim((string)(tpmst_getConfig($styleSettings, $labelKey, '') ?? ''));
+        $navItems[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '/',
+        ];
+    }
+}
 
-if (!empty($navItemsConfig)) {
-    // 尝试解析为JSON格式（向后兼容）
-    $jsonItems = json_decode($navItemsConfig, true);
-    if (json_last_error() === JSON_ERROR_NONE && is_array($jsonItems) && !empty($jsonItems)) {
-        // JSON格式
-        $navItems = $jsonItems;
-    } else {
-        // Textarea格式：名字=>url，一行一个
-        // 支持 \n 和 \r\n 换行符
-        $lines = preg_split('/\r?\n/', $navItemsConfig);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line)) {
-                continue;
-            }
-            
-            // 解析 "名字=>url" 格式
-            if (strpos($line, '=>') !== false) {
-                $parts = explode('=>', $line, 2);
-                $text = trim($parts[0]);
-                $href = trim($parts[1] ?? '');
-                
-                if (!empty($text)) {
-                    // 如果 URL 为空，使用 # 作为默认链接
-                    $navItems[] = [
-                        'text' => $text,
-                        'href' => !empty($href) ? $href : '#'
-                    ];
-                }
-            } else {
-                // 如果没有 =>，尝试作为纯文本，使用 # 作为链接
-                if (!empty($line)) {
-                    $navItems[] = [
-                        'text' => $line,
-                        'href' => '#'
-                    ];
+if (empty($navItems)) {
+    $defaultNavItems = "Home=>\nAbout=>\nBlog=>\nFAQs=>";
+    $navItemsConfig = tpmst_getConfig($styleSettings, 'header.navigation.items', $defaultNavItems);
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    if (!empty($navItemsConfig)) {
+        $jsonItems = json_decode($navItemsConfig, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($jsonItems) && !empty($jsonItems)) {
+            $navItems = $jsonItems;
+        } else {
+            $lines = preg_split('/\r?\n/', $navItemsConfig);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (empty($line)) continue;
+                if (strpos($line, '=>') !== false) {
+                    $parts = explode('=>', $line, 2);
+                    $text = trim($parts[0]);
+                    $href = trim($parts[1] ?? '');
+                    if (!empty($text)) {
+                        $navItems[] = ['text' => $text, 'href' => !empty($href) ? $href : '#'];
+                    }
+                } else {
+                    if (!empty($line)) $navItems[] = ['text' => $line, 'href' => '#'];
                 }
             }
         }
     }
 }
 
-// 如果没有配置导航项，使用默认导航
 if (empty($navItems)) {
     $navItems = [
         ['text' => 'Home', 'href' => '#home'],

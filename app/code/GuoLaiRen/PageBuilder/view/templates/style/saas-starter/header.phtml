@@ -72,7 +72,7 @@ $logoUrl = ss_getConfig($styleSettings, 'logo.url', '');
 $logoWidth = ss_getConfig($styleSettings, 'logo.width', '36');
 
 $navDisplay = ss_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = ss_getConfig($styleSettings, 'navigation.bg_color', 'rgba(11, 15, 25, 0.95)');
+$navBgColor = ss_getConfig($styleSettings, 'navigation.bg_color', ss_color($colors, 'nav_bg', 'rgba(11, 15, 25, 0.95)'));
 $navTextColor = ss_getConfig($styleSettings, 'navigation.text_color', '#f1f5f9');
 $navLinkHoverColor = ss_getConfig($styleSettings, 'navigation.link_hover_color', '#34d399');
 $navLinksRaw = ss_getConfig($styleSettings, 'navigation.links', "Features=>#features\nPricing=>#pricing\nTestimonials=>#testimonials\nFAQ=>#faq");

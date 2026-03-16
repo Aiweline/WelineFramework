@@ -17,7 +17,11 @@
                 "config": {
                     "content.badge": "Contact Us",
                     "content.title": "Get in Touch",
-                    "content.description": "Have questions or feedback? We'd love to hear from you!"
+                    "content.description": "Have questions or feedback? We'd love to hear from you! Our support team is available around the clock.",
+                    "contact.email": "support@ludoempire.com",
+                    "contact.phone": "+91 98765 43210",
+                    "contact.address": "Mumbai, India",
+                    "contact.hours": "24/7 Support Available"
                 }
             }
         ],

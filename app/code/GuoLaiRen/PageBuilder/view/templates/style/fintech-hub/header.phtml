@@ -77,7 +77,7 @@ $logoWidth = fh_getConfig($styleSettings, 'logo.width', '40');
 
 // 导航配置
 $navDisplay = fh_getConfig($styleSettings, 'navigation.display', 'yes');
-$navBgColor = fh_getConfig($styleSettings, 'navigation.bg_color', 'rgba(8, 11, 22, 0.95)');
+$navBgColor = fh_getConfig($styleSettings, 'navigation.bg_color', fh_color($colors, 'nav_bg', 'rgba(8, 11, 22, 0.95)'));
 $navTextColor = fh_getConfig($styleSettings, 'navigation.text_color', '#f8fafc');
 $navLinkHoverColor = fh_getConfig($styleSettings, 'navigation.link_hover_color', '#3b82f6');
 $navLinksRaw = fh_getConfig($styleSettings, 'navigation.links', "Features=>#features\nServices=>#services\nAbout=>#stats\nFAQ=>#faq");
