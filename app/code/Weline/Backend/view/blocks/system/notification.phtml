@@ -435,7 +435,7 @@ $unreadCount = $block->getUnreadCount();
 
     var WelineNotification = {
         markAllRead: function() {
-            window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/notification/markAllRead') ?>', { method: 'POST' })
+            window.Weline.Api.request('<?= $this->getBackendUrl('system/backend/notification/markAllRead') ?>', { method: 'POST' })
             .then(function(response) {
                 var data = response.data;
                 if (response.ok && data && data.success) {
