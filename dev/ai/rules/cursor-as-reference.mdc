@@ -6,10 +6,4 @@ alwaysApply: true
 
 # .cursor 仅做引用（硬性）
 
-- **规则、技能、计划的主存储位置**：`dev/ai/rules`、`dev/ai/skills`、`dev/ai/plans`。`.cursor/rules`、`.cursor/skills`、`.cursor/plans` 为目录联结，指向上述路径。
-- **新增或修改规则**：只在 `dev/ai/rules/` 下新增或编辑 `.mdc` 文件；禁止在 `.cursor/rules` 下创建新的实质内容文件。
-- **新增或修改技能**：只在 `dev/ai/skills/<技能名>/` 下新增或编辑（如 SKILL.md）；禁止在 `.cursor/skills` 下创建新的实质内容。
-- **新增或修改计划**：只在 `dev/ai/plans/` 或模块 `doc/开发/` 下操作；禁止在 `.cursor/plans` 下创建新的实质内容。
-- **.cursor 内允许的**：仅保留对 `dev/ai` 的引用（如 README、联结目标）；路径书写上可继续使用 `.cursor/plans` 等（因联结等价于 dev/ai）。
-
-**详细说明与触发场景**：`dev/ai/skills/cursor-as-reference/SKILL.md`
+规则/技能/计划主仓在 `dev/ai/rules`、`dev/ai/skills`、`dev/ai/plans`；禁止在 .cursor 下改实质内容。详见 `dev/ai/skills/cursor-as-reference/SKILL.md`。
