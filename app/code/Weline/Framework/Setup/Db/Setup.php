@@ -125,6 +125,20 @@ class Setup
     }
 
     /**
+     * 检查表中是否存在指定列
+     *
+     * @param string $table 表名（可带前缀或使用 getTable 规则）
+     * @param string $column 列名
+     * @return bool
+     */
+    public function columnExist(string $table, string $column): bool
+    {
+        $table = $this->getTable($table);
+        $def = $this->getConnector()->getQuery()->getColumnDefinition($table, $column);
+        return $def !== null && \is_array($def);
+    }
+
+    /**
      * @DESC         |获取表名
      *
      * 参数区：
