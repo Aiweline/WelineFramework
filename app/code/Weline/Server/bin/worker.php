@@ -172,6 +172,7 @@ try {
     $sessionCfg = \is_array($envConfig) ? ($envConfig['session'] ?? []) : [];
     $sessionHost = (string)($sessionCfg['server_host'] ?? $sessionCfg['host'] ?? '127.0.0.1');
     $sessionPort = (int)($sessionCfg['server_port'] ?? $sessionCfg['port'] ?? 19970);
+    WlsLogger::info_("[Session] 开始连接 Session 服务 {$sessionHost}:{$sessionPort}，最多重试 10 次，间隔 2 秒");
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
         'connect_timeout' => 1.0,
         'timeout' => 2.0,
@@ -179,21 +180,23 @@ try {
     ]);
     $sessionConnected = false;
     for ($attempt = 1; $attempt <= 10; $attempt++) {
+        WlsLogger::info_("[Session] 第 {$attempt}/10 次尝试连接 Session 服务...");
         if ($sessionClient->connect()) {
             $sessionConnected = true;
+            WlsLogger::info_("[Session] 第 {$attempt} 次尝试连接成功");
             break;
         }
-        WlsLogger::warning_("Session 服务连接失败，2 秒后重试 ({$attempt}/10)");
+        WlsLogger::warning_("[Session] 第 {$attempt}/10 次连接失败，2 秒后重试");
         if ($attempt < 10) {
             \Weline\Framework\Runtime\SchedulerSystem::sleep(2);
         }
     }
     if (!$sessionConnected) {
-        WlsLogger::error_("Session 服务连接失败，已重试 10 次，Worker 拒绝工作并退出");
+        WlsLogger::error_("[Session] Session 服务连接失败，已重试 10 次，Worker 拒绝工作并退出");
         w_log_error("[WLS Worker] Session 服务不可达 (host={$sessionHost}, port={$sessionPort})，已重试 10 次，退出");
         exit(1);
     }
-    WlsLogger::info_("Session 服务连接成功");
+    WlsLogger::info_("[Session] Session 服务连接成功，Worker 可开始接收请求");
     if (\defined('STDOUT') && \is_resource(STDOUT)) {
         \fwrite(STDOUT, "\033[32m    ✓ Session 服务连接成功\033[0m\n");
     }
