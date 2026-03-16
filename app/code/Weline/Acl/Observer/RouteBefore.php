@@ -203,6 +203,12 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $referer = '';
         }
 
+        // WLS 健康检查接口：不要求登录，便于监控与开发工具面板请求
+        if (strtolower($uri) === '_wls/health') {
+            w_auth_log('acl_whitelist', 'URI 为 WLS 健康检查，跳过权限校验', ['uri' => $uri]);
+            return;
+        }
+
         if (in_array(strtolower($uri), $white_lists)) {
             w_auth_log('acl_whitelist', 'URI 在白名单内，跳过权限校验', ['uri' => $uri]);
             return;
