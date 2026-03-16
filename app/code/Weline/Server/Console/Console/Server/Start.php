@@ -50,12 +50,18 @@ class Start implements CommandInterface
             $this->printer->note(__('运行模式: 前台运行'));
         }
         
-        // 同端口只能存在一个服务器：若该端口被 Weline Server 占用，先停止 WLS 再启动 CLI
+        // 同端口只能存在一个服务器：若该端口被 Weline Server 占用，先彻底停止 WLS 实例下所有进程再启动 CLI
         $mainStop = ObjectManager::getInstance(\Weline\Server\Console\Server\Stop::class);
         if ($mainStop->stopWelineServerOnPort($port)) {
             $this->printer->note(__('已停止占用端口 %{1} 的 Weline Server，以便启动 CLI 服务器', [$port]));
             $this->printer->note(__('等待端口释放...'));
-                SchedulerSystem::sleep(2);
+            $this->waitForPortReleased($host, $port, 12);
+        } else {
+            // 实例未找到时仍可能被 WLS 进程占用（如实例文件缺失），按端口强杀 WLS 进程
+            if ($mainStop->killWlsProcessOnPort($port)) {
+                $this->printer->note(__('等待端口释放...'));
+                $this->waitForPortReleased($host, $port, 12);
+            }
         }
         
         // 检查服务是否已经运行
@@ -65,28 +71,34 @@ class Start implements CommandInterface
                 // 强制启动模式：先停止现有服务器
                 $this->printer->note(__('检测到服务器已在运行中，强制启动模式将先停止现有服务器...'));
                 
-                if ($runningInfo['pid']) {
-                    $this->printer->note(__('正在停止现有服务器进程，进程ID：%{1}', [$runningInfo['pid']]));
-                    if ($this->stopExistingServer($runningInfo['pid'])) {
-                        $this->printer->success(__('现有服务器已成功停止'));
-                    } else {
-                        $this->printer->error(__('停止现有服务器失败，请手动停止后重试'));
-                        return;
-                    }
+                // 优先用 Processer 停止（与 WLS 一致：后台启动的 CLI 会登记为 weline-cli-server-{port}）
+                if ($this->tryStopCliServerByProcesser($port)) {
+                    $this->printer->success(__('现有服务器已成功停止'));
                 } else {
-                    // 通过端口停止
-                    $actualPid = $this->getProcessIdByPort($port);
-                    if ($actualPid) {
-                        $this->printer->note(__('通过端口检测到进程，正在停止，进程ID：%{1}', [$actualPid]));
-                        if ($this->stopExistingServer($actualPid)) {
-                            $this->printer->success(__('现有服务器已成功停止'));
+                    $stoppedPid = $runningInfo['pid'] ?: $this->getProcessIdByPort($port);
+                    if ($stoppedPid) {
+                        if (!Processer::isRunningByPid($stoppedPid)) {
+                            $this->printer->note(__('端口被占用，但检测到的占用进程已不存在，跳过停止。'));
                         } else {
-                            $this->printer->error(__('停止现有服务器失败，请手动停止后重试'));
-                            return;
+                            if (!$runningInfo['pid']) {
+                                $this->printer->note(__('通过端口检测到进程，正在停止，进程ID：%{1}', [$stoppedPid]));
+                            } else {
+                                $this->printer->note(__('正在停止现有服务器进程，进程ID：%{1}', [$stoppedPid]));
+                            }
+                            if (!$this->stopExistingServer($stoppedPid, $port, $host)) {
+                                if (!Processer::isRunningByPid($stoppedPid)) {
+                                    $this->printer->note(__('占用进程已退出，视为端口已释放，继续启动。'));
+                                } else {
+                                    $this->printer->error(__('停止现有服务器失败，请手动停止后重试'));
+                                    $this->printManualKillHint($stoppedPid);
+                                    return;
+                                }
+                            } else {
+                                $this->printer->success(__('现有服务器已成功停止'));
+                            }
                         }
                     } else {
                         $this->printer->warning(__('端口被占用但无法确定进程ID，尝试强制清理端口'));
-                        // 等待一下让端口释放
                         SchedulerSystem::sleep(3);
                     }
                 }
@@ -122,14 +134,9 @@ class Start implements CommandInterface
                         $this->printer->note(__('已自动更新配置信息。'));
                     }
                     
-                    // 显示服务器信息
+                    // 显示服务器信息（统一表，左右无边界）
                     echo "\n";
-                    $this->printTable('服务访问地址', [
-                        ['前端首页', "http://{$host}:{$port}/"],
-                        ['前端API', "http://{$host}:{$port}/api/rest"],
-                        ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
-                        ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
-                    ], true, 0, false); // false 表示不截断URL，完整显示地址
+                    $this->printTable(__('服务访问地址'), $this->buildServerAddressRows($host, $port), true, 0, false, true);
                     echo "\n";
                     
                     // 如果是后台模式，显示后台运行信息
@@ -141,12 +148,7 @@ class Start implements CommandInterface
                 } else {
                     $this->printer->warning(__('检测到端口被占用，但无法获取进程信息'));
                     echo "\n";
-                    $this->printTable('服务访问地址', [
-                        ['前端首页', "http://{$host}:{$port}/"],
-                        ['前端API', "http://{$host}:{$port}/api/rest"],
-                        ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
-                        ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
-                    ], true, 0, false); // false 表示不截断URL，完整显示地址
+                    $this->printTable(__('服务访问地址'), $this->buildServerAddressRows($host, $port), true, 0, false, true);
                     echo "\n";
                     $this->printer->note(__('如需强制重启，请使用 "php bin/w server:start -r" 命令'));
                     return;
@@ -154,30 +156,25 @@ class Start implements CommandInterface
             }
         }
         
+        // 启动前先确保端口已释放（再打印地址表并启动，避免“先展示再报占用”的错序）
+        if (!$this->ensurePortFreeBeforeStart($host, $port)) {
+            return;
+        }
+        
         # 咨询，WEB服务器会将部署模式设置为DEV
         $this->printer->warning(__('开发专用，请勿用于生产环境。'));
         $this->printer->note(__('启用PHP内置本地WebServer服务...'));
         echo "\n";
         
-        // 本地访问地址
-        $this->printTable('本地访问地址', [
-            ['前端首页', "http://{$host}:{$port}/"],
-            ['前端API', "http://{$host}:{$port}/api/rest"],
-            ['后端管理', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
-            ['后端API', "http://{$host}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
-        ], true, 0, false); // false 表示不截断URL，完整显示地址
-        
-        echo "\n";
-        
-        // 局域网访问地址
-        $localIp = $this->system->getLocalIp();
-        $this->printTable('局域网访问地址', [
-            ['前端首页', "http://{$localIp}:{$port}/"],
-            ['前端API', "http://{$localIp}:{$port}/api/rest"],
-            ['后端管理', "http://{$localIp}:{$port}/" . Env::getAreaRoutePrefix('backend') . "/admin/login"],
-            ['后端API', "http://{$localIp}:{$port}/" . Env::getAreaRoutePrefix('rest_backend') . "/rest"],
-        ], true, 0, false); // false 表示不截断URL，完整显示地址
-        
+        // 本地、局域网（及公网）统一一张表，左右无边界
+        $this->printTable(
+            __('服务访问地址'),
+            $this->buildServerAddressRows($host, $port),
+            true,
+            0,
+            false,
+            true
+        );
         echo "\n";
 
         # 检查部署模式，如果是生产环境给出强烈警告
@@ -200,9 +197,6 @@ class Start implements CommandInterface
             $this->printer->error(__('⚠️  您已选择在生产模式下使用PHP内置服务器，请自行承担风险！'));
         }
         
-        // 启动前确保端口已释放：可能被 Weline Server 占用但实例文件未找到，按端口强杀
-        $this->ensurePortFreeBeforeStart($host, $port);
-        
         // 启动服务器并记录进程ID
         $pid = Server::instance($host, $port, $backend);
         
@@ -215,14 +209,14 @@ class Start implements CommandInterface
             }
         }
         
-        // 如果后台模式下PID为null，尝试通过端口获取PID
+        // 如果后台模式下PID为null，尝试通过端口获取 PID（仅采用仍存活的进程，避免写入陈旧 PID）
         if ($backend && !$pid) {
             $connection = @fsockopen($host, $port, $errno, $errstr, 1);
             if ($connection !== false) {
                 fclose($connection);
-                // 尝试获取占用端口的进程ID
-                $pid = $this->getProcessIdByPort($port);
-                if ($pid) {
+                $foundPid = $this->getProcessIdByPort($port);
+                if ($foundPid && Processer::isRunningByPid($foundPid)) {
+                    $pid = $foundPid;
                     $this->printer->note(__('通过端口检测到服务器进程，进程ID：%{1}', [$pid]));
                 }
             }
@@ -241,7 +235,9 @@ class Start implements CommandInterface
         }
         
         if ($pid) {
-            $this->saveServerPid($host, $port, $pid);
+            if (Processer::isRunningByPid($pid)) {
+                $this->saveServerPid($host, $port, $pid);
+            }
             
             // 触发服务器启动事件
             $eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -269,6 +265,9 @@ class Start implements CommandInterface
         } else if ($backend) {
             // 后台模式下，如果PID为null，说明启动失败
             $this->printer->error(__('后台启动失败，请检查端口是否被占用'));
+        } else {
+            // 前台模式（Windows 为 exec 阻塞，返回时进程已结束；或绑定失败立即退出）
+            $this->printer->note(__('服务器进程已结束。若未能正常启动请检查端口是否被占用。'));
         }
     }
 
@@ -288,15 +287,15 @@ class Start implements CommandInterface
             ];
         }
         
-        // 检查端口是否被占用
+        // 检查端口是否被占用（仅以端口是否可连接为准；占用进程以“当前存活”为准，避免使用系统返回的陈旧 PID）
         $connection = @fsockopen($host, $port, $errno, $errstr, 1);
         
         if ($connection !== false) {
             fclose($connection);
-            
-            // 尝试获取占用端口的进程ID
             $pid = $this->getProcessIdByPort($port);
-            
+            if ($pid !== null && !Processer::isRunningByPid($pid)) {
+                $pid = null; // 系统返回的 PID 已失效（如 Windows netstat 滞后），不当作当前占用者
+            }
             return [
                 'running' => true,
                 'pid' => $pid
@@ -310,7 +309,9 @@ class Start implements CommandInterface
     }
 
     /**
-     * 通过端口获取进程ID
+     * 通过端口向系统查询当前占用该端口的进程 ID（netstat/Get-NetTCPConnection 等）。
+     * 注意：进程退出后系统可能短暂仍返回该 PID（尤其 Windows），故调用方需用 isRunningByPid 校验，
+     * 未存活则视为“无法确定占用者”，勿当作当前进程重复提示同一 PID。
      */
     private function getProcessIdByPort(int $port): ?int
     {
@@ -319,60 +320,221 @@ class Start implements CommandInterface
     }
 
     /**
-     * 启动前确保端口已释放（按端口强杀占用进程，避免 Weline Server 占端口但实例文件未找到时 CLI 无法绑定）
+     * 构建服务访问地址表数据（本地 + 局域网统一，左右无边界表格用）
+     *
+     * @return array<int, array{string, string}> [ [ "类型 · 名称", "URL" ], ... ]
      */
-    private function ensurePortFreeBeforeStart(string $host, int $port): void
+    private function buildServerAddressRows(string $host, int $port): array
+    {
+        $backendPrefix = Env::getAreaRoutePrefix('backend');
+        $restPrefix = Env::getAreaRoutePrefix('rest_backend');
+        $localLabel = __('本地');
+        $lanLabel = __('局域网');
+        $home = __('前端首页');
+        $api = __('前端API');
+        $admin = __('后端管理');
+        $rest = __('后端API');
+
+        $rows = [];
+        $rows[] = ["{$localLabel} · {$home}", "http://{$host}:{$port}/"];
+        $rows[] = ["{$localLabel} · {$api}", "http://{$host}:{$port}/api/rest"];
+        $rows[] = ["{$localLabel} · {$admin}", "http://{$host}:{$port}/{$backendPrefix}/admin/login"];
+        $rows[] = ["{$localLabel} · {$rest}", "http://{$host}:{$port}/{$restPrefix}/rest"];
+
+        $localIp = $this->system->getLocalIp();
+        if ($localIp !== '' && $localIp !== $host) {
+            $rows[] = ["{$lanLabel} · {$home}", "http://{$localIp}:{$port}/"];
+            $rows[] = ["{$lanLabel} · {$api}", "http://{$localIp}:{$port}/api/rest"];
+            $rows[] = ["{$lanLabel} · {$admin}", "http://{$localIp}:{$port}/{$backendPrefix}/admin/login"];
+            $rows[] = ["{$lanLabel} · {$rest}", "http://{$localIp}:{$port}/{$restPrefix}/rest"];
+        }
+        return $rows;
+    }
+
+    /**
+     * 轮询等待端口释放（WLS 停止后给系统时间释放端口）
+     *
+     * @param string $host    监听地址
+     * @param int    $port    端口
+     * @param int    $timeout 最大等待秒数
+     */
+    private function waitForPortReleased(string $host, int $port, int $timeout = 12): void
+    {
+        for ($i = 0; $i < $timeout; $i++) {
+            $conn = @fsockopen($host, $port, $errno, $errstr, 1);
+            if ($conn === false || !is_resource($conn)) {
+                return;
+            }
+            fclose($conn);
+            SchedulerSystem::sleep(1);
+        }
+    }
+
+    /**
+     * 启动前确保端口已释放（按端口强杀占用进程，避免 Weline Server 占端口但实例文件未找到时 CLI 无法绑定）
+     *
+     * @return bool 端口已释放或未被占用为 true，无法释放或放弃时为 false（调用方应中止启动）
+     */
+    private function ensurePortFreeBeforeStart(string $host, int $port): bool
     {
         $maxTries = 3;
+        $deadPidCount = 0; // 连续出现“端口可连但 PID 已不存在”时，视为进程检测异常，避免死循环
         for ($i = 0; $i < $maxTries; $i++) {
             $connection = @fsockopen($host, $port, $errno, $errstr, 1);
             if ($connection === false || !is_resource($connection)) {
-                return;
+                return true;
             }
             fclose($connection);
             $pid = $this->getProcessIdByPort($port);
             if ($pid) {
+                // 避免“僵尸 PID”：进程已退出但 netstat/驱动仍返回该 PID（Windows 常见）
+                if (!Processer::isRunningByPid($pid)) {
+                    $deadPidCount++;
+                    $this->printer->note(__('端口 %{1} 仍可连接，但无法确定占用进程（系统返回的 PID 已失效），可能正在释放中…', [$port]));
+                    SchedulerSystem::sleep(2);
+                    // 等待后再次检测：若端口已不可达则视为已释放，避免误判导致后续绑定失败
+                    $retryConn = @fsockopen($host, $port, $errno, $errstr, 1);
+                    if ($retryConn === false || !is_resource($retryConn)) {
+                        return true;
+                    }
+                    if (is_resource($retryConn)) {
+                        fclose($retryConn);
+                    }
+                    if ($deadPidCount >= 2) {
+                        $this->printer->warning(__('进程检测异常（端口与 PID 不一致），尝试继续启动；若绑定失败请先执行 server:kill-php 或 taskkill 后重试。'));
+                        return true;
+                    }
+                    continue;
+                }
+                $deadPidCount = 0;
                 $this->printer->note(__('端口 %{1} 仍被占用（PID：%{2}），正在停止以便启动 CLI 服务器...', [$port, $pid]));
-                $this->stopExistingServer($pid);
-                SchedulerSystem::sleep(2);
+                // 若为 Processer 登记的 CLI 进程，优先用 destroy（与 WLS 一致）
+                if (!$this->tryStopCliServerByProcesser($port)) {
+                    $stopped = $this->stopExistingServer($pid, $port, $host);
+                } else {
+                    $stopped = true;
+                }
+                if (!$stopped) {
+                    $this->printer->warning(__('进程 %{1} 未能成功结束。请手动执行后重试：', [$pid]));
+                    $this->printManualKillHint($pid);
+                    return false;
+                }
+                // 等待端口释放（Windows 上有时需更长时间）
+                SchedulerSystem::sleep($i < $maxTries - 1 ? 3 : 2);
             } else {
                 $this->printer->warning(__('端口 %{1} 被占用但无法获取进程ID，请手动停止后重试', [$port]));
-                return;
+                return false;
             }
         }
         $this->printer->warning(__('端口 %{1} 多次尝试后仍被占用，CLI 可能无法正常监听', [$port]));
+        return false;
+    }
+
+    /**
+     * 若占用端口的进程是 Processer 登记的 CLI 进程（命令行含 weline-cli-server），用 destroy 停止并清理索引（与 WLS 一致）。
+     *
+     * @return bool 端口已释放为 true，否则 false（未登记或 destroy 后端口仍占用）
+     */
+    private function tryStopCliServerByProcesser(int $port): bool
+    {
+        $pid = $this->getProcessIdByPort($port);
+        if ($pid === null || $pid <= 0) {
+            return false;
+        }
+        if (!Processer::isRunningByPid($pid)) {
+            return false; // 系统返回的 PID 已失效，不当作 CLI 进程处理
+        }
+        $pname = Processer::getNameByPid($pid);
+        if ($pname === '' || $pname === 'unknown' || \strpos($pname, 'weline-cli-server') === false) {
+            return false;
+        }
+        Processer::destroy($pname);
+        SchedulerSystem::sleep(1);
+        $conn = @fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
+        if ($conn !== false && is_resource($conn)) {
+            fclose($conn);
+            return false;
+        }
+        return true;
     }
 
     /**
      * 停止现有服务器
+     *
+     * 为可靠释放端口：先尝试杀进程树，再补杀单进程。传入 $port 时以「端口已释放」为准，
+     * 不依赖 isRunningByPid（Windows 上 tasklist 可能漏报或延迟），避免误判为已停止。
+     *
+     * @param int      $pid  要结束的进程 ID
+     * @param int|null $port 若提供，则以端口不再被该 PID 占用为准
+     * @param string   $host 与 port 同时提供时，occupantPid 为 null 时用 fsockopen(host,port) 二次确认
      */
-    private function stopExistingServer(int $pid): bool
+    private function stopExistingServer(int $pid, ?int $port = null, string $host = '127.0.0.1'): bool
     {
-        // CLI 服务器的命令行是 "php -S localhost:port"，不包含 weline- 前缀
-        // 需要直接使用驱动层杀死（绕过 weline- 前缀校验）
+        $driver = Processer::getDriver();
         $cmdLine = Processer::getProcessCommandLine($pid);
         $isPhpServer = $cmdLine !== '' && (
-            \stripos($cmdLine, 'php') !== false && 
+            \stripos($cmdLine, 'php') !== false &&
             \stripos($cmdLine, '-S') !== false
         );
-        
-        if ($isPhpServer) {
-            // PHP CLI 服务器：直接使用驱动层杀死
-            Processer::getDriver()->killProcess($pid);
-        } else {
-            // 其他进程：使用标准方法（带己方进程校验）
-            Processer::killByPid($pid, true);
+        $isWin = \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
+        $waitAfterKillUs = $isWin ? 1_200_000 : 500000;
+        $maxAttempts = $isWin ? 4 : 3;
+
+        for ($attempt = 0; $attempt < $maxAttempts; $attempt++) {
+            if ($isPhpServer) {
+                $driver->killProcessTree($pid);
+                SchedulerSystem::usleep($waitAfterKillUs);
+                if (Processer::isRunningByPid($pid)) {
+                    $driver->killProcess($pid);
+                    SchedulerSystem::usleep($isWin ? 800000 : 300000);
+                }
+            } else {
+                Processer::killByPid($pid, true);
+                SchedulerSystem::usleep($waitAfterKillUs);
+                if (Processer::isRunningByPid($pid)) {
+                    $driver->killProcessTree($pid);
+                    SchedulerSystem::usleep($isWin ? 800000 : 300000);
+                }
+            }
+            // 以端口为准：若传了 port，只有端口不再被该 PID 占用才算成功（Windows 上 isRunningByPid 可能不可靠）
+            if ($port !== null) {
+                SchedulerSystem::usleep($isWin ? 500000 : 200000);
+                $occupantPid = $this->getProcessIdByPort($port);
+                if ($occupantPid !== null && $occupantPid !== $pid) {
+                    return true;
+                }
+                // occupantPid === null 时可能是 netstat 漏报，用 fsockopen 再确认端口是否真的释放
+                if ($occupantPid === null) {
+                    $conn = @fsockopen($host, $port, $errno, $errstr, 1);
+                    if ($conn === false || !is_resource($conn)) {
+                        return true;
+                    }
+                    fclose($conn);
+                }
+            } else {
+                if (!Processer::isRunningByPid($pid)) {
+                    return true;
+                }
+            }
         }
-        
-        SchedulerSystem::usleep(500000);
-        
-        if (Processer::isRunningByPid($pid)) {
-            // 如果还在运行，尝试杀死进程树
-            Processer::getDriver()->killProcessTree($pid);
-            SchedulerSystem::usleep(300000);
+
+        if ($port !== null) {
+            return $this->getProcessIdByPort($port) !== $pid;
         }
-        
         return !Processer::isRunningByPid($pid);
+    }
+
+    /**
+     * 输出手动结束进程的提示（Windows: taskkill，其他: kill -9）
+     */
+    private function printManualKillHint(int $pid): void
+    {
+        if (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN') {
+            $this->printer->note('  taskkill /F /T /PID ' . $pid);
+            $this->printer->note(__('若仍无法结束，请以管理员身份运行 CMD 或 PowerShell 后执行上述命令。'));
+        } else {
+            $this->printer->note('  kill -9 ' . $pid);
+        }
     }
 
     /**
@@ -425,7 +587,7 @@ class Start implements CommandInterface
      */
     public function tip(): string
     {
-        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认后台运行，使用 -f 或 --foreground 参数前台运行，使用 -r 或 --force 参数强制重启。';
+        return '启用PHP内置本地WebServer服务。开发专用，请勿用于生产环境。默认后台运行。-r/--force：重启（先停后起）；-f/--foreground：前台运行。';
     }
 
     public function help(): array|string
@@ -448,8 +610,8 @@ class Start implements CommandInterface
     php bin/w server:start [选项]
 
 🔧 常用选项：
+    -r, --force             重启（先停止现有服务器再启动，即强制重启）
     -f, --foreground        前台运行（实时查看日志输出）
-    -r, --force             强制重启（停止现有服务器后重新启动）
     --host=<主机>           指定主机地址（默认：127.0.0.1；直连外网用 --host 0.0.0.0；-h 保留给帮助）
     -p, --port=<端口>       指定端口（默认：9981）
     --help                  显示此帮助信息
@@ -464,9 +626,10 @@ class Start implements CommandInterface
     php bin/w server:start -f             # 前台运行，实时查看日志
     php bin/w server:start --foreground   # 前台运行（完整参数名）
 
-3️⃣ 强制重启：
-    php bin/w server:start -r             # 强制重启服务器
-    php bin/w server:start --force        # 强制重启（完整参数名）
+3️⃣ 重启（先停后起）：
+    php bin/w server:start -r             # 重启（-r = 先停后起）
+    php bin/w server:start --force        # 同上（完整参数名）
+    php bin/w server:start -r -f          # 重启并前台运行（-f = 前台）
 
 4️⃣ 自定义配置：
     php bin/w server:start --host 0.0.0.0 -p 8080    # 监听所有网卡，端口8080
