@@ -1075,20 +1075,35 @@ class Component extends BackendController
             // 使用 LayoutService 获取 PageLayout
             $layout = $this->layoutService->getOrCreate($targetPageId);
             
+            // 目标页面的 styleCode（用于 header/footer 组件代码规范化比较）
+            $targetPage = clone $this->pageModel;
+            $targetPage->load($targetPageId);
+            $styleCode = $targetPage->getData(Page::schema_fields_STYLE) ?: '';
+            
             // 根据区域类型更新配置
             if ($region === 'header') {
-                // 验证组件代码
                 $currentComponent = $layout->getData(PageLayout::schema_fields_HEADER_COMPONENT);
-                if ($currentComponent !== $componentCode) {
-                    throw new \Exception('组件代码不匹配');
+                $currentComponent = $currentComponent === null ? '' : trim((string)$currentComponent);
+                if ($currentComponent !== '') {
+                    $storedCanonical = $this->normalizeHeaderFooterComponentCode($currentComponent, 'header', $styleCode);
+                    $requestCanonical = $this->normalizeHeaderFooterComponentCode($componentCode, 'header', $styleCode);
+                    if ($storedCanonical !== $requestCanonical) {
+                        throw new \Exception('组件代码不匹配');
+                    }
                 }
+                $layout->setData(PageLayout::schema_fields_HEADER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::schema_fields_HEADER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } elseif ($region === 'footer') {
-                // 验证组件代码
                 $currentComponent = $layout->getData(PageLayout::schema_fields_FOOTER_COMPONENT);
-                if ($currentComponent !== $componentCode) {
-                    throw new \Exception('组件代码不匹配');
+                $currentComponent = $currentComponent === null ? '' : trim((string)$currentComponent);
+                if ($currentComponent !== '') {
+                    $storedCanonical = $this->normalizeHeaderFooterComponentCode($currentComponent, 'footer', $styleCode);
+                    $requestCanonical = $this->normalizeHeaderFooterComponentCode($componentCode, 'footer', $styleCode);
+                    if ($storedCanonical !== $requestCanonical) {
+                        throw new \Exception('组件代码不匹配');
+                    }
                 }
+                $layout->setData(PageLayout::schema_fields_FOOTER_COMPONENT, $componentCode);
                 $layout->setData(PageLayout::schema_fields_FOOTER_CONFIG, json_encode($config, JSON_UNESCAPED_UNICODE));
             } else {
                 // Content 区域：更新指定索引的组件配置
@@ -1150,6 +1165,32 @@ class Component extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+    
+    /**
+     * 将 header/footer 组件代码规范化为与 LayoutAssembler 一致的 canonical 形式，用于比较
+     * 例如：sattaking-header -> header-nav，sattaking-footer -> footer-links
+     */
+    private function normalizeHeaderFooterComponentCode(string $code, string $region, string $styleCode): string
+    {
+        $code = trim($code);
+        if ($region === 'header') {
+            if ($code === $styleCode . '-header' || $code === 'header') {
+                return 'header-nav';
+            }
+            if (preg_match('/^' . preg_quote($styleCode, '/') . '_header_header$/i', $code)) {
+                return 'header-nav';
+            }
+        }
+        if ($region === 'footer') {
+            if ($code === $styleCode . '-footer' || $code === 'footer') {
+                return 'footer-links';
+            }
+            if (preg_match('/^' . preg_quote($styleCode, '/') . '_footer_(footer|links)$/i', $code)) {
+                return 'footer-links';
+            }
+        }
+        return $code;
     }
     
     /**

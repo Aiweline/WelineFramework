@@ -73,7 +73,17 @@ class Run implements CommandInterface
                 ObjectManager::getInstance(Printing::class)->error(__('指执行的任务不存在！'));
                 exit;
             }
-            $class = $task->getData(CronTask::schema_fields_CLASS);
+            $class = (string) ($task->getData(CronTask::schema_fields_CLASS) ?? '');
+            $executeName = (string) ($task->getData(CronTask::schema_fields_EXECUTE_NAME) ?? '');
+            if ($class !== '' && !class_exists($class)) {
+                $fallback = $executeName === 'domain_lifecycle_orchestration'
+                    ? 'Weline\\Websites\\Cron\\DomainLifecycleOrchestration'
+                    : '';
+                if ($fallback !== '' && class_exists($fallback)) {
+                    $class = $fallback;
+                    $task->setData(CronTask::schema_fields_CLASS, $class)->setData(CronTask::schema_fields_MODULE, 'Weline_Websites')->save();
+                }
+            }
             /**@var CronTaskInterface $instance */
             $instance = ObjectManager::getInstance($class);
             $result = $instance->execute();
