@@ -122,7 +122,8 @@ class ResponseRedirectBefore implements ObserverInterface
                 return;
             }
 
-            // 检查用户是否已登录
+            // 先确保 Session 已启动（从 Cookie + 存储加载），再判断登录态，避免「尚未 start」被误判为未登录
+            SessionFactory::getInstance()->createSession()->start(null);
             /** @var AuthenticatedSessionInterface $backendSession */
             $backendSession = SessionFactory::getInstance()->createBackendSession();
 
