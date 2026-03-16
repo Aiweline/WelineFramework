@@ -99,27 +99,27 @@ foreach ($lines as $line) {
 
 <?php if ($navDisplay === 'yes'): ?>
 <style>
-    .ss-header { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; }
-    .ss-header-container { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
-    .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
-    .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-    .ss-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
-    .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
-    .ss-nav { display: flex; align-items: center; gap: 32px; }
-    .ss-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
-    .ss-nav-link { color: <?= htmlspecialchars($navTextColor) ?>; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: color 0.3s ease; opacity: 0.8; }
-    .ss-nav-link:hover { color: <?= htmlspecialchars($navLinkHoverColor) ?>; opacity: 1; }
-    .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
-    .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); }
+    .ss-header-outer { width: 100vw; margin-left: calc(-50vw + 50%); position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: <?= htmlspecialchars($navBgColor) ?>; backdrop-filter: blur(10px); padding: 15px 0; transition: all 0.3s ease; box-sizing: border-box; }
+    .ss-header-inner { max-width: 1200px; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; }
+    .ss-header-inner .ss-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: <?= htmlspecialchars($navTextColor) ?>; }
+    .ss-header-inner .ss-logo-icon { width: <?= intval($logoWidth) ?>px; height: <?= intval($logoWidth) ?>px; background: <?= $buttonPrimaryBg ?>; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+    .ss-header-inner .ss-logo-icon svg { width: 20px; height: 20px; fill: #ffffff; }
+    .ss-header-inner .ss-logo-text { font-size: 1.25rem; font-weight: 700; }
+    .ss-header-inner .ss-nav { display: flex; align-items: center; gap: 32px; }
+    .ss-header-inner .ss-nav-links { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
+    .ss-header-inner .ss-nav-link { color: <?= htmlspecialchars($navTextColor) ?>; text-decoration: none; font-size: 0.95rem; font-weight: 500; transition: color 0.3s ease; opacity: 0.8; }
+    .ss-header-inner .ss-nav-link:hover { color: <?= htmlspecialchars($navLinkHoverColor) ?>; opacity: 1; }
+    .ss-header-inner .ss-header-cta { display: inline-flex; align-items: center; gap: 8px; padding: 10px 24px; background: <?= $buttonPrimaryBg ?>; color: #ffffff; text-decoration: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; transition: all 0.3s ease; }
+    .ss-header-inner .ss-header-cta:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4); }
     @media (max-width: 768px) {
-        .ss-nav-links { display: none; }
-        .ss-header-cta span { display: none; }
-        .ss-header-cta { padding: 10px; }
+        .ss-header-inner .ss-nav-links { display: none; }
+        .ss-header-inner .ss-header-cta span { display: none; }
+        .ss-header-inner .ss-header-cta { padding: 10px; }
     }
 </style>
 
-<header class="ss-header">
-    <div class="ss-header-container">
+<header class="ss-header-outer">
+    <div class="ss-header-inner">
         <?php if ($logoDisplay === 'yes'): ?>
         <a href="/" class="ss-logo">
             <span class="ss-logo-icon">
