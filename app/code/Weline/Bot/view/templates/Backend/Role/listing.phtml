@@ -1,0 +1,90 @@
+<?php
+/**
+ * 角色管理列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><lang>角色管理</lang></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>Bot</lang></a></li>
+                    <li class="breadcrumb-item active"><lang>角色管理</lang></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-end mb-3">
+                    <a href="@backend-url('*/backend/role/add')" class="btn btn-primary">
+                        <i class="mdi mdi-plus me-1"></i><lang>新增角色</lang>
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th><lang>代码</lang></th>
+                            <th><lang>名称</lang></th>
+                            <th><lang>状态</lang></th>
+                            <th><lang>默认</lang></th>
+                            <th><lang>更新时间</lang></th>
+                            <th><lang>操作</lang></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <foreach name="roles" item="role" key="k">
+                            <tr>
+                                <td>{{role.role_id}}</td>
+                                <td>{{role.code}}</td>
+                                <td>{{role.name}}</td>
+                                <td>
+                                    <if condition="role.status == 'enabled'">
+                                        <span class="badge bg-success"><lang>启用</lang></span>
+                                    <else/>
+                                        <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                    </if>
+                                </td>
+                                <td>
+                                    <if condition="role.is_default == 1">
+                                        <span class="badge bg-info"><lang>是</lang></span>
+                                    <else/>
+                                        <span class="badge bg-light text-dark"><lang>否</lang></span>
+                                    </if>
+                                </td>
+                                <td>{{role.updated_at}}</td>
+                                <td>
+                                    <a href="@backend-url('*/backend/role/edit?id={{role.role_id}}')" class="btn btn-sm btn-outline-primary">
+                                        <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                                    </a>
+                                </td>
+                            </tr>
+                        </foreach>
+                        <empty name="roles">
+                            <tr>
+                                <td colspan="7" class="text-center py-4">
+                                    <span class="text-muted"><lang>暂无角色数据</lang></span>
+                                </td>
+                            </tr>
+                        </empty>
+                        </tbody>
+                    </table>
+                </div>
+                <var>pagination</var>
+            </div>
+        </div>
+    </div>
+</div>

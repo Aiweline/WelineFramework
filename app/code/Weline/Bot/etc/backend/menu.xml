@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
+    <!-- AI 智能体主菜单 -->
+    <menu source="Weline_Bot::bot"
+          name="bot"
+          title="AI 智能体"
+          icon="mdi mdi-robot"
+          order="50">
+
+        <!-- 角色管理 -->
+        <menu source="Weline_Bot::role"
+              name="role"
+              title="角色管理"
+              action="*/backend/role/listing"
+              icon="mdi mdi-account-cog"
+              order="10"/>
+
+        <!-- 技能管理 -->
+        <menu source="Weline_Bot::skill"
+              name="skill"
+              title="技能管理"
+              action="*/backend/skill/listing"
+              icon="mdi mdi-puzzle"
+              order="20"/>
+
+        <!-- 调度任务 -->
+        <menu source="Weline_Bot::schedule"
+              name="schedule"
+              title="调度任务"
+              action="*/backend/schedule/listing"
+              icon="mdi mdi-clock-outline"
+              order="30"/>
+
+        <!-- 会话管理 -->
+        <menu source="Weline_Bot::session"
+              name="session"
+              title="会话管理"
+              action="*/backend/session/listing"
+              icon="mdi mdi-message-text"
+              order="40"/>
+
+        <!-- 记忆管理 -->
+        <menu source="Weline_Bot::memory"
+              name="memory"
+              title="记忆管理"
+              action="*/backend/memory/listing"
+              icon="mdi mdi-brain"
+              order="50"/>
+
+        <!-- 聊天控制台 -->
+        <menu source="Weline_Bot::console"
+              name="console"
+              title="聊天控制台"
+              action="*/backend/chat/index"
+              icon="mdi mdi-chat"
+              order="60"/>
+
+    </menu>
+</menus>
