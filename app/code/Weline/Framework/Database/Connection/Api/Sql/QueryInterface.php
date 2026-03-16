@@ -432,6 +432,16 @@ interface QueryInterface
     public function fetchArray(): array;
 
     /**
+     * 流式迭代结果集，按行或按批 yield，降低大结果集内存占用。
+     * 部分适配器（如 Pgsql）提供真正流式实现；默认实现为 yield from fetchArray()。
+     *
+     * @param string $model_class 模型类名，传空则 yield 关联数组
+     * @param int $batchSize 每批行数，1 表示逐行
+     * @return \Generator<int, array|object, mixed, void>
+     */
+    public function fetchIterator(string $model_class = '', int $batchSize = 1): \Generator;
+
+    /**
      * @DESC          # 清理特定条件
      *
      * @AUTH    秋枫雁飞

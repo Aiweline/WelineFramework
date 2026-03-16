@@ -1,0 +1,43 @@
+<?php
+/**
+ * 后台 Topbar Logo - 由 Backend 模块配置
+ * Hook：Weline_Theme::backend::partials::topbar::logo
+ * @hook-priority 100
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Backend\Model\Config as BackendConfig;
+
+/** @var \Weline\Framework\View\Template $this */
+$backendConfig = ObjectManager::getInstance(BackendConfig::class);
+$logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend') ?: '';
+$logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
+$logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend') ?: '';
+
+if ($logoDark === '') {
+    $logoDark = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png') ?: '';
+}
+if ($logoLight === '') {
+    $logoLight = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png') ?: '';
+}
+if ($logoSm === '') {
+    $logoSm = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-sm.png') ?: '';
+}
+
+$homeUrl = $this->getBackendUrl('admin');
+?>
+<a href="<?= htmlspecialchars($homeUrl) ?>" class="logo logo-dark">
+    <span class="logo-sm">
+        <img src="<?= htmlspecialchars($logoSm) ?>" alt="logo-sm-dark" height="50">
+    </span>
+    <span class="logo-lg">
+        <img src="<?= htmlspecialchars($logoDark) ?>" alt="logo-dark" height="70">
+    </span>
+</a>
+<a href="<?= htmlspecialchars($homeUrl) ?>" class="logo logo-light">
+    <span class="logo-sm">
+        <img src="<?= htmlspecialchars($logoSm) ?>" alt="logo-sm-light" height="50">
+    </span>
+    <span class="logo-lg">
+        <img src="<?= htmlspecialchars($logoLight) ?>" alt="logo-light" height="70">
+    </span>
+</a>

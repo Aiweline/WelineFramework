@@ -30,6 +30,15 @@
                   sort="10"/>
     </event>
 
+    <!-- 日志运行模式：WLS 进程内将 runtime 设为 wls，LoggerFactory 使用 WlsLoggerAdapter -->
+    <event name="Weline_Framework_Log::resolve_runtime">
+        <observer name="Weline_Server::logger_resolve_runtime"
+                  instance="Weline\Server\Log\Observer\LoggerResolveRuntimeObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+
     <!-- WLS 模式下接管缓存驱动：File => WlsMemoryCache -->
     <event name="Weline_Framework_Cache::driver_create_before">
         <observer name="Weline_Server::cache_driver_interceptor"

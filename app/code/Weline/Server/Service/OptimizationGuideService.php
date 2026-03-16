@@ -709,7 +709,11 @@ INI,
                 if ($data) {
                     $name = \pathinfo($file, PATHINFO_FILENAME);
                     $instances[$name] = $data;
-                    $instances[$name]['running'] = $this->isPortOpen($data['host'] ?? '127.0.0.1', $data['port'] ?? 9981);
+                    $host = $data['host'] ?? '127.0.0.1';
+                    $port = (int)($data['port'] ?? 9981);
+                    // 0.0.0.0 / :: 为绑定地址，无法作为连接目标，用 127.0.0.1 检测本机端口
+                    $checkHost = ($host === '0.0.0.0' || $host === '::') ? '127.0.0.1' : $host;
+                    $instances[$name]['running'] = $this->isPortOpen($checkHost, $port);
                 }
             }
         }

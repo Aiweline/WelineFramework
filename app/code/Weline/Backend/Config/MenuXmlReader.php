@@ -11,12 +11,15 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Config;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Config\Reader\XmlReader;
 use Weline\Framework\System\File\Scanner;
 use Weline\Framework\Xml\Parser;
 
 class MenuXmlReader extends XmlReader
 {
+    private const RELATIVE_PATH = 'etc' . DIRECTORY_SEPARATOR . 'backend' . DIRECTORY_SEPARATOR . 'menu.xml';
+
     public function __construct(
         Scanner $scanner,
         Parser  $parser,
@@ -26,49 +29,47 @@ class MenuXmlReader extends XmlReader
         parent::__construct($scanner, $parser, $path);
     }
 
-    public function read(): array
+    /**
+     * 获取 menu.xml 文件列表：仅激活模块，用 base_path + etc/backend/menu.xml 直接定位，不扫描目录。
+     *
+     * @param \Closure|null $callback 保留签名兼容，此处未使用
+     * @return array<string, string> 模块名 => 文件绝对路径
+     */
+    public function getFileList(null|\Closure $callback = null): array
     {
-        $configs = parent::read();
-        $module_menus = [];
-        
-        foreach ($configs as $module_and_file => $config) {
-            if (!isset($config['menus']) || !is_array($config['menus'])) {
-                w_log_warning(__('跳过格式不正确的菜单配置文件：%{1}', [$module_and_file]));
+        $result = [];
+        $modules = Env::getInstance()->getActiveModules();
+        $order = ['app' => 0, 'framework' => 1, 'system' => 2, 'composer' => 3];
+        uasort($modules, static fn($a, $b) => ($order[$a['position'] ?? 'composer'] ?? 4) <=> ($order[$b['position'] ?? 'composer'] ?? 4));
+        foreach ($modules as $module) {
+            $name = $module['name'] ?? '';
+            $basePath = rtrim($module['base_path'] ?? '', '/\\');
+            if ($name === '' || $basePath === '') {
                 continue;
             }
-            
-            $m_a_f_arr = explode('::', $module_and_file);
-            $module = array_shift($m_a_f_arr);
-            $module_menu_file = array_pop($m_a_f_arr);
-            $module_menus[$module]['file'] = $module_menu_file;
-            $module_menus[$module]['data'] = [];
-            
-            if (
-                !isset($config['menus']['_attribute']['noNamespaceSchemaLocation']) && (
-                    'urn:weline:module:Weline_Backend::etc/xsd/menu.xsd' !== ($config['menus']['_attribute']['noNamespaceSchemaLocation'] ?? '')
-                )
-            ) {
-                $this->checkElementAttribute(
-                    $config['menus'],
-                    'noNamespaceSchemaLocation',
-                    __('菜单元素menus必须设置：noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"，文件：%{1}', $module_and_file)
-                );
-            }
-            
-            // Parser 将子节点放在 _value 下，需从 _value 中取 menu
-            $menusContent = $config['menus']['_value'] ?? $config['menus'];
-            $menusContent = is_array($menusContent) ? $menusContent : [];
-            foreach ($menusContent as $key => $menuGroup) {
-                if ($key === '_attribute' || $key === '_value') {
-                    continue;
-                }
-                if ($key === 'menu') {
-                    $menuItems = $this->parseMenuElement($menuGroup, '', $module_and_file);
-                    $module_menus[$module]['data'] = array_merge($module_menus[$module]['data'], $menuItems);
-                }
+            $filePath = $basePath . DIRECTORY_SEPARATOR . self::RELATIVE_PATH;
+            if (is_file($filePath)) {
+                $result[$name] = $filePath;
             }
         }
-        
+        return $callback ? $callback($result) : $result;
+    }
+
+    /**
+     * 读取菜单配置：仅激活模块，base_path 直接定位，逐文件解析合并，降低内存占用。
+     */
+    public function read(): array
+    {
+        $module_menus = [];
+        $fileList = $this->getFileList();
+        foreach ($fileList as $module => $filePath) {
+            $config = $this->parser->load($filePath)->xmlToArray();
+            $module_and_file = $module . '::' . $filePath;
+            $one = $this->processOneMenuConfig($config, $filePath, $module_and_file);
+            if ($one !== null) {
+                $module_menus[$module] = $one;
+            }
+        }
         foreach ($module_menus as &$module_menu) {
             $data = $module_menu['data'];
             if ($data) {
@@ -77,8 +78,40 @@ class MenuXmlReader extends XmlReader
                 $module_menu['data'] = $data;
             }
         }
-        
         return $module_menus;
+    }
+
+    /**
+     * 处理单个 menu.xml 解析结果，返回 ['file' => ..., 'data' => [...]] 或 null 表示跳过。
+     */
+    private function processOneMenuConfig(array $config, string $filePath, string $module_and_file): ?array
+    {
+        if (!isset($config['menus']) || !is_array($config['menus'])) {
+            w_log_warning(__('跳过格式不正确的菜单配置文件：%{1}', [$module_and_file]));
+            return null;
+        }
+        if (
+            !isset($config['menus']['_attribute']['noNamespaceSchemaLocation'])
+            && 'urn:weline:module:Weline_Backend::etc/xsd/menu.xsd' !== ($config['menus']['_attribute']['noNamespaceSchemaLocation'] ?? '')
+        ) {
+            $this->checkElementAttribute(
+                $config['menus'],
+                'noNamespaceSchemaLocation',
+                __('菜单元素menus必须设置：noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"，文件：%{1}', $module_and_file)
+            );
+        }
+        $menusContent = $config['menus']['_value'] ?? $config['menus'];
+        $menusContent = is_array($menusContent) ? $menusContent : [];
+        $data = [];
+        foreach ($menusContent as $key => $menuGroup) {
+            if ($key === '_attribute' || $key === '_value') {
+                continue;
+            }
+            if ($key === 'menu') {
+                $data = array_merge($data, $this->parseMenuElement($menuGroup, '', $module_and_file));
+            }
+        }
+        return ['file' => $filePath, 'data' => $data];
     }
     
     /**
