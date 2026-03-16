@@ -280,8 +280,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                             $rawSession->set('backend_acl_role_id', $roleId);
                             $rawSession->set('backend_acl_is_enabled', $sessionAclContext['is_enabled']);
                         } else {
+                            // getAclContext 返回 null = 用户不存在或被删除（如线上 backend_user 无该 id），与“未分配角色”区分
                             $roleId = 0;
-                            $sessionAclContext = ['user_id' => (int) $userId, 'role_id' => 0, 'is_enabled' => 1];
+                            $sessionAclContext = ['user_id' => (int) $userId, 'role_id' => 0, 'is_enabled' => 1, '_user_not_found' => true];
                         }
                     }
                 } else {
@@ -350,20 +351,22 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                 return;
             }
             
-            // 如果没有角色，返回无权限
+            // 如果没有角色，或用户不存在（getAclContext 曾返回 null）
             if ($roleId <= 0) {
+                $userNotFound = (bool) ($sessionAclContext['_user_not_found'] ?? false);
+                $reason = $userNotFound ? 'user_not_found' : 'no_role';
                 // #region agent log
-                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_role','message'=>'dispatch no_role','data'=>['uri'=>$uri,'userId'=>$sessionAclContext['user_id']??null,'roleId'=>$roleId,'reason'=>'no_role'],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
+                @file_put_contents($__logFile, \json_encode(['sessionId'=>'b1cda8','location'=>'RouteBefore.php:no_role','message'=>'dispatch no_role','data'=>['uri'=>$uri,'userId'=>$sessionAclContext['user_id']??null,'roleId'=>$roleId,'reason'=>$reason],'timestamp'=>round(microtime(true)*1000),'hypothesisId'=>'B,C']) . "\n", \FILE_APPEND | \LOCK_EX);
                 // #endregion
                 if ($request->isApiBackend()) {
-                    $this->returnApiError(403, __('用户没有分配角色'), $request);
+                    $this->returnApiError(403, $userNotFound ? __('用户不存在或已被删除') : __('用户没有分配角色'), $request);
                     return;
                 } else {
                     $this->getBackendSession()->logout();
                     $this->persistBackendSessionAfterLogout();
                     /**@var EventsManager $eventsManager */
                     $eventsManager = ObjectManager::getInstance(EventsManager::class);
-                    $noAccessData = ['data' => ['reason' => 'no_role']];
+                    $noAccessData = ['data' => ['reason' => $reason]];
                     $eventsManager->dispatch('Weline_Acl::no_access_redirect_before', $noAccessData);
                     $request->getResponse()->noRouter(DEV ? 403 : 404);
                     return;
