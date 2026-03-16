@@ -1,104 +1,560 @@
 <?php
 /**
- * 主题管理列表页面（简化版）
- * 
+ * 主题管理列表页面（前后端分 Tab，各自选择激活）
+ *
  * @var \Weline\Framework\View\Template $this
  * @var array $themes
+ * @var int|null $active_frontend_id
+ * @var int|null $active_backend_id
  */
-
 $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
+$active_frontend_id = (int)($active_frontend_id ?? 0) ?: null;
+$active_backend_id = (int)($active_backend_id ?? 0) ?: null;
+$template = $this;
 ?>
 <!-- 页面标题 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('主题管理') ?></h4>
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('主题管理') ?></li>
-                                </ol>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('主题管理') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript:void(0);"><?= __('系统') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('主题管理') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 消息提示 -->
+<div class="row">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="weline-theme-manage">
+    <?php if (empty($themes)): ?>
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="empty-state">
+                            <i class="mdi mdi-palette-outline"></i>
+                            <h5><?= __('暂无主题') ?></h5>
+                            <p><?= __('系统中还没有安装任何主题') ?></p>
+                            <div class="mt-3">
+                                <p class="small text-muted">
+                                    <?= __('请使用命令行安装主题：') ?>
+                                    <code>php bin/w theme:install</code>
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
-
-                <!-- 消息提示 -->
-                <div class="row">
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-
-                <!-- 主题列表 -->
-                <div class="row">
-                    <?php if (empty($themes)): ?>
-                        <div class="col-12">
-                            <div class="card">
-                                <div class="card-body">
-                                    <div class="empty-state">
-                                        <i class="mdi mdi-palette-outline"></i>
-                                        <h5><?= __('暂无主题') ?></h5>
-                                        <p><?= __('系统中还没有安装任何主题') ?></p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($themes as $theme): ?>
-                            <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
-                                <div class="theme-card <?= ($theme['is_active'] ?? 0) ? 'active' : '' ?>">
-                                    <div class="theme-preview">
-                                        <i class="mdi mdi-palette theme-icon"></i>
-                                        <?php if ($theme['is_active'] ?? 0): ?>
-                                            <span class="active-badge">
-                                                <i class="mdi mdi-check-circle"></i> <?= __('已激活') ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <div class="theme-info">
-                                        <h5 class="theme-name"><?= htmlspecialchars($theme['name'] ?? '') ?></h5>
-                                        <div class="theme-meta">
-                                            <i class="mdi mdi-folder-outline"></i>
-                                            <?= htmlspecialchars($theme['module_name'] ?? '') ?>
-                                        </div>
-                                        <?php if (!empty($theme['parent_theme_name'])): ?>
-                                            <div class="theme-meta">
-                                                <i class="mdi mdi-arrow-up-bold-circle-outline"></i>
-                                                <?= __('继承自') ?>: <?= htmlspecialchars($theme['parent_theme_name']) ?>
-                                            </div>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <div class="theme-actions">
-                                        <!-- 激活按钮 -->
-                                        <button type="button" 
-                                                class="btn btn-sm <?= ($theme['is_active'] ?? 0) ? 'btn-success' : 'btn-outline-success' ?> activate-btn"
-                                                data-theme-id="<?= $theme['id'] ?>"
-                                                data-theme-name="<?= htmlspecialchars($theme['name'] ?? '') ?>"
-                                                <?= ($theme['is_active'] ?? 0) ? 'disabled' : '' ?>>
-                                            <i class="mdi mdi-check-circle"></i>
-                                            <?= ($theme['is_active'] ?? 0) ? __('已激活') : __('激活') ?>
-                                        </button>
-                                        
-                                        <!-- 预览按钮 -->
-                                        <a href="<?= $url->getBackendUrl('theme/backend/index/preview', ['theme_id' => $theme['id'], 'area' => 'frontend']) ?>" 
-                                           class="btn btn-sm btn-outline-primary"
-                                           target="_blank"
-                                           title="<?= __('预览主题') ?>">
-                                            <i class="mdi mdi-eye"></i>
-                                            <?= __('预览') ?>
-                                        </a>
-                                        
-                                        <!-- 可视化编辑按钮 -->
-                                        <a href="<?= $url->getBackendUrl('theme/backend/theme-editor', ['theme_id' => $theme['id']]) ?>" 
-                                           class="btn btn-sm btn-outline-info"
-                                           title="<?= __('可视化编辑') ?>">
-                                            <i class="mdi mdi-palette-swatch"></i>
-                                            <?= __('编辑') ?>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
+            </div>
+        </div>
+    <?php else: ?>
+        <!-- 前后端 Tab -->
+        <ul class="nav nav-tabs weline-theme-manage__tabs mb-3" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" data-bs-toggle="tab" href="#weline-theme-tab-frontend" role="tab">
+                    <i class="mdi mdi-store-front"></i> <?= __('前台主题') ?>
+                    <?php if ($active_frontend_id): ?>
+                        <span class="badge bg-success ms-1"><?= __('已选') ?></span>
                     <?php endif; ?>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-bs-toggle="tab" href="#weline-theme-tab-backend" role="tab">
+                    <i class="mdi mdi-cog"></i> <?= __('后台主题') ?>
+                    <?php if ($active_backend_id): ?>
+                        <span class="badge bg-success ms-1"><?= __('已选') ?></span>
+                    <?php endif; ?>
+                </a>
+            </li>
+        </ul>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small"><?= __('共 %{1} 个主题', [count($themes)]) ?></span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="batchGeneratePreviews">
+                <i class="mdi mdi-camera-plus"></i> <?= __('批量生成预览图') ?>
+            </button>
+        </div>
+
+        <div class="tab-content">
+            <?php
+            $renderThemeCards = function ($area, $activeId) use ($themes, $url, $template) {
+                foreach ($themes as $theme):
+                    $themeId = (int)($theme['id'] ?? 0);
+                    $themeName = $theme['name'] ?? '';
+                    $moduleName = $theme['module_name'] ?? '';
+                    $isActive = ($activeId && $themeId === $activeId);
+                    $previewImage = $theme['preview_image'] ?? '';
+                    $previewImageSrc = $previewImage ? $template->getBaseUrl() . ltrim($previewImage, '/') : '';
+            ?>
+                <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
+                    <div class="theme-card <?= $isActive ? 'active' : '' ?>">
+                        <div class="theme-preview">
+                            <?php if ($previewImageSrc): ?>
+                                <img src="<?= $previewImageSrc ?>" alt="<?= __('主题预览') ?>" class="theme-preview-image" onerror="this.src=''">
+                            <?php else: ?>
+                                <div class="theme-preview-placeholder">
+                                    <i class="mdi mdi-image-outline theme-icon-placeholder"></i>
+                                    <span class="text-muted small"><?= __('暂无预览图') ?></span>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($isActive): ?>
+                                <span class="active-badge"><i class="mdi mdi-check-circle"></i> <?= __('已激活') ?></span>
+                            <?php endif; ?>
+                            <?php if (!$previewImageSrc): ?>
+                                <button type="button" class="btn btn-sm btn-primary generate-preview-btn" data-theme-id="<?= $themeId ?>" data-theme-name="<?= htmlspecialchars($themeName) ?>" title="<?= __('生成预览图') ?>">
+                                    <i class="mdi mdi-camera"></i>
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="theme-info">
+                            <h5 class="theme-name"><?= htmlspecialchars($themeName) ?></h5>
+                            <div class="theme-meta"><i class="mdi mdi-folder-outline"></i> <?= htmlspecialchars($moduleName) ?></div>
+                            <?php if (!empty($theme['parent_theme_name'])): ?>
+                                <div class="theme-meta"><i class="mdi mdi-arrow-up-bold-circle-outline"></i> <?= __('继承自') ?>: <?= htmlspecialchars($theme['parent_theme_name']) ?></div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="theme-actions">
+                            <button type="button" class="btn btn-sm <?= $isActive ? 'btn-success' : 'btn-outline-success' ?> activate-btn" data-theme-id="<?= $themeId ?>" data-theme-name="<?= htmlspecialchars($themeName) ?>" data-area="<?= $area ?>" <?= $isActive ? 'disabled' : '' ?>>
+                                <i class="mdi mdi-check-circle"></i> <?= $isActive ? __('已激活') : __('激活') ?>
+                            </button>
+                            <a href="<?= $url->getBackendUrl('theme/backend/index/preview', ['theme_id' => $themeId, 'area' => $area]) ?>" class="btn btn-sm btn-outline-primary" target="_blank" title="<?= __('预览主题') ?>">
+                                <i class="mdi mdi-eye"></i> <?= __('预览') ?>
+                            </a>
+                            <a href="<?= $url->getBackendUrl('theme/backend/theme-editor', ['theme_id' => $themeId]) ?>" class="btn btn-sm btn-outline-info" title="<?= __('可视化编辑') ?>">
+                                <i class="mdi mdi-palette-swatch"></i> <?= __('编辑') ?>
+                            </a>
+                        </div>
+                    </div>
                 </div>
+            <?php
+                endforeach;
+            };
+            ?>
+            <div class="tab-pane fade show active" id="weline-theme-tab-frontend" role="tabpanel">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <p class="text-muted small mb-0"><?= __('选择用于网站前台的主题，访客将看到该主题的样式。') ?></p>
+                    </div>
+                    <?php $renderThemeCards('frontend', $active_frontend_id); ?>
+                </div>
+            </div>
+            <div class="tab-pane fade" id="weline-theme-tab-backend" role="tabpanel">
+                <div class="row">
+                    <div class="col-12 mb-2">
+                        <p class="text-muted small mb-0"><?= __('选择用于管理后台的主题，仅影响后台界面样式。') ?></p>
+                    </div>
+                    <?php $renderThemeCards('backend', $active_backend_id); ?>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+</div>
+
+<!-- 批量生成预览图弹窗 -->
+<div class="modal fade" id="batchGenerateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('批量生成预览图') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="batchProgress">
+                    <div class="progress">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-3 small text-muted" id="batchStatus">
+                        <?= __('准备生成...') ?>
+                    </div>
+                    <div class="mt-2 small text-muted" id="batchCount"></div>
+                </div>
+                <div id="batchResult" class="mt-3" style="display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 单个主题生成预览图弹窗 -->
+<div class="modal fade" id="singleGenerateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="singleGenerateTitle"><?= __('生成预览图') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="text-center py-3">
+                    <div class="spinner-border text-primary" role="status" style="display: none;" id="singleSpinner">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <i class="mdi mdi-camera-text" style="font-size: 64px; color: #ccc;"></i>
+                </div>
+                <div class="text-center small text-muted" id="singleStatus">
+                    <?= __('正在生成预览图，请稍候...') ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+
+    // 配置
+    const BASE_URL = '<?= $this->getBaseUrl() ?>';
+    const CSRF_TOKEN = '<?= $this->getFormKeyValue() ?>';
+
+    // 全局变量
+    let batchTotal = 0;
+    let batchProcessed = 0;
+
+    // 批量生成按钮点击事件
+    document.getElementById('batchGeneratePreviews')?.addEventListener('click', function() {
+        const modal = new bootstrap.Modal(document.getElementById('batchGenerateModal'));
+        modal.show();
+        
+        // 准备批量生成
+        batchTotal = <?= count($themes) ?>;
+        batchProcessed = 0;
+        
+        document.getElementById('batchStatus').innerText = '正在准备生成 ' + batchTotal + ' 个主题的预览图...';
+        document.getElementById('batchCount').innerText = '0 / ' + batchTotal;
+        document.getElementById('batchResult').style.display = 'none';
+        
+        // 发送批量生成请求
+        fetchBatchPreviews();
+    });
+
+    // 批量生成预览图
+    async function fetchBatchPreviews() {
+        try {
+            const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'form_key': CSRF_TOKEN
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.status === 'success' || result.status === 'warning') {
+                document.getElementById('batchStatus').innerHTML = 
+                    '<span class="text-success"><i class="mdi mdi-check-circle"></i> 生成完成！</span>';
+                document.getElementById('batchCount').innerHTML = 
+                    '✓ ' + result.data.success + ' 个成功，' + (result.data.failed || 0) + ' 个失败';
+                
+                // 显示详细结果
+                if (result.data.messages && result.data.messages.length > 0) {
+                    let html = '<div class="alert alert-warning"><h6>失败详情：</h6><ul class="mb-0">';
+                    result.data.messages.forEach(msg => {
+                        html += '<li>' + escapeHtml(msg) + '</li>';
+                    });
+                    html += '</ul></div>';
+                    document.getElementById('batchResult').innerHTML = html;
+                    document.getElementById('batchResult').style.display = 'block';
+                }
+                
+                // 3秒后自动刷新页面
+                setTimeout(() => {
+                    modal.hide();
+                    location.reload();
+                }, 3000);
+            } else {
+                document.getElementById('batchStatus').innerHTML = 
+                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 生成失败：' + 
+                    escapeHtml(result.message) + '</span>';
+            }
+        } catch (error) {
+            console.error('批量生成预览图失败:', error);
+            document.getElementById('batchStatus').innerHTML = 
+                '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 网络错误：' + 
+                escapeHtml(error.message) + '</span>';
+        }
+    }
+
+    // 激活主题按钮（按区域）
+    document.querySelectorAll('.activate-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            if (this.disabled) return;
+            const themeId = this.dataset.themeId;
+            const themeName = this.dataset.themeName;
+            const area = this.dataset.area || 'frontend';
+            const areaLabel = area === 'frontend' ? '<?= __('前台') ?>' : '<?= __('后台') ?>';
+            fetch('<?= $url->getBackendUrl('theme/backend/index/postActivate') ?>', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ form_key: CSRF_TOKEN, theme_id: themeId, area: area })
+            }).then(r => r.json()).then(function(result) {
+                if (result.status === 'success') {
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success('<?= __('主题已设为%{1}主题') ?>'.replace('%{1}', areaLabel));
+                    } else {
+                        alert('<?= __('主题激活成功') ?>');
+                    }
+                    location.reload();
+                } else {
+                    const msg = result.message || '<?= __('激活失败') ?>';
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(msg);
+                    } else {
+                        alert(msg);
+                    }
+                }
+            }).catch(function(err) {
+                const msg = '<?= __('网络错误') ?>: ' + (err.message || '');
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(msg);
+                } else {
+                    alert(msg);
+                }
+            });
+        });
+    });
+
+    // 单个主题生成按钮点击事件
+    document.querySelectorAll('.generate-preview-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const themeId = this.dataset.themeId;
+            const themeName = this.dataset.themeName;
+            
+            // 显示弹窗
+            const modal = new bootstrap.Modal(document.getElementById('singleGenerateModal'));
+            modal.show();
+            
+            // 更新标题
+            document.getElementById('singleGenerateTitle').innerText = '生成 "' + themeName + '" 的预览图';
+            
+            // 显示进度
+            document.getElementById('singleStatus').innerHTML = '正在生成预览图，请稍候...';
+            document.getElementById('singleSpinner').style.display = 'block';
+            
+            // 发送生成请求
+            generateSinglePreview(themeId);
+        });
+    });
+
+    // 生成单个主题预览图
+    async function generateSinglePreview(themeId) {
+        try {
+            const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    'form_key': CSRF_TOKEN,
+                    'theme_id': themeId,
+                    'area': 'frontend',
+                    'force': '1'
+                })
+            });
+
+            const result = await response.json();
+            
+            document.getElementById('singleSpinner').style.display = 'none';
+            
+            if (result.status === 'success') {
+                document.getElementById('singleStatus').innerHTML = 
+                    '<span class="text-success"><i class="mdi mdi-check-circle"></i> 预览图生成成功！</span>';
+                
+                // 1秒后刷新页面
+                setTimeout(() => {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('singleGenerateModal'));
+                    modal.hide();
+                    location.reload();
+                }, 1000);
+            } else {
+                document.getElementById('singleStatus').innerHTML = 
+                    '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 生成失败：' + 
+                    escapeHtml(result.message) + '</span>';
+            }
+        } catch (error) {
+            console.error('生成预览图失败:', error);
+            document.getElementById('singleSpinner').style.display = 'none';
+            document.getElementById('singleStatus').innerHTML = 
+                '<span class="text-danger"><i class="mdi mdi-alert-circle"></i> 网络错误：' + 
+                escapeHtml(error.message) + '</span>';
+        }
+    }
+
+    // HTML转义函数
+    function escapeHtml(text) {
+        if (!text) return '';
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+})();
+</script>
+
+<style>
+/* 主题管理：使用主题变量，避免硬编码颜色 */
+.weline-theme-manage__tabs.nav-tabs .nav-link {
+    color: var(--backend-color-text-secondary, #6c757d);
+    border-color: transparent;
+}
+.weline-theme-manage__tabs.nav-tabs .nav-link:hover {
+    color: var(--backend-color-primary, #405189);
+    border-color: transparent;
+}
+.weline-theme-manage__tabs.nav-tabs .nav-link.active {
+    color: var(--backend-color-primary, #405189);
+    background: var(--backend-color-card-bg, #fff);
+    border-color: var(--backend-color-border-default, #dee2e6);
+    border-bottom-color: var(--backend-color-card-bg, #fff);
+}
+
+/* 主题卡片样式 */
+.weline-theme-manage .theme-card {
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+    border-radius: 8px;
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.weline-theme-manage .theme-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--backend-shadow-md, 0 8px 24px rgba(0,0,0,0.1));
+}
+
+/* 预览区域 */
+.weline-theme-manage .theme-preview {
+    position: relative;
+    width: 100%;
+    height: 180px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    overflow: hidden;
+}
+
+.weline-theme-manage .theme-preview-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.weline-theme-manage .theme-preview-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+.weline-theme-manage .theme-icon-placeholder {
+    font-size: 48px;
+    margin-bottom: 10px;
+}
+
+/* 生成按钮 */
+.weline-theme-manage .generate-preview-btn {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    z-index: 10;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--backend-shadow-md, 0 2px 8px rgba(0,0,0,0.3));
+}
+
+.weline-theme-manage .generate-preview-btn:hover {
+    transform: scale(1.1);
+}
+
+/* 激活标签 */
+.weline-theme-manage .active-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: var(--backend-color-success, #28a745);
+    color: var(--backend-color-text-inverse, #fff);
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 10;
+    box-shadow: var(--backend-shadow-sm, 0 2px 4px rgba(0,0,0,0.2));
+}
+
+/* 主题信息 */
+.weline-theme-manage .theme-info {
+    padding: 15px;
+}
+
+.weline-theme-manage .theme-name {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--backend-color-text-primary, #212529);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.weline-theme-manage .theme-meta {
+    font-size: 13px;
+    color: var(--backend-color-text-secondary, #6c757d);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.weline-theme-manage .theme-meta i {
+    color: var(--backend-color-text-tertiary, #adb5bd);
+}
+
+/* 操作按钮区域 */
+.weline-theme-manage .theme-actions {
+    padding: 12px 15px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    border-top: 1px solid var(--backend-color-border-light, #e9ecef);
+    display: flex;
+    gap: 8px;
+}
+
+.weline-theme-manage .theme-actions .btn {
+    flex: 1;
+}
+
+/* 挂起主题样式 */
+.weline-theme-manage .theme-card.suspended {
+    opacity: 0.7;
+}
+
+.weline-theme-manage .theme-card.suspended .theme-name {
+    text-decoration: line-through;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+    .weline-theme-manage .theme-preview {
+        height: 140px;
+    }
+    .weline-theme-manage .theme-name {
+        font-size: 16px;
+    }
+}
+</style>

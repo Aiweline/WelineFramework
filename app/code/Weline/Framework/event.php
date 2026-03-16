@@ -11,6 +11,21 @@ return [
         'description' => __('应用运行后，你可以在这里做一些后续操作。'),
         'doc' => 'app/应用运行后.md',
     ],
+    'Weline_Framework::telemetry::request_collected' => [
+        'name' => __('请求遥测数据已采集'),
+        'description' => __('在一次请求生命周期结束时触发。Framework 仅广播通用遥测快照（trace、request、runtime、summary、result），由上层模块（如 DeveloperWorkspace、监控模块）自行监听并处理。'),
+        'doc' => 'app/请求遥测数据已采集.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'request' => ['type' => 'array', 'required' => true, 'description' => '请求快照：uri/method/is_backend/is_api_backend/is_api_frontend/is_ajax/is_iframe 等'],
+            'runtime' => ['type' => 'array', 'required' => true, 'description' => '运行时快照：mode/timestamp'],
+            'trace' => ['type' => 'array', 'required' => true, 'description' => '链路追踪数据：spans（含 category/parent/db_duration_ms）'],
+            'summary' => ['type' => 'array', 'required' => true, 'description' => '汇总数据：total_duration_ms/db_total_ms/spans_total/category_totals 等'],
+            'extensions' => ['type' => 'array', 'required' => false, 'description' => '扩展区：errors/external_calls 等非核心字段，供未来扩展'],
+            'result' => ['type' => 'string', 'required' => false, 'description' => '当前响应字符串，监听者可按需修改（例如注入调试面板脚本）'],
+        ],
+    ],
     'Weline_Framework::App::url_parsed_after' => [
         'name' => __('URL解析后'),
         'description' => __('URL解析后，你可以在这里做一些后续操作。'),

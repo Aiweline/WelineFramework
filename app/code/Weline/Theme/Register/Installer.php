@@ -257,6 +257,18 @@ class Installer implements RegisterInterface
             }
         }
 
+        // 检查主题名是否重复（不同module_name）
+        $this->welineTheme->clearData()->clearQuery();
+        $this->welineTheme->load(WelineTheme::schema_fields_NAME, $param['name']);
+        if ($this->welineTheme->getId() && $this->welineTheme->getModuleName() !== $module_name) {
+            $this->printing->warning(__('主题名 "%{1}" 已被模块 "%{2}" 占用，跳过安装', [
+                $param['name'],
+                $this->welineTheme->getModuleName()
+            ]));
+            return;
+        }
+        
+        // 加载已存在的主题（按module_name）
         $this->welineTheme->clearData()->clearQuery();
         $this->welineTheme->load(WelineTheme::schema_fields_MODULE_NAME, $module_name);
 

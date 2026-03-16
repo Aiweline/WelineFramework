@@ -15,6 +15,12 @@ use Weline\Framework\Exception\ExceptionBootstrap;
 class ErrorHandler
 {
     /**
+     * E_STRICT 的历史错误码（2048）。
+     * PHP 8.4+ 直接访问 E_STRICT 常量会触发 deprecation，故使用数值兼容旧日志级别映射。
+     */
+    private const LEGACY_E_STRICT = 2048;
+
+    /**
      * 是否已注册
      */
     private static bool $registered = false;
@@ -98,7 +104,7 @@ class ErrorHandler
             E_WARNING, E_USER_WARNING, E_CORE_WARNING, E_COMPILE_WARNING => 'warning',
             E_NOTICE, E_USER_NOTICE => 'notice',
             E_DEPRECATED, E_USER_DEPRECATED => 'debug',
-            E_STRICT => 'info',
+            self::LEGACY_E_STRICT => 'info',
             default => 'warning',
         };
     }
@@ -120,7 +126,7 @@ class ErrorHandler
             E_USER_ERROR => 'E_USER_ERROR',
             E_USER_WARNING => 'E_USER_WARNING',
             E_USER_NOTICE => 'E_USER_NOTICE',
-            E_STRICT => 'E_STRICT',
+            self::LEGACY_E_STRICT => 'E_STRICT',
             E_RECOVERABLE_ERROR => 'E_RECOVERABLE_ERROR',
             E_DEPRECATED => 'E_DEPRECATED',
             E_USER_DEPRECATED => 'E_USER_DEPRECATED',

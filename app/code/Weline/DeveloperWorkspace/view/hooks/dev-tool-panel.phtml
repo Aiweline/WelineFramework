@@ -186,7 +186,7 @@ $panelType = $panelType ?? 'frontend';
 
     .dev-tool-trigger i {
         transition: transform 0.3s ease;
-        opacity: 0;
+        opacity: 1;
     }
 
     /* 展开状态下隐藏触发器（使用header双击收起） */
@@ -196,7 +196,7 @@ $panelType = $panelType ?? 'frontend';
 
     #dev-tool-panel.collapsed .dev-tool-trigger i {
         transform: rotate(180deg);
-        opacity: 0;
+        opacity: 1;
     }
 
     .dev-tool-container {
@@ -733,9 +733,10 @@ $panelType = $panelType ?? 'frontend';
     .performance-item {
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
         padding: 8px 0;
         border-bottom: 1px solid #e8e8e8;
+        gap: 8px;
     }
 
     .performance-item:last-child {
@@ -748,6 +749,10 @@ $panelType = $panelType ?? 'frontend';
         display: flex;
         align-items: center;
         gap: 6px;
+        min-width: 0;
+        flex: 1;
+        overflow-wrap: break-word;
+        word-break: break-word;
     }
 
     .performance-value {
@@ -755,6 +760,27 @@ $panelType = $panelType ?? 'frontend';
         font-weight: 600;
         color: #5c574f;
         font-family: 'Courier New', monospace;
+        flex-shrink: 0;
+    }
+
+    .trace-toggle, .trace-toggle-placeholder {
+        display: inline-flex;
+        width: 18px;
+        flex-shrink: 0;
+        margin-right: 2px;
+    }
+    .trace-toggle {
+        cursor: pointer;
+        color: #7d7870;
+        align-items: center;
+        justify-content: center;
+    }
+    .trace-toggle:hover {
+        color: #5c574f;
+    }
+    .trace-children {
+        border-left: 1px solid #e8e8e8;
+        margin-left: 9px;
     }
 
     .performance-value.fast {
@@ -1194,6 +1220,9 @@ $panelType = $panelType ?? 'frontend';
             <button class="dev-tool-tab" data-tab="performance" onclick="DevToolPanel.switchMainTab(this, 'performance')">
                 <i class="fa fa-clock-o"></i> 耗时统计
             </button>
+            <button class="dev-tool-tab" data-tab="trace" onclick="DevToolPanel.switchMainTab(this, 'trace')">
+                <i class="fa fa-list-alt"></i> 请求链路
+            </button>
             <?= $extraTabsHtml ?? '' ?>
         </div>
         
@@ -1232,6 +1261,13 @@ $panelType = $panelType ?? 'frontend';
             <div id="performance-search-area" style="display: none;">
                 <div style="padding: 8px; font-size: 12px; color: #666;">
                     <i class="fa fa-info-circle"></i> 实时性能监控和耗时统计
+                </div>
+            </div>
+            
+            <!-- 请求链路 (trace tab) -->
+            <div id="trace-search-area" style="display: none;">
+                <div style="padding: 8px; font-size: 12px; color: #666;">
+                    <i class="fa fa-info-circle"></i> 当前请求各阶段耗时（仅 DEV 且 HTML 响应）
                 </div>
             </div>
             
@@ -1365,8 +1401,13 @@ const DevToolPanel = (function() {
             renderPerformanceStats();
         }
         
+        // 如果是请求链路标签，渲染请求链路
+        if (state.activeMainTab === 'trace') {
+            renderRequestTrace();
+        }
+        
         // 扩展标签：仅当当前为某扩展标签时才加载（由扩展通过 registerExtensionTab 注册，可能稍晚注册）
-        var extTab = state.activeMainTab && state.activeMainTab !== 'routes' && state.activeMainTab !== 'docs' && state.activeMainTab !== 'performance';
+        var extTab = state.activeMainTab && state.activeMainTab !== 'routes' && state.activeMainTab !== 'docs' && state.activeMainTab !== 'performance' && state.activeMainTab !== 'trace';
         if (extTab) {
             (function tryLoadExtension() {
                 if (window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[state.activeMainTab]) {
@@ -2026,16 +2067,18 @@ const DevToolPanel = (function() {
         const routeSearchArea = document.getElementById('route-search-area');
         const docSearchArea = document.getElementById('doc-search-area');
         const performanceSearchArea = document.getElementById('performance-search-area');
+        const traceSearchArea = document.getElementById('trace-search-area');
         
         // 隐藏所有内置搜索区域
         routeSearchArea.style.display = 'none';
         docSearchArea.style.display = 'none';
         performanceSearchArea.style.display = 'none';
+        if (traceSearchArea) traceSearchArea.style.display = 'none';
         // 隐藏所有扩展搜索区（约定 id 为 dev-tool-search-area-{tabId}）
         document.querySelectorAll('[id^="dev-tool-search-area-"]').forEach(el => { el.style.display = 'none'; });
         
         // 扩展标签：若加载器尚未注册则短时重试，最多重试几次；重试前检查用户是否已切换标签，避免覆盖
-        const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance';
+        const isExtensionTab = tab !== 'routes' && tab !== 'docs' && tab !== 'performance' && tab !== 'trace';
         const extSearchArea = document.getElementById('dev-tool-search-area-' + tab);
         const extLoader = window.DevToolPanelExtensionLoaders && window.DevToolPanelExtensionLoaders[tab];
         if (isExtensionTab && extSearchArea && !extLoader) {
@@ -2066,6 +2109,10 @@ const DevToolPanel = (function() {
             window._devToolExtensionRetryCount = {};
             performanceSearchArea.style.display = 'block';
             renderPerformanceStats();
+        } else if (tab === 'trace') {
+            window._devToolExtensionRetryCount = {};
+            if (traceSearchArea) traceSearchArea.style.display = 'block';
+            renderRequestTrace();
         } else if (extLoader) {
             if (window._devToolExtensionRetryCount) window._devToolExtensionRetryCount[tab] = 0;
             if (extSearchArea) extSearchArea.style.display = 'block';
@@ -2586,10 +2633,228 @@ const DevToolPanel = (function() {
         }
     }
 
+    function formatSqlPreview(sql, maxLen) {
+        var normalized = String(sql || '').replace(/\s+/g, ' ').trim();
+        if (!normalized) {
+            return '';
+        }
+        if (normalized.length <= maxLen) {
+            return normalized;
+        }
+        return normalized.substring(0, maxLen) + ' ...';
+    }
+
+    /** 从 db span 的 name（如 db::find::m_acl）解析出 operation 和 table，兼容无 meta 的旧数据 */
+    function parseDbSpanName(name) {
+        var n = String(name || '');
+        if (n.indexOf('db::') !== 0) {
+            return { operation: n || '—', table: '—' };
+        }
+        var parts = n.split('::');
+        if (parts.length >= 3) {
+            return { operation: parts[1] || '—', table: parts[2] || '—' };
+        }
+        if (parts.length === 2) {
+            return { operation: parts[1] || '—', table: '—' };
+        }
+        return { operation: '—', table: '—' };
+    }
+
     function getTimeClass(ms, fast = 100, slow = 500) {
         if (ms < fast) return 'fast';
         if (ms < slow) return 'medium';
         return 'slow';
+    }
+
+    function buildTraceTree(spans) {
+        var nodes = spans.map(function(s) {
+            return {
+                name: s.name || '',
+                duration_ms: Number(s.duration_ms) || 0,
+                category: s.category || '',
+                parent: s.parent || null,
+                db_duration_ms: Number(s.db_duration_ms || 0),
+                children: []
+            };
+        });
+        var byName = {};
+        nodes.forEach(function(n) { byName[n.name] = n; });
+        nodes.forEach(function(n) {
+            if (n.parent && byName[n.parent]) byName[n.parent].children.push(n);
+        });
+        return nodes.filter(function(n) { return !n.parent; });
+    }
+
+    function renderTraceNode(node, depth, totalMsRef) {
+        if (!node.parent) totalMsRef.value += node.duration_ms;
+        var timeClass = getTimeClass(node.duration_ms);
+        var category = node.category ? ' <span style="opacity:0.7;font-size:11px">[' + escapeHtml(node.category) + ']</span>' : '';
+        var hasChildren = node.children && node.children.length > 0;
+        var indent = depth > 0 ? ' style="padding-left:' + (depth * 14) + 'px"' : '';
+        var html = '<div class="performance-item trace-node" data-depth="' + depth + '"' + indent + '>';
+        if (hasChildren) {
+            html += '<span class="trace-toggle" data-expanded="0" role="button" tabindex="0" title="展开/折叠">';
+            html += '<i class="fa fa-caret-right"></i></span>';
+        } else {
+            html += '<span class="trace-toggle-placeholder"></span>';
+        }
+        html += '<span class="performance-label">' + escapeHtml(String(node.name)) + category + '</span>';
+        html += '<span class="performance-value ' + timeClass + '">';
+        html += formatTime(node.duration_ms);
+        if (node.db_duration_ms && node.db_duration_ms > 0) {
+            html += ' <span style="margin-left:6px;font-size:11px;color:#555;">DB ' + formatTime(node.db_duration_ms) + '</span>';
+        }
+        html += ' <span class="performance-badge ' + timeClass + '">' + (timeClass === 'fast' ? '快' : timeClass === 'medium' ? '中' : '慢') + '</span>';
+        html += '</span>';
+        html += '</div>';
+        if (hasChildren) {
+            html += '<div class="trace-children" style="display:none">';
+            node.children.forEach(function(ch) { html += renderTraceNode(ch, depth + 1, totalMsRef); });
+            html += '</div>';
+        }
+        return html;
+    }
+
+    function renderRequestTrace() {
+        const content = document.getElementById('dev-tool-content');
+        if (!content) return;
+        const spans = (typeof window.__WELINE_REQUEST_TRACE__ !== 'undefined' && Array.isArray(window.__WELINE_REQUEST_TRACE__))
+            ? window.__WELINE_REQUEST_TRACE__
+            : [];
+        const codeSpans = spans.filter(function(s) { return (s.category || '') !== 'db'; });
+        const dbSpans = spans.filter(function(s) { return (s.category || '') === 'db'; });
+
+        let html = '<div class="performance-stats">';
+
+        // 子 Tab：编码 / DB
+        html += '<div style="display:flex;border-bottom:1px solid #eee;margin-bottom:6px;">';
+        html += '<button type="button" id="trace-subtab-code" class="dev-tool-tab dev-tool-subtab active" style="flex:1;font-size:12px;padding:4px 8px;border:none;border-bottom:2px solid #667eea;background:#f7f7ff;color:#333;cursor:pointer;">编码</button>';
+        html += '<button type="button" id="trace-subtab-db" class="dev-tool-tab dev-tool-subtab" style="flex:1;font-size:12px;padding:4px 8px;border:none;border-bottom:2px solid transparent;background:#fafafa;color:#666;cursor:pointer;">DB</button>';
+        html += '</div>';
+
+        // 编码视图
+        html += '<div id="trace-code-view" class="performance-section">';
+        html += '<div class="performance-section-title">';
+        html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（编码阶段）';
+        html += '</div>';
+        if (codeSpans.length === 0) {
+            html += '<div class="dev-tool-empty">当前页面无请求链路数据。</div>';
+            html += '<div style="margin-top:8px;padding:8px;font-size:11px;color:#888;background:#f5f5f5;border-radius:4px;">';
+            html += '请确认：<br>1) 已开启开发模式（env.php 中 system.deploy 为 dev）或开启 DEBUG；<br>';
+            html += '2) 本页为 HTML 响应（WLS/CLI/FPM 均支持）。<br>刷新页面后再试。';
+            html += '</div>';
+        } else {
+            var roots = buildTraceTree(codeSpans);
+            var totalMsRef = { value: 0 };
+            roots.forEach(function(node) { html += renderTraceNode(node, 0, totalMsRef); });
+            html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
+            html += '<span class="performance-label">合计</span>';
+            html += '<span class="performance-value">' + formatTime(totalMsRef.value) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>';
+
+        // DB 视图
+        html += '<div id="trace-db-view" class="performance-section" style="display:none;">';
+        html += '<div class="performance-section-title">';
+        html += '<i class="fa fa-database"></i> 数据库链路';
+        html += '</div>';
+        if (dbSpans.length === 0) {
+            html += '<div class="dev-tool-empty">当前请求未记录数据库访问。</div>';
+        } else {
+            let totalDb = 0;
+            dbSpans.forEach(function(s) { totalDb += Number(s.duration_ms || 0); });
+            html += '<div style="max-height:320px;overflow:auto;font-size:11px;border:1px solid #eee;border-radius:4px;">';
+            html += '<table style="width:100%;border-collapse:collapse;table-layout:fixed;">';
+            html += '<thead><tr style="background:#fafafa;">';
+            html += '<th style="padding:4px 6px;text-align:left;width:70px;">操作</th>';
+            html += '<th style="padding:4px 6px;text-align:left;width:100px;">表</th>';
+            html += '<th style="padding:4px 6px;text-align:left;">SQL</th>';
+            html += '<th style="padding:4px 6px;text-align:left;width:90px;">父阶段</th>';
+            html += '<th style="padding:4px 6px;text-align:right;width:80px;white-space:nowrap;">耗时</th></tr></thead>';
+            html += '<tbody>';
+            dbSpans.forEach(function(s) {
+                const meta = (s && typeof s.meta === 'object' && s.meta !== null) ? s.meta : {};
+                const parsed = parseDbSpanName(s.name);
+                const operation = String(meta.operation || parsed.operation || '');
+                const table = String(meta.table || parsed.table || '');
+                const sql = String(meta.sql || '');
+                const parent = String(s.parent || '');
+                const durationNum = Number(s.duration_ms);
+                const dur = (durationNum >= 0 && durationNum < 1e9) ? formatTime(durationNum) : '—';
+                const sqlPreview = formatSqlPreview(sql, 140);
+                html += '<tr>';
+                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;">' + escapeHtml(operation || '—') + '</td>';
+                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;">' + escapeHtml(table || '—') + '</td>';
+                if (sql) {
+                    html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;word-break:break-word;overflow:hidden;">';
+                    html += '<details><summary style="cursor:pointer;">' + escapeHtml(sqlPreview) + '</summary><pre style="margin:4px 0 0;white-space:pre-wrap;word-break:break-word;font-size:11px;">' + escapeHtml(sql) + '</pre></details>';
+                    html += '</td>';
+                } else {
+                    html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;color:#999;">(无 SQL 文本)</td>';
+                }
+                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;color:#777;">' + escapeHtml(parent) + '</td>';
+                html += '<td style="padding:3px 6px;border-top:1px solid #f0f0f0;text-align:right;white-space:nowrap;">' + dur + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
+            html += '<span class="performance-label">DB 合计</span>';
+            html += '<span class="performance-value">' + formatTime(totalDb) + '</span>';
+            html += '</div>';
+        }
+        html += '</div>'; // end db view
+
+        html += '</div>'; // end performance-stats
+        content.innerHTML = html;
+        var container = content.closest('.dev-tool-container');
+        if (container) {
+            container.querySelectorAll('.trace-toggle').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var expanded = btn.getAttribute('data-expanded') === '1';
+                    var children = btn.closest('.performance-item').nextElementSibling;
+                    if (children && children.classList.contains('trace-children')) {
+                        children.style.display = expanded ? 'none' : 'block';
+                        btn.setAttribute('data-expanded', expanded ? '0' : '1');
+                        btn.querySelector('i').className = expanded ? 'fa fa-caret-right' : 'fa fa-caret-down';
+                    }
+                });
+            });
+
+            // 绑定子 Tab 切换：编码 / DB
+            var codeBtn = document.getElementById('trace-subtab-code');
+            var dbBtn = document.getElementById('trace-subtab-db');
+            var codeView = document.getElementById('trace-code-view');
+            var dbView = document.getElementById('trace-db-view');
+            if (codeBtn && dbBtn && codeView && dbView) {
+                codeBtn.addEventListener('click', function () {
+                    codeBtn.classList.add('active');
+                    codeBtn.style.borderBottomColor = '#667eea';
+                    codeBtn.style.background = '#f7f7ff';
+                    dbBtn.classList.remove('active');
+                    dbBtn.style.borderBottomColor = 'transparent';
+                    dbBtn.style.background = '#fafafa';
+                    codeView.style.display = 'block';
+                    dbView.style.display = 'none';
+                });
+                dbBtn.addEventListener('click', function () {
+                    dbBtn.classList.add('active');
+                    dbBtn.style.borderBottomColor = '#667eea';
+                    dbBtn.style.background = '#f7f7ff';
+                    codeBtn.classList.remove('active');
+                    codeBtn.style.borderBottomColor = 'transparent';
+                    codeBtn.style.background = '#fafafa';
+                    codeView.style.display = 'none';
+                    dbView.style.display = 'block';
+                });
+            }
+        }
+    }
+
+    function escapeHtml(s) {
+        const div = document.createElement('div');
+        div.textContent = s;
+        return div.innerHTML;
     }
 
     function renderPerformanceStats() {

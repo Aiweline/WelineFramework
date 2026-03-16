@@ -17,11 +17,12 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 
 /**
  * 开发工具面板 Observer
- * 监听 Weline_Framework::App::run_after 事件，在页面输出前注入开发工具面板
+ * 监听 Weline_Framework::telemetry::request_collected 事件，在页面输出前注入 trace 数据与开发工具面板
  */
 class DevToolPanelObserver implements ObserverInterface
 {
@@ -37,6 +38,14 @@ class DevToolPanelObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        $eventName = (string)$event->getName();
+        $this->debugLog('execute_enter', ['event' => $eventName, 'dev' => DEV]);
+        $payload = $this->resolvePayload($event);
+        if ($payload === null) {
+            $this->debugLog('skip_invalid_payload', ['event' => $eventName]);
+            return;
+        }
+
         // 检查是否启用开发工具面板
         // 1. 开发模式下默认启用
         // 2. 生产模式下可通过配置 dev_tool.enable_in_prod 启用
@@ -73,6 +82,11 @@ class DevToolPanelObserver implements ObserverInterface
         // 2. 生产模式 + 配置启用：显示
         // 3. 有Cookie：显示
         if (!DEV && !$enableInProd && !$hasCookie) {
+            $this->debugLog('skip_not_enabled', [
+                'dev' => DEV,
+                'enableInProd' => $enableInProd,
+                'hasCookie' => $hasCookie,
+            ]);
             return;
         }
 
@@ -80,40 +94,74 @@ class DevToolPanelObserver implements ObserverInterface
         if ($this->request->isAjax() || 
             $this->request->isApiFrontend() || 
             $this->request->isApiBackend()) {
+            $this->debugLog('skip_ajax_or_api', [
+                'isAjax' => $this->request->isAjax(),
+                'isApiFrontend' => $this->request->isApiFrontend(),
+                'isApiBackend' => $this->request->isApiBackend(),
+            ]);
             return;
         }
 
         // 如果是 iframe 请求（URL 带 isIframe 或 Sec-Fetch-Dest: iframe），不显示 id="dev-tool-panel"
         if ($this->request->isIframe()) {
+            $this->debugLog('skip_iframe');
             return;
         }
 
         try {
-            // 检查已发送的 headers 中是否有 Content-Type: application/json
-            $headers = headers_list();
-            foreach ($headers as $header) {
-                if (stripos($header, 'Content-Type:') !== false && 
-                    stripos($header, 'application/json') !== false) {
-                    return;
-                }
-            }
-            
-            // 获取页面输出结果
-            $result = $event->getData('result');
+            // 获取页面输出结果（兼容 telemetry / run_after 两种事件）
+            $result = $payload['result'] ?? '';
             
             if (empty($result) || !is_string($result)) {
+                $this->debugLog('skip_empty_result');
                 return;
             }
             
             // 检查是否是 HTML 响应（包含 JSON 检测）
             if (!$this->isHtmlResponse($result)) {
+                $this->debugLog('skip_not_html_response');
                 return;
             }
-            
+
+            // 先注入请求链路数据（供 dev-tool-panel.phtml 中 trace 视图读取）
+            $traceSpans = $payload['trace']['spans'] ?? [];
+            if (!is_array($traceSpans) || empty($traceSpans)) {
+                // 兜底：兼容 run_after 事件或 payload 未带 trace 的场景，直接读取当前请求追踪数据
+                $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
+                if (is_array($traceSpans) && !empty($traceSpans)) {
+                    $payload['trace']['spans'] = $traceSpans;
+                    $this->debugLog('trace_fallback_loaded', ['spansCount' => count($traceSpans)]);
+                } else {
+                    $this->debugLog('trace_empty_after_fallback', ['traceEnabled' => RequestLifecycleTrace::isEnabled()]);
+                }
+            }
+            if (is_array($traceSpans) && !empty($traceSpans)) {
+                $dbSpansCount = count(array_filter($traceSpans, static function ($span) {
+                    return (($span['category'] ?? '') === 'db');
+                }));
+                $this->debugLog('trace_stats', [
+                    'spansTotal' => count($traceSpans),
+                    'dbSpans' => $dbSpansCount,
+                    'event' => $eventName,
+                ]);
+                $result = $this->injectTraceScript($result, $traceSpans);
+                $this->debugLog('trace_injected', ['spansCount' => count($traceSpans)]);
+            }
+
+            // 幂等保护：避免 telemetry + run_after 双监听导致重复注入同一面板
+            // 注意：trace 注入必须先执行，否则会出现“面板显示但无链路数据”
+            if (stripos($result, 'id="dev-tool-panel"') !== false) {
+                $payload['result'] = $result;
+                $this->writeBackPayload($event, $payload);
+                $this->debugLog('skip_already_injected');
+                return;
+            }
+
             // 渲染开发工具面板
             $panelHtml = $this->renderPanel();
             
             if (empty($panelHtml)) {
+                $this->debugLog('skip_empty_panel_html');
                 return;
             }
             
@@ -130,15 +178,87 @@ class DevToolPanelObserver implements ObserverInterface
                 $result = $result . $panelHtml;
             }
             
-            // 更新 result
-            $event->setData('result', $result);
+            // 回写事件数据（dispatch 第二参数是引用变量）
+            $payload['result'] = $result;
+            $this->writeBackPayload($event, $payload);
+            $this->debugLog('panel_injected_success');
             
         } catch (\Exception $e) {
+            $this->debugLog('inject_exception', ['message' => $e->getMessage()]);
             $this->logToConsole('error', 'DevToolPanel Error: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
         }
+    }
+
+    private function debugLog(string $stage, array $context = []): void
+    {
+        $base = [
+            'stage' => $stage,
+            'uri' => $this->request->getUri(),
+            'method' => $this->request->getMethod(),
+            'isBackend' => $this->request->isBackend(),
+        ];
+        w_log_warning('[DevToolPanelObserver] ' . $stage, array_merge($base, $context), 'dev_tool_panel');
+    }
+
+    /**
+     * 兼容两类事件结构：
+     * 1) Weline_Framework::telemetry::request_collected: ['data' => [...]]
+     * 2) Weline_Framework::App::run_after: ['result' => '...']
+     */
+    private function resolvePayload(Event $event): ?array
+    {
+        $telemetryData = $event->getData('data');
+        if (is_array($telemetryData)) {
+            return $telemetryData;
+        }
+
+        $legacyResult = $event->getData('result');
+        if (is_string($legacyResult)) {
+            return [
+                'result' => $legacyResult,
+                'trace' => ['spans' => []],
+            ];
+        }
+
+        return null;
+    }
+
+    private function writeBackPayload(Event $event, array $payload): void
+    {
+        if (is_array($event->getData('data'))) {
+            $event->setData('data', $payload);
+            return;
+        }
+        $event->setData('result', (string)($payload['result'] ?? ''));
+    }
+
+    /**
+     * 将请求链路数据注入到 HTML，供前端 DevTool 面板读取。
+     */
+    private function injectTraceScript(string $result, array $traceSpans): string
+    {
+        $traceScript = '<script>window.__WELINE_REQUEST_TRACE__=' . json_encode($traceSpans) . ';</script>';
+        if (stripos($result, 'window.__WELINE_REQUEST_TRACE__') !== false) {
+            // 已存在时覆盖为最新链路，避免 run_after 先注入空数据后 telemetry 无法更新
+            $updated = preg_replace(
+                '/<script>\s*window\.__WELINE_REQUEST_TRACE__=.*?<\/script>/is',
+                $traceScript,
+                $result,
+                1
+            );
+            return is_string($updated) ? $updated : $result;
+        }
+        $bodyClosePos = strripos($result, '</body>');
+        if ($bodyClosePos !== false) {
+            $before = substr($result, 0, $bodyClosePos);
+            $after = substr($result, $bodyClosePos);
+            return $before . $traceScript . $after;
+        }
+
+        return $result . $traceScript;
     }
 
     /**

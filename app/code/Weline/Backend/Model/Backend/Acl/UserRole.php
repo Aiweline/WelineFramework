@@ -22,6 +22,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_role_id', columns: ['role_id'], comment: '角色ID索引')]
 class UserRole extends Model
 {
+    public const schema_table = 'backend_acl_user_role';
     public const schema_primary_key = 'id';
 
     public const fields_ID      = 'user_id';
