@@ -186,7 +186,11 @@ if ($controlPort > 0) {
 
 // 信号处理（仅 Linux/Mac）
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
+// Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
 if (\function_exists('pcntl_signal')) {
+    if (\defined('SIGPIPE')) {
+        \pcntl_signal(SIGPIPE, SIG_IGN);
+    }
     \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGTERM, function () use ($server) {
         WlsLogger::info_('收到 SIGTERM 信号，执行优雅退出');

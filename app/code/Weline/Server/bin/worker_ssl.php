@@ -1210,7 +1210,11 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
 
 // 信号处理（热更新支持，仅 Linux/Mac）
 // 注意：子进程不处理 SIGINT（Ctrl+C），由 Master 通过 IPC 广播 SHUTDOWN 通知退出
+// Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
 if (\function_exists('pcntl_signal')) {
+    if (\defined('SIGPIPE')) {
+        \pcntl_signal(SIGPIPE, SIG_IGN);
+    }
     \pcntl_signal(SIGINT, SIG_IGN);
     \pcntl_signal(SIGUSR1, function () use (&$shouldExit, &$ipcDraining, &$drainStartTime, &$socket, $logReload) {
         // 收到重载信号，标记优雅退出（Master 会重新启动新进程加载新代码）
