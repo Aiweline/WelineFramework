@@ -17,7 +17,11 @@
                 "config": {
                     "content.badge": "About Us",
                     "content.title": "About PokerArena",
-                    "content.description": "Founded by poker enthusiasts, PokerArena was built to create the ultimate online poker experience — fair, fast, and player-first."
+                    "content.description": "Founded by poker enthusiasts, PokerArena was built to create the ultimate online poker experience — fair, fast, and player-first.",
+                    "story.title": "Our Story",
+                    "story.content": "PokerArena was founded in 2020 by a team of professional poker players and technology experts who believed online poker could be better. We set out to build a platform that combines cutting-edge technology with the authentic feel of live poker. Today, we serve over 500,000 active players across 50+ countries.",
+                    "stats.items": "500K+|Active Players\n$10M+|Daily Prize Pools\n50+|Countries Served\n99.9%|Uptime",
+                    "values.items": "Fair Play|Every hand is dealt with certified RNG technology. We maintain the highest standards of game integrity.\nPlayer First|Our platform is designed around player needs — from intuitive UI to responsive support.\nResponsible Gaming|We provide tools for self-exclusion, deposit limits, and session time reminders.\nInnovation|We continuously invest in technology to deliver the smoothest poker experience possible."
                 }
             }
         ],

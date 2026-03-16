@@ -17,7 +17,8 @@
  * brand.show_logo => 显示Logo:select:yes|yes,no
  * 
  * group:links => 链接设置
- * links.items => 导航链接:textarea:Download App=>#download\r\nGames=>#games\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接，一行一个
+ * links.use_custom_links => 使用自定义链接组:select:no|no,yes
+ * links.items => 导航链接:textarea:Download App=>#download\r\nGames=>#games\r\nFAQ=>#faq\r\nContact=>/contact|格式：名称=>链接（仅当开启自定义链接时生效）
  * links.style => 链接样式:select:inline|inline,grid|inline=一行显示,grid=网格显示
  * 
  * group:copyright => 版权设置
@@ -49,22 +50,19 @@ $brandName = $config['brand.name'] ?? 'Satta King 786';
 $brandDesc = $config['brand.description'] ?? 'An informational guide to satta king formats, schedules, and Android access. Always check local laws and follow responsible play practices.';
 $showLogo = ($config['brand.show_logo'] ?? 'yes') !== 'no';
 
-// 链接配置
+// 链接配置：默认与 header 一致使用 getHeaderNavigationPages
 $linksRaw = $config['links.items'] ?? "Download App=>#download\nGames=>#games\nFAQ=>#faq\nContact=>/contact";
 $linksStyle = $config['links.style'] ?? 'inline';
 
-// 解析链接
 $parseLinks = function($raw) {
     $links = [];
     $lines = preg_split('/[\r\n]+/', $raw);
     foreach ($lines as $line) {
         $line = trim($line);
         if (empty($line)) continue;
-        
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
         $url = trim($parts[1] ?? '#');
-        
         if (!empty($name)) {
             $links[] = ['name' => $name, 'url' => $url];
         }
@@ -72,7 +70,30 @@ $parseLinks = function($raw) {
     return $links;
 };
 
-$navLinks = $parseLinks($linksRaw);
+$useCustomLinks = ($config['links.use_custom_links'] ?? 'no') === 'yes';
+$navLinks = [];
+$page = $this->getData('page');
+if (!$useCustomLinks && $page && method_exists($page, 'getHeaderNavigationPages')) {
+    $footerPages = $page->getHeaderNavigationPages(30);
+    foreach ($footerPages as $fp) {
+        $ft = $fp['type'] ?? '';
+        $labelKey = 'links.footer_label_' . $ft;
+        $configuredLabel = trim((string)($config[$labelKey] ?? ''));
+        $name = $configuredLabel !== '' ? $configuredLabel : ($fp['title'] ?? '');
+        $url = $fp['url'] ?? '/';
+        if (isset($fp['type']) && $fp['type'] === \GuoLaiRen\PageBuilder\Model\Page::TYPE_HOME) {
+            $name = __('Home');
+            $url = '/';
+        }
+        $navLinks[] = ['name' => $name, 'url' => $url];
+    }
+}
+if ($useCustomLinks || empty($navLinks)) {
+    $navLinks = $parseLinks($linksRaw);
+}
+if (empty($navLinks)) {
+    $navLinks = [['name' => 'Download App', 'url' => '#download'], ['name' => 'Games', 'url' => '#games'], ['name' => 'FAQ', 'url' => '#faq'], ['name' => 'Contact', 'url' => '/contact']];
+}
 
 // 版权配置
 $copyrightText = $config['copyright.text'] ?? 'Designed for clarity, speed, and compliance-first guidance.';
