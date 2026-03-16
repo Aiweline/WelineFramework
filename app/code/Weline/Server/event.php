@@ -62,7 +62,7 @@ return [
     
     /**
      * 证书删除事件
-     * 当 SSL 证书被删除（含批量删除、ssl:reload --clear 清理）时触发
+     * 当 SSL 证书被删除（含批量删除、server:ssl:reload --clear 清理）时触发
      */
     'Weline_Server::domain::certificate_deleted' => [
         'name' => __('证书已删除'),
@@ -143,6 +143,38 @@ return [
             'rules' => ['type' => 'array', 'required' => true, 'description' => '保存时提交的规则'],
             'merged_rules' => ['type' => 'array', 'required' => true, 'description' => '合并默认值后的完整规则'],
             'instance' => ['type' => 'string', 'required' => false, 'description' => '实例名'],
+        ],
+    ],
+
+    /**
+     * 维护模式状态查询事件（Framework 集成事件）
+     * 由 Framework Env 在 WLS 下触发，本模块通过 IPC 返回当前维护模式状态
+     */
+    'Weline_Server::integration::maintenance_check' => [
+        'name' => __('维护模式状态查询'),
+        'description' => __('由 Framework 触发，用于查询 WLS 运行时维护模式状态。'),
+        'doc' => 'integration/maintenance_check.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'maintenance' => ['type' => 'boolean', 'required' => false, 'description' => '当前维护模式状态（由观察者回填）'],
+            'source' => ['type' => 'string', 'required' => false, 'description' => '状态来源（如 wls/ipc）'],
+        ],
+    ],
+
+    /**
+     * 维护模式状态设置事件（Framework 集成事件）
+     * 由 Framework Env 在 WLS 下触发，本模块通过 IPC 设置维护模式状态
+     */
+    'Weline_Server::integration::maintenance_set' => [
+        'name' => __('维护模式状态设置'),
+        'description' => __('由 Framework 触发，用于在 WLS 运行时设置维护模式状态。'),
+        'doc' => 'integration/maintenance_set.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'maintenance' => ['type' => 'boolean', 'required' => true, 'description' => '目标维护模式状态'],
+            'source' => ['type' => 'string', 'required' => false, 'description' => '设置来源（如 env/service）'],
         ],
     ],
 ];

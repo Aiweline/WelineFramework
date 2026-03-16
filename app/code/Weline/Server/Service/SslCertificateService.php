@@ -898,7 +898,7 @@ CNF;
             @\chmod($certPath, 0644);
             @\chmod($keyPath, 0600);
             
-            $this->updateCertificateRecord(
+            $saved = $this->updateCertificateRecord(
                 $domain,
                 $certPath,
                 $keyPath,
@@ -907,6 +907,9 @@ CNF;
                 $websiteId,
                 self::PROVIDER_SELF_SIGNED
             );
+            if (!$saved) {
+                return ['success' => false, 'message' => __('自签证书文件已生成，但写入证书管理失败，请检查日志并重试')];
+            }
             
             return [
                 'success' => true,
@@ -938,7 +941,7 @@ CNF;
         int $validDays,
         int $websiteId = 0,
         string $provider = self::PROVIDER_SELF_SIGNED
-    ): void {
+    ): bool {
         try {
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
             $isRenewal = $cert->getCertId() > 0;
@@ -1004,9 +1007,11 @@ CNF;
             if ($certType === SslCertificate::CERT_TYPE_WILDCARD) {
                 $this->syncWildcardToSubdomains($domain);
             }
+            return true;
             
         } catch (\Throwable $e) {
             w_log_error('[SslCertificateService] ' . __('更新证书记录失败：%{1}', [$e->getMessage()]));
+            return false;
         }
     }
     
@@ -1387,7 +1392,33 @@ CNF;
             $certId = (int)($cert[SslCertificate::schema_fields_ID] ?? 0);
             $expiresAt = (string)($cert[SslCertificate::schema_fields_EXPIRES_AT] ?? '');
 
-            // 检查证书文件是否存在；不存在时先尝试从证书管理中保存的 PEM 内容恢复
+            // 检查证书文件是否存在；若 DB 路径为空/失效，先尝试从标准目录自动探测并回写路径
+            if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+                [$resolvedCertPath, $resolvedKeyPath] = $this->resolveCertificateFilePaths($domain, $certPath, $keyPath);
+                if ($resolvedCertPath !== '' && $resolvedKeyPath !== '') {
+                    $certPath = $resolvedCertPath;
+                    $keyPath = $resolvedKeyPath;
+                    $cert[SslCertificate::schema_fields_CERT_PATH] = $certPath;
+                    $cert[SslCertificate::schema_fields_KEY_PATH] = $keyPath;
+
+                    // 路径探测成功后同步回 DB，避免后续请求重复误判
+                    try {
+                        $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
+                        $certModel->load($certId);
+                        if ($certModel->getCertId()) {
+                            $certModel->setCertPath($certPath)
+                                ->setKeyPath($keyPath)
+                                ->setStatus(SslCertificate::STATUS_ACTIVE)
+                                ->setRenewError('')
+                                ->save();
+                        }
+                    } catch (\Throwable $e) {
+                        w_log_warning('[SslCertificateService] 自动回写证书路径失败: ' . $e->getMessage());
+                    }
+                }
+            }
+
+            // 标准目录探测后仍不可用时，再尝试从证书管理中保存的 PEM 内容恢复
             if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
                 $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
                 if (!$isExpired && $this->restoreCertificateFilesFromData($cert)) {
@@ -1441,6 +1472,37 @@ CNF;
         }
         
         return $map;
+    }
+
+    /**
+     * 解析证书文件路径（优先使用现有路径，其次探测标准目录下常见文件名）。
+     *
+     * @return array{0:string,1:string} [certPath,keyPath]
+     */
+    protected function resolveCertificateFilePaths(string $domain, string $certPath, string $keyPath): array
+    {
+        if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
+            return [$certPath, $keyPath];
+        }
+
+        $certDir = $this->getCertificateDir($domain);
+        $candidates = [
+            ['cert' => 'fullchain.pem', 'key' => 'privkey.pem'],
+            ['cert' => 'cert.pem', 'key' => 'key.pem'],
+            ['cert' => 'ssl.crt', 'key' => 'ssl.key'],
+            ['cert' => 'server.crt', 'key' => 'server.key'],
+            ['cert' => 'certificate.crt', 'key' => 'private.key'],
+        ];
+
+        foreach ($candidates as $candidate) {
+            $candidateCertPath = $certDir . $candidate['cert'];
+            $candidateKeyPath = $certDir . $candidate['key'];
+            if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
+                return [$candidateCertPath, $candidateKeyPath];
+            }
+        }
+
+        return ['', ''];
     }
     
     /**
@@ -2018,7 +2080,7 @@ CNF;
                 $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
                 $issuer = ((string) ($certInfo['issuer'] ?? '')) !== '' ? (string) $certInfo['issuer'] : $this->getIssuerByProvider($provider);
 
-                // 将 PEM 内容写入证书记录，供 ssl:reload 等场景从 DB 恢复证书
+                // 将 PEM 内容写入证书记录，供 server:ssl:reload 等场景从 DB 恢复证书
                 $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
                 // ACME 只生成 fullchain.pem + privkey.pem，补全 chain.pem + cert.pem 到磁盘
                 if ($certContents['chain_pem'] !== '' && !\is_file($chainPath)) {
@@ -3409,7 +3471,7 @@ CNF;
         }
 
         // 3. 通知其他模块清除关联状态
-        $this->dispatchCertificateDeletedEvent($domain, $certId, (string) __('ssl:reload --clear 清理'));
+        $this->dispatchCertificateDeletedEvent($domain, $certId, (string) __('server:ssl:reload --clear 清理'));
 
         $result['deleted']++;
         $result['deleted_domains'][] = $domain;
