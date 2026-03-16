@@ -197,6 +197,18 @@ class HeaderCollector implements HeaderCollectorInterface
         ];
         return $this;
     }
+
+    /**
+     * 移除已收集的 Cookie（按名称），响应中不再发送该 Set-Cookie。
+     *
+     * @param string $name Cookie 名称
+     * @return static
+     */
+    public function removeCookie(string $name): static
+    {
+        unset($this->cookies[$name]);
+        return $this;
+    }
     
     /**
      * 获取所有 Cookie
