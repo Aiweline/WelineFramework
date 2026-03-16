@@ -1150,8 +1150,8 @@ class PageRenderService
             return $this->renderVisualMode($headerHtml, $contentHtml, $footerHtml, $debugInfo, $previewBoot, $page, $styleCode);
         }
         
-        // preview 和 live 模式：纯净输出
-        return $previewBoot . $headerHtml . $contentHtml . $footerHtml;
+        // preview 和 live 模式：输出完整 HTML 文档，主题样式放入 <head>，避免 head 为空、样式错位
+        return $this->renderLiveOrPreviewDocument($headerHtml, $contentHtml, $footerHtml, $previewBoot, $page, $styleCode);
     }
     
     /**
@@ -1208,6 +1208,77 @@ class PageRenderService
 </html>';
     }
     
+    /**
+     * live/preview 模式：输出完整 HTML 文档，将主题样式放入 <head>，避免 head 为空、样式错位
+     */
+    private function renderLiveOrPreviewDocument(
+        string $headerHtml,
+        string $contentHtml,
+        string $footerHtml,
+        string $previewBoot,
+        Page $page,
+        string $styleCode
+    ): string {
+        $headerResult = $this->cleanHtmlDocumentTagsAndExtractStyles($headerHtml);
+        $contentResult = $this->cleanHtmlDocumentTagsAndExtractStyles($contentHtml);
+        $footerResult = $this->cleanHtmlDocumentTagsAndExtractStyles($footerHtml);
+
+        $headStyles = $headerResult['styles'] . $contentResult['styles'] . $footerResult['styles'];
+        $pageTitle = $page ? ($page->getData('title') ?: '') : '';
+        if ($pageTitle === '') {
+            $pageTitle = 'Preview';
+        }
+        $templateHelper = Template::getInstance();
+        $baseCssUrl = $templateHelper->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
+        $baseCssLink = '';
+        if ($baseCssUrl !== '' && $baseCssUrl !== null) {
+            $baseCssLink = '<link rel="stylesheet" href="' . htmlspecialchars($baseCssUrl, ENT_QUOTES, 'UTF-8') . '">';
+        }
+        $headerCustomCode = $page->getData(Page::schema_fields_HEADER_CUSTOM_CODE) ?? '';
+        $footerCustomCode = $page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '';
+
+        $headEnd = (!empty($headerCustomCode) ? "\n    " . $headerCustomCode : '') . "\n</head>";
+        $bodyEnd = (!empty($footerCustomCode) ? "\n    " . $footerCustomCode : '') . "\n</body>";
+
+        return '<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>' . htmlspecialchars($pageTitle) . '</title>
+    ' . $baseCssLink . '
+    ' . $headStyles . '
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    </style>' . $headEnd . '
+<body>
+    ' . $previewBoot . '
+    ' . $headerResult['html'] . '
+    ' . $contentResult['html'] . '
+    ' . $footerResult['html'] . $bodyEnd . '
+</html>';
+    }
+
+    /**
+     * 清理文档标签并从片段中提取 <style>，返回 body 片段与要放入 head 的样式（供 live/preview 使用）
+     */
+    private function cleanHtmlDocumentTagsAndExtractStyles(string $html): array
+    {
+        $styles = '';
+        if (preg_match_all('/<style[^>]*>.*?<\/style>/is', $html, $matches)) {
+            $styles = implode("\n", $matches[0]);
+            $html = preg_replace('/<style[^>]*>.*?<\/style>/is', '', $html);
+        }
+        $html = preg_replace('/<!DOCTYPE[^>]*>/i', '', $html);
+        $html = preg_replace('/<html[^>]*>/i', '', $html);
+        $html = preg_replace('/<\/html>/i', '', $html);
+        $html = preg_replace('/<head[^>]*>.*?<\/head>/is', '', $html);
+        $html = preg_replace('/<body[^>]*>/i', '', $html);
+        $html = preg_replace('/<\/body>/i', '', $html);
+        return ['html' => trim($html), 'styles' => $styles];
+    }
+
     /**
      * 清理 HTML 文档结构标签
      * 
