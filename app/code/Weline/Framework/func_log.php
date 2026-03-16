@@ -221,3 +221,27 @@ if (!function_exists('w_log_sql')) {
         w_log('debug', 'SQL: {_sql}', $context, 'sql');
     }
 }
+
+if (!function_exists('w_auth_log')) {
+    /**
+     * 开发模式下将登录/权限认证步骤与数据写入 var/log/auth.log，生产环境不写入。
+     *
+     * @param string $step 步骤标识，如 login_post_success, acl_not_logged_in
+     * @param string $message 简短描述
+     * @param array $data 上下文数据（勿含密码等敏感字段）
+     */
+    function w_auth_log(string $step, string $message, array $data = []): void
+    {
+        if (!\defined('DEV') || !DEV) {
+            return;
+        }
+        $line = \json_encode([
+            'ts' => \date('Y-m-d H:i:s'),
+            'step' => $step,
+            'message' => $message,
+            'data' => $data,
+        ], \JSON_UNESCAPED_UNICODE) . "\n";
+        $path = (\defined('BP') ? BP : '') . 'var/log/auth.log';
+        @\file_put_contents($path, $line, \FILE_APPEND | \LOCK_EX);
+    }
+}
