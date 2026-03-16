@@ -167,6 +167,36 @@ try {
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
     WlsLogger::info_("框架运行时初始化成功");
+
+    // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
+    $sessionCfg = \is_array($envConfig) ? ($envConfig['session'] ?? []) : [];
+    $sessionHost = (string)($sessionCfg['server_host'] ?? $sessionCfg['host'] ?? '127.0.0.1');
+    $sessionPort = (int)($sessionCfg['server_port'] ?? $sessionCfg['port'] ?? 19970);
+    $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
+        'connect_timeout' => 1.0,
+        'timeout' => 2.0,
+        'token_file_name' => 'session_server.token',
+    ]);
+    $sessionConnected = false;
+    for ($attempt = 1; $attempt <= 10; $attempt++) {
+        if ($sessionClient->connect()) {
+            $sessionConnected = true;
+            break;
+        }
+        WlsLogger::warning_("Session 服务连接失败，2 秒后重试 ({$attempt}/10)");
+        if ($attempt < 10) {
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(2);
+        }
+    }
+    if (!$sessionConnected) {
+        WlsLogger::error_("Session 服务连接失败，已重试 10 次，Worker 拒绝工作并退出");
+        w_log_error("[WLS Worker] Session 服务不可达 (host={$sessionHost}, port={$sessionPort})，已重试 10 次，退出");
+        exit(1);
+    }
+    WlsLogger::info_("Session 服务连接成功");
+    if (\defined('STDOUT') && \is_resource(STDOUT)) {
+        \fwrite(STDOUT, "\033[32m    ✓ Session 服务连接成功\033[0m\n");
+    }
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());
