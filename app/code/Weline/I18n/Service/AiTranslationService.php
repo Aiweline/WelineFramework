@@ -83,12 +83,7 @@ class AiTranslationService
             $untranslatedWords = $this->getUntranslatedWords($targetLocale, $batchSize);
 
             if (empty($untranslatedWords)) {
-                $this->sendSystemMessage(
-                    __('AI翻译完成'),
-                    __('没有待翻译的词，所有词典已翻译完成。'),
-                    'ri-checkbox-circle-line'
-                );
-
+                // 没有待翻译的词时静默返回，不再发送系统消息
                 return [
                     'success' => true,
                     'translated' => 0,

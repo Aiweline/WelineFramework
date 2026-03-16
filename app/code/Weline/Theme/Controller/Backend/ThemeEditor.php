@@ -1248,6 +1248,12 @@ class ThemeEditor extends BackendController
             ]);
         }
 
+        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
+        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
+        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+        $session->setData('preview_theme_id', $themeId);
+        $session->setData('preview_theme_area', 'frontend');
+
         try {
             // 获取主题信息
             $this->welineTheme->load($themeId);
@@ -1656,6 +1662,12 @@ class ThemeEditor extends BackendController
             ]);
         }
 
+        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
+        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
+        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+        $session->setData('preview_theme_id', $themeId);
+        $session->setData('preview_theme_area', 'frontend');
+
         try {
             // 获取原始编译后的 HTML
             $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
@@ -1720,6 +1732,26 @@ class ThemeEditor extends BackendController
             $editorArea = 'frontend';
         }
 
+        // 设置预览主题到 session，让 TemplateFetchFile Observer 能识别当前编辑的主题
+        // 这是主题编辑器切换主题后实时生效的关键
+        // 注意：必须使用 ObjectManager::getInstance(Session::class) 与 Observer 保持一致
+        if ($themeId) {
+            $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+            $session->setData('preview_theme_id', $themeId);
+            $session->setData('preview_theme_area', $editorArea);
+        }
+        // 强制本次请求内 fetch 走 fetchFile 并触发 fetch_file（避免 view 缓存命中导致观察者不执行）
+        $this->request->setData('skip_view_file_cache', true);
+
+        // 主题编辑器预览：禁用一切相关缓存，确保每次解析到当前 theme_id 对应的主题目录
+        try {
+            w_cache('view')->clear();
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            \Weline\Theme\Helper\ThemeData::clearCache();
+        } catch (\Throwable $e) {
+            // 忽略单类缓存清理失败，继续渲染
+        }
+
         // 检查布局模板文件是否存在（按区域：frontend/backend）
         $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
         $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
@@ -1747,10 +1779,47 @@ class ThemeEditor extends BackendController
 
         // 返回编译后的布局（在 iframe 中渲染，按 editor_area 使用前端或后端布局）
         $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        $html = $this->fetch($templatePath);
+        // 强制本次 fetch 走 fetchFile 并触发 fetch_file：删除该布局在 view 缓存中的键（与 Template 中 key 一致）
+        try {
+            $modulePath = $this->request->getRouterData('module_path');
+            if ($modulePath) {
+                $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
+                $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
+                $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
+                w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
+                w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
+            }
+        } catch (\Throwable $e) {
+            // 忽略，继续 fetch
+        }
+
+        // 两阶段渲染：若布局模板依赖 base（setLayout('base')），先渲染内容再套 base，否则只渲染当前布局
+        $contentHtml = $this->fetch($templatePath);
+        $basePath = "Weline_Theme::theme/{$editorArea}/layouts/base.phtml";
+        $baseExists = $this->resolveThemeLayoutExists($themeId, $editorArea, 'base', 'default');
+        if ($baseExists) {
+            $this->getTemplate()->setData('child_html', ['content' => $contentHtml]);
+            try {
+                if ($modulePath = $this->request->getRouterData('module_path')) {
+                    $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
+                    $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
+                    $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                    w_cache('view')->delete($viewDir . $baseRel . $langLocal);
+                    w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
+                    w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
+                }
+            } catch (\Throwable $e) {
+                // 忽略
+            }
+            $html = $this->fetch($basePath);
+        } else {
+            $html = $contentHtml;
+        }
+
         // 注入编辑模式的 CSS 和 JS
         $html = $this->injectEditorModeAssets($html);
-        
+
         return $html;
     }
     
@@ -1793,7 +1862,33 @@ HTML;
         
         return $html;
     }
-    
+
+    /**
+     * 判断当前预览主题下是否存在指定布局文件（用于两阶段渲染时是否套 base）
+     */
+    private function resolveThemeLayoutExists(int $themeId, string $editorArea, string $layoutType, string $layoutOption = 'default'): bool
+    {
+        if ($themeId <= 0) {
+            return false;
+        }
+        $theme = ObjectManager::getInstance(WelineTheme::class);
+        $theme->load($themeId);
+        if (!$theme->getId()) {
+            return false;
+        }
+        $modules = \Weline\Framework\App\Env::getInstance()->getModuleList();
+        if (!isset($modules['Weline_Theme'])) {
+            return false;
+        }
+        $ds = DS;
+        $modulePath = rtrim($modules['Weline_Theme']['base_path'], $ds) . $ds . 'view' . $ds . 'theme' . $ds
+            . $editorArea . $ds . 'layouts' . $ds . $layoutType . $ds . $layoutOption . '.phtml';
+        $resolver = ObjectManager::getInstance(\Weline\Theme\Helper\ThemePathResolver::class);
+        $resolved = $resolver->resolveThemeFile($modulePath, $theme);
+
+        return $resolved !== '' && is_file($resolved);
+    }
+
     /**
      * 渲染布局文件不存在的错误页面
      */

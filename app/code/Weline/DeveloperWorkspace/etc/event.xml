@@ -6,9 +6,13 @@
         <observer name="Weline_DeveloperWorkspace::module_upgrade_documents" instance="Weline\DeveloperWorkspace\Observer\ModuleUpgradeObserver" disabled="false" shared="true" sort="10"/>
     </event>
     
-    <!-- 开发工具面板：在应用运行完成后注入 -->
-    <event name="Weline_Framework::App::run_after">
+    <!-- 开发工具面板：监听 Framework 统一遥测事件 -->
+    <event name="Weline_Framework::telemetry::request_collected">
         <observer name="Weline_DeveloperWorkspace::dev_tool_panel" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
+    </event>
+    <!-- 兼容回退：当 telemetry 事件注册未刷新时，仍可通过 run_after 注入面板 -->
+    <event name="Weline_Framework::App::run_after">
+        <observer name="Weline_DeveloperWorkspace::dev_tool_panel_compat" instance="Weline\DeveloperWorkspace\Observer\DevToolPanelObserver" disabled="false" shared="true" sort="0"/>
     </event>
 </config>
 

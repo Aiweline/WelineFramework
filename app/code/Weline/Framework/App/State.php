@@ -24,6 +24,9 @@ class State extends DataObject
 
     public static bool $is_backend = false;
 
+    /** 请求级缓存：getLangLocal() 结果，同请求内只触发一次事件，WLS 下由 StateManager 重置 */
+    private static ?string $langLocalCache = null;
+
     /**
      * State 初始函数...
      *
@@ -104,24 +107,28 @@ class State extends DataObject
 
     /**
      * 获取语言本地化代码（触发事件，允许其他模块修改）
-     * 
+     * 同请求内只触发一次事件，后续调用直接返回缓存值，减少重复 dispatch。
+     *
      * @return string
      */
     public static function getLangLocal(): string
     {
+        if (self::$langLocalCache !== null) {
+            return self::$langLocalCache;
+        }
         $data = new DataObject();
         $data->setData('lang', self::getLang());
         $data->setData('currency', self::getCurrency());
         $data->setData('lang_local', self::getLang());
-        
-        // 触发事件，允许其他模块修改 lang_local
+
         try {
             \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
                 ->dispatch('Weline_Framework_Cookie::lang_local', $data);
         } catch (\Exception $e) {
             // 如果事件系统未初始化，静默处理
         }
-        
-        return $data->getData('lang_local');
+
+        self::$langLocalCache = $data->getData('lang_local');
+        return self::$langLocalCache;
     }
 }

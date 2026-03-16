@@ -102,9 +102,10 @@ class TemplateFetchFile implements ObserverInterface
                     $session = ObjectManager::getInstance(Session::class);
                     $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
                 }
-                // 校验区域：仅当模板路径对应预览区域时才使用预览主题
+                // 校验区域：仅当模板路径对应预览区域时才使用预览主题（统一用 / 判断，兼容 Windows \）
                 if ($previewThemeId && $previewThemeArea) {
-                    $areaFromPath = str_contains($module_file_path, 'theme/frontend') ? 'frontend' : (str_contains($module_file_path, 'theme/backend') ? 'backend' : '');
+                    $pathNorm = str_replace('\\', '/', $module_file_path);
+                    $areaFromPath = str_contains($pathNorm, 'theme/frontend') ? 'frontend' : (str_contains($pathNorm, 'theme/backend') ? 'backend' : '');
                     if ($areaFromPath !== '' && $areaFromPath !== $previewThemeArea) {
                         $previewThemeId = 0;
                     }
@@ -113,23 +114,22 @@ class TemplateFetchFile implements ObserverInterface
                 $previewThemeId = 0;
             }
         }
+        $area = $this->resolveAreaFromPath($module_file_path);
         if ($previewThemeId) {
             // 使用预览主题
             $this->welineTheme->load($previewThemeId);
             if ($this->welineTheme->getId()) {
                 $theme = $this->welineTheme;
             } else {
-                // 预览主题不存在，使用激活的主题
                 try {
-                    $theme = $this->welineTheme->getActiveTheme();
+                    $theme = $this->welineTheme->getActiveTheme($area);
                 } catch (\Exception $exception) {
                     throw  new Exception(__('主题异常：') . $exception->getMessage());
                 }
             }
         } else {
-            // 正常流程：使用激活的主题
             try {
-                $theme = $this->welineTheme->getActiveTheme();
+                $theme = $this->welineTheme->getActiveTheme($area);
             } catch (\Exception $exception) {
                 throw  new Exception(__('主题异常：') . $exception->getMessage());
             }
@@ -144,5 +144,20 @@ class TemplateFetchFile implements ObserverInterface
         $theme_file_path = $this->themePathResolver->resolveThemeFile($module_file_path, $theme);
         $theme_file_path = str_replace('\\', DS, $theme_file_path);
         $fileData->setData('filename', $theme_file_path);
+    }
+
+    /**
+     * 从模板路径解析区域（frontend/backend）
+     */
+    private function resolveAreaFromPath(string $module_file_path): ?string
+    {
+        $pathNorm = str_replace('\\', '/', $module_file_path);
+        if (str_contains($pathNorm, 'theme/frontend')) {
+            return 'frontend';
+        }
+        if (str_contains($pathNorm, 'theme/backend')) {
+            return 'backend';
+        }
+        return null;
     }
 }

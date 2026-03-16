@@ -1261,7 +1261,9 @@ class Localization extends BaseController
             // 查找简码为空或ISO2为空或ISO3为空的记录
             // 使用OR条件查找任一字段为空的记录
             $missingCodes = $localeModel->reset()
-                ->whereRaw($this->locale::schema_fields_SHORT_CODE . ' IS NULL OR ' . $this->locale::schema_fields_SHORT_CODE . ' = \'\' OR ' . $this->locale::schema_fields_ISO2 . ' IS NULL OR ' . $this->locale::schema_fields_ISO2 . ' = \'\' OR ' . $this->locale::schema_fields_ISO3 . ' IS NULL OR ' . $this->locale::schema_fields_ISO3 . ' = \'\'')
+                ->where($this->locale::schema_fields_SHORT_CODE, '', '=', 'OR')
+                ->where($this->locale::schema_fields_ISO2, '', '=', 'OR')
+                ->where($this->locale::schema_fields_ISO3, '', '=')
                 ->select()
                 ->fetch()
                 ->getItems();

@@ -555,11 +555,10 @@ class DomainPool extends Model
      */
     public function getSelectableForSiteGroupedByRoot(): array
     {
-        $siteCreatedCondition = '(' . self::schema_fields_SITE_CREATED . ' IS NULL OR ' . self::schema_fields_SITE_CREATED . ' = 0)';
         $domains = $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 1)
-            ->whereRaw($siteCreatedCondition, 'AND')
+            ->where(self::schema_fields_SITE_CREATED, 0)
             ->order(self::schema_fields_ROOT_DOMAIN, 'ASC')
             ->order(self::schema_fields_DOMAIN, 'ASC')
             ->select()
@@ -714,10 +713,9 @@ class DomainPool extends Model
      */
     public function getDomainsNotSiteReady(int $limit = 100): array
     {
-        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->whereRaw($siteReadyCondition, 'AND')
+            ->where(self::schema_fields_SITE_READY, 0)
             ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
             ->limit($limit)
             ->select()
@@ -732,20 +730,24 @@ class DomainPool extends Model
      */
     public function getDomainsNeedResolveCheck(int $limit = 100): array
     {
-        // 使用数据库函数避免 PHP 日期字符串中的冒号被 PDO 误解析为命名参数（PostgreSQL: time zone "p11:p40" not recognized）
-        $thresholdExpr = "(NOW() - INTERVAL '10 minutes')";
-        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
-        $resolveCheckedCondition = '(' . self::schema_fields_RESOLVE_CHECKED_AT . ' IS NULL OR '
-            . self::schema_fields_RESOLVE_CHECKED_AT . ' < ' . $thresholdExpr . ')';
-
-        return $this->clearQuery()
+        $thresholdTime = date('Y-m-d H:i:s', time() - 600);
+        $domains = $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->whereRaw($siteReadyCondition, 'AND')
-            ->whereRaw($resolveCheckedCondition, 'AND')
+            ->where(self::schema_fields_SITE_READY, 0)
             ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
-            ->limit($limit)
             ->select()
             ->fetchArray();
+        $result = [];
+        foreach ($domains as $domain) {
+            $checkedAt = (string)($domain[self::schema_fields_RESOLVE_CHECKED_AT] ?? '');
+            if ($checkedAt === '' || $checkedAt < $thresholdTime) {
+                $result[] = $domain;
+                if (count($result) >= $limit) {
+                    break;
+                }
+            }
+        }
+        return $result;
     }
     
     /**
@@ -758,11 +760,9 @@ class DomainPool extends Model
      */
     public function getDomainsNeedCertificate(int $limit = 50): array
     {
-        $siteReadyCondition = '(' . self::schema_fields_SITE_READY . ' IS NULL OR ' . self::schema_fields_SITE_READY . ' = 0)';
-
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->whereRaw($siteReadyCondition, 'AND')
+            ->where(self::schema_fields_SITE_READY, 0)
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)

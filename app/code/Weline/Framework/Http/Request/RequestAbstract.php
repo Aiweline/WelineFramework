@@ -648,21 +648,19 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getDisplayBaseUrl(): string
     {
-        // 获取当前协议
         $scheme = $this->getSsl();
-        // 获取主机名
-        $host = $_SERVER['SERVER_NAME'] ?? ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        // 获取端口
+        // 优先使用 HTTP_HOST（客户端 Host 头通常带端口），保证生成的 URL 携带当前请求端口
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
         $port = $_SERVER['SERVER_PORT'] ?? '';
         $withPort = false;
-        if ($port !== '') {
-            // 80和443为默认端口，其它端口需显式加上
+        if (\str_contains($host, ':')) {
+            $withPort = false;
+        } elseif ($port !== '') {
             $withPort = !(
                 ($scheme === 'http' && $port == 80) ||
                 ($scheme === 'https' && $port == 443)
             );
         }
-        // 解析当前请求的路径部分
         $requestUri = $_SERVER['REQUEST_URI'] ?? '';
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
         $basePath = '';

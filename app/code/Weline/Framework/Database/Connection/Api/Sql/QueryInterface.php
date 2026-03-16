@@ -226,22 +226,6 @@ interface QueryInterface
     public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): QueryInterface;
 
     /**
-     * @DESC          # 原生 SQL 条件
-     *
-     * 用于无法通过结构化 where() 表达的复杂条件（如 OR 分组、SQL 函数、字段对比等）。
-     * 条件会被括号包裹后直接嵌入 WHERE 子句，不做字段名引用处理。
-     *
-     * 示例：
-     *   ->whereRaw('end_date IS NULL OR end_date >= NOW()')
-     *   ->whereRaw('processed_count < target_count')
-     *
-     * @param string $sql 原生 SQL 条件表达式
-     * @param string $where_logic 与下一个 where 条件的连接符，默认 AND
-     * @return QueryInterface
-     */
-    public function whereRaw(string $sql, string $where_logic = 'AND'): QueryInterface;
-
-    /**
      * @DESC          # 累减
      * @param string $field
      * @param float|int $value
