@@ -252,8 +252,12 @@ class Session implements SessionInterface
     public function save(): void
     {
         if ($this->dirty && $this->sessionId !== '') {
-            $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
-            $this->dirty = false;
+            $ok = $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
+            if ($ok) {
+                $this->dirty = false;
+            } else {
+                w_log_warning('[Session] 落库失败，sessionId=' . \substr($this->sessionId, 0, 8) . '...', [], 'session');
+            }
         }
     }
 
