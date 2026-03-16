@@ -396,6 +396,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
 
         $response = $this->makeRequest("/zones/{$zoneId}/dns_records", 'POST', $data, $credentials);
 
+        $dnsResponse = [
+            'provider' => 'cloudflare',
+            'success' => (bool)($response['success'] ?? false),
+            'result_id' => (string)($response['result']['id'] ?? ''),
+            'errors' => $response['errors'] ?? [],
+        ];
+
         if (!($response['success'] ?? false)) {
             $errors = $response['errors'] ?? [];
             $errorMsg = !empty($errors) ? ($errors[0]['message'] ?? __('未知错误')) : __('添加记录失败');
@@ -406,11 +413,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
                     'success' => true,
                     'record_id' => $existing,
                     'message' => $existing !== '' ? __('DNS 记录已存在，复用现有记录') : __('DNS 记录已存在（与现有记录相同）'),
+                    'dns_response' => $dnsResponse,
                 ];
             }
             return [
                 'success' => false,
                 'message' => $errorMsg,
+                'dns_response' => $dnsResponse,
             ];
         }
 
@@ -418,6 +427,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
             'success' => true,
             'record_id' => $response['result']['id'] ?? '',
             'message' => __('DNS 记录添加成功'),
+            'dns_response' => $dnsResponse,
         ];
     }
 
