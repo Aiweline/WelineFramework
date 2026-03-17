@@ -1,6 +1,6 @@
 ---
 name: skill-trigger-reminders
-description: 场景→技能映射。计划→planning；测试→testing；事件/Hook/Extends→extension-points；进程/WLS→runtime-and-process；提示→friendly-notifications；上下文压缩→context-compression（必加载）。
+description: 场景→技能映射。计划→planning；测试→testing；事件/Hook/Extends→extension-points；进程/WLS→runtime-and-process；提示→friendly-notifications；上下文压缩→context-compression（必加载）；SSE/流式/EventSource→sse-streaming。
 globs: []
 alwaysApply: false
 ---
@@ -27,6 +27,7 @@ alwaysApply: false
 | 菜单/ACL | acl-permission-system |
 | Block/Taglib/Widget/DataTable | frontend-components |
 | 配置/ env/扩展 | config-and-env |
+| SSE/流式/EventSource/text/event-stream | sse-streaming |
 | 新增/修改规则技能 | cursor-as-reference |
 
 ## 禁止

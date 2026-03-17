@@ -20,7 +20,7 @@ alwaysApply: false
 ## 必做
 
 - 用前验证方法存在（grep/search），禁止 invent 方法
-- 用户可见文案用 `__()` 或 `<lang>`，词条进 i18n/*.csv
+- 用户可见文案用 `__()` 或 `<lang>`，词条进 i18n/*.csv；标签属性用 `@lang{xxx}` 等静态标签，禁止写 `<?= ?>` 干扰标签解析
 - 实例用 ObjectManager::getInstance(Class::class)；Model 用 getInstance(,,false)；控制器构造函数注入
 - 文件头 declare(strict_types=1)；遵循框架模式；测试放 Test/Unit/；SOLID（单职责、依赖抽象）
 - 注释中禁止写 <?、?>、<?php

@@ -1,0 +1,286 @@
+<?php
+/**
+ * AI 生成页面内容组件
+ * 包含模态框 HTML 和 openAiGenerateModal、generatePageContent 逻辑
+ * 通过 w:template 引入，依赖 $page、$isEdit、$this
+ */
+?>
+<!-- AI生成内容模态框 -->
+<div class="modal fade" id="aiGenerateModal" tabindex="-1" aria-labelledby="aiGenerateModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiGenerateModalLabel">
+                    <i class="mdi mdi-robot"></i> <?= __('AI一键生成页面内容') ?>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="aiDescription" class="form-label">
+                        <?= __('页面描述') ?> <span class="text-danger">*</span>
+                    </label>
+                    <textarea class="form-control" id="aiDescription" rows="4"
+                        placeholder="<?= $isEdit ? __('AI将基于当前页面的信息生成内容，您也可以修改描述以调整生成方向...') : __('请描述您想要创建的页面内容，例如：创建一个关于我们页面，介绍公司历史、团队和使命...') ?>"><?= htmlspecialchars(($page && $page->getId()) ? (string)($page->getData('ai_description') ?? '') : '') ?></textarea>
+                    <div class="form-text">
+                        <?= __('详细描述页面内容，AI 将根据描述和当前页面类型生成标题、SEO 信息及页面内容。') ?>
+                    </div>
+                </div>
+                <?php
+                $pageTypePromptMap = $this->getData('page_type_prompt_map') ?? [];
+                $pageTypeNames = $this->getData('page_types') ?? [];
+                ?>
+                <div class="accordion mb-3" id="aiGenerateAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#aiTypePromptsCollapse" aria-expanded="false" aria-controls="aiTypePromptsCollapse">
+                                <i class="mdi mdi-file-document-outline me-2"></i> <?= __('各页面类型生成提示词') ?>
+                            </button>
+                        </h2>
+                        <div id="aiTypePromptsCollapse" class="accordion-collapse collapse" data-bs-parent="#aiGenerateAccordion">
+                            <div class="accordion-body p-0">
+                                <div class="list-group list-group-flush">
+                                    <?php foreach ($pageTypePromptMap as $type => $instruction): ?>
+                                    <div class="list-group-item py-2 px-3">
+                                        <strong class="text-primary"><?= htmlspecialchars($pageTypeNames[$type] ?? $type) ?></strong>
+                                        <p class="mb-0 mt-1 small text-muted"><?= htmlspecialchars($instruction) ?></p>
+                                    </div>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#aiHowItWorksCollapse" aria-expanded="false" aria-controls="aiHowItWorksCollapse">
+                                <i class="mdi mdi-information-outline me-2"></i> <?= __('AI 生成工作原理指南') ?>
+                            </button>
+                        </h2>
+                        <div id="aiHowItWorksCollapse" class="accordion-collapse collapse" data-bs-parent="#aiGenerateAccordion">
+                            <div class="accordion-body">
+                                <ol class="mb-0 ps-3 small">
+                                    <li><?= __('根据页面类型选择对应的提示词模板，生成内容会遵循该类型的结构和侧重点。') ?></li>
+                                    <li><?= __('您在「页面描述」中填写的信息将作为主要输入；编辑模式下若描述为空，会基于当前页面的标题、SEO、内容自动生成描述。') ?></li>
+                                    <li><?= __('生成结果包含：title、meta_title、meta_description、meta_keywords；非首页类型还会生成 content（HTML 内容）。') ?></li>
+                                    <li><?= __('首页类型不生成 content 字段，由样式模板的组件负责展示。') ?></li>
+                                    <li><?= __('生成语言与页面选择的默认语言一致，请确保已正确设置页面的「默认语言」。') ?></li>
+                                    <li><?= __('生成完成后请检查并微调内容，AI 输出仅供参考与加速创作。') ?></li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div id="aiGenerateProgressMessage" class="mt-2 small text-muted" style="display:none;"></div>
+                <w:theme:sse-terminal id="aiPageContentSseTerminal" title="@lang{生成过程}" height="240px"
+                    events="start,progress,chunk,done,error" show-toolbar="true" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" onclick="generatePageContent()" id="aiGenerateSubmitBtn">
+                    <span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span>
+                    <i class="mdi mdi-robot"></i> <?= __('生成内容') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+if (typeof window.openAiGenerateModal === 'function') return;
+var _t = <?= json_encode(__('生成内容'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+window.openAiGenerateModal = function() {
+    var modal = document.getElementById('aiGenerateModal');
+    if (!modal) return;
+    var closeBtn = modal.querySelector('.btn-close');
+    var cancelBtn = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+    var submitBtn = document.getElementById('aiGenerateSubmitBtn');
+    var spinner = document.getElementById('aiGenerateSpinner');
+    if (closeBtn) { closeBtn.style.pointerEvents = ''; closeBtn.style.opacity = ''; closeBtn.removeAttribute('disabled'); closeBtn.removeAttribute('aria-disabled'); }
+    if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.style.opacity = ''; cancelBtn.style.cursor = ''; cancelBtn.removeAttribute('aria-disabled'); }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span><i class="mdi mdi-robot"></i> ' + _t; }
+    if (spinner) spinner.classList.add('d-none');
+    try { new bootstrap.Modal(modal).show(); } catch (e) { bootstrap.Modal.getOrCreateInstance(modal).show(); }
+    var desc = document.getElementById('aiDescription');
+    var hid = document.getElementById('ai_description_hidden');
+    if (desc && hid) {
+        if (hid.value) desc.value = hid.value;
+        if (!desc.dataset.syncBound) {
+            desc.dataset.syncBound = '1';
+            desc.addEventListener('input', function(){ hid.value = desc.value; });
+            desc.addEventListener('change', function(){ hid.value = desc.value; });
+        }
+    }
+};
+})();
+</script>
+
+<script>
+// AI 生成内容：完整实现（openAiGenerateModal 会被上面的 IIFE 或此处覆盖）
+window.openAiGenerateModal = function() {
+    var modal = document.getElementById('aiGenerateModal');
+    if (!modal) return;
+    var closeBtn = modal.querySelector('.btn-close');
+    var cancelBtn = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
+    var submitBtn = document.getElementById('aiGenerateSubmitBtn');
+    var spinner = document.getElementById('aiGenerateSpinner');
+    if (closeBtn) { closeBtn.style.pointerEvents = ''; closeBtn.style.opacity = ''; closeBtn.removeAttribute('disabled'); closeBtn.removeAttribute('aria-disabled'); }
+    if (cancelBtn) { cancelBtn.disabled = false; cancelBtn.style.opacity = ''; cancelBtn.style.cursor = ''; cancelBtn.removeAttribute('aria-disabled'); }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span><i class="mdi mdi-robot"></i> <?= addslashes(__('生成内容')) ?>'; }
+    if (spinner) spinner.classList.add('d-none');
+    try { new bootstrap.Modal(modal).show(); } catch (e) { bootstrap.Modal.getOrCreateInstance(modal).show(); }
+    var desc = document.getElementById('aiDescription');
+    var hid = document.getElementById('ai_description_hidden');
+    if (desc && hid) {
+        if (hid.value) desc.value = hid.value;
+        if (!desc.dataset.syncBound) {
+            desc.dataset.syncBound = '1';
+            desc.addEventListener('input', function(){ hid.value = desc.value; });
+            desc.addEventListener('change', function(){ hid.value = desc.value; });
+        }
+    }
+    <?php if ($isEdit && $page && $page->getId()): ?>
+    if (desc && !desc.value.trim()) {
+        var pt = document.getElementById('title') && document.getElementById('title').value || '';
+        var mt = document.getElementById('meta_title') && document.getElementById('meta_title').value || '';
+        var md = document.getElementById('meta_description') && document.getElementById('meta_description').value || '';
+        var pc = document.getElementById('custom_content') && document.getElementById('custom_content').value || '';
+        var ad = '';
+        if (pt) ad += '页面标题：' + pt + '\n';
+        if (mt) ad += 'SEO标题：' + mt + '\n';
+        if (md) ad += 'SEO描述：' + md + '\n';
+        if (pc) { var ct = pc.replace(/<[^>]*>/g, '').trim(); if (ct) ad += '当前页面内容摘要：' + (ct.length > 200 ? ct.substring(0, 200) + '...' : ct) + '\n'; }
+        if (ad) { ad += '\n请基于以上信息优化和完善页面内容。'; desc.value = ad; if (hid) hid.value = ad; }
+    }
+    <?php endif; ?>
+};
+
+window.generatePageContent = function() {
+    var descEl = document.getElementById('aiDescription');
+    var description = (descEl && descEl.value) ? descEl.value.trim() : '';
+    <?php if ($isEdit && $page && $page->getId()): ?>
+    if (!description) {
+        var pt = document.getElementById('title') && document.getElementById('title').value || '';
+        var mt = document.getElementById('meta_title') && document.getElementById('meta_title').value || '';
+        var md = document.getElementById('meta_description') && document.getElementById('meta_description').value || '';
+        var pc = document.getElementById('custom_content') && document.getElementById('custom_content').value || '';
+        var ad = '';
+        if (pt) ad += '页面标题：' + pt + '\n';
+        if (mt) ad += 'SEO标题：' + mt + '\n';
+        if (md) ad += 'SEO描述：' + md + '\n';
+        if (pc) { var ct = pc.replace(/<[^>]*>/g, '').trim(); if (ct) ad += '当前页面内容摘要：' + (ct.length > 200 ? ct.substring(0, 200) + '...' : ct) + '\n'; }
+        if (ad) { ad += '\n请基于以上信息优化和完善页面内容。'; description = ad; if (descEl) descEl.value = ad; }
+    }
+    <?php endif; ?>
+    if (!description) {
+        <?php if ($isEdit && $page && $page->getId()): ?>
+        BackendToast.warning(<?= json_encode(__('请输入页面描述，或确保页面有标题、SEO信息或内容'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        <?php else: ?>
+        BackendToast.warning(<?= json_encode(__('请输入页面描述'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        <?php endif; ?>
+        return;
+    }
+    var submitBtn = document.getElementById('aiGenerateSubmitBtn');
+    var spinner = document.getElementById('aiGenerateSpinner');
+    if (!submitBtn) return;
+    var originalHtml = submitBtn.innerHTML;
+    var modalEl = document.getElementById('aiGenerateModal');
+    var modal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+    var closeBtn = modalEl ? modalEl.querySelector('.btn-close') : null;
+    var cancelBtn = modalEl ? modalEl.querySelector('.btn-secondary[data-bs-dismiss="modal"]') : null;
+    var isGenerating = true;
+    if (modal) {
+        var ob = modal._config.backdrop, ok = modal._config.keyboard;
+        modal._config.backdrop = 'static';
+        modal._config.keyboard = false;
+        modalEl.setAttribute('data-bs-backdrop', 'static');
+        modalEl.setAttribute('data-bs-keyboard', 'false');
+        var ph = function(e){ if (isGenerating){ e.preventDefault(); e.stopPropagation(); return false; } };
+        modalEl.addEventListener('hide.bs.modal', ph, { capture: true });
+        modal._restoreClose = function(){ isGenerating = false; modal._config.backdrop = ob; modal._config.keyboard = ok; modalEl.removeAttribute('data-bs-backdrop'); modalEl.removeAttribute('data-bs-keyboard'); modalEl.removeEventListener('hide.bs.modal', ph, { capture: true }); };
+    }
+    if (closeBtn) { closeBtn.style.pointerEvents = 'none'; closeBtn.style.opacity = '0.5'; closeBtn.setAttribute('disabled','disabled'); }
+    if (cancelBtn) { cancelBtn.disabled = true; cancelBtn.style.opacity = '0.5'; cancelBtn.style.cursor = 'not-allowed'; }
+    submitBtn.disabled = true;
+    if (spinner) spinner.classList.remove('d-none');
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= addslashes(__('生成中...')) ?>';
+    var formData = new FormData();
+    formData.append('description', description);
+    formData.append('page_type', (document.getElementById('type') && document.getElementById('type').value) || 'custom_page');
+    <?php if ($isEdit && $page && $page->getId()): ?>formData.append('page_id', <?= (int)$page->getId() ?>);<?php endif; ?>
+    ['title','meta_title','meta_description','meta_keywords','handle','style_code','default_locale'].forEach(function(k){ var e=document.getElementById(k); if(e&&e.value) formData.append(k,e.value); });
+    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content-stream") ?>';
+    var progressEl = document.getElementById('aiGenerateProgressMessage');
+    var sseTerminal = (window.WelineSseTerminal && window.WelineSseTerminal['aiPageContentSseTerminal']) || null;
+    var sseContent = document.getElementById('aiPageContentSseTerminal_content');
+    var sseStatus = document.getElementById('aiPageContentSseTerminal_status');
+    var sseContainer = document.getElementById('aiPageContentSseTerminal');
+    var _sseConnecting = <?= json_encode(__('连接中...'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _sseConnected = <?= json_encode(__('已连接'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _sseDisconnected = <?= json_encode(__('已断开'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _sseGenerating = <?= json_encode(__('正在生成...'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _msgSuccess = <?= json_encode(__('AI已成功生成页面内容，请检查并调整'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _msgFailed = <?= json_encode(__('生成失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var _msgReqFailed = <?= json_encode(__('生成请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    function sseLog(t,y){ y=y||'info'; if(sseTerminal){ sseTerminal.log(t,y); return; } if(!sseContent) return; var l=document.createElement('div'); l.className='weline-sse-terminal-line '+y; l.innerHTML='<span class="weline-sse-terminal-time">['+new Date().toLocaleTimeString('zh-CN',{hour12:false})+']</span><span class="weline-sse-terminal-text">'+(t||'').replace(/</g,'&lt;')+'</span>'; sseContent.appendChild(l); if(sseContent.parentElement) sseContent.parentElement.scrollTop=sseContent.parentElement.scrollHeight; }
+    function sseSetStatus(t){ if(sseStatus) sseStatus.textContent=t||''; if(sseContainer) sseContainer.classList.toggle('connected',t===_sseConnected); }
+    function restoreModalAndButton(){ if(modal&&modal._restoreClose) modal._restoreClose(); if(closeBtn){ closeBtn.style.pointerEvents=''; closeBtn.style.opacity=''; closeBtn.removeAttribute('disabled'); } if(cancelBtn){ cancelBtn.disabled=false; cancelBtn.style.opacity=''; cancelBtn.style.cursor=''; } submitBtn.disabled=false; if(spinner) spinner.classList.add('d-none'); submitBtn.innerHTML=originalHtml; if(progressEl){ progressEl.style.display='none'; progressEl.textContent=''; } sseSetStatus(_sseDisconnected); }
+    function applyGeneratedData(data){
+        if(data.title){ var e=document.getElementById('title'); if(e){ e.value=data.title; e.classList.add('ai-filled'); } }
+        if(data.meta_title){ var e=document.getElementById('meta_title'); if(e){ e.value=data.meta_title; e.classList.add('ai-filled'); } }
+        if(data.meta_description){ var e=document.getElementById('meta_description'); if(e){ e.value=data.meta_description; e.classList.add('ai-filled'); } }
+        if(data.meta_keywords){ var e=document.getElementById('meta_keywords'); if(e){ e.value=data.meta_keywords; e.classList.add('ai-filled'); } }
+        if(data.content){
+            var editor = window.pageEditors && window.pageEditors['custom_content'];
+            var el = document.getElementById('custom_content');
+            if(editor){ editor.setData(data.content); setTimeout(function(){ try{ var r=editor.editing&&editor.editing.view&&editor.editing.view.domRoots.get(editor.editing.view.document); if(r) r.classList.add('ai-filled'); }catch(e){} var ed=document.querySelector('#custom_content + .ck-editor .ck-editor__editable'); if(ed) ed.classList.add('ai-filled'); },100); }
+            else if(el){ el.value=data.content; el.classList.add('ai-filled'); }
+        }
+    }
+    if(progressEl) progressEl.style.display='none';
+    if(sseTerminal){
+        sseTerminal.clear(); sseTerminal.setUrl(url);
+        sseTerminal.on('done',function(e){ try{ var p=e.data?JSON.parse(e.data):{}; var d=p.data||p; restoreModalAndButton(); applyGeneratedData(d); var m=bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal')); if(m) m.hide(); BackendToast.success(_msgSuccess); }catch(err){ restoreModalAndButton(); BackendToast.error(<?= json_encode(__('解析结果失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); } });
+        sseTerminal.on('error',function(e){ try{ var p=e.data?JSON.parse(e.data):{}; restoreModalAndButton(); BackendToast.error((p&&p.message)||_msgFailed); }catch(err){ restoreModalAndButton(); BackendToast.error(_msgFailed); } });
+        sseTerminal.start(url,{method:'POST',body:formData});
+        return;
+    }
+    if(sseContent) sseContent.innerHTML='';
+    sseLog(_sseConnecting,'info'); sseSetStatus(_sseConnecting);
+    fetch(url,{method:'POST',body:formData,headers:{'X-Requested-With':'XMLHttpRequest'}})
+    .then(function(res){
+        if(!res.ok) throw new Error(res.statusText||<?= json_encode(__('请求失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        if(!res.body) throw new Error(<?= json_encode(__('不支持流式响应'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
+        var reader=res.body.getReader(), decoder=new TextDecoder(), buffer='', currentEvent='', currentData='';
+        function finishEvent(){
+            try{
+                var payload=currentData?JSON.parse(currentData):{};
+                if(currentEvent==='start'||currentEvent==='progress'){ if(payload.message){ sseLog(payload.message,currentEvent==='start'?'start':'progress'); sseSetStatus(_sseConnected); } }
+                else if(currentEvent==='chunk'){ var txt = (payload.content && typeof payload.content==='string') ? payload.content : (_sseGenerating+(payload.total_length?(' ('+payload.total_length+')'):'')); sseLog(txt,'progress'); }
+                else if(currentEvent==='done'){ var d=payload.data||payload; restoreModalAndButton(); applyGeneratedData(d); var m=bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal')); if(m) m.hide(); BackendToast.success(_msgSuccess); }
+                else if(currentEvent==='error'){ if(payload.message) sseLog(payload.message,'error'); restoreModalAndButton(); BackendToast.error((payload&&payload.message)||_msgFailed); }
+            }catch(e){}
+            currentEvent=''; currentData='';
+        }
+        function processChunk(chunk){
+            if(chunk&&chunk.value) buffer+=decoder.decode(chunk.value,{stream:true});
+            var SEP_DBL = String.fromCharCode(10,10), SEP_SGL = String.fromCharCode(10);
+            var parts = buffer.split(SEP_DBL);
+            buffer = parts.pop()||'';
+            for(var i=0;i<parts.length;i++){
+                var lines = parts[i].split(SEP_SGL);
+                currentEvent=''; currentData='';
+                for(var j=0;j<lines.length;j++){
+                    var ln=lines[j];
+                    if(ln.indexOf('event:')===0) currentEvent=ln.replace(/^event:\s*/,'').trim();
+                    else if(ln.indexOf('data:')===0) currentData=ln.replace(/^data:\s*/,'');
+                }
+                finishEvent();
+            }
+        }
+        function next(val){ processChunk(val); return (val&&!val.done)?reader.read().then(next):undefined; }
+        return reader.read().then(next);
+    })
+    .catch(function(err){ restoreModalAndButton(); console.error('AI生成错误:',err); BackendToast.error(err&&err.message?err.message:_msgReqFailed); });
+};
+</script>

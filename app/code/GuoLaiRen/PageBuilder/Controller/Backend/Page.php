@@ -403,6 +403,7 @@ class Page extends BackendController
         $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
         $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
         $this->assign('ai_enabled', $aiEnabled);
+        $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
 
         // 读取多语言功能配置
         $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
@@ -669,6 +670,7 @@ class Page extends BackendController
                 ->setData(PageModel::schema_fields_DEFAULT_LOCALE, $defaultLocale)
                 ->setData(PageModel::schema_fields_META_TITLE, $data['meta_title'] ?? '')
                 ->setData(PageModel::schema_fields_META_DESCRIPTION, $data['meta_description'] ?? '')
+                ->setData(PageModel::schema_fields_AI_DESCRIPTION, $data['ai_description'] ?? '')
                 ->setData(PageModel::schema_fields_META_KEYWORDS, $data['meta_keywords'] ?? '')
                 ->setData(PageModel::schema_fields_REDIRECT_URL, $data['redirect_url'] ?? '')
                 ->setData(PageModel::schema_fields_HEADER_CUSTOM_CODE, $data['header_custom_code'] ?? '')
@@ -694,6 +696,10 @@ class Page extends BackendController
             MessageManager::success(__('页面创建成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
         } catch (\Exception $exception) {
+            try {
+                $this->pageModel->getQuery()->rollBack();
+            } catch (\Throwable) {
+            }
             MessageManager::warning(__('页面创建失败！'));
             if (DEV) {
                 MessageManager::exception($exception);
@@ -937,10 +943,11 @@ class Page extends BackendController
         // 读取AI功能配置
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
-        $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+$aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
         $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
         $this->assign('ai_enabled', $aiEnabled);
-        
+        $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
+
         // 获取可用的布局页面列表（排除当前页面）
         $layoutPages = $page->getAvailableLayoutPages((int)$pageId);
         $this->assign('layout_pages', $layoutPages);
@@ -1254,6 +1261,7 @@ class Page extends BackendController
                 PageModel::schema_fields_DEFAULT_LOCALE => $defaultLocale,
                 PageModel::schema_fields_META_TITLE => $data['meta_title'] ?? '',
                 PageModel::schema_fields_META_DESCRIPTION => $data['meta_description'] ?? '',
+                PageModel::schema_fields_AI_DESCRIPTION => $data['ai_description'] ?? '',
                 PageModel::schema_fields_META_KEYWORDS => $data['meta_keywords'] ?? '',
                 PageModel::schema_fields_REDIRECT_URL => $data['redirect_url'] ?? '',
                 PageModel::schema_fields_HEADER_CUSTOM_CODE => $data['header_custom_code'] ?? '',
@@ -1283,71 +1291,64 @@ class Page extends BackendController
             if (!$checkPage->getId()) {
                 throw new \Exception(__('页面不存在，无法更新！'));
             }
-            
-            // 使用条件更新：where()->update()->fetch()
-            try {
-                $saveResult = $page->clear()
-                    ->where(PageModel::schema_fields_ID, $pageIdInt)
-                    ->update($updateData, PageModel::schema_fields_ID)
-                    ->fetch();
-            } catch (\PDOException $e) {
-                throw $e;
-            } catch (\Exception $e) {
-                throw $e;
-            }
-            
-            // 更新后重新加载数据到 Model（使用整数类型的 pageId）
+
+            // ========== 核心保存流程（顺序不可乱） ==========
+            // 1. page 主表更新（Query::update，无事务）
+            $page->clear()
+                ->where(PageModel::schema_fields_ID, $pageIdInt)
+                ->update($updateData, PageModel::schema_fields_ID)
+                ->fetch();
+
+            // 2. 更新后重新加载
             $page->clear()->load($pageIdInt);
-            
-            // 编辑时实时更新页面的重写路由（统一用 page_id，handle 变更时自动覆盖；首页含空重写）
+
+            // 3. URL 重写（Model->save，自有事务）
             $this->createOrUpdateUrlRewrite($page);
-            
-            // 清理旧格式的 url_identify 条目（pagebuilder_page_{websiteId}_{handle}）
+
+            // 4. 清理旧格式 url_identify，失败则 rollBack 并中止保存
             $newHandle = $page->getData(PageModel::schema_fields_HANDLE);
             $newWebsiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
             if ($oldHandle !== '' && $oldHandle !== null) {
+                $cleanupRewrite = ObjectManager::getInstance(UrlRewrite::class);
+                $cleanupRewrite = clone $cleanupRewrite;
                 try {
                     $oldUrlIdentify = "pagebuilder_page_{$oldWebsiteId}_{$oldHandle}";
-                    /**@var UrlRewrite $cleanupRewrite */
-                    $cleanupRewrite = ObjectManager::getInstance(UrlRewrite::class);
-                    $cleanupRewrite = clone $cleanupRewrite;
                     $cleanupRewrite->clear()
                         ->where(UrlRewrite::schema_fields_URL_IDENTIFY, $oldUrlIdentify)
                         ->delete()
                         ->fetch();
                 } catch (\Throwable $e) {
-                    // 忽略
+                    $cleanupRewrite->getQuery()->rollBack();
+                    throw $e;
                 }
             }
-            
-            // handle / website_id / style 有变更时清除路由与重写缓存
+
+            // 5. 清除路由与重写缓存
             if ($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId || $oldStyleCode !== $styleToSave) {
                 $this->clearRouterAndPageBuilderCache();
             }
 
-            // 若当前保存的是主页（根页面）且主题已变更，则同步更新该主页下所有子页面的主题
+            // 6. 主页主题变更时同步子页面（逐条 save，避免 PostgreSQL IN+update 导致事务中止）
             if ((int)$newParentId === 0 && $page->getId() && (string)$oldStyleCode !== (string)$styleToSave) {
                 $descendantIds = $page->getDescendantIds();
                 if (!empty($descendantIds)) {
                     $childUpdater = clone $this->pageModel;
-                    $childUpdater->clear()
-                        ->where(PageModel::schema_fields_ID, $descendantIds, 'IN')
-                        ->update([PageModel::schema_fields_STYLE => $styleToSave], PageModel::schema_fields_ID)
-                        ->fetch();
+                    foreach ($descendantIds as $id) {
+                        $childUpdater->clear()->load((int)$id)->setData(PageModel::schema_fields_STYLE, $styleToSave)->save();
+                    }
                     MessageManager::success(
                         __('主页主题已更新，已同步 %{1} 个子页面的主题。', [count($descendantIds)])
                     );
                 }
             }
 
-            // 处理多语言内容翻译
+            // 7. 多语言翻译（非默认语言的 LocalDescription，find + insert/update）
             if (!empty($selectedLocales)) {
                 foreach ($selectedLocales as $locale) {
                     // 跳过默认语言（默认语言内容已经保存在主表中）
                     if ($locale == $defaultLocale) {
                         continue;
                     }
-                    
                     // 从多语言 Tab 表单获取该语言的翻译内容
                     $titleKey = 'title_' . $locale;
                     $contentKey = 'content_' . $locale;
@@ -1361,36 +1362,35 @@ class Page extends BackendController
                     $translatedMetaDesc = $data[$metaDescKey] ?? '';
                     $translatedMetaKeywords = $data[$metaKeywordsKey] ?? '';
                     
-                    // 查找或创建翻译记录
+                    // 查找或创建翻译记录（用 insert/update 代替 save，避免 Model 事务/事件引发 25P02）
                     $localDesc = clone $this->localDescriptionModel;
                     $existing = $localDesc->clear()
-                        ->where(LocalDescription::schema_fields_ID, $pageId)
+                        ->where(LocalDescription::schema_fields_ID, $pageIdInt)
                         ->where('local_code', $locale)
                         ->find()
                         ->fetch();
-                    
+
+                    $query = $this->localDescriptionModel->getQuery()->clearQuery()->table(LocalDescription::schema_table);
+                    $rowData = [
+                        LocalDescription::schema_fields_NAME => $data['name'] ?? '',
+                        LocalDescription::schema_fields_TITLE => $translatedTitle,
+                        LocalDescription::schema_fields_CONTENT => $translatedContent,
+                        LocalDescription::schema_fields_META_TITLE => $translatedMetaTitle,
+                        LocalDescription::schema_fields_META_DESCRIPTION => $translatedMetaDesc,
+                        LocalDescription::schema_fields_META_KEYWORDS => $translatedMetaKeywords,
+                    ];
                     if ($existing && $existing->getId()) {
-                        // 更新现有翻译
-                        $existing->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
-                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
-                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
-                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
-                            ->save();
+                        $query->where(LocalDescription::schema_fields_ID, $pageIdInt)
+                            ->where('local_code', $locale)
+                            ->update($rowData, LocalDescription::schema_fields_ID)
+                            ->fetch();
                     } else {
-                        // 创建新翻译
-                        $newTranslation = clone $this->localDescriptionModel;
-                        $newTranslation->clearData()
-                            ->setData(LocalDescription::schema_fields_ID, $pageId)
-                            ->setData('local_code', $locale)
-                            ->setData(LocalDescription::schema_fields_NAME, $data['name'] ?? '')
-                            ->setData(LocalDescription::schema_fields_TITLE, $translatedTitle)
-                            ->setData(LocalDescription::schema_fields_CONTENT, $translatedContent)
-                            ->setData(LocalDescription::schema_fields_META_TITLE, $translatedMetaTitle)
-                            ->setData(LocalDescription::schema_fields_META_DESCRIPTION, $translatedMetaDesc)
-                            ->setData(LocalDescription::schema_fields_META_KEYWORDS, $translatedMetaKeywords)
-                            ->save();
+                        $insertData = array_merge($rowData, [
+                            LocalDescription::schema_fields_ID => $pageIdInt,
+                            'local_code' => $locale,
+                            'locale_code' => $locale,
+                        ]);
+                        $query->insert($insertData)->fetch();
                     }
                 }
             }
@@ -1409,6 +1409,12 @@ class Page extends BackendController
             
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
+            // PostgreSQL：任一 SQL 失败后连接处于 aborted 状态，必须 rollBack 才能恢复，否则后续请求会报 25P02
+            try {
+                $this->pageModel->getQuery()->rollBack();
+            } catch (\Throwable) {
+                // 忽略 rollBack 自身异常
+            }
             $errorMessage = $exception->getMessage();
             
             // 如果是数据库约束错误，提供更友好的提示
@@ -1416,6 +1422,11 @@ class Page extends BackendController
                 $errorMessage = __('必填字段不能为空，请检查表单数据是否完整');
             } elseif (strpos($errorMessage, 'Duplicate entry') !== false) {
                 $errorMessage = __('数据重复，请检查页面句柄是否已被使用');
+            } elseif (strpos($errorMessage, '25P02') !== false) {
+                // DEV 模式保留原始信息便于定位首次失败的 SQL；生产用友好提示
+                if (!DEV) {
+                    $errorMessage = __('数据库事务失败，通常由前置操作异常导致，请重试或检查数据');
+                }
             }
             
             MessageManager::warning(__('页面更新失败！'));
@@ -1793,6 +1804,10 @@ class Page extends BackendController
             MessageManager::success(__('翻译保存成功！'));
             $this->redirect('*/backend/page/edit', ['id' => $pageId]);
         } catch (\Exception $exception) {
+            try {
+                $this->pageModel->getQuery()->rollBack();
+            } catch (\Throwable) {
+            }
             MessageManager::warning(__('翻译保存失败！'));
             if (DEV) {
                 MessageManager::exception($exception);
@@ -2760,7 +2775,8 @@ class Page extends BackendController
             if (DEV) {
                 w_log_error("Failed to create URL rewrite for page [{$page->getId()}]: " . $e->getMessage());
             }
-            return false;
+            // 必须 rethrow：若吞掉异常，PostgreSQL 事务会保持 aborted，后续 LocalDescription 保存将报 25P02
+            throw $e;
         }
     }
 
