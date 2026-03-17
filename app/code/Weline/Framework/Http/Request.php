@@ -59,9 +59,10 @@ class Request extends Request\RequestAbstract implements RequestInterface
             $this->fileBag->initFromGlobals();
         }
         
-        if (is_array($this->getBodyParams())) {
-            $this->setData(array_merge($this->getParams(), $this->getBodyParams()));
-        }
+        // 将 GET+POST+Body 合并写入 _data，供 getParam/getPost/getGet 优先读取（与 WLS parseRawHttp 行为一致）
+        $params = $this->getParams();
+        $body = $this->getBodyParams();
+        $this->setData(\is_array($body) ? \array_merge($params, $body) : $params);
     }
     
     /**
@@ -285,16 +286,28 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $params;
     }
 
+    /**
+     * 按 key 获取 POST/Body 参数（与 getParam 一致：优先从请求 _data 取，再回退到 ParameterBag）
+     * 确保 WLS parseRawHttp 写入的合并数据、以及 FPM 下 __init 合并的 GET+POST+Body 可被正确读取。
+     */
     public function getPost(string $key = '', mixed $default = null)
     {
         if ('' === $key) {
             return $this->getParameterBag()->getRequest();
         }
+        // 1) 优先从请求 _data 取（WLS parseRawHttp / FPM __init 合并数据）
+        $result = $this->getData($key);
+        if ($result !== null) {
+            if ($default !== null) {
+                $result = $this->getDefaultTypeData($result, $default);
+            }
+            return $this->checkResult($key, $result);
+        }
+        // 2) 回退到 ParameterBag（POST + Body）
         $result = $this->getParameterBag()->getRequest($key, $default);
         if ($default !== null) {
             $result = $this->getDefaultTypeData($result, $default);
         }
-
         return $this->checkResult($key, $result);
     }
 
@@ -303,11 +316,23 @@ class Request extends Request\RequestAbstract implements RequestInterface
         return $this->getGet($key, $default);
     }
 
+    /**
+     * 按 key 获取 GET 参数（与 getParam 一致：优先从请求 _data 取，再回退到 ParameterBag）
+     */
     public function getGet(string $key = '', mixed $default = null)
     {
         if ('' === $key) {
             return $this->getParameterBag()->getQuery();
         }
+        // 1) 优先从请求 _data 取（WLS parseRawHttp / FPM __init 合并数据）
+        $result = $this->getData($key);
+        if ($result !== null) {
+            if ($default !== null) {
+                $result = $this->getDefaultTypeData($result, $default);
+            }
+            return $this->checkResult($key, $result);
+        }
+        // 2) 回退到 ParameterBag（GET）
         $result = $this->getParameterBag()->getQuery($key, $default);
         if ($default !== null) {
             $result = $this->getDefaultTypeData($result, $default);
@@ -598,6 +623,9 @@ class Request extends Request\RequestAbstract implements RequestInterface
      *
      * @return array|bool|int|mixed|string
      */
+    /**
+     * 按 default 类型转换 data；当 default 为 array 且取到的是字符串时，尝试 JSON 解析（兼容 JSON body / FormData 里 JSON 字符串）。
+     */
     public function getDefaultTypeData(mixed $data, mixed $default): mixed
     {
         if (is_bool($default)) {
@@ -605,7 +633,12 @@ class Request extends Request\RequestAbstract implements RequestInterface
         } elseif (is_string($default)) {
             $data = (string)$data;
         } elseif (is_array($default)) {
-            $data = (array)$data;
+            if (\is_string($data) && $data !== '') {
+                $decoded = \json_decode($data, true);
+                $data = \is_array($decoded) ? $decoded : (array)$data;
+            } else {
+                $data = (array)$data;
+            }
         } elseif (is_int($default) || is_integer($default)) {
             $data = (int)$data;
         } elseif (is_float($default) || is_double($default)) {
