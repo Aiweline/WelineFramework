@@ -21,6 +21,21 @@ $handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('han
 $styleSettings = $page ? $page->getStyleSettings() : [];
 $isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
 
+// AI 组件配置生成所需：页面类型、页面描述、各类型提示词（供前端手风琴展示）
+$pageType = $page ? (string)($page->getData('type') ?? 'custom_page') : 'custom_page';
+$aiDescription = $page ? (string)($page->getData('ai_description') ?? '') : '';
+$pageTypePromptMap = \GuoLaiRen\PageBuilder\Model\Page::getPageTypePromptInstructionsMap();
+$pageTypeNames = \GuoLaiRen\PageBuilder\Model\Page::getPageTypes();
+$currentPageTypePrompt = $pageTypePromptMap[$pageType] ?? $pageTypePromptMap['custom_page'] ?? '';
+$currentPageTypeName = $pageTypeNames[$pageType] ?? $pageType;
+
+// 渲染 SseTerminal 组件 HTML（用于组件配置弹窗内的 AI 生成过程展示）
+ob_start();
+?>
+<w:theme:sse-terminal id="aiComponentConfigSseTerminal" title="@lang{生成过程}" height="180px" events="start,progress,chunk,done,error" show-toolbar="true" />
+<?php
+$aiComponentConfigSseTerminalHtml = ob_get_clean();
+
 // 获取后端主题配置
 /**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
@@ -84,6 +99,34 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     --visual-config-hover-bg: #3a3a3a;
     --visual-config-scrollbar-thumb: rgba(148, 163, 184, 0.3);
     --visual-config-scrollbar-thumb-hover: rgba(148, 163, 184, 0.5);
+}
+
+/* SSE 终端内 pre 块：写死颜色，亮/暗主题兼容，不依赖 CSS 变量加载顺序 */
+.weline-sse-terminal-context,
+.weline-sse-terminal-prompt,
+.weline-sse-terminal-trace {
+    margin: 6px 0 0 0;
+    padding: 8px;
+    font-size: 11px;
+    line-height: 1.4;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border-radius: 4px;
+    background: #e9ecef;
+    color: #212529;
+    border: 1px solid #dee2e6;
+}
+.weline-sse-terminal-context { max-height: 280px; }
+.weline-sse-terminal-prompt { max-height: 200px; }
+.weline-sse-terminal-trace { max-height: 160px; }
+
+[data-theme="dark"] .weline-sse-terminal-context,
+[data-theme="dark"] .weline-sse-terminal-prompt,
+[data-theme="dark"] .weline-sse-terminal-trace {
+    background: #3a3a3a;
+    color: #e9ecef;
+    border-color: #495057;
 }
 
 .visual-config-wrapper.active {
@@ -1598,32 +1641,12 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
             </div>
         </div>
         
-        <!-- 右侧组件面板 -->
-        <?php 
+        <!-- 右侧栏：页面结构 + 组件库（独立模板） -->
+        <?php
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
-        // 根据页面类型自动选择布局：博客类型页面使用blog布局
-        $layoutCode = 'default';
-        if ($page) {
-            // 优先使用页面已设置的layout字段
-            $layoutCode = $page->getData('layout');
-            // 如果未设置layout，根据页面类型自动选择
-            if (empty($layoutCode)) {
-                $pageType = $page->getData('type');
-                // 博客类型页面使用blog布局
-                if (in_array($pageType, [
-                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG,
-                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY,
-                    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST
-                ])) {
-                    $layoutCode = 'blog';
-                } else {
-                    $layoutCode = 'default';
-                }
-            }
-        }
-        $this->assign('layout_code', $layoutCode);
+        $this->assign('page', $page);
         ?>
-        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
+        <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config_right_sidebar.phtml</w:template>
     </div>
 </div>
 <!-- SweetAlert2 CSS -->
@@ -1698,6 +1721,12 @@ if (typeof window.openVisualConfig === 'undefined') {
     // 初始化全局变量（只在未定义时设置，避免覆盖已有值）
     window.visualConfigInitialized = window.visualConfigInitialized || false;
     window.visualPageId = window.visualPageId || null;
+    // AI 组件配置生成：当前页面类型、页面描述、类型提示词（供手风琴展示）
+    window.PB_AI_PAGE_TYPE = <?= json_encode($pageType, JSON_UNESCAPED_UNICODE) ?>;
+    window.PB_AI_AI_DESCRIPTION = <?= json_encode($aiDescription, JSON_UNESCAPED_UNICODE) ?>;
+    window.PB_AI_CURRENT_PAGE_TYPE_PROMPT = <?= json_encode($currentPageTypePrompt, JSON_UNESCAPED_UNICODE) ?>;
+    window.PB_AI_CURRENT_PAGE_TYPE_NAME = <?= json_encode($currentPageTypeName, JSON_UNESCAPED_UNICODE) ?>;
+    window.PB_AI_SSE_TERMINAL_HTML = <?= json_encode($aiComponentConfigSseTerminalHtml, JSON_UNESCAPED_UNICODE) ?>;
     window.visualConfigHandle = window.visualConfigHandle || null;
     window.currentVisualLanguage = window.currentVisualLanguage || '';
     window.defaultLanguage = window.defaultLanguage || '';
@@ -1871,6 +1900,10 @@ function openVisualConfig(passedHandle) {
             loadVisualStyleConfig().then(() => {
                 if (typeof window.refreshPreview === 'function') {
                     window.refreshPreview();
+                }
+                if (typeof window.visualEditorLoadPageTree === 'function') {
+                    var pid = window.visualPageId || window.pageId;
+                    if (pid) window.visualEditorLoadPageTree(pid);
                 }
             });
         }
@@ -2189,6 +2222,18 @@ window.refreshPreview = function(savedPosition) {
         }, 200);
     };
 }
+
+// 可视化编辑内 iframe 点击 header/footer 链接时通过 postMessage 通知跳转，在此统一处理
+window.addEventListener('message', function(e) {
+    if (!e.data || e.data.type !== 'PageBuilderVisualEditor' || e.data.action !== 'navigate' || !e.data.page_id) return;
+    var targetPageId = parseInt(e.data.page_id, 10);
+    if (!targetPageId) return;
+    window.visualPageId = targetPageId;
+    if (typeof window.pageId !== 'undefined') window.pageId = targetPageId;
+    if (typeof window.refreshPreview === 'function') window.refreshPreview();
+    if (typeof window.visualEditorLoadPageTree === 'function') window.visualEditorLoadPageTree(targetPageId);
+    if (typeof window.visualEditorSelectPageInTree === 'function') window.visualEditorSelectPageInTree(targetPageId);
+});
 
 // 通过可视化面板自动保存 SEO / TDK（直接写入页面记录，而不是样式配置）
 window.saveSeoConfig = async function () {
@@ -5274,13 +5319,46 @@ window.editComponentInPreview = async function(wrapper) {
         // 添加 AI 生成按钮（仅当有文字配置项且AI功能开启时显示）
         <?php if (($ai_enabled ?? '0') === '1'): ?>
         if (hasTextFields && Object.keys(fields).length > 0) {
+            const currentTypePrompt = (typeof window.PB_AI_CURRENT_PAGE_TYPE_PROMPT !== 'undefined' ? window.PB_AI_CURRENT_PAGE_TYPE_PROMPT : '');
+            const currentTypeName = (typeof window.PB_AI_CURRENT_PAGE_TYPE_NAME !== 'undefined' ? window.PB_AI_CURRENT_PAGE_TYPE_NAME : '');
+            const accordionId = 'aiCompConfigAccordion_' + Date.now();
+            const collapse1 = 'aiCompTypePrompt_' + Date.now();
+            const collapse2 = 'aiCompHowItWorks_' + Date.now();
+            const aiPromptValue = (currentConfig._ai_prompt !== undefined && currentConfig._ai_prompt !== null) ? String(currentConfig._ai_prompt) : '';
             formHtml += '<div class="ai-generate-bar" style="margin-bottom: 16px; padding: 10px; background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%); border-radius: 8px; border: 1px solid rgba(102,126,234,0.2);">';
-            formHtml += '<div style="display: flex; align-items: center; justify-content: space-between;">';
+            formHtml += '<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">';
             formHtml += '<span style="font-size: 12px; opacity: 0.8;"><i class="mdi mdi-robot" style="margin-right: 4px;"></i><?= __('AI可根据页面信息自动生成此组件的文字配置') ?></span>';
             formHtml += '<button type="button" id="aiGenerateComponentConfigBtn" class="btn btn-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; border: none; padding: 4px 12px; font-size: 12px;">';
             formHtml += '<i class="mdi mdi-auto-fix"></i> <?= __('AI生成') ?>';
             formHtml += '</button>';
             formHtml += '</div>';
+            formHtml += '<div style="margin-bottom: 10px;">';
+            formHtml += '<label style="display: block; margin-bottom: 4px; font-size: 12px; opacity: 0.85;"><?= __('AI生成提示词') ?> <span class="text-muted" style="font-weight: normal;">(<?= __('可选，与系统提示词拼接') ?>)</span></label>';
+            formHtml += '<textarea id="comp_config__ai_prompt" data-field="_ai_prompt" class="form-control form-control-sm" rows="2" style="width: 100%; font-size: 12px; resize: vertical;" placeholder="<?= __('例如：强调科技感、语气年轻化') ?>">' + escapeHtml(aiPromptValue) + '</textarea>';
+            formHtml += '</div>';
+            formHtml += '<div class="accordion accordion-flush" id="' + accordionId + '" style="font-size: 12px;">';
+            formHtml += '<div class="accordion-item" style="background: transparent; border: none;">';
+            formHtml += '<h2 class="accordion-header"><button class="accordion-button collapsed py-2" style="font-size: 12px; min-height: 32px;" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapse1 + '">';
+            formHtml += '<i class="mdi mdi-file-document-outline me-2"></i> <?= __('当前页面类型提示词') ?>' + (currentTypeName ? '（' + escapeHtml(currentTypeName) + '）' : '');
+            formHtml += '</button></h2>';
+            formHtml += '<div id="' + collapse1 + '" class="accordion-collapse collapse" data-bs-parent="#' + accordionId + '">';
+            formHtml += '<div class="accordion-body py-2 px-3 small text-muted">' + (currentTypePrompt ? escapeHtml(currentTypePrompt) : '<?= __('无') ?>') + '</div></div></div>';
+            formHtml += '<div class="accordion-item" style="background: transparent; border: none;">';
+            formHtml += '<h2 class="accordion-header"><button class="accordion-button collapsed py-2" style="font-size: 12px; min-height: 32px;" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapse2 + '">';
+            formHtml += '<i class="mdi mdi-information-outline me-2"></i> <?= __('生成原理') ?>';
+            formHtml += '</button></h2>';
+            formHtml += '<div id="' + collapse2 + '" class="accordion-collapse collapse" data-bs-parent="#' + accordionId + '">';
+            formHtml += '<div class="accordion-body py-2 px-3 small"><ol class="mb-0 ps-3" style="font-size: 11px;">';
+            formHtml += '<li><?= __('根据当前页面类型选择对应的提示词，生成内容遵循该类型侧重点。') ?></li>';
+            formHtml += '<li><?= __('页面的「AI内容生成」描述会作为参考；当前字段值仅供参考，以页面语言为准重新生成。') ?></li>';
+            formHtml += '<li><?= __('组件配置根据当前组件情况（组件角色、所在区域等）生成内容。') ?></li>';
+            formHtml += '<li><?= __('遵循组件 meta 的默认格式与条数生成；用户可在「AI生成提示词」中指定条数或风格。') ?></li>';
+            formHtml += '<li><?= __('生成语言与页面默认语言一致。') ?></li>';
+            formHtml += '<li><?= __('生成完成后请检查并微调。') ?></li></ol></div></div></div>';
+            formHtml += '</div>';
+            if (typeof window.PB_AI_SSE_TERMINAL_HTML !== 'undefined' && window.PB_AI_SSE_TERMINAL_HTML) {
+                formHtml += '<div class="mt-3" style="margin-top: 12px;">' + window.PB_AI_SSE_TERMINAL_HTML + '</div>';
+            }
             formHtml += '</div>';
         }
         <?php endif; ?>
@@ -5375,62 +5453,223 @@ window.editComponentInPreview = async function(wrapper) {
                     }
                 });
                 
-                // AI 生成按钮点击事件
+                // AI 生成按钮点击事件（SSE 流式，在「生成过程」终端中展示）
                 const aiBtn = document.getElementById('aiGenerateComponentConfigBtn');
                 if (aiBtn) {
                     aiBtn.addEventListener('click', async () => {
                         const originalHtml = aiBtn.innerHTML;
                         aiBtn.disabled = true;
                         aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= __('生成中...') ?>';
-                        
+                        const aiPromptEl = document.querySelector('.weline-component-config-modal [data-field="_ai_prompt"]');
+                        const aiPromptValue = (aiPromptEl && aiPromptEl.value) ? aiPromptEl.value.trim() : '';
+                        const formData = new FormData();
+                        formData.append('page_id', pageId);
+                        formData.append('style_code', styleCode);
+                        formData.append('component_code', componentCode);
+                        formData.append('region', region);
+                        formData.append('index', index);
+                        formData.append('ai_prompt', aiPromptValue);
+                        // 点击生成时更新并保存组件 AI 提示词到页面数据（与组件配置一起存放）
+                        const collectModalConfig = () => {
+                            const cfg = {};
+                            document.querySelectorAll('.weline-component-config-modal [data-field]').forEach(input => {
+                                const key = input.getAttribute('data-field');
+                                if (!key) return;
+                                let val = input.value;
+                                if (input.type === 'color' && input.id) {
+                                    const textEl = document.getElementById(input.id + '_text');
+                                    if (textEl) val = textEl.value;
+                                }
+                                cfg[key] = val;
+                            });
+                            return cfg;
+                        };
                         try {
-                            const formData = new FormData();
-                            formData.append('page_id', pageId);
-                            formData.append('style_code', styleCode);
-                            formData.append('component_code', componentCode);
-                            formData.append('region', region);
-                            formData.append('index', index);
-                            
-                            var url = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config") ?>';
-                            var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-                            var res = await window.Weline.Api.request(url, opts);
-                            const data = (res && res.data) || res;
-                            
-                            if (data.success && data.data) {
-                                // 填充生成的配置到表单
-                                let filledCount = 0;
-                                for (const [key, value] of Object.entries(data.data)) {
-                                    const inputId = 'comp_config_' + key.replace(/\./g, '_');
-                                    const input = document.getElementById(inputId);
-                                    if (input) {
-                                        input.value = value;
-                                        input.style.borderColor = '#667eea';
-                                        input.style.boxShadow = '0 0 0 2px rgba(102,126,234,0.2)';
-                                        // 触发 change 事件
-                                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                                        filledCount++;
-                                        
-                                        // 2秒后恢复样式
-                                        setTimeout(() => {
-                                            input.style.borderColor = '';
-                                            input.style.boxShadow = '';
-                                        }, 2000);
-                                    }
+                            const configToSave = collectModalConfig();
+                            configToSave._ai_prompt = aiPromptValue;
+                            const saveUrl = '<?= $this->getBackendUrl('*/backend/visual/api/component/updateConfig') ?>';
+                            await window.Weline.Api.request(saveUrl, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ page_id: pageId, component_code: componentCode, region: region, index: index, config: configToSave }) });
+                        } catch (e) { /* 保存提示词失败不影响本次生成 */ }
+                        const streamUrl = '<?= $this->getBackendUrl("*/backend/ai-generate/component-config-stream") ?>';
+                        const sseContent = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal_content');
+                        const sseStatus = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal_status');
+                        const sseContainer = document.querySelector('.weline-component-config-modal #aiComponentConfigSseTerminal');
+                        function sseLog(t, type) {
+                            type = type || 'info';
+                            if (!sseContent) return;
+                            const line = document.createElement('div');
+                            line.className = 'weline-sse-terminal-line ' + type;
+                            line.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-text">' + (t || '').replace(/</g, '&lt;') + '</span>';
+                            sseContent.appendChild(line);
+                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                        }
+                        function sseSetStatus(t) {
+                            if (sseStatus) sseStatus.textContent = t || '';
+                            if (sseContainer) sseContainer.classList.toggle('connected', t === '<?= __("已连接") ?>');
+                        }
+                        function applyConfigData(data) {
+                            function toDisplayValue(val) {
+                                if (Array.isArray(val)) {
+                                    return val.map(function(item) {
+                                        if (item && typeof item === 'object') return Object.values(item).map(function(v) { return v != null ? String(v) : ''; }).join('|');
+                                        return String(item);
+                                    }).join('\n');
                                 }
-                                
-                                if (filledCount > 0) {
-                                    BackendToast.success('<?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>');
-                                }
-                            } else {
-                                BackendToast.error(data.message || '<?= __('生成失败') ?>');
+                                return val != null ? String(val) : '';
                             }
-                        } catch (error) {
-                            console.error('AI生成组件配置错误:', error);
-                            BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
-                        } finally {
+                            let filledCount = 0;
+                            for (const [key, value] of Object.entries(data)) {
+                                const inputId = 'comp_config_' + key.replace(/\./g, '_');
+                                const input = document.getElementById(inputId);
+                                if (input) {
+                                    input.value = toDisplayValue(value);
+                                    input.style.borderColor = '#667eea';
+                                    input.style.boxShadow = '0 0 0 2px rgba(102,126,234,0.2)';
+                                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                                    filledCount++;
+                                    setTimeout(() => { input.style.borderColor = ''; input.style.boxShadow = ''; }, 2000);
+                                }
+                            }
+                            if (filledCount > 0) BackendToast.success('<?= __('已生成') ?> ' + filledCount + ' <?= __('个配置项') ?>');
+                        }
+                        function restoreBtn() {
                             aiBtn.disabled = false;
                             aiBtn.innerHTML = originalHtml;
+                            if (sseStatus) sseStatus.textContent = '<?= __("已断开") ?>';
+                            if (sseContainer) sseContainer.classList.remove('connected');
+                        }
+                        if (sseContent) sseContent.innerHTML = '';
+                        document.querySelectorAll('.weline-component-config-modal .weline-sse-unpublished-warning').forEach(function(el) { el.remove(); });
+                        sseLog('<?= __("连接中...") ?>', 'info');
+                        sseSetStatus('<?= __("连接中...") ?>');
+                        let streamingLineEl = null;
+                        let streamingTextEl = null;
+                        try {
+                            const res = await fetch(streamUrl, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            if (!res.ok) throw new Error(res.statusText || '<?= __("请求失败") ?>');
+                            if (!res.body) throw new Error('<?= __("不支持流式响应") ?>');
+                            const reader = res.body.getReader();
+                            const decoder = new TextDecoder();
+                            let buffer = '';
+                            let currentEvent = '', currentData = '';
+                            function finishEvent() {
+                                try {
+                                    const payload = currentData ? JSON.parse(currentData) : {};
+                                    if (currentEvent === 'start' || currentEvent === 'progress') {
+                                        if (payload.message) { sseLog(payload.message, currentEvent === 'start' ? 'start' : 'progress'); sseSetStatus('<?= __("已连接") ?>'); }
+                                    } else if (currentEvent === 'context') {
+                                        if (payload.display_text && sseContent) {
+                                            sseLog('【<?= __("操作上下文") ?>】', 'info');
+                                            const pre = document.createElement('pre');
+                                            pre.className = 'weline-sse-terminal-context';
+                                            pre.textContent = payload.display_text;
+                                            sseContent.appendChild(pre);
+                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
+                                    } else if (currentEvent === 'unpublished_warning') {
+                                        const msg = (payload.message || '<?= __("以下页面未发布，请发布后再使用或注意核对导航链接。") ?>');
+                                        const items = payload.items || [];
+                                        let existing = document.querySelector('.weline-component-config-modal .weline-sse-unpublished-warning');
+                                        if (existing) existing.remove();
+                                        if (sseContainer && items.length > 0) {
+                                            const wrap = document.createElement('div');
+                                            wrap.className = 'weline-sse-unpublished-warning';
+                                            wrap.style.cssText = 'margin-top:10px; padding:12px; background:#dc3545; color:#fff; border-radius:6px; border:1px solid #c82333;';
+                                            let html = '<div style="font-weight:700; margin-bottom:8px;">⚠️ ' + (msg.replace(/</g, '&lt;')) + '</div>';
+                                            html += '<ul style="margin:0 0 10px 0; padding-left:20px; font-size:12px;">';
+                                            items.forEach(function(it) {
+                                                const t = (it.title || '') + (it.handle ? ' (' + it.handle + ')' : '');
+                                                html += '<li>' + (t.replace(/</g, '&lt;')) + '</li>';
+                                            });
+                                            html += '</ul>';
+                                            html += '<button type="button" class="btn btn-sm btn-light weline-sse-unpublished-confirm"><?= __("知道了") ?></button>';
+                                            wrap.innerHTML = html;
+                                            wrap.querySelector('.weline-sse-unpublished-confirm').addEventListener('click', function() { wrap.remove(); });
+                                            sseContainer.parentNode.insertBefore(wrap, sseContainer.nextSibling);
+                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
+                                    } else if (currentEvent === 'trace') {
+                                        if (payload.display_text && sseContent) {
+                                            let traceEl = document.querySelector('.weline-sse-terminal-trace');
+                                            if (!traceEl) {
+                                                sseLog('【<?= __("链路追踪") ?>】', 'info');
+                                                traceEl = document.createElement('pre');
+                                                traceEl.className = 'weline-sse-terminal-trace';
+                                                sseContent.appendChild(traceEl);
+                                            }
+                                            traceEl.textContent = payload.display_text;
+                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
+                                    } else if (currentEvent === 'prompt') {
+                                        if (payload.prompt && sseContent) {
+                                            sseLog('【<?= __("本次提示词") ?>】', 'info');
+                                            const pre = document.createElement('pre');
+                                            pre.className = 'weline-sse-terminal-prompt';
+                                            pre.textContent = payload.prompt;
+                                            sseContent.appendChild(pre);
+                                            if (sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
+                                    } else if (currentEvent === 'chunk') {
+                                        const txt = (payload.content && typeof payload.content === 'string') ? payload.content : '';
+                                        if (!txt) return;
+                                        if (!streamingTextEl && sseContent) {
+                                            const line = document.createElement('div');
+                                            line.className = 'weline-sse-terminal-line progress weline-sse-terminal-streaming';
+                                            line.innerHTML = '<span class="weline-sse-terminal-time">[' + new Date().toLocaleTimeString('zh-CN', { hour12: false }) + ']</span><span class="weline-sse-terminal-text"></span>';
+                                            sseContent.appendChild(line);
+                                            streamingLineEl = line;
+                                            streamingTextEl = line.querySelector('.weline-sse-terminal-text');
+                                        }
+                                        if (streamingTextEl) {
+                                            streamingTextEl.textContent += txt;
+                                            if (sseContent && sseContent.parentElement) sseContent.parentElement.scrollTop = sseContent.parentElement.scrollHeight;
+                                        }
+                                    } else if (currentEvent === 'done') {
+                                        if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
+                                        streamingLineEl = null; streamingTextEl = null;
+                                        const d = payload.data || payload;
+                                        restoreBtn();
+                                        applyConfigData(d);
+                                        sseLog('<?= __("生成完成") ?>', 'done');
+                                    } else if (currentEvent === 'error') {
+                                        if (streamingLineEl) streamingLineEl.classList.remove('weline-sse-terminal-streaming');
+                                        streamingLineEl = null; streamingTextEl = null;
+                                        if (payload.message) sseLog(payload.message, 'error');
+                                        restoreBtn();
+                                        BackendToast.error((payload && payload.message) || '<?= __("生成失败") ?>');
+                                    }
+                                } catch (e) {}
+                                currentEvent = '';
+                                currentData = '';
+                            }
+                            function processChunk(chunk) {
+                                if (chunk && chunk.value) buffer += decoder.decode(chunk.value, { stream: true });
+                                const SEP_DBL = '\n\n', SEP_SGL = '\n';
+                                const parts = buffer.split(SEP_DBL);
+                                buffer = parts.pop() || '';
+                                for (let i = 0; i < parts.length; i++) {
+                                    const lines = parts[i].split(SEP_SGL);
+                                    currentEvent = '';
+                                    currentData = '';
+                                    for (let j = 0; j < lines.length; j++) {
+                                        const ln = lines[j];
+                                        if (ln.indexOf('event:') === 0) currentEvent = ln.replace(/^event:\s*/, '').trim();
+                                        else if (ln.indexOf('data:') === 0) currentData = ln.replace(/^data:\s*/, '');
+                                    }
+                                    finishEvent();
+                                }
+                            }
+                            while (true) {
+                                const val = await reader.read();
+                                processChunk(val);
+                                if (val && val.done) break;
+                            }
+                        } catch (err) {
+                            console.error('AI生成组件配置错误:', err);
+                            restoreBtn();
+                            BackendToast.error(err && err.message ? err.message : '<?= __("生成请求失败，请稍后重试") ?>');
+                            if (sseContent) sseLog((err && err.message) || '<?= __("请求失败") ?>', 'error');
                         }
                     });
                 }
