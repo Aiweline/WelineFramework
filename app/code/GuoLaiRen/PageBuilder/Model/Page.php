@@ -68,6 +68,8 @@ class Page extends Model
     public const schema_fields_META_TITLE = 'meta_title';
     #[Col(type: 'text', nullable: true, comment: 'SEO描述')]
     public const schema_fields_META_DESCRIPTION = 'meta_description';
+    #[Col(type: 'text', nullable: true, comment: 'AI生成用页面描述（可随时编辑，生成前自动保存）')]
+    public const schema_fields_AI_DESCRIPTION = 'ai_description';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'SEO关键词')]
     public const schema_fields_META_KEYWORDS = 'meta_keywords';
     #[Col(type: 'varchar', length: 500, nullable: true, comment: '表单提交后跳转URL')]
@@ -126,6 +128,28 @@ class Page extends Model
             self::TYPE_BLOG_CATEGORY => __('博客分类'),
             self::TYPE_BLOG_LIST => __('博客列表'),
             self::TYPE_CUSTOM => __('自定义页面'),
+        ];
+    }
+
+    /**
+     * 获取各页面类型对应的 AI 生成提示词（用于弹窗展示与后端提示构建）
+     * @return array<string, string> type => instruction
+     */
+    public static function getPageTypePromptInstructionsMap(): array
+    {
+        return [
+            self::TYPE_HOME => __('【首页】内容应突出核心价值主张、产品/服务亮点、主要卖点；文案简短有力，适合首屏与首屏以下关键区块；注重转化与品牌印象。'),
+            self::TYPE_ABOUT => __('【关于我们】内容应包含：公司/品牌介绍、使命与愿景、核心团队或创始人、发展历程/里程碑、核心价值观或特色；语气专业且富有亲和力。'),
+            self::TYPE_CONTACT => __('【联系我们】内容应包含：联系表单说明、客服/销售邮箱与电话、办公地址、营业时间、常见联系方式提示；确保用户能快速找到联系渠道。'),
+            self::TYPE_PRIVACY_POLICY => __('【隐私政策】内容应包含：数据收集范围、使用目的、存储与安全措施、用户权利（访问/更正/删除）、第三方共享说明、Cookie 与追踪说明、政策更新方式。'),
+            self::TYPE_TERMS_OF_SERVICE => __('【服务条款】内容应包含：服务范围与说明、用户责任与禁止行为、知识产权、免责声明、争议解决、条款变更通知。'),
+            self::TYPE_REFUND_POLICY => __('【退款政策】内容应包含：退款适用条件、申请流程与时限、退款方式与到账时间、不可退款情形、客服联系方式。'),
+            self::TYPE_SHIPPING_POLICY => __('【配送政策】内容应包含：配送范围、配送时效、配送费用说明、物流跟踪、签收与退货相关说明。'),
+            self::TYPE_COOKIE_POLICY => __('【Cookie 政策】内容应包含：Cookie 用途与类型、必要与非必要 Cookie 说明、用户如何管理与禁用 Cookie、第三方 Cookie 说明。'),
+            self::TYPE_BLOG => __('【博客文章】内容为单篇文章正文：标题、引言、分段正文、配图占位提示；符合博客文章风格与可读性。'),
+            self::TYPE_BLOG_LIST => __('【博客列表】内容为列表页说明：栏目介绍、文章摘要展示说明；引导用户浏览文章列表。'),
+            self::TYPE_BLOG_CATEGORY => __('【博客分类】内容为分类介绍：该分类主题说明、典型内容范围；引导用户浏览该分类下文章。'),
+            self::TYPE_CUSTOM => __('【自定义页面】根据页面描述生成符合主题的完整内容；结构清晰、信息完整。'),
         ];
     }
     

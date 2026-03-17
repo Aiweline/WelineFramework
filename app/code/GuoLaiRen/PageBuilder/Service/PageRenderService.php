@@ -1243,6 +1243,12 @@ class PageRenderService
         // 清理 header/footer 中可能存在的 HTML 文档结构标签（兼容旧模板）
         $headerHtml = $this->cleanHtmlDocumentTags($headerHtml);
         $footerHtml = $this->cleanHtmlDocumentTags($footerHtml);
+        // footer 若来自 footer.phtml 等非 renderRegionComponents 路径，缺少 tpmst-component-wrapper，
+        // 导致 setupPreviewDropZones 无法注入 component-actions。补包 wrapper 并设置 data-component 供编辑/删除定位
+        if (stripos($footerHtml, 'tpmst-component-wrapper') === false && stripos($footerHtml, 'pb-component-wrapper') === false) {
+            $footerComponentCode = 'footer-links';
+            $footerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="footer" data-component="' . $footerComponentCode . '">' . $footerHtml . '</div>';
+        }
         
         // 组件化模式：构建完整 HTML
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
@@ -1485,6 +1491,12 @@ class PageRenderService
             .pb-component-wrapper:hover .component-actions,
             .tpmst-component-wrapper .component-actions:hover,
             .pb-component-wrapper .component-actions:hover {
+                display: flex !important;
+            }
+            /* footer 区域：因主题结构常阻挡 hover，工具按钮始终显示 */
+            .pb-slot-footer .component-actions,
+            [data-region="footer"] .tpmst-component-wrapper .component-actions,
+            [data-region="footer"] .pb-component-wrapper .component-actions {
                 display: flex !important;
             }
         </style>';

@@ -1560,15 +1560,22 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function beginTransaction(): void
     {
-        // 🔧 修复：getLink() 现在直接返回原始 PDO，不再使用包装器
         $this->getLink()->beginTransaction();
     }
 
     public function rollBack(): void
     {
-        // 🔧 修复：getLink() 现在直接返回原始 PDO，不再使用包装器
-        if($this->getLink()->inTransaction()) {
-            $this->getLink()->rollBack();
+        $pdo = $this->getLink();
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+            return;
+        }
+        // PostgreSQL：语句失败后 inTransaction() 可能错误返回 false，但连接仍处于 aborted 状态，
+        // 必须执行 ROLLBACK 才能恢复，否则后续操作报 25P02
+        try {
+            $pdo->rollBack();
+        } catch (\Throwable) {
+            // 无活跃事务时 rollBack 会抛错，忽略
         }
     }
 
@@ -2163,6 +2170,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
         }
         try {
+            try {
         // 在执行前检查是否包含多个 SQL 命令
         // PostgreSQL 的 prepared statement 不支持多个 SQL 命令
         if (!empty($this->sql)) {
@@ -2702,24 +2710,30 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         // 处理结果
         return $this->processFetchResult($model_class);
-        } finally {
-            if ($dbTraceStart > 0.0) {
-                $duration = (microtime(true) - $dbTraceStart) * 1000;
-                if ($duration < 0) {
-                    $duration = 0;
+            } finally {
+                if ($dbTraceStart > 0.0) {
+                    $duration = (microtime(true) - $dbTraceStart) * 1000;
+                    if ($duration < 0) {
+                        $duration = 0;
+                    }
+                    RequestLifecycleTrace::recordSpan(
+                        $dbTraceLabel,
+                        $duration,
+                        'db',
+                        null,
+                        [
+                            'sql' => $dbTraceSql,
+                            'operation' => $traceOperation,
+                            'table' => $traceTable,
+                        ]
+                    );
                 }
-                RequestLifecycleTrace::recordSpan(
-                    $dbTraceLabel,
-                    $duration,
-                    'db',
-                    null,
-                    [
-                        'sql' => $dbTraceSql,
-                        'operation' => $traceOperation,
-                        'table' => $traceTable,
-                    ]
-                );
             }
+        } catch (\PDOException $e) {
+            // PostgreSQL：任意 SQL 失败后连接进入 aborted 状态，必须 ROLLBACK 才能恢复；
+            // 否则后续操作（含 BEGIN）均报 25P02。在 rethrow 前统一 rollBack 以恢复连接。
+            $this->rollBack();
+            throw $e;
         }
     }
     
@@ -2928,15 +2942,20 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $stmt = $this->PDOStatement;
         $needExecute = ($stmt === null && !empty($this->sql));
         if ($needExecute) {
-            if ($this->hasMultipleSqlCommands($this->sql)) {
-                throw new DbException(__('fetchIterator 不支持多语句 SQL，请使用单条 SELECT'));
+            try {
+                if ($this->hasMultipleSqlCommands($this->sql)) {
+                    throw new DbException(__('fetchIterator 不支持多语句 SQL，请使用单条 SELECT'));
+                }
+                $stmt = $this->preparePgsql($this->sql);
+                if ($stmt === false || !$stmt->execute($this->bound_values)) {
+                    $err = $this->getLink()->errorInfo();
+                    throw new DbException($err[2] ?? 'Execute failed');
+                }
+                $this->PDOStatement = $stmt;
+            } catch (\PDOException $e) {
+                $this->rollBack();
+                throw $e;
             }
-            $stmt = $this->preparePgsql($this->sql);
-            if ($stmt === false || !$stmt->execute($this->bound_values)) {
-                $err = $this->getLink()->errorInfo();
-                throw new DbException($err[2] ?? 'Execute failed');
-            }
-            $this->PDOStatement = $stmt;
         }
         if ($stmt === null) {
             return;
