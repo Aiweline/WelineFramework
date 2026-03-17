@@ -91,7 +91,18 @@ $instanceId = 'ss-hero-' . uniqid();
             #<?= $instanceId ?> .ss-hero-stats { gap: 24px; }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <div class="ss-hero-container">
         <?php if ($badge): ?>
         <div class="ss-hero-badge">
@@ -104,11 +115,11 @@ $instanceId = 'ss-hero-' . uniqid();
         <p class="ss-hero-desc"><?= htmlspecialchars($description) ?></p>
         
         <div class="ss-hero-cta">
-            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="ss-hero-btn-primary">
+            <a href="javascript:void(0)" role="button" class="ss-hero-btn-primary" data-download-trigger="primary">
                 <?= htmlspecialchars($primaryBtnText) ?>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>
-            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="ss-hero-btn-secondary">
+            <a href="javascript:void(0)" role="button" class="ss-hero-btn-secondary" data-download-trigger="secondary">
                 <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                 <?= htmlspecialchars($secondaryBtnText) ?>
             </a>
