@@ -144,9 +144,11 @@ class Post extends BackendController
             }
 
             $status       = (int)($data['status'] ?? PostModel::STATUS_DRAFT);
-            $published_at = $data['published_at'] ?? '';
+            $published_at = trim((string)($data['published_at'] ?? ''));
             if ($status === PostModel::STATUS_PUBLISHED && $published_at === '') {
                 $published_at = date('Y-m-d H:i:s');
+            } elseif ($published_at === '') {
+                $published_at = null;
             }
 
             // 获取当前网站ID（优先使用表单提交的，否则从WebsiteData获取）
@@ -248,9 +250,11 @@ class Post extends BackendController
             }
 
             $status       = (int)($data['status'] ?? PostModel::STATUS_DRAFT);
-            $published_at = $data['published_at'] ?? '';
+            $published_at = trim((string)($data['published_at'] ?? ''));
             if ($status === PostModel::STATUS_PUBLISHED && $published_at === '') {
                 $published_at = date('Y-m-d H:i:s');
+            } elseif ($published_at === '') {
+                $published_at = null;
             }
 
             $post->setData(PostModel::schema_fields_TITLE, $title)
