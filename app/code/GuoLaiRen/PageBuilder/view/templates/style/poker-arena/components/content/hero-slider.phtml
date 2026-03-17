@@ -272,7 +272,18 @@ $instanceId = 'pa-hero-' . uniqid();
             #<?= $instanceId ?> .pa-hero-stat::after { display: none; }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <!-- Floating card suit decorations -->
     <span class="pa-hero-suit">♠</span>
     <span class="pa-hero-suit">♥</span>
@@ -291,13 +302,13 @@ $instanceId = 'pa-hero-' . uniqid();
         
         <div class="pa-hero-cta">
             <?php if ($primaryBtnText): ?>
-            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="pa-hero-btn-primary">
+            <a href="javascript:void(0)" role="button" class="pa-hero-btn-primary" data-download-trigger="primary">
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="pa-hero-btn-secondary">
+            <a href="javascript:void(0)" role="button" class="pa-hero-btn-secondary" data-download-trigger="secondary">
                 <?= htmlspecialchars($secondaryBtnText) ?>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>

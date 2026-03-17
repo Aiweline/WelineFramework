@@ -146,7 +146,21 @@ $componentId = 'cta_' . uniqid();
             }
         }
     </style>
-    
+    <script>
+    (function(){
+        var buttonUrl = <?= json_encode($buttonUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var target = <?= json_encode($buttonTarget ?? '_self', JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $componentId ?> .shared-cta-download-trigger').forEach(function(el){
+            el.addEventListener('click', function(){
+                if (target === '_blank') {
+                    window.open(buttonUrl, '_blank', 'noopener,noreferrer');
+                } else {
+                    window.location.href = buttonUrl;
+                }
+            });
+        });
+    })();
+    </script>
     <div class="container">
         <?php if ($subtitle): ?>
         <p class="cta-subtitle"><?= htmlspecialchars($subtitle) ?></p>
@@ -159,8 +173,9 @@ $componentId = 'cta_' . uniqid();
         <?php endif; ?>
         
         <?php if ($buttonText): ?>
-        <a href="<?= htmlspecialchars($buttonUrl) ?>" 
-           class="cta-button" 
+        <a href="javascript:void(0)" 
+           role="button"
+           class="cta-button shared-cta-download-trigger" 
            target="<?= htmlspecialchars($buttonTarget) ?>">
             <?= htmlspecialchars($buttonText) ?>
         </a>
