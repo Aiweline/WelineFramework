@@ -408,7 +408,7 @@ body {
                 
                 <?php if ($downloadBtnDisplay): ?>
                 <div class="tpmst-nav-download-wrapper">
-                    <a href="<?= htmlspecialchars($downloadBtnUrl) ?>" class="tpmst-nav-download-btn"><?= htmlspecialchars($downloadBtnText) ?></a>
+                    <a href="javascript:void(0)" role="button" class="tpmst-nav-download-btn tpmst-download-trigger-nav"><?= htmlspecialchars($downloadBtnText) ?></a>
                 </div>
                 <?php endif; ?>
             </div>
@@ -460,6 +460,13 @@ body {
     });
     
     handleScroll();
+})();
+
+(function(){
+    var downloadUrl = <?= json_encode($downloadBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+    document.querySelectorAll('#<?= $componentId ?>-nav .tpmst-download-trigger-nav').forEach(function(el){
+        el.addEventListener('click', function(){ window.location.href = downloadUrl; });
+    });
 })();
 </script>
 <!-- TPMST Header Nav Component End: <?= $componentId ?> -->
