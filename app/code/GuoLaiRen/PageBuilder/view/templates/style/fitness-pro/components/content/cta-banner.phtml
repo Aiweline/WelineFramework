@@ -63,19 +63,30 @@ $instanceId = 'fp-cta-' . uniqid();
             #<?= $instanceId ?> .fp-cta-btn-primary, #<?= $instanceId ?> .fp-cta-btn-secondary { width: 100%; max-width: 320px; justify-content: center; }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <div class="fp-cta-container" id="cta">
         <div class="fp-cta-card">
             <div class="fp-cta-icon">🔥</div>
             <h2 class="fp-cta-title"><?= htmlspecialchars($title) ?></h2>
             <p class="fp-cta-desc"><?= htmlspecialchars($description) ?></p>
             <div class="fp-cta-buttons">
-                <a href="<?= htmlspecialchars($primaryUrl) ?>" class="fp-cta-btn-primary">
+                <a href="javascript:void(0)" role="button" class="fp-cta-btn-primary" data-download-trigger="primary">
                     <?= htmlspecialchars($primaryText) ?>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </a>
                 <?php if ($showSecondary): ?>
-                <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="fp-cta-btn-secondary">
+                <a href="javascript:void(0)" role="button" class="fp-cta-btn-secondary" data-download-trigger="secondary">
                     <?= htmlspecialchars($secondaryText) ?>
                 </a>
                 <?php endif; ?>

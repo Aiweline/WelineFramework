@@ -309,7 +309,18 @@ $instanceId = 'rr-hero-' . uniqid();
             }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <!-- Decorative playing card shapes -->
     <div class="rr-hero-deco-card"></div>
     <div class="rr-hero-deco-card"></div>
@@ -326,14 +337,14 @@ $instanceId = 'rr-hero-' . uniqid();
         
         <div class="rr-hero-cta">
             <?php if ($primaryBtnText): ?>
-            <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="rr-hero-btn-primary">
+            <a href="javascript:void(0)" role="button" class="rr-hero-btn-primary" data-download-trigger="primary">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="rr-hero-btn-secondary">
+            <a href="javascript:void(0)" role="button" class="rr-hero-btn-secondary" data-download-trigger="secondary">
                 <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 <?= htmlspecialchars($secondaryBtnText) ?>
             </a>

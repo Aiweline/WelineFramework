@@ -43,13 +43,17 @@
         return str;
     }
 
-    function api(params, onDone, onErr) {
+    function api(params, onDone, onErr, options) {
         var isUpload = params instanceof FormData;
         var url = CONNECTOR;
-        var opts = {};
+        var opts = options || {};
         if (isUpload) {
             opts.method = 'POST';
             opts.body = params;
+            // Linux 下 multipart 有时未正确解析出 target，导致上传到根目录；把 cmd/target 同时放在 URL 上兜底
+            if (opts.uploadQuery) {
+                url += (url.indexOf('?') >= 0 ? '&' : '?') + opts.uploadQuery;
+            }
         } else {
             var q = [];
             for (var k in params) {
@@ -899,6 +903,7 @@
         }
         showUploadProgress(true);
         updateUploadProgress(0);
+        var uploadQuery = 'cmd=upload&target=' + encodeURIComponent(CWD_HASH);
         api(fd, function (data) {
             showUploadProgress(false);
             showSuccess(t('uploadComplete'));
@@ -906,7 +911,7 @@
         }, function (err) {
             showUploadProgress(false);
             showError(err);
-        });
+        }, { uploadQuery: uploadQuery });
     }
 
     function showUploadProgress(visible) {
