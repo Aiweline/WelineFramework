@@ -49,9 +49,9 @@ $title = $config['content.title'] ?? "India's Most Trusted Rummy Platform";
 $description = $config['content.description'] ?? 'Join millions of players on India\'s premier rummy platform. Play skill-based card games, compete in tournaments, and win real cash prizes with instant withdrawals.';
 
 $primaryBtnText = $config['cta.primary_text'] ?? 'Play Rummy Now';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#games';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#games');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
 
 $statsRaw = $config['stats.items'] ?? "5M+|Active Players\n₹500Cr+|Winnings Paid\n24/7|Live Support";
 $stats = [];

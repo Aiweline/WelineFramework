@@ -83,7 +83,7 @@ $navLinkHoverColor = le_getConfig($styleSettings, 'navigation.link_hover_color',
 $navLinksRaw = le_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=>/games\nDownload=>/download\nFAQ=>/faq");
 $showCta = le_getConfig($styleSettings, 'navigation.show_cta', 'yes');
 $ctaText = le_getConfig($styleSettings, 'navigation.cta_text', 'Play Now');
-$ctaUrl = le_getConfig($styleSettings, 'navigation.cta_url', '#games');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(le_getConfig($styleSettings, 'navigation.cta_url', '#games'));
 
 // 颜色配置
 $accentPrimary = le_color($colors, 'accent_primary', '#8b5cf6');
@@ -97,7 +97,7 @@ foreach ($lines as $line) {
     if (empty($line)) continue;
     $parts = explode('=>', $line, 2);
     $name = trim($parts[0] ?? '');
-    $url = trim($parts[1] ?? '#');
+    $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
     if (!empty($name)) {
         $navLinks[] = ['name' => $name, 'url' => $url];
     }

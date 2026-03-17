@@ -51,9 +51,9 @@ $title = $config['content.title'] ?? 'Where Champions Play';
 $description = $config['content.description'] ?? 'Experience the thrill of Texas Hold\'em, Omaha, and world-class tournaments. Join millions of players at the most trusted poker platform with $10M+ in daily prize pools.';
 
 $primaryBtnText = $config['cta.primary_text'] ?? 'Join Free';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#register';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#register');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
 
 $statsRaw = $config['stats.items'] ?? "\$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
 $stats = [];

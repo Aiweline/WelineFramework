@@ -42,7 +42,7 @@ $description = $config['content.description'] ?? 'Join millions of rummy players
 $primaryBtnText = $config['buttons.primary_text'] ?? 'Register Now';
 $primaryBtnUrl = $config['buttons.primary_url'] ?? '#';
 $secondaryBtnText = $config['buttons.secondary_text'] ?? 'Download App';
-$secondaryBtnUrl = $config['buttons.secondary_url'] ?? '#download';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.secondary_url'] ?? '#download');
 
 $instanceId = 'rr-cta-' . uniqid();
 ?>

@@ -53,9 +53,9 @@ $title = $config['content.title'] ?? 'Roll the Dice, Rule the Board!';
 $description = $config['content.description'] ?? 'Join millions of players worldwide in the ultimate Ludo experience. Play with friends, win real prizes, and become the king of the board!';
 
 $primaryBtnText = $config['cta.primary_text'] ?? 'Play Now';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#games';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#games');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download Free';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#download';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
 
 $statsRaw = $config['stats.items'] ?? "10M+|Players Worldwide\n1M+|Daily Games\n100+|Tournaments";
 $stats = [];
