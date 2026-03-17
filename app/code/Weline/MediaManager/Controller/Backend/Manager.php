@@ -32,16 +32,27 @@ class Manager extends BackendController
         $params = $this->request->getParams();
         $connectorUrl = $this->_url->getBackendUrl('media/backend/connector');
         $startPath = $params['startPath'] ?? $params['path'] ?? '';
-        
+        $initialValue = trim((string) ($params['initialValue'] ?? ''));
+        if ($initialValue !== '') {
+            $firstPath = explode(',', $initialValue)[0];
+            $firstPath = trim(str_replace('\\', '/', $firstPath));
+            $firstPath = preg_replace('#^/pub/media/#', '', $firstPath);
+            if ($firstPath !== '' && $startPath === '') {
+                $dir = dirname($firstPath);
+                if ($dir !== '.') {
+                    $startPath = $dir . '/';
+                }
+            }
+        }
         $this->assign('connector_url', $connectorUrl);
         $this->assign('start_path', $startPath);
+        $this->assign('initial_value', $initialValue);
         $this->assign('is_iframe', '1');
         $this->assign('target', $params['target'] ?? '');
         $this->assign('multi', $params['multi'] ?? '0');
         $this->assign('ext', $params['ext'] ?? '*');
         $this->assign('size', $params['size'] ?? '102400');
         $this->assign('lock_path', $params['lockPath'] ?? '0');
-        
         return $this->fetch('manager.phtml');
     }
 }
