@@ -8,7 +8,9 @@
 .mmf-wrap {
     display: flex;
     height: calc(100vh - 120px);
-    min-height: 500px;
+    min-height: 100%;
+    width: 100%;
+    box-sizing: border-box;
     gap: 0;
     background: var(--backend-color-card-bg, #fff);
     border: 1px solid var(--backend-color-border-default, #dee2e6);
@@ -17,10 +19,19 @@
     box-shadow: var(--backend-card-shadow, 0 0 13px 0 rgba(74, 53, 107, 0.05));
 }
 
+/* blank 布局 / iframe 内：无顶栏，占满视口宽度与高度，保证 .mmf-main 有宽度 */
+.backend-blank-content .mmf-wrap,
+.mmf-wrap.mmf-iframe-mode {
+    width: 100%;
+    height: 100vh;
+    min-height: 100vh;
+    box-sizing: border-box;
+}
+
 /* 侧边树 */
 .mmf-sidebar {
     width: 240px;
-    min-width: 180px;
+    min-width: 240px;
     background: var(--backend-color-sidebar-bg, #fff);
     border-right: 1px solid var(--backend-color-border-default, #dee2e6);
     overflow-y: auto;

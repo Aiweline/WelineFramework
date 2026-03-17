@@ -90,57 +90,80 @@ class ParameterBag
     }
     
     /**
-     * 解析 Body 参数
-     * 
-     * 优先使用已注入的 rawBody（WLS 模式），回退到 php://input（FPM 模式）
-     * 
+     * 解析 Body 参数（与 WlsRequest 支持的协议对齐，FPM 下 php://input）
+     *
+     * 支持：application/json、text/json、+json、application/x-www-form-urlencoded、
+     * multipart/form-data（由 PHP 填 $_POST，body 可不解析）、text/plain、空或未知类型（智能嗅探）。
+     *
      * @return array
      */
     private function parseBodyParams(): array
     {
-        // 优先使用已注入的 rawBody（WLS 模式由 WlsRequest 设置）
         $rawBody = $this->rawBody;
-        
-        // FPM 模式回退到 php://input
         if ($rawBody === '') {
             $rawBody = file_get_contents('php://input') ?: '';
-            $this->rawBody = $rawBody; // 缓存，避免多次读取
+            $this->rawBody = $rawBody;
         }
-        
         if ($rawBody === '') {
             return [];
         }
-        
-        // 尝试解析 JSON
+
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-        if (str_contains($contentType, 'application/json')) {
-            $decoded = json_decode($rawBody, true);
-            return is_array($decoded) ? $decoded : [];
+        $ct = \strtolower(\trim((string) \explode(';', $contentType, 2)[0]));
+
+        // ── JSON 系列：application/json, text/json, *+json ──
+        if ($ct === 'application/json' || $ct === 'text/json' || \str_ends_with($ct, '+json')) {
+            $decoded = \json_decode($rawBody, true);
+            return \is_array($decoded) ? $decoded : [];
         }
-        
-        // 尝试解析 URL 编码的表单数据
-        if (str_contains($contentType, 'application/x-www-form-urlencoded')) {
-            parse_str($rawBody, $params);
+
+        // ── URL-encoded ──
+        if ($ct === 'application/x-www-form-urlencoded') {
+            \parse_str($rawBody, $params);
             return $params;
         }
-        
-        // 尝试通用解析
+
+        // ── multipart/form-data：PHP 已填 $_POST，body 不再解析 ──
+        if ($ct === 'multipart/form-data') {
+            return [];
+        }
+
+        // ── text/plain、空、未知类型：智能嗅探 JSON → URL-encoded → 通用 & 解析 ──
+        return $this->parseBodyParamsFallback($rawBody);
+    }
+
+    /**
+     * 未知/未声明 Content-Type 时的兜底解析（与 WlsRequest::parsePlainText 逻辑一致）
+     */
+    private function parseBodyParamsFallback(string $rawBody): array
+    {
+        $trimmed = \ltrim($rawBody);
+        if (($trimmed[0] ?? '') === '{' || ($trimmed[0] ?? '') === '[') {
+            $data = \json_decode($rawBody, true);
+            if (\is_array($data)) {
+                return $data;
+            }
+        }
+        if (\str_contains($rawBody, '=') && !\str_contains($rawBody, "\n")) {
+            \parse_str($rawBody, $params);
+            if ($params !== []) {
+                return $params;
+            }
+        }
         $params = [];
-        foreach (explode('&', $rawBody) as $pair) {
-            $parts = explode('=', $pair, 2);
-            if (count($parts) === 2) {
-                $key = urldecode($parts[0]);
-                $value = urldecode($parts[1]);
-                // 处理数组参数 (如 items[])
-                if (str_ends_with($key, '[]')) {
-                    $key = rtrim($key, '[]');
+        foreach (\explode('&', $rawBody) as $pair) {
+            $parts = \explode('=', $pair, 2);
+            if (\count($parts) === 2) {
+                $key = \urldecode($parts[0]);
+                $value = \urldecode($parts[1]);
+                if (\str_ends_with($key, '[]')) {
+                    $key = \rtrim($key, '[]');
                     $params[$key][] = $value;
                 } else {
                     $params[$key] = $value;
                 }
             }
         }
-        
         return $params;
     }
     
