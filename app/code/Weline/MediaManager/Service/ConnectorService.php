@@ -43,12 +43,11 @@ class ConnectorService
         $src = $this->parseSource($request);
         $cmd = $src['cmd'] ?? 'open';
 
-        // Linux 等环境下 multipart/form-data 有时未正确填充 $_POST，导致 cmd/target 为空被当成 open，返回目录列表
+        // Linux 等环境下 multipart 有时未解析出 target，导致上传到根目录；优先用 URL 上的 target 兜底
         if (\strtoupper($request->getMethod()) === 'POST' && !empty($_FILES['upload'])) {
             $cmd = 'upload';
-            if (!isset($src['target']) || $src['target'] === '') {
-                $src['target'] = $_POST['target'] ?? $_GET['target'] ?? '';
-            }
+            $target = \trim((string) ($src['target'] ?? $_GET['target'] ?? $_POST['target'] ?? ''));
+            $src['target'] = $target;
         }
 
         return match ($cmd) {

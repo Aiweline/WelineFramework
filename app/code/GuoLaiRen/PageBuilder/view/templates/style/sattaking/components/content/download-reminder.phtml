@@ -240,7 +240,18 @@ $instanceId = 'sk-download-reminder-' . uniqid();
             }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <!-- 装饰元素 -->
     <div class="sk-dr-decor sk-dr-decor-1"></div>
     <div class="sk-dr-decor sk-dr-decor-2"></div>
@@ -256,13 +267,13 @@ $instanceId = 'sk-download-reminder-' . uniqid();
         <p class="sk-dr-desc"><?= htmlspecialchars($description) ?></p>
         
         <div class="sk-dr-buttons">
-            <a href="<?= htmlspecialchars($primaryUrl) ?>" class="sk-dr-btn sk-dr-btn-primary">
+            <a href="javascript:void(0)" role="button" class="sk-dr-btn sk-dr-btn-primary" data-download-trigger="primary">
                 <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 <?= htmlspecialchars($primaryText) ?>
             </a>
             
             <?php if ($showSecondary): ?>
-            <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="sk-dr-btn sk-dr-btn-secondary">
+            <a href="javascript:void(0)" role="button" class="sk-dr-btn sk-dr-btn-secondary" data-download-trigger="secondary">
                 <?= htmlspecialchars($secondaryText) ?>
             </a>
             <?php endif; ?>

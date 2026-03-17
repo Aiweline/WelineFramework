@@ -221,6 +221,22 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 $processLogs[] = $line;
                 $this->echoLine($line);
                 w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，失败: %{2}', [$requestDomain, $msg]), [], 'domain_pool_cert');
+                if (\function_exists('w_msg')) {
+                    w_msg(
+                        'domain_pool_certificate_request',
+                        'error',
+                        __('域名池证书申请失败：%{1}', [$requestDomain]),
+                        $msg,
+                        [
+                            'icon' => 'ri-error-warning-line',
+                            'metadata' => [
+                                'domain' => $domain,
+                                'request_domain' => $requestDomain,
+                                'pool_id' => $poolId,
+                            ],
+                        ]
+                    );
+                }
             }
         } catch (\Throwable $e) {
             $counter['failed']++;
@@ -232,6 +248,22 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             $processLogs[] = $line;
             $this->echoLine($line);
             w_log_error(__('[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}', [$requestDomain, $errMsg]), [], 'domain_pool_cert');
+            if (\function_exists('w_msg')) {
+                w_msg(
+                    'domain_pool_certificate_request',
+                    'error',
+                    __('域名池证书申请异常：%{1}', [$requestDomain]),
+                    $errMsg,
+                    [
+                        'icon' => 'ri-error-warning-line',
+                        'metadata' => [
+                            'domain' => $domain,
+                            'request_domain' => $requestDomain,
+                            'pool_id' => $poolId,
+                        ],
+                    ]
+                );
+            }
         }
 
         return $counter;

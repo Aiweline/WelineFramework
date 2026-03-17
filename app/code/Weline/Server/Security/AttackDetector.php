@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Security;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Service\AttackLogService;
@@ -40,10 +41,16 @@ class AttackDetector
     
     /**
      * 被封禁的 IP
-     * 格式: [ip => expire_time]
+     * 格式: [ip => expire_time]，永久封禁用 PHP_INT_MAX
      * @var array<string, int>
      */
     private array $blockedIps = [];
+
+    /**
+     * 永久封禁的 IP（持久化到文件，仅后台解禁可恢复）
+     * @var array<string, true>
+     */
+    private array $permanentBannedIps = [];
     
     /**
      * 攻击事件日志
@@ -193,6 +200,56 @@ class AttackDetector
             'block_duration' => 60,         // 封禁时长（秒）- 降低到 1 分钟，快速解封
             'fast_close_threshold' => 0.2,  // 快速关闭阈值（秒）- 降低到 200ms，只捕获真正的 SSL 失败
         ],
+
+        // 扫描路径即永久封禁：命中任意配置路径则立即永久封禁 IP，仅后台解禁可恢复
+        'ban_on_path_match' => [
+            'enabled' => true,
+            'paths' => [
+                '/wp-admin',
+                '/wp-login',
+                '/wp-content',
+                '/wp-includes',
+                '/xmlrpc.php',
+                '/phpmyadmin',
+                '/.env',
+                '/.git/',
+                '/admin.php',
+                '/config.php',
+                '/install.php',
+                '/setup.php',
+                '/wp-admin/setup-config.php',
+                '/wp-admin/install.php',
+            ],
+        ],
+
+        // 攻击信号后：被标记为攻击者的 IP，在「禁止路径」之外的请求多次则封禁
+        'attack_signaled_follow_ban' => [
+            'enabled' => true,
+            'signal_ttl' => 3600,           // 攻击信号保留时长（秒）
+            'window' => 60,                  // 统计窗口
+            'max_requests' => 15,           // 信号后窗口内允许的请求数（超出则封禁）
+            'block_duration' => 600,        // 封禁时长（秒）
+        ],
+
+        // 流量暴增 + 非框架路由：请求量暴增 2 倍时，对「非框架路由」的连续请求达到次数则封禁
+        'traffic_spike' => [
+            'enabled' => true,
+            'window' => 60,                  // 统计窗口（秒）
+            'multiplier' => 2.0,             // 当前窗口请求量 >= 上一窗口 * multiplier 视为暴增
+            'spike_mode_duration' => 120,    // 暴增后持续严格检测的时长（秒）
+        ],
+        'unknown_route_ban' => [
+            'enabled' => true,
+            'consecutive_count' => 5,       // 连续几次非框架路由请求后封禁
+            'block_duration' => 300,        // 封禁时长（秒），0 表示仅本次拦截不记时长
+            'only_in_spike_mode' => true,   // 是否仅在流量暴增时启用（false 则始终启用）
+        ],
+
+        // 解封后再触发：连续 3 次「解封后又触发未知路由封禁」则改为永久封禁
+        'unblock_retrigger_permanent' => [
+            'enabled' => true,
+            'count' => 3,
+        ],
     ];
     
     /**
@@ -229,7 +286,26 @@ class AttackDetector
         'protected_path_blocks' => 0,
         'ssl_failure_blocks' => 0,
         'ssl_failure_total' => 0,
+        'ban_on_path_blocks' => 0,
+        'attack_signaled_follow_blocks' => 0,
+        'unknown_route_blocks' => 0,
     ];
+
+    /** 攻击信号 IP：命中过任意攻击规则的 IP，在 signal_ttl 内对其「规则外」请求计数，超限则封禁 */
+    private array $attackSignaledIps = [];
+    /** 攻击信号后的请求计数 [ip => ['count' => int, 'window_start' => int]] */
+    private array $attackSignaledRequestCount = [];
+    /** 连续非框架路由请求次数 [ip => int]，命中已知路由时清零 */
+    private array $consecutiveUnknownRoute = [];
+    /** 解封后再触发次数 [ip => int]，用于满 3 次改永久封禁 */
+    private array $unblockRetriggerCount = [];
+    /** 框架已知路由路径（前缀集合），用于判断是否「非框架路由」 */
+    private array $knownRoutePaths = [];
+    private int $knownRoutePathsLoadedAt = 0;
+    private int $knownRoutePathsReloadInterval = 300;
+    /** 流量暴增：当前窗口 [start, count]、上一窗口 [start, count] */
+    private array $requestCountSpikeWindow = ['current' => [0, 0], 'previous' => [0, 0]];
+    private int $spikeModeUntil = 0;
     
     /**
      * 私有构造函数
@@ -238,6 +314,7 @@ class AttackDetector
     {
         $this->rules = $this->defaultRules;
         $this->loadRules();
+        $this->loadPermanentBannedIps();
     }
     
     /**
@@ -388,13 +465,58 @@ class AttackDetector
     {
         return BP . 'var' . DS . 'server' . DS . 'security-rules-update.flag';
     }
+
+    /**
+     * 永久封禁 IP 列表文件路径
+     */
+    public static function getPermanentBannedFilePath(): string
+    {
+        return BP . 'var' . DS . 'server' . DS . 'permanent-banned-ips.json';
+    }
+
+    private function loadPermanentBannedIps(): void
+    {
+        // 先移除当前内存中已记录的永久封禁 IP（避免重载后与文件不一致时残留）
+        foreach (\array_keys($this->permanentBannedIps) as $ip) {
+            unset($this->blockedIps[$ip]);
+        }
+        $this->permanentBannedIps = [];
+
+        $file = self::getPermanentBannedFilePath();
+        if (!\is_file($file)) {
+            return;
+        }
+        $raw = @\file_get_contents($file);
+        if ($raw === false || $raw === '') {
+            return;
+        }
+        $data = @\json_decode($raw, true);
+        if (\is_array($data) && isset($data['ips']) && \is_array($data['ips'])) {
+            $this->permanentBannedIps = \array_fill_keys($data['ips'], true);
+            foreach ($this->permanentBannedIps as $ip => $_) {
+                $this->blockedIps[$ip] = \PHP_INT_MAX;
+            }
+        }
+    }
+
+    private function savePermanentBannedIps(): void
+    {
+        $file = self::getPermanentBannedFilePath();
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        $ips = \array_keys($this->permanentBannedIps);
+        @\file_put_contents($file, \json_encode(['ips' => $ips], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+    }
     
     /**
-     * 重新加载规则
+     * 重新加载规则与永久封禁列表
      */
     public function reload(): void
     {
         $this->loadRules();
+        $this->loadPermanentBannedIps();
     }
     
     /**
@@ -466,17 +588,45 @@ class AttackDetector
             'instance' => $this->instanceName ?? 'default',
         ];
         
-        // 1. 检查是否已被封禁
+        // 1. 检查是否已被封禁（含永久封禁）
         if ($this->isBlocked($clientIp)) {
             $this->stats['blocked_requests']++;
             $result = [
                 'is_attack' => true,
                 'type' => 'blocked',
-                'reason' => 'IP 已被临时封禁',
+                'reason' => isset($this->permanentBannedIps[$clientIp]) ? 'IP 已永久封禁（仅后台可解禁）' : 'IP 已被临时封禁',
                 'should_block' => true,
             ];
             $this->persistAttackLog($result, $requestInfo);
             return $result;
+        }
+
+        // 1.5 扫描路径即永久封禁：命中配置路径则立即永久封禁，仅后台解禁可恢复（并记入攻击记录）
+        $banOnPathResult = $this->checkBanOnPathMatch($clientIp, $uri);
+        if ($banOnPathResult['is_attack']) {
+            $this->stats['ban_on_path_blocks']++;
+            $this->persistAttackLog($banOnPathResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
+            return $banOnPathResult;
+        }
+
+        // 1.6 攻击信号后：已被标记为攻击者的 IP，在禁止路径外的请求多次则封禁
+        $attackSignaledResult = $this->checkAttackSignaledFollowBan($clientIp, $uri);
+        if ($attackSignaledResult['is_attack']) {
+            $this->stats['attack_signaled_follow_blocks']++;
+            $this->persistAttackLog($attackSignaledResult, $requestInfo);
+            return $attackSignaledResult;
+        }
+
+        // 1.7 流量暴增检测（更新暴增状态）
+        $this->updateTrafficSpike();
+        // 1.8 非框架路由连续请求：暴增时（或始终）连续 N 次命中非框架路由则封禁，解封后再触发 3 次则永久封禁
+        $unknownRouteResult = $this->checkUnknownRouteBan($clientIp, $uri);
+        if ($unknownRouteResult['is_attack']) {
+            $this->stats['unknown_route_blocks']++;
+            $this->persistAttackLog($unknownRouteResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
+            return $unknownRouteResult;
         }
         
         // 2. 频率限制检测
@@ -485,14 +635,16 @@ class AttackDetector
             $this->stats['rate_limit_blocks']++;
             $requestInfo['request_count'] = $this->ipCounters[$clientIp]['count'] ?? 1;
             $this->persistAttackLog($rateResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $rateResult;
         }
-        
-        // 3. 路径扫描检测
+
+        // 3. 路径级限流
         $pathRateResult = $this->checkPathRateLimit($clientIp, $uri);
         if ($pathRateResult['is_attack']) {
             $this->stats['path_rate_limit_blocks']++;
             $this->persistAttackLog($pathRateResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $pathRateResult;
         }
 
@@ -502,30 +654,34 @@ class AttackDetector
             $this->stats['path_scan_blocks']++;
             $requestInfo['unique_paths'] = $this->ipCounters[$clientIp]['unique_paths'] ?? 0;
             $this->persistAttackLog($pathResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $pathResult;
         }
-        
+
         // 5. 敏感路径保护
         $protectedResult = $this->checkProtectedPaths($clientIp, $uri);
         if ($protectedResult['is_attack']) {
             $this->stats['protected_path_blocks']++;
             $this->persistAttackLog($protectedResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $protectedResult;
         }
-        
+
         // 6. 恶意特征检测
         $maliciousResult = $this->checkMaliciousPatterns($clientIp, $uri, $body);
         if ($maliciousResult['is_attack']) {
             $this->stats['malicious_blocks']++;
             $this->persistAttackLog($maliciousResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $maliciousResult;
         }
-        
+
         // 7. 恶意 User-Agent 检测
         $uaResult = $this->checkUserAgent($clientIp, $headers);
         if ($uaResult['is_attack']) {
             $this->stats['bad_ua_blocks']++;
             $this->persistAttackLog($uaResult, $requestInfo);
+            $this->markAttackSignaled($clientIp);
             return $uaResult;
         }
         
@@ -570,12 +726,268 @@ class AttackDetector
     }
     
     /**
-     * 封禁 IP
+     * 封禁 IP（临时）
      */
     private function blockIp(string $ip, int $duration): void
     {
         $this->blockedIps[$ip] = \time() + $duration;
         $this->logAttack($ip, 'block', "IP 被封禁 {$duration} 秒");
+    }
+
+    /**
+     * 永久封禁 IP：写入持久化列表，仅后台解禁可恢复
+     */
+    private function blockIpPermanent(string $ip): void
+    {
+        if (isset($this->permanentBannedIps[$ip])) {
+            return;
+        }
+        $this->permanentBannedIps[$ip] = true;
+        $this->blockedIps[$ip] = \PHP_INT_MAX;
+        $this->savePermanentBannedIps();
+        $this->logAttack($ip, 'block_permanent', 'IP 已永久封禁（命中扫描路径，仅后台可解禁）');
+    }
+
+    /**
+     * 标记 IP 为攻击信号（命中任意攻击规则后记录，用于后续「规则外多次请求即封禁」）
+     */
+    private function markAttackSignaled(string $ip): void
+    {
+        $rule = $this->rules['attack_signaled_follow_ban'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return;
+        }
+        $ttl = (int)($rule['signal_ttl'] ?? 3600);
+        $this->attackSignaledIps[$ip] = \time() + $ttl;
+    }
+
+    /**
+     * 请求 URI 是否命中「禁止路径」（ban_on_path_match.paths）
+     */
+    private function isUriForbiddenPath(string $uri): bool
+    {
+        $paths = $this->rules['ban_on_path_match']['paths'] ?? [];
+        if (!\is_array($paths) || $paths === []) {
+            return false;
+        }
+        $path = \strtolower((string)(\parse_url($uri, PHP_URL_PATH) ?? '/'));
+        foreach ($paths as $p) {
+            $p = \strtolower(\trim((string)$p));
+            if ($p !== '' && \str_contains($path, $p)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 攻击信号后：被标记的 IP 在禁止路径外的请求超过次数则封禁
+     */
+    private function checkAttackSignaledFollowBan(string $ip, string $uri): array
+    {
+        $rule = $this->rules['attack_signaled_follow_ban'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $now = \time();
+        if (!isset($this->attackSignaledIps[$ip]) || $this->attackSignaledIps[$ip] < $now) {
+            unset($this->attackSignaledIps[$ip], $this->attackSignaledRequestCount[$ip]);
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        if ($this->isUriForbiddenPath($uri)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $window = (int)($rule['window'] ?? 60);
+        $maxRequests = (int)($rule['max_requests'] ?? 15);
+        $blockDuration = (int)($rule['block_duration'] ?? 600);
+        if (!isset($this->attackSignaledRequestCount[$ip])) {
+            $this->attackSignaledRequestCount[$ip] = ['count' => 0, 'window_start' => $now];
+        }
+        $bucket = &$this->attackSignaledRequestCount[$ip];
+        if ($now - $bucket['window_start'] > $window) {
+            $bucket = ['count' => 0, 'window_start' => $now];
+        }
+        $bucket['count']++;
+        if ($bucket['count'] <= $maxRequests) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $this->blockIp($ip, $blockDuration);
+        return [
+            'is_attack' => true,
+            'type' => 'attack_signaled_follow_ban',
+            'reason' => "攻击信号后规则外请求过多: {$bucket['count']} 次/{$window}秒 → 已封禁 {$blockDuration} 秒",
+            'should_block' => true,
+        ];
+    }
+
+    /**
+     * 从 generated/routers 加载框架已知路由路径（用于判断是否「非框架路由」）
+     */
+    private function loadKnownRoutePaths(): void
+    {
+        $now = \time();
+        if ($now - $this->knownRoutePathsLoadedAt < $this->knownRoutePathsReloadInterval) {
+            return;
+        }
+        $this->knownRoutePathsLoadedAt = $now;
+        $paths = [];
+        if (!\class_exists(Env::class, false)) {
+            return;
+        }
+        $files = Env::router_files_PATH ?? [];
+        if (!\is_array($files)) {
+            return;
+        }
+        foreach ($files as $file) {
+            if (!\is_file($file)) {
+                continue;
+            }
+            try {
+                $routes = @(include $file);
+                if (!\is_array($routes)) {
+                    continue;
+                }
+                foreach (\array_keys($routes) as $key) {
+                    $path = \trim((string)\preg_replace('/::.*$/', '', $key));
+                    if ($path !== '') {
+                        $path = '/' . \trim($path, '/');
+                        $paths[$path] = true;
+                    }
+                }
+            } catch (\Throwable $e) {
+                continue;
+            }
+        }
+        $this->knownRoutePaths = \array_keys($paths);
+    }
+
+    private function isPathKnownRoute(string $path): bool
+    {
+        $this->loadKnownRoutePaths();
+        $path = '/' . \trim(\strtolower((string)$path), '/');
+        if ($path === '/' && \in_array('/', $this->knownRoutePaths, true)) {
+            return true;
+        }
+        foreach ($this->knownRoutePaths as $r) {
+            if ($path === $r || \str_starts_with($path, $r . '/') || \str_starts_with($r, $path . '/')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 更新流量暴增状态：当前窗口请求量 >= 上一窗口 * multiplier 则进入 spike 模式
+     */
+    private function updateTrafficSpike(): void
+    {
+        $rule = $this->rules['traffic_spike'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return;
+        }
+        $now = \time();
+        $window = (int)($rule['window'] ?? 60);
+        $multiplier = (float)($rule['multiplier'] ?? 2.0);
+        $spikeDuration = (int)($rule['spike_mode_duration'] ?? 120);
+        $cur = &$this->requestCountSpikeWindow['current'];
+        $prev = &$this->requestCountSpikeWindow['previous'];
+        if ($cur[0] === 0) {
+            $cur = [$now, 0];
+            $prev = [$now - $window, 0];
+        }
+        $cur[1]++;
+        if ($now - $cur[0] >= $window) {
+            $oldPrevCount = $prev[1];
+            $prev = [$cur[0], $cur[1]];
+            $cur = [$now, 0];
+            if ($oldPrevCount > 0 && $prev[1] >= $oldPrevCount * $multiplier) {
+                $this->spikeModeUntil = $now + $spikeDuration;
+            }
+        }
+        if ($this->spikeModeUntil > 0 && $now > $this->spikeModeUntil) {
+            $this->spikeModeUntil = 0;
+        }
+    }
+
+    /**
+     * 非框架路由连续请求：达到次数则封禁；解封后再触发满 3 次则永久封禁
+     */
+    private function checkUnknownRouteBan(string $ip, string $uri): array
+    {
+        $rule = $this->rules['unknown_route_ban'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $onlyInSpike = (bool)($rule['only_in_spike_mode'] ?? true);
+        if ($onlyInSpike && $this->spikeModeUntil < \time()) {
+            $this->consecutiveUnknownRoute[$ip] = 0;
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $path = (string)(\parse_url($uri, PHP_URL_PATH) ?? '/');
+        if ($this->isPathKnownRoute($path)) {
+            $this->consecutiveUnknownRoute[$ip] = 0;
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $consecutive = (int)($this->consecutiveUnknownRoute[$ip] ?? 0);
+        $consecutive++;
+        $this->consecutiveUnknownRoute[$ip] = $consecutive;
+        $threshold = (int)($rule['consecutive_count'] ?? 5);
+        $blockDuration = (int)($rule['block_duration'] ?? 300);
+        if ($consecutive < $threshold) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $unblockRule = $this->rules['unblock_retrigger_permanent'] ?? [];
+        $retriggerLimit = (\is_array($unblockRule) && ($unblockRule['enabled'] ?? true)) ? (int)($unblockRule['count'] ?? 3) : 0;
+        $usePermanent = $retriggerLimit > 0 && (int)($this->unblockRetriggerCount[$ip] ?? 0) >= $retriggerLimit;
+        $this->consecutiveUnknownRoute[$ip] = 0;
+        if ($usePermanent) {
+            $this->blockIpPermanent($ip);
+            $this->unblockRetriggerCount[$ip] = 0;
+            return [
+                'is_attack' => true,
+                'type' => 'unknown_route_ban',
+                'reason' => "非框架路由连续请求 {$consecutive} 次（解封后再触发达 {$retriggerLimit} 次）→ 已永久封禁",
+                'should_block' => true,
+            ];
+        }
+        if ($blockDuration > 0) {
+            $this->blockIp($ip, $blockDuration);
+        }
+        return [
+            'is_attack' => true,
+            'type' => 'unknown_route_ban',
+            'reason' => "非框架路由连续请求 {$consecutive} 次 → 已封禁 " . ($blockDuration > 0 ? "{$blockDuration} 秒" : "并记录"),
+            'should_block' => true,
+        ];
+    }
+
+    /**
+     * 扫描路径即永久封禁：URI 命中配置的任意路径则立即永久封禁
+     */
+    private function checkBanOnPathMatch(string $ip, string $uri): array
+    {
+        $rule = $this->rules['ban_on_path_match'] ?? [];
+        if (!($rule['enabled'] ?? true)) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $paths = $rule['paths'] ?? [];
+        if (!\is_array($paths) || $paths === []) {
+            return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
+        }
+        $path = \strtolower((string)(\parse_url($uri, PHP_URL_PATH) ?? '/'));
+        foreach ($paths as $pattern) {
+            $p = \strtolower(\trim((string)$pattern));
+            if ($p !== '' && \str_contains($path, $p)) {
+                $this->blockIpPermanent($ip);
+                return [
+                    'is_attack' => true,
+                    'type' => 'ban_on_path_match',
+                    'reason' => "访问扫描路径: {$pattern} → IP 已永久封禁，仅后台可解禁",
+                    'should_block' => true,
+                ];
+            }
+        }
+        return ['is_attack' => false, 'type' => 'none', 'reason' => '', 'should_block' => false];
     }
     
     /**
@@ -892,9 +1304,9 @@ class AttackDetector
         }
         $this->lastCleanup = $now;
         
-        // 清理过期的封禁
+        // 清理过期的封禁（永久封禁 expireTime === PHP_INT_MAX 不清理）
         foreach ($this->blockedIps as $ip => $expireTime) {
-            if ($expireTime < $now) {
+            if ($expireTime !== \PHP_INT_MAX && $expireTime < $now) {
                 unset($this->blockedIps[$ip]);
             }
         }
@@ -919,6 +1331,12 @@ class AttackDetector
                 unset($this->sslFailureCounts[$ip]);
             }
         }
+        // 清理过期的攻击信号与相关计数
+        foreach ($this->attackSignaledIps as $ip => $expire) {
+            if ($expire < $now) {
+                unset($this->attackSignaledIps[$ip], $this->attackSignaledRequestCount[$ip]);
+            }
+        }
     }
     
     /**
@@ -935,7 +1353,11 @@ class AttackDetector
             'malicious_blocks' => $this->stats['malicious_blocks'],
             'bad_ua_blocks' => $this->stats['bad_ua_blocks'],
             'protected_path_blocks' => $this->stats['protected_path_blocks'],
+            'ban_on_path_blocks' => $this->stats['ban_on_path_blocks'],
+            'attack_signaled_follow_blocks' => $this->stats['attack_signaled_follow_blocks'],
+            'unknown_route_blocks' => $this->stats['unknown_route_blocks'],
             'blocked_ips_count' => \count($this->blockedIps),
+            'permanent_banned_ips_count' => \count($this->permanentBannedIps),
             'tracked_ips_count' => \count($this->ipCounters),
             'attack_logs_count' => \count($this->attackLogs),
             'block_rate' => $this->stats['total_requests'] > 0 
@@ -953,7 +1375,7 @@ class AttackDetector
     }
     
     /**
-     * 获取被封禁的 IP 列表
+     * 获取被封禁的 IP 列表（含永久封禁）
      */
     public function getBlockedIps(): array
     {
@@ -961,10 +1383,11 @@ class AttackDetector
         $result = [];
         
         foreach ($this->blockedIps as $ip => $expireTime) {
-            if ($expireTime > $now) {
+            if ($expireTime > $now || $expireTime === \PHP_INT_MAX) {
                 $result[$ip] = [
-                    'expire_time' => $expireTime,
-                    'remaining_seconds' => $expireTime - $now,
+                    'expire_time' => $expireTime === \PHP_INT_MAX ? null : $expireTime,
+                    'remaining_seconds' => $expireTime === \PHP_INT_MAX ? null : $expireTime - $now,
+                    'permanent' => $expireTime === \PHP_INT_MAX,
                 ];
             }
         }
@@ -981,19 +1404,29 @@ class AttackDetector
     }
     
     /**
-     * 手动解封 IP
+     * 手动解封 IP（含永久封禁列表）；解封时增加「解封后再触发」计数，满 3 次再触发则永久封禁
      */
     public function unblock(string $ip): void
     {
         unset($this->blockedIps[$ip]);
+        if (isset($this->permanentBannedIps[$ip])) {
+            unset($this->permanentBannedIps[$ip]);
+            $this->savePermanentBannedIps();
+        }
+        $rule = $this->rules['unblock_retrigger_permanent'] ?? [];
+        if (\is_array($rule) && ($rule['enabled'] ?? true)) {
+            $this->unblockRetriggerCount[$ip] = (int)($this->unblockRetriggerCount[$ip] ?? 0) + 1;
+        }
     }
 
     /**
-     * 清空全部封禁（用于运维：清理封印数据）
+     * 清空全部封禁（含永久封禁列表，用于运维）
      */
     public function clearAllBlocks(): void
     {
         $this->blockedIps = [];
+        $this->permanentBannedIps = [];
+        $this->savePermanentBannedIps();
     }
     
     /**
