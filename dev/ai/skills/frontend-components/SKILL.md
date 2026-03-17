@@ -32,3 +32,4 @@ alwaysApply: false
 ## 禁止
 
 - Block 不调 parent::__init()；Taglib 不 taglib:collect；Widget 不注册就用；敏感字段不过滤
+- 标签属性写 `<?= ?>` 等 PHP 代码，应使用 `@lang{xxx}` 等静态标签，避免干扰标签解析

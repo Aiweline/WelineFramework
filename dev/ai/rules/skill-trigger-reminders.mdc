@@ -1,5 +1,5 @@
 ---
-description: 场景→技能映射。计划/审计/计划→planning；进程/WLS→runtime-and-process；样式/JS/前端→theme-development；提示/弹窗→friendly-notifications；模块间查询→unified-query-provider；Session→session-development；改规则/技能→cursor-as-reference。
+description: 场景→技能映射。计划/审计/计划→planning；进程/WLS→runtime-and-process；样式/JS/前端→theme-development；提示/弹窗→friendly-notifications；模块间查询→unified-query-provider；Session→session-development；SSE/流式/EventSource/text/event-stream→sse-streaming；改规则/技能→cursor-as-reference。
 alwaysApply: true
 ---
 
