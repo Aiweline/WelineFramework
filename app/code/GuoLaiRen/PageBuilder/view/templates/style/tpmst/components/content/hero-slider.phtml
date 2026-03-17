@@ -201,7 +201,14 @@ $instanceId = 'tpmst-hero-slider-' . uniqid();
             50% { transform: scale(1.02); }
         }
     </style>
-    
+    <script>
+    (function(){
+        var downloadUrl = <?= json_encode($downloadBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="url"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = downloadUrl; });
+        });
+    })();
+    </script>
     <div class="<?= htmlspecialchars($fullSliderClasses) ?>">
         <div class="slider slider-slide-1">
             <div class="slider-item">
@@ -227,7 +234,7 @@ $instanceId = 'tpmst-hero-slider-' . uniqid();
                             </picture>
                         </div>
                         <?php if ($downloadBtnDisplay && $finalDownloadBtn): ?>
-                        <a href="<?= htmlspecialchars($downloadBtnUrl) ?>" class="download-btn">
+                        <a href="javascript:void(0)" role="button" class="download-btn" data-download-trigger="url">
                             <img class="download-icon animation-scale lazy-loading" 
                                  src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
                                  data-src="<?= htmlspecialchars($finalDownloadBtn) ?>" 

@@ -316,7 +316,18 @@ $instanceId = 'sk-download-' . uniqid();
             }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <div class="sk-download-container">
         <div class="sk-download-header">
             <div class="sk-download-badge">
@@ -341,8 +352,8 @@ $instanceId = 'sk-download-' . uniqid();
                 <p class="sk-download-card-desc"><?= htmlspecialchars($downloadDesc) ?></p>
                 
                 <div class="sk-download-btns">
-                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="sk-download-btn-primary"><?= htmlspecialchars($primaryBtnText) ?></a>
-                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="sk-download-btn-secondary"><?= htmlspecialchars($secondaryBtnText) ?></a>
+                    <a href="javascript:void(0)" role="button" class="sk-download-btn-primary" data-download-trigger="primary"><?= htmlspecialchars($primaryBtnText) ?></a>
+                    <a href="javascript:void(0)" role="button" class="sk-download-btn-secondary" data-download-trigger="secondary"><?= htmlspecialchars($secondaryBtnText) ?></a>
                 </div>
                 
                 <?php if (!empty($features)): ?>

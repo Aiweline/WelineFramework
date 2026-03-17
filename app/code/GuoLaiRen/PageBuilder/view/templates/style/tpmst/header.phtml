@@ -34,6 +34,7 @@
  * header.download_button.padding => 按钮内边距:responsive:12/16|px[MD]
  * header.download_button.border_radius => 按钮圆角:number:8|px
  * header.download_button.extra_classes => 按钮额外CSS类:textarea:common-dwn download-btn ml-10 pl-52 pr-52 pb-15 pt-15 md-pl-22 md-pr-22 md-pb-8 md-pt-8 fs-5 d-flex align-self-center fw-bolder|可配置额外的CSS类名，多个类名用空格分隔
+ * header.download_button.url => 下载链接:text:/#download
  * 
  * group:banner => Banner横幅区域设置（Hero/Banner）【已独立为组件hero-slider】
  * banner.display => 显示Banner区域:select:no|yes,no【建议使用hero-slider组件代替】
@@ -364,6 +365,7 @@ $downloadBtnShadowHover = tpmst_color($colors, 'button_primary_shadow_hover', 'r
 $downloadBtnSize = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.size', '14/18') . 'px'));
 $downloadBtnPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.padding', '12/16') . 'px'));
 $downloadBtnRadius = tpmst_getConfig($styleSettings, 'header.download_button.border_radius', '8');
+$downloadBtnUrl = (string)(tpmst_getConfig($styleSettings, 'header.download_button.url', '/#download') ?? '/#download');
 
 // SEO信息
 $metaTitle = ($page ? ($page->getData('meta_title') ?: $page->getData('title')) : null) ?: 'Teen Patti Master';
@@ -790,7 +792,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             </ul>
             
             <?php if ($downloadBtnDisplay === 'yes'): ?>
-            <a href="/#download" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?>"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
+            <a href="javascript:void(0)" role="button" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?> tpmst-download-trigger"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
             <?php endif; ?>
         </div>
     </nav>
@@ -872,5 +874,12 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
     
     // 初始检查
     handleScroll();
+})();
+
+(function(){
+    var tpmstNavDownloadUrl = <?= json_encode($downloadBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+    document.querySelectorAll('.tpmst-nav-download-btn.tpmst-download-trigger').forEach(function(el){
+        el.addEventListener('click', function(){ window.location.href = tpmstNavDownloadUrl; });
+    });
 })();
 </script>
