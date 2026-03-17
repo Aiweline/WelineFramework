@@ -14,17 +14,18 @@ class Router implements RouterInterface
      */
     public static function process(string &$path, array &$rule): void
     {
-        if($_SERVER['WELINE_IS_MEDIA']){
-            if (str_starts_with(strtolower($path), '/media/image/')) {
-                $file = str_replace('/media/image/', '', $path);
-                $rule['file'] = urldecode($file);
-                $path = '/media/image/index';
-            }
-            if (str_starts_with(strtolower($path), '/media/file/')) {
-                $file = str_replace('/media/file/', '', $path);
-                $rule['file'] = urldecode($file);
-                $path = '/media/file/index';
-            }
+        if (!($_SERVER['WELINE_IS_MEDIA'] ?? false)) {
+            return;
+        }
+        $pathLower = strtolower(ltrim($path, '/'));
+        if (str_starts_with($pathLower, 'media/image/')) {
+            $file = preg_replace('#^media/image/#i', '', $pathLower);
+            $rule['file'] = urldecode($file);
+            $path = '/media/image/index';
+        } elseif (str_starts_with($pathLower, 'media/file/')) {
+            $file = preg_replace('#^media/file/#i', '', $pathLower);
+            $rule['file'] = urldecode($file);
+            $path = '/media/file/index';
         }
     }
 }
