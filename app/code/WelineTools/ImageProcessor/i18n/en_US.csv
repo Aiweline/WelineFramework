@@ -1,31 +1,25 @@
-图片处理工具集,图片处理工具集
+﻿图片处理工具集,图片处理工具集
 去除背景,"Remove Background"
 更多工具,"More Tools"
-"上传图片，AI 自动识别主体并去除背景，生成透明 PNG。处理在浏览器本地完成，图片不上传服务器。","Upload an image. AI will detect the subject and remove the background, outputting a transparent PNG. Processing runs locally in the browser, images are not uploaded."
+上传图片后，在图上涂抹背景区域取色（按住鼠标拖拽），取到的颜色会作为要去除的背景；调整容差与羽化后点击「去除背景」生成透明图。,"Upload an image, then brush over the background (drag with mouse) to sample colors. Those colors are removed as background. Adjust tolerance and feather, then click Remove Background."
 选择图片,"Select Image"
 点击或拖拽图片到此处,"Click or drag image here"
 "支持 JPG、PNG、WebP、GIF","Supports JPG, PNG, WebP, GIF"
+涂抹取色,"Brush to sample"
+清空取色,"Clear samples"
+容差,Tolerance
+边缘羽化,"Edge feather"
 下载透明图,"Download Transparent PNG"
 原图,Original
+按住拖拽涂抹背景取色,"Drag to brush and sample background"
 待上传,"Pending upload"
 去背景后,"Result (No BG)"
 待处理,Pending
 更多图片工具即将上线,"More tools coming soon"
+个色,个色
 处理中...,Processing...
+处理失败,处理失败
 去背景完成,"Background removed"
-处理失败：,处理失败：
 已开始下载,"Download started"
-"免费在线图片处理：AI 去除背景、生成透明 PNG。处理在浏览器本地完成，图片不上传服务器。","免费在线图片处理：AI 去除背景、生成透明 PNG。处理在浏览器本地完成，图片不上传服务器。"
-"免费在线图片处理，支持 AI 去背景","Free online image tools, AI remove background"
-"上传图片后，在图上涂抹背景区域取色（按住鼠标拖拽），取到的颜色会作为要去除的背景；调整容差与羽化后点击「去除背景」生成透明图。","Upload an image, then brush over the background (drag with mouse) to sample colors. Those colors are removed as background. Adjust tolerance and feather, then click Remove Background."
-"背景色","Background color"
-"容差","Tolerance"
-"边缘羽化","Edge feather"
-"点击取色","Click to pick"
-"涂抹取色","Brush to sample"
-"清空取色","Clear samples"
-"按住拖拽涂抹背景取色","Drag to brush and sample background"
-" 个色"," colors"
-"要去除的颜色","Color to remove"
 "免费在线图片处理：按颜色去除背景、生成透明 PNG。处理在浏览器本地完成，图片不上传服务器。","Free online: remove background by color, output transparent PNG. All in browser."
-"免费在线图片处理，按颜色去除背景（纯色/近似纯色）","Free online image tools, remove background by color (solid/near-solid)"
+免费在线图片处理，按颜色去除背景（纯色/近似纯色）,"Free online image tools, remove background by color (solid/near-solid)"

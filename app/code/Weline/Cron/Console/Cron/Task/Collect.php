@@ -52,6 +52,7 @@ class Collect implements CommandInterface
         $modules = Env::getInstance()->getActiveModules();
         /** @var list<string> 物理文件为唯一来源：仅保留此次扫描到的任务类 */
         $collectedClasses = [];
+        $added = 0;
 
         foreach ($modules as $module) {
             if (!is_dir($module['base_path'] . 'Cron')) {
@@ -77,6 +78,8 @@ class Collect implements CommandInterface
                 if (!$taskObject instanceof CronTaskInterface) {
                     continue;
                 }
+                // 先标记为已收集，避免 save() 异常或后续逻辑导致本类未入列表，removeStaleTaskRecords 误删本条
+                $collectedClasses[] = $taskObject::class;
                 $existing = $this->cronTask->clearQuery()
                     ->where(CronTask::schema_fields_EXECUTE_NAME, $taskObject->execute_name())
                     ->find()
@@ -92,14 +95,18 @@ class Collect implements CommandInterface
                     ->setData(CronTask::schema_fields_MODULE, $module['name']);
                 if ($existingId) {
                     $model->setData(CronTask::schema_fields_ID, $existingId);
+                } else {
+                    $added++;
                 }
                 $model->save();
-                $collectedClasses[] = $taskObject::class;
             }
         }
 
         // Diff 删除：表中 class 不在本次收集列表中的记录（物理文件已删除的任务）
         $deleted = $this->removeStaleTaskRecords($collectedClasses);
+        if ($added > 0) {
+            $this->printing->note((string) __('新增 %{1} 条调度任务', [$added]));
+        }
         if ($deleted > 0) {
             $this->printing->warning((string) __('已移除 %{1} 条已无物理文件的任务记录', [$deleted]));
         }
@@ -119,16 +126,25 @@ class Collect implements CommandInterface
         if ($rows === []) {
             return 0;
         }
-        $allowed = array_flip($collectedClasses);
+        $allowed = [];
+        foreach ($collectedClasses as $c) {
+            $allowed[self::normalizeClass($c)] = true;
+        }
         $deleted = 0;
         foreach ($rows as $row) {
-            $class = (string) ($row->getData(CronTask::schema_fields_CLASS) ?? '');
+            $class = self::normalizeClass((string) ($row->getData(CronTask::schema_fields_CLASS) ?? ''));
             if ($class !== '' && !isset($allowed[$class])) {
-                $row->delete();
+                $row->delete()->fetch();
                 $deleted++;
             }
         }
         return $deleted;
+    }
+
+    private static function normalizeClass(string $class): string
+    {
+        $class = trim(str_replace('/', '\\', $class));
+        return $class;
     }
 
     public function tip(): string
