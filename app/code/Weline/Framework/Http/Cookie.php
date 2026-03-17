@@ -53,6 +53,18 @@ class Cookie
     }
 
     /**
+     * 删除 Cookie（设置过期时间为过去）
+     *
+     * @param string $key Cookie 名称
+     * @param array $options 须与 set 时一致（path、domain 等），否则无法正确删除
+     */
+    public static function delete(string $key, array $options = []): void
+    {
+        unset($_COOKIE[$key]);
+        self::set($key, '', -86400, $options);
+    }
+
+    /**
      * @DESC          # 获取语言（已废弃，请使用 State::getLang()）
      * @deprecated 请使用 \Weline\Framework\App\State::getLang() 替代
      * 此方法仅用于向后兼容，实际调用 State::getLang()

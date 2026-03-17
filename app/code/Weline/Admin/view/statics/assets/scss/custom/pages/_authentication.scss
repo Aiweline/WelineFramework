@@ -17,6 +17,45 @@
   }
 }
 
+// 登录页 Card 炫酷容器
+.weline-admin-login-page .weline-admin-login-card {
+  border: 1px solid var(--backend-color-border-light, rgba(255, 255, 255, 0.18));
+  border-radius: var(--backend-border-radius-xl, 20px);
+  overflow: hidden;
+  box-shadow:
+    var(--backend-shadow-card, 0 25px 50px -12px rgba(0, 0, 0, 0.15)),
+    0 0 0 1px var(--backend-color-border-light, rgba(255, 255, 255, 0.05));
+  backdrop-filter: blur(20px);
+  background: color-mix(in srgb, var(--backend-color-card-bg, #fff) 92%, transparent);
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+
+  &:hover {
+    box-shadow:
+      var(--backend-shadow-card-hover, 0 32px 64px -12px rgba(0, 0, 0, 0.2)),
+      0 0 0 1px var(--backend-color-primary-bg-subtle, rgba(85, 110, 230, 0.2));
+  }
+}
+
+.weline-admin-login-page .weline-admin-login-card-body {
+  position: relative;
+  padding: var(--backend-spacing-xl, 2rem) var(--backend-spacing-lg, 1.5rem) !important;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+      90deg,
+      var(--backend-color-primary, #556ee6),
+      var(--backend-color-info, #50a5f1)
+    );
+    border-radius: var(--backend-border-radius-xl, 20px) var(--backend-border-radius-xl, 20px) 0 0;
+  }
+}
+
 // 登录页小屏幕兼容（weline-admin-login-page）
 .weline-admin-login-page {
   .account-pages {
@@ -57,8 +96,9 @@
       margin-right: 0;
     }
 
-    .account-pages .card-body {
-      padding: var(--backend-padding-card-sm, 1rem);
+    .account-pages .card-body,
+    .weline-admin-login-card-body {
+      padding: var(--backend-padding-card-sm, 1rem) !important;
     }
 
     .weline-logo.auth-logo {

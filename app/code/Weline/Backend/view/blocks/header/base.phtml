@@ -89,7 +89,16 @@ endif;
         url_host: '{{ url_host }}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
-        themeConfig: <?=json_encode($themeConfig->getThemeConfig()) ?? '{}';?>,
+        themeConfig: <?php
+        ob_start();
+        try {
+            $tc = $themeConfig->getThemeConfig();
+        } catch (\Throwable $e) {
+            $tc = [];
+        }
+        ob_end_clean();
+        echo json_encode(is_array($tc) ? $tc : [], JSON_UNESCAPED_UNICODE) ?: '{}';
+        ?>,
     }
     window.path = (path) => {
         path = path.replace('*', '{{base_router}}')

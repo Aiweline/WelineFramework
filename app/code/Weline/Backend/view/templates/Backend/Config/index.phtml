@@ -44,13 +44,13 @@ $configs = $configs ?? [];
                                 <div class="mb-3">
                                     <label class="form-label"><lang>深色Logo（大图）</lang></label>
                                     <input type="hidden" class="form-control" id="logo_dark" name="config[logo_dark]" 
-                                           value="<?= htmlspecialchars($configs['logo_dark'] ?? '') ?>">
+                                           value="{{configs.logo_dark}}">
                                     <file-manager target='#logo_dark'
-                                                  title='<?= __('选择深色Logo') ?>'
-                                                  vars='config'
+                                                  title='@lang(选择深色Logo)'
+                                                  vars='configs'
                                                   preview="1"
                                                   path='backend/logo/'
-                                                  value='<?= htmlspecialchars($configs['logo_dark'] ?? '') ?>'
+                                                  value='configs.logo_dark'
                                                   multi='0'
                                                   ext="jpg,jpeg,png,gif,webp,svg"
                                                   size="2048000"
@@ -65,13 +65,13 @@ $configs = $configs ?? [];
                                 <div class="mb-3">
                                     <label class="form-label"><lang>浅色Logo（大图）</lang></label>
                                     <input type="hidden" class="form-control" id="logo_light" name="config[logo_light]" 
-                                           value="<?= htmlspecialchars($configs['logo_light'] ?? '') ?>">
+                                           value="{{configs.logo_light}}">
                                     <file-manager target='#logo_light'
-                                                  title='<?= __('选择浅色Logo') ?>'
-                                                  vars='config'
+                                                  title='@lang(选择浅色Logo)'
+                                                  vars='configs'
                                                   preview="1"
                                                   path='backend/logo/'
-                                                  value='<?= htmlspecialchars($configs['logo_light'] ?? '') ?>'
+                                                  value='configs.logo_light'
                                                   multi='0'
                                                   ext="jpg,jpeg,png,gif,webp,svg"
                                                   size="2048000"
@@ -86,13 +86,13 @@ $configs = $configs ?? [];
                                 <div class="mb-3">
                                     <label class="form-label"><lang>小Logo</lang></label>
                                     <input type="hidden" class="form-control" id="logo_sm" name="config[logo_sm]" 
-                                           value="<?= htmlspecialchars($configs['logo_sm'] ?? '') ?>">
+                                           value="{{configs.logo_sm}}">
                                     <file-manager target='#logo_sm'
-                                                  title='<?= __('选择小Logo') ?>'
-                                                  vars='config'
+                                                  title='@lang(选择小Logo)'
+                                                  vars='configs'
                                                   preview="1"
                                                   path='backend/logo/'
-                                                  value='<?= htmlspecialchars($configs['logo_sm'] ?? '') ?>'
+                                                  value='configs.logo_sm'
                                                   multi='0'
                                                   ext="jpg,jpeg,png,gif,webp,svg"
                                                   size="2048000"
@@ -100,6 +100,34 @@ $configs = $configs ?? [];
                                                   h='50'/>
                                     <small class="form-text text-muted">
                                         <lang>用于侧边栏折叠时的小尺寸Logo，建议高度50px</lang>
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- 登录页背景 -->
+                    <div class="mb-4">
+                        <h5 class="mb-3"><lang>登录页背景</lang></h5>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label"><lang>登录页背景图</lang></label>
+                                    <input type="hidden" class="form-control" id="login_bg" name="config[login_bg]"
+                                           value="{{configs.login_bg}}">
+                                    <file-manager target='#login_bg'
+                                                  title='@lang(选择登录页背景)'
+                                                  vars='configs'
+                                                  preview="1"
+                                                  path='backend/bg/'
+                                                  value='configs.login_bg'
+                                                  multi='0'
+                                                  ext="jpg,jpeg,png,gif,webp"
+                                                  size="5120000"/>
+                                    <small class="form-text text-muted">
+                                        <lang>建议尺寸 1920x1080，留空使用默认背景</lang>
                                     </small>
                                 </div>
                             </div>
@@ -170,7 +198,7 @@ $configs = $configs ?? [];
         }
         
         var url = '<?= $this->getBackendUrl('*/backend/config/save') ?>';
-        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
+        var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data).toString() };
         window.Weline.Api.request(url, opts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;

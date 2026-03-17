@@ -14,29 +14,38 @@
     @template(Weline_Admin::common/head.phtml)
 </head>
 
-<body class="bg-pattern weline-admin-login-page">
+<body class="bg-pattern weline-admin-login-page"<?php if ($bgUrl = $this->getData('login_bg_url')): ?> style="background-image: url('<?= htmlspecialchars($bgUrl) ?>')"<?php endif ?>>
 <div class="account-pages my-5 pt-5">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-12 col-sm-10 col-md-6 col-lg-5 col-xl-4">
-                <div class="card">
-                    <div class="card-body p-4">
+                <div class="card weline-admin-login-card">
+                    <div class="card-body p-4 weline-admin-login-card-body">
                         <div class="">
                             <div class="text-center">
-                            <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
+                            <?php
+                            $loginLogoDark = $this->getData('login_logo_dark')
+                                ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png')
+                                ?: $this->fetchTagSourceFile('statics', 'Weline_Backend::img/logo.png');
+                            $loginLogoLight = $this->getData('login_logo_light')
+                                ?: $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png')
+                                ?: $loginLogoDark;
+                            ?>
+                            <img src="<?= htmlspecialchars($loginLogoDark) ?>" alt="" height="125"
                                          class="weline-logo auth-logo logo-dark mx-auto">
-                                    <img src="@static(Weline_Backend::img/logo.png)" alt="" height="125"
+                                    <img src="<?= htmlspecialchars($loginLogoLight) ?>" alt="" height="125"
                                          class="weline-logo auth-logo logo-light mx-auto">
                             </div>
                             <!-- end row -->
                             <h4 class="font-size-18 text-muted mt-2 text-center"><?= __('欢迎回来！') ?></h4>
-                            <p class="mb-3 text-center"><?= __('登录 Weline 管理面板') ?>.</p>
+                            <p class="mb-3 text-center"><?= __('登录 %{name} 管理面板', ['name' => $this->getData('login_site_name') ?: 'Weline']) ?>.</p>
                             <div class="row weline-admin-login-messages">
                                 <?php if (!empty($this->getData('no_access_message'))): ?>
                                 <div class="col-12"><?= $this->getData('no_access_message') ?></div>
                                 <?php endif; ?>
-                                <!--消息-->
-                                <template>Weline_Component::message.phtml</template>
+                                <?php if ($msg = $this->getData('login_flash_message')): ?>
+                                <div class="col-12"><?= $msg ?></div>
+                                <?php endif; ?>
                             </div>
                             <form class="form-horizontal" action="<?= $this->getData('post_url') ?>" method="post">
                                 <?= $this->getFormKey($this->getData('post_url')) ?>

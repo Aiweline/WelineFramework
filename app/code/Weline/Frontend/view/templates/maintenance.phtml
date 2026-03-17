@@ -279,9 +279,13 @@
             <div class='col-md-8 col-lg-6 col-xl-5'>
                 <div class='text-center mt-sm-5 mb-4'>
                     <a href="@url('')" class=''>
-                        <img src='@static(Weline_Frontend::assets/images/logo-dark.png)' alt='logo'
+                        <?php
+                        $logoDark = $this->getData('maintenance_logo_dark') ?: $this->fetchTagSourceFile('statics', 'Weline_Frontend::assets/images/logo-dark.png');
+                        $logoLight = $this->getData('maintenance_logo_light') ?: $this->fetchTagSourceFile('statics', 'Weline_Frontend::assets/images/logo-light.png') ?: $logoDark;
+                        ?>
+                        <img src='<?= htmlspecialchars($logoDark) ?>' alt='logo'
                              class='auth-logo logo-dark mx-auto'>
-                        <img src='@static(Weline_Frontend::assets/images/logo-light.png)' alt='logo'
+                        <img src='<?= htmlspecialchars($logoLight) ?>' alt='logo'
                              class='auth-logo logo-light mx-auto'>
                     </a>
                     <h1 class='mt-3'>
