@@ -34,7 +34,7 @@ class RequestFilter extends DataObject
             'float'            => (float)$data,
             'double'           => (float)$data,
             'string'           => (string)$data,
-            'array'            => (array)$data,
+            'array'            => self::filterArray($data),
             'bool', 'boolean'  => (bool)$data,
             'json'             => json_decode($data, true),
             'xml'              => simplexml_load_string($data),
@@ -51,6 +51,18 @@ class RequestFilter extends DataObject
             'nl2br'            => nl2br($data),
             default            => $data,
         };
+    }
+
+    /**
+     * 转为 array：若值为 JSON 字符串则先解析，兼容 JSON body / FormData 中的 JSON 字符串（如 domain_ids）。
+     */
+    private static function filterArray(mixed $data): array
+    {
+        if (\is_string($data) && $data !== '') {
+            $decoded = \json_decode($data, true);
+            return \is_array($decoded) ? $decoded : (array)$data;
+        }
+        return (array)$data;
     }
 
     final public static function getInstance(): RequestFilter
