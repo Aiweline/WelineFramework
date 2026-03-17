@@ -348,7 +348,12 @@ class App
         self::init();
         $_SERVER['WELINE_PARSER_URL'] = true;  // 是否解析URL
         $_SERVER['WELINE_IS_MEDIA'] = false;  // 是否媒体资源
-        
+        // 唯一判断处：静态文件仅按 path 判断，其他处只读 WELINE_IS_STATIC_FILE
+        if (!CLI && !isset($_SERVER['WELINE_IS_STATIC_FILE'])) {
+            $reqPath = \parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+            $_SERVER['WELINE_IS_STATIC_FILE'] = weline_is_static_file_path($reqPath);
+        }
+
         // 性能优化：延迟获取 EventsManager，只在需要时实例化
         static $eventManager = null;
         if ($eventManager === null) {

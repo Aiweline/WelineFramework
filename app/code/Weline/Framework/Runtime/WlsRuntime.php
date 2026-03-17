@@ -422,6 +422,11 @@ class WlsRuntime implements RuntimeInterface
             return $terminateEx->toHttpString();
             
         } catch (\Throwable $e) {
+            // 302 等响应终止异常若落入此处（不应发生），按正常响应处理，不记错误
+            if ($e instanceof \Weline\Framework\Http\ResponseTerminateException) {
+                return $e->toHttpString();
+            }
+
             // 记录错误日志（DEV 环境）
             $isDev = \defined('DEV') && DEV;
             if ($isDev) {
