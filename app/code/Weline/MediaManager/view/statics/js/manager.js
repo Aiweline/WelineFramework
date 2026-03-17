@@ -172,7 +172,13 @@
                 if (fromUrl !== null && fromUrl !== '') CONFIG.initialValue = fromUrl;
             } catch (e) {}
         }
-        
+        if (!CONFIG.initialValue && (options.initialValue || '').trim() !== '') {
+            CONFIG.initialValue = String(options.initialValue).trim();
+        }
+        if (options.themeMode && document.documentElement) {
+            document.documentElement.setAttribute('data-theme', 'backend');
+            document.documentElement.setAttribute('data-theme-mode', options.themeMode === 'dark' ? 'dark' : 'light');
+        }
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
         if (!CONNECTOR) {
             setLoading(false);
@@ -203,6 +209,9 @@
         }
 
         var lastHash = loadLastPath();
+        if (IFRAME_MODE && (CONFIG.initialValue || '').trim()) {
+            lastHash = null;
+        }
         if (lastHash) {
             openDir(lastHash, true);
         } else {
@@ -1138,12 +1147,16 @@
         }
     }
 
+    function normalizePathForMatch(p) {
+        if (!p || typeof p !== 'string') return '';
+        return p.trim().replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '').replace(/\\/g, '/').replace(/\/+$/, '');
+    }
+
     function applyInitialSelection() {
         var raw = (CONFIG.initialValue || '').trim();
         if (!raw) return;
         var paths = raw.split(',').map(function (p) {
-            p = p.trim().replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
-            return p.replace(/\\/g, '/');
+            return normalizePathForMatch(p);
         });
         var pathSet = {};
         paths.forEach(function (p) { if (p) pathSet[p] = true; });
@@ -1151,7 +1164,7 @@
         for (var h in FILES) {
             var f = FILES[h];
             if (f.mime === 'directory') continue;
-            var fp = (f.path || '').replace(/\\/g, '/');
+            var fp = normalizePathForMatch(f.path || '');
             if (pathSet[fp]) SELECTED.push(h);
         }
         highlightSelected();
