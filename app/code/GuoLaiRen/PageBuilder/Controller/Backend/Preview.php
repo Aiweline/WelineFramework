@@ -361,6 +361,9 @@ class Preview extends BackendController
             $currentLocale,
             $tempStyleCode
         );
+        if ($isVisualEditor) {
+            $html = $this->injectVisualEditorNavLinks($html, $page);
+        }
         // 通过终止异常直接输出完整 HTML，避免被主题/布局包裹导致 header 等组件被塞进后台 layout 的 body
         $headers = [
             'Content-Type' => 'text/html; charset=UTF-8',
@@ -370,6 +373,105 @@ class Preview extends BackendController
             'X-Accel-Expires' => '0',
         ];
         throw new ResponseTerminateException(200, $html, $headers);
+    }
+
+    /**
+     * 获取当前页对应的「本站页面」列表（用于可视化编辑内 nav 链接转预览地址）
+     * 逻辑与 AiGenerate::getExistingSitePagesList 一致：主页=子页面+首页自身，子页=同级+父页首页
+     *
+     * @return list<array{page_id: int, handle: string, url: string, title: string}>
+     */
+    private function getNavPagesForVisualEditor(Page $page): array
+    {
+        $parentId = (int)$page->getData(Page::schema_fields_PARENT_ID);
+        try {
+            if ($parentId === 0) {
+                $list = $page->getChildPagesForNav(50);
+                if ($page->getId() && $page->getData(Page::schema_fields_TYPE) === Page::TYPE_HOME) {
+                    $h = $page->getData(Page::schema_fields_HANDLE);
+                    $hStr = $h === null || $h === '' ? '' : (string)$h;
+                    array_unshift($list, [
+                        'title' => $page->getData(Page::schema_fields_TITLE) ?: $page->getData(Page::schema_fields_NAME),
+                        'handle' => $hStr,
+                        'url' => $hStr === '' ? '/' : '/' . $hStr,
+                        'type' => Page::TYPE_HOME,
+                        'page_id' => $page->getId(),
+                    ]);
+                }
+            } else {
+                $list = $page->getSiblingPagesForNav(50);
+            }
+        } catch (\Throwable $e) {
+            return [];
+        }
+        $out = [];
+        foreach ($list as $item) {
+            $handle = $item['handle'] ?? '';
+            $url = $item['url'] ?? '';
+            if ($url === '' && ($handle === '' || $handle === null)) {
+                $url = '/';
+            } elseif ($url === '' && $handle !== '') {
+                $url = '/' . $handle;
+            }
+            $out[] = [
+                'page_id' => (int)($item['page_id'] ?? 0),
+                'handle' => $handle === '' || $handle === null ? '' : (string)$handle,
+                'url' => $url,
+                'title' => $item['title'] ?? '',
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * 可视化编辑模式下注入脚本：将 header/footer 内站内链接转为 postMessage 通知父窗口跳转预览地址，避免离开编辑器
+     */
+    private function injectVisualEditorNavLinks(string $html, Page $page): string
+    {
+        $pages = $this->getNavPagesForVisualEditor($page);
+        if (empty($pages)) {
+            return $html;
+        }
+        $pagesJson = json_encode($pages, JSON_UNESCAPED_UNICODE);
+        $script = <<<SCRIPT
+<script>
+(function(){
+  var pages = {$pagesJson};
+  function findPageIdByHref(href) {
+    if (!href || href.charAt(0) === '#') return null;
+    var path = href.replace(/^https?:\\/\\/[^/]*/, '').replace(/\\?.*\$/, '').split('#')[0] || '/';
+    if (path === '') path = '/';
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i].url === path) return pages[i].page_id;
+    }
+    return null;
+  }
+  var sel = 'header a[href^="/"], footer a[href^="/"], [data-region="header"] a[href^="/"], [data-region="footer"] a[href^="/"], nav a[href^="/"]';
+  var links = document.querySelectorAll(sel);
+  for (var j = 0; j < links.length; j++) {
+    var a = links[j];
+    var href = a.getAttribute('href');
+    var pageId = findPageIdByHref(href);
+    if (pageId != null) {
+      a.setAttribute('data-ve-page-id', String(pageId));
+      a.setAttribute('href', '#');
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        var id = this.getAttribute('data-ve-page-id');
+        if (id && window.parent !== window) {
+          window.parent.postMessage({ type: 'PageBuilderVisualEditor', action: 'navigate', page_id: parseInt(id, 10) }, '*');
+        }
+      });
+    }
+  }
+})();
+</script>
+SCRIPT;
+        $pos = strripos($html, '</body>');
+        if ($pos !== false) {
+            return substr($html, 0, $pos) . $script . "\n" . substr($html, $pos);
+        }
+        return $html . $script;
     }
 
     /**
