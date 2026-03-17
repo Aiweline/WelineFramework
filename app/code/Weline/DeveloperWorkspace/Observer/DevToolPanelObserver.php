@@ -39,10 +39,8 @@ class DevToolPanelObserver implements ObserverInterface
     public function execute(Event &$event): void
     {
         $eventName = (string)$event->getName();
-        $this->debugLog('execute_enter', ['event' => $eventName, 'dev' => DEV]);
         $payload = $this->resolvePayload($event);
         if ($payload === null) {
-            $this->debugLog('skip_invalid_payload', ['event' => $eventName]);
             return;
         }
 
@@ -82,11 +80,6 @@ class DevToolPanelObserver implements ObserverInterface
         // 2. 生产模式 + 配置启用：显示
         // 3. 有Cookie：显示
         if (!DEV && !$enableInProd && !$hasCookie) {
-            $this->debugLog('skip_not_enabled', [
-                'dev' => DEV,
-                'enableInProd' => $enableInProd,
-                'hasCookie' => $hasCookie,
-            ]);
             return;
         }
 
@@ -94,17 +87,11 @@ class DevToolPanelObserver implements ObserverInterface
         if ($this->request->isAjax() || 
             $this->request->isApiFrontend() || 
             $this->request->isApiBackend()) {
-            $this->debugLog('skip_ajax_or_api', [
-                'isAjax' => $this->request->isAjax(),
-                'isApiFrontend' => $this->request->isApiFrontend(),
-                'isApiBackend' => $this->request->isApiBackend(),
-            ]);
             return;
         }
 
         // 如果是 iframe 请求（URL 带 isIframe 或 Sec-Fetch-Dest: iframe），不显示 id="dev-tool-panel"
         if ($this->request->isIframe()) {
-            $this->debugLog('skip_iframe');
             return;
         }
 
@@ -113,13 +100,11 @@ class DevToolPanelObserver implements ObserverInterface
             $result = $payload['result'] ?? '';
             
             if (empty($result) || !is_string($result)) {
-                $this->debugLog('skip_empty_result');
                 return;
             }
             
             // 检查是否是 HTML 响应（包含 JSON 检测）
             if (!$this->isHtmlResponse($result)) {
-                $this->debugLog('skip_not_html_response');
                 return;
             }
 
@@ -130,22 +115,10 @@ class DevToolPanelObserver implements ObserverInterface
                 $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
                 if (is_array($traceSpans) && !empty($traceSpans)) {
                     $payload['trace']['spans'] = $traceSpans;
-                    $this->debugLog('trace_fallback_loaded', ['spansCount' => count($traceSpans)]);
-                } else {
-                    $this->debugLog('trace_empty_after_fallback', ['traceEnabled' => RequestLifecycleTrace::isEnabled()]);
                 }
             }
             if (is_array($traceSpans) && !empty($traceSpans)) {
-                $dbSpansCount = count(array_filter($traceSpans, static function ($span) {
-                    return (($span['category'] ?? '') === 'db');
-                }));
-                $this->debugLog('trace_stats', [
-                    'spansTotal' => count($traceSpans),
-                    'dbSpans' => $dbSpansCount,
-                    'event' => $eventName,
-                ]);
                 $result = $this->injectTraceScript($result, $traceSpans);
-                $this->debugLog('trace_injected', ['spansCount' => count($traceSpans)]);
             }
 
             // 幂等保护：避免 telemetry + run_after 双监听导致重复注入同一面板
@@ -153,7 +126,6 @@ class DevToolPanelObserver implements ObserverInterface
             if (stripos($result, 'id="dev-tool-panel"') !== false) {
                 $payload['result'] = $result;
                 $this->writeBackPayload($event, $payload);
-                $this->debugLog('skip_already_injected');
                 return;
             }
 
@@ -161,7 +133,6 @@ class DevToolPanelObserver implements ObserverInterface
             $panelHtml = $this->renderPanel();
             
             if (empty($panelHtml)) {
-                $this->debugLog('skip_empty_panel_html');
                 return;
             }
             
@@ -181,26 +152,13 @@ class DevToolPanelObserver implements ObserverInterface
             // 回写事件数据（dispatch 第二参数是引用变量）
             $payload['result'] = $result;
             $this->writeBackPayload($event, $payload);
-            $this->debugLog('panel_injected_success');
             
         } catch (\Exception $e) {
-            $this->debugLog('inject_exception', ['message' => $e->getMessage()]);
             $this->logToConsole('error', 'DevToolPanel Error: ' . $e->getMessage(), [
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
             ]);
         }
-    }
-
-    private function debugLog(string $stage, array $context = []): void
-    {
-        $base = [
-            'stage' => $stage,
-            'uri' => $this->request->getUri(),
-            'method' => $this->request->getMethod(),
-            'isBackend' => $this->request->isBackend(),
-        ];
-        w_log_warning('[DevToolPanelObserver] ' . $stage, array_merge($base, $context), 'dev_tool_panel');
     }
 
     /**
