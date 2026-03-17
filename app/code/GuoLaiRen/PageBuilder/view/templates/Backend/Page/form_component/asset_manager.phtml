@@ -8,7 +8,7 @@
  * - handle 为空时使用 pagebuilder/common 或提示先填写
  */
 $weline_media_dir_prefix = 'pagebuilder/pages';
-$media_iframe_base_url = $this->getBackendUrl('media/backend/manager/iframe');
+$media_iframe_base_url = $this->getBackendUrl('media/backend/manager', ['iframe' => '1'], true);
 ?>
 <!-- 文件管理器样式与弹窗 -->
 <style>
