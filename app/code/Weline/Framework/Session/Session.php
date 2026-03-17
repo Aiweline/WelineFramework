@@ -97,11 +97,34 @@ class Session implements SessionInterface
     }
 
     /**
+     * 清除指定键（如 MessageManager 消息键），防止 render 后其他代码写入导致 persist 时消息残留。
+     * 在 flushRequestSessions 前由 MessageManager 注册的 shutdown 回调调用。
+     */
+    public static function clearKeysFromInstances(array $keys): void
+    {
+        foreach (self::$instancesForShutdown as $session) {
+            if (!$session instanceof self) {
+                continue;
+            }
+            foreach ($keys as $key) {
+                $session->delete($key);
+            }
+        }
+    }
+
+    /**
      * 请求结束时统一保存本请求内已启动的 Session。
      * 仅从队列移除已成功落库或无需保存的 Session，落库失败则保留以便下次 flush（如 302 前）重试。
+     * flush 前若 MessageManager 已 render，清除其消息键，避免多 Session 实例中残留的 message 被 persist。
      */
     public static function flushRequestSessions(): void
     {
+        if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)
+            && \method_exists(\Weline\Framework\Manager\MessageManager::class, 'shouldClearMessagesBeforeFlush')
+            && \Weline\Framework\Manager\MessageManager::shouldClearMessagesBeforeFlush()
+        ) {
+            self::clearKeysFromInstances(\Weline\Framework\Manager\MessageManager::keys);
+        }
         $count = count(self::$instancesForShutdown);
         if ($count > 0 && function_exists('w_log_info')) {
             w_log_info('[Session] flushRequestSessions count=' . $count, [], 'session');
