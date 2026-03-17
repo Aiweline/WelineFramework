@@ -190,20 +190,31 @@ $instanceId = 'le-cta-' . uniqid();
             }
         }
     </style>
-    
+    <script>
+    (function(){
+        var primaryUrl = <?= json_encode($primaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode($secondaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+        });
+        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
+            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+        });
+    })();
+    </script>
     <div class="le-cta-container">
         <div class="le-cta-emoji">🎲</div>
         <h2 class="le-cta-title"><?= htmlspecialchars($title) ?></h2>
         <p class="le-cta-desc"><?= htmlspecialchars($description) ?></p>
         <div class="le-cta-buttons">
             <?php if ($primaryText): ?>
-            <a href="<?= htmlspecialchars($primaryUrl) ?>" class="le-cta-btn-primary">
+            <a href="javascript:void(0)" role="button" class="le-cta-btn-primary" data-download-trigger="primary">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <?= htmlspecialchars($primaryText) ?>
             </a>
             <?php endif; ?>
             <?php if ($secondaryText): ?>
-            <a href="<?= htmlspecialchars($secondaryUrl) ?>" class="le-cta-btn-secondary">
+            <a href="javascript:void(0)" role="button" class="le-cta-btn-secondary" data-download-trigger="secondary">
                 <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/></svg>
                 <?= htmlspecialchars($secondaryText) ?>
             </a>
