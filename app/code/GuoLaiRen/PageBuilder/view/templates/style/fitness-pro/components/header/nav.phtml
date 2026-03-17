@@ -32,7 +32,7 @@ $useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navLinksRaw = $config['navigation.links'] ?? "Programs=>#programs\nResults=>#stats\nReviews=>#testimonials\nFAQ=>#faq";
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Join Now';
-$ctaUrl = $config['navigation.cta_url'] ?? '#cta';
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#cta');
 
 $accentPrimary = $colors['accent_primary'] ?? '#f97316';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)';
@@ -64,12 +64,12 @@ if ($useCustomLinks || empty($navLinks)) {
         if (empty($line)) continue;
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
-        $url = trim($parts[1] ?? '#');
+        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
         if (!empty($name)) $navLinks[] = ['name' => $name, 'url' => $url];
     }
 }
 if (empty($navLinks)) {
-    $navLinks = [['name' => 'Programs', 'url' => '#programs'], ['name' => 'Results', 'url' => '#stats'], ['name' => 'Reviews', 'url' => '#testimonials'], ['name' => 'FAQ', 'url' => '#faq']];
+    $navLinks = [['name' => 'Programs', 'url' => '/#programs'], ['name' => 'Results', 'url' => '/#stats'], ['name' => 'Reviews', 'url' => '/#testimonials'], ['name' => 'FAQ', 'url' => '/#faq']];
 }
 
 $instanceId = 'fp-nav-' . uniqid();

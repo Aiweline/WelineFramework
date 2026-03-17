@@ -42,9 +42,9 @@ $badge = $config['content.badge'] ?? 'Now in Public Beta';
 $title = $config['content.title'] ?? 'Ship faster with the modern SaaS platform';
 $description = $config['content.description'] ?? 'Streamline your workflow, automate repetitive tasks, and collaborate seamlessly. Built for modern teams who move fast.';
 $primaryBtnText = $config['cta.primary_text'] ?? 'Start Free Trial';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#pricing';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#pricing');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Watch Demo';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#demo';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#demo');
 
 $statsRaw = $config['stats.items'] ?? "10K+|Active Teams\n99.9%|Uptime SLA\n50+|Integrations";
 $stats = [];
