@@ -3,9 +3,10 @@ declare(strict_types=1);
 
 /**
  * Weline Server - 重启命令
- * 
- * 组合 Stop + Start 命令，由各命令内部发送信号给 Orchestrator。
- * 
+ *
+ * 已运行且 -r：委托 Reload 执行滚动重载（Master 保持）。
+ * 未运行：委托 Start 启动。只有 server:stop 会停止 Master。
+ *
  * @author Aiweline
  * @email aiweline@qq.com
  */
@@ -13,17 +14,16 @@ declare(strict_types=1);
 namespace Weline\Server\Console\Server;
 
 use Weline\Framework\Console\CommandAbstract;
-use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\App\Env;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
  * server:restart - 重启常驻内存服务器
- * 
- * 架构：简单组合 Stop + Start，不包含进程管理逻辑
+ *
+ * 已运行时（-r）：保持 Master 运行，通过 IPC 发送 reload 执行滚动重启（维护模式+重载 Worker）。
+ * 未运行时：直接启动。只有 server:stop 才会停止 Master。
  */
 class Restart extends CommandAbstract
 {
@@ -41,22 +41,20 @@ class Restart extends CommandAbstract
                 $this->showAlreadyRunningInfo($instanceName);
                 return;
             }
-            
-            $this->printer->note(__('检测到服务器已运行，正在重启...'));
-            
-            // 停止
-            $stopCommand = ObjectManager::getInstance(Stop::class);
-            $stopCommand->execute($args, $data);
-            
-            // 等待进程完全停止
-            SchedulerSystem::sleep(2);
-        } else {
-            $this->printer->note(__('服务器未运行，正在启动...'));
+
+            // 强制重启：保持 Master 运行，通过 IPC 发送 reload 命令，由 Orchestrator 执行维护模式+滚动重载
+            // 只有 server:stop 才会停止 Master
+            $this->printer->note(__('检测到服务器已运行，执行滚动重启（Master 保持运行）...'));
+            $reloadCommand = ObjectManager::getInstance(Reload::class);
+            $reloadCommand->execute($args, $data);
+            return;
         }
-        
+
+        $this->printer->note(__('服务器未运行，正在启动...'));
+
         // 设置守护进程模式
         $args['d'] = true;
-        
+
         // 启动
         $startCommand = ObjectManager::getInstance(Start::class);
         $startCommand->execute($args, $data);
@@ -155,9 +153,9 @@ class Restart extends CommandAbstract
     {
         return CommandHelper::formatHelp(
             'server:restart',
-            __('确保 Weline Server 运行中（已运行则不重启，除非使用 -r）'),
+            __('确保 Weline Server 运行中（已运行 -r 时保持 Master 滚动重载，未运行则启动）'),
             [
-                '-r, --force' => __('强制重启（先停止再启动）'),
+                '-r, --force' => __('强制重启（保持 Master，滚动重载 Worker）'),
                 '-h, --host <ip>' => __('监听地址（默认：0.0.0.0）'),
                 '-p, --port <port>' => __('监听端口（默认：443）'),
                 '-c, --count <n>' => __('Worker 进程数（默认：4）'),
