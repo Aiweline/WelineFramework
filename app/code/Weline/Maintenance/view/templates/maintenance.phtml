@@ -428,7 +428,11 @@
         </div>
         <div class="container">
             <div class="icon-container">
-                <span class="icon">🔧</span>
+                <?php if (!empty($maintenance_logo_url)): ?>
+                    <img src="<?= htmlspecialchars($maintenance_logo_url) ?>" alt="Logo" class="maintenance-logo" style="max-width:80px;max-height:80px;object-fit:contain">
+                <?php else: ?>
+                    <span class="icon">🔧</span>
+                <?php endif; ?>
             </div>
             
             <h1><?= $heading ?? '系统升级维护中' ?></h1>

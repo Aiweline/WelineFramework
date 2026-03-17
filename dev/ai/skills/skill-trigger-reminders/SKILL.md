@@ -29,6 +29,7 @@ alwaysApply: false
 | 配置/ env/扩展 | config-and-env |
 | SSE/流式/EventSource/text/event-stream | sse-streaming |
 | 新增/修改规则技能 | cursor-as-reference |
+| 翻译/i18n/taglib 属性中的文案/@lang/w: 标签属性 | i18n-internationalization |
 
 ## 禁止
 

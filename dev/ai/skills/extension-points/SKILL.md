@@ -29,6 +29,11 @@ alwaysApply: false
 ## 2) Hook（视图扩展）
 
 - 命名：`{Module}::{area}::{type}::{component}::{position}`；hook.php 定义；模板 `<w:hook name="Name"/>`；实现 view/hooks/
+- **命名规范（必守，否则 setup:upgrade 报致命错误）**：
+  - `area`: 仅 `frontend` 或 `backend`（小写）
+  - `type`: 仅 `partials` 或 `layouts`（小写）
+  - `component` / `position`: **仅小写字母和连字符**（`[a-z-]+`），**禁止下划线**。例如用 `ai-usage-stats`，不要用 `ai_usage_stats`
+  - 实现文件路径与 hook 名对应：`view/hooks/{Module}/...` 下文件名用连字符，如 `ai-usage-stats.phtml`
 
 ## 3) Extends 定义（create-extends）
 

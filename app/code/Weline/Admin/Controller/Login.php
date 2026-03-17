@@ -22,6 +22,8 @@ use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\Strategy\WlsStrategy;
+use Weline\Backend\Model\Config as BackendConfig;
+use Weline\FileManager\Helper\Image as ImageHelper;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Text;
@@ -78,12 +80,34 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         } else {
             $this->assign('no_access_message', '');
         }
+        // 显式输出 MessageManager 的 Flash 消息（密码错误、验证码错误等），确保 302 后能展示
+        $this->assign('login_flash_message', (string) $this->messageManager);
         # 检测验证码
         if ($this->session->get('need_backend_verification_code')) {
             $this->assign('need_backend_verification_code', true);
             // 使用连字符小写路径以与白名单精确匹配，并兼容路由规则
             $this->assign('backend_verification_code_url', $this->_url->getBackendUrl('admin/login/verification-code'));
         }
+        # 登录页：使用后台配置（Logo、站点名）
+        $backendConfig = ObjectManager::getInstance(BackendConfig::class);
+        $logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend') ?: '';
+        $logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
+        $this->assign('login_logo_dark', $logoDark !== '' ? ImageHelper::pathToMediaUrl($logoDark, 125, 125) : '');
+        $this->assign('login_logo_light', $logoLight !== '' ? ImageHelper::pathToMediaUrl($logoLight, 125, 125) : '');
+        $siteName = (string) ($backendConfig->getConfig('site_name', 'Weline_Backend') ?: 'Weline');
+        $this->assign('login_site_name', $siteName);
+        $loginBg = trim((string) ($backendConfig->getConfig('login_bg', 'Weline_Backend') ?? ''));
+        if ($loginBg !== '') {
+            foreach (['/pub/media/', 'pub/media/', '/media/'] as $prefix) {
+                if (str_starts_with($loginBg, $prefix)) {
+                    $loginBg = ltrim(substr($loginBg, strlen($prefix)), '/');
+                    break;
+                }
+            }
+            $loginBg = ltrim($loginBg, '/');
+        }
+        $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : '';
+        $this->assign('login_bg_url', $loginBgUrl);
         // 锁定提示以 Session 为准，但若数据库中该用户 attempt_times 已恢复（管理员改过），则清除 Session 标志避免一直提示
         $s = $this->session;
         $backendDisable = $s->get('backend_disable_login');
@@ -98,26 +122,19 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 if ($uid && $attemptTimes <= 6) {
                     $s->delete('backend_disable_login');
                     $s->delete('backend_disable_login_username');
-                    foreach (MessageManager::keys as $key) {
-                        $s->delete($key);
-                    }
+                    ObjectManager::getInstance(MessageManager::class)->clear();
                     $cleared = true;
                 }
             } else {
                 // 无用户名时视为老旧 session，清除锁定显示，让用户重试（POST 会重新校验）
                 $s->delete('backend_disable_login');
                 $s->delete('backend_disable_login_username');
-                foreach (MessageManager::keys as $key) {
-                    $s->delete($key);
-                }
+                ObjectManager::getInstance(MessageManager::class)->clear();
                 $cleared = true;
             }
             $afterClear = $s->get('backend_disable_login');
             if (!$cleared && $afterClear) {
-                // 用 set 覆盖，避免 append 累积（若 session 持久化/清空异常，刷新会重复 append 导致多条相同提示）
-                $html = MessageManager::process_message(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'), __('错误！'), 'danger');
-                $s->set('system-message', $html);
-                $s->set('has-error', '1');
+                MessageManager::error(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'));
             }
         }
         return $this->fetch();
@@ -281,7 +298,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 ->setAttemptIp($this->request->clientIP())
                 ->save();
             MessageManager::error(__('登录凭据错误！'));
-            $this->logout();
+            // 用户未登录，无需 logout；logout 会 destroy session 导致 MessageManager 的错误信息丢失
             $this->redirect($this->_url->getBackendUrl('/admin/login'));
             return;
         }
