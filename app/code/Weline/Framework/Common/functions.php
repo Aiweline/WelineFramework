@@ -79,6 +79,31 @@ if (!function_exists('w_url')) {
         }
     }
 }
+
+/**
+ * 唯一判断：根据 path 是否为静态文件（仅看 path，不看 query，避免参数中的扩展名误判）。
+ * 结果应在请求入口写入 $_SERVER['WELINE_IS_STATIC_FILE']，其他处只读该标志。
+ *
+ * @param string $pathOrUri 路径或完整 URI（会自动去掉 ? 及之后部分）
+ * @return bool
+ */
+if (!function_exists('weline_is_static_file_path')) {
+    function weline_is_static_file_path(string $pathOrUri): bool
+    {
+        $path = \str_contains($pathOrUri, '?')
+            ? ((\parse_url($pathOrUri, PHP_URL_PATH) ?? '') ?: $pathOrUri)
+            : $pathOrUri;
+        $path = \trim($path, '/');
+        if ($path === '') {
+            return false;
+        }
+        $arr = \explode('/', $path);
+        $last = \end($arr);
+        return \str_contains($last, '.')
+            && \preg_match('/\.(jpg|jpeg|png|webp|gif|svg|css|js|ico|woff|woff2|eot|ttf|otf|ttf2|woff3|txt|pdf|doc|docx|xls|xlsx|ppt|pptx|mp4|mp3|m3u8|json|xml|map)$/i', $last) === 1;
+    }
+}
+
 if (!function_exists('getStringBetweenContents')) {
     function getStringBetweenContents(string $str, string $startDelimiter, string $endDelimiter): array
     {

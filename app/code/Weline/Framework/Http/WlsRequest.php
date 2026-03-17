@@ -207,7 +207,9 @@ class WlsRequest extends Request
             'REQUEST_URI' => $uri,
             'QUERY_STRING' => $queryString,
             'PATH_INFO' => $path,
-            
+            // 唯一判断处：静态文件仅按 path 判断，其他处只读此标志
+            'WELINE_IS_STATIC_FILE' => weline_is_static_file_path($path),
+
             // ===== 服务器信息（FPM 标准）=====
             'SERVER_SOFTWARE' => WlsResponse::SERVER_SIGNATURE,
             'SERVER_PROTOCOL' => $protocol,
