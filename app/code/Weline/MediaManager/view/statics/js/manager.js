@@ -906,6 +906,10 @@
             showError(t('noFiles'));
             return;
         }
+        if (!CWD_HASH) {
+            showError(t('uploadWaitDir'));
+            return;
+        }
         var fd = new FormData();
         fd.append('cmd', 'upload');
         fd.append('target', CWD_HASH);

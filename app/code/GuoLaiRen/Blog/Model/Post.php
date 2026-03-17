@@ -87,6 +87,16 @@ class Post extends Model
     }
 
     /**
+     * 保存前：确保 published_at 空字符串为 null，避免 PostgreSQL timestamp 报错（兜底 setData 未覆盖的路径）
+     */
+    public function save_before(): void
+    {
+        if ($this->getData(self::schema_fields_PUBLISHED_AT) === '') {
+            $this->setData(self::schema_fields_PUBLISHED_AT, null);
+        }
+    }
+
+    /**
      * 获取状态名称
      */
     public function getStatusName(): string
