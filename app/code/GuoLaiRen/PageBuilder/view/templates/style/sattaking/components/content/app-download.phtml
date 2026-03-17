@@ -63,7 +63,7 @@ $downloadDesc = $config['download.description'] ?? 'Get the official Android bui
 $primaryBtnText = $config['download.primary_text'] ?? 'Primary Download';
 $primaryBtnUrl = $config['download.primary_url'] ?? '#';
 $secondaryBtnText = $config['download.secondary_text'] ?? 'Need Help?';
-$secondaryBtnUrl = $config['download.secondary_url'] ?? '#faq';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['download.secondary_url'] ?? '#faq');
 
 // 特性列表
 $featuresRaw = $config['features.items'] ?? "Lightweight install\nResult history\nMarket reminders";
