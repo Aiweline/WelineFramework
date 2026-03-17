@@ -2626,9 +2626,12 @@ function handleRequest(
         return $httpString;
         
     } catch (\Throwable $e) {
-        WlsLogger::error_("请求处理错误: " . $e->getMessage() . " (文件: " . $e->getFile() . ":" . $e->getLine() . ")");
-        w_log_error('[WLS Worker SSL] Request error: ' . $e->getMessage());
-        
+        // 302 等响应终止为正常控制流，不记错误
+        if (!$e instanceof \Weline\Framework\Http\ResponseTerminateException) {
+            WlsLogger::error_("请求处理错误: " . $e->getMessage() . " (文件: " . $e->getFile() . ":" . $e->getLine() . ")");
+            w_log_error('[WLS Worker SSL] Request error: ' . $e->getMessage());
+        }
+
         $statusCode = 500;
         $errorMessage = $e->getMessage() ?: 'Internal Server Error';
         
