@@ -772,8 +772,8 @@ class WlsRequest extends Request
             // ── text/plain：智能嗅探（依次尝试 JSON → URL-encoded → 原始文本）──
             $ct === 'text/plain' || $ct === '' => self::parsePlainText($body),
 
-            // ── 未知类型：不解析 ──
-            default => $empty,
+            // ── 未知/未声明类型：用 parsePlainText 兜底（尝试 JSON → URL-encoded → 原始文本），避免漏解析
+            default => self::parsePlainText($body),
         };
     }
 
