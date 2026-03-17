@@ -176,7 +176,7 @@ $headerHeight = $getConfig('style.height', '70px');
         
         <?php if ($showButton): ?>
         <div class="tpmst-header-action">
-            <a href="<?= htmlspecialchars($buttonUrl) ?>" class="btn-download">
+            <a href="javascript:void(0)" role="button" class="btn-download tpmst-dark-download-trigger">
                 <span class="btn-icon">⬇</span>
                 <span class="btn-text"><?= htmlspecialchars($buttonText) ?></span>
             </a>
@@ -401,6 +401,13 @@ body {
             component.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.3)';
         }
         lastScroll = currentScroll;
+    });
+})();
+
+(function(){
+    var buttonUrl = <?= json_encode($buttonUrl, JSON_UNESCAPED_SLASHES) ?>;
+    document.querySelectorAll('#<?= $componentId ?> .tpmst-dark-download-trigger').forEach(function(el){
+        el.addEventListener('click', function(){ window.location.href = buttonUrl; });
     });
 })();
 </script>
