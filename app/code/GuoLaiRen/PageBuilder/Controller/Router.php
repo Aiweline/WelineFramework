@@ -72,12 +72,17 @@ class Router implements RouterInterface
             }
             if ($websiteId > 0) {
                 $homePageHandle = self::getHomePageHandle($websiteId);
-                // 有首页即重写（handle 可为空，同站首页用域名即可）
+                // 有首页即重写。live 模式：根路径直接以域名为首页，不传 handle；预览模式仍传 handle
                 if ($homePageHandle !== null) {
                     $path = '/pagebuilder/frontend/page/view';
                     $rule['module'] = 'GuoLaiRen_PageBuilder';
-                    $rule['handle'] = $homePageHandle;
-                    $_GET['handle'] = $homePageHandle;
+                    if ($isPreview) {
+                        $rule['handle'] = $homePageHandle ?? '';
+                        $_GET['handle'] = $rule['handle'];
+                    } else {
+                        $rule['handle'] = '';
+                        $_GET['handle'] = '';
+                    }
                     return;
                 }
             }
