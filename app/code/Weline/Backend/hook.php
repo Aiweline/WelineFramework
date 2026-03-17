@@ -14,4 +14,10 @@ return [
         'description' => __('在后台页面的 <head> 标签内注入内容，允许其他模块在后台页面头部注入额外的 CSS、JavaScript 或其他资源。'),
         'doc' => 'backend/head.md',
     ],
+    // ==================== Backend Dashboard / Tab 面板 ====================
+    'Weline_Backend::backend::partials::dashboard::ai-usage-stats' => [
+        'name' => __('AI 使用统计区块'),
+        'description' => __('在后台统计/仪表盘等 Tab 面板中展示 AI 使用量统计（今日 tokens、花费等），可由 Weline_Ai 等模块实现。'),
+        'doc' => 'backend/partials/dashboard/ai-usage-stats.md',
+    ],
 ];

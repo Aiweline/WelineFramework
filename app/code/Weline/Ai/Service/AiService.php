@@ -896,7 +896,7 @@ class AiService
                 'scenario_code' => $params['scenario_code'] ?? null,
                 'locale' => $params['locale'] ?? null,
                 'user_id' => $params['user_id'] ?? 0,
-                'created_time' => time(),
+                'created_at' => date('Y-m-d H:i:s.u'),
                 'status' => AiUsageLog::STATUS_SUCCESS,
             ]);
             $this->usageLog->save();
