@@ -97,6 +97,18 @@ class Post extends Model
     }
 
     /**
+     * 返回写入用数据前，将 published_at 空字符串转为 null（PostgreSQL timestamp 不接受 ''）
+     */
+    public function getModelData(string $field = ''): array|string
+    {
+        $data = parent::getModelData($field);
+        if (is_array($data) && array_key_exists(self::schema_fields_PUBLISHED_AT, $data) && $data[self::schema_fields_PUBLISHED_AT] === '') {
+            $data[self::schema_fields_PUBLISHED_AT] = null;
+        }
+        return $data;
+    }
+
+    /**
      * 获取状态名称
      */
     public function getStatusName(): string
