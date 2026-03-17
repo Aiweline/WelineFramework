@@ -145,6 +145,7 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 暂无分类，请点击右上角按钮创建,"No categories yet"
 删除,删除
 确定要删除这个分类吗？,"Are you sure you want to delete this category?"
+点击选择域名（可多选）,点击选择域名（可多选）
 博客表单,博客表单
 基本信息,基本信息
 文章标题,"Post Title"
@@ -176,7 +177,6 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 文章作者名称,"Author name"
 浏览量,"View Count"
 选择域名,选择域名
-点击选择域名（可多选）,点击选择域名（可多选）
 选择域名后会自动填充站点名称、代码和网站地址,选择域名后会自动填充站点名称、代码和网站地址
 站点名称,站点名称
 例如：我的博客站点,例如：我的博客站点

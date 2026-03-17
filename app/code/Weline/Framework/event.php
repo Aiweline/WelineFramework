@@ -252,6 +252,13 @@ return [
             'storage_config' => ['type' => 'array', 'required' => false, 'description' => '存储配置数组，由 Observer 提供'],
         ],
     ],
+
+    // ========== 日志事件 ==========
+    'Weline_Framework_Log::resolve_runtime' => [
+        'name' => __('日志运行模式解析'),
+        'description' => __('在解析当前日志运行模式（fpm | wls）时触发。默认来自配置 log.runtime，观察者可修改 data["runtime"] 为 wls（如 WLS 进程内由 Weline_Server 设置）。'),
+        'doc' => 'log/日志运行模式解析.md',
+    ],
     
     // ========== 控制台事件 ==========
     'Weline_Framework_Console::compile' => [
