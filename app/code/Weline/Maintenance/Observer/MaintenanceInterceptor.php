@@ -392,12 +392,14 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     }
 
     /**
-     * 获取静态文件路径
+     * 获取静态文件路径（跨平台，使用 DS）
      */
     private function getStaticFilePath(string $lang, bool $isApi = false): string
     {
         $suffix = $isApi ? '.json' : '.html';
-        return BP . self::STATIC_DIR . $lang . $suffix;
+        $base = defined('PUB') ? rtrim(PUB, \DIRECTORY_SEPARATOR) : (BP . 'pub');
+        return $base . \DIRECTORY_SEPARATOR . 'errors' . \DIRECTORY_SEPARATOR . 'maintenance'
+            . \DIRECTORY_SEPARATOR . $lang . $suffix;
     }
 
     /**
@@ -577,16 +579,17 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     }
 
     /**
-     * 保存静态文件
+     * 保存静态文件（跨平台路径，确保目录创建成功）
      */
     private function saveStaticFile(string $filePath, string $content): void
     {
-        $dir = dirname($filePath);
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+        $dir = \dirname($filePath);
+        if (!\is_dir($dir)) {
+            if (!@\mkdir($dir, 0755, true) && !\is_dir($dir)) {
+                return;
+            }
         }
-        
-        @file_put_contents($filePath, $content);
+        @\file_put_contents($filePath, $content);
     }
 
     /**
@@ -609,6 +612,28 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 获取联系邮箱配置
         $contactEmail = Env::getInstance()->getConfig('contact_email', 'support@example.com');
+
+        // 获取 Logo URL（后台配置，维护页为深色背景，优先用 logo_light）
+        $maintenance_logo_url = '';
+        try {
+            $backendConfig = ObjectManager::getInstance(\Weline\Backend\Model\Config::class);
+            $logoLight = trim((string) ($backendConfig->getConfig('logo_light', 'Weline_Backend') ?? ''));
+            if ($logoLight === '') {
+                $logoLight = trim((string) ($backendConfig->getConfig('logo_dark', 'Weline_Backend') ?? ''));
+            }
+            if ($logoLight !== '') {
+                foreach (['/pub/media/', 'pub/media/', '/media/'] as $prefix) {
+                    if (str_starts_with($logoLight, $prefix)) {
+                        $logoLight = ltrim(substr($logoLight, strlen($prefix)), '/');
+                        break;
+                    }
+                }
+                $logoLight = ltrim($logoLight, '/');
+                $maintenance_logo_url = '/pub/media/' . $logoLight;
+            }
+        } catch (\Throwable $e) {
+            // 维护模式下 DB 可能不可用，忽略
+        }
         
         // 根据语言设置 HTML lang 属性
         $htmlLang = str_replace('_', '-', $lang);

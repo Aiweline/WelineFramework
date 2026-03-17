@@ -41,6 +41,7 @@ class Config extends BackendController
                 'logo_sm' => $config->getConfig('logo_sm', 'Weline_Backend') ?? '',
                 'site_name' => $config->getConfig('site_name', 'Weline_Backend') ?? '',
                 'site_description' => $config->getConfig('site_description', 'Weline_Backend') ?? '',
+                'login_bg' => $config->getConfig('login_bg', 'Weline_Backend') ?? '',
             ];
 
             $this->assign('configs', $configs);

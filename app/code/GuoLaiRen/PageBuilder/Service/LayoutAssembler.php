@@ -478,10 +478,15 @@ class LayoutAssembler
                     $type = trim($parts[1] ?? 'text');
                     $defaultAndOptions = trim($parts[2] ?? '');
                     
-                    // 分离默认值和选项
+                    // 分离默认值、格式提示与选项
                     $defaultValue = '';
+                    $formatHint = '';
                     $options = [];
-                    if (strpos($defaultAndOptions, '|') !== false) {
+                    if (strpos($defaultAndOptions, '|格式：') !== false) {
+                        list($defaultValue, $formatHint) = explode('|格式：', $defaultAndOptions, 2);
+                        $defaultValue = trim($defaultValue);
+                        $formatHint = trim($formatHint);
+                    } elseif (strpos($defaultAndOptions, '|') !== false) {
                         list($defaultValue, $optionsStr) = explode('|', $defaultAndOptions, 2);
                         if (!empty($optionsStr)) {
                             $options = array_map('trim', explode(',', $optionsStr));
@@ -497,12 +502,16 @@ class LayoutAssembler
                         ];
                     }
                     
-                    $fields[$currentGroup]['fields'][$fieldKey] = [
+                    $fieldData = [
                         'label' => $label,
                         'type' => $type,
                         'default' => $defaultValue,
                         'options' => $options,
                     ];
+                    if ($formatHint !== '') {
+                        $fieldData['format'] = $formatHint;
+                    }
+                    $fields[$currentGroup]['fields'][$fieldKey] = $fieldData;
                 }
             }
         }

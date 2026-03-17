@@ -328,8 +328,12 @@ id属性不能为空,"The id attribute cannot be empty."
 提示：点击选择AI模型，输入关键词搜索（800ms防抖）,"Tip: Click to select an AI model, enter keywords to search (800ms debounce)"
 未找到匹配的模型,"No matching model found."
 加载失败,"Failed to load"
-适配器详情,"Adapter Details"
+"AI 使用统计","AI Usage Stats"
+今日,Today
+总令牌,"Total Tokens"
+约花费,"Est. Cost"
 详情,Details
+适配器详情,"Adapter Details"
 返回列表,"Return to list"
 启用,Enable
 基本信息,"Basic Information"
@@ -457,6 +461,7 @@ id属性不能为空,"The id attribute cannot be empty."
 暂无受保护的模型,"No protected models"
 "AI 管理","AI 管理"
 模型,Model
+统计面板,"Statistics Panel"
 复制模型,"Copy model"
 "您正在复制模型: <strong>%{1}</strong>","You are copying the model: <strong>%{1}</strong>"
 复制的模型将继承原始模型的所有配置，您可以在复制后修改其配置。,"The copied model will inherit all configurations of the original model, and you can modify its configurations after copying."
@@ -724,19 +729,24 @@ API密钥将被加密存储,API密钥将被加密存储
 请求类型,请求类型
 输入令牌,输入令牌
 输出令牌,输出令牌
-总令牌,总令牌
 花费,Spent
 耗时,耗时
 使用详情,使用详情
 加载中...,Loading...
 加载失败，请重试,加载失败，请重试
-暂无数据,"No data available"
+暂无数据,"No data"
 上一页,Previous
 下一页,Next
 请求ID,请求ID
 错误信息,"Error message"
 请求数据,请求数据
 响应数据,响应数据
+本周,"This Week"
+本月,"This Month"
+本年,"This Year"
+统计区间,Period
+按模型消耗排名,"Usage by Model (Ranked)"
+排名,Rank
 首页,Home
 聊天,Chat
 管理您的API密钥和个人设置,管理您的API密钥和个人设置

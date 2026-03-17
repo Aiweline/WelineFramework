@@ -287,6 +287,93 @@ class Page extends Model
     }
 
     /**
+     * 获取当前页面的子页面列表（不区分发布状态），用于 nav/链接 给 AI 参考
+     * 返回格式与 getNavigationPages 一致：title, handle, url, type, page_id
+     */
+    public function getChildPagesForNav(int $limit = 50): array
+    {
+        $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+        $parentId = (int)$this->getId();
+        if ($parentId <= 0) {
+            return [];
+        }
+        $pages = clone $this;
+        $items = $pages->clear()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_PARENT_ID, $parentId)
+            ->order(self::schema_fields_TYPE, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $result = [];
+        foreach ($items as $item) {
+            $handle = $item->getData(self::schema_fields_HANDLE);
+            $h = $handle === null || $handle === '' ? '' : (string)$handle;
+            $result[] = [
+                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'handle' => $h,
+                'url' => $h === '' ? '/' : '/' . $h,
+                'type' => $item->getData(self::schema_fields_TYPE),
+                'page_id' => $item->getId(),
+                'status' => (int)$item->getData(self::schema_fields_STATUS),
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * 获取当前页面的同级子页面列表（同一 parent_id 下，含自身），用于 nav/链接 给 AI 参考
+     * 若父页是首页，会在列表前追加父页（首页），保证导航有「首页」项
+     */
+    public function getSiblingPagesForNav(int $limit = 50): array
+    {
+        $parentId = (int)$this->getData(self::schema_fields_PARENT_ID);
+        if ($parentId <= 0) {
+            return [];
+        }
+        $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+        $pages = clone $this;
+        $items = $pages->clear()
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(self::schema_fields_PARENT_ID, $parentId)
+            ->order(self::schema_fields_TYPE, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetch()
+            ->getItems();
+        $result = [];
+        foreach ($items as $item) {
+            $handle = $item->getData(self::schema_fields_HANDLE);
+            $h = $handle === null || $handle === '' ? '' : (string)$handle;
+            $result[] = [
+                'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
+                'handle' => $h,
+                'url' => $h === '' ? '/' : '/' . $h,
+                'type' => $item->getData(self::schema_fields_TYPE),
+                'page_id' => $item->getId(),
+                'status' => (int)$item->getData(self::schema_fields_STATUS),
+            ];
+        }
+        // 父页是首页时，把首页插到最前
+        $parent = clone $this;
+        $parent->clear()->load($parentId);
+        if ($parent->getId() && $parent->getData(self::schema_fields_TYPE) === self::TYPE_HOME) {
+            $ph = $parent->getData(self::schema_fields_HANDLE);
+            $phStr = $ph === null || $ph === '' ? '' : (string)$ph;
+            array_unshift($result, [
+                'title' => $parent->getData(self::schema_fields_TITLE) ?: $parent->getData(self::schema_fields_NAME),
+                'handle' => $phStr,
+                'url' => $phStr === '' ? '/' : '/' . $phStr,
+                'type' => self::TYPE_HOME,
+                'page_id' => $parent->getId(),
+                'status' => (int)$parent->getData(self::schema_fields_STATUS),
+            ]);
+        }
+        return $result;
+    }
+
+    /**
      * 获取当前页面下所有后代页面的 ID（递归：子页面 + 子页面的子页面 + …）
      * 用于主页换主题时同步更新该站点下所有子页面的 theme
      */

@@ -183,13 +183,9 @@ function WelineMediaManager_{{target}}_close() {
         
         var paths = [];
         files.forEach(function(f) {
-            if (f.path) {
-                paths.push(f.path);
-            } else if (f.url) {
-                paths.push(f.url);
-            } else if (f.name) {
-                paths.push(f.name);
-            }
+            var raw = f.path || f.url || f.name || '';
+            var relative = raw.replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
+            paths.push(relative || raw);
         });
         
         var isMulti = e.data.multi;
