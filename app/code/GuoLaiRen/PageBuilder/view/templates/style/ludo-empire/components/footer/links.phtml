@@ -59,7 +59,7 @@ $parseLinks = function($raw) {
         if (empty($line)) continue;
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
-        $url = trim($parts[1] ?? '#');
+        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
         if (!empty($name)) {
             $links[] = ['name' => $name, 'url' => $url];
         }
@@ -82,6 +82,7 @@ $col3Links = [];
 $col1Title = $config['links.column1_title'] ?? 'Games';
 $col2Title = $config['links.column2_title'] ?? 'Company';
 $col3Title = $config['links.column3_title'] ?? 'Support';
+$useCustomLinks = ($config['links.use_custom_links'] ?? 'no') === 'yes';
 
 if ($page && method_exists($page, 'getHeaderNavigationPages')) {
     $navPages = $page->getHeaderNavigationPages(20);

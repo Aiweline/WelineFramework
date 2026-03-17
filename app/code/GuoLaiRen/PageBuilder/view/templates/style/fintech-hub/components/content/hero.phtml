@@ -66,9 +66,9 @@ $description = $config['content.description'] ?? 'Secure payments, smart investm
 
 // CTA配置
 $primaryBtnText = $config['cta.primary_text'] ?? 'Open Free Account';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#services';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#services');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Explore Products';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#features';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#features');
 
 // 统计数据
 $statsRaw = $config['stats.items'] ?? "\$2B+|Total Processed\n1M+|Active Users\n99.99%|Uptime\n150+|Countries";
