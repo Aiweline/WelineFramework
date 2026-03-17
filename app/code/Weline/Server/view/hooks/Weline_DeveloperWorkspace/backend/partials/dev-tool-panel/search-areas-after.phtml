@@ -114,7 +114,7 @@ $setHealthAllowCookieUrl = $this->getBackendUrl('server/backend/server-monitor/s
         // 使用 WLS 健康检查接口获取服务状态，而不是请求当前页面
         // /_wls/health?detail=1 返回完整的 JSON 信息
         // Weline.Api.request 返回 { ok, status, data }，body 已在 data 中，无 .json() 方法
-        var req = window.Weline.Api.request('/_wls/health?detail=1', { method: 'GET', cache: 'no-cache', silent: true });
+        var req = window.Weline.Api.request('/_wls/health?detail=1', { method: 'GET', cache: 'no-cache', credentials: 'same-origin', silent: true });
         req.then(function(response) {
             if (!response.ok) {
                 // 403 = 健康检查仅允许本机访问（通过 Nginx/外网访问时会 403，WLS 可能正在运行）
