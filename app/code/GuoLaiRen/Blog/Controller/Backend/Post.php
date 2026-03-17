@@ -14,6 +14,7 @@ use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
 use GuoLaiRen\Blog\Model\TrendsConfig;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Data\WebsiteData;
@@ -176,6 +177,9 @@ class Post extends BackendController
 
             $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         } catch (\Throwable $e) {
+            if ($e instanceof RedirectException) {
+                throw $e;
+            }
             MessageManager::error($e->getMessage());
             $this->redirect('blog/backend/post/create');
         }
@@ -275,6 +279,9 @@ class Post extends BackendController
 
             $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         } catch (\Throwable $e) {
+            if ($e instanceof RedirectException) {
+                throw $e;
+            }
             MessageManager::error($e->getMessage());
             $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         }
