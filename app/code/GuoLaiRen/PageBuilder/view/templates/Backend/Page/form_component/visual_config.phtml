@@ -1762,8 +1762,8 @@ if (typeof window.openVisualConfig === 'undefined') {
             window.visualConfigInitialized = true;
         }
         
-        if (!window.defaultLanguage && <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>) {
-            window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale')) : 'null' ?>;
+        if (!window.defaultLanguage && <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>) {
+            window.defaultLanguage = <?= $page && $page->getData('default_locale') ? json_encode($page->getData('default_locale'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>;
             window.currentVisualLanguage = window.defaultLanguage;
         }
     };
@@ -2649,8 +2649,10 @@ function renderTemplateConfig(configGroups) {
             fieldHtml += `</div>`;
             fieldHtml += `</div>`;
         } else if (config.type === 'color') {
+            // type="color" 只接受 #rrggbb，rgba 等会导致解析/验证错误
+            const colorHex = /^#[0-9A-Fa-f]{6}$/.test(String(rawValue || '')) ? rawValue : '#000000';
             fieldHtml += `<input type="color" id="${fieldId}" class="form-control form-control-color auto-save-field" 
-                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(rawValue)}">`;
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(colorHex)}">`;
         } else if (config.type === 'textarea') {
             // 处理 textarea 的值：将字面量 \n 和 \r\n 转换为实际换行符
             // 注意：textarea 内容中的换行符不需要 HTML 转义，但需要转义其他 HTML 特殊字符
@@ -3330,7 +3332,7 @@ window.openPageSpeedMobile = function(){
     let handle = '';
     if (window.isTemplateConfigMode) {
         // 模板配置模式：使用测试页面句柄
-        const page = <?= ($page && $page->getId()) ? json_encode($page->getData('handle')) : 'null' ?>;
+        const page = <?= ($page && $page->getId()) ? json_encode($page->getData('handle'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) : 'null' ?>;
         handle = page || '';
     } else {
         // 正常模式：从表单获取
@@ -4275,10 +4277,26 @@ window.setupPreviewDropZones = function() {
                     transition: box-shadow 0.2s ease;
                     z-index: 1 !important;
                 }
-                /* header/footer 区域的组件包装器需要更高的 z-index */
+                /* header/footer 区域的组件包装器需要更高的 z-index，footer 禁止裁剪以便显示操作按钮 */
                 [data-region="header"] .tpmst-component-wrapper,
-                [data-region="footer"] .tpmst-component-wrapper {
+                [data-region="footer"] .tpmst-component-wrapper,
+                .pb-slot-footer .tpmst-component-wrapper,
+                .pb-slot-footer .pb-component-wrapper {
                     z-index: 10000 !important;
+                }
+                [data-region="footer"],
+                .pb-slot-footer {
+                    overflow: visible !important;
+                }
+                /* footer 区取消 ::before 遮罩，避免阻挡 wrapper 的 mouseenter，与 header 行为一致 */
+                [data-region="footer"]::before,
+                .pb-slot-footer::before {
+                    display: none !important;
+                }
+                [data-region="footer"] .tpmst-component-wrapper,
+                .pb-slot-footer .tpmst-component-wrapper,
+                .pb-slot-footer .pb-component-wrapper {
+                    overflow: visible !important;
                 }
                 .tpmst-component-wrapper:hover {
                     /* 参照 header 样式：使用边框内部虚线阴影，不要背景蒙版 */
@@ -4304,6 +4322,10 @@ window.setupPreviewDropZones = function() {
                 [data-region="footer"] .tpmst-component-wrapper footer {
                     position: relative !important;
                 }
+                /* 确保 footer 区 wrapper 可被悬停：子元素不阻挡 wrapper 的 hover 传递 */
+                [data-region="footer"] .tpmst-component-wrapper {
+                    isolation: isolate;
+                }
                 .tpmst-component-wrapper .component-actions {
                     position: absolute !important;
                     top: 8px !important;
@@ -4327,13 +4349,37 @@ window.setupPreviewDropZones = function() {
                     height: auto !important;
                 }
                 .tpmst-component-wrapper:hover .component-actions,
-                .tpmst-component-wrapper .component-actions:hover {
+                .tpmst-component-wrapper .component-actions:hover,
+                .tpmst-component-wrapper .component-actions.pb-actions-visible {
                     display: flex !important;
                 }
-                /* header/footer 区域的操作按钮需要更高的 z-index */
+                /* header/footer 区域的操作按钮统一放在右上角，z-index 更高 */
                 [data-region="header"] .tpmst-component-wrapper .component-actions,
-                [data-region="footer"] .tpmst-component-wrapper .component-actions {
+                [data-region="footer"] .tpmst-component-wrapper .component-actions,
+                .pb-slot-footer .tpmst-component-wrapper .component-actions,
+                .pb-slot-footer .pb-component-wrapper .component-actions {
                     z-index: 100001 !important;
+                }
+                /* footer 区域：与 header 一致，仅 hover 时显示按钮，失去 hover 时隐藏 */
+                .pb-slot-footer .tpmst-component-wrapper .component-actions,
+                .pb-slot-footer .pb-component-wrapper .component-actions {
+                    display: none !important;
+                }
+                .pb-slot-footer footer,
+                .pb-slot-footer [data-region="footer"],
+                .pb-slot-footer .tpmst-region-footer,
+                [data-region="footer"] footer {
+                    overflow: visible !important;
+                }
+                .pb-slot-footer:hover .tpmst-component-wrapper .component-actions,
+                .pb-slot-footer:hover .pb-component-wrapper .component-actions,
+                [data-region="footer"]:hover .tpmst-component-wrapper .component-actions,
+                [data-region="footer"]:hover .pb-component-wrapper .component-actions,
+                [data-region="footer"] .tpmst-component-wrapper:hover .component-actions,
+                [data-region="footer"] .pb-component-wrapper:hover .component-actions,
+                .pb-slot-footer .tpmst-component-wrapper:hover .component-actions,
+                .pb-slot-footer .pb-component-wrapper:hover .component-actions {
+                    display: flex !important;
                 }
                 .tpmst-component-wrapper .component-actions button {
                     width: 32px;
@@ -4396,6 +4442,34 @@ window.setupPreviewDropZones = function() {
             zone.addEventListener('dragleave', handlePreviewDragLeave);
             zone.addEventListener('drop', handlePreviewDrop);
         });
+
+        // footer 区域：用 document 级 mouseover/mouseout 委托，辅助 hover 显示（与 header/content 一致）
+        (function() {
+            var footerSelector = '[data-region="footer"], .pb-slot-footer';
+            var footerZones = doc.querySelectorAll(footerSelector);
+            if (footerZones.length === 0) return;
+            var actionsSelector = '.tpmst-component-wrapper .component-actions, .pb-component-wrapper .component-actions';
+            var hideFooterActions = function(zone) {
+                if (!zone) return;
+                zone.querySelectorAll(actionsSelector).forEach(function(a) { a.classList.remove('pb-actions-visible'); });
+            };
+            var showFooterActions = function(zone) {
+                if (!zone) return;
+                zone.style.position = 'relative';
+                zone.querySelectorAll(actionsSelector).forEach(function(a) { a.classList.add('pb-actions-visible'); });
+            };
+            doc.addEventListener('mouseover', function(e) {
+                var zone = e.target && e.target.closest ? e.target.closest(footerSelector) : null;
+                if (zone) showFooterActions(zone);
+            }, true);
+            doc.addEventListener('mouseout', function(e) {
+                var zone = e.target && e.target.closest ? e.target.closest(footerSelector) : null;
+                var related = e.relatedTarget;
+                if (!zone) return;
+                if (related && zone.contains(related)) return;
+                hideFooterActions(zone);
+            }, true);
+        })();
         
         // 为每个组件添加操作按钮
         doc.querySelectorAll('.tpmst-component-wrapper').forEach(wrapper => {
@@ -4425,11 +4499,9 @@ window.setupPreviewDropZones = function() {
             // 创建新的操作按钮容器
             const actions = doc.createElement('div');
             actions.className = 'component-actions';
-            // 确保按钮容器有正确的定位样式
             actions.style.position = 'absolute';
-            actions.style.top = '8px';
             actions.style.right = '8px';
-            actions.style.zIndex = '99999';
+            actions.style.top = '8px';
             
             // content 区域添加排序按钮
             if (region === 'content') {
@@ -4555,6 +4627,11 @@ window.setupPreviewDropZones = function() {
             actions.appendChild(removeBtn);
             
             wrapper.appendChild(actions);
+            
+            // footer 区：始终显示按钮（不随 hover 切换），避免嵌套结构阻挡 hover
+            if (region === 'footer') {
+                actions.classList.add('pb-footer-actions', 'pb-actions-visible');
+            }
         });
         
         // 更新所有 content 区域组件的排序按钮状态
@@ -5253,8 +5330,10 @@ window.editComponentInPreview = async function(wrapper) {
                         formHtml += '<textarea id="' + inputId + '" data-field="' + fullKey + '" class="form-control form-control-sm" rows="3" style="width: 100%;">' + 
                             escapeHtml(currentValue) + '</textarea>';
                     } else if (fieldType === 'color') {
+                        const colorVal = String(currentValue || '');
+                        const colorHex = /^#[0-9A-Fa-f]{6}$/.test(colorVal) ? colorVal : '#000000';
                         formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
-                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + (currentValue || '#000000') + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
+                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(colorHex) + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
                         formHtml += '<input type="text" id="' + inputId + '_text" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="#000000">';
                         formHtml += '</div>';
                     } else if (fieldType === 'image') {

@@ -76,17 +76,14 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
 </div>
 <!-- end page title -->
 
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div>
-<!-- end message -->
+<!-- 消息由布局层统一展示，此处不再重复引入 message.phtml，避免同一条错误显示两次 -->
 
 <form id="page-form" action="<?= $this->getData('action') ?>" method="post" class="needs-validation" novalidate>
     <!-- 隐藏字段：父页面ID（用于创建子页面） -->
     <?php if ($this->getData('parent_id')): ?>
     <input type="hidden" name="parent_id" value="<?= $this->getData('parent_id') ?>">
     <?php endif; ?>
+    <input type="hidden" name="ai_description" id="ai_description_hidden" value="<?= htmlspecialchars(($page && $page->getId()) ? (string)($page->getData('ai_description') ?? '') : '') ?>">
     
     <div class="row">
         <!-- 左侧主表单 -->
@@ -1361,76 +1358,11 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
 })();
 </script>
 
-<!-- AI生成内容模态框 -->
+<!-- AI生成内容 START -->
 <?php if (($ai_enabled ?? '0') === '1'): ?>
-<div class="modal fade" id="aiGenerateModal" tabindex="-1" aria-labelledby="aiGenerateModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="aiGenerateModalLabel">
-                    <i class="mdi mdi-robot"></i> <?= __('AI一键生成页面内容') ?>
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <label for="aiDescription" class="form-label">
-                        <?= __('页面描述') ?> <span class="text-danger">*</span>
-                    </label>
-                    <textarea class="form-control" 
-                              id="aiDescription" 
-                              rows="4" 
-                              placeholder="<?= $isEdit ? __('AI将基于当前页面的信息生成内容，您也可以修改描述以调整生成方向...') : __('请描述您想要创建的页面内容，例如：创建一个关于我们页面，介绍公司历史、团队和使命...') ?>"></textarea>
-                    <div class="form-text">
-                        <?php if ($isEdit): ?>
-                            <?= __('编辑模式下，AI将基于当前页面的标题、内容、SEO信息等自动生成提示词。您也可以修改描述以调整生成方向。') ?>
-                        <?php else: ?>
-                            <?= __('详细描述页面内容，AI将根据描述自动生成标题、SEO信息和页面内容') ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php if ($isEdit): ?>
-                <div class="alert alert-warning">
-                    <i class="mdi mdi-information-outline"></i>
-                    <strong><?= __('编辑模式') ?>：</strong>
-                    <?= __('将使用当前页面的以下信息作为提示词：') ?>
-                    <ul class="mb-0 mt-2">
-                        <?php if ($page->getData('title')): ?>
-                            <li><?= __('页面标题') ?>: <?= htmlspecialchars($page->getData('title')) ?></li>
-                        <?php endif; ?>
-                        <?php if ($page->getData('meta_title')): ?>
-                            <li><?= __('SEO标题') ?>: <?= htmlspecialchars($page->getData('meta_title')) ?></li>
-                        <?php endif; ?>
-                        <?php if ($page->getData('meta_description')): ?>
-                            <li><?= __('SEO描述') ?>: <?= htmlspecialchars(mb_substr($page->getData('meta_description'), 0, 100)) ?><?= mb_strlen($page->getData('meta_description')) > 100 ? '...' : '' ?></li>
-                        <?php endif; ?>
-                        <?php if ($page->getData('content')): ?>
-                            <li><?= __('页面内容摘要') ?>: <?= htmlspecialchars(mb_substr(strip_tags($page->getData('content')), 0, 100)) ?><?= mb_strlen(strip_tags($page->getData('content'))) > 100 ? '...' : '' ?></li>
-                        <?php endif; ?>
-                    </ul>
-                </div>
-                <?php else: ?>
-                <div class="alert alert-info">
-                    <i class="mdi mdi-information-outline"></i>
-                    <strong><?= __('提示') ?>：</strong>
-                    <?= __('AI将根据您填写的描述和页面现有信息生成内容。主页类型页面不会生成content字段。') ?>
-                </div>
-                <?php endif; ?>
-                <div id="aiGenerateProgressMessage" class="mt-2 small text-muted" style="display:none;"></div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                    <?= __('取消') ?>
-                </button>
-                <button type="button" class="btn btn-primary" onclick="generatePageContent()" id="aiGenerateSubmitBtn">
-                    <span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span>
-                    <i class="mdi mdi-robot"></i> <?= __('生成内容') ?>
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+<w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/ai_generate.phtml</w:template>
 <?php endif; ?>
+<!-- AI生成内容 END -->
 
 <!-- 样式预览模态框 -->
 <div id="stylePreviewModal" class="style-preview-modal">
@@ -2359,7 +2291,7 @@ document.addEventListener('DOMContentLoaded', function() {
         $currentOriginForJs = rtrim($this->request->getBaseHost(), '/');
         $currentPortForJs = parse_url($currentOriginForJs, PHP_URL_PORT);
         ?>
-        const websiteUrlMap = <?= json_encode($websiteUrlMap) ?>;
+        const websiteUrlMap = <?= json_encode($websiteUrlMap, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         const currentOriginForPort = '<?= htmlspecialchars($currentOriginForJs, ENT_QUOTES, 'UTF-8') ?>';
         const currentPortForDisplay = <?= json_encode($currentPortForJs !== null && $currentPortForJs !== '' ? (string)$currentPortForJs : '') ?>;
 
@@ -2522,7 +2454,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (currentHandle && lastCheckedHandle === currentHandle && !isHandleValid) {
                 event.preventDefault();
                 event.stopPropagation();
-                BackendToast.warning('<?= __('页面句柄已被使用，请使用其他句柄后再提交！') ?>');
+                BackendToast.warning(<?= json_encode(__('页面句柄已被使用，请使用其他句柄后再提交！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                 handleInput.focus();
                 handleInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 return false;
@@ -2539,11 +2471,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (invalidFields.length > 0) {
                     const firstInvalid = invalidFields[0];
                     const fieldName = firstInvalid.getAttribute('name') || firstInvalid.id || '字段';
-                    let errorMessage = `<?= __('请填写必填字段：') ?>${fieldName}`;
+                    let errorMessage = (<?= json_encode(__('请填写必填字段：'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + fieldName;
                     
                     // 特殊处理样式字段
                     if (firstInvalid.id === 'style' || firstInvalid.name === 'style') {
-                        errorMessage = '<?= __('请先选择页面样式模板！') ?>';
+                        errorMessage = <?= json_encode(__('请先选择页面样式模板！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
                     }
                     
                     // 滚动到第一个无效字段
@@ -2569,7 +2501,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (styleSelect && !styleSelect.value) {
                 event.preventDefault();
                 event.stopPropagation();
-                BackendToast.warning('<?= __('请先选择页面样式模板！') ?>');
+                BackendToast.warning(<?= json_encode(__('请先选择页面样式模板！'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
                 // 滚动到样式选择区域
                 const styleSection = document.querySelector('#styleCardsContainer') || styleSelect;
                 if (styleSection) {
@@ -2613,7 +2545,7 @@ window.publishPage = function() {
     
     if (!statusSelect || !form) {
         console.error('❌ 找不到状态选择器或表单');
-        BackendToast.error('<?= __('系统错误，请刷新页面重试') ?>');
+        BackendToast.error(<?= json_encode(__('系统错误，请刷新页面重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         return;
     }
     
@@ -2634,7 +2566,7 @@ window.publishPage = function() {
         form.submit();
     } catch (error) {
         console.error('❌ 发布失败:', error);
-        BackendToast.error('<?= __('发布失败，请重试') ?>');
+        BackendToast.error(<?= json_encode(__('发布失败，请重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         
         // 恢复按钮状态
         publishBtn.disabled = false;
@@ -2714,7 +2646,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const isFromAddChildPage = urlParentId && urlParentId !== '0';
     
     // 获取父页面数据（从PHP传递）
-    const parentPageData = <?= json_encode($this->getData('parent_page_data')) ?>;
+    const parentPageData = <?= json_encode($this->getData('parent_page_data'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     // 子页面主题继承自主页（根页面），不可修改
     const inheritedStyleCode = <?= json_encode($inheritedStyleCode) ?>;
     if (inheritedStyleCode && parentPageData) {
@@ -3281,7 +3213,7 @@ function removeLocaleTag(localeCode) {
     // 检查是否是默认语言，默认语言不能删除
     const defaultLocale = document.getElementById('default_locale').value;
     if (localeCode === defaultLocale) {
-        BackendToast.warning('<?= __('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。') ?>');
+        BackendToast.warning(<?= json_encode(__('默认语言不能从支持的语言列表中删除！如需更改，请先切换默认语言。'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         return false;
     }
     
@@ -3932,15 +3864,15 @@ async function selectStyle(styleCode) {
         if (pageIdForm && styleCode !== oldStyle) {
             autoSaveStyleChange(styleCode);
             if (typeof BackendToast !== 'undefined') {
-                BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+                BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
             }
         }
     }
     
     if (needConfirm && typeof BackendConfirm !== 'undefined') {
-        BackendConfirm.show('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？") ?>', {
-            title: '<?= __("确认修改主题") ?>',
-            confirmText: '<?= __("确定") ?>'
+        BackendConfirm.show(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, {
+            title: <?= json_encode(__("确认修改主题"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+            confirmText: <?= json_encode(__("确定"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
         }).then(function(confirmed) {
             if (confirmed) applyStyleChoice();
         });
@@ -4352,7 +4284,7 @@ if (refreshStyleBtn) {
             
         } catch (error) {
             console.error('❌ 刷新失败:', error);
-            BackendToast.error('<?= __('刷新失败') ?>：' + error.message);
+            BackendToast.error(<?= json_encode(__('刷新失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> + '：' + error.message);
         } finally {
             // 恢复按钮状态
             this.disabled = false;
@@ -4385,9 +4317,9 @@ if (styleSelect) {
         if (needConfirm && typeof BackendConfirm !== 'undefined') {
             const self = this;
             const selectedOption = this.options[this.selectedIndex];
-            BackendConfirm.show('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？") ?>', {
-                title: '<?= __("确认修改主题") ?>',
-                confirmText: '<?= __("确定") ?>'
+            BackendConfirm.show(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。确定要修改吗？"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, {
+                title: <?= json_encode(__("确认修改主题"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                confirmText: <?= json_encode(__("确定"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
             }).then(async function(confirmed) {
                 if (!confirmed) {
                     self.value = oldStyle;
@@ -4407,7 +4339,7 @@ if (styleSelect) {
             window.committedPageStyle = selectedStyle;
             await autoSaveStyleChange(selectedStyle);
             if (window.isRootPageForStyleHint && typeof BackendToast !== 'undefined') {
-                BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+                BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
             }
         }
         <?php endif; ?>
@@ -4459,7 +4391,7 @@ async function doStyleChangeSave(selectEl, selectedStyle, selectedOption) {
     loadStyleConfig(selectedStyle);
     await autoSaveStyleChange(selectedStyle);
     if (typeof BackendToast !== 'undefined') {
-        BackendToast.info('<?= __("修改主页主题后，该站点下所有子页面的主题会随之变更。") ?>', 4000);
+        BackendToast.info(<?= json_encode(__("修改主页主题后，该站点下所有子页面的主题会随之变更。"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 4000);
     }
 }
 
@@ -4638,7 +4570,7 @@ document.addEventListener('click', function(e) {
  */
 function openStyleConfigTranslation(configKey, configLabel, currentValue) {
     if (!pageIdForm || pageIdForm === 'null') {
-        BackendToast.warning('<?= __('只有在编辑模式下才能翻译配置项') ?>');
+        BackendToast.warning(<?= json_encode(__('只有在编辑模式下才能翻译配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         return;
     }
     
@@ -4860,7 +4792,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // 显示状态提示
             contentStatusAlert.classList.remove('d-none');
             const wordCount = content.length;
-            contentStatusText.textContent = `<?= __('当前已填写 ') ?>${wordCount}<?= __(' 个字符。页面将使用此自定义内容替代 content.phtml 模板。') ?>`;
+            contentStatusText.textContent = (<?= json_encode(__('当前已填写 '), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + wordCount + (<?= json_encode(__(' 个字符。页面将使用此自定义内容替代 content.phtml 模板。'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         } else {
             // 无内容时恢复默认
             badge.textContent = '<?= __('我要自定义内容') ?>';
@@ -5016,7 +4948,7 @@ function showToast(type, title, message) {
  */
 window.generateTemplateConfig = function() {
     // 获取页面ID和模板代码
-    let pageId = window.visualPageId || <?= $pageId ?: 0 ?>;
+    let pageId = window.visualPageId || <?= ($visualPageId ?? ($page && $page->getId() ? $page->getId() : 0)) ?: 0 ?>;
     let styleCode = window.currentTemplateStyleCode || window.currentStyle || '';
     
     // 如果还没有，尝试从全局变量获取
@@ -5041,12 +4973,12 @@ window.generateTemplateConfig = function() {
     }
     
     if (pageId <= 0) {
-        BackendToast.warning('<?= __('页面ID不能为空') ?>');
+        BackendToast.warning(<?= json_encode(__('页面ID不能为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         return;
     }
     
     if (!styleCode) {
-        BackendToast.warning('<?= __('模板代码不能为空') ?>');
+        BackendToast.warning(<?= json_encode(__('模板代码不能为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
         return;
     }
     
@@ -5062,7 +4994,7 @@ window.generateTemplateConfig = function() {
 
     // 弹出“正在生成”等待框，禁止用户关闭（直到成功或失败）
     // 显示"正在生成"提示
-    BackendToast.info('<?= __('AI正在生成配置，请稍候...') ?>', 0);
+    BackendToast.info(<?= json_encode(__('AI正在生成配置，请稍候...'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, 0);
     
     // 显示加载状态
     btn.disabled = true;
@@ -5091,7 +5023,7 @@ window.generateTemplateConfig = function() {
         // 检查响应数据
         if (!data) {
             console.error('[AI生成配置] 响应数据为空');
-            BackendToast.error('<?= __('响应数据为空') ?>');
+            BackendToast.error(<?= json_encode(__('响应数据为空'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
             return;
         }
         
@@ -5104,7 +5036,7 @@ window.generateTemplateConfig = function() {
         
         if (!data.data || (typeof data.data === 'object' && Object.keys(data.data).length === 0)) {
             console.warn('[AI生成配置] 没有生成任何配置项');
-            BackendToast.warning('<?= __('AI没有生成任何配置项') ?>');
+            BackendToast.warning(<?= json_encode(__('AI没有生成任何配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
             return;
         }
         
@@ -5275,14 +5207,14 @@ window.generateTemplateConfig = function() {
                                 item.input.style.borderStyle = 'solid';
                             }
                         });
-                        BackendToast.success('<?= __('已生成并填充') ?> ' + configItems.length + ' <?= __('个配置项') ?>');
+                        BackendToast.success((<?= json_encode(__('已生成并填充'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + ' ' + configItems.length + (<?= json_encode(__('个配置项'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>));
                     }
                 } else {
                     console.log('[AI生成配置] 用户取消');
                 }
             });
         } else {
-            BackendToast.warning('<?= __('共') ?> ' + allConfigItems.length + ' <?= __('个配置项生成，但未找到对应的输入框') ?>');
+            BackendToast.warning((<?= json_encode(__('共'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + ' ' + allConfigItems.length + (<?= json_encode(__('个配置项生成，但未找到对应的输入框'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>));
         }
     })
     .catch(error => {
@@ -5296,7 +5228,7 @@ window.generateTemplateConfig = function() {
         btn.innerHTML = originalHtml;
         
         console.error('AI生成配置错误:', error);
-        BackendToast.error('<?= __('生成请求失败，请稍后重试') ?>');
+        BackendToast.error(<?= json_encode(__('生成请求失败，请稍后重试'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
     });
 }
 
@@ -5438,7 +5370,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('<?= __("复制失败") ?>:', err);
             // 最后降级方案：提示用户手动复制
-            prompt('<?= __("请手动复制以下内容") ?>:', text);
+            prompt(<?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, text);
         } finally {
             document.body.removeChild(textArea);
         }
@@ -5513,376 +5445,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // showToast 函数现在是全局函数，可以在任何地方调用
 });
 
-// ==================== AI生成内容功能（全局函数，可在onclick中调用） ====================
-/**
- * 打开AI生成内容模态框
- */
-window.openAiGenerateModal = function() {
-    const modal = document.getElementById('aiGenerateModal');
-    if (modal) {
-        // 确保按钮状态已重置（如果之前有生成过程）
-        const closeBtn = modal.querySelector('.btn-close');
-        const cancelBtn = modal.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
-        const submitBtn = document.getElementById('aiGenerateSubmitBtn');
-        const spinner = document.getElementById('aiGenerateSpinner');
-        
-        if (closeBtn) {
-            closeBtn.style.pointerEvents = '';
-            closeBtn.style.opacity = '';
-            closeBtn.removeAttribute('disabled');
-            closeBtn.removeAttribute('aria-disabled');
-        }
-        if (cancelBtn) {
-            cancelBtn.disabled = false;
-            cancelBtn.style.opacity = '';
-            cancelBtn.style.cursor = '';
-            cancelBtn.removeAttribute('aria-disabled');
-        }
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm d-none" id="aiGenerateSpinner" role="status"></span><i class="mdi mdi-robot"></i> <?= __('生成内容') ?>';
-        }
-        if (spinner) {
-            spinner.classList.add('d-none');
-        }
-        
-        const bootstrapModal = new bootstrap.Modal(modal);
-        bootstrapModal.show();
-        
-        // 如果是编辑模式，自动生成描述
-        <?php if ($isEdit && $page && $page->getId()): ?>
-        const descriptionTextarea = document.getElementById('aiDescription');
-        if (descriptionTextarea && !descriptionTextarea.value.trim()) {
-            // 基于当前页面信息生成描述
-            const pageTitle = document.getElementById('title')?.value || '';
-            const metaTitle = document.getElementById('meta_title')?.value || '';
-            const metaDescription = document.getElementById('meta_description')?.value || '';
-            const pageContent = document.getElementById('custom_content')?.value || '';
-            
-            let autoDescription = '';
-            if (pageTitle) {
-                autoDescription += `页面标题：${pageTitle}\n`;
-            }
-            if (metaTitle) {
-                autoDescription += `SEO标题：${metaTitle}\n`;
-            }
-            if (metaDescription) {
-                autoDescription += `SEO描述：${metaDescription}\n`;
-            }
-            if (pageContent) {
-                const contentText = pageContent.replace(/<[^>]*>/g, '').trim();
-                if (contentText) {
-                    const contentSummary = contentText.length > 200 ? contentText.substring(0, 200) + '...' : contentText;
-                    autoDescription += `当前页面内容摘要：${contentSummary}\n`;
-                }
-            }
-            
-            if (autoDescription) {
-                autoDescription += '\n请基于以上信息优化和完善页面内容。';
-                descriptionTextarea.value = autoDescription;
-            }
-        }
-        <?php endif; ?>
-    }
-};
-
-/**
- * 生成页面内容
- */
-window.generatePageContent = function() {
-    const descriptionTextarea = document.getElementById('aiDescription');
-    let description = descriptionTextarea?.value.trim() || '';
-    
-    // 如果是编辑模式且描述为空，自动从页面信息生成描述
-    <?php if ($isEdit && $page && $page->getId()): ?>
-    if (!description) {
-        // 从表单字段获取当前页面信息
-        const pageTitle = document.getElementById('title')?.value || '';
-        const metaTitle = document.getElementById('meta_title')?.value || '';
-        const metaDescription = document.getElementById('meta_description')?.value || '';
-        const pageContent = document.getElementById('custom_content')?.value || '';
-        
-        // 构建自动描述
-        let autoDescription = '';
-        if (pageTitle) {
-            autoDescription += `页面标题：${pageTitle}\n`;
-        }
-        if (metaTitle) {
-            autoDescription += `SEO标题：${metaTitle}\n`;
-        }
-        if (metaDescription) {
-            autoDescription += `SEO描述：${metaDescription}\n`;
-        }
-        if (pageContent) {
-            const contentText = pageContent.replace(/<[^>]*>/g, '').trim();
-            if (contentText) {
-                const contentSummary = contentText.length > 200 ? contentText.substring(0, 200) + '...' : contentText;
-                autoDescription += `当前页面内容摘要：${contentSummary}\n`;
-            }
-        }
-        
-        if (autoDescription) {
-            autoDescription += '\n请基于以上信息优化和完善页面内容。';
-            description = autoDescription;
-            // 同时更新文本框显示
-            if (descriptionTextarea) {
-                descriptionTextarea.value = description;
-            }
-        }
-    }
-    
-    if (!description) {
-        BackendToast.warning('<?= __('请输入页面描述，或确保页面有标题、SEO信息或内容') ?>');
-        return;
-    }
-    <?php else: ?>
-    if (!description) {
-        BackendToast.warning('<?= __('请输入页面描述') ?>');
-        return;
-    }
-    <?php endif; ?>
-
-    const submitBtn = document.getElementById('aiGenerateSubmitBtn');
-    const spinner = document.getElementById('aiGenerateSpinner');
-    if (!submitBtn) return;
-    
-    const originalHtml = submitBtn.innerHTML;
-
-    // 获取模态框元素
-    const modalElement = document.getElementById('aiGenerateModal');
-    const modal = bootstrap.Modal.getInstance(modalElement);
-    const closeBtn = modalElement?.querySelector('.btn-close');
-    const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
-    
-    // 标记正在生成中
-    let isGenerating = true;
-    
-    // 禁用关闭操作：防止生成过程中关闭弹窗
-    if (modal) {
-        // 保存原始配置
-        const originalBackdrop = modal._config.backdrop;
-        const originalKeyboard = modal._config.keyboard;
-        
-        // 设置不允许关闭
-        modal._config.backdrop = 'static';
-        modal._config.keyboard = false;
-        
-        // 更新模态框元素的属性
-        modalElement.setAttribute('data-bs-backdrop', 'static');
-        modalElement.setAttribute('data-bs-keyboard', 'false');
-        
-        // 监听 hide 事件，在生成过程中阻止关闭
-        const preventHideHandler = function(e) {
-            if (isGenerating) {
-                e.preventDefault();
-                e.stopPropagation();
-                e.stopImmediatePropagation();
-                return false;
-            }
-        };
-        modalElement.addEventListener('hide.bs.modal', preventHideHandler, { capture: true });
-        
-        // 保存恢复函数到模态框实例
-        modal._restoreClose = function() {
-            isGenerating = false;
-            modal._config.backdrop = originalBackdrop;
-            modal._config.keyboard = originalKeyboard;
-            modalElement.removeAttribute('data-bs-backdrop');
-            modalElement.removeAttribute('data-bs-keyboard');
-            modalElement.removeEventListener('hide.bs.modal', preventHideHandler, { capture: true });
-        };
-    }
-    
-    // 禁用关闭按钮和取消按钮
-    if (closeBtn) {
-        closeBtn.style.pointerEvents = 'none';
-        closeBtn.style.opacity = '0.5';
-        closeBtn.setAttribute('disabled', 'disabled');
-        closeBtn.setAttribute('aria-disabled', 'true');
-    }
-    if (cancelBtn) {
-        cancelBtn.disabled = true;
-        cancelBtn.style.opacity = '0.5';
-        cancelBtn.style.cursor = 'not-allowed';
-        cancelBtn.setAttribute('aria-disabled', 'true');
-    }
-
-    // 显示加载状态
-    submitBtn.disabled = true;
-    if (spinner) spinner.classList.remove('d-none');
-    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> <?= __('生成中...') ?>';
-
-    // 收集页面信息
-    const pageType = document.getElementById('page_type')?.value || 'page';
-    const title = document.getElementById('title')?.value || '';
-    const metaTitle = document.getElementById('meta_title')?.value || '';
-    const metaDescription = document.getElementById('meta_description')?.value || '';
-    const metaKeywords = document.getElementById('meta_keywords')?.value || '';
-    const handle = document.getElementById('handle')?.value || '';
-    const styleCode = document.getElementById('style')?.value || '';
-    const defaultLocale = document.getElementById('default_locale')?.value || '';
-
-    // 准备请求数据
-    const formData = new FormData();
-    formData.append('description', description);
-    formData.append('page_type', pageType);
-    <?php if ($isEdit && $page && $page->getId()): ?>
-    formData.append('page_id', <?= $page->getId() ?>);
-    <?php endif; ?>
-    if (title) formData.append('title', title);
-    if (metaTitle) formData.append('meta_title', metaTitle);
-    if (metaDescription) formData.append('meta_description', metaDescription);
-    if (metaKeywords) formData.append('meta_keywords', metaKeywords);
-    if (handle) formData.append('handle', handle);
-    if (styleCode) formData.append('style_code', styleCode);
-    if (defaultLocale) formData.append('default_locale', defaultLocale);
-
-    var url = '<?= $this->getBackendUrl("*/backend/ai-generate/page-content-stream") ?>';
-    var progressEl = document.getElementById('aiGenerateProgressMessage');
-
-    function restoreModalAndButton() {
-        const modalElement = document.getElementById('aiGenerateModal');
-        const modal = bootstrap.Modal.getInstance(modalElement);
-        const closeBtn = modalElement?.querySelector('.btn-close');
-        const cancelBtn = modalElement?.querySelector('.btn-secondary[data-bs-dismiss="modal"]');
-        if (modal && modal._restoreClose) modal._restoreClose();
-        if (closeBtn) {
-            closeBtn.style.pointerEvents = '';
-            closeBtn.style.opacity = '';
-            closeBtn.removeAttribute('disabled');
-            closeBtn.removeAttribute('aria-disabled');
-        }
-        if (cancelBtn) {
-            cancelBtn.disabled = false;
-            cancelBtn.style.opacity = '';
-            cancelBtn.style.cursor = '';
-            cancelBtn.removeAttribute('aria-disabled');
-        }
-        submitBtn.disabled = false;
-        if (spinner) spinner.classList.add('d-none');
-        submitBtn.innerHTML = originalHtml;
-        if (progressEl) { progressEl.style.display = 'none'; progressEl.textContent = ''; }
-    }
-
-    function applyGeneratedData(data) {
-        if (data.title && document.getElementById('title')) {
-            const titleInput = document.getElementById('title');
-            titleInput.value = data.title;
-            titleInput.classList.add('ai-filled');
-        }
-        if (data.meta_title && document.getElementById('meta_title')) {
-            document.getElementById('meta_title').value = data.meta_title;
-            document.getElementById('meta_title').classList.add('ai-filled');
-        }
-        if (data.meta_description && document.getElementById('meta_description')) {
-            document.getElementById('meta_description').value = data.meta_description;
-            document.getElementById('meta_description').classList.add('ai-filled');
-        }
-        if (data.meta_keywords && document.getElementById('meta_keywords')) {
-            document.getElementById('meta_keywords').value = data.meta_keywords;
-            document.getElementById('meta_keywords').classList.add('ai-filled');
-        }
-        if (data.content && document.getElementById('custom_content')) {
-            const contentEditor = window.pageEditors && window.pageEditors['custom_content'];
-            if (contentEditor) {
-                contentEditor.setData(data.content);
-                setTimeout(function() {
-                    try {
-                        if (contentEditor.editing && contentEditor.editing.view) {
-                            var domRoot = contentEditor.editing.view.domRoots.get(contentEditor.editing.view.document);
-                            if (domRoot) domRoot.classList.add('ai-filled');
-                        }
-                    } catch (e) {}
-                    var editableElement = document.querySelector('#custom_content + .ck-editor .ck-editor__editable');
-                    if (editableElement) editableElement.classList.add('ai-filled');
-                }, 100);
-            } else {
-                document.getElementById('custom_content').value = data.content;
-                document.getElementById('custom_content').classList.add('ai-filled');
-            }
-        }
-    }
-
-    if (progressEl) { progressEl.style.display = 'block'; progressEl.textContent = '<?= __('连接中...') ?>'; }
-
-    fetch(url, { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(function(res) {
-        if (!res.ok) throw new Error(res.statusText || '<?= __('请求失败') ?>');
-        if (!res.body) throw new Error('<?= __('不支持流式响应') ?>');
-        var reader = res.body.getReader();
-        var decoder = new TextDecoder();
-        var buffer = '';
-        var currentEvent = '';
-        var currentData = '';
-
-        function parseLine(line) {
-            if (line.indexOf('event:') === 0) {
-                currentEvent = line.replace(/^event:\s*/, '').trim();
-            } else if (line.indexOf('data:') === 0) {
-                currentData = line.replace(/^data:\s*/, '');
-            }
-        }
-
-        function finishEvent() {
-            if (currentEvent === 'start' || currentEvent === 'progress') {
-                try {
-                    var payload = currentData ? JSON.parse(currentData) : {};
-                    if (progressEl && payload.message) progressEl.textContent = payload.message;
-                } catch (e) {}
-            } else if (currentEvent === 'done') {
-                try {
-                    var payload = currentData ? JSON.parse(currentData) : {};
-                    var data = payload.data || payload;
-                    restoreModalAndButton();
-                    applyGeneratedData(data);
-                    var modal = bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal'));
-                    if (modal) modal.hide();
-                    BackendToast.success('<?= __('AI已成功生成页面内容，请检查并调整') ?>');
-                } catch (e) {
-                    restoreModalAndButton();
-                    BackendToast.error('<?= __('解析结果失败') ?>');
-                }
-            } else if (currentEvent === 'error') {
-                try {
-                    var payload = currentData ? JSON.parse(currentData) : {};
-                    var msg = payload.message || '<?= __('生成失败') ?>';
-                    restoreModalAndButton();
-                    BackendToast.error(msg);
-                } catch (e) {
-                    restoreModalAndButton();
-                    BackendToast.error(currentData || '<?= __('生成失败') ?>');
-                }
-            }
-            currentEvent = '';
-            currentData = '';
-        }
-
-        function processChunk() {
-            buffer += decoder.decode(arguments.length ? arguments[0] : null, { stream: true });
-            var parts = buffer.split('\n\n');
-            buffer = parts.pop() || '';
-            for (var i = 0; i < parts.length; i++) {
-                var lines = parts[i].split('\n');
-                currentEvent = '';
-                currentData = '';
-                for (var j = 0; j < lines.length; j++) {
-                    parseLine(lines[j]);
-                }
-                finishEvent();
-            }
-        }
-
-        return reader.read().then(function next(value) {
-            processChunk(value && value.value);
-            if (value && !value.done) return reader.read().then(next);
-        });
-    })
-    .catch(function(error) {
-        restoreModalAndButton();
-        console.error('AI生成错误:', error);
-        BackendToast.error(error && error.message ? error.message : '<?= __('生成请求失败，请稍后重试') ?>');
-    });
-};
+// AI生成内容功能已移至 form_component/ai_generate.phtml（通过 w:template 引入）
 
 /**
  * ========================================
@@ -5919,7 +5482,7 @@ window.openFrontendPreview = function() {
         }
     }
     ?>
-    const websiteUrlsPreview = <?= json_encode($websiteUrls) ?>;
+    const websiteUrlsPreview = <?= json_encode($websiteUrls, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     
     // 获取当前选中的网站ID
     const websiteSelect = document.getElementById('website_id');

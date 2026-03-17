@@ -26,15 +26,18 @@ class MessageManager
         'system-message',
     ];
 
-    private Session $session;
-    public function __construct()
-    {
-        $this->session = SessionFactory::getInstance()->createSession();
-    }
-
+    /**
+     * 每次从 SessionFactory 获取当前请求的 Session。
+     * WLS 下 MessageManager 为常驻单例，构造函数只执行一次，若在构造内 cache Session 会持首请求的实例，
+     * 与 SessionFactory::resetRequestInstances 后新请求创建的 Session 不一致，导致清理/落盘失效。
+     */
     public function getSession(): Session
     {
-        return $this->session;
+        $session = SessionFactory::getInstance()->createSession();
+        if (!$session instanceof Session) {
+            throw new \RuntimeException('MessageManager requires Weline\Framework\Session\Session');
+        }
+        return $session;
     }
 
     public static function session(): Session
@@ -237,16 +240,30 @@ class MessageManager
         return (bool)self::session()->get('has-notes');
     }
 
+    /** 本请求是否已 render（用于 flushRequestSessions 前决定是否清除所有 Session 的消息键） */
+    private static bool $messagesRenderedThisRequest = false;
+
+    /** 供 Session::flushRequestSessions 调用，避免耦合 */
+    public static function shouldClearMessagesBeforeFlush(): bool
+    {
+        return self::$messagesRenderedThisRequest;
+    }
+
+    /** WLS 下每请求重置 */
+    public static function resetRequestState(): void
+    {
+        self::$messagesRenderedThisRequest = false;
+    }
+
     /**
      * 输出并消费消息：读取后立即删除并持久化。
-     *
-     * WLS 下必须「读后即删 + 立即落盘」，否则消息会跨请求残留、在所有界面重复显示。
-     * 删除后显式 flush 确保响应发送前 Session 已落盘。
+     * flushRequestSessions 执行前会清除所有 Session 实例的消息键，解决多 Session 导致 message 残留。
      */
     public function render(): string
     {
-        $session = self::session();
+        $session = $this->getSession();
         $content = $session->get('system-message') ?? '';
+        self::$messagesRenderedThisRequest = true;
         $this->clear();
         return "<div class='system message'>{$content}</div>";
     }
@@ -276,14 +293,13 @@ class MessageManager
 
     /**
      * 清空系统消息，并立即落盘。
-     * WLS 下必须显式 save，否则清空只作用于内存，下次请求仍会看到残留消息。
+     * 清除当前 Session 及 instancesForShutdown 内所有实例的消息键，解决多实例导致消息残留。
+     * flushRequestSessions 前会再次兜底清除。
      */
     public function clear(): void
     {
-        $session = self::session();
-        foreach (self::keys as $key) {
-            $session->delete($key);
-        }
+        Session::clearKeysFromInstances(self::keys);
+        $session = $this->getSession();
         $session->save();
     }
 
