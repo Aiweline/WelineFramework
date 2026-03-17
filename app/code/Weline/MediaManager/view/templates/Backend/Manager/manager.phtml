@@ -1,3 +1,7 @@
+<notempty name="is_iframe">
+<css>Weline_MediaManager::css/backend-theme-vars.css</css>
+<script>(function(){var d=document.documentElement;d.setAttribute('data-theme','backend');d.setAttribute('data-theme-mode','{{$theme_mode|default:"light"}}');})();</script>
+</notempty>
 <css>Weline_MediaManager::css/manager.css</css>
 <js>Weline_MediaManager::js/manager.js</js>
 
@@ -155,7 +159,7 @@
 <input type="file" id="mmf-file-input" multiple style="display:none">
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
+        document.addEventListener('DOMContentLoaded', function () {
         WelineMediaManager.init('{{$connector_url}}', '{{$start_path|default:""}}', {
             isIframe: '{{$is_iframe|default:"0"}}' === '1' || '{{$is_iframe|default:"0"}}' === 'true',
             target: '{{$target|default:""}}',
@@ -163,6 +167,8 @@
             ext: '{{$ext|default:"*"}}',
             size: parseInt('{{$size|default:"102400"}}') || 102400,
             lockPath: '{{$lock_path|default:"0"}}' === '1' || '{{$lock_path|default:"0"}}' === 'true',
+            initialValue: '{{$initial_value|default:""}}',
+            themeMode: '{{$theme_mode|default:"light"}}',
             i18n: {
                 connectorNotConfigured: '@lang{连接器URL未配置，请刷新页面}',
                 requestTimeout: '@lang{请求超时，服务器可能繁忙}',
