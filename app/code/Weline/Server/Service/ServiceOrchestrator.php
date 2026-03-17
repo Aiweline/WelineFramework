@@ -1223,9 +1223,27 @@ class ServiceOrchestrator
             $reloadRoles = ['worker'];
         }
         WlsLogger::info_("[Orchestrator] 收到重载请求 (type={$type})，目标角色: " . \implode(',', $reloadRoles));
+
+        // Worker 重载：先启用维护 Worker 接管流量，Master 保持运行；全部重启完成后再关闭维护 Worker
+        $reloadsWorker = \in_array('worker', $reloadRoles, true);
+        $maintenanceEnabledForReload = false;
+        if ($reloadsWorker && !$this->maintenanceMode) {
+            $enableResult = $this->enableMaintenanceMode();
+            if ($enableResult['success']) {
+                $maintenanceEnabledForReload = true;
+                SchedulerSystem::usleep(500000);
+                $this->controlServer?->poll(0, 100000);
+            }
+        }
+
         foreach ($reloadRoles as $role) {
             $this->reloadService((string)$role, $type);
         }
+
+        if ($maintenanceEnabledForReload) {
+            $this->disableMaintenanceMode();
+        }
+
         $this->broadcastRoutingPolicyToWorkers();
     }
 
