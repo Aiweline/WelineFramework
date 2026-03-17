@@ -61,7 +61,7 @@ class SseTerminal implements TaglibInterface
             $eventsAttr = \trim((string) ($attributes['events'] ?? ''));
             $eventsList = $eventsAttr !== ''
                 ? \array_map('trim', \array_filter(\explode(',', $eventsAttr)))
-                : ['start', 'progress', 'done', 'error', 'info', 'warning', 'success', 'debug'];
+                : ['start', 'progress', 'chunk', 'done', 'error', 'info', 'warning', 'success', 'debug'];
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
@@ -157,6 +157,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-line.debug { color: var(--backend-color-text-muted, #6c7086); font-style: italic; }';
             $html[] = '.weline-sse-terminal-line.start { color: var(--backend-color-primary, #89b4fa); font-weight: 500; }';
             $html[] = '.weline-sse-terminal-line.done { color: var(--backend-color-success, #a6e3a1); font-weight: 500; }';
+            $html[] = '.weline-sse-terminal-line.weline-sse-terminal-streaming .weline-sse-terminal-text { white-space: pre-wrap; word-break: break-word; }';
             $html[] = '.weline-sse-terminal-progress { height: 3px; background: var(--backend-color-border-default, #313244); }';
             $html[] = '.weline-sse-terminal-progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--backend-color-primary, #89b4fa), var(--backend-color-info, #89dceb)); transition: width 0.3s; }';
             $html[] = '.weline-sse-terminal::-webkit-scrollbar { width: 6px; }';
@@ -190,6 +191,7 @@ var btnCopy = document.getElementById(id + '_btn_copy');
 var btnClear = document.getElementById(id + '_btn_clear');
 
 var eventSource = null;
+var postAbortController = null;
 var isRunning = false;
 var currentUrl = initialUrl;
 
@@ -214,8 +216,11 @@ function formatTime() {
     return now.toLocaleTimeString('zh-CN', { hour12: false });
 }
 
+var streamingLine = null;
+
 function log(text, type) {
     type = type || 'info';
+    streamingLine = null;
     var line = document.createElement('div');
     line.className = 'weline-sse-terminal-line ' + type;
     
@@ -242,6 +247,28 @@ function log(text, type) {
     }
 }
 
+function appendChunk(text) {
+    var s = typeof text === 'string' ? text : '';
+    if (!s) return;
+    if (!streamingLine) {
+        streamingLine = document.createElement('div');
+        streamingLine.className = 'weline-sse-terminal-line weline-sse-terminal-streaming chunk';
+        if (showTimestamp) {
+            var time = document.createElement('span');
+            time.className = 'weline-sse-terminal-time';
+            time.textContent = '[' + formatTime() + ']';
+            streamingLine.appendChild(time);
+        }
+        var textEl = document.createElement('span');
+        textEl.className = 'weline-sse-terminal-text';
+        streamingLine.appendChild(textEl);
+        content.appendChild(streamingLine);
+    }
+    var textEl = streamingLine.querySelector('.weline-sse-terminal-text') || streamingLine.lastChild;
+    if (textEl) textEl.textContent += s;
+    if (autoScroll) body.scrollTop = body.scrollHeight;
+}
+
 function setProgress(percent) {
     if (percent >= 0 && percent <= 100) {
         progressContainer.style.display = 'block';
@@ -265,7 +292,44 @@ function setStatus(status, text) {
     if (statusText) statusText.textContent = text;
 }
 
-function start(url) {
+function dispatchSseEvent(eventName, data) {
+    try {
+        if (eventName === 'chunk' && data.content !== undefined) {
+            var chunkContent = typeof data.content === 'string' ? data.content : '';
+            if (eventCallbacks.chunk) {
+                eventCallbacks.chunk({ data: JSON.stringify(data) });
+            } else {
+                appendChunk(chunkContent);
+            }
+            if (data.progress !== undefined) setProgress(data.progress);
+            return;
+        }
+        var msg = data.message || data.result || data.keyword || data.msg;
+        if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
+        var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
+        if (eventCallbacks[eventName]) {
+            eventCallbacks[eventName]({ data: JSON.stringify(data) });
+        } else {
+            log(msg, type);
+        }
+        if (data.dns_response) {
+            var dr = data.dns_response;
+            var drStr = typeof dr === 'string' ? dr : JSON.stringify(dr, null, 2);
+            log('$t_dns_response ' + drStr, 'debug');
+        }
+        if (data.progress !== undefined) {
+            setProgress(data.progress);
+        }
+        if (eventName === 'done' || eventName === 'failed' || eventName === 'error') {
+            stop();
+        }
+    } catch (err) {
+        log(typeof data === 'string' ? data : eventName, eventName);
+        if (eventCallbacks[eventName]) eventCallbacks[eventName]({ data: typeof data === 'string' ? data : JSON.stringify(data) });
+    }
+}
+
+function start(url, options) {
     if (isRunning) return;
     
     url = url || currentUrl;
@@ -274,6 +338,7 @@ function start(url) {
         return;
     }
     
+    options = options || {};
     currentUrl = url;
     isRunning = true;
     
@@ -285,6 +350,69 @@ function start(url) {
     
     log('$t_connecting', 'info');
     setStatus('connecting', '$t_connecting');
+    
+    if (options.method === 'POST' && options.body) {
+        postAbortController = new AbortController();
+        fetch(url, {
+            method: 'POST',
+            body: options.body,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            signal: postAbortController.signal
+        }).then(function(res) {
+            if (!res.ok) throw new Error(res.statusText || 'Request failed');
+            if (!res.body) throw new Error('Stream not supported');
+            setStatus('connected', '$t_connected');
+            log('$t_connected', 'success');
+            if (eventCallbacks.open) eventCallbacks.open();
+            var reader = res.body.getReader();
+            var decoder = new TextDecoder();
+            var buffer = '', currentEvent = '', currentData = '';
+            function finishEvent(evName) {
+                try {
+                    var payload = currentData ? JSON.parse(currentData) : {};
+                    if (evName === 'start' && eventCallbacks.start) eventCallbacks.start({ data: currentData });
+                    else if (evName === 'message' && eventCallbacks.message) eventCallbacks.message({ data: currentData });
+                    dispatchSseEvent(evName, payload);
+                } catch (e) {
+                    if (evName === 'error') dispatchSseEvent('error', { message: currentData });
+                }
+            }
+            function readNext() {
+                return reader.read().then(function(value) {
+                    if (value && value.value) {
+                        buffer += decoder.decode(value.value, { stream: true });
+                        var parts = buffer.split('\\n\\n');
+                        buffer = parts.pop() || '';
+                        for (var i = 0; i < parts.length; i++) {
+                            var lines = parts[i].split('\\n');
+                            currentEvent = '';
+                            currentData = '';
+                            for (var j = 0; j < lines.length; j++) {
+                                var line = lines[j];
+                                if (line.indexOf('event:') === 0) currentEvent = line.replace(/^event:\s*/, '').trim();
+                                else if (line.indexOf('data:') === 0) currentData = line.replace(/^data:\s*/, '');
+                            }
+                            if (currentEvent || currentData) finishEvent(currentEvent || 'message');
+                        }
+                    }
+                    if (value && !value.done) return readNext();
+                });
+            }
+            return readNext();
+        }).then(function() {
+            if (postAbortController) {
+                postAbortController = null;
+            }
+        }).catch(function(err) {
+            if (err.name === 'AbortError') return;
+            setStatus('error', '$t_error');
+            log('$t_error', 'error');
+            log('$t_connection_failed', 'error');
+            if (eventCallbacks.error) eventCallbacks.error(err);
+            stop();
+        });
+        return;
+    }
     
     eventSource = new EventSource(url);
     
@@ -306,7 +434,6 @@ function start(url) {
         if (eventCallbacks.error) eventCallbacks.error(e);
     };
     
-    // 默认消息处理
     eventSource.onmessage = function(e) {
         try {
             var data = JSON.parse(e.data);
@@ -326,28 +453,10 @@ function start(url) {
         eventSource.addEventListener(eventName, function(e) {
             try {
                 var data = JSON.parse(e.data || '{}');
-                var msg = data.message || data.result || data.keyword || data.msg;
-                if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
-                var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
-                
                 if (eventCallbacks[eventName]) {
                     eventCallbacks[eventName](e);
-                } else {
-                    log(msg, type);
                 }
-                if (data.dns_response) {
-                    var dr = data.dns_response;
-                    var drStr = typeof dr === 'string' ? dr : JSON.stringify(dr, null, 2);
-                    log('$t_dns_response ' + drStr, 'debug');
-                }
-                
-                if (data.progress !== undefined) {
-                    setProgress(data.progress);
-                }
-                
-                if (eventName === 'done' || eventName === 'failed') {
-                    stop();
-                }
+                dispatchSseEvent(eventName, data);
             } catch (err) {
                 log(e.data || eventName, eventName);
                 if (eventCallbacks[eventName]) eventCallbacks[eventName](e);
@@ -357,6 +466,10 @@ function start(url) {
 }
 
 function stop() {
+    if (postAbortController) {
+        postAbortController.abort();
+        postAbortController = null;
+    }
     if (eventSource) {
         eventSource.close();
         eventSource = null;

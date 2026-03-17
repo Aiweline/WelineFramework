@@ -1,0 +1,11 @@
+---
+description: view/tpl 下 com_* 为编译产物，可读不可改。修改源模板在 view/templates/。
+alwaysApply: true
+---
+
+# view/tpl 编译文件规范（硬性）
+
+- `view/tpl/{locale}/` 下以 `com_` 开头的文件（如 `com_form.phtml`、`com_index.phtml`）为**编译产物**
+- 由框架在开发模式下根据源模板自动合并/生成
+- **可读取**用于排查问题，**禁止手动修改**，修改会在下次生成时被覆盖
+- 源模板在 `view/templates/`，修改源模板后框架会重新生成 com_* 文件
