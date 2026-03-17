@@ -27,9 +27,9 @@ $available_widgets = $this->getData('available_widgets') ?: [];
 // 根据后台配置获取文件管理器连接器 URL
 $fileManagerCode = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Model\BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
 $fileManagerConnectorUrl = match ($fileManagerCode) {
-    'weline_media' => $this->getBackendUrl('media/backend/manager/iframe'),
+    'weline_media' => $this->getBackendUrl('media/backend/manager', ['iframe' => '1'], true),
     'elfinder' => $this->getBackendUrl('elfinder/backend/connector/manager'),
-    default => $this->getBackendUrl('media/backend/manager/iframe'),
+    default => $this->getBackendUrl('media/backend/manager', ['iframe' => '1'], true),
 };
 
 // 辅助：获取部件图标（闭包，避免模板多次包含时重复声明）
