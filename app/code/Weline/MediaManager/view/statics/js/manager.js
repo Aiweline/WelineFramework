@@ -165,6 +165,13 @@
         options = options || {};
         CONFIG = options;
         I18N = options.i18n || {};
+        if (typeof window !== 'undefined' && window.location && window.location.search) {
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                var fromUrl = urlParams.get('initialValue');
+                if (fromUrl !== null && fromUrl !== '') CONFIG.initialValue = fromUrl;
+            } catch (e) {}
+        }
         
         CONNECTOR = (typeof connectorUrl === 'string' ? connectorUrl : '').trim();
         if (!CONNECTOR) {
@@ -330,6 +337,10 @@
                 renderPath();
                 updateStatus();
                 updatePreviewPanel();
+                if (IFRAME_MODE && CONFIG.initialValue && !CONFIG._initialSelectionApplied) {
+                    CONFIG._initialSelectionApplied = true;
+                    applyInitialSelection();
+                }
                 saveLastPath();
             } catch (e) {
                 setLoading(false);
@@ -1103,6 +1114,47 @@
         }
     }
 
+    function invertSelection() {
+        var items = [];
+        for (var h in FILES) {
+            var f = FILES[h];
+            if ((f.phash === CWD_HASH || f.hash === CWD_HASH) && f.hash !== CWD_HASH && f.mime !== 'directory') {
+                items.push(f.hash);
+            }
+        }
+        var newSelected = [];
+        items.forEach(function (hash) {
+            if (SELECTED.indexOf(hash) < 0) newSelected.push(hash);
+        });
+        SELECTED = newSelected;
+        highlightSelected();
+        updateStatus();
+        if (IFRAME_MODE) {
+            updateSelectBar();
+        }
+    }
+
+    function applyInitialSelection() {
+        var raw = (CONFIG.initialValue || '').trim();
+        if (!raw) return;
+        var paths = raw.split(',').map(function (p) {
+            p = p.trim().replace(/^\/pub\/media\//, '').replace(/^pub\/media\//, '');
+            return p.replace(/\\/g, '/');
+        });
+        var pathSet = {};
+        paths.forEach(function (p) { if (p) pathSet[p] = true; });
+        SELECTED = [];
+        for (var h in FILES) {
+            var f = FILES[h];
+            if (f.mime === 'directory') continue;
+            var fp = (f.path || '').replace(/\\/g, '/');
+            if (pathSet[fp]) SELECTED.push(h);
+        }
+        highlightSelected();
+        updateStatus();
+        if (IFRAME_MODE) updateSelectBar();
+    }
+
     function confirmSelection() {
         if (!SELECTED.length) {
             showError(t('pleaseSelectFile'));
@@ -1177,6 +1229,10 @@
                 updateSelectBar();
                 updateStatus();
             });
+        }
+        var btnInvertSelect = qs('#mmf-btn-invert-select');
+        if (btnInvertSelect) {
+            btnInvertSelect.addEventListener('click', function () { invertSelection(); });
         }
         if (btnCancel) {
             btnCancel.addEventListener('click', function () {
