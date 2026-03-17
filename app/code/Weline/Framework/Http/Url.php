@@ -716,10 +716,12 @@ class Url implements UrlInterface
             return $parse_url ?: $_SERVER['REQUEST_URI'] ?? '/';
         }
         
-        # 静态文件不用再分析店铺
-        if ($parse_url and str_contains($parse_url, '.')
-            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $parse_url)) {
+        # 静态文件不用再分析店铺（只读 WELINE_IS_STATIC_FILE 或对给定 URL 用统一判断）
+        if ($parse_url && weline_is_static_file_path($parse_url)) {
             return $parse_url;
+        }
+        if (!$parse_url && !empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+            return $_SERVER['REQUEST_URI'] ?? '/';
         }
 
         $url = $parse_url;
@@ -771,9 +773,8 @@ class Url implements UrlInterface
             // 3) 重写路由解码（decode_url → seo_decode 事件，查找 UrlRewrite 并改写为真实 path）
             // 缺一会导致路由或网站上下文错误
         }
-        # 静态文件不用再分析店铺
-        if ($uri and str_contains($uri, '.')
-            and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $_SERVER['REQUEST_URI'])) {
+        # 静态文件不用再分析店铺（只读请求入口写入的 WELINE_IS_STATIC_FILE）
+        if (!empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
             return $url;
         }
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
