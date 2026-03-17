@@ -43,10 +43,24 @@ class ConnectorService
         $src = $this->parseSource($request);
         $cmd = $src['cmd'] ?? 'open';
 
-        // Linux 等环境下 multipart 有时未解析出 target，导致上传到根目录；优先用 URL 上的 target 兜底
+        // multipart 上传时部分环境（WLS/反向代理/PHP 解析差异）下 $_GET/$_POST 可能无 target，导致上传到根目录；多源兜底
         if (\strtoupper($request->getMethod()) === 'POST' && !empty($_FILES['upload'])) {
             $cmd = 'upload';
-            $target = \trim((string) ($src['target'] ?? $_GET['target'] ?? $_POST['target'] ?? ''));
+            $target = \trim((string) (
+                $src['target']
+                ?? $_GET['target']
+                ?? $_POST['target']
+                ?? $request->getParam('target')
+                ?? $request->getQuery('target')
+                ?? ''
+            ));
+            if ($target === '') {
+                $qs = $request->getServer('QUERY_STRING');
+                if (\is_string($qs) && $qs !== '') {
+                    \parse_str($qs, $parsed);
+                    $target = \trim((string) ($parsed['target'] ?? ''));
+                }
+            }
             $src['target'] = $target;
         }
 

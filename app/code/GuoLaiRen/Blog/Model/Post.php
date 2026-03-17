@@ -71,6 +71,22 @@ class Post extends Model
     public const STATUS_PUBLISHED = 1;
 
     /**
+     * 写入时把 published_at 空字符串转为 null，避免 PostgreSQL timestamp 报错。
+     * 覆盖所有保存入口（表单、API/Query、批量 setData 等）。
+     */
+    public function setData($key, $value = null, bool $is_unique = false): static
+    {
+        if (is_array($key)) {
+            if (isset($key[self::schema_fields_PUBLISHED_AT]) && $key[self::schema_fields_PUBLISHED_AT] === '') {
+                $key[self::schema_fields_PUBLISHED_AT] = null;
+            }
+        } elseif ($key === self::schema_fields_PUBLISHED_AT && $value === '') {
+            $value = null;
+        }
+        return parent::setData($key, $value, $is_unique);
+    }
+
+    /**
      * 获取状态名称
      */
     public function getStatusName(): string

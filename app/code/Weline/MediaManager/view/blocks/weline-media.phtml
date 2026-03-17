@@ -139,10 +139,12 @@ function WelineMediaManager_{{target}}_open() {
     document.body.style.overflow = 'hidden';
     
     if (iframe) {
-        var currentSrc = iframe.getAttribute('src');
         var connectorUrl = iframe.getAttribute('data-connector');
-        if ((!currentSrc || currentSrc === '') && connectorUrl) {
-            iframe.src = connectorUrl;
+        if (connectorUrl) {
+            var targetEl = document.getElementById('{{target}}');
+            var currentValue = (targetEl && targetEl.value !== undefined) ? (targetEl.value || '') : '';
+            var sep = connectorUrl.indexOf('?') >= 0 ? '&' : '?';
+            iframe.src = connectorUrl + sep + 'initialValue=' + encodeURIComponent(currentValue);
         }
     }
 }
