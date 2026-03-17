@@ -68,6 +68,17 @@ class ExceptionHandler
      */
     public static function handle(\Throwable $e): void
     {
+        // 302 等响应终止异常为正常控制流，不按错误记录，仅转交或退出
+        if ($e instanceof \Weline\Framework\Http\ResponseTerminateException) {
+            if (self::$previousHandler !== null) {
+                \call_user_func(self::$previousHandler, $e);
+            }
+            if (self::$exitOnException) {
+                exit(255);
+            }
+            return;
+        }
+
         // 收集异常信息
         ErrorCollector::collect([
             'level' => LogLevel::ERROR,

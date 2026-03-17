@@ -44,6 +44,11 @@ class ExceptionHandler
      */
     public static function handle(\Throwable $exception): void
     {
+        // 302 等响应终止异常为正常控制流，不记录、不渲染
+        if ($exception instanceof \Weline\Framework\Http\ResponseTerminateException) {
+            return;
+        }
+
         // 记录日志
         self::logException($exception);
 
@@ -59,6 +64,11 @@ class ExceptionHandler
      */
     private static function logException(\Throwable $exception): void
     {
+        // 302 等响应终止异常为正常控制流，不记入异常日志
+        if ($exception instanceof \Weline\Framework\Http\ResponseTerminateException) {
+            return;
+        }
+
         if (!function_exists('w_log_exception')) {
             return;
         }
