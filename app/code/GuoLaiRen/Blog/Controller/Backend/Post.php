@@ -174,7 +174,7 @@ class Post extends BackendController
 
             MessageManager::success(__('博客文章已创建'));
 
-            $this->redirect('blog/backend/post/index');
+            $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());
             $this->redirect('blog/backend/post/create');
@@ -273,10 +273,10 @@ class Post extends BackendController
 
             MessageManager::success(__('博客文章已保存'));
 
-            $this->redirect('blog/backend/post/index');
+            $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());
-            $this->redirect('blog/backend/post/index');
+            $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
         }
     }
 
