@@ -227,26 +227,17 @@ class UrlProcessor
     }
     
     /**
-     * 检查 URL 是否为静态文件
-     * 
-     * @param string $url URL
+     * 检查是否为静态文件：当前请求只读 WELINE_IS_STATIC_FILE，给定 URL 用统一判断 weline_is_static_file_path()
+     *
+     * @param string $url 空则表示当前请求
      * @return bool
      */
     public function isStaticFile(string $url = ''): bool
     {
-        if (empty($url)) {
-            $url = $_SERVER['REQUEST_URI'] ?? '';
+        if ($url === '') {
+            return (bool)($_SERVER['WELINE_IS_STATIC_FILE'] ?? false);
         }
-        
-        // 去除查询参数
-        if (($pos = strpos($url, '?')) !== false) {
-            $url = substr($url, 0, $pos);
-        }
-        
-        // 获取扩展名
-        $ext = strtolower(pathinfo($url, PATHINFO_EXTENSION));
-        
-        return in_array($ext, self::STATIC_FILE_EXTENSIONS, true);
+        return weline_is_static_file_path($url);
     }
     
     /**
