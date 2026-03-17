@@ -702,5 +702,12 @@ class StateManager
                 \Weline\Widget\Taglib\Widget::resetRequestState();
             }
         });
+
+        // MessageManager 请求级状态
+        self::registerResetCallback('message_manager_request_state', function () {
+            if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)) {
+                \Weline\Framework\Manager\MessageManager::resetRequestState();
+            }
+        });
     }
 }
