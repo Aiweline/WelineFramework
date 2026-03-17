@@ -21,6 +21,7 @@ use Weline\Framework\Database\Model\ModelManager;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
+use Weline\Framework\Module\Helper\Data as ModuleHelperData;
 use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Register\Register;
@@ -168,7 +169,42 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->warning(__('清理异常卸载模块 ACL/菜单残留失败：%{1}', [$e->getMessage()]));
         }
     }
-    
+
+    /**
+     * 从 app/etc/modules.php 中移除异常卸载/搬迁的模块，避免下次升级仍报错。
+     * 解决「module:remove 提示成功但再次 setup:upgrade 仍提示未找到」的问题。
+     *
+     * @param string[] $moduleNames
+     */
+    private function removeMissingModulesFromModulesFile(array $moduleNames): void
+    {
+        $moduleNames = array_values(array_filter(array_unique($moduleNames)));
+        if (empty($moduleNames)) {
+            return;
+        }
+        if (!is_file(Env::path_MODULES_FILE)) {
+            return;
+        }
+        try {
+            $list = Env::getInstance()->getModuleList(true);
+            $changed = false;
+            foreach ($moduleNames as $name) {
+                if (isset($list[$name])) {
+                    unset($list[$name]);
+                    $changed = true;
+                }
+            }
+            if ($changed) {
+                /** @var ModuleHelperData $moduleData */
+                $moduleData = ObjectManager::getInstance(ModuleHelperData::class);
+                $moduleData->updateModules($list);
+                $this->printing->note(__('已从 modules.php 中移除以下异常卸载的模块：%{1}', [implode(', ', $moduleNames)]));
+            }
+        } catch (\Throwable $e) {
+            $this->printing->warning(__('从 modules.php 移除异常模块时失败：%{1}', [$e->getMessage()]));
+        }
+    }
+
     /**
      * 运行 composer dump-autoload 命令
      * 如果找不到 composer 命令则抛出异常
@@ -1468,19 +1504,21 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         // 只有真正找不到 register.php 文件的模块才抛出异常
         if ($no_modules) {
             $this->cleanupMissingModuleAclResidues($no_modules);
+            $this->removeMissingModulesFromModulesFile($no_modules);
             $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
-            $this->printing->setup(__('%{modules} 模块未找到(异常卸载)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $no_modules)]));
+            $this->printing->setup(__('%{modules} 模块未找到(异常卸载)，已从 modules.php 移除；请再次执行：php bin/w setup:upgrade', ['modules' => implode(' ', $no_modules)]));
             // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
-            throw new Exception(__('模块检查失败：%{modules} 模块未找到(异常卸载)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $no_modules)]));
+            throw new Exception(__('模块检查失败：%{modules} 模块未找到(异常卸载)，已自动从 modules.php 移除，请再次执行 php bin/w setup:upgrade 完成升级', ['modules' => implode(' ', $no_modules)]));
         }
         if ($diff_base_path_modules) {
             $this->cleanupMissingModuleAclResidues($diff_base_path_modules);
+            $this->removeMissingModulesFromModulesFile($diff_base_path_modules);
             $system->exec(PHP_BINARY . ' bin/w cache:clear -f');
             $this->printing->setup(__('发现网站正在进行搬迁，请再次运行php bin/w setup:upgrade命令！如果还有有问题请运行composer update后再次运行。'));
-            $this->printing->setup(__('%{modules} 模块路径不一致(异常搬迁)，如果模块确认需要卸载，请再次执行：php bin/w module:remove %{modules}', ['modules' => implode(' ', $diff_base_path_modules)]));
+            $this->printing->setup(__('%{modules} 模块路径不一致(异常搬迁)，已从 modules.php 移除；请再次执行：php bin/w setup:upgrade', ['modules' => implode(' ', $diff_base_path_modules)]));
             // 抛出异常而不是exit，让外层的try-catch-finally可以正确处理并释放锁
-            throw new Exception(__('模块检查失败：%{modules} 模块路径不一致(异常搬迁)，请先执行 php bin/w module:remove %{modules} 卸载这些模块', ['modules' => implode(' ', $diff_base_path_modules)]));
+            throw new Exception(__('模块检查失败：%{modules} 模块路径不一致(异常搬迁)，已自动从 modules.php 移除，请再次执行 php bin/w setup:upgrade 完成升级', ['modules' => implode(' ', $diff_base_path_modules)]));
         }
 
         $dependencyModuleNames = array_keys($dependencyModules);
