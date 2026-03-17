@@ -2410,16 +2410,34 @@ function handleRequest(
             $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
                 ?? $env['wls']['health_allow_remote'] ?? false);
         }
-        // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 则放行
+        // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 或同源请求则放行
         $healthAllowedByCookie = false;
+        $healthAllowedBySameOrigin = false;
         if (!$isLocal && !$healthAllowRemote) {
             $cookieHeader = getHeaderValue($rawRequest, 'Cookie') ?? '';
             $allowCookie = getCookieValue($cookieHeader, 'wls_health_allow');
             if ($allowCookie !== null && isHealthAllowCookieValid($allowCookie, $env)) {
                 $healthAllowedByCookie = true;
             }
+            // 同源请求放行：开发工具面板等从后台页面发起的 fetch 可访问；直接导航时 Referer 同站点也可放行
+            $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+            $originHeader = \trim((string)(getHeaderValue($rawRequest, 'Origin') ?? ''));
+            if ($hostHeader !== '') {
+                if ($originHeader !== '' && \preg_match('#^https?://([^/]+)#i', $originHeader, $om)) {
+                    if (\strcasecmp($om[1], $hostHeader) === 0) {
+                        $healthAllowedBySameOrigin = true;
+                    }
+                } else {
+                    $refererHeader = \trim((string)(getHeaderValue($rawRequest, 'Referer') ?? ''));
+                    if ($refererHeader !== '' && \preg_match('#^https?://([^/]+)#i', $refererHeader, $rm)) {
+                        if (\strcasecmp($rm[1], $hostHeader) === 0) {
+                            $healthAllowedBySameOrigin = true;
+                        }
+                    }
+                }
+            }
         }
-        if (!$isLocal && !$healthAllowRemote && !$healthAllowedByCookie) {
+        if (!$isLocal && !$healthAllowRemote && !$healthAllowedByCookie && !$healthAllowedBySameOrigin) {
             // 非本地请求且未配置允许且无有效放行 Cookie：返回 403（极简响应）
             return $keepAlive
                 ? "HTTP/1.1 403 Forbidden\r\nContent-Length: 9\r\nConnection: keep-alive\r\n\r\nForbidden"
