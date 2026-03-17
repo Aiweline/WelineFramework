@@ -43,6 +43,14 @@ class ConnectorService
         $src = $this->parseSource($request);
         $cmd = $src['cmd'] ?? 'open';
 
+        // Linux 等环境下 multipart/form-data 有时未正确填充 $_POST，导致 cmd/target 为空被当成 open，返回目录列表
+        if (\strtoupper($request->getMethod()) === 'POST' && !empty($_FILES['upload'])) {
+            $cmd = 'upload';
+            if (!isset($src['target']) || $src['target'] === '') {
+                $src['target'] = $_POST['target'] ?? $_GET['target'] ?? '';
+            }
+        }
+
         return match ($cmd) {
             'open'    => $this->handleOpen($src, $rootPath, $rootReal),
             'tree'    => $this->handleTree($src, $rootPath, $rootReal),
@@ -502,8 +510,9 @@ class ConnectorService
                 }
                 $cleanName = \basename((string) $name);
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
-                $dest = $rootPath . $rel;
-                if ($this->moveUploadedFile($tmp, $dest)) {
+                $rel = \str_replace('\\', '/', $rel);
+                $dest = $rootPath . \str_replace('/', \DIRECTORY_SEPARATOR, $rel);
+                if ($this->ensureParentDir($dest) && $this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
@@ -514,8 +523,9 @@ class ConnectorService
             if ($tmp !== '' && $error === \UPLOAD_ERR_OK && \file_exists($tmp)) {
                 $cleanName = \basename((string) $name);
                 $rel = \trim(($relative === '' ? '' : $relative . '/') . $cleanName, '/');
-                $dest = $rootPath . $rel;
-                if ($this->moveUploadedFile($tmp, $dest)) {
+                $rel = \str_replace('\\', '/', $rel);
+                $dest = $rootPath . \str_replace('/', \DIRECTORY_SEPARATOR, $rel);
+                if ($this->ensureParentDir($dest) && $this->moveUploadedFile($tmp, $dest)) {
                     $added[] = $this->buildFileInfo($rel, $rootPath, $rootReal);
                 }
             }
@@ -526,6 +536,13 @@ class ConnectorService
         }
 
         return ['added' => $added];
+    }
+
+    /** 确保目标文件的父目录存在（Linux 下路径一致） */
+    private function ensureParentDir(string $filePath): bool
+    {
+        $dir = \dirname($filePath);
+        return \is_dir($dir) || @\mkdir($dir, 0755, true);
     }
 
     /**
