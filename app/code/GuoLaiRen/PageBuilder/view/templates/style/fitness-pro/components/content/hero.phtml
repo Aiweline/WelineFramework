@@ -43,9 +43,9 @@ $badge = $config['content.badge'] ?? 'Transform Your Body';
 $title = $config['content.title'] ?? 'Unleash Your Full Potential';
 $description = $config['content.description'] ?? 'Join the ultimate fitness experience with world-class trainers, cutting-edge equipment, and a community that pushes you to be your best.';
 $primaryBtnText = $config['cta.primary_text'] ?? 'Start Training';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#cta';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#cta');
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'View Programs';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#programs';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#programs');
 
 $statsRaw = $config['stats.items'] ?? "500+|Happy Members\n50+|Daily Classes\n15+|Expert Trainers";
 $stats = [];
