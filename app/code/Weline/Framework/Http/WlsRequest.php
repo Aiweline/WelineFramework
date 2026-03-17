@@ -803,7 +803,7 @@ class WlsRequest extends Request
         if (!\preg_match('/boundary=(["\']?)(.+?)\1(?:\s*;|$)/i', $contentType, $m)) {
             return ['post' => [], 'files' => []];
         }
-        $boundary = $m[2];
+        $boundary = \trim($m[2]);
         $delimiter = '--' . $boundary;
 
         // 按 boundary 分割
@@ -817,13 +817,18 @@ class WlsRequest extends Request
         foreach ($parts as $part) {
             $part = \ltrim($part, "\r\n");
 
-            // header / body 以双 CRLF 分隔
+            // header / body 以双 CRLF 或双 LF 分隔（Linux 下可能只有 \n）
             $sep = \strpos($part, "\r\n\r\n");
+            $sepLen = 4;
+            if ($sep === false) {
+                $sep = \strpos($part, "\n\n");
+                $sepLen = 2;
+            }
             if ($sep === false) {
                 continue;
             }
             $head = \substr($part, 0, $sep);
-            $data = \substr($part, $sep + 4);
+            $data = \substr($part, $sep + $sepLen);
             $data = \rtrim($data, "\r\n");
 
             // 必须有 name
