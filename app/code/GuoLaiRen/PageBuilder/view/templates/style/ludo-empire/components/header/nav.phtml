@@ -49,7 +49,7 @@ $useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nDownload=>#download\nFAQ=>#faq\nContact=>/contact";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Play Now';
-$ctaUrl = $config['navigation.cta_url'] ?? '#games';
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#games');
 
 $navItems = [];
 $page = $this->getData('page');
@@ -76,7 +76,7 @@ if ($useCustomLinks || empty($navItems)) {
         if (empty($line)) continue;
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
-        $url = trim($parts[1] ?? '#');
+        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
         if (!empty($name)) {
             $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
         }
@@ -84,10 +84,10 @@ if ($useCustomLinks || empty($navItems)) {
 }
 if (empty($navItems)) {
     $navItems = [
-        ['name' => 'Home', 'url' => '#hero'],
-        ['name' => 'Games', 'url' => '#games'],
-        ['name' => 'Download', 'url' => '#download'],
-        ['name' => 'FAQ', 'url' => '#faq'],
+        ['name' => 'Home', 'url' => '/#hero'],
+        ['name' => 'Games', 'url' => '/#games'],
+        ['name' => 'Download', 'url' => '/#download'],
+        ['name' => 'FAQ', 'url' => '/#faq'],
         ['name' => 'Contact', 'url' => '/contact'],
     ];
 }

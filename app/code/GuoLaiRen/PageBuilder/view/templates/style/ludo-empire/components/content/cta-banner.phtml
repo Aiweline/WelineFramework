@@ -39,9 +39,9 @@ $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5
 $title = $config['content.title'] ?? 'Ready to Roll?';
 $description = $config['content.description'] ?? 'Download LudoEmpire now and start your journey to becoming the ultimate Ludo champion!';
 $primaryText = $config['buttons.primary_text'] ?? 'Play Now';
-$primaryUrl = $config['buttons.primary_url'] ?? '#games';
+$primaryUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.primary_url'] ?? '#games');
 $secondaryText = $config['buttons.secondary_text'] ?? 'Download App';
-$secondaryUrl = $config['buttons.secondary_url'] ?? '#download';
+$secondaryUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.secondary_url'] ?? '#download');
 
 $instanceId = 'le-cta-' . uniqid();
 ?>

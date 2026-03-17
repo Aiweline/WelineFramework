@@ -310,11 +310,12 @@ class Page extends Model
         foreach ($items as $item) {
             $handle = $item->getData(self::schema_fields_HANDLE);
             $h = $handle === null || $handle === '' ? '' : (string)$handle;
+            $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
                 'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
                 'handle' => $h,
-                'url' => $h === '' ? '/' : '/' . $h,
-                'type' => $item->getData(self::schema_fields_TYPE),
+                'url' => $type === self::TYPE_HOME ? '/' : ($h === '' ? '/' : '/' . $h),
+                'type' => $type,
                 'page_id' => $item->getId(),
                 'status' => (int)$item->getData(self::schema_fields_STATUS),
             ];
@@ -346,25 +347,24 @@ class Page extends Model
         foreach ($items as $item) {
             $handle = $item->getData(self::schema_fields_HANDLE);
             $h = $handle === null || $handle === '' ? '' : (string)$handle;
+            $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
                 'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
                 'handle' => $h,
-                'url' => $h === '' ? '/' : '/' . $h,
-                'type' => $item->getData(self::schema_fields_TYPE),
+                'url' => $type === self::TYPE_HOME ? '/' : ($h === '' ? '/' : '/' . $h),
+                'type' => $type,
                 'page_id' => $item->getId(),
                 'status' => (int)$item->getData(self::schema_fields_STATUS),
             ];
         }
-        // 父页是首页时，把首页插到最前
+        // 父页是首页时，把首页插到最前；首页链接直接用域名，不拼 handle
         $parent = clone $this;
         $parent->clear()->load($parentId);
         if ($parent->getId() && $parent->getData(self::schema_fields_TYPE) === self::TYPE_HOME) {
-            $ph = $parent->getData(self::schema_fields_HANDLE);
-            $phStr = $ph === null || $ph === '' ? '' : (string)$ph;
             array_unshift($result, [
                 'title' => $parent->getData(self::schema_fields_TITLE) ?: $parent->getData(self::schema_fields_NAME),
-                'handle' => $phStr,
-                'url' => $phStr === '' ? '/' : '/' . $phStr,
+                'handle' => $parent->getData(self::schema_fields_HANDLE) ?? '',
+                'url' => '/',
                 'type' => self::TYPE_HOME,
                 'page_id' => $parent->getId(),
                 'status' => (int)$parent->getData(self::schema_fields_STATUS),
@@ -430,11 +430,12 @@ class Page extends Model
         $result = [];
         foreach ($items as $item) {
             $handle = $item->getData(self::schema_fields_HANDLE);
+            $type = $item->getData(self::schema_fields_TYPE);
             $result[] = [
                 'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
                 'handle' => $handle,
-                'url' => '/' . $handle, // SEO 友好的 URL（通过路由重写）
-                'type' => $item->getData(self::schema_fields_TYPE),
+                'url' => $type === self::TYPE_HOME ? '/' : ('/' . ($handle ?? '')), // 首页直接用域名，不拼 handle
+                'type' => $type,
                 'page_id' => $item->getId(),
             ];
         }
@@ -483,10 +484,11 @@ class Page extends Model
         $byType = [];
         foreach ($items as $item) {
             $type = $item->getData(self::schema_fields_TYPE);
+            $handle = $item->getData(self::schema_fields_HANDLE);
             $byType[$type] = [
                 'title' => $item->getData(self::schema_fields_TITLE) ?: $item->getData(self::schema_fields_NAME),
-                'handle' => $item->getData(self::schema_fields_HANDLE),
-                'url' => '/' . ($item->getData(self::schema_fields_HANDLE) ?: ''),
+                'handle' => $handle,
+                'url' => $type === self::TYPE_HOME ? '/' : ('/' . ($handle ?: '')),
                 'type' => $type,
                 'page_id' => $item->getId(),
             ];

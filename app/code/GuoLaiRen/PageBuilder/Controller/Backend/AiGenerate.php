@@ -1235,7 +1235,7 @@ class AiGenerate extends BackendController
                     array_unshift($list, [
                         'title' => $page->getData(PageModel::schema_fields_TITLE) ?: $page->getData(PageModel::schema_fields_NAME),
                         'handle' => $hStr,
-                        'url' => $hStr === '' ? '/' : '/' . $hStr,
+                        'url' => '/', // 首页直接用域名，不拼 handle
                         'type' => PageModel::TYPE_HOME,
                         'page_id' => $page->getId(),
                         'status' => (int)$page->getData(PageModel::schema_fields_STATUS),
@@ -1256,7 +1256,9 @@ class AiGenerate extends BackendController
             $title = $item['title'] ?? '';
             $url = $item['url'] ?? '';
             $status = (int)($item['status'] ?? PageModel::STATUS_PUBLISHED);
-            if ($url === '' && ($handle === '' || $handle === null)) {
+            if ($type === PageModel::TYPE_HOME) {
+                $url = '/';
+            } elseif ($url === '' && ($handle === '' || $handle === null)) {
                 $url = '/';
             } elseif ($url === '' && $handle !== '') {
                 $url = '/' . $handle;
