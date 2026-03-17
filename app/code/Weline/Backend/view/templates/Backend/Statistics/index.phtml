@@ -64,6 +64,11 @@ $trends = $trends ?? [];
     </div>
 </div>
 
+<!-- Hook: AI 使用统计等扩展区块 -->
+<div class="row mt-3">
+    <?= $this->getHook('Weline_Backend::backend::partials::dashboard::ai-usage-stats') ?>
+</div>
+
 <!-- 提示信息 -->
 <div class="row">
     <div class="col-12">

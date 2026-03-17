@@ -6,6 +6,7 @@
  */
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Backend\Model\Config as BackendConfig;
+use Weline\FileManager\Helper\Image as ImageHelper;
 
 /** @var \Weline\Framework\View\Template $this */
 $backendConfig = ObjectManager::getInstance(BackendConfig::class);
@@ -15,12 +16,18 @@ $logoSm = $backendConfig->getConfig('logo_sm', 'Weline_Backend') ?: '';
 
 if ($logoDark === '') {
     $logoDark = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-dark.png') ?: '';
+} else {
+    $logoDark = ImageHelper::pathToMediaUrl($logoDark, 70, 70);
 }
 if ($logoLight === '') {
     $logoLight = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-light.png') ?: '';
+} else {
+    $logoLight = ImageHelper::pathToMediaUrl($logoLight, 70, 70);
 }
 if ($logoSm === '') {
     $logoSm = $this->fetchTagSourceFile('statics', 'Weline_Admin::assets/images/logo-sm.png') ?: '';
+} else {
+    $logoSm = ImageHelper::pathToMediaUrl($logoSm, 50, 50);
 }
 
 $homeUrl = $this->getBackendUrl('admin');

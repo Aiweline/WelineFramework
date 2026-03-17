@@ -702,31 +702,37 @@ class AiGenerate extends BackendController
                 }
             }
 
-            // 构建提示词
+            $userPrompt = trim((string) $this->request->getPost('ai_prompt', ''));
+            // 构建提示词（传入区域、序号及用户补充提示词）
             $prompt = $this->buildComponentConfigPrompt(
                 $page,
                 $metadata,
                 $textConfigs,
-                $currentConfig
+                $currentConfig,
+                $region,
+                $index,
+                $userPrompt
             );
 
-            // 调用AI服务
+            // 调用AI服务：生成语言与页面默认语言一致；传入 meta 供适配器提取格式与条数
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            
-            $locale = State::getLang() ?: 'zh_Hans_CN';
+            $pageLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
+            $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
                 'pagebuilder_content_generation', // 场景代码：页面构建器内容生成
                 $locale,
-                [],
+                ['component_meta_text_configs' => $textConfigs], // 供适配器按 meta 提取格式与条数
                 null, // userId
                 true  // isBackend
             );
 
-            // 解析JSON响应
+            // 解析JSON响应，并将列表类配置的数组规范化为多行竖线字符串
             $data = $this->parseJsonResponse($response);
+            $data = $this->normalizeComponentConfigListFields($data, $textConfigs);
+            $data = $this->ensureUseCustomLinksWhenNavGenerated($data);
 
             $this->request->getResponse()->setHeader('Content-Type', 'application/json');
             return json_encode([
@@ -743,6 +749,228 @@ class AiGenerate extends BackendController
                 'message' => $errorMessage
             ]);
         }
+    }
+
+    /**
+     * 组件配置生成（SSE 流式）
+     *
+     * POST /pagebuilder/backend/ai-generate/component-config-stream
+     *
+     * 参数与 componentConfig 相同。响应为 text/event-stream：
+     * - start: 开始
+     * - progress: 进度消息
+     * - chunk: AI 逐块返回内容（content、total_length）
+     * - done: 成功，data 为解析后的配置 JSON
+     * - error: 失败，message 为错误信息
+     */
+    public function componentConfigStream(): void
+    {
+        @set_time_limit(0);
+        @ignore_user_abort(true);
+
+        $sse = new \Weline\Framework\Http\Sse\SseWriter();
+        $sse->start();
+
+        try {
+            if (!$this->request->isPost()) {
+                $sse->sendEvent('error', ['message' => __('仅支持POST请求')]);
+                $sse->close();
+                return;
+            }
+
+            $pageId = (int)$this->request->getPost('page_id', 0);
+            $styleCode = trim($this->request->getPost('style_code', ''));
+            $componentCode = trim($this->request->getPost('component_code', ''));
+            $region = trim($this->request->getPost('region', ''));
+            $index = (int)$this->request->getPost('index', 0);
+
+            if ($pageId <= 0) {
+                $sse->sendEvent('error', ['message' => __('页面ID不能为空')]);
+                $sse->close();
+                return;
+            }
+            if (empty($styleCode)) {
+                $sse->sendEvent('error', ['message' => __('模板代码不能为空')]);
+                $sse->close();
+                return;
+            }
+            if (empty($componentCode)) {
+                $sse->sendEvent('error', ['message' => __('组件代码不能为空')]);
+                $sse->close();
+                return;
+            }
+
+            $page = clone $this->pageModel;
+            $page->load($pageId);
+            if (!$page->getId()) {
+                $sse->sendEvent('error', ['message' => __('页面不存在')]);
+                $sse->close();
+                return;
+            }
+
+            $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
+            $metadata = $layoutAssembler->getComponentMetadata($styleCode, $componentCode);
+            if (!$metadata) {
+                $sse->sendEvent('error', ['message' => __('组件不存在')]);
+                $sse->close();
+                return;
+            }
+
+            $textConfigs = $this->getComponentTextConfigs($metadata);
+            if (empty($textConfigs)) {
+                $sse->sendEvent('error', ['message' => __('此组件没有可生成的文字配置项')]);
+                $sse->close();
+                return;
+            }
+
+            $currentConfig = [];
+            $layoutConfig = $page->getFullLayoutConfig();
+            if ($region !== '' && isset($layoutConfig[$region]) && isset($layoutConfig[$region][$index])) {
+                $componentInLayout = $layoutConfig[$region][$index];
+                if (($componentInLayout['code'] ?? '') === $componentCode) {
+                    $currentConfig = $componentInLayout['config'] ?? [];
+                }
+            }
+
+            $sse->sendEvent('start', ['message' => __('开始生成组件配置...')]);
+
+            $context = $this->buildOperationContext($styleCode, $componentCode, $metadata, $textConfigs, $region, $index, $page);
+            $sse->sendEvent('context', $context);
+
+            $unpublished = $context['unpublished_pages'] ?? [];
+            if (!empty($unpublished)) {
+                $sse->sendEvent('unpublished_warning', [
+                    'message' => __('以下页面未发布，请发布后再使用或注意核对导航链接。'),
+                    'items' => $unpublished,
+                    'severity' => 'danger',
+                ]);
+            }
+
+            $sse->sendEvent('progress', ['message' => __('正在构建提示词...')]);
+
+            $userPrompt = trim((string) $this->request->getPost('ai_prompt', ''));
+            $prompt = $this->buildComponentConfigPrompt(
+                $page,
+                $metadata,
+                $textConfigs,
+                $currentConfig,
+                $region,
+                $index,
+                $userPrompt
+            );
+
+            // 将本次提示词通过 SSE 返回，便于排查「本站已有页面」等是否包含
+            $sse->sendEvent('prompt', ['prompt' => $prompt]);
+
+            $sse->sendEvent('progress', ['message' => __('正在调用 AI 生成...')]);
+
+            /** @var AiService $aiService */
+            $aiService = ObjectManager::getInstance(AiService::class);
+            $pageLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
+            $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
+            $fullContent = '';
+            $streamError = null;
+            $chunkCount = 0;
+            $traceSteps = [];
+
+            $traceSteps[] = sprintf('[1] %s：scenario=pagebuilder_content_generation, locale=%s, prompt_length=%d', __('准备调用 AI'), $locale, \strlen($prompt));
+            $sse->sendEvent('trace', ['step' => 1, 'message' => $traceSteps[0], 'display_text' => implode("\n", $traceSteps)]);
+
+            $beforeAi = microtime(true);
+            try {
+                $aiService->generateStream(
+                    $prompt,
+                    function (string $chunk) use ($sse, &$fullContent, &$chunkCount): bool {
+                        $chunkCount++;
+                        $fullContent .= $chunk;
+                        $sse->sendEvent('chunk', [
+                            'content' => $chunk,
+                            'total_length' => \strlen($fullContent),
+                        ]);
+                        return $sse->isAlive();
+                    },
+                    null,
+                    'pagebuilder_content_generation',
+                    $locale,
+                    ['component_meta_text_configs' => $textConfigs] // 供适配器按 meta 提取格式与条数
+                );
+            } catch (\Throwable $e) {
+                $streamError = $this->sanitizeErrorMessage($e->getMessage());
+                $traceSteps[] = sprintf('[2] %s：%s', __('AI 调用异常'), $streamError);
+                $sse->sendEvent('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'error' => $streamError]);
+                $sse->sendEvent('error', ['message' => $streamError]);
+                $sse->close();
+                return;
+            }
+
+            $afterAi = microtime(true);
+            $elapsedMs = (int) (($afterAi - $beforeAi) * 1000);
+            $traceSteps[] = sprintf('[2] %s：chunk_count=%d, total_length=%d, elapsed_ms=%d, raw_preview=%s', __('AI 流式返回完毕'), $chunkCount, \strlen($fullContent), $elapsedMs, mb_substr(trim($fullContent), 0, 300));
+            $sse->sendEvent('trace', ['step' => 2, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps), 'chunk_count' => $chunkCount, 'total_length' => \strlen($fullContent), 'elapsed_ms' => $elapsedMs]);
+
+            if (trim($fullContent) === '') {
+                $traceSteps[] = '[3] ' . __('AI 返回内容为空');
+                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $msg = $streamError ?: __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
+                $sse->sendEvent('error', ['message' => $msg]);
+                $sse->close();
+                return;
+            }
+
+            $sse->sendEvent('progress', ['message' => __('解析生成结果...')]);
+
+            try {
+                $data = $this->parseJsonResponse($fullContent);
+                $traceSteps[] = '[3] ' . __('解析 JSON 成功') . '：keys=' . implode(', ', array_keys($data));
+                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+
+                $data = $this->normalizeComponentConfigListFields($data, $textConfigs);
+                $data = $this->ensureUseCustomLinksWhenNavGenerated($data);
+                $traceSteps[] = '[4] ' . __('合并并下发配置') . '：keys=' . implode(', ', array_keys($data));
+                $sse->sendEvent('trace', ['step' => 4, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+
+                $sse->sendEvent('done', ['data' => $data]);
+            } catch (\Throwable $e) {
+                $traceSteps[] = '[3] ' . __('解析/合并异常') . '：' . $this->sanitizeErrorMessage($e->getMessage());
+                $sse->sendEvent('trace', ['step' => 3, 'message' => $traceSteps[\count($traceSteps) - 1], 'display_text' => implode("\n", $traceSteps)]);
+                $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
+            }
+        } catch (\Throwable $e) {
+            $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
+        }
+
+        $sse->close();
+    }
+
+    /**
+     * 当 AI 生成了导航项/链接项时，自动启用「使用自定义导航链接」/「使用自定义链接组」，否则前端不生效
+     */
+    private function ensureUseCustomLinksWhenNavGenerated(array $data): array
+    {
+        foreach ($data as $key => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            $keyLower = strtolower($key);
+            if (($keyLower === 'navigation.items' || $keyLower === 'navigation.links')) {
+                $data['navigation.use_custom_links'] = 'yes';
+                break;
+            }
+        }
+        foreach ($data as $key => $value) {
+            if ($value === '' || $value === null) {
+                continue;
+            }
+            $keyLower = strtolower($key);
+            if (str_starts_with($keyLower, 'links.') && (str_contains($keyLower, 'items') || str_contains($keyLower, 'links'))) {
+                $data['links.use_custom_links'] = 'yes';
+                break;
+            }
+        }
+        if (isset($data['content.footer_links']) && $data['content.footer_links'] !== '' && $data['content.footer_links'] !== null) {
+            $data['content.use_custom_links'] = 'yes';
+        }
+        return $data;
     }
 
     /**
@@ -797,13 +1025,27 @@ class AiGenerate extends BackendController
                     continue;
                 }
                 
-                $textConfigs[] = [
+                $label = $field['label'] ?? $fieldKey;
+                $default = $field['default'] ?? '';
+                $format = $field['format'] ?? '';
+                $isListLike = $this->isListLikeConfigKey($fullKey, $label, $default);
+                $isNavOrLink = $this->isNavOrLinkConfigKey($fullKey, $label);
+                $item = [
                     'key' => $fullKey,
-                    'label' => $field['label'] ?? $fieldKey,
+                    'label' => $label,
                     'type' => $type,
-                    'default' => $field['default'] ?? '',
+                    'default' => $default,
                     'group' => $groupKey,
+                    'is_list_like' => $isListLike,
+                    'is_nav_or_link' => $isNavOrLink,
+                    'format' => $format,
                 ];
+                if ($isListLike && $default !== '') {
+                    $lines = array_filter(preg_split('/[\r\n]+/', $default), static fn(string $l): bool => trim($l) !== '');
+                    $item['default_count'] = count($lines);
+                    $item['default_sample'] = mb_substr(implode("\n", array_slice($lines, 0, 2)), 0, 400);
+                }
+                $textConfigs[] = $item;
             }
         }
         
@@ -839,26 +1081,351 @@ class AiGenerate extends BackendController
     }
 
     /**
-     * 构建单个组件配置生成的提示词
+     * 将列表类配置中 AI 返回的数组规范化为多行竖线字符串（与组件默认结构一致）
      */
+    private function normalizeComponentConfigListFields(array $data, array $textConfigs): array
+    {
+        $listLikeKeys = [];
+        foreach ($textConfigs as $c) {
+            if (!empty($c['is_list_like'])) {
+                $listLikeKeys[$c['key']] = true;
+            }
+        }
+        foreach ($listLikeKeys as $key => $_) {
+            if (!isset($data[$key]) || !is_array($data[$key])) {
+                continue;
+            }
+            $rows = [];
+            foreach ($data[$key] as $item) {
+                if (is_array($item)) {
+                    $rows[] = implode('|', array_map('trim', array_values($item)));
+                } else {
+                    $rows[] = (string) $item;
+                }
+            }
+            $data[$key] = implode("\n", $rows);
+        }
+        return $data;
+    }
+
+    /**
+     * 构建「操作上下文」：当前模板、组件、meta、配置项、Header/Footer 时本站已有页面及操作说明，供 SSE 展示
+     */
+    private function buildOperationContext(
+        string $styleCode,
+        string $componentCode,
+        array $metadata,
+        array $textConfigs,
+        string $region,
+        int $index,
+        PageModel $page
+    ): array {
+        $typeNames = PageModel::getPageTypes();
+        $componentName = $metadata['name'] ?? $metadata['code'] ?? $componentCode;
+        $componentDesc = $metadata['description'] ?? '';
+        $componentRegion = $metadata['region'] ?? 'content';
+        $configFields = [];
+        foreach ($textConfigs as $c) {
+            $configFields[] = [
+                'key' => $c['key'],
+                'label' => $c['label'] ?? '',
+                'is_nav_or_link' => !empty($c['is_nav_or_link']),
+                'format' => $c['format'] ?? '',
+            ];
+        }
+
+        $sitePages = null;
+        $sitePagesNote = null;
+        $unpublishedPages = [];
+        $plan = __('将根据组件 meta 与当前配置生成各文字配置项。');
+        $regionLower = strtolower($region);
+        if ($regionLower === 'header' || $regionLower === 'footer') {
+            $siteData = $this->getExistingSitePagesList($page);
+            $sitePages = $siteData['list'] ?? [];
+            $unpublishedPages = $siteData['unpublished'] ?? [];
+            if (empty($sitePages)) {
+                $sitePagesNote = __('当前为主页时无子页面，或当前为子页时无同级页面，无法提供「本站已有页面」表。');
+                $plan = $regionLower === 'header'
+                    ? __('Header：因无已有页面表，将按组件默认示例生成导航项；生成后会自动启用「使用自定义导航链接」。')
+                    : __('Footer：因无已有页面表，将按组件默认示例生成链接；生成后会自动启用「使用自定义链接组」。');
+            } else {
+                $plan = $regionLower === 'header'
+                    ? __('Header：根据下方「本站已有页面」规划导航项，填充导航/链接类配置项（名称=>链接，一行一条），并自动启用「使用自定义导航链接」。')
+                    : __('Footer：根据下方「本站已有页面」规划多组链接，按 meta 字段含义归类归组填充，并自动启用「使用自定义链接组」。');
+            }
+        }
+
+        $lines = [
+            '========== ' . __('操作上下文') . ' ==========',
+            '',
+            __('【当前操作】') . ' ' . __('AI生成组件配置'),
+            __('【模板】') . ' ' . $styleCode,
+            __('【组件代码】') . ' ' . $componentCode,
+            __('【组件名称】') . ' ' . $componentName,
+            __('【组件描述】') . ' ' . ($componentDesc ?: '-'),
+            __('【组件区域(meta)】') . ' ' . $componentRegion,
+            __('【布局位置】') . ' ' . $region . ' / index=' . $index,
+            '',
+            '--- ' . __('组件可生成配置项（meta）') . ' ---',
+        ];
+        foreach ($configFields as $f) {
+            $navTag = $f['is_nav_or_link'] ? ' [导航/链接]' : '';
+            $lines[] = '  ' . $f['key'] . '  ' . $f['label'] . $navTag . ($f['format'] ? '  | ' . $f['format'] : '');
+        }
+        $lines[] = '';
+        $lines[] = '--- ' . __('本次将执行') . ' ---';
+        $lines[] = $plan;
+        $lines[] = '';
+
+        if ($sitePagesNote !== null) {
+            $lines[] = '--- ' . __('本站已有页面（Header/Footer）') . ' ---';
+            $lines[] = $sitePagesNote;
+        } elseif ($sitePages !== null && !empty($sitePages)) {
+            $lines[] = '--- ' . __('本站已有页面（类型、handle、标题、链接）') . ' ---';
+            foreach ($sitePages as $p) {
+                $lines[] = sprintf('  %s（%s）  handle=%s  标题=%s  链接=%s',
+                    $p['type_label'], $p['type'], $p['handle'], $p['title'], $p['url']);
+            }
+        }
+        if (!empty($unpublishedPages)) {
+            $lines[] = '';
+            $lines[] = '--- ' . __('未发布页面（请发布后再使用或注意核对）') . ' ---';
+            foreach ($unpublishedPages as $u) {
+                $lines[] = sprintf('  %s  %s（%s）', $u['type_label'] ?? '', $u['title'] ?? '', $u['handle'] ?? '');
+            }
+        }
+        $lines[] = '';
+        $lines[] = '==========================================';
+
+        return [
+            'style_code' => $styleCode,
+            'component_code' => $componentCode,
+            'component_name' => $componentName,
+            'component_description' => $componentDesc,
+            'component_region' => $componentRegion,
+            'slot_region' => $region,
+            'slot_index' => $index,
+            'operation' => __('AI生成组件配置'),
+            'config_fields' => $configFields,
+            'site_pages' => $sitePages,
+            'site_pages_note' => $sitePagesNote,
+            'unpublished_pages' => $unpublishedPages,
+            'plan' => $plan,
+            'display_text' => implode("\n", $lines),
+        ];
+    }
+
+    /**
+     * 获取「本站已有页面」列表，供 Header/Footer 导航给 AI 参考
+     * - 当前页为主页（无 parent_id）：查该主页下的所有子页面
+     * - 当前页有 parent_id：查该 parent 下的所有子页面（同级兄弟），且若父页是首页则含首页
+     *
+     * @return array ['list' => [['type','type_label','handle','title','url'], ...], 'unpublished' => [['type_label','title','handle'], ...]]
+     */
+    private function getExistingSitePagesList(PageModel $page): array
+    {
+        $parentId = (int)$page->getData(PageModel::schema_fields_PARENT_ID);
+        try {
+            if ($parentId === 0) {
+                $list = $page->getChildPagesForNav(50);
+                // 当前为主页时，把首页自身插到最前，方便 AI 生成含「首页」的导航
+                if ($page->getId() && $page->getData(PageModel::schema_fields_TYPE) === PageModel::TYPE_HOME) {
+                    $h = $page->getData(PageModel::schema_fields_HANDLE);
+                    $hStr = $h === null || $h === '' ? '' : (string)$h;
+                    array_unshift($list, [
+                        'title' => $page->getData(PageModel::schema_fields_TITLE) ?: $page->getData(PageModel::schema_fields_NAME),
+                        'handle' => $hStr,
+                        'url' => $hStr === '' ? '/' : '/' . $hStr,
+                        'type' => PageModel::TYPE_HOME,
+                        'page_id' => $page->getId(),
+                        'status' => (int)$page->getData(PageModel::schema_fields_STATUS),
+                    ]);
+                }
+            } else {
+                $list = $page->getSiblingPagesForNav(50);
+            }
+        } catch (\Throwable $e) {
+            return ['list' => [], 'unpublished' => []];
+        }
+        $typeNames = PageModel::getPageTypes();
+        $result = [];
+        $unpublished = [];
+        foreach ($list as $item) {
+            $type = $item['type'] ?? '';
+            $handle = $item['handle'] ?? '';
+            $title = $item['title'] ?? '';
+            $url = $item['url'] ?? '';
+            $status = (int)($item['status'] ?? PageModel::STATUS_PUBLISHED);
+            if ($url === '' && ($handle === '' || $handle === null)) {
+                $url = '/';
+            } elseif ($url === '' && $handle !== '') {
+                $url = '/' . $handle;
+            }
+            $typeLabel = $typeNames[$type] ?? $type;
+            $result[] = [
+                'type' => $type,
+                'type_label' => $typeLabel,
+                'handle' => $handle === '' || $handle === null ? '(首页)' : (string) $handle,
+                'title' => $title,
+                'url' => $url,
+            ];
+            if ($status !== PageModel::STATUS_PUBLISHED) {
+                $unpublished[] = ['type_label' => $typeLabel, 'title' => $title, 'handle' => $handle === '' || $handle === null ? '(首页)' : (string)$handle];
+            }
+        }
+        return ['list' => $result, 'unpublished' => $unpublished];
+    }
+
+    /**
+     * 构建「本站已有页面」提示块，供 Header/Footer 的导航/链接生成使用
+     * 当前为主页时=该主页下所有子页面；当前为子页时=该父页下所有子页面（同级）+ 若父为首页则含首页
+     */
+    private function buildExistingSitePagesForNavPrompt(PageModel $page): string
+    {
+        $data = $this->getExistingSitePagesList($page);
+        $list = $data['list'] ?? [];
+        if (empty($list)) {
+            return '';
+        }
+        $lines = [
+            '【本站已有页面】以下为当前页对应的子页面列表（当前为主页=其子页面；当前为子页=同级子页面+父页首页若存在），供规划导航/链接时选用。链接请使用下表「链接」列，名称可自定义。',
+            '',
+        ];
+        foreach ($list as $item) {
+            $lines[] = sprintf('- %s（%s）| handle：%s | 标题：%s | 链接：%s',
+                $item['type_label'] ?? '',
+                $item['type'] ?? '',
+                $item['handle'] ?? '',
+                $item['title'] ?? '',
+                $item['url'] ?? '');
+        }
+        $lines[] = '';
+        return implode("\n", $lines);
+    }
+
+    /**
+     * 判断配置项是否为「导航/链接」类（由 meta 的 key 或 label 描述可知，需用页面类型规划填充）
+     */
+    private function isNavOrLinkConfigKey(string $fullKey, string $label): bool
+    {
+        $keyLower = strtolower($fullKey);
+        if (str_contains($keyLower, 'navigation.') && (str_contains($keyLower, 'items') || str_contains($keyLower, 'links'))) {
+            return true;
+        }
+        if (str_contains($keyLower, 'links.') && (str_contains($keyLower, 'items') || preg_match('/links\.\w+\.items/', $keyLower))) {
+            return true;
+        }
+        if (preg_match('/导航|链接(组|项)?|nav|link\s*list/u', $label)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 构建 Header/Footer 专属说明：让 AI 根据 meta 识别 nav/links 字段，用「本站所有页面类型」规划并归类归组填充
+     *
+     * @param string $region header 或 footer
+     * @param array $textConfigs 组件文字配置项（含 is_nav_or_link）
+     */
+    private function buildHeaderFooterNavInstruction(string $region, array $textConfigs): string
+    {
+        $navLinkKeys = [];
+        foreach ($textConfigs as $c) {
+            if (!empty($c['is_nav_or_link'])) {
+                $navLinkKeys[] = $c['key'] . '（' . ($c['label'] ?? '') . '）';
+            }
+        }
+        $navLinkList = empty($navLinkKeys) ? '' : implode('、', $navLinkKeys);
+
+        $regionLower = strtolower($region);
+        if ($regionLower === 'header') {
+            $lines = [
+                '【Header 导航规划】',
+                '请根据下方「本站已有页面」规划导航项（仅使用表中已有页面的链接）。Header 常用：首页、博客列表、关于我们、联系我们、政策类等。',
+                '请识别组件中属于「导航」的配置项（meta 中有描述），用「名称=>链接」、一行一条填充；链接使用上表链接，名称可自定义。',
+            ];
+            if ($navLinkList !== '') {
+                $lines[] = '导航/链接类配置项：' . $navLinkList . '。';
+            }
+        } else {
+            $lines = [
+                '【Footer 链接规划】',
+                '请根据下方「本站已有页面」规划链接（仅使用表中已有页面的链接）。Footer 常有多组链接：请根据组件 meta 中各配置项的含义（如「主要链接」「政策与条款」「联系与支持」等）归类归组。',
+                '每组对应一个配置字段，用「名称=>链接」、一行一条填充；链接使用上表链接，名称可自定义。',
+            ];
+            if ($navLinkList !== '') {
+                $lines[] = '链接类配置项（可能多组）：' . $navLinkList . '。请分析字段含义后归组填充。';
+            }
+        }
+        $lines[] = '';
+        return implode("\n", $lines);
+    }
+
+    /**
+     * 判断配置项是否为「列表/多行结构」（如优势列表、导航项），需按多行竖线格式生成
+     */
+    private function isListLikeConfigKey(string $fullKey, string $label, string $default): bool
+    {
+        if (str_contains($fullKey, '.items') || str_contains($fullKey, '.list')) {
+            return true;
+        }
+        if (preg_match('/列表|项配置|导航项|优势项|条目/u', $label)) {
+            return true;
+        }
+        if (str_contains($default, "\n") || (str_contains($default, '|') && mb_strlen($default) > 30)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 构建单个组件配置生成的提示词
+     *
+     * 生成原理：根据当前页面类型选择对应提示词、遵循该类型侧重点；结合页面「AI内容生成」描述与当前组件在页面中的位置/用途，生成与该组件角色一致的内容；生成语言与页面默认语言一致。
+     *
+     * @param string $region 组件所在区域（如 header/content/footer），用于“当前组件情况”
+     * @param int $index 组件在区域中的序号
+     */
+    /**
+     * 组件配置中用于保存「AI生成提示词」的 key，与系统提示词拼接后发给 AI
+     */
+    private const COMPONENT_CONFIG_AI_PROMPT_KEY = '_ai_prompt';
+
     private function buildComponentConfigPrompt(
         PageModel $page,
         array $metadata,
         array $textConfigs,
-        array $currentConfig = []
+        array $currentConfig = [],
+        string $region = '',
+        int $index = 0,
+        string $userPrompt = ''
     ): string {
         // 获取页面的目标语言
         $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
         
         $componentName = $metadata['name'] ?? $metadata['code'] ?? '未知组件';
         $componentDesc = $metadata['description'] ?? '';
+        $pageType = (string)($page->getData('type') ?? 'custom_page');
         
-        $prompt = "你是一个专业的网页组件配置生成助手。根据页面信息为【{$componentName}】组件生成配置内容，请返回JSON格式的数据。\n\n";
+        $prompt = "你是一个专业的网页组件配置生成助手。根据页面信息、页面类型提示词以及当前组件在页面中的情况，为【{$componentName}】组件生成配置内容，请返回JSON格式的数据。\n\n";
+        $prompt .= "【生成原理】根据当前页面类型选择对应的类型要求，生成内容遵循该类型侧重点；页面的「AI内容生成」描述作为参考；结合当前组件的角色与所在位置生成与该组件用途一致的内容；生成语言与页面默认语言一致。生成完成后请从逻辑与语气上自检并微调。\n\n";
+        $prompt .= "【生成原则-组件 meta】遵循组件 meta 的默认信息（格式、类型、条数）生成：按 meta 中默认值的格式与默认条数生成对应内容；若用户补充提示词中指定了条数或格式要求（如「生成 4 条」「只要 3 项」），则按用户要求生成。列表类配置的值必须是多行字符串（每行用竖线|分隔各列），不要返回 JSON 数组。\n\n";
+        $prompt .= "【示例】例如组件 meta 中优势列表默认 6 条、格式为「标题|图标|描述|颜色，一行一个」，则生成 6 行该格式的多行字符串；若用户写「生成 4 条」则生成 4 条。\n\n";
+        
+        // 根据当前页面类型撰写提示词
+        $pageTypeInstruction = $this->getPageTypePromptInstructions($pageType);
+        $prompt .= "【该页面类型要求】{$pageTypeInstruction}\n\n";
         
         $prompt .= "【页面信息】\n";
         $prompt .= "- 页面标题：{$page->getData('title')}\n";
         $prompt .= "- 页面句柄：{$page->getData('handle')}\n";
-        $prompt .= "- 页面类型：{$page->getData('type')}\n";
+        $prompt .= "- 页面类型：{$pageType}\n";
+        
+        // 页面AI内容生成描述作为参考
+        $aiDesc = (string)($page->getData('ai_description') ?? '');
+        if ($aiDesc !== '') {
+            $prompt .= "- 页面描述（AI内容生成参考）：" . mb_substr($aiDesc, 0, 500) . "\n";
+        }
         
         if ($page->getData('meta_description')) {
             $prompt .= "- SEO描述：{$page->getData('meta_description')}\n";
@@ -874,44 +1441,104 @@ class AiGenerate extends BackendController
         if ($componentDesc) {
             $prompt .= "- 组件描述：{$componentDesc}\n";
         }
-        $prompt .= "- 组件区域：" . ($metadata['region'] ?? 'content') . "\n";
+        $componentRegion = $metadata['region'] ?? 'content';
+        $prompt .= "- 组件区域：{$componentRegion}\n";
+        // 当前组件情况：在页面布局中的位置，便于生成与角色一致的内容
+        if ($region !== '') {
+            $positionHint = $index > 0
+                ? "该组件在页面布局中位于「{$region}」区域，为该区域中第 " . ($index + 1) . " 个组件，请根据此位置与前后文关系生成贴合场景的配置内容。"
+                : "该组件在页面布局中位于「{$region}」区域，请根据该区域的典型用途生成贴合场景的配置内容。";
+            $prompt .= "- 当前组件情况：{$positionHint}\n";
+        }
 
-        // 如果有当前配置，显示当前值
+        // Header/Footer 特殊：提供本站已有页面（主页下/同站顶级已发布页），由 AI 根据 meta 识别 nav/links 字段并仅用已有页面规划
+        $regionLower = strtolower($region);
+        if ($regionLower === 'header' || $regionLower === 'footer') {
+            $prompt .= "\n" . $this->buildHeaderFooterNavInstruction($region, $textConfigs);
+            $existingPagesBlock = $this->buildExistingSitePagesForNavPrompt($page);
+            if ($existingPagesBlock !== '') {
+                $prompt .= "\n" . $existingPagesBlock;
+            }
+        }
+
+        // 当前字段值仅作为参考，以页面语言为准重新生成（列表类若为数组则转为多行竖线字符串再展示）
         if (!empty($currentConfig)) {
-            $prompt .= "\n【当前配置值】（可参考进行优化）\n";
+            $prompt .= "\n【当前配置值】（仅供参考，请按目标语言重新撰写）\n";
             foreach ($textConfigs as $config) {
                 $key = $config['key'];
-                if (isset($currentConfig[$key]) && !empty($currentConfig[$key])) {
-                    $prompt .= "- {$config['label']}：{$currentConfig[$key]}\n";
+                if (!isset($currentConfig[$key])) {
+                    continue;
+                }
+                $val = $currentConfig[$key];
+                if (is_array($val) && !empty($config['is_list_like'])) {
+                    $rows = [];
+                    foreach ($val as $item) {
+                        $rows[] = is_array($item) ? implode('|', array_map('trim', array_values($item))) : (string) $item;
+                    }
+                    $val = implode("\n", $rows);
+                } elseif (is_array($val)) {
+                    $val = json_encode($val, JSON_UNESCAPED_UNICODE);
+                } else {
+                    $val = (string) $val;
+                }
+                if ($val !== '') {
+                    $prompt .= "- {$config['label']}：" . mb_substr($val, 0, 800) . "\n";
                 }
             }
         }
 
-        $prompt .= "\n【需要生成的配置项】\n";
+        $prompt .= "\n【需要生成的配置项】（按 meta 默认格式与条数，用户有要求则从用户）\n";
+        $hasListLike = false;
         foreach ($textConfigs as $config) {
-            $defaultHint = $config['default'] ? "（默认值参考：{$config['default']}）" : '';
+            $defaultHint = '';
+            if (!empty($config['is_list_like'])) {
+                $hasListLike = true;
+                $formatHint = $config['format'] ?? '';
+                $countHint = isset($config['default_count']) ? "默认条数：{$config['default_count']} 条。" : '';
+                $sampleHint = isset($config['default_sample']) && $config['default_sample'] !== ''
+                    ? "示例结构（前1～2条）：" . mb_substr($config['default_sample'], 0, 350) . "。" : '';
+                $defaultHint = "（列表类：{$countHint}{$formatHint} {$sampleHint} 值为多行字符串，每行用|分隔列，不要返回JSON数组；若用户补充提示词指定了条数则按用户）";
+            } else {
+                $defaultHint = $config['default'] ? "（默认值参考：" . mb_substr($config['default'], 0, 200) . "）" : '';
+            }
             $prompt .= "- {$config['key']}：{$config['label']}{$defaultHint}\n";
+        }
+
+        if ($hasListLike) {
+            $prompt .= "\n【重要-列表类配置】必须按组件 meta 的格式与默认条数生成多行字符串（每行竖线|分隔各列）；若用户补充提示词中指定了条数则按用户要求。不要返回 JSON 数组。\n";
         }
 
         $prompt .= "\n请生成所有配置项的值，返回JSON格式：\n";
         $prompt .= "{\n";
         foreach ($textConfigs as $config) {
-            $prompt .= '  "' . $config['key'] . '": "根据页面信息和组件用途生成合适的内容",' . "\n";
+            $example = !empty($config['is_list_like'])
+                ? '多行字符串，每行用|分隔列，例如：标题1|图标1|描述1\\n标题2|图标2|描述2'
+                : '根据页面信息和组件用途生成合适的内容';
+            $prompt .= '  "' . $config['key'] . '": "' . $example . '",' . "\n";
         }
         $prompt = rtrim($prompt, ",\n") . "\n";
         $prompt .= "}\n\n";
 
+        // 用户补充提示词（可选），与系统提示词拼接
+        $userPrompt = trim($userPrompt);
+        if ($userPrompt !== '') {
+            $prompt .= "【用户补充提示词】\n" . mb_substr($userPrompt, 0, 2000) . "\n\n";
+        }
+
         $prompt .= "要求：\n";
-        $prompt .= "1. 所有配置项的值必须符合页面主题和组件用途\n";
+        $prompt .= "1. 所有配置项的值必须符合页面主题、组件用途及【该页面类型要求】\n";
         $prompt .= "2. 内容要专业、准确、符合实际使用场景\n";
-        $prompt .= "3. 如果有当前配置值，可以参考进行优化和完善\n";
+        $prompt .= "3. 当前配置值仅供参考；按目标语言重新撰写，不要直接照抄\n";
         $prompt .= "4. 返回的JSON必须是有效的JSON格式，可以直接解析\n";
         $prompt .= "5. 只返回JSON，不要包含其他说明文字\n";
-        
+        if ($hasListLike) {
+            $prompt .= "6. 列表类配置项（如优势列表）的值必须是多行竖线|分隔的字符串，不能是 JSON 数组。\n";
+        }
         // 添加语言要求
         if (!empty($targetLocale)) {
             $languageName = $this->getLanguageNameFromLocale($targetLocale);
-            $prompt .= "6. 【重要-语言要求】所有生成的内容必须使用 {$languageName} ({$targetLocale}) 语言编写，无论提示词使用什么语言，生成结果都必须是 {$languageName}\n";
+            $num = $hasListLike ? '7' : '6';
+            $prompt .= "{$num}. 【重要-语言要求】所有生成的内容必须使用 {$languageName} ({$targetLocale}) 语言编写，无论提示词使用什么语言，生成结果都必须是 {$languageName}\n";
         }
 
         return $prompt;
