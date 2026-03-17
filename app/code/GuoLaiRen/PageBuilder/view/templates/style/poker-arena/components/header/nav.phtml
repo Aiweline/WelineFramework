@@ -54,7 +54,7 @@ $useCustomLinks = ($config['navigation.use_custom_links'] ?? 'no') === 'yes';
 $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nAdvantages=>#advantages\nDownload=>#download\nFAQ=>#faq";
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Join Table';
-$ctaUrl = $config['navigation.cta_url'] ?? '#register';
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#register');
 
 // 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
 $navItems = [];
@@ -82,7 +82,7 @@ if ($useCustomLinks || empty($navItems)) {
         if (empty($line)) continue;
         $parts = explode('=>', $line, 2);
         $name = trim($parts[0] ?? '');
-        $url = trim($parts[1] ?? '#');
+        $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
         if (!empty($name)) {
             $navItems[] = ['name' => $name, 'url' => $url ?: '#'];
         }
@@ -90,11 +90,11 @@ if ($useCustomLinks || empty($navItems)) {
 }
 if (empty($navItems)) {
     $navItems = [
-        ['name' => 'Home', 'url' => '#hero'],
-        ['name' => 'Games', 'url' => '#games'],
-        ['name' => 'Advantages', 'url' => '#advantages'],
-        ['name' => 'Download', 'url' => '#download'],
-        ['name' => 'FAQ', 'url' => '#faq'],
+        ['name' => 'Home', 'url' => '/#hero'],
+        ['name' => 'Games', 'url' => '/#games'],
+        ['name' => 'Advantages', 'url' => '/#advantages'],
+        ['name' => 'Download', 'url' => '/#download'],
+        ['name' => 'FAQ', 'url' => '/#faq'],
     ];
 }
 
