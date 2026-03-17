@@ -51,7 +51,7 @@ class PageTree extends BackendController
                     array_unshift($list, [
                         'title' => $page->getData(Page::schema_fields_TITLE) ?: $page->getData(Page::schema_fields_NAME),
                         'handle' => $hStr,
-                        'url' => $hStr === '' ? '/' : '/' . $hStr,
+                        'url' => '/', // 首页直接用域名，不拼 handle
                         'type' => Page::TYPE_HOME,
                         'page_id' => $page->getId(),
                     ]);
@@ -65,8 +65,11 @@ class PageTree extends BackendController
         $out = [];
         foreach ($list as $item) {
             $handle = $item['handle'] ?? '';
+            $type = $item['type'] ?? '';
             $url = $item['url'] ?? '';
-            if ($url === '' && ($handle === '' || $handle === null)) {
+            if ($type === Page::TYPE_HOME) {
+                $url = '/';
+            } elseif ($url === '' && ($handle === '' || $handle === null)) {
                 $url = '/';
             } elseif ($url === '' && $handle !== '') {
                 $url = '/' . $handle;

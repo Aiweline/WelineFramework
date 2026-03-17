@@ -97,7 +97,7 @@ foreach ($lines as $line) {
     if (empty($line)) continue;
     $parts = explode('=>', $line, 2);
     $name = trim($parts[0] ?? '');
-    $url = trim($parts[1] ?? '#');
+    $url = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(trim($parts[1] ?? '#'));
     if (!empty($name)) {
         $navLinks[] = ['name' => $name, 'url' => $url];
     }
