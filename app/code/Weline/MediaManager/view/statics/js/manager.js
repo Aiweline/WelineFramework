@@ -883,6 +883,14 @@
     }
 
     function uploadFiles(fileList) {
+        if (!CONNECTOR) {
+            showError(t('connectorNotConfigured'));
+            return;
+        }
+        if (!fileList || fileList.length === 0) {
+            showError(t('noFiles'));
+            return;
+        }
         var fd = new FormData();
         fd.append('cmd', 'upload');
         fd.append('target', CWD_HASH);
