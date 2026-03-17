@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="WelineTools_ImageProcessor::image-tools" name="image-tools" title="图片处理" action=""
+         parent="Weline_Backend::system_config_group" icon="mdi mdi-image-edit-outline" order="22150" is_backend="1">
+        <menu source="WelineTools_ImageProcessor:image_processor_index" name="image_processor_index" title="图片工具集" action="imageprocessor/backend/index/index"
+             icon="mdi mdi-toolbox-outline" order="1" is_backend="1"/>
+    </menu>
+</menus>
