@@ -732,6 +732,24 @@ class Core
             // 抛出静态文件异常，由 Runtime 层统一处理
             throw new \Weline\Framework\Http\StaticFileException($filename, $mime_type, $responseHeaders);
         }
+        // 文件不存在：后缀为 .css/.js 时返回 404 + 对应 MIME，避免浏览器 MIME 严格检查报错
+        $url_path = preg_replace('/\?.*/', '', str_replace('\\', '/', trim($url, '/')));
+        $seg = explode('.', $url_path);
+        $ext = strtolower($seg[count($seg) - 1] ?? '');
+        if ($ext === 'css') {
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                404,
+                '',
+                ['Content-Type' => 'text/css; charset=utf-8']
+            );
+        }
+        if ($ext === 'js' || $ext === 'mjs') {
+            throw new \Weline\Framework\Http\ResponseTerminateException(
+                404,
+                '',
+                ['Content-Type' => 'text/javascript; charset=utf-8']
+            );
+        }
         return false;
     }
     
