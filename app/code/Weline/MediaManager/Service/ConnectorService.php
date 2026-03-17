@@ -60,6 +60,14 @@ class ConnectorService
                     \parse_str($qs, $parsed);
                     $target = \trim((string) ($parsed['target'] ?? ''));
                 }
+                if ($target === '') {
+                    $uri = $request->getServer('REQUEST_URI');
+                    if (\is_string($uri) && \str_contains($uri, '?')) {
+                        $qsFromUri = \substr($uri, (int) \strpos($uri, '?') + 1);
+                        \parse_str($qsFromUri, $parsedUri);
+                        $target = \trim((string) ($parsedUri['target'] ?? ''));
+                    }
+                }
             }
             $src['target'] = $target;
         }

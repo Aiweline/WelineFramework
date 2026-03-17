@@ -109,13 +109,36 @@ class ThumbnailService
         if (!\is_file($thumbPath)) {
             return false;
         }
-        
         $originalMtime = @\filemtime($originalPath);
         $thumbMtime = @\filemtime($thumbPath);
-        
         return $thumbMtime !== false && $originalMtime !== false && $thumbMtime >= $originalMtime;
     }
+
+    /**
+     * 返回已存在的有效缩略图路径（.webp / .jpg / .png 任一即可）
+     */
+    private function getExistingThumbPath(string $originalPath): ?string
+    {
+        $base = $this->getThumbCachePath($originalPath);
+        $base = \preg_replace('/\.webp$/i', '', $base);
+        foreach (['.webp', '.jpg', '.png'] as $ext) {
+            $path = $base . $ext;
+            if ($this->isCacheValid($originalPath, $path)) {
+                return $path;
+            }
+        }
+        return null;
+    }
     
+    /**
+     * 检查当前环境是否支持 GD 缩略图生成（至少有一种输出格式可用）
+     */
+    public function hasGdOutputSupport(): bool
+    {
+        return \function_exists('imagecreatetruecolor')
+            && (\function_exists('imagewebp') || \function_exists('imagejpeg') || \function_exists('imagepng'));
+    }
+
     /**
      * 生成缩略图
      *
@@ -124,6 +147,9 @@ class ThumbnailService
     public function generate(string $originalPath, ?int $width = null, ?int $height = null): ?string
     {
         if (!\is_file($originalPath)) {
+            return null;
+        }
+        if (!$this->hasGdOutputSupport()) {
             return null;
         }
         
@@ -186,10 +212,13 @@ class ThumbnailService
         if (\function_exists('imagewebp')) {
             $result = @\imagewebp($dstImage, $thumbPath, $this->thumbQuality);
         }
-        
-        if (!$result) {
+        if (!$result && \function_exists('imagejpeg')) {
             $thumbPath = \preg_replace('/\.webp$/i', '.jpg', $thumbPath);
             $result = @\imagejpeg($dstImage, $thumbPath, $this->thumbQuality);
+        }
+        if (!$result && \function_exists('imagepng')) {
+            $thumbPath = \preg_replace('/\.(webp|jpg|jpeg)$/i', '.png', $thumbPath);
+            $result = @\imagepng($dstImage, $thumbPath, (int) \round(9 - $this->thumbQuality / 100 * 9));
         }
         
         \imagedestroy($srcImage);
@@ -205,12 +234,10 @@ class ThumbnailService
      */
     public function getOrGenerate(string $originalPath): ?string
     {
-        $thumbPath = $this->getThumbCachePath($originalPath);
-        
-        if ($this->isCacheValid($originalPath, $thumbPath)) {
-            return $thumbPath;
+        $existing = $this->getExistingThumbPath($originalPath);
+        if ($existing !== null) {
+            return $existing;
         }
-        
         return $this->generate($originalPath);
     }
     
