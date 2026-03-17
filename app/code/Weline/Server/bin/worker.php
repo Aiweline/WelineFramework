@@ -1773,7 +1773,10 @@ function handleRequest(
             $handleDuration = \round(($handleEndTime - $handleStartTime) * 1000, 2);
             WlsLogger::info_("runtime->handle() 完成，耗时: {$handleDuration}ms，结果类型: " . \gettype($result));
         } catch (\Throwable $handleE) {
-            WlsLogger::error_("runtime->handle() 异常: " . $handleE->getMessage() . " (" . $handleE->getFile() . ":" . $handleE->getLine() . ")");
+            // 302 等响应终止为正常控制流，不记错误
+            if (!$handleE instanceof \Weline\Framework\Http\ResponseTerminateException) {
+                WlsLogger::error_("runtime->handle() 异常: " . $handleE->getMessage() . " (" . $handleE->getFile() . ":" . $handleE->getLine() . ")");
+            }
             throw $handleE;
         }
         
@@ -1914,10 +1917,12 @@ function handleRequest(
         
         return $httpResponse;
     } catch (\Throwable $e) {
-        
-        WlsLogger::error_("请求处理错误: " . $e->getMessage() . " (文件: " . $e->getFile() . ":" . $e->getLine() . ")");
-        w_log_error('[WLS Worker] Request error: ' . $e->getMessage());
-        
+        // 302 等响应终止为正常控制流，不记错误
+        if (!$e instanceof \Weline\Framework\Http\ResponseTerminateException) {
+            WlsLogger::error_("请求处理错误: " . $e->getMessage() . " (文件: " . $e->getFile() . ":" . $e->getLine() . ")");
+            w_log_error('[WLS Worker] Request error: ' . $e->getMessage());
+        }
+
         $statusCode = 500;
         $errorMessage = $e->getMessage() ?: 'Internal Server Error';
         

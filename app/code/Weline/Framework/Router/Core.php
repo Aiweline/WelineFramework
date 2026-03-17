@@ -1086,17 +1086,13 @@ class Core
         header('Content-Length: ' . filesize($filename));
     }
 
+    /** 只读请求入口写入的 WELINE_IS_STATIC_FILE，不再在此处判断 */
     private function isStaticFile(): bool
     {
-        if(!$_SERVER['WELINE_PARSER_URL']){
+        if (!($_SERVER['WELINE_PARSER_URL'] ?? false)) {
             return false;
         }
-        $arrs = $this->request->getPathSplit();
-        $last = end($arrs);
-        if (str_contains($last, '.') and preg_match('/\.(jpg|jpeg|png|webp|gif|css|js|ico|woff|woff2|txt|pdf|doc|docx|xls|xlsx|ppt|pptx)$/', $last)) {
-            return true;
-        }
-        return false;
+        return (bool)($_SERVER['WELINE_IS_STATIC_FILE'] ?? false);
     }
 
     private function collectRouterGeneratedGetParams(array $originalGet): array
