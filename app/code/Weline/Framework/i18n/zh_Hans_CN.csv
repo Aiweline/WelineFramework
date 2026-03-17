@@ -693,6 +693,8 @@ SEO解码,SEO解码
 "在创建 Session 驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File Session 替换为内存 Session。","在创建 Session 驱动实例前触发，允许其他模块（如 Weline_Server）接管驱动，例如 WLS 模式下将 File Session 替换为内存 Session。"
 "Session 存储解析","Session 存储解析"
 "在 SessionFactory 解析存储类型时触发，允许外部模块（如 WLS）声明自己的存储类型和配置。实现 Session 模块与具体存储后端的解耦。","在 SessionFactory 解析存储类型时触发，允许外部模块（如 WLS）声明自己的存储类型和配置。实现 Session 模块与具体存储后端的解耦。"
+日志运行模式解析,日志运行模式解析
+"在解析当前日志运行模式（fpm | wls）时触发。默认来自配置 log.runtime，观察者可修改 data[""runtime""] 为 wls（如 WLS 进程内由 Weline_Server 设置）。","在解析当前日志运行模式（fpm | wls）时触发。默认来自配置 log.runtime，观察者可修改 data[""runtime""] 为 wls（如 WLS 进程内由 Weline_Server 设置）。"
 控制台编译,控制台编译
 在控制台编译时触发，允许其他模块执行编译相关操作。,在控制台编译时触发，允许其他模块执行编译相关操作。
 CLI命令执行完成,CLI命令执行完成
@@ -1247,6 +1249,8 @@ HTTP方法,HTTP方法
 跳过反射编译,跳过反射编译
 "已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}","已清理异常卸载模块 ACL/菜单残留 %{1} 条：%{2}"
 "清理异常卸载模块 ACL/菜单残留失败：%{1}","清理异常卸载模块 ACL/菜单残留失败：%{1}"
+"已从 modules.php 中移除以下异常卸载的模块：%{1}","已从 modules.php 中移除以下异常卸载的模块：%{1}"
+"从 modules.php 移除异常模块时失败：%{1}","从 modules.php 移除异常模块时失败：%{1}"
 "正在检查 composer 命令...","正在检查 composer 命令..."
 "未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。","未找到 composer 命令！请确保 composer 已安装并添加到系统 PATH 中。"
 "找到 composer 命令: %{1}","找到 composer 命令: %{1}"
