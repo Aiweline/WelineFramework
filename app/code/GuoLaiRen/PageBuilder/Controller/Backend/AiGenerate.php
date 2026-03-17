@@ -275,11 +275,10 @@ class AiGenerate extends BackendController
                 $targetLocale
             );
 
-            // 调用AI服务
+            // 调用AI服务（跟随页面选择的语言生成）
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            
-            $locale = State::getLang() ?: 'zh_Hans_CN';
+            $locale = !empty($targetLocale) ? $targetLocale : (State::getLang() ?: 'zh_Hans_CN');
             $response = $aiService->generate(
                 $prompt,
                 null, // 自动选择模型
@@ -316,10 +315,11 @@ class AiGenerate extends BackendController
      *
      * POST /pagebuilder/backend/ai-generate/page-content-stream
      *
-     * 参数与 pageContent 相同。响应为 text/event-stream：
+     * 参数与 pageContent 相同。响应为 text/event-stream，全过程流式输出：
      * - start: 开始
      * - progress: 进度消息
-     * - done: 成功，data 为生成结果
+     * - chunk: AI 逐块返回内容（content、total_length）
+     * - done: 成功，data 为解析后的生成结果
      * - error: 失败，message 为错误信息
      */
     public function pageContentStream(): void
@@ -348,6 +348,11 @@ class AiGenerate extends BackendController
                     $sse->sendEvent('error', ['message' => __('页面不存在')]);
                     $sse->close();
                     return;
+                }
+                // 生成前先保存 ai_description 到数据库
+                $aiDesc = trim((string) $this->request->getPost('description', ''));
+                if ($aiDesc !== '') {
+                    $page->setData(PageModel::schema_fields_AI_DESCRIPTION, $aiDesc)->save();
                 }
             }
 
@@ -438,21 +443,48 @@ class AiGenerate extends BackendController
 
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            $locale = State::getLang() ?: 'zh_Hans_CN';
-            $response = $aiService->generate(
-                $prompt,
-                null,
-                'pagebuilder_content_generation',
-                $locale,
-                [],
-                null,
-                true
-            );
+            $locale = !empty($targetLocale) ? $targetLocale : (State::getLang() ?: 'zh_Hans_CN');
+            $fullContent = '';
+            $streamError = null;
+
+            try {
+                $aiService->generateStream(
+                    $prompt,
+                    function (string $chunk) use ($sse, &$fullContent): bool {
+                        $fullContent .= $chunk;
+                        $sse->sendEvent('chunk', [
+                            'content' => $chunk,
+                            'total_length' => \strlen($fullContent),
+                        ]);
+                        return $sse->isAlive();
+                    },
+                    null,
+                    'pagebuilder_content_generation',
+                    $locale,
+                    []
+                );
+            } catch (\Throwable $e) {
+                $streamError = $this->sanitizeErrorMessage($e->getMessage());
+                $sse->sendEvent('error', ['message' => $streamError]);
+                $sse->close();
+                return;
+            }
+
+            if (trim($fullContent) === '') {
+                $msg = $streamError ?: __('AI 未返回任何内容，请检查 AI 服务配置或网络连接');
+                $sse->sendEvent('error', ['message' => $msg]);
+                $sse->close();
+                return;
+            }
 
             $sse->sendEvent('progress', ['message' => __('解析生成结果...')]);
 
-            $data = $this->parseJsonResponse($response);
-            $sse->sendEvent('done', ['data' => $data]);
+            try {
+                $data = $this->parseJsonResponse($fullContent);
+                $sse->sendEvent('done', ['data' => $data]);
+            } catch (\Throwable $e) {
+                $sse->sendEvent('error', ['message' => $this->sanitizeErrorMessage($e->getMessage())]);
+            }
         } catch (\Throwable $e) {
             $errorMessage = $this->sanitizeErrorMessage($e->getMessage());
             $sse->sendEvent('error', ['message' => $errorMessage]);
@@ -947,6 +979,15 @@ class AiGenerate extends BackendController
     }
 
     /**
+     * 根据页面类型返回对应的生成提示（页面内容侧重点与结构要求）
+     */
+    private function getPageTypePromptInstructions(string $pageType): string
+    {
+        $map = PageModel::getPageTypePromptInstructionsMap();
+        return $map[$pageType] ?? __('【通用页面】根据页面描述生成符合主题的完整内容；结构清晰、信息完整、风格一致。');
+    }
+
+    /**
      * 构建页面内容生成的提示词
      * 
      * @param string $targetLocale 目标语言代码（如 en_US, zh_Hans_CN 等）
@@ -973,7 +1014,8 @@ class AiGenerate extends BackendController
         }
         
         $prompt .= "页面描述：{$description}\n";
-        $prompt .= "页面类型：{$pageType}\n\n";
+        $prompt .= "页面类型：{$pageType}\n";
+        $prompt .= "【该类型页面要求】" . $this->getPageTypePromptInstructions($pageType) . "\n\n";
 
         if (!empty($title)) {
             $prompt .= "当前页面标题：{$title}\n";
@@ -1018,8 +1060,9 @@ class AiGenerate extends BackendController
             $prompt .= '  "meta_keywords": "SEO关键词（如果没有提供则根据描述生成，用逗号分隔）"' . "\n";
         }
 
-        // 主页类型不需要content字段
-        if ($pageType !== 'home' && $pageType !== 'homepage') {
+        // 主页类型不需要 content 字段（由模板组件负责）
+        $isHomeType = in_array($pageType, [PageModel::TYPE_HOME, 'home', 'homepage'], true);
+        if (!$isHomeType) {
             if ($isEdit) {
                 $prompt .= ',\n  "content": "优化后的页面HTML内容（基于当前页面内容进行优化和完善，保持风格一致）"' . "\n";
             } else {
