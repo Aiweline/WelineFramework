@@ -15,6 +15,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Extends\Model\ExtendsRule;
 use Weline\Extends\Service\CircularDependencyDetector;
+use Weline\Framework\Manager\MessageManager;
 
 /**
  * 扩展管理控制器
@@ -42,7 +43,7 @@ class ExtendsController extends BackendController
     {
         $moduleName = $this->request->getParam('module');
         if (empty($moduleName)) {
-            $this->getMessageManager()->addWarning(__('请指定模块名'));
+            MessageManager::warning(__('请指定模块名'));
             $this->redirect('*/index');
             return;
         }
@@ -70,13 +71,13 @@ class ExtendsController extends BackendController
             $cycles = $detector->detectAll();
 
             if (empty($cycles)) {
-                $this->getMessageManager()->addSuccess(__('未检测到循环依赖'));
+                MessageManager::success(__('未检测到循环依赖'));
             } else {
-                $this->getMessageManager()->addError(__('检测到循环依赖，请查看详情'));
+                MessageManager::error(__('检测到循环依赖，请查看详情'));
                 $this->assign('cycles', $cycles);
             }
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+            MessageManager::error($e->getMessage());
         }
 
         $this->assign('title', __('循环依赖检测'));
@@ -94,12 +95,12 @@ class ExtendsController extends BackendController
             $result = $registry->refresh();
 
             if ($result) {
-                $this->getMessageManager()->addSuccess(__('扩展注册表刷新成功'));
+                MessageManager::success(__('扩展注册表刷新成功'));
             } else {
-                $this->getMessageManager()->addError(__('扩展注册表刷新失败'));
+                MessageManager::error(__('扩展注册表刷新失败'));
             }
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('刷新失败: %1', $e->getMessage()));
+            MessageManager::error(__('刷新失败: %1', $e->getMessage()));
         }
 
         $this->redirect('*/index');
@@ -153,7 +154,7 @@ class ExtendsController extends BackendController
             
             return $this->fetch();
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('加载 Sticker 统计失败: %1', $e->getMessage()));
+            MessageManager::error(__('加载 Sticker 统计失败: %1', $e->getMessage()));
             $this->redirect('*/index');
         }
     }
@@ -166,7 +167,11 @@ class ExtendsController extends BackendController
         try {
             $moduleName = $this->request->getParam('module');
             if (empty($moduleName)) {
-                $this->getMessageManager()->addWarning(__('请指定模块名'));
+                MessageManager::warning(__('请指定模块名'));
+                if ($this->request->isAjax() || $this->request->getGet('isIframe')) {
+                    $this->assign('error', __('请指定模块名'));
+                    return $this->fetch('templates/Backend/Extends/error.phtml');
+                }
                 $this->redirect('*/index');
                 return;
             }
@@ -199,7 +204,7 @@ class ExtendsController extends BackendController
             
             return $this->fetch();
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('加载模块详情失败: %1', $e->getMessage()));
+            MessageManager::error(__('加载模块详情失败: %1', $e->getMessage()));
             $this->redirect('*/index');
         }
     }
@@ -311,7 +316,7 @@ class ExtendsController extends BackendController
             
             return $this->fetch();
         } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('搜索失败: %1', $e->getMessage()));
+            MessageManager::error(__('搜索失败: %1', $e->getMessage()));
             $this->redirect('*/index');
         }
     }
