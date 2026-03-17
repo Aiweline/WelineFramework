@@ -66,10 +66,10 @@ $description = $config['content.description'] ?? 'A balanced, encyclopedia-style
 
 // CTA配置
 $primaryBtnText = $config['cta.primary_text'] ?? 'Get the Android App';
-$primaryBtnUrl = $config['cta.primary_url'] ?? '#download';
+$primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.primary_url'] ?? '#download');
 $primaryBtnIcon = $config['cta.primary_icon'] ?? 'download';
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Explore Games';
-$secondaryBtnUrl = $config['cta.secondary_url'] ?? '#games';
+$secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#games');
 
 // 特性配置 - 使用原网站文案
 $featuresRaw = $config['features.items'] ?? "Result cycles decoded|Understand single, jodi, and panna formats used in satta king 786 listings.\nAndroid-first access|Lightweight app guidance with clear install steps and permission clarity.\nCompliance-friendly tone|Facts, definitions, and responsible use notes without promises of winnings.";

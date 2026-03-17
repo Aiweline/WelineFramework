@@ -311,5 +311,24 @@ class PageHelper
         }
         return $url;
     }
+
+    /**
+     * 将纯锚点链接转为根路径，避免相对路径导致跨页跳错。例如 #games -> /#games
+     * 仅对以 # 开头且长度>1 的链接加前缀 /，其它（/、http 等）原样返回
+     *
+     * @param string $url 原始链接（如 #games、#download、/contact）
+     * @return string 规范化后的链接
+     */
+    public static function normalizeAnchorUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '' || $url === '#') {
+            return $url !== '' ? $url : '#';
+        }
+        if ($url[0] === '#') {
+            return '/' . $url;
+        }
+        return $url;
+    }
 }
 
