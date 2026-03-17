@@ -11,11 +11,17 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Manager;
 
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionFactory;
 
 class MessageManager
 {
+    /** Flash 消息 Cookie 名，独立于 Session，不受 session destroy 影响 */
+    private const FLASH_COOKIE = 'w_flash';
+
+    /** Flash Cookie 存活秒数（重定向+渲染一次请求内有效） */
+    private const FLASH_TTL = 120;
 
     public const keys = [
         'has-error',
@@ -55,18 +61,14 @@ class MessageManager
      */
     public function addError(string $msg = '', string $title = '', string $class = 'danger'): static
     {
-        $title = $title ?: __('错误！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-error', '1');
+        self::flashAppend(self::process_message($msg, $title ?: __('错误！'), $class), 'has-error');
         return $this;
     }
 
     public static function add_error(string $msg = '', string $title = '', string $class = 'danger'): self
     {
-        $title = $title ?: __('错误！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-error', '1');
-        return new self(self::session());
+        self::flashAppend(self::process_message($msg, $title ?: __('错误！'), $class), 'has-error');
+        return ObjectManager::getInstance(self::class);
     }
 
     public static function error(string $msg = '', string $title = '', string $class = 'danger'): void
@@ -82,11 +84,15 @@ class MessageManager
      */
     public function hasErrorMessage(): bool
     {
-        return (bool)self::session()->get('has-error');
+        return self::has_error_message();
     }
 
     public static function has_error_message(): bool
     {
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            return $flash['f'] === 'has-error';
+        }
         return (bool)self::session()->get('has-error');
     }
 
@@ -99,9 +105,7 @@ class MessageManager
      */
     public function addException(\Exception $exception, string $title = '', string $class = 'warning')
     {
-        $msg = $exception->getMessage();
-        self::session()->append('system-message', self::process_message($msg, __('异常警告！'), $class));
-        self::session()->set('has-exception', '1');
+        self::flashAppend(self::process_message($exception->getMessage(), $title ?: __('异常警告！'), $class), 'has-exception');
         return $this;
     }
 
@@ -117,11 +121,15 @@ class MessageManager
      */
     public function hasException(): bool
     {
-        return (bool)self::session()->get('has-exception');
+        return self::has_exception();
     }
 
     public static function has_exception(): bool
     {
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            return $flash['f'] === 'has-exception';
+        }
         return (bool)self::session()->get('has-exception');
     }
 
@@ -134,9 +142,7 @@ class MessageManager
      */
     public function addSuccess(string $msg = '', string $title = '', string $class = 'success')
     {
-        $title = $title ?: __('操作成功！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-success', '1');
+        self::flashAppend(self::process_message($msg, $title ?: __('操作成功！'), $class), 'has-success');
         return $this;
     }
 
@@ -152,11 +158,15 @@ class MessageManager
      */
     public function hasSuccessMessage(): bool
     {
-        return (bool)self::session()->get('has-success');
+        return self::has_success_message();
     }
 
     public static function has_success_message(): bool
     {
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            return $flash['f'] === 'has-success';
+        }
         return (bool)self::session()->get('has-success');
     }
 
@@ -169,9 +179,7 @@ class MessageManager
      */
     public function addWarning(string $msg = '', string $title = '', string $class = 'warning'): self
     {
-        $title = $title ?: __('警告！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-warning', '1');
+        self::flashAppend(self::process_message($msg, $title ?: __('警告！'), $class), 'has-warning');
         return $this;
     }
 
@@ -187,11 +195,15 @@ class MessageManager
      */
     public function hasWarningMessage(): bool
     {
-        return (bool)self::session()->get('has-warning');
+        return self::has_warning_message();
     }
 
     public static function has_warning_message(): bool
     {
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            return $flash['f'] === 'has-warning';
+        }
         return (bool)self::session()->get('has-warning');
     }
 
@@ -204,9 +216,7 @@ class MessageManager
      */
     public function addNotes(string $msg = '', string $title = '', string $class = 'notes')
     {
-        $title = $title ?: __('提示！');
-        self::session()->append('system-message', self::process_message($msg, $title, $class));
-        self::session()->set('has-notes', '1');
+        self::flashAppend(self::process_message($msg, $title ?: __('提示！'), $class), 'has-notes');
         return $this;
     }
 
@@ -218,12 +228,52 @@ class MessageManager
 
     /**
      * 写入单条消息：清空历史消息后写入当前消息。
+     * 存于 Cookie，与 Session 解耦，不受 session destroy 影响。
      */
     private static function setSingleMessage(string $msg, string $title, string $class, string $flagKey): void
     {
-        $session = self::session();
-        $session->set('system-message', self::process_message($msg, $title, $class));
-        $session->set($flagKey, '1');
+        $content = self::process_message($msg, $title, $class);
+        self::flashWrite($content, $flagKey);
+    }
+
+    /** 写入 Flash 到 Cookie */
+    private static function flashWrite(string $content, string $flagKey): void
+    {
+        $payload = base64_encode(json_encode(['c' => $content, 'f' => $flagKey], \JSON_THROW_ON_ERROR));
+        Cookie::set(self::FLASH_COOKIE, $payload, self::FLASH_TTL, ['path' => '/', 'httponly' => true]);
+    }
+
+    /** 读取 Flash 从 Cookie，返回 ['c' => content, 'f' => flag] 或 null */
+    private static function flashRead(): ?array
+    {
+        $raw = Cookie::get(self::FLASH_COOKIE);
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        $decoded = @base64_decode($raw, true);
+        if ($decoded === false) {
+            return null;
+        }
+        try {
+            $data = json_decode($decoded, true, 2, \JSON_THROW_ON_ERROR);
+            return \is_array($data) && isset($data['c'], $data['f']) ? $data : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** 删除 Flash Cookie */
+    private static function flashDelete(): void
+    {
+        Cookie::delete(self::FLASH_COOKIE, ['path' => '/']);
+    }
+
+    /** 追加到 Flash（deprecated append 方法用） */
+    private static function flashAppend(string $html, string $flagKey): void
+    {
+        $existing = self::flashRead();
+        $content = ($existing['c'] ?? '') . $html;
+        self::flashWrite($content, $flagKey);
     }
 
     /**
@@ -232,11 +282,15 @@ class MessageManager
      */
     public function hasNotesMessage(): bool
     {
-        return (bool)self::session()->get('has-notes');
+        return self::has_notes_message();
     }
 
     public static function has_notes_message(): bool
     {
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            return $flash['f'] === 'has-notes';
+        }
         return (bool)self::session()->get('has-notes');
     }
 
@@ -256,13 +310,18 @@ class MessageManager
     }
 
     /**
-     * 输出并消费消息：读取后立即删除并持久化。
-     * flushRequestSessions 执行前会清除所有 Session 实例的消息键，解决多 Session 导致 message 残留。
+     * 输出并消费消息：优先读 Cookie Flash，再回退 Session，读取后立即删除。
+     * Cookie Flash 与 Session 解耦，不受 session destroy 影响。
      */
     public function render(): string
     {
-        $session = $this->getSession();
-        $content = $session->get('system-message') ?? '';
+        $flash = self::flashRead();
+        if ($flash !== null) {
+            $content = $flash['c'];
+        } else {
+            $session = $this->getSession();
+            $content = $session->get('system-message') ?? '';
+        }
         self::$messagesRenderedThisRequest = true;
         $this->clear();
         return "<div class='system message'>{$content}</div>";
@@ -292,12 +351,11 @@ class MessageManager
     }
 
     /**
-     * 清空系统消息，并立即落盘。
-     * 清除当前 Session 及 instancesForShutdown 内所有实例的消息键，解决多实例导致消息残留。
-     * flushRequestSessions 前会再次兜底清除。
+     * 清空系统消息：删除 Flash Cookie 并清除 Session 消息键。
      */
     public function clear(): void
     {
+        self::flashDelete();
         Session::clearKeysFromInstances(self::keys);
         $session = $this->getSession();
         $session->save();

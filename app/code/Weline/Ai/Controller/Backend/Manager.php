@@ -17,18 +17,19 @@ use Weline\Framework\Acl\Acl;
 class Manager extends BackendController
 {
     /**
-     * 聚合入口：按 tab 重定向到模型/适配器/供应商页（无 iframe，统一 Tab 布局）
+     * 聚合入口：按 tab 重定向（第一个 Tab 为统计面板）
      */
     #[Acl('Weline_Ai::ai_manager_index', '查看AI管理', 'mdi-view-dashboard', '查看AI管理聚合页')]
     public function index()
     {
-        $tab = $this->request->getGet('tab', 'model');
+        $tab = $this->request->getGet('tab', 'statistics');
         $map = [
+            'statistics' => 'ai/backend/statistics',
             'model' => 'ai/backend/model',
             'adapter' => 'ai/backend/adapter',
             'account' => 'ai/backend/provider',
         ];
-        $path = $map[$tab] ?? $map['model'];
+        $path = $map[$tab] ?? $map['statistics'];
         return $this->redirect($this->request->getUrlBuilder()->getBackendUrl($path));
     }
 }

@@ -26,7 +26,7 @@ alwaysApply: false
 - JS 必须 IIFE 闭包，禁止全局变量污染
 - 组件 CSS 使用独立作用域前缀（如 `.vendor-module-xxx`）
 - 用户可见文案用 `__()` 或 `<lang>`，词条进 i18n/*.csv；弹窗/确认用 BackendToast/BackendConfirm，禁止 alert/confirm/prompt
-- **标签属性**：禁止在标签属性上写 `<?= ?>` 等 PHP 代码，应使用 `@lang{xxx}` 等静态标签，避免干扰标签解析、便于生成静态信息
+- **【硬性】标签属性禁止 PHP**：`<w:xxx attr="...">` 等自定义标签的**属性值内**禁止写 `<?= ?>`、`<?php ?>`，必须用 `@lang{xxx}` 或 `@lang(xxx)`；否则标签解析器会报 `unexpected identifier` ParseError
 
 ## 最小示例
 
@@ -43,4 +43,4 @@ alwaysApply: false
 - 硬编码 #fff、rgb()、rgba()
 - 全局 var/function 污染；通用类名 .card、.header 无前缀
 - 禁止 alert/confirm/prompt，用 BackendToast/BackendConfirm
-- 在标签属性中写 `<?= __('xxx') ?>` 等 PHP 代码，应改用 `@lang{xxx}`
+- **在 w:/自定义 标签属性中写** `<?= __('xxx') ?>` 或 `<?= htmlspecialchars(...) ?>` 等任何 PHP → 必须改用 `@lang{xxx}` 或 `@lang(xxx)`

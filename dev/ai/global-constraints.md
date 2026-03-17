@@ -4,6 +4,7 @@
 
 ## 禁止（全局）
 
+- **在 w: 标签 / 自定义 Taglib 标签 的属性中写 `<?= ?>` 或 `<?php ?>`** → 必须用 `@lang{xxx}` 或 `@lang(xxx)`，否则标签解析会报 `unexpected identifier` 等 ParseError（见 i18n-internationalization）
 - 改 `generated/`；用 `error_log()`/echo/print 打错误
 - `alert()` / `confirm()` / `prompt()` → 用 BackendToast / BackendConfirm（见 friendly-notifications）
 - 硬编码用户可见文本 → 用 `__()`、`<lang>`、i18n/*.csv（见 i18n-internationalization）
