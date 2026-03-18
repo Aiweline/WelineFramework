@@ -32,6 +32,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '按证书有效性同步站点 HTTPS 开关。',
     examples: ['php bin/w cron:test --task=https_sync --domain=www.example.com -v'],
+    manual_help: [
+        '控制台 --domain= 仅同步该站点域名记录。',
+        '后台「后缀」未解析时处理全表（受任务内批量逻辑限制）。',
+    ],
 )]
 class HttpsSync
 {

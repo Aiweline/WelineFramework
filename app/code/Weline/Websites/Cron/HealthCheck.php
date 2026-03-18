@@ -26,6 +26,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '站点域名健康检查与 HTTPS 探测（website_domain 表）。',
     examples: ['php bin/w cron:test --task=health_check --domain=www.example.com -v'],
+    manual_help: [
+        '控制台 --domain= 只检查匹配该域名的站点行。',
+        '后台「后缀」未解析时按任务默认批量检查。',
+    ],
 )]
 class HealthCheck
 {
