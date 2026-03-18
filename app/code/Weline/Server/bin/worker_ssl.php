@@ -29,7 +29,7 @@ $isFrontend = false;
 $useReusePort = false;  // 是否使用 SO_REUSEPORT（Linux 直连模式）
 $deferSsl = false;      // 延迟 SSL 模式（用于 TCP 透传架构，先接受 TCP 连接，再手动启用 SSL）
                         // 注意：延迟 SSL 仅改变握手时机，不消除 TLS 问题。Windows 下若出现 TLS reset，
-                        // 可改用 --no-ssl 或 env.server.https=false 做 HTTP 验证；或安装 event 扩展后再测 HTTPS。
+                        // 可改用 --no-ssl 或 wls.https=false 做 HTTP 验证；或安装 event 扩展后再测 HTTPS。
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 
@@ -148,8 +148,9 @@ $originTokenValidationEnabled = false;
 $originTokenHeader = 'X-Weline-Origin-Token';
 $originTokenAllowLocal = true;
 if (\is_array($envConfig)) {
-    $originToken = (string)($envConfig['server']['origin_token'] ?? '');
-    $originValidationConfig = $envConfig['server']['origin_token_validation'] ?? [];
+    $wlsEnv = $envConfig['wls'] ?? [];
+    $originToken = (string)($wlsEnv['origin_token'] ?? '');
+    $originValidationConfig = $wlsEnv['origin_token_validation'] ?? [];
     if (\is_array($originValidationConfig)) {
         $originTokenValidationEnabled = (bool)($originValidationConfig['enabled'] ?? false);
         $originTokenHeader = (string)($originValidationConfig['header'] ?? $originTokenHeader);
@@ -414,9 +415,11 @@ try {
     WlsLogger::info_("框架运行时初始化成功");
 
     // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
-    $sessionCfg = \is_array($envConfig) ? ($envConfig['session'] ?? []) : [];
-    $sessionHost = (string)($sessionCfg['server_host'] ?? $sessionCfg['host'] ?? '127.0.0.1');
-    $sessionPort = (int)($sessionCfg['server_port'] ?? $sessionCfg['port'] ?? 19970);
+    $wlsSess = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
+        ? $envConfig['wls']['session'] : [];
+    $wlsSrv = \is_array($wlsSess['wls_server'] ?? null) ? $wlsSess['wls_server'] : [];
+    $sessionHost = (string)($wlsSrv['host'] ?? $wlsSess['host'] ?? '127.0.0.1');
+    $sessionPort = (int)($wlsSrv['port'] ?? $wlsSess['port'] ?? 19970);
     WlsLogger::info_("[Session] 开始连接 Session 服务 {$sessionHost}:{$sessionPort}，最多重试 10 次，间隔 2 秒");
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
         'connect_timeout' => 1.0,
@@ -463,8 +466,8 @@ try {
 // ========== WLS 内存缓存配置（智能模式） ==========
 // 读取 env 配置中的 WLS 缓存配置
 $wlsCacheConfig = [];
-if ($envConfig !== null && isset($envConfig['server']['cache'])) {
-    $wlsCacheConfig = $envConfig['server']['cache'];
+if ($envConfig !== null && isset(($envConfig['wls'] ?? [])['cache'])) {
+    $wlsCacheConfig = $envConfig['wls']['cache'];
 }
 
 /**
@@ -647,7 +650,7 @@ if ($freeMemory > 0 && $freeMemory < $requiredMemory) {
     
     // 如果严重不足（低于需求的 50%），报错退出
     if ($freeMemory < $requiredMemory * 0.5) {
-        WlsLogger::error_("内存严重不足，无法启动。请增加系统内存或减少 env.php 中的 server.cache.static_file_max_total 配置");
+        WlsLogger::error_("内存严重不足，无法启动。请增加系统内存或减少 env.php 中的 wls.cache.static_file_max_total 配置");
         exit(1);
     }
     
@@ -660,6 +663,16 @@ if ($freeMemory > 0 && $freeMemory < $requiredMemory) {
 
 WlsLogger::info_("内存缓存配置：静态文件缓存上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL / 1024 / 1024, 1) . "MB，单文件上限 " . \round($WLS_STATIC_CACHE_MAX_SIZE / 1024, 1) . "KB，淘汰阈值 " . \round($WLS_CACHE_EVICTION_THRESHOLD / 1024 / 1024, 1) . "MB");
 // ========== 内存缓存配置结束 ==========
+
+$WLS_UOPZ_EXIT_GUARD = false;
+if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
+    try {
+        \uopz_allow_exit(false);
+        $WLS_UOPZ_EXIT_GUARD = true;
+        WlsLogger::info_('uopz 已启用：裸 exit()/die() 不结束 SSL Worker（请使用 System::exit）');
+    } catch (\Throwable) {
+    }
+}
 
 // 注册补充 shutdown handler（检测 die()/exit() 非正常退出）
 // 注：致命错误由 ErrorBootstrap 统一处理，此处仅处理非致命退出
@@ -995,7 +1008,8 @@ $ipcClient = null;
 $ipcReceivedShutdown = false;
 $ipcDraining = false; // 是否正在排水（收到 reload 后关闭监听 socket，处理剩余请求）
 $drainStartTime = 0;   // 排水开始时间戳
-$maxDrainTime = 10;     // 排水最大等待时间（秒），超时后强制关闭所有连接退出
+$maxDrainTime = 10;     // 由 Master drain/reload 消息或默认覆盖
+$pendingMaintDrainReqId = null; // 维护：先排空本 Worker 存量连接再 ACK
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 
 // 如果启用了维护模式
@@ -1023,7 +1037,7 @@ if ($controlPort > 0) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerSslControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, $workerId, &$sniServerCerts): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$maxDrainTime, &$pendingMaintDrainReqId, $workerId, &$sniServerCerts, &$ipcClient, $isMaintenanceWorker): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -1039,12 +1053,14 @@ if ($controlPort > 0) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    $maxDrainTime = $dt >= 10 ? \min(7200, $dt) : 120;
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
                     }
-                    WlsLogger::info_("收到 reload 命令，已清除 opcache 并关闭监听 socket，开始排水（最多等待 10 秒）...");
+                    WlsLogger::info_("收到 reload 命令，已清除 opcache 并关闭监听 socket，开始排水（最多等待 {$maxDrainTime} 秒）...");
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_CACHE_CLEAR:
@@ -1083,14 +1099,60 @@ if ($controlPort > 0) {
                     $shouldExit = true;
                     $ipcDraining = true;
                     $drainStartTime = \time();
+                    $dt = (int) ($msg['drain_timeout_sec'] ?? 0);
+                    if ($dt >= 10) {
+                        $maxDrainTime = \min(7200, $dt);
+                    }
                     // 关闭监听 socket（不再接受新连接）
                     if ($socket && \is_resource($socket)) {
                         @\fclose($socket);
                         $socket = null;
                     }
-                    WlsLogger::info_("收到 drain 命令，已关闭监听 socket，开始排水...");
+                    WlsLogger::info_("收到 drain 命令，已关闭监听 socket，开始排水（最多 {$maxDrainTime}s）...");
                     break;
-                    
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
+                    if ($isMaintenanceWorker) {
+                        break;
+                    }
+                    $mEnabled = (bool) ($msg['enabled'] ?? false);
+                    $mReqId = (string) ($msg['request_id'] ?? '');
+                    if ($mEnabled) {
+                        if (!empty($msg['immediate_ack'])) {
+                            try {
+                                \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
+                            } catch (\Throwable $e) {
+                                WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
+                            }
+                            if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
+                                $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+                                    'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+                                    'request_id' => $mReqId,
+                                    'worker_id' => $workerId,
+                                ]));
+                            }
+                            break;
+                        }
+                        $pendingMaintDrainReqId = $mReqId !== '' ? $mReqId : 'wm';
+                        WlsLogger::info_('维护模式：等待本 Worker 存量连接处理完毕后再确认 Master（新连接已由 Dispatcher 切至维护 Worker）');
+                        break;
+                    }
+                    $pendingMaintDrainReqId = null;
+                    try {
+                        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', false);
+                        WlsLogger::info_("IPC 维护信号 enabled=false request_id={$mReqId}");
+                    } catch (\Throwable $e) {
+                        WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
+                    }
+                    if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+                            'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+                            'request_id' => $mReqId,
+                            'worker_id' => $workerId,
+                        ]));
+                    }
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
                     // 主动终结：优雅退出
                     $ipcReceivedShutdown = true;
@@ -1240,6 +1302,10 @@ if (\function_exists('pcntl_signal')) {
 $consecutiveErrors = 0;
 $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足够的恢复机会）
 
+// 进入事件循环后向 Master 上报（略延迟，避免早于 register/ready 被 Master 处理）
+$workerLoopStartedSent = false;
+$workerLoopNotifyNotBefore = 0.0;
+
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -1268,7 +1334,39 @@ while (true) {
     if ($ipcClient && !$ipcClient->isConnected() && !$ipcReceivedShutdown) {
         $ipcClient->tryReconnect();
     }
-    
+    if ($ipcClient && !$ipcClient->isConnected()) {
+        $workerLoopStartedSent = false;
+        $workerLoopNotifyNotBefore = 0.0;
+    }
+    if ($ipcClient && $ipcClient->isConnected() && !$workerLoopStartedSent && !$ipcReceivedShutdown) {
+        if ($workerLoopNotifyNotBefore <= 0.0) {
+            $workerLoopNotifyNotBefore = \microtime(true) + 0.25;
+        }
+        if (\microtime(true) >= $workerLoopNotifyNotBefore) {
+            $ipcClient->sendWorkerLoopStarted($workerId, $port, (int) \getmypid());
+            $workerLoopStartedSent = true;
+        }
+    }
+
+    if ($pendingMaintDrainReqId !== null && !$isMaintenanceWorker
+        && empty($connections) && empty($pendingHandshakes)) {
+        try {
+            \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
+        } catch (\Throwable $e) {
+            WlsLogger::warning_('维护标志应用失败: ' . $e->getMessage());
+        }
+        $rid = $pendingMaintDrainReqId;
+        if ($ipcClient !== null && $ipcClient->isConnected()) {
+            $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+                'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+                'request_id' => $rid,
+                'worker_id' => $workerId,
+            ]));
+        }
+        WlsLogger::info_('维护：存量连接已排空，已上报 Master ACK');
+        $pendingMaintDrainReqId = null;
+    }
+
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
         if ($ipcDraining) {
@@ -1895,15 +1993,27 @@ while (true) {
         WlsLogger::info_("Worker 开始处理请求 connId={$connId} uri=" . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog));
         $handleStartTime = \microtime(true);
         
-        // 处理请求
-        $response = handleRequest(
-            $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port, 
-            $requestCount, $activeRequests, \count($connections), $startTime,
-            $originToken,
-            $originTokenValidationEnabled,
-            $originTokenHeader,
-            $originTokenAllowLocal
-        );
+        try {
+            $response = handleRequest(
+                $rawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+                $requestCount, $activeRequests, \count($connections), $startTime,
+                $originToken,
+                $originTokenValidationEnabled,
+                $originTokenHeader,
+                $originTokenAllowLocal
+            );
+        } catch (\Weline\Framework\Runtime\RequestExitException) {
+            $response = '';
+        } catch (\Error $e) {
+            if ($WLS_UOPZ_EXIT_GUARD && \str_contains($e->getMessage(), 'uopz')) {
+                WlsLogger::warning_('SSL Worker：exit()/die() 已由 uopz 拦截');
+                $response = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                    . "Connection: close\r\nContent-Length: 52\r\n\r\n"
+                    . "Internal error: exit()/die() not allowed in WLS request\n";
+            } else {
+                throw $e;
+            }
+        }
         $handleDurationMs = (\microtime(true) - $handleStartTime) * 1000;
         $response = injectWlsProcessTimeHeader($response, $handleDurationMs);
         $responseStatus = 200;
@@ -2410,8 +2520,10 @@ function handleRequest(
         if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
             $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
             $env = \is_array($env) ? $env : [];
-            $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
-                ?? $env['wls']['health_allow_remote'] ?? false);
+            $w = $env['wls'] ?? [];
+            $wlsServers = \is_array($w['servers'] ?? null) ? $w['servers'] : [];
+            $healthAllowRemote = (bool)(($wlsServers[$instanceName]['health_allow_remote'] ?? null)
+                ?? $w['health_allow_remote'] ?? false);
         }
         // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 或同源请求则放行
         $healthAllowedByCookie = false;

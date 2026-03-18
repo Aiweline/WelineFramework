@@ -32,7 +32,7 @@ class Stop implements CommandInterface
         $force = $args['force'] ?? $args['f'] ?? false;
         
         $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
+        $serverConfig = $env->get('cli_server') ?? [];
         
         $host = $serverConfig['host'] ?? '127.0.0.1';
         $port = $serverConfig['port'] ?? 9981;
@@ -206,7 +206,7 @@ class Stop implements CommandInterface
     private function clearServerConfig(): void
     {
         $env = Env::getInstance();
-        $server = $env->get('server');
+        $server = $env->get('cli_server');
         if (!\is_array($server)) {
             return;
         }
@@ -215,7 +215,7 @@ class Stop implements CommandInterface
         foreach ($runtimeKeys as $key) {
             unset($cleaned[$key]);
         }
-        $env->setConfig('server', $cleaned);
+        $env->setConfig('cli_server', $cleaned);
         $env->save();
     }
 
