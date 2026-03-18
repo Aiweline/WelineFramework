@@ -15,6 +15,7 @@ namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
+use Weline\Websites\Adapter\Concern\DomainRegistrarCdnDefaultsTrait;
 use Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait;
 use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
 use Weline\Websites\Adapter\Concern\RegistrarProvisioningNormalizeNoopTrait;
@@ -29,6 +30,7 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
     use DnsCdnZoneRecordsProviderTrait;
     use RegistrarBatchCheckAvailabilityTrait;
+    use DomainRegistrarCdnDefaultsTrait;
     use RegistrarProvisioningNormalizeNoopTrait;
     /** 官方接口域名 */
     private const DEFAULT_API_HOST = 'api.gname.com';

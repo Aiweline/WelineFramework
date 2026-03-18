@@ -1376,6 +1376,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <option value=""><lang>-- 不切换 CDN --</lang></option>
                 </select>
             </div>
+            <div class="pb-dm-form-group" style="margin-top:12px;">
+                <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-weight:normal;">
+                    <input type="checkbox" id="pb-dm-root-dns-switch-verify-cdn" value="1" style="margin-top:3px;">
+                    <span><lang>切换完成后校验 CDN 响应</lang> <span class="pb-dm-text-muted">(<lang>仅当站点已可访问时勾选；未建站时勿选，否则会长时间重试</lang>)</span></span>
+                </label>
+            </div>
         </div>
         <div style="padding:12px 24px;border-top:1px solid var(--backend-color-border-default,#dee2e6);">
             <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-root-dns-switch-cancel"><lang>取消</lang></button>
@@ -4849,11 +4855,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         document.getElementById('pb-dm-root-dns-switch-modal').classList.remove('pb-dm-form-modal--open');
     }
 
-    function openDnsSwitchSseModalAndStart(domainId, dnsAccountId, cdnAccountId) {
+    function openDnsSwitchSseModalAndStart(domainId, dnsAccountId, cdnAccountId, verifyCdn) {
         var sseModal = document.getElementById('pb-dm-dns-switch-sse-modal');
         var doneBtn = document.getElementById('pb-dm-dns-switch-sse-done-btn');
         var streamUrl = API.dnsSwitchStream + '?domain_id=' + encodeURIComponent(domainId) + '&dns_account_id=' + encodeURIComponent(dnsAccountId);
         if (cdnAccountId) streamUrl += '&cdn_account_id=' + encodeURIComponent(cdnAccountId);
+        if (verifyCdn) streamUrl += '&verify_cdn=1';
         var terminal = window.WelineSseTerminal && window.WelineSseTerminal['pb-dm-dns-switch-sse-terminal'];
         if (!sseModal) return;
         if (doneBtn) doneBtn.style.display = 'none';
@@ -4899,8 +4906,10 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 return;
             }
             var cdnAccountId = document.getElementById('pb-dm-root-dns-switch-cdn-account') && document.getElementById('pb-dm-root-dns-switch-cdn-account').value;
+            var verifyCdnCb = document.getElementById('pb-dm-root-dns-switch-verify-cdn');
+            var verifyCdn = verifyCdnCb && verifyCdnCb.checked;
             closeRootDnsSwitchModal();
-            openDnsSwitchSseModalAndStart(rootDnsSwitchState.domainId, dnsAccountId, cdnAccountId || '');
+            openDnsSwitchSseModalAndStart(rootDnsSwitchState.domainId, dnsAccountId, cdnAccountId || '', verifyCdn);
         });
         if (modal) modal.addEventListener('click', function(e) { if (e.target === modal) closeRootDnsSwitchModal(); });
     })();
