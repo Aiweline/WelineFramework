@@ -118,4 +118,14 @@ interface DomainRegistrarInterface
 
     /** @return array<array{domain: string, status: string, nameservers?: array, zone_id?: string}> */
     public function getHostedDomainList(array $credentials): array;
+
+    /**
+     * 一站式配置订单：按供应商规则统一 DNS/CDN 账户侧字段。
+     * 返回空数组表示不处理；返回的键将写入订单（dns_vendor、dns_account_id、cdn_vendor、cdn_account_id）。
+     * 若无法自动统一，返回 `_error` => 用户可读说明。
+     *
+     * @param array{dns_vendor: string, dns_account_id: int, cdn_vendor: string, cdn_account_id: int, domain?: string} $context
+     * @return array<string, mixed>
+     */
+    public function normalizeProvisioningDnsCdnAccounts(array $context): array;
 }
