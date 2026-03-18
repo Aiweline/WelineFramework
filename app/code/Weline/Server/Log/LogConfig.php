@@ -158,12 +158,13 @@ class LogConfig
     }
 
     /**
-     * 从 env.php 加载 log.wls 配置（兼容旧的 wls.log 路径）
+     * 从 env.php 加载 wls.log
      */
     private static function loadEnvConfig(): array
     {
         $env = self::loadRawEnvConfig();
-        return $env['log']['wls'] ?? $env['wls']['log'] ?? [];
+        $wls = $env['wls'] ?? [];
+        return \is_array($wls['log'] ?? null) ? $wls['log'] : [];
     }
 
     /**

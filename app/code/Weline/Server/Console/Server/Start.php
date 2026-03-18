@@ -227,7 +227,7 @@ class Start extends CommandAbstract
                 $port = self::DEFAULT_PORT;  // 保持 80
                 $config['port'] = $port;
             }
-            $this->printer->note(__('以 HTTP 运行（端口 %{1}）。由 env.server.https=false 或 --no-ssl 生效。', [$port]));
+            $this->printer->note(__('以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。', [$port]));
         } else {
             // Windows 下未安装 event 时允许强制运行 SSL；提示延后到「服务器已在后台运行」之后输出（后台模式）或此处输出（前台模式）
             $isMasterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
@@ -417,7 +417,7 @@ class Start extends CommandAbstract
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
         $workerSslEnabled = $sslEnabled;
         
-        // ========== HTTP Redirect 端口计算（HTTPS 模式始终启动） ==========
+        // ========== HTTP Redirect：仅 HTTPS=443 时默认 80；非 443 不启独立 Worker（可配 http_redirect_port） ==========
         $httpRedirectPort = 0;
         $explicitRedirectPort = false;
         if ($sslEnabled) {
@@ -438,27 +438,18 @@ class Start extends CommandAbstract
                 // 配置文件明确指定（包括 0，表示禁用）
                 $httpRedirectPort = $configRedirectPort;
                 if ($httpRedirectPort === 0) {
-                    $this->printer->note(__('HTTP 重定向已禁用（env.server.http_redirect_port = 0）'));
+                    $this->printer->note(__('HTTP 重定向已禁用（wls.http_redirect_port = 0）'));
                 }
             } else {
-                // 未配置，自动计算：
-                // - HTTPS = 443 → 使用 80
-                // - HTTPS ≠ 443 → 使用 httpsPort - 1（如 9981 → 9980）
-                if ($port === 443) {
-                    $httpRedirectPort = 80;
-                } else {
-                    $httpRedirectPort = $port - 1;
-                    // 确保端口合法
-                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
-                        $httpRedirectPort = 80;  // 回退到默认 80
-                    }
+                $httpRedirectPort = ($port === 443) ? 80 : 0;
+                if ($sslEnabled && $httpRedirectPort === 0 && $port !== 443) {
+                    $this->printer->note(__('HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS'));
                 }
             }
-            
-            // 验证端口范围（0 表示禁用，允许；其他值必须在 1-65535）
+
             if ($httpRedirectPort !== 0 && ($httpRedirectPort < 1 || $httpRedirectPort > 65535)) {
-                $this->printer->error(__('HTTP 重定向端口无效: %{1}，将使用默认端口 80', [$httpRedirectPort]));
-                $httpRedirectPort = 80;
+                $this->printer->error(__('HTTP 重定向端口无效: %{1}', [$httpRedirectPort]));
+                $httpRedirectPort = ($port === 443) ? 80 : 0;
             }
         }
         
@@ -470,7 +461,7 @@ class Start extends CommandAbstract
                 $this->printer->warning(__('默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}', [$port, self::DEFAULT_PORT_FALLBACK]));
                 $port = self::DEFAULT_PORT_FALLBACK;
                 $config['port'] = $port;
-                $httpRedirectPort = $port - 1;  // 9981 → 9980
+                $httpRedirectPort = 0;
             }
             // 降级后仍被占用，或用户指定了端口 → 报错
             if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
@@ -575,7 +566,7 @@ class Start extends CommandAbstract
         }
         
         // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
-        $sessionServerPort = (int) (Env::get('session.server_port') ?? 19970);
+        $sessionServerPort = (int) (Env::get('wls.session.port') ?? 19970);
         if ($count > 1 && $sessionServerPort > 0) {
             if (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
@@ -723,15 +714,7 @@ class Start extends CommandAbstract
             // 优先使用实例文件中保存的端口，否则智能计算
             $httpRedirectPort = (int)($data['http_redirect_port'] ?? 0);
             if ($httpRedirectPort <= 0) {
-                // HTTPS = 443 → 使用 80；否则使用 httpsPort - 1
-                if ($port === 443) {
-                    $httpRedirectPort = 80;
-                } else {
-                    $httpRedirectPort = $port - 1;
-                    if ($httpRedirectPort <= 0 || $httpRedirectPort > 65535) {
-                        $httpRedirectPort = 80;
-                    }
-                }
+                $httpRedirectPort = ($port === 443) ? 80 : 0;
             }
         }
         $workerPids = \array_values($data['worker_pids'] ?? []);
@@ -899,7 +882,7 @@ class Start extends CommandAbstract
         $this->printer->warning(__('║  php.ini：%{1}                                                                 ║', [$iniFile]));
         $this->printer->warning(__('╠══════════════════════════════════════════════════════════════════════════════╣'));
         $this->printer->warning(__('║  当前已允许继续启动 HTTPS；若无法接受握手阻塞，请安装 event 或使用         ║'));
-        $this->printer->warning(__('║  --no-ssl / env.server.https=false 仅跑 HTTP。                               ║'));
+        $this->printer->warning(__('║  --no-ssl / wls.https=false 仅跑 HTTP。                               ║'));
         $this->printer->warning(__('╚══════════════════════════════════════════════════════════════════════════════╝'));
     }
     
@@ -1163,7 +1146,7 @@ class Start extends CommandAbstract
     
     /**
      * 获取服务器配置
-     * 优先级：命令行参数 > env.servers[实例名] > env.server > 默认值
+     * 优先级：命令行参数 > wls.servers[实例名] > wls（默认实例）> 默认值
      */
     protected function getServerConfig(string $instanceName, array $args): array
     {
@@ -1174,7 +1157,7 @@ class Start extends CommandAbstract
             'worker_count' => 'auto',
             'mode' => 'io',
             'daemon' => true,
-            'hot_reload' => false,  // 默认关闭，可通过 env.server.hot_reload=true 或 --hot-reload 启用
+            'hot_reload' => false,  // 默认关闭，可通过 wls.hot_reload=true 或 --hot-reload 启用
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
             'worker_base_port' => 10000,  // Dispatcher 模式下 Worker 内网端口基数（实际端口 = base + 外网端口）
@@ -1194,18 +1177,21 @@ class Start extends CommandAbstract
         // 读取 env 配置
         $envConfig = Env::getInstance()->getConfig();
         
-        // 2. 检查多实例配置 servers[实例名]
-        if ($instanceName !== 'default' && isset($envConfig['servers'][$instanceName])) {
-            $instanceConfig = $envConfig['servers'][$instanceName];
+        $wlsServers = ($envConfig['wls'] ?? [])['servers'] ?? [];
+        // 2. 多实例：wls.servers[实例名]
+        if ($instanceName !== 'default' && isset($wlsServers[$instanceName]) && \is_array($wlsServers[$instanceName])) {
+            $instanceConfig = $wlsServers[$instanceName];
             $config = \array_merge($config, $instanceConfig);
-            $config['source'] = __('env.servers.%{1}', [$instanceName]);
+            $config['source'] = __('env.wls.servers.%{1}', [$instanceName]);
         }
-        // 3. 检查默认服务器配置 server
-        elseif (isset($envConfig['server']) && \is_array($envConfig['server'])) {
-            $config = \array_merge($config, $envConfig['server']);
-            $config['source'] = __('env.server');
+        // 3. 默认实例：wls
+        elseif (isset($envConfig['wls']) && \is_array($envConfig['wls'])) {
+            $baseWls = $envConfig['wls'];
+            unset($baseWls['servers'], $baseWls['log'], $baseWls['session']);
+            $config = \array_merge($config, $baseWls);
+            $config['source'] = __('env.wls');
         }
-        // env.server.https = false 时也禁用 HTTPS（与 --no-ssl 一致，供生成地址等使用）
+        // wls.https = false 时也禁用 HTTPS（与 --no-ssl 一致，供生成地址等使用）
         if (isset($config['https']) && $config['https'] === false) {
             $config['no_ssl'] = true;
         }
@@ -2617,9 +2603,9 @@ class Start extends CommandAbstract
     }
     
     /**
-     * 将实际的 host 同步到 env.php 的 server 配置
+     * 将实际的 host 同步到 env.php 的 wls 配置
      *
-     * http:req 等 CLI 工具依赖 env.server.{host,port,https} 构建请求 URL。
+     * http:req 等 CLI 工具依赖 wls.{host,port,https} 构建请求 URL。
      * 
      * 注意：
      * - 只同步 host，不同步 port 和 https
@@ -2629,15 +2615,15 @@ class Start extends CommandAbstract
     protected function syncServerConfigToEnv(string $host, int $port, bool $sslEnabled): void
     {
         $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
-        if (!\is_array($serverConfig)) {
-            $serverConfig = [];
+        $wlsConfig = $env->get('wls') ?? [];
+        if (!\is_array($wlsConfig)) {
+            $wlsConfig = [];
         }
         
         // 只同步 host，不同步 port（port 是用户配置，不应被自动覆盖）
-        if (($serverConfig['host'] ?? null) !== $host) {
-            $serverConfig['host'] = $host;
-            $env->setConfig('server', $serverConfig);
+        if (($wlsConfig['host'] ?? null) !== $host) {
+            $wlsConfig['host'] = $host;
+            $env->setConfig('wls', $wlsConfig);
         }
     }
     
@@ -2708,7 +2694,7 @@ class Start extends CommandAbstract
         $savedConfig = [];
         
         // 从当前合并后的配置中提取可复用项
-        // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 env.server.https 为准
+        // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
         $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
@@ -3398,7 +3384,7 @@ PHP;
                 'current' => $workerCount,
                 'recommended' => $recommendedWorkers,
                 'message' => __('当前 Worker 数：%{1}，推荐：%{2}', [$workerCount, $recommendedWorkers]) . $platformNote,
-                'action' => __('使用 -c %{1} 参数或在 env.server.worker_count 设置', [$recommendedWorkers]),
+                'action' => __('使用 -c %{1} 参数或在 wls.worker_count 设置', [$recommendedWorkers]),
             ];
         }
         
@@ -3749,14 +3735,14 @@ PHP;
                 '--help' => __('显示帮助信息'),
             ],
             [
-                __('配置优先级') => __('命令行参数 > 已保存实例配置 > env.servers.[name] > env.server > 默认值'),
+                __('配置优先级') => __('命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值'),
                 __('多实例支持') => __('可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动'),
                 __('配置记忆') => __('首次 server:start api -p 8443 会保存配置，之后 server:start api 自动使用端口 8443'),
                 __('智能模式') => __('worker_count 设为 "auto" 时：开发环境固定 2 个 Worker，生产环境根据 CPU 核心数自动计算'),
                 __('事件循环') => __('自动选择最优：Event 扩展 > stream_select'),
                 __('多进程') => __('优先级：proc_open > pcntl_fork > exec'),
                 __('HTTPS 支持') => __('自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key'),
-                __('禁用 HTTPS') => __('env.server.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
+                __('禁用 HTTPS') => __('wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址'),
                 __('SSL 协议') => __('支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
                 __('80/443 端口') => __('默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
@@ -3797,7 +3783,7 @@ PHP;
     protected function startHotReloadIfEnabled(array $config, string $instanceName): void
     {
         // 热重载默认关闭，需要显式启用
-        // 可通过 env.server.hot_reload=true 或命令行 --hot-reload 启用
+        // 可通过 wls.hot_reload=true 或命令行 --hot-reload 启用
         $hotReload = $config['hot_reload'] ?? false;
         if (!$hotReload) {
             return;
@@ -3813,7 +3799,7 @@ PHP;
         $this->printer->note(__('启动热重载监控...'));
         
         // 获取监控配置
-        $serverEnv = Env::getInstance()->getConfig('server') ?? [];
+        $serverEnv = Env::getInstance()->getConfig('wls') ?? [];
         $watchDirs = $serverEnv['watch_dirs'] ?? ['app/code', 'app/etc'];
         $watchInterval = (float) ($serverEnv['watch_interval'] ?? 1);
         
@@ -4075,17 +4061,25 @@ PHP;
         }
         
         // 创建配置对象
+        $strategyMainPort = (int) ($config['port'] ?? ($sslEnabled ? 443 : 80));
+        $strategyRedirect = 0;
+        if ($sslEnabled) {
+            if (isset($config['http_redirect_port'])) {
+                $strategyRedirect = (int) $config['http_redirect_port'];
+            } else {
+                $strategyRedirect = ($strategyMainPort === 443) ? 80 : 0;
+            }
+        }
         $serverConfig = new ServerConfig([
             'instance_name' => $instanceName,
             'host' => $config['host'] ?? '127.0.0.1',
-            'port' => (int) ($config['port'] ?? ($sslEnabled ? 443 : 80)),
+            'port' => $strategyMainPort,
             'worker_count' => (int) ($config['worker_count'] ?? 4),
             'worker_base_port' => (int) ($config['worker_base_port'] ?? 10443),
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
             'frontend' => $frontend,
-            'http_redirect_port' => (int) ($config['http_redirect_port'] ?? 80),
-            'http_redirect_enabled' => $sslEnabled && (($config['http_redirect_port'] ?? 80) > 0),
+            'http_redirect_port' => $strategyRedirect,
             'log_dir' => Env::VAR_DIR . 'log' . DS,
             'bin_dir' => \dirname(__DIR__, 2) . DS . 'bin' . DS,
         ]);

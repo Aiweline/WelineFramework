@@ -177,7 +177,7 @@ class WlsRequest extends Request
                 // 如果服务器配置为 HTTPS 模式，即使直接访问 Worker 也应识别为 HTTPS
                 if (\defined('BP') && \file_exists(BP . 'etc/env.php')) {
                     $envConfig = include BP . 'etc/env.php';
-                    $serverConfig = $envConfig['server'] ?? [];
+                    $serverConfig = $envConfig['wls'] ?? [];
                     // 检查服务器是否配置为 HTTPS 模式
                     if (isset($serverConfig['https']) && $serverConfig['https'] === true) {
                         $isHttps = true;

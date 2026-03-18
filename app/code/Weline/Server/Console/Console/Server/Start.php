@@ -128,7 +128,7 @@ class Start implements CommandInterface
                     
                     // 检查配置是否完整，如果不完整则更新
                     $env = Env::getInstance();
-                    $serverConfig = $env->get('server') ?? [];
+                    $serverConfig = $env->get('cli_server') ?? [];
                     if (empty($serverConfig) || !isset($serverConfig['pid']) || $serverConfig['pid'] != $runningInfo['pid']) {
                         $this->saveServerPid($host, $port, $runningInfo['pid']);
                         $this->printer->note(__('已自动更新配置信息。'));
@@ -278,7 +278,7 @@ class Start implements CommandInterface
     private function isServerRunning(string $host, int $port): array
     {
         $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
+        $serverConfig = $env->get('cli_server') ?? [];
         if (isset($serverConfig['pid']) && $serverConfig['pid']) {
             $isRunning = Processer::isRunningByPid((int)$serverConfig['pid']);
             return [
@@ -551,7 +551,7 @@ class Start implements CommandInterface
     private function clearServerConfig(): void
     {
         $env = Env::getInstance();
-        $server = $env->get('server');
+        $server = $env->get('cli_server');
         if (!\is_array($server)) {
             return;
         }
@@ -560,7 +560,7 @@ class Start implements CommandInterface
         foreach ($runtimeKeys as $key) {
             unset($cleaned[$key]);
         }
-        $env->setConfig('server', $cleaned);
+        $env->setConfig('cli_server', $cleaned);
         $env->save();
     }
 
@@ -570,7 +570,7 @@ class Start implements CommandInterface
     private function saveServerPid(string $host, int $port, int $pid): void
     {
         $env = Env::getInstance();
-        $existing = $env->get('server');
+        $existing = $env->get('cli_server');
         $serverConfig = \is_array($existing) ? $existing : [];
         $serverConfig['host'] = $host;
         $serverConfig['port'] = $port;
@@ -578,7 +578,7 @@ class Start implements CommandInterface
         $serverConfig['start_time'] = time();
         $serverConfig['status'] = 'running';
 
-        $env->setConfig('server', $serverConfig);
+        $env->setConfig('cli_server', $serverConfig);
         $env->save();
     }
 

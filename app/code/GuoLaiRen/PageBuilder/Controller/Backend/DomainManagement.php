@@ -1288,11 +1288,11 @@ class DomainManagement extends BaseController
 
     /**
      * 获取 WLS 端口与是否可用 HTTP-01（用于证书申请提示）
-     * 以 env.server 为准：主端口 80 或 443 且启用了 80 重定向时，可用 HTTP-01。
+     * 以 wls 为准：主端口 80 或 443 且启用了 80 重定向时，可用 HTTP-01。
      */
     public function getGetServerPort(): string
     {
-        $config = Env::getInstance()->getConfig('server');
+        $config = Env::getInstance()->getConfig('wls');
         $port = 80;
         if (\is_array($config) && isset($config['port'])) {
             $portVal = $config['port'];
