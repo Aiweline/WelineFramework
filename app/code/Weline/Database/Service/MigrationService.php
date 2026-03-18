@@ -276,17 +276,23 @@ class MigrationService
      */
     private function loadMigrationClass(string $migrationFile): MigrationInterface
     {
-        $className = $this->getMigrationClassName($migrationFile);
-        
-        if (!class_exists($className)) {
+        $shortClass = $this->getMigrationClassName($migrationFile);
+
+        if (!class_exists($shortClass)) {
             require_once $migrationFile;
         }
-        
-        if (!class_exists($className)) {
-            throw new \Exception(__("迁移类不存在: %{1}", $className));
+
+        if (class_exists($shortClass)) {
+            $instance = new $shortClass();
+        } else {
+            $fqcn = $this->resolveNamespacedMigrationClass($migrationFile, $shortClass);
+            if ($fqcn === null) {
+                throw new \Exception(__("迁移类不存在: %{1}", $shortClass));
+            }
+            $instance = new $fqcn();
         }
-        
-        return new $className();
+
+        return $instance;
     }
     
     
@@ -619,12 +625,28 @@ class MigrationService
      */
     private function getMigrationClassName(string $filename): string
     {
-        $className = str_replace('.php', '', $filename);
+        $basename = basename($filename);
+        $className = str_replace('.php', '', $basename);
         $className = str_replace(['_', '-', '.'], ' ', $className);
         $className = ucwords($className);
         $className = str_replace(' ', '', $className);
-        
+
         return $className;
+    }
+
+    /**
+     * 迁移文件在命名空间 Weline\X\Setup\Db\Migration 下时，class_exists(短类名) 为 false，由此解析 FQCN。
+     */
+    private function resolveNamespacedMigrationClass(string $migrationFile, string $shortClassName): ?string
+    {
+        $real = realpath($migrationFile);
+        $dir = str_replace('\\', '/', $real !== false ? dirname($real) : dirname($migrationFile));
+        if (!preg_match('#/code/(.+)/Setup/Db/Migration$#', $dir, $m)) {
+            return null;
+        }
+        $fqcn = str_replace('/', '\\', $m[1]) . '\\Setup\\Db\\Migration\\' . $shortClassName;
+
+        return class_exists($fqcn) ? $fqcn : null;
     }
     
     /**

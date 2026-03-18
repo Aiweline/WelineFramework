@@ -29,9 +29,11 @@ use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DnsSwitchService;
+use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Service\DomainPoolMaintenanceService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainParserService;
+use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
@@ -47,6 +49,7 @@ class Domain extends BackendController
     private DomainModel $domainModel;
     private DomainConfig $domainConfig;
     private DomainResolveService $resolveService;
+    private DomainOriginMatchService $originMatch;
     private DomainParserService $domainParserService;
     private DomainSyncService $syncService;
     private ServerIpService $serverIpService;
@@ -61,6 +64,7 @@ class Domain extends BackendController
         DomainModel $domainModel,
         DomainConfig $domainConfig,
         DomainResolveService $resolveService,
+        DomainOriginMatchService $originMatch,
         DomainParserService $domainParserService,
         DomainSyncService $syncService,
         ServerIpService $serverIpService,
@@ -74,6 +78,7 @@ class Domain extends BackendController
         $this->domainModel = $domainModel;
         $this->domainConfig = $domainConfig;
         $this->resolveService = $resolveService;
+        $this->originMatch = $originMatch;
         $this->domainParserService = $domainParserService;
         $this->syncService = $syncService;
         $this->serverIpService = $serverIpService;
@@ -184,6 +189,15 @@ class Domain extends BackendController
         }
         unset($poolRow);
 
+        $flowSvc = ObjectManager::getInstance(DomainPoolFlowLogService::class);
+        $pids = \array_values(\array_filter(\array_map('intval', \array_column($poolRows, DomainPool::schema_fields_ID))));
+        $recentMap = $flowSvc->getRecentByPoolIds($pids, 12);
+        foreach ($poolRows as &$poolRow) {
+            $pid = (int) ($poolRow[DomainPool::schema_fields_ID] ?? 0);
+            $poolRow['_flow_html'] = $flowSvc->buildFlowDisplayHtml($poolRow, $recentMap[$pid] ?? []);
+        }
+        unset($poolRow);
+
         return $poolRows;
     }
 
@@ -287,6 +301,42 @@ class Domain extends BackendController
             return $this->fetchJson([
                 'code' => 500,
                 'msg' => __('获取域名池列表失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 域名池流转记录（时间线）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    public function getPoolFlowLog()
+    {
+        try {
+            $poolId = (int) $this->request->getGet('pool_id', 0);
+            if ($poolId <= 0) {
+                return $this->fetchJson(['code' => 400, 'msg' => __('参数错误')]);
+            }
+            $model = ObjectManager::getInstance(\Weline\Websites\Model\DomainPoolFlowLog::class);
+            $rows = $model->clearQuery()
+                ->where(\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_POOL_ID, $poolId)
+                ->order(\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_ID, 'DESC')
+                ->limit(80)
+                ->select()
+                ->fetchArray();
+            $items = [];
+            foreach ($rows as $r) {
+                $items[] = [
+                    'at' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_CREATED_AT] ?? ''),
+                    'kind' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_EVENT_KIND] ?? ''),
+                    'message' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_MESSAGE] ?? ''),
+                ];
+            }
+
+            return $this->fetchJson(['code' => 200, 'data' => ['items' => $items]]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => $e->getMessage(),
             ]);
         }
     }
@@ -765,6 +815,13 @@ class Domain extends BackendController
             if ($subdomains === []) {
                 $subdomains = ['@', 'www'];
             }
+            $purchaseContactPost = $this->request->getPost('purchase_contact', '');
+            $purchaseContactGlobal = [];
+            if (\is_string($purchaseContactPost) && $purchaseContactPost !== '') {
+                $purchaseContactGlobal = \json_decode($purchaseContactPost, true) ?: [];
+            } elseif (\is_array($purchaseContactPost)) {
+                $purchaseContactGlobal = $purchaseContactPost;
+            }
 
             if ($items === [] || $accountId <= 0) {
                 return $this->fetchJson([
@@ -803,6 +860,18 @@ class Domain extends BackendController
                 }
                 if (!isset($it['start_lifecycle'])) {
                     $it['start_lifecycle'] = $startLifecycle;
+                }
+                if ($purchaseContactGlobal !== []) {
+                    $existingPc = [];
+                    if (isset($it['purchase_contact'])) {
+                        $rawPc = $it['purchase_contact'];
+                        $existingPc = \is_string($rawPc) ? (\json_decode($rawPc, true) ?: []) : (array) $rawPc;
+                    }
+                    $it['purchase_contact'] = \array_merge($purchaseContactGlobal, $existingPc);
+                }
+                $cip = \trim((string) $this->request->getClientIp());
+                if ($cip !== '' && \filter_var($cip, FILTER_VALIDATE_IP)) {
+                    $it['user_client_ip'] = $cip;
                 }
             }
             unset($it);
@@ -2159,7 +2228,6 @@ class Domain extends BackendController
 
             $serverIpService = ObjectManager::getInstance(\Weline\Websites\Service\ServerIpService::class);
             $subdomainGenerator = ObjectManager::getInstance(\Weline\Websites\Service\SubdomainGeneratorService::class);
-            $authOrigin = ObjectManager::getInstance(\Weline\Websites\Service\AuthoritativeDnsOriginService::class);
 
             $serverIp = $serverIpService->getPublicIpv4();
             $serverIpv6 = $serverIpService->getPublicIpv6();
@@ -2189,26 +2257,12 @@ class Domain extends BackendController
                 }
 
                 $domainName = $domain->getDomain();
-                $pointsToLocal = false;
-                $dnsId = (int) $domain->getDnsAccountId();
-                $cdnId = (int) $domain->getCdnAccountId();
-                if ($dnsId > 0 || $cdnId > 0) {
-                    $auth = $authOrigin->originPointsToServer(
-                        $domainName,
-                        $domainName,
-                        $dnsId,
-                        $cdnId,
-                        $serverIp,
-                        $serverIpv6,
-                    );
-                    if ($auth['api_ok'] && $auth['has_direct_records']) {
-                        $pointsToLocal = (bool) ($auth['matches']);
-                    }
-                }
-                if (!$pointsToLocal && $serverIp !== '') {
-                    $resolvedIp = @\gethostbyname($domainName);
-                    $pointsToLocal = $resolvedIp !== $domainName && $serverIpService->isLocalServer($resolvedIp);
-                }
+                $pointsToLocal = $this->originMatch->fqdnPointsToServer(
+                    $domainName,
+                    \strtolower(\trim($domainName)),
+                    (int) $domain->getDnsAccountId(),
+                    (int) $domain->getCdnAccountId(),
+                );
 
                 if (!$pointsToLocal) {
                     $totalSkipped++;
@@ -3853,6 +3907,13 @@ class Domain extends BackendController
                 $poolModel->setCdnStatus(DomainPool::INFRA_STATUS_READY);
             }
             $poolModel->save();
+            if ($isNewPool && $poolModel->getPoolId() > 0) {
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    (int) $poolModel->getPoolId(),
+                    \Weline\Websites\Model\DomainPoolFlowLog::KIND_POOL_CREATED,
+                    __('后台手动添加：%{1}', [\trim($domain)])
+                );
+            }
 
             $httpsMode = \strtolower(\trim($httpsMode));
             if (!\in_array($httpsMode, ['none', 'auto', 'manual'], true)) {

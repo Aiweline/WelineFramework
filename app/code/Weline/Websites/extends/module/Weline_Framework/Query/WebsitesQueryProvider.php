@@ -6,19 +6,20 @@ namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
-use Weline\Websites\Api\NameserverSwitchInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
+use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\ServerIpService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\DnsProviderDetector;
+use Weline\Websites\Service\ProvisioningQueryHandler;
 
 class WebsitesQueryProvider implements QueryProviderInterface
 {
@@ -29,7 +30,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
         private readonly DomainRegistrar $registrarModel,
         private readonly Website $websiteModel,
         private readonly WebsiteLanguage $websiteLanguageModel,
-        private readonly DnsProviderDetector $dnsProviderDetector
+        private readonly DnsProviderDetector $dnsProviderDetector,
+        private readonly ProvisioningQueryHandler $provisioningQueryHandler
     ) {
     }
 
@@ -40,6 +42,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
     public function execute(string $operation, array $params = []): mixed
     {
+        if (\in_array($operation, ProvisioningQueryHandler::operationNames(), true)) {
+            return $this->provisioningQueryHandler->execute($operation, $params);
+        }
+
         return match ($operation) {
             'getRegistrars'          => $this->getRegistrars(),
             'getRegistrarAccounts'   => $this->getRegistrarAccounts($params),
@@ -79,9 +85,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
         return [
             'provider'    => 'websites',
             'name'        => __('域名与网站查询'),
-            'description' => __('提供域名注册商、账号管理、域名列表、可用性检查、购买等能力'),
+            'description' => __('提供域名注册商、账号管理、域名列表、可用性检查、购买及一站式配置编排等能力'),
             'module'      => 'Weline_Websites',
-            'operations'  => [
+            'operations'  => \array_merge([
                 [
                     'name'        => 'getRegistrars',
                     'description' => __('获取所有可用的域名注册商适配器'),
@@ -135,14 +141,20 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'description' => __('购买域名'),
                     'params'      => [
                         ['name' => 'account_id', 'type' => 'int',   'required' => true, 'description' => __('账号 ID')],
-                        ['name' => 'items',      'type' => 'array', 'required' => true, 'description' => __('购买项数组')],
+                        ['name' => 'items',      'type' => 'array', 'required' => true, 'description' => __('购买项：domain、years、website_id、auto_create_site 等')],
                         ['name' => 'auto_resolve', 'type' => 'bool', 'required' => false, 'description' => __('是否自动解析到本地，默认 true')],
-                        ['name' => 'resolve_to_local', 'type' => 'string', 'required' => false, 'description' => __('默认 yes/no，对 items 中未指定者生效')],
-                        ['name' => 'subdomains', 'type' => 'array|string', 'required' => false, 'description' => __('默认子域名列表，如 ["@","www"] 或 "@,www"')],
-                        ['name' => 'dns_choice', 'type' => 'string', 'required' => false, 'description' => __('DNS 策略：follow_registrar/custom_nameservers')],
-                        ['name' => 'dns_nameservers', 'type' => 'string', 'required' => false, 'description' => __('自定义 Nameserver，逗号分隔')],
-                        ['name' => 'cdn_choice', 'type' => 'string', 'required' => false, 'description' => __('CDN 策略：follow_registrar/none')],
-                        ['name' => 'start_lifecycle', 'type' => 'string|bool', 'required' => false, 'description' => __('是否启动后续全流程状态跟踪')],
+                        ['name' => 'resolve_to_local', 'type' => 'string', 'required' => false, 'description' => __('默认 yes/no')],
+                        ['name' => 'subdomains', 'type' => 'array|string', 'required' => false, 'description' => __('默认子域 @、www')],
+                        ['name' => 'dns_choice', 'type' => 'string', 'required' => false, 'description' => __('follow_registrar|provider_account|custom_nameservers')],
+                        ['name' => 'dns_provider', 'type' => 'string', 'required' => false, 'description' => __('指定 DNS 注册商代码')],
+                        ['name' => 'dns_account_id', 'type' => 'int', 'required' => false, 'description' => __('DNS 子账户 ID')],
+                        ['name' => 'dns_nameservers', 'type' => 'string', 'required' => false, 'description' => __('自定义 NS')],
+                        ['name' => 'cdn_choice', 'type' => 'string', 'required' => false, 'description' => __('follow_registrar|provider_account|none')],
+                        ['name' => 'cdn_provider', 'type' => 'string', 'required' => false, 'description' => __('CDN 注册商代码')],
+                        ['name' => 'cdn_account_id', 'type' => 'int', 'required' => false, 'description' => __('CDN 子账户 ID')],
+                        ['name' => 'start_lifecycle', 'type' => 'string|bool', 'required' => false, 'description' => __('是否启动 Websites 全流程生命周期；false 时不应再依赖 Observer 补单')],
+                        ['name' => 'purchase_contact', 'type' => 'array|string', 'required' => false, 'description' => __('默认 WHOIS：与后台弹窗同字段；或与 Weline_Websites env domain_purchase_default_contact 合并')],
+                        ['name' => 'client_ip', 'type' => 'string', 'required' => false, 'description' => __('终端公网 IP，阿里云下单用；缺省则 127.0.0.1')],
                     ],
                 ],
                 [
@@ -287,7 +299,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
-            ],
+            ], $this->provisioningQueryHandler->getDescriptorOperations()),
         ];
     }
 
@@ -608,6 +620,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $defaultStartLifecycle = isset($params['start_lifecycle'])
             ? (string) $params['start_lifecycle']
             : '1';
+        $purchaseContactGlobal = $params['purchase_contact'] ?? [];
+        if (\is_string($purchaseContactGlobal)) {
+            $purchaseContactGlobal = \json_decode($purchaseContactGlobal, true) ?: [];
+        }
+        $purchaseContactGlobal = \is_array($purchaseContactGlobal) ? $purchaseContactGlobal : [];
+        $callerClientIp = \trim((string) ($params['client_ip'] ?? $params['user_client_ip'] ?? ''));
+        if ($callerClientIp !== '' && !\filter_var($callerClientIp, FILTER_VALIDATE_IP)) {
+            $callerClientIp = '';
+        }
         if (!\is_array($defaultSubdomains)) {
             $s = \trim((string) $defaultSubdomains);
             $defaultSubdomains = \str_starts_with($s, '[')
@@ -648,6 +669,17 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
             if (!isset($item['start_lifecycle'])) {
                 $item['start_lifecycle'] = $defaultStartLifecycle;
+            }
+            if ($purchaseContactGlobal !== []) {
+                $existingPc = [];
+                if (isset($item['purchase_contact'])) {
+                    $rawPc = $item['purchase_contact'];
+                    $existingPc = \is_string($rawPc) ? (\json_decode($rawPc, true) ?: []) : (array) $rawPc;
+                }
+                $item['purchase_contact'] = \array_merge($purchaseContactGlobal, $existingPc);
+            }
+            if ($callerClientIp !== '' && empty($item['user_client_ip'])) {
+                $item['user_client_ip'] = $callerClientIp;
             }
         }
         unset($item);
@@ -764,10 +796,6 @@ class WebsitesQueryProvider implements QueryProviderInterface
             $adapter = $this->resolver->getAdapter($registrarCode);
             if ($adapter === null) {
                 return ['success' => false, 'message' => (string)__('未找到适配器：%{1}', $registrarCode)];
-            }
-
-            if (!$adapter instanceof NameserverSwitchInterface) {
-                return ['success' => false, 'message' => (string)__('域名商 %{1} 不支持 NS 切换', $registrarCode)];
             }
 
             $credentials = $account->getCredentials();
@@ -1148,7 +1176,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
 
     private function syncDnsRecordsToDomainPool(Domain $rootDomain, array $records, bool $createNonLocal = false): array
     {
-        $serverIpService = ObjectManager::getInstance(ServerIpService::class);
+        $originMatch = ObjectManager::getInstance(DomainOriginMatchService::class);
         $rootDomainName = \strtolower((string)$rootDomain->getDomain());
         $parentDomainId = (int)$rootDomain->getDomainId();
         $now = \date('Y-m-d H:i:s');
@@ -1174,7 +1202,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
 
             $isIpRecord = $type === 'A' || $type === 'AAAA';
-            $isLocal = $isIpRecord && $value !== '' && $serverIpService->isLocalServer($value);
+            $isLocal = $isIpRecord && $value !== '' && $originMatch->recordIpValueIsOrigin($type, $value);
 
             $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
             $poolDomain->loadByDomain($fullDomain);
@@ -1226,8 +1254,11 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 $poolDomain->setResolvedIpv6($value);
             }
             if ($isIpRecord) {
-                $poolDomain->setIsLocalServer($isLocal);
-                if ($wasLocal && !$isLocal) {
+                // 同一 FQDN 多条 A/AAAA 时：任一条记录值指向本机即视为指向本机（CDN 场景下不能只靠单条）
+                $thisRecordPointsToLocal = $value !== '' && $originMatch->recordIpValueIsOrigin($type, $value);
+                $newLocal = $thisRecordPointsToLocal || $wasLocal;
+                $poolDomain->setIsLocalServer($newLocal);
+                if ($wasLocal && !$newLocal) {
                     $markedNonLocal++;
                 }
             }

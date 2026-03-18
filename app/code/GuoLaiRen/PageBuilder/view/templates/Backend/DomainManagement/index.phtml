@@ -2015,7 +2015,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                           '<i class="mdi mdi-dns"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('管理DNS记录') ?>" style="margin-left:4px;">' +
                           '<i class="mdi mdi-playlist-plus"></i></button>' +
-                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" title="<?= __('切换DNS/CDN') ?>" style="margin-left:4px;">' +
+                          '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn' + (d.is_registering ? ' pb-dm-btn-disabled' : '') + '" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" data-is-registering="' + (d.is_registering ? '1' : '0') + '" title="' + (d.is_registering ? '<?= __("域名注册完成后将自动处理，无需手动切换") ?>' : '<?= __("切换DNS/CDN") ?>') + '" style="margin-left:4px;"' + (d.is_registering ? ' disabled' : '') + '>' +
                           '<i class="mdi mdi-swap-horizontal"></i></button>' +
                           '<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __('删除根域（含子域名与池记录）') ?>" style="margin-left:4px;"><i class="mdi mdi-delete-outline"></i></button>'
                         : '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __('拉取并入池') ?>">' +
@@ -2262,6 +2262,10 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         domainContainer.querySelectorAll('.pb-dm-root-switch-dns-btn').forEach(function(btn) {
             btn.addEventListener('click', function(e) {
                 e.stopPropagation();
+                if (btn.dataset.isRegistering === '1' || btn.disabled) {
+                    BackendToast.info('<?= __('域名注册完成后将自动处理 DNS/CDN，无需手动切换。') ?>');
+                    return;
+                }
                 var domainId = parseInt(btn.dataset.domainId) || 0;
                 var domain = btn.dataset.domain || '';
                 var accountId = parseInt(btn.dataset.accountId) || 0;

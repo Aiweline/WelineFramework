@@ -63,7 +63,7 @@ class Post extends Model
     public const schema_fields_UPDATED_AT     = 'updated_at';
     #[Col(type: 'int', nullable: false, default: 0, comment: '趋势画像ID（自动发文时填充）')]
     public const schema_fields_TREND_PROFILE_ID = 'trend_profile_id';
-    #[Col(type: 'varchar', length: 255, nullable: true, comment: '生成时的来源关键词，用于排重')]
+    #[Col(type: 'text', nullable: true, comment: '生成时的来源关键词（可含多行 SEO 词表），用于排重')]
     public const schema_fields_SOURCE_KEYWORD = 'source_keyword';
 
     // 状态常量
@@ -93,6 +93,10 @@ class Post extends Model
     {
         if ($this->getData(self::schema_fields_PUBLISHED_AT) === '') {
             $this->setData(self::schema_fields_PUBLISHED_AT, null);
+        }
+        $sk = $this->getData(self::schema_fields_SOURCE_KEYWORD);
+        if (\is_string($sk) && \mb_strlen($sk) > 60000) {
+            $this->setData(self::schema_fields_SOURCE_KEYWORD, \mb_substr($sk, 0, 60000));
         }
     }
 
