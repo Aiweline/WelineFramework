@@ -1154,6 +1154,71 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     }
 
     /**
+     * 推送前为可代理记录默认开启橙云（与 {@see resolveProxiedValue} 行为一致）。
+     *
+     * @param list<array<string, mixed>> $records
+     * @return list<array<string, mixed>>
+     */
+    public function applyCdnSettingsToDnsRecords(string $domain, array $records): array
+    {
+        unset($domain);
+        $out = [];
+        foreach ($records as $r) {
+            $type = \strtoupper((string) ($r['type'] ?? 'A'));
+            if ($this->supportsCloudflareProxy($type)) {
+                $r['proxied'] = \array_key_exists('proxied', $r) ? (bool) $r['proxied'] : true;
+            }
+            $out[] = $r;
+        }
+
+        return $out;
+    }
+
+    /**
+     * 通过 DNS API 判断根域或 www 的 A/AAAA/CNAME 是否已开启代理（不依赖站点是否可访问）。
+     *
+     * @return array{supported: bool, ok: bool, message: string}
+     */
+    public function verifyCdnConfiguration(string $domain, array $credentials): array
+    {
+        try {
+            $this->validateCredentials($credentials);
+            $records = $this->getDnsRecords($domain, $credentials);
+        } catch (\Throwable $e) {
+            return [
+                'supported' => true,
+                'ok' => false,
+                'message' => $e->getMessage(),
+            ];
+        }
+        $apexHosts = ['@', 'www', ''];
+        $types = ['A', 'AAAA', 'CNAME'];
+        foreach ($records as $r) {
+            $host = \trim((string) ($r['host'] ?? '@'));
+            if ($host === '') {
+                $host = '@';
+            }
+            $type = \strtoupper((string) ($r['type'] ?? ''));
+            if (!\in_array($host, $apexHosts, true) || !\in_array($type, $types, true)) {
+                continue;
+            }
+            if (!empty($r['proxied'])) {
+                return [
+                    'supported' => true,
+                    'ok' => true,
+                    'message' => __('已检测到 %{1} 记录（%{2}）开启 Cloudflare 代理', [$type, $host === '@' ? __('根域') : 'www']),
+                ];
+            }
+        }
+
+        return [
+            'supported' => true,
+            'ok' => false,
+            'message' => __('根域或 www 下未找到已开启代理的 A/AAAA/CNAME 记录'),
+        ];
+    }
+
+    /**
      * 从 Registrar GET 结果中提取展示用价格（字段名随 API 扩展可能变化）
      *
      * @param array<string, mixed> $r
