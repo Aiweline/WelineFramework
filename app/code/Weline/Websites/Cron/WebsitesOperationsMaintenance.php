@@ -17,6 +17,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     examples: [
         'php bin/w cron:test --task=websites_operations_maintenance --domain=example.com -v --hourly',
     ],
+    manual_help: [
+        '整点附带 NS 检测与 HTTPS 同步；--hourly 可在控制台立即跑这两段。',
+        '控制台：--domain=、-v、--hourly；后台后缀未解析时等同定时。',
+    ],
 )]
 class WebsitesOperationsMaintenance implements CronTaskInterface
 {
