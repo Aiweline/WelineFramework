@@ -1,4 +1,4 @@
-﻿分类管理,分类管理
+分类管理,分类管理
 博客管理,"Blog Management"
 新建分类,"Create Category"
 名称和URL别名不能为空,"Name and URL slug cannot be empty"
@@ -219,6 +219,8 @@ URL别名将用于生成分类页面的访问地址。,"URL slug will be used to
 成功生成,成功生成
 篇文章，即将刷新页面...,篇文章，即将刷新页面...
 未生成文章，请检查配额与关键词配置。,未生成文章，请检查配额与关键词配置。
+该画像关键词均已用于发文，本次按配额复用关键词继续生成。,"All profile keywords were already used for posts; reusing keywords for this run to meet daily quota."
+AI 返回的标题或正文为空，请检查模型、提示词或关键词是否过短。,"AI returned empty title or body; check model, prompt, or keyword length."
 执行完成,执行完成
 连接失败或执行出错，请查看下方终端输出。,"Connection failed or execution error. Check the terminal output below."
 日志列表,"Log List"
