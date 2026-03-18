@@ -528,7 +528,8 @@ class DomainManagement extends BaseController
                     return \strcmp($a['domain'], $b['domain']);
                 });
 
-                // 正在注册/开通流程中的根域（生命周期订单未完成）：用于前端禁用「切换 DNS」等
+                // 正在注册/开通流程中的根域（生命周期订单未完成）：用于前端禁用「切换 DNS」等。
+                // 若域名在注册商侧已为 active（正常），则不再视为注册中，允许切换 DNS。
                 $registeringRoots = [];
                 $seenLifecycleRoot = [];
                 foreach ($groupItems as $i) {
@@ -541,6 +542,10 @@ class DomainManagement extends BaseController
                         continue;
                     }
                     $seenLifecycleRoot[$rootLower] = true;
+                    $itemStatus = \strtolower((string) ($i['status'] ?? ''));
+                    if ($itemStatus === 'active') {
+                        continue;
+                    }
                     try {
                         $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
                         if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
@@ -1025,16 +1030,31 @@ class DomainManagement extends BaseController
             $domains = $model->select()->fetchArray();
             $pagination = $model->pagination ?? [];
 
-            // 正在注册/开通流程中的根域（生命周期订单未完成）：须禁用「切换 DNS」等；已拉取进域名表≠流程结束
+            // 正在注册/开通流程中的根域（生命周期订单未完成）：须禁用「切换 DNS」等。若根域在 Domain 表已为 active（正常），则不再视为注册中。
             $rootDomains = array_unique(array_filter(array_column($domains, DomainPool::schema_fields_ROOT_DOMAIN)));
             $registeringRoots = [];
             $lifecycleStages = [];
+            $domainModelForStatus = ObjectManager::getInstance(Domain::class);
             foreach ($rootDomains as $root) {
                 $root = (string) $root;
                 if ($root === '') {
                     continue;
                 }
                 $rootLower = \strtolower(\trim($root));
+                $dom = $domainModelForStatus->reset()->where(Domain::schema_fields_DOMAIN, $root)->find()->fetch();
+                if ($dom->getId() && \strtolower((string) ($dom->getData(Domain::schema_fields_STATUS) ?? '')) === 'active') {
+                    try {
+                        $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
+                        if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
+                            $lifecycleStages[$rootLower] = [
+                                'lifecycle_stage' => (string) ($lifecycle['data']['order']['lifecycle_stage'] ?? ''),
+                                'lifecycle_stage_label' => (string) ($lifecycle['data']['order']['lifecycle_stage_label'] ?? ''),
+                            ];
+                        }
+                    } catch (\Throwable) {
+                    }
+                    continue;
+                }
                 try {
                     $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
                     if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
