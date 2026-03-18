@@ -676,30 +676,43 @@ class DomainResolveService
             return null;
         }
 
-        // 首先根据 code 查找 DomainRegistrar 获取 registrar_id
-        $registrar = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
-        $registrar->clearQuery()
+        // 不用 find()->fetch() 承接结果：Query 上若残留 find_fields，fetch 可能返回标量，导致后续 ->getRegistrarCode() 报错
+        $regProbe = ObjectManager::getInstance(\Weline\Websites\Model\DomainRegistrar::class);
+        $regRows = $regProbe->clearQuery()
             ->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_CODE, \strtolower($providerCode))
-            ->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_STATUS, \Weline\Websites\Model\DomainRegistrar::STATUS_ACTIVE);
-        
-        $registrar = $registrar->find()->fetch();
-        if (!$registrar instanceof \Weline\Websites\Model\DomainRegistrar || !$registrar->getId()) {
+            ->where(\Weline\Websites\Model\DomainRegistrar::schema_fields_STATUS, \Weline\Websites\Model\DomainRegistrar::STATUS_ACTIVE)
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        if ($regRows === [] || !\is_array($regRows[0])) {
             return null;
         }
-        
-        // 然后根据 registrar_id 查找账户
-        $account = ObjectManager::getInstance(DomainRegistrarAccount::class);
-        $account->clearQuery()
-            ->where(DomainRegistrarAccount::schema_fields_REGISTRAR_ID, $registrar->getId())
-            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE);
-        
-        $account = $account->find()->fetch();
-        
-        if ($account instanceof DomainRegistrarAccount && $account->getId()) {
-            return $account;
+        $registrarId = (int) ($regRows[0][\Weline\Websites\Model\DomainRegistrar::schema_fields_ID] ?? 0);
+        if ($registrarId <= 0) {
+            return null;
         }
-        
-        return null;
+
+        $accProbe = ObjectManager::getInstance(DomainRegistrarAccount::class);
+        $accRows = $accProbe->clearQuery()
+            ->where(DomainRegistrarAccount::schema_fields_REGISTRAR_ID, $registrarId)
+            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+            ->order(DomainRegistrarAccount::schema_fields_ID, 'ASC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        if ($accRows === [] || !\is_array($accRows[0])) {
+            return null;
+        }
+        $accountId = (int) ($accRows[0][DomainRegistrarAccount::schema_fields_ID] ?? 0);
+        if ($accountId <= 0) {
+            return null;
+        }
+
+        $account = ObjectManager::getInstance(DomainRegistrarAccount::class);
+        $account->clearData(true);
+        $account->load($accountId);
+
+        return $account->getAccountId() > 0 ? $account : null;
     }
 
     /**
