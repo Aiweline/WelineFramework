@@ -1,6 +1,16 @@
 <?php
 return [
     'router' => 'websites',
+
+    /**
+     * 健康检查 HTTP(S)：默认连本机环回 + CURLOPT_RESOLVE，SNI/Host 仍为域名，避免 hairpin 公网 IP 触发 WLS 自封等。
+     * CDN 终结 TLS 时设 local_endpoint_probe => false（否则只验证源站证书）。
+     */
+    'health_check' => [
+        'local_endpoint_probe' => true,
+        'local_bind_address' => '127.0.0.1',
+    ],
+
     // 是否禁止未匹配的域名访问（默认不禁止）
     // true: 如果查不到匹配的站点，返回404错误
     // false: 查不到站点也没关系，继续处理（默认）
