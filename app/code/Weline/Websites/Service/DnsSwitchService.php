@@ -135,24 +135,36 @@ class DnsSwitchService
             w_log_error(__('[DnsSwitchService] %{1} NS 切换失败：%{2}', [$domainName, $updateMsg]), [], $logCh);
             return $this->fail($updateMsg);
         }
-        $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换成功（API 返回：%{1}）', [$updateMsg])]);
-        w_log_info(__('[DnsSwitchService] %{1} Step3: NS 切换成功', [$domainName]), [], $logCh);
+        $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…', [$updateMsg])]);
+        w_log_info(__('[DnsSwitchService] %{1} Step3: NS API 成功，开始注册商侧轮询校验', [$domainName]), [], $logCh);
 
-        // 提交后即时用注册商接口校验（可选），并输出详细日志
-        $registrarCheck = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $sourceAccount->getCredentials());
-        if ($registrarCheck['supported'] === false) {
-            $notify('registrar_ns_check', ['message' => __('[步骤2后] 注册商 getDomainDetail 不支持或未实现，跳过注册商侧校验')]);
-        } elseif ($registrarCheck['error'] !== '') {
-            $notify('registrar_ns_check', ['message' => __('[步骤2后] 注册商 NS 查询异常：%{1}', [$registrarCheck['error']]), 'error' => $registrarCheck['error']]);
-        } else {
-            $regNsNorm = $registrarCheck['normalized'];
-            if ($regNsNorm === $targetNsNormalized) {
-                $notify('registrar_ns_updated', ['message' => __('注册商侧已更新为目标 NS，提交已生效')]);
-            } else {
-                $nsStr = $regNsNorm === [] ? __('(空)') : \implode(', ', $regNsNorm);
-                $notify('registrar_ns_current', ['nameservers' => $regNsNorm, 'message' => __('[步骤2后] 注册商侧当前 NS：%{1}', [$nsStr])]);
-            }
+        // 注册商接口可能返回成功但 NS 未实际变更（Gname 等）；此前仅提示仍继续会导致「显示切换成功、解析未切回」
+        $registrarVerify = $this->pollRegistrarNsMatchesTarget(
+            $sourceAdapter,
+            $domainName,
+            $sourceAccount->getCredentials(),
+            $targetNsNormalized,
+            6,
+            5
+        );
+        if ($registrarVerify['supported'] === false) {
+            $notify('registrar_ns_check', ['message' => __('注册商 getDomainDetail 不支持，无法二次校验 NS，请自行在注册商确认 NS 已为目标值')]);
+        } elseif ($registrarVerify['error'] !== '') {
+            $notify('registrar_ns_check', ['message' => __('注册商 NS 查询异常（已重试）：%{1}', [$registrarVerify['error']]), 'error' => $registrarVerify['error']]);
+            w_log_error(__('[DnsSwitchService] %{1} 注册商 NS 校验异常：%{2}', [$domainName, $registrarVerify['error']]), [], $logCh);
+            return $this->fail(__('NS 切换后无法从注册商读取当前 NS，请检查 API 权限或稍后重试：%{1}', [$registrarVerify['error']]));
+        } elseif ($registrarVerify['match'] === false) {
+            $curStr = $registrarVerify['normalized'] === [] ? (string) __('(空)') : \implode(', ', $registrarVerify['normalized']);
+            $wantStr = \implode(', ', $targetNs);
+            $failMsg = (string) __(
+                'NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。',
+                [$curStr, $wantStr]
+            );
+            $notify('switch_ns_verify_fail', ['message' => $failMsg, 'current_ns' => $registrarVerify['normalized'], 'target_ns' => $targetNs]);
+            w_log_error(__('[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}', [$domainName, $curStr, $wantStr]), [], $logCh);
+            return $this->fail($failMsg);
         }
+        $notify('registrar_ns_updated', ['message' => __('注册商侧 NS 已与目标一致，切换已生效')]);
 
         // ── Step 3b: 可选等待 NS 生效（公网或注册商侧） ──
         if ($waitForNs) {
@@ -333,8 +345,46 @@ class DnsSwitchService
     }
 
     /**
-     * @return array<string>|null
+     * 轮询注册商侧 NS 是否与目标一致（应对接口乐观成功、控制台「等待生效」等）
+     *
+     * @return array{supported: bool, match: bool|null, normalized: array<string>, error: string}
      */
+    private function pollRegistrarNsMatchesTarget(
+        object $sourceAdapter,
+        string $domainName,
+        array $credentials,
+        array $targetNsNormalized,
+        int $attempts,
+        int $sleepSeconds
+    ): array {
+        $probe = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $credentials);
+        if ($probe['supported'] === false) {
+            return ['supported' => false, 'match' => null, 'normalized' => [], 'error' => ''];
+        }
+        $lastNorm = [];
+        $lastErr = '';
+        for ($i = 0; $i < $attempts; $i++) {
+            if ($i > 0 && $sleepSeconds > 0) {
+                \sleep($sleepSeconds);
+            }
+            $check = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $credentials);
+            if (($check['error'] ?? '') !== '') {
+                $lastErr = (string) $check['error'];
+                continue;
+            }
+            $lastErr = '';
+            $lastNorm = $check['normalized'];
+            if ($lastNorm === $targetNsNormalized) {
+                return ['supported' => true, 'match' => true, 'normalized' => $lastNorm, 'error' => ''];
+            }
+        }
+        if ($lastErr !== '') {
+            return ['supported' => true, 'match' => null, 'normalized' => $lastNorm, 'error' => $lastErr];
+        }
+
+        return ['supported' => true, 'match' => false, 'normalized' => $lastNorm, 'error' => ''];
+    }
+
     private function getRegistrarNameservers(object $sourceAdapter, string $domainName, array $credentials): ?array
     {
         $r = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $credentials);

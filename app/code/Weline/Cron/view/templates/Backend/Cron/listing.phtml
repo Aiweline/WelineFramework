@@ -228,6 +228,13 @@
                                                 data-task-name="{{task.name}}">
                                             <i class="mdi mdi-play"></i> <lang>运行</lang>
                                         </button>
+                                        <button type="button"
+                                                class="btn btn-outline-secondary btn-sm weline-cron-log-btn mb-1"
+                                                title="@lang{调度运行日志（历史与实时）}"
+                                                data-execute-name="{{task.execute_name}}"
+                                                data-task-name="{{task.name}}">
+                                            <i class="mdi mdi-text-box-outline"></i> <lang>日志</lang>
+                                        </button>
                                         <if condition="task.status === 'block'">
                                             <form action="@backend-url('*/backend/cron/unlock')" method="post" class="d-inline">
                                                 <csrf/>
@@ -487,6 +494,26 @@
     align-items: center;
     justify-content: flex-end;
 }
+.weline-cron-log-static-pre {
+    display: none;
+    margin: 0;
+    padding: 10px;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--backend-color-bg-surface, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: 6px;
+    max-height: 380px;
+    overflow: auto;
+    font-family: ui-monospace, monospace;
+}
+.weline-cron-log-empty-hint {
+    padding: 16px;
+    text-align: center;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
 .weline-cron-run-help-details { margin-bottom: 12px; }
 .weline-cron-run-help-details summary { cursor: pointer; font-weight: 600; color: var(--backend-color-text-primary, #333); }
 .weline-cron-run-help-pre {
@@ -738,6 +765,173 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
         fd.append('suffix', document.getElementById('weline-cron-run-suffix').value);
         if (typeof term.clear === 'function') term.clear();
         term.start(runStreamUrl, { method: 'POST', body: fd });
+    });
+})();
+</script>
+
+<?php
+$welineCronLogListUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-log-list'), ENT_QUOTES, 'UTF-8');
+$welineCronLogContentUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-log-content'), ENT_QUOTES, 'UTF-8');
+$welineCronLogStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/post-run-log-stream'), ENT_QUOTES, 'UTF-8');
+?>
+<div id="weline-cron-log-modal" class="weline-cron-run-modal" role="dialog" aria-modal="true" aria-labelledby="weline-cron-log-modal-title">
+    <div class="weline-cron-run-modal-backdrop" id="weline-cron-log-modal-backdrop"></div>
+    <div class="weline-cron-run-modal-dialog" style="max-width: 820px;">
+        <div class="weline-cron-run-modal-header">
+            <h5 class="mb-0" id="weline-cron-log-modal-title">
+                <i class="mdi mdi-text-box-outline"></i> <lang>调度运行日志</lang>
+                <small class="text-muted ms-1" id="weline-cron-log-modal-title-task"></small>
+            </h5>
+            <button type="button" class="btn btn-sm btn-light" id="weline-cron-log-modal-close" aria-label="<?= htmlspecialchars((string) __('关闭')) ?>">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        <div class="weline-cron-run-modal-body">
+            <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
+                <label for="weline-cron-log-select" class="form-label small mb-0"><lang>选择记录</lang></label>
+                <select id="weline-cron-log-select" class="form-select form-select-sm" style="max-width: 420px;"></select>
+            </div>
+            <p class="small text-muted mb-2" id="weline-cron-log-hint"></p>
+            <div id="weline-cron-log-empty" class="weline-cron-log-empty-hint" style="display:none;"></div>
+            <pre id="weline-cron-log-static" class="weline-cron-log-static-pre" aria-label="<?= htmlspecialchars((string) __('历史日志内容')) ?>"></pre>
+            <div id="weline-cron-log-terminal-wrap">
+                <w:theme:sse-terminal id="weline-cron-log-terminal"
+                 title="@lang{输出}"
+                 height="320px"
+                 events="start,progress,chunk,done,error"
+                 show-toolbar="true"
+                 show-start-toggle="false" />
+            </div>
+        </div>
+        <div class="weline-cron-run-modal-footer">
+            <button type="button" class="btn btn-secondary btn-sm" id="weline-cron-log-close-btn"><lang>关闭</lang></button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var logListUrl = '<?= $welineCronLogListUrl ?>';
+    var logContentUrl = '<?= $welineCronLogContentUrl ?>';
+    var logStreamUrl = '<?= $welineCronLogStreamUrl ?>';
+    var logModal = document.getElementById('weline-cron-log-modal');
+    if (!logModal) return;
+    var currentExecuteName = '';
+    var sel = document.getElementById('weline-cron-log-select');
+    var pre = document.getElementById('weline-cron-log-static');
+    var emptyEl = document.getElementById('weline-cron-log-empty');
+    var termWrap = document.getElementById('weline-cron-log-terminal-wrap');
+    var hint = document.getElementById('weline-cron-log-hint');
+
+    function closeLogModal() {
+        logModal.classList.remove('is-open');
+        var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
+        if (term && typeof term.stop === 'function') term.stop();
+    }
+    function showHistoryContent(file) {
+        var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
+        if (term && typeof term.stop === 'function') term.stop();
+        termWrap.style.display = 'none';
+        pre.style.display = 'block';
+        pre.textContent = '<?= addslashes((string) __('加载中')) ?>…';
+        fetch(logContentUrl + '?execute_name=' + encodeURIComponent(currentExecuteName) + '&file=' + encodeURIComponent(file), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (!j || !j.success) {
+                pre.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
+                return;
+            }
+            var t = j.content != null ? String(j.content) : '';
+            if (j.truncated) t += '\n\n<?= addslashes((string) __('【已截断】仅显示前 2MB')) ?>';
+            pre.textContent = t || '<?= addslashes((string) __('（空）')) ?>';
+        }).catch(function() {
+            pre.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+        });
+    }
+    function startLiveStream() {
+        termWrap.style.display = '';
+        pre.style.display = 'none';
+        var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
+        if (!term) return;
+        if (typeof term.clear === 'function') term.clear();
+        var fd = new FormData();
+        fd.append('csrf', document.getElementById('weline-cron-sse-csrf').value);
+        fd.append('execute_name', currentExecuteName);
+        term.start(logStreamUrl, { method: 'POST', body: fd });
+    }
+    function onLogSelectChange() {
+        if (!sel || !sel.value) return;
+        if (sel.value === '__live__') {
+            if (hint) hint.textContent = '<?= addslashes((string) __('实时尾随 var/cron 下当前日志；任务结束后自动结束流')) ?>';
+            startLiveStream();
+        } else {
+            if (hint) hint.textContent = '<?= addslashes((string) __('历史归档：任务每次正常结束或新一轮启动前会保留到 var/cron/history')) ?>';
+            showHistoryContent(sel.value);
+        }
+    }
+    function openLogModal(executeName, taskName) {
+        currentExecuteName = (executeName || '').trim();
+        var sub = document.getElementById('weline-cron-log-modal-title-task');
+        if (sub) sub.textContent = taskName ? (taskName + ' · ' + currentExecuteName) : currentExecuteName;
+        emptyEl.style.display = 'none';
+        pre.style.display = 'none';
+        termWrap.style.display = '';
+        sel.innerHTML = '';
+        if (hint) hint.textContent = '';
+        logModal.classList.add('is-open');
+        fetch(logListUrl + '?execute_name=' + encodeURIComponent(currentExecuteName), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (!j || !j.success) {
+                emptyEl.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
+                emptyEl.style.display = 'block';
+                termWrap.style.display = 'none';
+                return;
+            }
+            if (j.task_running || j.live_exists) {
+                var o = document.createElement('option');
+                o.value = '__live__';
+                o.textContent = j.task_running
+                    ? '<?= addslashes((string) __('当前运行中（SSE 实时）')) ?>'
+                    : '<?= addslashes((string) __('当前日志文件（实时尾随至空闲）')) ?>';
+                sel.appendChild(o);
+            }
+            (j.items || []).forEach(function(it) {
+                var o = document.createElement('option');
+                o.value = it.file;
+                o.textContent = it.label || it.file;
+                sel.appendChild(o);
+            });
+            if (sel.options.length === 0) {
+                emptyEl.textContent = '<?= addslashes((string) __('暂无日志。任务由系统调度跑完后会自动归档到此；也可在运行中产生当前日志文件。')) ?>';
+                emptyEl.style.display = 'block';
+                termWrap.style.display = 'none';
+                var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-log-terminal'];
+                if (term && typeof term.stop === 'function') term.stop();
+                return;
+            }
+            sel.selectedIndex = 0;
+            onLogSelectChange();
+        }).catch(function() {
+            emptyEl.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+            emptyEl.style.display = 'block';
+            termWrap.style.display = 'none';
+        });
+    }
+    document.querySelectorAll('.weline-cron-log-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            openLogModal(btn.getAttribute('data-execute-name') || '', btn.getAttribute('data-task-name') || '');
+        });
+    });
+    if (sel) sel.addEventListener('change', onLogSelectChange);
+    ['weline-cron-log-modal-close', 'weline-cron-log-close-btn', 'weline-cron-log-modal-backdrop'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', function() { closeLogModal(); });
     });
 })();
 </script>

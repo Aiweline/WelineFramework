@@ -16,6 +16,7 @@ namespace Weline\Cron\Controller\Backend;
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Model\CronTask;
 use Weline\Cron\Service\CronManualRunStreamer;
+use Weline\Cron\Service\CronRunLogService;
 use Weline\Cron\Service\CronTestDiscovery;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Exception\Core;
@@ -348,5 +349,87 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         /** @var CronManualRunStreamer $streamer */
         $streamer = ObjectManager::getInstance(CronManualRunStreamer::class);
         $streamer->stream($executeName, $suffix, new SseWriter());
+    }
+
+    #[Acl('Weline_Cron::cron_run_log', '运行日志列表', 'mdi mdi-history', '计划任务调度日志历史与当前文件信息', 'Weline_Cron::cron_pc_root')]
+    public function runLogList(): string
+    {
+        $this->layoutType = null;
+        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
+        /** @var CronRunLogService $svc */
+        $svc = ObjectManager::getInstance(CronRunLogService::class);
+        $data = $svc->listForExecuteName($executeName);
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        if (!($data['success'] ?? false)) {
+            $this->request->getResponse()->setHttpResponseCode(400);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) ($data['message'] ?? \__('请求失败')),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        return (string) \json_encode([
+            'success' => true,
+            'task_running' => (bool) ($data['task_running'] ?? false),
+            'live_exists' => (bool) ($data['live_exists'] ?? false),
+            'live_size' => (int) ($data['live_size'] ?? 0),
+            'items' => $data['items'] ?? [],
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    #[Acl('Weline_Cron::cron_run_log', '运行日志内容', 'mdi mdi-file-document-outline', '读取单次调度归档日志全文', 'Weline_Cron::cron_pc_root')]
+    public function runLogContent(): string
+    {
+        $this->layoutType = null;
+        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
+        $file = \trim((string) $this->request->getGet('file', ''));
+        /** @var CronRunLogService $svc */
+        $svc = ObjectManager::getInstance(CronRunLogService::class);
+        $data = $svc->readHistoryFile($executeName, $file);
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+        if (!($data['success'] ?? false)) {
+            $code = \str_contains((string) ($data['message'] ?? ''), '不存在') ? 404 : 400;
+            $this->request->getResponse()->setHttpResponseCode($code);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) ($data['message'] ?? \__('读取失败')),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        return (string) \json_encode([
+            'success' => true,
+            'content' => (string) ($data['content'] ?? ''),
+            'truncated' => (bool) ($data['truncated'] ?? false),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    #[Acl('Weline_Cron::cron_run_log', '运行日志SSE', 'mdi mdi-access-point', '当前调度日志实时尾随（SSE）', 'Weline_Cron::cron_pc_root')]
+    public function postRunLogStream(): void
+    {
+        $this->layoutType = null;
+        $csrfPost = (string) $this->request->getPost('csrf', '');
+        $csrfValid = Token::get('csrf');
+        if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
+            if (!\headers_sent()) {
+                \header('Content-Type: application/json; charset=utf-8', true, 403);
+            }
+            echo \json_encode(['error' => (string) \__('CSRF 验证失败')], JSON_UNESCAPED_UNICODE);
+
+            return;
+        }
+        $executeName = \trim((string) $this->request->getPost('execute_name', ''));
+        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) \__('执行名无效'));
+            $sse->complete(['exit_code' => -1]);
+
+            return;
+        }
+        /** @var CronRunLogService $svc */
+        $svc = ObjectManager::getInstance(CronRunLogService::class);
+        $svc->streamLiveLogTail($executeName, new SseWriter());
     }
 }
