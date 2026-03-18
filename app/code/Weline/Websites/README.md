@@ -6,7 +6,7 @@
 - 域名可用性检查与购买
 - 统一购买弹窗参数传递（DNS / CDN / 解析到本机 / 生命周期跟踪）
 - 根域、`@`、`www` 的状态监控
-- 与 `Weline_Saas` 生命周期编排、`Weline_Server` HTTPS 证书能力联动
+- 与本模块内生命周期编排（`DomainLifecycleOrchestrationService`）、`Weline_Server` HTTPS 证书能力联动
 
 ## GName 购买结果兼容
 
@@ -19,7 +19,7 @@
 
 ## 生命周期编排
 
-购买成功后可自动启动 `Weline\Saas\Service\DomainLifecycleOrchestrationService`，持续推进：
+购买成功后可自动启动 `Weline\Websites\Service\DomainLifecycleOrchestrationService`，持续推进：
 
 1. 购买确认
 2. DNS / 解析处理
