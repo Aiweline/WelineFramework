@@ -1,0 +1,88 @@
+/**
+ * 媒体管理器 iframe 用后端主题变量（与 Weline_Theme 亮/暗色一致）
+ * 仅用于无布局的 iframe 页面，使 --backend-* 变量与后台主题色一致
+ */
+:root,
+[data-theme="backend"][data-theme-mode="light"],
+[data-theme-mode="light"] {
+    /* 品牌色 */
+    --backend-color-primary: #556ee6;
+    --backend-color-primary-rgb: 85, 110, 230;
+    --backend-color-primary-hover: #4857d4;
+    --backend-color-primary-bg-subtle: rgba(85, 110, 230, 0.1);
+    /* 文本 */
+    --backend-color-text-primary: #212529;
+    --backend-color-text-secondary: #6c757d;
+    --backend-color-text-inverse: #ffffff;
+    --backend-color-text-dark: #212529;
+    /* 背景 */
+    --backend-color-bg-primary: #ffffff;
+    --backend-color-bg-secondary: #f8f9fa;
+    --backend-color-bg-body: #f8f9fa;
+    --backend-color-bg-tertiary: #e9ecef;
+    /* 边框 */
+    --backend-color-border-default: #dee2e6;
+    /* 侧栏/卡片 */
+    --backend-color-sidebar-bg: #ffffff;
+    --backend-color-card-bg: #ffffff;
+    /* 功能色 */
+    --backend-color-danger: #f46a6a;
+    --backend-color-danger-hover: #f24a4a;
+    --backend-color-success: #34c38f;
+    --backend-color-success-hover: #2ab57d;
+    --backend-color-warning: #f1b44c;
+    --backend-color-warning-hover: #eea428;
+    --backend-color-input-bg: #ffffff;
+    /* 组件 */
+    --backend-border-radius: 0.375rem;
+    --backend-border-radius-sm: 0.25rem;
+    --backend-border-radius-md: 0.5rem;
+    --backend-border-radius-lg: 0.75rem;
+    --backend-spacing-sm: 0.5rem;
+    --backend-spacing-md: 1rem;
+    --backend-spacing-lg: 1.5rem;
+    --backend-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --backend-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --backend-card-shadow: 0 0 13px 0 rgba(74, 53, 107, 0.05);
+    --backend-modal-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --backend-focus-ring: 0 0 0 0.15rem rgba(85, 110, 230, 0.25);
+    --backend-font-size-xs: 0.75rem;
+    --backend-font-size-sm: 0.875rem;
+    --backend-font-weight-semibold: 600;
+    --backend-padding-input: 8px 12px;
+}
+
+/* iframe 下整页背景与主题一致 */
+html[data-theme="backend"],
+html[data-theme-mode="dark"] {
+    background: var(--backend-color-bg-body, #f8f9fa);
+}
+body {
+    background: var(--backend-color-bg-body, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+}
+
+[data-theme-mode="dark"],
+[data-theme="dark"] {
+    --backend-color-bg-body: #1D222E;
+    --backend-color-text-primary: #e9ecef;
+    --backend-color-text-secondary: #adb5bd;
+    --backend-color-text-inverse: #212529;
+    --backend-color-text-dark: #f8f9fa;
+    --backend-color-bg-primary: #1D222E;
+    --backend-color-bg-secondary: #252B3B;
+    --backend-color-border-default: #495057;
+    --backend-color-sidebar-bg: #1D222E;
+    --backend-color-card-bg: #252B3B;
+    --backend-color-primary-bg-subtle: rgba(85, 110, 230, 0.15);
+    --backend-color-danger: #f46a6a;
+    --backend-color-danger-hover: #f24a4a;
+    --backend-color-success: #34c38f;
+    --backend-color-success-hover: #2ab57d;
+    --backend-color-warning: #f1b44c;
+    --backend-color-input-bg: #252B3B;
+    --backend-card-shadow: 0 0 13px 0 rgba(0, 0, 0, 0.3);
+    --backend-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    --backend-shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    --backend-modal-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.4);
+}
