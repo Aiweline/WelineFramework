@@ -10,6 +10,7 @@ use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainPoolResolveService;
+use Weline\Websites\Service\DnsSiteHostRules;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\HealthCheckService;
 
@@ -385,12 +386,18 @@ class DomainLifecycleOrchestrationService
     private function loadRootPoolDomains(string $rootDomain): array
     {
         $rows = $this->domainPoolModel->getDomainsByRoot($rootDomain);
+        $root = \strtolower(\trim($rootDomain));
         $items = [];
         foreach ($rows as $row) {
+            $fqdn = \strtolower(\trim((string) ($row[DomainPool::schema_fields_DOMAIN] ?? '')));
+            if ($fqdn !== '' && DnsSiteHostRules::isFqdnTechnicalNonSitePool($fqdn, $root)) {
+                continue;
+            }
             $pool = clone $this->domainPoolModel;
             $pool->setData($row);
             $items[] = $pool;
         }
+
         return $items;
     }
 
@@ -427,6 +434,10 @@ class DomainLifecycleOrchestrationService
             static fn(string $item): string => \trim($item),
             $subdomains
         )));
+        $subdomains = \array_values(\array_filter(
+            $subdomains,
+            static fn(string $s): bool => $s !== '' && !DomainResolveService::isUnderscoreTechnicalDnsHost($s)
+        ));
 
         if ($subdomains === []) {
             return ['@', 'www'];
