@@ -325,6 +325,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
     {
         $registrars = [];
         foreach ($this->resolver->getAllAdapters() as $adapter) {
+            if (!\is_object($adapter) || !$adapter instanceof \Weline\Websites\Api\DomainRegistrarInterface) {
+                continue;
+            }
             $registrars[] = [
                 'code'        => $adapter->getRegistrarCode(),
                 'name'        => $adapter->getRegistrarName(),
