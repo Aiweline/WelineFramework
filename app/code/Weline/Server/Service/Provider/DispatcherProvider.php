@@ -74,7 +74,7 @@ class DispatcherProvider extends AbstractServiceProvider
         $workerBasePort = $context->getWorkerBasePort();
 
         $arguments = [
-            $context->envConfig['server']['host'] ?? '127.0.0.1',
+            ($context->envConfig['wls'] ?? [])['host'] ?? '127.0.0.1',
             (string) $port,
             (string) $workerBasePort,
             (string) $workerCount,

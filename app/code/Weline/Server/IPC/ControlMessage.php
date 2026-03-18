@@ -49,6 +49,9 @@ class ControlMessage
     /** Master → Dispatcher：从负载均衡池移除端口 */
     public const TYPE_REMOVE_WORKER = 'remove_worker';
 
+    /** Master → Dispatcher：一次性替换负载均衡端口列表（维护模式切换用） */
+    public const TYPE_SET_WORKER_POOL = 'set_worker_pool';
+
     /** Master → Dispatcher：设置 HTTP 重定向端口（用于明文 HTTP 请求转发） */
     public const TYPE_SET_REDIRECT_PORT = 'set_redirect_port';
 
@@ -66,6 +69,9 @@ class ControlMessage
 
     /** 子进程 → Master：上报运行状态 */
     public const TYPE_STATUS_REPORT = 'status_report';
+
+    /** Worker → Master：已进入 HTTP 事件循环（Master 记录存活/重启统计） */
+    public const TYPE_WORKER_LOOP_STARTED = 'worker_loop_started';
     /** 子进程 → Master：上报请求遥测事件 */
     public const TYPE_TELEMETRY = 'telemetry';
 
@@ -150,6 +156,12 @@ class ControlMessage
 
     /** Worker → Master：Fiber 池统计上报 */
     public const TYPE_FIBER_POOL_STATS = 'fiber_pool_stats';
+
+    /** Master → Worker：进程内维护页开关（与维护 Worker 池配合，靠 IPC ACK 确认） */
+    public const TYPE_SET_MAINTENANCE_MODE = 'set_maintenance_mode';
+
+    /** Worker → Master：已应用维护信号 */
+    public const TYPE_MAINTENANCE_MODE_ACK = 'maintenance_mode_ack';
 
     // ========== 复活优先级 ==========
 
@@ -301,6 +313,19 @@ class ControlMessage
     }
 
     /**
+     * Worker 进入主事件循环后上报（listen + IPC 就绪之后）
+     */
+    public static function workerLoopStarted(int $workerId, int $port, int $pid): string
+    {
+        return self::encode([
+            'type'      => self::TYPE_WORKER_LOOP_STARTED,
+            'worker_id' => $workerId,
+            'port'      => $port,
+            'pid'       => $pid,
+        ]);
+    }
+
+    /**
      * 构建 shutdown 消息
      */
     public static function shutdown(string $reason = ''): string
@@ -314,11 +339,27 @@ class ControlMessage
     /**
      * 构建 reload 消息
      */
-    public static function reload(string $reloadType = self::RELOAD_TYPE_CODE): string
+    public static function reload(string $reloadType = self::RELOAD_TYPE_CODE, int $drainTimeoutSec = 0): string
     {
-        return self::encode([
+        $p = [
             'type'        => self::TYPE_RELOAD,
             'reload_type' => $reloadType,
+        ];
+        if ($drainTimeoutSec > 0) {
+            $p['drain_timeout_sec'] = $drainTimeoutSec;
+        }
+
+        return self::encode($p);
+    }
+
+    /**
+     * @param int[] $ports
+     */
+    public static function setWorkerPool(array $ports): string
+    {
+        return self::encode([
+            'type'  => self::TYPE_SET_WORKER_POOL,
+            'ports' => \array_values(\array_map('intval', $ports)),
         ]);
     }
 
@@ -352,6 +393,19 @@ class ControlMessage
         return self::encode([
             'type' => self::TYPE_ROUTING_POLICY,
             'data' => $policy,
+        ]);
+    }
+
+    /**
+     * @param bool $immediateAckOnEnable 无 Dispatcher 时置 true：立即 ACK（无法切池排水）
+     */
+    public static function setMaintenanceMode(bool $enabled, string $requestId, bool $immediateAckOnEnable = false): string
+    {
+        return self::encode([
+            'type' => self::TYPE_SET_MAINTENANCE_MODE,
+            'enabled' => $enabled,
+            'request_id' => $requestId,
+            'immediate_ack' => $immediateAckOnEnable,
         ]);
     }
 

@@ -819,6 +819,32 @@ class PassthroughCore
         // 清理健康记录
         unset($this->workerHealth[$port]);
     }
+
+    /**
+     * 替换整个 Worker 端口池（维护模式：仅维护 Worker / 恢复业务 Worker）
+     *
+     * @param int[] $ports
+     */
+    public function setWorkerPorts(array $ports): void
+    {
+        $this->workerPorts = \array_values(\array_unique(\array_map('intval', $ports)));
+        $this->workerCount = \count($this->workerPorts);
+        $this->workerHealth = [];
+        foreach ($this->workerPorts as $port) {
+            if ($port <= 0) {
+                continue;
+            }
+            $this->workerHealth[$port] = [
+                'failures' => 0,
+                'blacklisted_at' => 0.0,
+                'last_success' => \microtime(true),
+                'total_failures' => 0,
+            ];
+        }
+        $this->writeStderr(
+            '[PassthroughCore] SET_WORKER_POOL 当前列表: ' . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
+        );
+    }
     
     /**
      * 获取 Worker 健康状态摘要

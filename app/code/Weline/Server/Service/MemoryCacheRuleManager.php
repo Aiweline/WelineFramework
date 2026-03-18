@@ -273,7 +273,7 @@ class MemoryCacheRuleManager
         $this->rulesLoaded = true;
 
         // 加载默认 TTL 配置
-        $this->defaultTtl = (int)Env::get('server.memory_cache.default_ttl', 3600);
+        $this->defaultTtl = (int)Env::get('wls.memory_cache.default_ttl', 3600);
     }
 
     /**
@@ -316,7 +316,7 @@ class MemoryCacheRuleManager
         
         // 2. 尝试从 env.php 加载规则文件路径
         if ($rulesFile === null) {
-            $envRulesFile = Env::get('server.memory_cache.rules_file', '');
+            $envRulesFile = Env::get('wls.memory_cache.rules_file', '');
             if (!empty($envRulesFile)) {
                 // 相对路径转绝对路径
                 if (!str_starts_with($envRulesFile, '/') && !preg_match('/^[A-Za-z]:/', $envRulesFile)) {
@@ -509,7 +509,7 @@ class MemoryCacheRuleManager
      */
     public static function isEnabled(): bool
     {
-        return (bool)Env::get('server.memory_cache.enabled', false);
+        return (bool)Env::get('wls.memory_cache.enabled', false);
     }
 
     /**
@@ -519,6 +519,6 @@ class MemoryCacheRuleManager
      */
     public static function getMaxSize(): int
     {
-        return (int)Env::get('server.memory_cache.max_size', 104857600); // 默认 100MB
+        return (int)Env::get('wls.memory_cache.max_size', 104857600); // 默认 100MB
     }
 }

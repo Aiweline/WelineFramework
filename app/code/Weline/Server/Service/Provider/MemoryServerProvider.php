@@ -31,7 +31,8 @@ class MemoryServerProvider extends AbstractServiceProvider
 
     public function isEnabled(ServiceContext $context): bool
     {
-        return (bool)($context->envConfig['server']['memory_service']['enabled'] ?? true);
+        $m = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
+        return (bool)($m['enabled'] ?? true);
     }
 
     public function getInstanceCount(ServiceContext $context): int
@@ -94,6 +95,7 @@ class MemoryServerProvider extends AbstractServiceProvider
 
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
-        return (int)($context->envConfig['server']['memory_service']['port'] ?? 19971);
+        $ms = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
+        return (int)($ms['port'] ?? 19971);
     }
 }

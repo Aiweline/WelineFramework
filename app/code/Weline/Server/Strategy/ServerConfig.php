@@ -106,8 +106,17 @@ final class ServerConfig
         $this->sslKey = $config['ssl_key'] ?? '';
         $this->sslEnabled = !empty($this->sslCert) && !empty($this->sslKey);
         $this->frontend = (bool) ($config['frontend'] ?? false);
-        $this->httpRedirectPort = (int) ($config['http_redirect_port'] ?? 80);
-        $this->httpRedirectEnabled = (bool) ($config['http_redirect_enabled'] ?? true);
+        $portVal = (int) ($config['port'] ?? 443);
+        if ($this->sslEnabled) {
+            if (\array_key_exists('http_redirect_port', $config)) {
+                $this->httpRedirectPort = (int) $config['http_redirect_port'];
+            } else {
+                $this->httpRedirectPort = ($portVal === 443) ? 80 : 0;
+            }
+        } else {
+            $this->httpRedirectPort = 0;
+        }
+        $this->httpRedirectEnabled = $this->sslEnabled && $this->httpRedirectPort > 0;
         $this->phpBinary = $config['php_binary'] ?? PHP_BINARY;
         $this->logDir = $config['log_dir'] ?? $this->getDefaultLogDir();
         $this->binDir = $config['bin_dir'] ?? $this->getDefaultBinDir();

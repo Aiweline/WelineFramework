@@ -380,6 +380,7 @@ class MasterProcess
      */
     public function stopWithProgress(string $signal): void
     {
+        $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
 
         if ($this->stopWithProgressViaIpc($signal)) {
@@ -398,6 +399,7 @@ class MasterProcess
      */
     public function stop(): void
     {
+        $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
         $this->orchestrator?->stopAll('manual');
         $this->orchestrator?->stop();

@@ -515,7 +515,15 @@ class Dispatcher
                 }
                 $this->log('移除 Worker 端口: ' . \implode(',', $ports), 'WARN');
                 break;
-                
+
+            case ControlMessage::TYPE_SET_WORKER_POOL:
+                $ports = $msg['ports'] ?? [];
+                if (\is_array($ports)) {
+                    $this->passthroughCore->setWorkerPorts($ports);
+                    $this->log('SET_WORKER_POOL: ' . \implode(',', $ports), 'INFO');
+                }
+                break;
+
             case ControlMessage::TYPE_SHUTDOWN:
                 $this->log('收到 shutdown 命令', 'WARN');
                 $this->ipcReceivedShutdown = true;

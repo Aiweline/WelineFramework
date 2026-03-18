@@ -1977,7 +1977,7 @@ CNF;
         }
 
         // 兼容旧格式：app/etc 下直接放证书
-        $defaultDomain = (string)(Env::get('server.host') ?? 'localhost');
+        $defaultDomain = (string)(Env::get('wls.host') ?? 'localhost');
         if ($defaultDomain === '127.0.0.1' || $defaultDomain === '::1' || $defaultDomain === '0.0.0.0') {
             $defaultDomain = 'localhost';
         }
@@ -2434,7 +2434,7 @@ CNF;
     
     protected function getServerPort(): int
     {
-        $config = Env::getInstance()->getConfig('server');
+        $config = Env::getInstance()->getConfig('wls');
         if (\is_array($config)) {
             return (int)($config['port'] ?? 80);
         }
@@ -2447,7 +2447,7 @@ CNF;
      */
     protected function canUseHttp01Challenge(): bool
     {
-        $config = Env::getInstance()->getConfig('server');
+        $config = Env::getInstance()->getConfig('wls');
         if (!\is_array($config)) {
             return true;
         }

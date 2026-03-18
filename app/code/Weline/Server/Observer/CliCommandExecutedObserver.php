@@ -178,14 +178,14 @@ class CliCommandExecutedObserver implements ObserverInterface
     }
 
     /**
-     * 从 env server.reload_prefixes 读取重载前缀，未配置时使用默认值
+     * 从 wls.reload_prefixes 读取重载前缀，未配置时使用默认值
      * 格式：['code' => ['setup:', 'command:'], 'cache' => ['cache:']]
      *
      * @return array{code: string[], cache: string[]}
      */
     private function getReloadPrefixes(): array
     {
-        $server = Env::getInstance()->getConfig('server');
+        $server = Env::getInstance()->getConfig('wls');
         $configured = \is_array($server['reload_prefixes'] ?? null) ? $server['reload_prefixes'] : [];
         $default = self::DEFAULT_RELOAD_PREFIXES;
         return [

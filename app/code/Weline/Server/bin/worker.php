@@ -127,8 +127,9 @@ $originTokenValidationEnabled = false;
 $originTokenHeader = 'X-Weline-Origin-Token';
 $originTokenAllowLocal = true;
 if (\is_array($envConfig)) {
-    $originToken = (string)($envConfig['server']['origin_token'] ?? '');
-    $originValidationConfig = $envConfig['server']['origin_token_validation'] ?? [];
+    $wlsEnv = $envConfig['wls'] ?? [];
+    $originToken = (string)($wlsEnv['origin_token'] ?? '');
+    $originValidationConfig = $wlsEnv['origin_token_validation'] ?? [];
     if (\is_array($originValidationConfig)) {
         $originTokenValidationEnabled = (bool)($originValidationConfig['enabled'] ?? false);
         $originTokenHeader = (string)($originValidationConfig['header'] ?? $originTokenHeader);
@@ -169,9 +170,11 @@ try {
     WlsLogger::info_("框架运行时初始化成功");
 
     // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
-    $sessionCfg = \is_array($envConfig) ? ($envConfig['session'] ?? []) : [];
-    $sessionHost = (string)($sessionCfg['server_host'] ?? $sessionCfg['host'] ?? '127.0.0.1');
-    $sessionPort = (int)($sessionCfg['server_port'] ?? $sessionCfg['port'] ?? 19970);
+    $wlsSess = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
+        ? $envConfig['wls']['session'] : [];
+    $wlsSrv = \is_array($wlsSess['wls_server'] ?? null) ? $wlsSess['wls_server'] : [];
+    $sessionHost = (string)($wlsSrv['host'] ?? $wlsSess['host'] ?? '127.0.0.1');
+    $sessionPort = (int)($wlsSrv['port'] ?? $wlsSess['port'] ?? 19970);
     WlsLogger::info_("[Session] 开始连接 Session 服务 {$sessionHost}:{$sessionPort}，最多重试 10 次，间隔 2 秒");
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
         'connect_timeout' => 1.0,
@@ -219,8 +222,8 @@ $fiberResults = [];
 
 // ========== WLS 内存缓存配置（智能模式） ==========
 $wlsCacheConfig = [];
-if ($envConfig !== null && isset($envConfig['server']['cache'])) {
-    $wlsCacheConfig = $envConfig['server']['cache'];
+if ($envConfig !== null && isset(($envConfig['wls'] ?? [])['cache'])) {
+    $wlsCacheConfig = $envConfig['wls']['cache'];
 }
 
 // 内存检测函数（与 worker_ssl.php 共用逻辑）
@@ -340,6 +343,17 @@ if ($freeMemory > 0 && $freeMemory < $requiredMemory) {
 
 WlsLogger::info_("内存缓存：上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL / 1024 / 1024, 1) . "MB，单文件 " . \round($WLS_STATIC_CACHE_MAX_SIZE / 1024, 1) . "KB");
 // ========== 内存缓存配置结束 ==========
+
+// uopz：将请求内的 exit()/die() 转为异常，避免整 Worker 进程退出（需安装 uopz 扩展）
+$WLS_UOPZ_EXIT_GUARD = false;
+if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
+    try {
+        \uopz_allow_exit(false);
+        $WLS_UOPZ_EXIT_GUARD = true;
+        WlsLogger::info_('uopz 已启用：业务代码中裸 exit()/die() 不再结束 Worker 进程（请优先使用 System::exit）');
+    } catch (\Throwable) {
+    }
+}
 
 // 注册补充 shutdown handler（检测 die()/exit() 非正常退出）
 // 注：致命错误由 ErrorBootstrap 统一处理，此处仅处理非致命退出
@@ -542,7 +556,7 @@ if ($controlPort > 0) {
         $orchestratorLaunchId
     );
     $handler = new \Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler(
-        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested): void {
+        static function (array $msg) use (&$shouldExit, &$ipcDraining, &$ipcReceivedShutdown, &$socket, &$drainStartTime, &$waitingForAck, $workerId, &$activeFibers, &$ipcClient, $port, &$fiberIdleTtlSec, &$fiberMaxActive, &$fiberReleaseIdleRequested, $isMaintenanceWorker): void {
             $type = $msg['type'] ?? '';
             // 帝王令：shutdown 至高无上，一旦收到则不再处理其他 IPC（RELOAD/DRAIN/CACHE_CLEAR 等）
             if ($type !== \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN && $ipcReceivedShutdown) {
@@ -633,7 +647,28 @@ if ($controlPort > 0) {
                         ));
                     }
                     break;
-                    
+
+                case \Weline\Server\IPC\ControlMessage::TYPE_SET_MAINTENANCE_MODE:
+                    if ($isMaintenanceWorker) {
+                        break;
+                    }
+                    $mEnabled = (bool) ($msg['enabled'] ?? false);
+                    $mReqId = (string) ($msg['request_id'] ?? '');
+                    try {
+                        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', $mEnabled);
+                        WlsLogger::info_("IPC 维护信号 enabled=" . ($mEnabled ? 'true' : 'false') . " request_id={$mReqId}");
+                    } catch (\Throwable $e) {
+                        WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
+                    }
+                    if ($mReqId !== '' && $ipcClient !== null && $ipcClient->isConnected()) {
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::encode([
+                            'type' => \Weline\Server\IPC\ControlMessage::TYPE_MAINTENANCE_MODE_ACK,
+                            'request_id' => $mReqId,
+                            'worker_id' => $workerId,
+                        ]));
+                    }
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_SHUTDOWN:
                     $ipcReceivedShutdown = true;
                     $shouldExit = true;
@@ -871,6 +906,9 @@ if (\function_exists('pcntl_signal')) {
 $consecutiveErrors = 0;
 $maxConsecutiveErrors = 100; // 连续 100 次错误才考虑重启（给予足够的恢复机会）
 
+// 进入事件循环后向 Master 上报一次（IPC 重连后会再次上报）
+$workerLoopStartedSent = false;
+
 // 事件循环（Workerman 模式：外层 try-catch 防止意外退出）
 while (true) {
     try {
@@ -898,7 +936,14 @@ while (true) {
     if ($ipcClient && !$ipcClient->isConnected() && !$ipcReceivedShutdown) {
         $ipcClient->tryReconnect();
     }
-    
+    if ($ipcClient && !$ipcClient->isConnected()) {
+        $workerLoopStartedSent = false;
+    }
+    if ($ipcClient && $ipcClient->isConnected() && !$waitingForAck && !$workerLoopStartedSent) {
+        $ipcClient->sendWorkerLoopStarted($workerId, $port, (int) \getmypid());
+        $workerLoopStartedSent = true;
+    }
+
     // ========== ACK 等待超时检测（启动确认协议） ==========
     if ($waitingForAck && $ipcClient && $ipcClient->isConnected()) {
         $ackElapsed = \microtime(true) - $readySentTime;
@@ -1284,16 +1329,27 @@ while (true) {
             $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal,
             $fiberConn, $fiberConnId, $handleStartTime,
             &$connectionLastActivity, &$requestBuffers, &$requestLogged,
-            $ipcClient, &$fiberResults
+            $ipcClient, &$fiberResults, $WLS_UOPZ_EXIT_GUARD
         ) {
-            $response = handleRequest(
-                $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
-                $requestCount, $activeRequests, \count($connections), $startTime,
-                $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal
-            );
-            
-            // Fiber 执行完成，返回结果供主循环处理
-            return $response;
+            try {
+                return handleRequest(
+                    $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+                    $requestCount, $activeRequests, \count($connections), $startTime,
+                    $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal
+                );
+            } catch (\Weline\Framework\Runtime\RequestExitException $e) {
+                throw $e;
+            } catch (\Error $e) {
+                if ($WLS_UOPZ_EXIT_GUARD && \str_contains($e->getMessage(), 'uopz')) {
+                    WlsLogger::warning_(
+                        '请求内 exit()/die() 已由 uopz 拦截，返回 500（请改用 \\Weline\\Framework\\Runtime\\System::exit）'
+                    );
+                    return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                        . "Connection: close\r\nContent-Length: 52\r\n\r\n"
+                        . "Internal error: exit()/die() not allowed in WLS request\n";
+                }
+                throw $e;
+            }
         });
         
         $fiberScheduler->registerFiber();
@@ -1636,8 +1692,10 @@ function handleRequest(
         if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
             $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
             $env = \is_array($env) ? $env : [];
-            $healthAllowRemote = (bool)($env['server']['servers'][$instanceName]['health_allow_remote']
-                ?? $env['wls']['health_allow_remote'] ?? false);
+            $w = $env['wls'] ?? [];
+            $wlsServers = \is_array($w['servers'] ?? null) ? $w['servers'] : [];
+            $healthAllowRemote = (bool)(($wlsServers[$instanceName]['health_allow_remote'] ?? null)
+                ?? $w['health_allow_remote'] ?? false);
         }
         // 非本地且未全局放行时：若带有“开发模式+后台登录”下发放的签名 Cookie 则放行
         $healthAllowedByCookie = false;
