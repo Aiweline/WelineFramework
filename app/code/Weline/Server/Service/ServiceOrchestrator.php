@@ -182,6 +182,9 @@ class ServiceOrchestrator
 
     /** 遥测同类异常节流：key => 上次 error 时间 */
     private array $telemetryAnomalyLoggedAt = [];
+
+    /** Worker 不齐时遥测 5xx 触发的补齐节流（仅进程已挂/缺槽时生效） */
+    private array $telemetryWorkerRecoveryAt = [];
     private ?IpcTelemetryGateway $telemetryGateway = null;
     private ?InMemoryMetricsAggregator $metricsAggregator = null;
     /** @var array<string, true> */
@@ -385,6 +388,7 @@ class ServiceOrchestrator
         $this->masterSelfAuditIntervalSec = (float) ($context->getConfig('wls.orchestrator.master_self_audit_interval_sec', 20.0) ?? 20.0);
         $this->lastMasterSelfAuditAt = 0.0;
         $this->telemetryAnomalyLoggedAt = [];
+        $this->telemetryWorkerRecoveryAt = [];
         $providersForCritical = $this->registry->getAllProviders();
         $defaultCriticalRoles = [];
         foreach ($providersForCritical as $provider) {
@@ -3740,6 +3744,7 @@ class ServiceOrchestrator
             WlsLogger::error_(
                 "[Master自检] 遥测 HTTP 异常 status={$status} host={$host} instance={$instance} latency_ms={$latencyMs}"
             );
+            $this->recoverSlotsAfterTelemetryHttpFailure($instance);
         } elseif ($status < 100 || $status > 599) {
             $this->logTelemetryAnomalyThrottled(
                 "bad_status_{$status}_{$host}",
@@ -3781,6 +3786,49 @@ class ServiceOrchestrator
             $this->telemetryAnomalyLoggedAt = \array_slice($this->telemetryAnomalyLoggedAt, -150, 150, true);
         }
         WlsLogger::error_($message);
+    }
+
+    /**
+     * 遥测 HTTP≥500：立即检查 Worker 进程/槽位是否已挂或缺失；仅在不齐备时补齐拉起（业务 5xx 但 Worker 仍存活则不动作）
+     */
+    private function recoverSlotsAfterTelemetryHttpFailure(string $instance): void
+    {
+        if ($this->context === null || !$this->running || $this->shuttingDown || $this->masterShutdownIntent) {
+            return;
+        }
+        if ($this->startAllCompletedAt > 0.0 && (\microtime(true) - $this->startAllCompletedAt) < 50.0) {
+            return;
+        }
+        $desired = (int) ($this->desiredState['worker'] ?? 0);
+        if ($desired <= 0) {
+            return;
+        }
+        $ready = $this->countRoleSlotsReadyHealthy('worker');
+        if ($ready >= $desired) {
+            $this->logTelemetryAnomalyThrottled(
+                "5xx_worker_alive_{$instance}",
+                "[Master自检] 遥测 HTTP≥500 但 Worker 进程槽位均正常（{$ready}/{$desired}），不拉起"
+            );
+
+            return;
+        }
+        $interval = (float) ($this->context->getConfig('wls.orchestrator.telemetry_5xx_worker_recovery_cooldown_sec', 3.0) ?? 3.0);
+        if ($interval < 1.0) {
+            $interval = 1.0;
+        }
+        $now = \microtime(true);
+        $last = (float) ($this->telemetryWorkerRecoveryAt[$instance] ?? 0.0);
+        if ($now - $last < $interval) {
+            return;
+        }
+        $this->telemetryWorkerRecoveryAt[$instance] = $now;
+        if (\count($this->telemetryWorkerRecoveryAt) > 64) {
+            $this->telemetryWorkerRecoveryAt = \array_slice($this->telemetryWorkerRecoveryAt, -32, 32, true);
+        }
+        WlsLogger::warning_(
+            "[Master自检] 遥测 HTTP≥500 且 Worker 未齐备（就绪 {$ready}/期望 {$desired}，含进程已退出或槽位空）— 立即补齐拉起"
+        );
+        $this->reconcileRoleSlotGaps('worker');
     }
 
     /**

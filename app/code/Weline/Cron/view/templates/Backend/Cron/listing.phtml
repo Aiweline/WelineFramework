@@ -587,7 +587,12 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
                 <input type="text" class="form-control form-control-sm" id="weline-cron-run-suffix" name="suffix" autocomplete="off"
                        placeholder="@lang{留空则与定时调度一致}" />
             </div>
-            <w:theme:sse-terminal id="weline-cron-run-terminal" title="@lang{输出}" height="280px" events="start,progress,chunk,done,error" show-toolbar="true" />
+            <w:theme:sse-terminal id="weline-cron-run-terminal"
+             title="@lang{输出}"
+             height="280px"
+             events="start,progress,chunk,done,error"
+             show-toolbar="true"
+             show-start-toggle="false" />
         </div>
         <div class="weline-cron-run-modal-footer">
             <span class="text-muted small me-auto" id="weline-cron-run-hint"></span>
@@ -606,6 +611,8 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
     var runHelpUrl = '<?= $welineCronRunHelpUrl ?>';
     var modal = document.getElementById('weline-cron-run-modal');
     if (!modal) return;
+    /** 最近一次点击「运行」的按钮；SSE POST 的 execute_name 必须取自其 data-execute-name，避免 id 重复导致隐藏域错乱 */
+    var welineCronRunSourceBtn = null;
 
     function closeModal() {
         modal.classList.remove('is-open');
@@ -645,15 +652,18 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
         btn.addEventListener('click', function(ev) {
             ev.preventDefault();
             ev.stopPropagation();
-            var en = btn.getAttribute('data-execute-name') || '';
-            var tn = btn.getAttribute('data-task-name') || '';
-            document.getElementById('weline-cron-run-execute-name').value = en;
+            welineCronRunSourceBtn = btn;
+            var executeName = (btn.getAttribute('data-execute-name') || '').trim();
+            var tn = (btn.getAttribute('data-task-name') || '').trim();
+            modal.setAttribute('data-weline-cron-execute-name', executeName);
+            var hid = document.getElementById('weline-cron-run-execute-name');
+            if (hid) hid.value = executeName;
             var sub = document.getElementById('weline-cron-run-modal-title-task');
-            if (sub) sub.textContent = en ? '(' + en + ')' : '';
+            if (sub) sub.textContent = tn ? (tn + (executeName ? ' · ' + executeName : '')) : (executeName ? '(' + executeName + ')' : '');
             document.getElementById('weline-cron-run-suffix').value = '';
             var details = document.getElementById('weline-cron-run-help-details');
             if (details) details.open = false;
-            fillHelp(en);
+            fillHelp(executeName);
             openModal();
         });
     });
@@ -666,9 +676,25 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
     document.getElementById('weline-cron-run-start-btn').addEventListener('click', function() {
         var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-run-terminal'];
         if (!term) return;
+        var enPost = '';
+        if (welineCronRunSourceBtn && welineCronRunSourceBtn.getAttribute) {
+            enPost = (welineCronRunSourceBtn.getAttribute('data-execute-name') || '').trim();
+        }
+        if (!enPost) {
+            enPost = (modal.getAttribute('data-weline-cron-execute-name') || '').trim();
+        }
+        if (!enPost) {
+            var h = document.getElementById('weline-cron-run-execute-name');
+            enPost = h ? (h.value || '').trim() : '';
+        }
+        if (!enPost) {
+            var hint = document.getElementById('weline-cron-run-hint');
+            if (hint) hint.textContent = '<?= addslashes((string) __('请先点击列表中的「运行」选择任务')) ?>';
+            return;
+        }
         var fd = new FormData();
         fd.append('csrf', document.getElementById('weline-cron-sse-csrf').value);
-        fd.append('execute_name', document.getElementById('weline-cron-run-execute-name').value);
+        fd.append('execute_name', enPost);
         fd.append('suffix', document.getElementById('weline-cron-run-suffix').value);
         if (typeof term.clear === 'function') term.clear();
         term.start(runStreamUrl, { method: 'POST', body: fd });
