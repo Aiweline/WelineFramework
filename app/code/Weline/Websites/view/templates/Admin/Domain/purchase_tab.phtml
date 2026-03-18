@@ -122,8 +122,73 @@ foreach ($accounts as $account) {
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
             </div>
             <div class="modal-body">
-                <p class="text-muted mb-3"><?= __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。') ?></p>
+                <p class="text-muted mb-3"><?= __('确认购买后，系统会按所选策略处理解析与后续状态跟踪。') ?></p>
+                <p class="text-info small mb-3"><?= __('DNS/CDN 切换不会在购买后立即执行：域名可能仍在注册中。注册完成后将由系统自动处理，无需您手动操作。') ?></p>
                 <div class="row g-3">
+                    <div class="col-12" id="purchase-extra-gname" style="display:none;">
+                        <div class="card border-primary">
+                            <div class="card-body py-2">
+                                <label class="form-label fw-bold"><?= __('Gname 模板 ID') ?></label>
+                                <input type="text" class="form-control" id="purchase-gname-template" placeholder="<?= __('可在账号凭据中配置 default_template_id；此处可覆盖') ?>">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12" id="purchase-extra-registrant" style="display:none;">
+                        <div class="card border-secondary">
+                            <div class="card-body">
+                                <h6 class="mb-3"><?= __('注册联系人（GoDaddy / AWS Route53 / 阿里云）') ?></h6>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('名') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-first">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('姓') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-last">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('邮箱') ?> <span class="text-danger">*</span></label>
+                                        <input type="email" class="form-control form-control-sm" id="purchase-reg-email">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('电话') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-phone" placeholder="+1.5551234567 <?= __('或') ?> 13800138000">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small"><?= __('地址') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-address1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small"><?= __('城市') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-city">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small"><?= __('州/省') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-state" placeholder="<?= __('美国/加拿大必填') ?>">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small"><?= __('邮编') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-postal">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('国家代码') ?> <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-country" value="US" maxlength="2" placeholder="US / CN">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label small"><?= __('组织（可选）') ?></label>
+                                        <input type="text" class="form-control form-control-sm" id="purchase-reg-org">
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="purchase-reg-privacy" checked>
+                                            <label class="form-check-label" for="purchase-reg-privacy"><?= __('开启 WHOIS 隐私保护（若注册商支持）') ?></label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="small text-muted mb-0 mt-2"><?= __('阿里云：提交后为待支付任务，需在阿里云控制台付款后域名才生效。') ?></p>
+                            </div>
+                        </div>
+                    </div>
                     <div class="col-lg-6">
                         <div class="card h-100">
                             <div class="card-body">
@@ -237,6 +302,20 @@ function getPurchaseDialogCurrentAccount() {
     }) || null;
 }
 
+function updatePurchaseExtraVisibility() {
+    var acc = getPurchaseDialogCurrentAccount();
+    var code = acc ? String(acc.registrar_code || '').toLowerCase() : '';
+    var gnameEl = document.getElementById('purchase-extra-gname');
+    var regEl = document.getElementById('purchase-extra-registrant');
+    if (gnameEl) {
+        gnameEl.style.display = code === 'gname' ? '' : 'none';
+    }
+    if (regEl) {
+        var needReg = ['godaddy', 'aws_route53', 'aliyun_domain', 'cloudflare'].indexOf(code) >= 0;
+        regEl.style.display = needReg ? '' : 'none';
+    }
+}
+
 function loadPurchaseDialogProviders(callback) {
     if (Object.keys(purchaseProviderAccounts).length > 0) {
         if (typeof callback === 'function') callback();
@@ -340,6 +419,7 @@ function openPurchaseConfigModal(accountId, items) {
     document.getElementById('purchase-dialog-cdn-account').value = '';
 
     syncPurchaseDialogSections();
+    updatePurchaseExtraVisibility();
     purchaseDialogModal.show();
 }
 
@@ -360,6 +440,47 @@ function collectPurchaseDialogResult() {
         return null;
     }
 
+    var acc = getPurchaseDialogCurrentAccount();
+    var code = acc ? String(acc.registrar_code || '').toLowerCase() : '';
+    var purchaseContact = {};
+    if (code === 'gname') {
+        var gt = (document.getElementById('purchase-gname-template') || {}).value || '';
+        if (gt.trim()) {
+            purchaseContact.gname_template_id = gt.trim();
+        }
+    }
+    if (['godaddy', 'aws_route53', 'aliyun_domain'].indexOf(code) >= 0) {
+        var fn = (document.getElementById('purchase-reg-first') || {}).value || '';
+        var ln = (document.getElementById('purchase-reg-last') || {}).value || '';
+        var em = (document.getElementById('purchase-reg-email') || {}).value || '';
+        var ph = (document.getElementById('purchase-reg-phone') || {}).value || '';
+        var a1 = (document.getElementById('purchase-reg-address1') || {}).value || '';
+        var ct = (document.getElementById('purchase-reg-city') || {}).value || '';
+        var st = (document.getElementById('purchase-reg-state') || {}).value || '';
+        var pc = (document.getElementById('purchase-reg-postal') || {}).value || '';
+        var cy = (document.getElementById('purchase-reg-country') || {}).value || '';
+        if (!fn.trim() || !ln.trim() || !em.trim() || !ph.trim() || !a1.trim() || !ct.trim() || !pc.trim() || !cy.trim()) {
+            showToast('<?= __('请填写完整注册联系人（标 * 项）') ?>', 'warning');
+            return null;
+        }
+        var cyc = cy.trim().toUpperCase().slice(0, 2);
+        if ((cyc === 'US' || cyc === 'CA') && !st.trim()) {
+            showToast('<?= __('美国/加拿大注册需填写州/省') ?>', 'warning');
+            return null;
+        }
+        purchaseContact.first_name = fn.trim();
+        purchaseContact.last_name = ln.trim();
+        purchaseContact.email = em.trim();
+        purchaseContact.phone = ph.trim();
+        purchaseContact.address1 = a1.trim();
+        purchaseContact.city = ct.trim();
+        purchaseContact.state = st.trim();
+        purchaseContact.postal_code = pc.trim();
+        purchaseContact.country = cyc;
+        purchaseContact.organization = (document.getElementById('purchase-reg-org') || {}).value || '';
+        purchaseContact.privacy = document.getElementById('purchase-reg-privacy') && document.getElementById('purchase-reg-privacy').checked;
+    }
+
     return {
         dns_choice: dnsChoice,
         dns_provider: dnsProvider,
@@ -370,7 +491,8 @@ function collectPurchaseDialogResult() {
         cdn_account_id: cdnAccountId,
         resolve_to_local: document.getElementById('purchase-dialog-resolve-to-local').checked ? 'yes' : 'no',
         subdomains: (document.getElementById('purchase-dialog-subdomains').value || '').trim() || '@,www',
-        start_lifecycle: document.getElementById('purchase-dialog-start-lifecycle').checked ? '1' : '0'
+        start_lifecycle: document.getElementById('purchase-dialog-start-lifecycle').checked ? '1' : '0',
+        purchase_contact: purchaseContact
     };
 }
 
@@ -521,6 +643,9 @@ function executePurchase(accountId, items, dialogResult) {
     formData.append('cdn_provider', dialogResult.cdn_provider || '');
     formData.append('cdn_account_id', dialogResult.cdn_account_id || '');
     formData.append('start_lifecycle', dialogResult.start_lifecycle || '1');
+    if (dialogResult.purchase_contact && Object.keys(dialogResult.purchase_contact).length > 0) {
+        formData.append('purchase_contact', JSON.stringify(dialogResult.purchase_contact));
+    }
 
     fetch(purchaseUrl, {
         method: 'POST',
@@ -536,6 +661,9 @@ function executePurchase(accountId, items, dialogResult) {
             if (dialogResult.start_lifecycle === '1') {
                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
             }
+            if (dialogResult.dns_choice === 'provider_account' || dialogResult.cdn_choice === 'provider_account') {
+                msg += ' <?= __('DNS/CDN 将在域名注册完成后自动处理。') ?>';
+            }
             showToast(msg, 'success');
             var results = (data.data && data.data.results) || [];
             var lifecycleFails = results.filter(function(r) {
@@ -543,7 +671,7 @@ function executePurchase(accountId, items, dialogResult) {
             });
             if (lifecycleFails.length > 0) {
                 showToast(
-                    '<?= __('%{count} 个域名购买成功，但未成功创建生命周期跟踪订单，请确认 Weline_Saas 模块已启用，或前往域名状态页使用「补建生命周期订单」补救。') ?>'.replace('%{count}', lifecycleFails.length),
+                    '<?= __('%{count} 个域名购买成功，但未成功创建生命周期跟踪订单，请确认 Weline_Websites 已启用且一站式配置可用，或前往域名状态页使用「补建生命周期订单」补救。') ?>'.replace('%{count}', lifecycleFails.length),
                     'warning'
                 );
             }
@@ -591,6 +719,11 @@ function escapeHtml(text) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    var accSel = document.getElementById('purchase-account-id');
+    if (accSel) {
+        accSel.addEventListener('change', updatePurchaseExtraVisibility);
+    }
+    updatePurchaseExtraVisibility();
     var dnsChoice = document.getElementById('purchase-dialog-dns-choice');
     var cdnChoice = document.getElementById('purchase-dialog-cdn-choice');
     var dnsProvider = document.getElementById('purchase-dialog-dns-provider');

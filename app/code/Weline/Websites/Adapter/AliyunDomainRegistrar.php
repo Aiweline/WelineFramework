@@ -13,12 +13,18 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Adapter;
 
+use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
+use Weline\Websites\Adapter\Concern\DomainRegistrarOptionalDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
+use Weline\Websites\Service\AliyunDomainOpenApi;
 
 class AliyunDomainRegistrar implements DomainRegistrarInterface
 {
     use DnsCdnZoneRecordsProviderTrait;
+    use DefaultDnsZoneOriginMatchTrait;
+    use DomainRegistrarOptionalDefaultsTrait;
     public function getRegistrarCode(): string
     {
         return 'aliyun_domain';
@@ -36,7 +42,7 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
 
     public function getVersion(): string
     {
-        return '1.0.0';
+        return '1.1.0';
     }
 
     public function getConfigFields(): array
@@ -78,59 +84,182 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
         return [
             'help_url' => 'https://ram.console.aliyun.com/manage/ak',
             'help_title' => __('阿里云域名配置获取指南'),
+            'purchase_help_steps' => [
+                __('【RAM 权限】子用户须挂载「AliyunDomainFullAccess」或等价自定义策略（需包含域名查询、注册任务创建等域名相关 API）。仅 DNS 权限无法完成购买。'),
+                __('【支付】本系统提交注册后，通常需在阿里云费用中心/订单页完成支付，域名才正式生效。'),
+                __('【实名】按阿里云要求完成域名实名模板与认证，否则注册可能被拒。'),
+            ],
             'help_steps' => [
-                __('1. 登录阿里云控制台：https://www.aliyun.com'),
-                __('2. 右上角头像 → 「AccessKey 管理」'),
-                __('3. 建议创建子用户 AccessKey（更安全），或使用主账号 AccessKey'),
-                __('4. 点击「创建 AccessKey」，完成手机验证'),
-                __('5. 将「AccessKey ID」填入上方对应字段'),
-                __('6. 将「AccessKey Secret」填入上方对应字段（仅创建时显示一次，请妥善保存）'),
-                __('7. 如使用子用户，需授予「AliyunDomainFullAccess」权限'),
-                __('8. 区域可保持默认（华东1-杭州）'),
+                __('1. RAM 创建用户 → 创建 AccessKey'),
+                __('2. 为用户授权 AliyunDomainFullAccess'),
+                __('3. ID/Secret 填入上方（Secret 仅显示一次）'),
+                __('4. 区域默认华东1即可'),
             ],
         ];
     }
 
     public function testConnection(array $credentials): bool
     {
-        // TODO: 实现阿里云 API 连接测试
         if (empty($credentials['api_key']) || empty($credentials['api_secret'])) {
             throw new \RuntimeException(__('AccessKey ID 和 AccessKey Secret 不能为空'));
         }
-
-        return true;
+        try {
+            AliyunDomainOpenApi::request(
+                'CheckDomain',
+                ['DomainName' => 'example.com'],
+                (string) $credentials['api_key'],
+                (string) $credentials['api_secret'],
+            );
+            return true;
+        } catch (\Throwable $e) {
+            throw new \RuntimeException($e->getMessage());
+        }
     }
 
     public function checkAvailability(string $domain, array $credentials): array
     {
-        // TODO: 调用阿里云 CheckDomainRequest
-        return [
-            'available' => false,
-            'domain' => $domain,
-            'price' => 0,
-            'currency' => 'CNY',
-            'premium' => false,
-            'message' => __('阿里云域名适配器尚未完成 API 对接，请稍后再试。'),
-        ];
-    }
-
-    public function batchCheckAvailability(array $domains, array $credentials): array
-    {
-        $results = [];
-        foreach ($domains as $domain) {
-            $results[] = $this->checkAvailability($domain, $credentials);
+        if (empty($credentials['api_key']) || empty($credentials['api_secret'])) {
+            return [
+                'available' => false,
+                'domain' => $domain,
+                'message' => __('未配置 AccessKey'),
+            ];
         }
-        return $results;
+        try {
+            $out = AliyunDomainOpenApi::request(
+                'CheckDomain',
+                ['DomainName' => strtolower(trim($domain))],
+                (string) $credentials['api_key'],
+                (string) $credentials['api_secret'],
+            );
+        } catch (\Throwable $e) {
+            return [
+                'available' => false,
+                'domain' => $domain,
+                'message' => $e->getMessage(),
+            ];
+        }
+        $availRaw = $out['Avail'] ?? $out['avail'] ?? 0;
+        $avail = (int) $availRaw === 1 || $availRaw === true || $availRaw === 'true';
+        $price = isset($out['Fee']) ? (float) $out['Fee'] : (isset($out['fee']) ? (float) $out['fee'] : 0.0);
+
+        return [
+            'available' => $avail,
+            'domain' => $domain,
+            'price' => $price,
+            'currency' => (string) ($out['FeeCurrency'] ?? 'CNY'),
+            'premium' => (bool) ($out['Premium'] ?? false),
+            'message' => $avail ? '' : (string) ($out['Reason'] ?? __('域名不可用')),
+        ];
     }
 
     public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array
     {
-        // TODO: 调用阿里云 SaveSingleTaskForCreatingOrderActivateRequest
+        if (empty($credentials['api_key']) || empty($credentials['api_secret'])) {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'message' => __('未配置 AccessKey'),
+            ];
+        }
+        $domain = strtolower(trim($domain));
+        $years = max(1, min(10, $years));
+        $contactJson = $contactInfo['aliyun_contact_json'] ?? null;
+        if ($contactJson === null || $contactJson === '') {
+            $flat = $contactInfo['purchase_contact_flat'] ?? [];
+            $contactJson = \is_array($flat) ? $this->buildAliyunContactJson($flat) : null;
+        }
+        if ($contactJson === null || $contactJson === '') {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'message' => __('请填写完整注册联系人信息（与购买弹窗一致），或在请求中传入 aliyun_contact_json（阿里云联系人 JSON）。'),
+            ];
+        }
+        if (\is_array($contactJson)) {
+            $contactJson = json_encode($contactJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        try {
+            $out = AliyunDomainOpenApi::request(
+                'SaveSingleTaskForCreatingOrderActivate',
+                [
+                    'DomainName' => $domain,
+                    'Years' => $years,
+                    'Lang' => 'en',
+                    'UserClientIp' => $this->resolveUserClientIp($contactInfo),
+                    'Contact' => (string) $contactJson,
+                ],
+                (string) $credentials['api_key'],
+                (string) $credentials['api_secret'],
+            );
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'message' => $e->getMessage(),
+            ];
+        }
+        $taskNo = (string) ($out['TaskNo'] ?? $out['taskNo'] ?? '');
+
         return [
             'success' => false,
             'domain' => $domain,
-            'message' => __('阿里云域名适配器尚未完成 API 对接，请稍后再试。'),
+            'message' => $taskNo !== ''
+                ? __('阿里云已创建注册任务，请在阿里云控制台完成支付后域名才会生效。任务号：%{1}', [$taskNo])
+                : __('阿里云返回异常，请查看控制台或联系客服。'),
+            'aliyun_task_no' => $taskNo,
+            'pending_payment' => true,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $flat
+     */
+    private function buildAliyunContactJson(array $flat): ?string
+    {
+        $first = \trim((string) ($flat['first_name'] ?? ''));
+        $last = \trim((string) ($flat['last_name'] ?? ''));
+        $email = \trim((string) ($flat['email'] ?? ''));
+        $phone = \preg_replace('/\D/', '', (string) ($flat['phone'] ?? '')) ?? '';
+        $a1 = \trim((string) ($flat['address1'] ?? ''));
+        $city = \trim((string) ($flat['city'] ?? ''));
+        $state = \trim((string) ($flat['state'] ?? ''));
+        $zip = \trim((string) ($flat['postal_code'] ?? ''));
+        $country = \strtoupper(\substr((string) ($flat['country'] ?? 'CN'), 0, 2));
+        if ($first === '' || $last === '' || $email === '' || $phone === '' || $a1 === '' || $city === '' || $zip === '') {
+            return null;
+        }
+        $name = $first . ' ' . $last;
+        $telArea = match ($country) {
+            'US', 'CA' => '1',
+            'CN' => '86',
+            default => '86',
+        };
+        $arr = [
+            'City' => $city,
+            'Country' => $country,
+            'Address' => $a1,
+            'Email' => $email,
+            'Organization' => \trim((string) ($flat['organization'] ?? '-')) ?: '-',
+            'Name' => $name,
+            'Province' => $state !== '' ? $state : $city,
+            'ZipCode' => $zip,
+            'TelArea' => $telArea,
+            'Telephone' => $phone,
+        ];
+
+        return json_encode($arr, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    /** @param array<string, mixed> $contactInfo */
+    private function resolveUserClientIp(array $contactInfo): string
+    {
+        $ip = \trim((string) ($contactInfo['user_client_ip'] ?? ''));
+        if ($ip !== '' && \filter_var($ip, FILTER_VALIDATE_IP)) {
+            return $ip;
+        }
+
+        return '127.0.0.1';
     }
 
     public function getDomainList(array $credentials): array

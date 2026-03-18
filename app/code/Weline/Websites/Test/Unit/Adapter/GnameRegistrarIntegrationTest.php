@@ -84,7 +84,7 @@ class GnameRegistrarIntegrationTest extends TestCase
     public function testGetPublicIp(): void
     {
         try {
-            $service = ObjectManager::getInstance(\Weline\Saas\Service\DomainProvisioningService::class);
+            $service = ObjectManager::getInstance(\Weline\Websites\Service\DomainProvisioningService::class);
             $ip = $service->getPublicIp();
 
             if ($ip === '') {
@@ -107,7 +107,7 @@ class GnameRegistrarIntegrationTest extends TestCase
     public function testSwitchNameserversInvalidOrder(): void
     {
         try {
-            $service = ObjectManager::getInstance(\Weline\Saas\Service\DomainProvisioningService::class);
+            $service = ObjectManager::getInstance(\Weline\Websites\Service\DomainProvisioningService::class);
             $result = $service->switchNameservers(999999, ['ns1.example.com', 'ns2.example.com']);
 
             $this->assertIsArray($result);
