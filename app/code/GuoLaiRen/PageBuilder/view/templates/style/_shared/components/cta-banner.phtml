@@ -148,10 +148,11 @@ $componentId = 'cta_' . uniqid();
     </style>
     <script>
     (function(){
-        var buttonUrl = <?= json_encode($buttonUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var buttonUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl), JSON_UNESCAPED_SLASHES) ?>;
         var target = <?= json_encode($buttonTarget ?? '_self', JSON_UNESCAPED_SLASHES) ?>;
         document.querySelectorAll('#<?= $componentId ?> .shared-cta-download-trigger').forEach(function(el){
-            el.addEventListener('click', function(){
+            el.addEventListener('click', function(e){
+                e.preventDefault();
                 if (target === '_blank') {
                     window.open(buttonUrl, '_blank', 'noopener,noreferrer');
                 } else {
