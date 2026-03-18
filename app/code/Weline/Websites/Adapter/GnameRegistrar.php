@@ -14,11 +14,13 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
+use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Api\AccountInfoInterface;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
 class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 {
+    use DnsCdnZoneRecordsProviderTrait;
     /** 官方接口域名 */
     private const DEFAULT_API_HOST = 'api.gname.com';
     private const REQUEST_TIMEOUT = 30;
@@ -946,36 +948,69 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
     {
         $this->validateCredentials($credentials);
 
-        // 官方文档：域名解析列表请求 URL 为 /api/resolution/list
-        $response = $this->makeRequest('api/resolution/list', [
-            'ym' => $domain,
-        ], $credentials);
-
-        $code = (int) ($response['code'] ?? 0);
-        if ($code !== 1) {
-            $errorMsg = $response['msg'] ?? __('未知错误');
-            throw new \RuntimeException(
-                __('获取 DNS 记录失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
-            );
-        }
-
+        // 官方 /api/resolution/list 分页；须拉全量以便与 Cloudflare 等一致供权威记录比对
         $records = [];
-        $list = $response['data'] ?? [];
+        $page = 1;
+        $perPage = 100;
+        $domainLower = \strtolower(\trim($domain));
 
-        if (!\is_array($list)) {
-            return [];
-        }
+        do {
+            $response = $this->makeRequest('api/resolution/list', [
+                'ym' => $domain,
+                'page' => (string) $page,
+                'limit' => (string) $perPage,
+            ], $credentials);
 
-        foreach ($list as $item) {
-            $records[] = [
-                'record_id' => (string) ($item['jxid'] ?? $item['id'] ?? $item['record_id'] ?? ''),
-                'type' => \strtoupper((string) ($item['type'] ?? $item['lx'] ?? 'A')),
-                'host' => (string) ($item['host'] ?? $item['zj'] ?? $item['zjt'] ?? '@'),
-                'value' => (string) ($item['value'] ?? $item['jlz'] ?? $item['jxz'] ?? ''),
-                'ttl' => (int) ($item['ttl'] ?? 600),
-                'priority' => (int) ($item['priority'] ?? $item['mx'] ?? 0),
-            ];
-        }
+            $code = (int) ($response['code'] ?? 0);
+            if ($code !== 1) {
+                $errorMsg = $response['msg'] ?? __('未知错误');
+                throw new \RuntimeException(
+                    __('获取 DNS 记录失败：%{1}（错误码：%{2}）', [$errorMsg, $code])
+                );
+            }
+
+            $list = $response['data'] ?? [];
+            if (!\is_array($list) || $list === []) {
+                break;
+            }
+
+            foreach ($list as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $hostRaw = \trim((string) ($item['host'] ?? $item['zj'] ?? $item['zjt'] ?? '@'), '.');
+                $hostLower = \strtolower($hostRaw);
+                if ($hostRaw === '' || $hostRaw === '@') {
+                    $host = '@';
+                } elseif ($hostLower === $domainLower) {
+                    $host = '@';
+                } elseif (\str_ends_with($hostLower, '.' . $domainLower)) {
+                    $host = \substr($hostRaw, 0, -\strlen('.' . $domainLower));
+                    if ($host === '') {
+                        $host = '@';
+                    }
+                } else {
+                    $host = $hostRaw;
+                }
+                $records[] = [
+                    'record_id' => (string) ($item['jxid'] ?? $item['id'] ?? $item['record_id'] ?? ''),
+                    'type' => \strtoupper((string) ($item['type'] ?? $item['lx'] ?? 'A')),
+                    'host' => $host,
+                    'value' => (string) ($item['value'] ?? $item['jlz'] ?? $item['jxz'] ?? ''),
+                    'ttl' => (int) ($item['ttl'] ?? 600),
+                    'priority' => (int) ($item['priority'] ?? $item['mx'] ?? 0),
+                ];
+            }
+
+            $total = (int) ($response['count'] ?? 0);
+            if ($total > 0 && \count($records) >= $total) {
+                break;
+            }
+            if (\count($list) < $perPage) {
+                break;
+            }
+            $page++;
+        } while ($page <= 500);
 
         return $records;
     }

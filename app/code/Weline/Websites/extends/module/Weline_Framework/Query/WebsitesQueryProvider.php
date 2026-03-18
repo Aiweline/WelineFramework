@@ -807,7 +807,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
         $accountId = (int)($params['account_id'] ?? 0);
         $domains = (array)($params['domains'] ?? []);
         $resolveMode = $params['resolve_mode'] ?? DomainSyncService::RESOLVE_MODE_BATCH_TO_LOCAL;
-        return $this->domainSyncService->importDomains($accountId, $domains, $resolveMode);
+        $bindDns = (int)($params['bind_dns_account_id'] ?? 0);
+        $bindCdn = (int)($params['bind_cdn_account_id'] ?? 0);
+
+        return $this->domainSyncService->importDomains($accountId, $domains, $resolveMode, $bindDns, $bindCdn);
     }
 
     private function syncDomains(array $params): array

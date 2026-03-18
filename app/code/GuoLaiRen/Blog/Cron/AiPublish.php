@@ -55,6 +55,7 @@ class AiPublish implements CronTaskInterface
         $todayStart = date('Y-m-d 00:00:00');
         $published = 0;
         $errors = []; // 收集错误信息
+        $skipReasons = []; // 与定时任务日志一致：每次跳过发文的明确原因（供 SSE / 返回文案）
         $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
         $asDraft = TrendsConfig::publishAsDraft();
         $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
@@ -68,9 +69,7 @@ class AiPublish implements CronTaskInterface
         }
 
         if (empty($quotas)) {
-            if ($onProgress) {
-                $onProgress('skip', ['reason' => '无配额记录']);
-            }
+            $this->recordSkip($onProgress, $skipReasons, 'no_quotas', []);
         }
 
         foreach ($quotas as $quota) {
@@ -80,24 +79,23 @@ class AiPublish implements CronTaskInterface
             $categoryId = (int)$quota->getData(TrendSiteQuota::schema_fields_DEFAULT_CATEGORY_ID);
 
             if ($categoryId <= 0) {
-                if ($onProgress) {
-                    $onProgress('skip', ['reason' => '配额未设置默认分类', 'site_id' => $siteId, 'profile_id' => $profileId]);
-                }
+                $this->recordSkip($onProgress, $skipReasons, 'no_category', ['site_id' => $siteId, 'profile_id' => $profileId]);
                 continue;
             }
 
             $cat = ObjectManager::getInstance(Category::class);
             $cat->clear()->load($categoryId);
             if (!$cat->getId()) {
-                if ($onProgress) {
-                    $onProgress('skip', ['reason' => '默认分类不存在', 'category_id' => $categoryId]);
-                }
+                $this->recordSkip($onProgress, $skipReasons, 'category_missing', ['site_id' => $siteId, 'profile_id' => $profileId, 'category_id' => $categoryId]);
                 continue;
             }
             if ((int)$cat->getData(Category::schema_fields_SITE_ID) !== $siteId) {
-                if ($onProgress) {
-                    $onProgress('skip', ['reason' => '默认分类不属于该站点', 'category_id' => $categoryId, 'category_site_id' => $cat->getData(Category::schema_fields_SITE_ID), 'quota_site_id' => $siteId]);
-                }
+                $this->recordSkip($onProgress, $skipReasons, 'category_wrong_site', [
+                    'site_id' => $siteId,
+                    'profile_id' => $profileId,
+                    'category_id' => $categoryId,
+                    'category_site_id' => (int)$cat->getData(Category::schema_fields_SITE_ID),
+                ]);
                 continue;
             }
 
@@ -109,9 +107,12 @@ class AiPublish implements CronTaskInterface
                 ->count();
             $need = max(0, $perDay - $already);
             if ($need <= 0) {
-                if ($onProgress) {
-                    $onProgress('skip', ['reason' => '今日已发满', 'site_id' => $siteId, 'profile_id' => $profileId, 'per_day' => $perDay, 'already' => $already]);
-                }
+                $this->recordSkip($onProgress, $skipReasons, 'quota_full', [
+                    'site_id' => $siteId,
+                    'profile_id' => $profileId,
+                    'per_day' => $perDay,
+                    'already' => $already,
+                ]);
                 continue;
             }
 
@@ -147,6 +148,9 @@ class AiPublish implements CronTaskInterface
 
                 $idx = 0;
                 $total = count($logs);
+                if ($need > 0 && $total === 0) {
+                    $this->recordSkip($onProgress, $skipReasons, 'trend_no_unused', ['site_id' => $siteId, 'profile_id' => $profileId, 'need' => $need]);
+                }
                 foreach ($logs as $log) {
                     $keyword = (string)$log->getData(TrendingKeywordLog::schema_fields_KEYWORD);
                     $logId = (int)$log->getData(TrendingKeywordLog::schema_fields_ID);
@@ -184,23 +188,21 @@ class AiPublish implements CronTaskInterface
                 $profile = ObjectManager::getInstance(TrendProfile::class);
                 $profile->clear()->load($profileId);
                 if (!$profile->getId()) {
-                    if ($onProgress) {
-                        $onProgress('skip', ['reason' => '画像不存在', 'profile_id' => $profileId]);
-                    }
+                    $this->recordSkip($onProgress, $skipReasons, 'profile_missing', ['site_id' => $siteId, 'profile_id' => $profileId]);
                     continue;
                 }
                 if ((int)$profile->getData(TrendProfile::schema_fields_IS_ACTIVE) !== 1) {
-                    if ($onProgress) {
-                        $onProgress('skip', ['reason' => '画像未启用', 'profile_id' => $profileId, 'is_active' => $profile->getData(TrendProfile::schema_fields_IS_ACTIVE)]);
-                    }
+                    $this->recordSkip($onProgress, $skipReasons, 'profile_inactive', [
+                        'site_id' => $siteId,
+                        'profile_id' => $profileId,
+                        'is_active' => $profile->getData(TrendProfile::schema_fields_IS_ACTIVE),
+                    ]);
                     continue;
                 }
 
                 $rawKeywords = array_values(array_unique($profile->getKeywordsArray()));
                 if (empty($rawKeywords)) {
-                    if ($onProgress) {
-                        $onProgress('skip', ['reason' => '画像无关键词', 'profile_id' => $profileId, 'raw_keywords' => $profile->getData(TrendProfile::schema_fields_KEYWORDS)]);
-                    }
+                    $this->recordSkip($onProgress, $skipReasons, 'profile_no_keywords', ['site_id' => $siteId, 'profile_id' => $profileId]);
                     continue;
                 }
                 $usedKeywords = $this->getUsedKeywordsForQuota($siteId, $profileId);
@@ -259,21 +261,35 @@ class AiPublish implements CronTaskInterface
         }
 
         $result = __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
-        
-        // 如果发布 0 篇且有错误，附加错误提示
-        if ($published === 0 && !empty($errors)) {
-            $uniqueErrors = array_unique($errors);
-            $hint = __('可能原因：') . implode('；', $uniqueErrors);
-            $result .= "\n" . $hint;
-        } elseif ($published === 0) {
-            $result .= "\n" . self::getZeroPublishHint();
+        $skipUnique = array_values(array_unique($skipReasons));
+        $errorUnique = array_values(array_unique($errors));
+        $hintBlock = '';
+
+        if ($published === 0) {
+            $lines = [];
+            if ($skipUnique !== []) {
+                $lines = $skipUnique;
+            }
+            if ($errorUnique !== []) {
+                $lines[] = __('生成异常：') . implode('；', $errorUnique);
+            }
+            if ($lines === []) {
+                $lines[] = self::getZeroPublishHint();
+            }
+            $hintBlock = implode("\n", $lines);
+            $result .= "\n" . $hintBlock;
+        } elseif ($errorUnique !== []) {
+            $hintBlock = __('部分关键词生成失败：') . implode('；', $errorUnique);
+            $result .= "\n" . $hintBlock;
         }
-        
+
         if ($onProgress) {
             $onProgress('done', [
                 'published' => $published,
                 'result' => $result,
-                'errors' => array_unique($errors)
+                'hint' => $hintBlock !== '' ? $hintBlock : null,
+                'errors' => $errorUnique,
+                'skip_reasons' => $skipUnique,
             ]);
         }
         return $result;

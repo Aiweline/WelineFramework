@@ -330,5 +330,36 @@ class PageHelper
         }
         return $url;
     }
+
+    /**
+     * 落地页「下载 / Android 包」占位链接解析为默认 APK 直链（调起浏览器下载）。
+     * 已为完整 http(s) 且含 .apk 的地址则原样返回；iOS App Store 等请填完整 URL，勿用 #ios 当下载链。
+     * 修改包地址：改常量或后台把按钮链接写成完整 APK URL。
+     */
+    public const DEFAULT_APP_DOWNLOAD_APK_URL = 'https://dld7y2twp0cax.cloudfront.net/TeenPattiMaster-6201-0119.apk';
+
+    public static function resolveAppDownloadUrl(string $url): string
+    {
+        $u = trim($url);
+        $apk = self::DEFAULT_APP_DOWNLOAD_APK_URL;
+        $t = strtolower($u);
+        if ($t === '' || $t === '#' || in_array($t, ['#download', '/#download', '#android', '/#android'], true)) {
+            return $apk;
+        }
+        if (preg_match('#^https?://#i', $u)) {
+            if (preg_match('#\.apk(\?|#|$)#i', $u)) {
+                return $u;
+            }
+            $frag = strtolower((string)(parse_url($u, PHP_URL_FRAGMENT) ?? ''));
+            if (in_array($frag, ['download', 'android'], true)) {
+                return $apk;
+            }
+            return $u;
+        }
+        if (preg_match('#/#(download|android)$#i', $u)) {
+            return $apk;
+        }
+        return $u;
+    }
 }
 
