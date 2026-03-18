@@ -365,8 +365,13 @@ class GnameRegistrar implements DomainRegistrarInterface
     /**
      * 修改域名 NS（内部实现，由 updateNameservers() 调用）
      *
+     * 官方文档：https://www.gname.com/zhcn/domain/api/domain/xgdns
+     * 请求地址：POST /api/domain/dns，参数 ym=域名、dns=逗号分隔的 NS。
+     * 响应 code=1 表示「提交修改成功，等待修改生效」（异步），应以 getDomainDetail 的 ymdns 为准校验。
+     * Gname 控制台可在 NS 仍指向外部时先添加解析，记录状态为「等待生效」；仅当 NS 改回 Gname 后解析才对外权威。
+     *
      * @param string $domain 域名
-     * @param string $dnsServers 逗号分隔的 NS，如 "ns1.cf.com,ns2.cf.com"
+     * @param string $dnsServers 逗号分隔的 NS，如 "ns1.gname-dns.com,ns2.gname-dns.com"
      * @param array $credentials API 凭据
      * @return array{success: bool, message: string}
      */
@@ -1259,18 +1264,76 @@ class GnameRegistrar implements DomainRegistrarInterface
     /**
      * @inheritDoc
      *
-     * GName 使用自己的 DNS 服务器，返回 GName 默认的 Nameserver
+     * 优先从 api/dns/list 取账户默认 NS（官方示例为 ns1.gname-dns.com,ns2.gname-dns.com），
+     * 与网页「设置为本站高防DNS」一致，否则修改 NS 可能提交成功但未真正生效。
      */
     public function getProviderNameservers(array $credentials, string $domain = ''): array
     {
+        $defaultNs = $this->fetchDefaultNameserversFromDnsList($credentials);
+        if ($defaultNs !== []) {
+            return [
+                'success' => true,
+                'nameservers' => $defaultNs,
+                'message' => __('GName 默认 DNS 服务器（来自 api/dns/list）'),
+            ];
+        }
         return [
             'success' => true,
             'nameservers' => [
                 'ns1.gname.com',
                 'ns2.gname.com',
             ],
-            'message' => __('GName 默认 DNS 服务器'),
+            'message' => __('GName 默认 DNS 服务器（回退）'),
         ];
+    }
+
+    /**
+     * 从 api/dns/list 获取账户默认 NS（ismr=1 或首条），与网页设置一致
+     *
+     * @return array<string>
+     */
+    private function fetchDefaultNameserversFromDnsList(array $credentials): array
+    {
+        try {
+            $response = $this->makeRequest('api/dns/list', [
+                'page' => 1,
+                'limit' => 50,
+            ], $credentials);
+            $code = (int) ($response['code'] ?? 0);
+            if ($code !== 1) {
+                return [];
+            }
+            $list = $response['data'] ?? [];
+            if (!\is_array($list)) {
+                return [];
+            }
+            $default = null;
+            $first = null;
+            foreach ($list as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $dnsStr = \trim((string) ($item['dns'] ?? ''));
+                if ($dnsStr === '') {
+                    continue;
+                }
+                $ns = \array_values(\array_filter(\array_map('trim', \explode(',', $dnsStr))));
+                if ($ns === []) {
+                    continue;
+                }
+                if ($first === null) {
+                    $first = $ns;
+                }
+                if ((int) ($item['ismr'] ?? 0) === 1) {
+                    $default = $ns;
+                    break;
+                }
+            }
+            return $default ?? $first ?? [];
+        } catch (\Throwable $e) {
+            w_log_warning(__('[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}', [$e->getMessage()]), [], 'dns_cdn_switch');
+            return [];
+        }
     }
 
     /**

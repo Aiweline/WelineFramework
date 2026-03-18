@@ -179,7 +179,6 @@ class Run implements CommandInterface
                     # 如果强制执行
                     if ($force) {
                         $msg = __('%{1} 程序ID:%{2} 正在运行中，当前强制执行正在杀死进程中...', [$process_name, $pid]);
-                        Process::unsetLogProcessFilePath($process_name);
                         $taskModel->setData($taskModel::schema_fields_RUNTIME_ERROR, $output . $msg)
                             ->setData($taskModel::schema_fields_BLOCK_TIME, 0)
                             ->setData($taskModel::schema_fields_STATUS, CronStatus::RUNNING->value)
