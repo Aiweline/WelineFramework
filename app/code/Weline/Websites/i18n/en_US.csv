@@ -1,4 +1,4 @@
-﻿阿里云域名,阿里云域名
+阿里云域名,阿里云域名
 "阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","Aliyun domain registration service, supporting domain registration, renewal, DNS resolution, and domain trading."
 区域,Region
 华东1（杭州）,"East China 1 (Hangzhou)"
@@ -1332,3 +1332,27 @@ SEO账户管理请前往：,SEO账户管理请前往：
 建站进度,建站进度
 例如：茶叶电商网站,例如：茶叶电商网站
 请填写要购买的域名,请填写要购买的域名
+"第 %{p} / %{t} 页，每页 %{n} 条，合计 %{total} 条","Page %{p} of %{t}, %{n} per page, %{total} total"
+共 1 页,1 page
+共 0 条本地域名,0 local domains
+仅 1 页,Single page
+本页,This page
+页，每页,pages · per page
+条，合计,items · total
+清理含非法字符的误同步池记录,Remove pool rows with invalid chars (sync errors)
+清理误同步池记录,Clean invalid pool sync rows
+删除根域@未指向本机IP的A/AAAA，并清空该根下域名池,Delete apex A/AAAA not pointing to this server; clear pool under root
+清理错误解析并移出池,Fix wrong apex DNS and remove from pool
+将列出含 [] 的非法池记录（不删除）。继续？,List invalid pool rows (dry run). Continue?
+将检查根域 @ 的 A/AAAA 是否指向本机公网（橙云代理不删）。继续试运行？,Dry-run: check apex A/AAAA vs server IP (CF proxied skipped). Continue?
+开始试运行,Run dry run
+试运行已完成。是否正式执行删除？此操作不可撤销。,Dry run done. Execute for real? This cannot be undone.
+正式执行？,Execute for real?
+无法获取本机公网 IPv4，请在 env 中配置 server.public_ip 或确保网络可访问外网 IP 检测接口,Cannot detect public IPv4; set server.public_ip or fix outbound network
+"获取域名池列表失败：%{1}","Domain pool list failed: %{1}"
+"清理失败：%{1}","Cleanup failed: %{1}"
+"操作失败：%{1}","Operation failed: %{1}"
+"试运行：发现 %{1} 条可清理记录","Dry run: %{1} row(s) can be removed"
+"已清理 %{1} 条非法域名池记录","Removed %{1} invalid pool row(s)"
+"将删除 %{n} 条 DNS 记录，并移除 %{p} 条域名池记录（试运行）","Dry run: would delete %{n} DNS record(s) and remove %{p} pool row(s)"
+"已删除 %{n} 条 DNS 记录，已移除 %{p} 条域名池记录","Deleted %{n} DNS record(s), removed %{p} pool row(s)"

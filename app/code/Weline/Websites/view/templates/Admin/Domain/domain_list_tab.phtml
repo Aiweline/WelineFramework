@@ -1573,7 +1573,14 @@ $accounts = $accounts ?? [];
         var from = total === 0 ? 0 : ((current - 1) * ps) + 1;
         var to = Math.min(current * ps, total);
 
-        info.textContent = total > 0 ? '<?= __('显示') ?> ' + from + '-' + to + ' <?= __('共') ?> ' + total + ' <?= __('条') ?>' : '';
+        if (total === 0) {
+            info.textContent = '<?= __('共 0 条本地域名') ?>';
+        } else {
+            info.textContent = '<?= __('共') ?> ' + total + ' <?= __('条') ?> · <?= __('第') ?> ' + current + ' / ' + lastPage + ' <?= __('页') ?> · <?= __('每页') ?> ' + ps + ' <?= __('条') ?>';
+            if (from > 0 && to > 0 && (from !== 1 || to !== total)) {
+                info.textContent += ' （<?= __('本页') ?> ' + from + '–' + to + '）';
+            }
+        }
 
         var linksHtml = '';
         if (lastPage > 1) {
@@ -1596,6 +1603,8 @@ $accounts = $accounts ?? [];
                 linksHtml += '<li class="page-item"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + lastPage + ');return false;">' + lastPage + '</a></li>';
             }
             linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current + 1) + ');return false;">&raquo;</a></li>';
+        } else if (total > 0) {
+            linksHtml = '<li class="page-item disabled"><span class="page-link"><?= __('仅 1 页') ?></span></li>';
         }
         links.innerHTML = linksHtml;
     }
