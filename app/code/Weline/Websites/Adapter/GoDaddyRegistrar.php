@@ -17,6 +17,7 @@ use Weline\Framework\App\Env;
 use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarProvisioningNormalizeNoopTrait;
 use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
 use Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
@@ -30,6 +31,7 @@ class GoDaddyRegistrar implements DomainRegistrarInterface
     use DnsCdnZoneRecordsProviderTrait;
     use DefaultDnsZoneOriginMatchTrait;
     use RegistrarBatchCheckAvailabilityTrait;
+    use RegistrarProvisioningNormalizeNoopTrait;
     /** API 地址 */
     private const API_BASE_URL = 'https://api.godaddy.com';
     private const API_BASE_URL_OTE = 'https://api.ote-godaddy.com'; // 测试环境

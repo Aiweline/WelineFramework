@@ -1228,10 +1228,15 @@ class ObjectManager implements ManagerInterface
             
             // PHP 8 性能优化：使用 ?? 操作符，减少 isset 检查
             $isClass = ($paramMeta['isClass'] ?? false) === true;
-            
+            $paramTypeName = $paramMeta['typeName'] ?? null;
+            // 预编译 reflection_metadata 在生成时若 class_exists 未命中，会将合法类误标为 isClass=false，导致注入 null
+            if (!$isClass && is_string($paramTypeName) && str_contains($paramTypeName, '\\')
+                && (self::cachedClassExists($paramTypeName) || interface_exists($paramTypeName, true))) {
+                $isClass = true;
+            }
+
             if ($isClass) {
                 // 类类型参数：检查实例是否已存在
-                $paramTypeName = $paramMeta['typeName'] ?? null;
                 if (empty($paramTypeName)) {
                     // 如果类型名称为空，跳过该参数
                     continue;

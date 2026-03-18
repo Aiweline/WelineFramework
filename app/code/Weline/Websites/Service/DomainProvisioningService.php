@@ -9,6 +9,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\ProvisioningOrder;
 use Weline\Websites\Model\ProvisioningStep;
+use Weline\Websites\Service\DomainRegistrarResolverService;
 
 /**
  * 一站式配置编排：购买域名 → 绑定 DNS → 绑定 CDN → 申请 SSL
@@ -66,6 +67,15 @@ class DomainProvisioningService
         $cdnVendor = trim((string) ($options['cdn_vendor'] ?? ''));
         $cdnAccountId = (int) ($options['cdn_account_id'] ?? 0);
         $applySsl = !isset($options['apply_ssl']) || (bool) $options['apply_ssl'];
+
+        $aligned = $this->mergeProvisioningDnsCdnFromAdapters($dnsVendor, $dnsAccountId, $cdnVendor, $cdnAccountId, $domain);
+        if (isset($aligned['error'])) {
+            return ['success' => false, 'message' => $aligned['error']];
+        }
+        $dnsVendor = $aligned['dns_vendor'];
+        $dnsAccountId = $aligned['dns_account_id'];
+        $cdnVendor = $aligned['cdn_vendor'];
+        $cdnAccountId = $aligned['cdn_account_id'];
         // 是否跳过购买步骤（使用已有域名）
         $skipPurchase = !empty($options['skip_purchase']) || !empty($options['domain_owned']);
 
@@ -240,12 +250,26 @@ class DomainProvisioningService
         }
 
         $domain = $order->getDomain();
-        $currentDnsVendor = (string) $order->getData(ProvisioningOrder::schema_fields_DNS_VENDOR);
+        $dnsVendorOrder = (string) $order->getData(ProvisioningOrder::schema_fields_DNS_VENDOR);
+        $dnsAccountOrder = (int) $order->getData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID);
         $currentCdnVendor = (string) $order->getData(ProvisioningOrder::schema_fields_CDN_VENDOR);
         $currentCdnAccountId = (int) $order->getData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID);
 
-        $vendor = $cdnVendor ?? $currentCdnVendor;
-        $accountId = $cdnAccountId ?? $currentCdnAccountId;
+        $vendorInput = $cdnVendor ?? $currentCdnVendor;
+        $accountInput = $cdnAccountId ?? $currentCdnAccountId;
+        $aligned = $this->mergeProvisioningDnsCdnFromAdapters($dnsVendorOrder, $dnsAccountOrder, $vendorInput, $accountInput, $domain);
+        if (isset($aligned['error'])) {
+            return ['success' => false, 'message' => $aligned['error']];
+        }
+        $order->setData(ProvisioningOrder::schema_fields_DNS_VENDOR, $aligned['dns_vendor']);
+        $order->setData(ProvisioningOrder::schema_fields_DNS_ACCOUNT_ID, $aligned['dns_account_id']);
+        $order->setData(ProvisioningOrder::schema_fields_CDN_VENDOR, $aligned['cdn_vendor']);
+        $order->setData(ProvisioningOrder::schema_fields_CDN_ACCOUNT_ID, $aligned['cdn_account_id']);
+        $order->save();
+
+        $currentDnsVendor = $aligned['dns_vendor'];
+        $vendor = $aligned['cdn_vendor'];
+        $accountId = $aligned['cdn_account_id'];
 
         if ($vendor !== '' && $vendor !== $currentDnsVendor) {
             $order->setData(ProvisioningOrder::schema_fields_DNS_VENDOR, $vendor);
@@ -470,6 +494,57 @@ class DomainProvisioningService
     /**
      * 记录步骤状态
      */
+    /**
+     * 按各适配器 {@see \Weline\Websites\Api\DomainRegistrarInterface::normalizeProvisioningDnsCdnAccounts} 合并 DNS/CDN 订单字段。
+     *
+     * @return array{dns_vendor: string, dns_account_id: int, cdn_vendor: string, cdn_account_id: int}|array{error: string}
+     */
+    private function mergeProvisioningDnsCdnFromAdapters(
+        string $dnsVendor,
+        int $dnsAccountId,
+        string $cdnVendor,
+        int $cdnAccountId,
+        string $domain = ''
+    ): array {
+        $ctx = [
+            'dns_vendor' => $dnsVendor,
+            'dns_account_id' => $dnsAccountId,
+            'cdn_vendor' => $cdnVendor,
+            'cdn_account_id' => $cdnAccountId,
+            'domain' => $domain,
+        ];
+        $codes = [];
+        foreach ([$dnsVendor, $cdnVendor] as $c) {
+            $c = \strtolower(\trim($c));
+            if ($c !== '') {
+                $codes[$c] = true;
+            }
+        }
+        $resolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
+        foreach (\array_keys($codes) as $code) {
+            $adapter = $resolver->getAdapter($code);
+            if ($adapter === null) {
+                continue;
+            }
+            $patch = $adapter->normalizeProvisioningDnsCdnAccounts($ctx);
+            if (isset($patch['_error'])) {
+                return ['error' => (string) $patch['_error']];
+            }
+            foreach (['dns_vendor', 'dns_account_id', 'cdn_vendor', 'cdn_account_id'] as $k) {
+                if (\array_key_exists($k, $patch)) {
+                    $ctx[$k] = $patch[$k];
+                }
+            }
+        }
+
+        return [
+            'dns_vendor' => (string) $ctx['dns_vendor'],
+            'dns_account_id' => (int) $ctx['dns_account_id'],
+            'cdn_vendor' => (string) $ctx['cdn_vendor'],
+            'cdn_account_id' => (int) $ctx['cdn_account_id'],
+        ];
+    }
+
     private function recordStep(
         int $orderId,
         string $stepName,
