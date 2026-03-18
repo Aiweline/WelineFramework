@@ -2763,6 +2763,21 @@ CNF;
         $digest = \hash('sha256', $keyAuth, true);
         $challengeValue = \str_replace(['+', '/', '='], ['-', '_', ''], \base64_encode($digest));
 
+        // 与 addAcmeTxtRecord 同源解析 DNS 供应商，不依赖其返回值（线上 w_query/序列化可能丢 dns_provider）
+        $dnsProviderCode = '';
+        try {
+            $probe = w_query('websites', 'getAcmeDnsProviderCode', [
+                'domain' => $domain,
+                'pool_id' => $poolId,
+                'domain_id' => $domainId,
+            ]);
+            if (\is_array($probe)) {
+                $dnsProviderCode = \strtolower(\trim((string)($probe['provider_code'] ?? '')));
+            }
+        } catch (\Throwable) {
+            // 未升级 Websites 时无此 operation，回退至 addResult 中的 dns_provider
+        }
+
         if ($onProgress) {
             $onProgress((string)__('正在通过 DNS 供应商添加 TXT 记录...'), ['step' => 'add_txt']);
         }
@@ -2785,9 +2800,17 @@ CNF;
             return ['validated' => false, 'error' => $addErr];
         }
         $recordId = (string)($addResult['record_id'] ?? '');
+        if ($dnsProviderCode === '' && \is_array($addResult)) {
+            $dnsProviderCode = \strtolower(\trim((string)($addResult['dns_provider'] ?? '')));
+            if ($dnsProviderCode === '') {
+                $dr = $addResult['dns_response'] ?? null;
+                if (\is_array($dr) && isset($dr['provider'])) {
+                    $dnsProviderCode = \strtolower(\trim((string) $dr['provider']));
+                }
+            }
+        }
         // 先轮询公网 TXT 是否可见，避免 Gname 等未真正生效时白等 3+7 分钟
         $txtFqdn = '_acme-challenge.' . $domain;
-        $dnsProviderCode = \strtolower(\trim((string)($addResult['dns_provider'] ?? ($addResult['dns_response']['provider'] ?? ''))));
         // GName 等平台 API 返回成功到公网可解析常需更久，90s 易误判失败
         $pollMaxSeconds = ($dnsProviderCode === 'gname') ? 180 : 90;
         $pollIntervalSeconds = 10;
