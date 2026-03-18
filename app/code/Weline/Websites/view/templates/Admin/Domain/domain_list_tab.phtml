@@ -1076,8 +1076,15 @@ $accounts = $accounts ?? [];
             .then(function(r) { return r.json(); })
             .then(function(data) {
                 if (data.code === 200) {
-                    var items = data.data.items || [];
-                    var pagination = data.data.pagination || {};
+                    var d = data.data || {};
+                    var items = d.items || [];
+                    // API 返回 total/page/pages/limit，与 pagination 嵌套结构二选一兼容
+                    var pagination = d.pagination && typeof d.pagination === 'object' ? d.pagination : {
+                        total: d.total || 0,
+                        current_page: d.page || 1,
+                        last_page: d.pages || 1,
+                        page_size: d.limit || pageSize
+                    };
                     // 检查是否有筛选条件
                     var hasFilters = filters.account_id || filters.resolve_status || filters.https_status || filters.search;
                     // 仅在首次加载（第1页，无筛选条件）且本地无数据时自动获取远程域名
@@ -1453,16 +1460,31 @@ $accounts = $accounts ?? [];
         var total = pagination.total || 0;
         var current = pagination.current_page || 1;
         var lastPage = pagination.last_page || 1;
-        var from = ((current - 1) * pageSize) + 1;
-        var to = Math.min(current * pageSize, total);
+        var ps = pagination.page_size || pageSize;
+        var from = total === 0 ? 0 : ((current - 1) * ps) + 1;
+        var to = Math.min(current * ps, total);
 
         info.textContent = total > 0 ? '<?= __('显示') ?> ' + from + '-' + to + ' <?= __('共') ?> ' + total + ' <?= __('条') ?>' : '';
 
         var linksHtml = '';
         if (lastPage > 1) {
             linksHtml += '<li class="page-item ' + (current <= 1 ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current - 1) + ');return false;">&laquo;</a></li>';
-            for (var i = 1; i <= lastPage && i <= 10; i++) {
+            var start = Math.max(1, current - 2);
+            var end = Math.min(lastPage, current + 2);
+            if (start > 1) {
+                linksHtml += '<li class="page-item"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(1);return false;">1</a></li>';
+                if (start > 2) {
+                    linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                }
+            }
+            for (var i = start; i <= end; i++) {
                 linksHtml += '<li class="page-item ' + (i === current ? 'active' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + i + ');return false;">' + i + '</a></li>';
+            }
+            if (end < lastPage) {
+                if (end < lastPage - 1) {
+                    linksHtml += '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                }
+                linksHtml += '<li class="page-item"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + lastPage + ');return false;">' + lastPage + '</a></li>';
             }
             linksHtml += '<li class="page-item ' + (current >= lastPage ? 'disabled' : '') + '"><a class="page-link" href="#" onclick="WelineDomainList.loadDomains(' + (current + 1) + ');return false;">&raquo;</a></li>';
         }
