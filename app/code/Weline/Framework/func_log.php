@@ -29,6 +29,15 @@ if (!function_exists('w_log')) {
         try {
             $logger = LoggerFactory::create($channel);
             $logger->log($level, $message, $context);
+            $sseManual = \getenv('WELINE_CRON_MANUAL_SSE');
+            if ($sseManual !== false && $sseManual !== '' && $sseManual !== '0') {
+                $echoLevels = ['notice', 'info', 'warning', 'error', 'critical', 'alert', 'emergency'];
+                if (\in_array(\strtolower($level), $echoLevels, true) && \defined('STDERR')) {
+                    $ch = $channel ?? 'app';
+                    @\fwrite(\STDERR, \sprintf('[%s] %s: %s%s', $ch, \strtoupper($level), $message, \PHP_EOL));
+                    @\fflush(\STDERR);
+                }
+            }
         } catch (\Throwable $e) {
             // 日志系统失败时的后备方案
             $fallbackMessage = sprintf(

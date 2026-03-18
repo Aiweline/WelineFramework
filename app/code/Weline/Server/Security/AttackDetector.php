@@ -201,6 +201,11 @@ class AttackDetector
             'fast_close_threshold' => 0.2,  // 快速关闭阈值（秒）- 降低到 200ms，只捕获真正的 SSL 失败
         ],
 
+        // Dispatcher 在 accept 时对每条 TLS 连接调用 detect(CONNECT, /, 无头)；为 true 时跳过频率/暴增等「按连接计数」的规则
+        'dispatcher_tls_connection_probe' => [
+            'skip_heavy_checks' => true,
+        ],
+
         // 扫描路径即永久封禁：命中任意配置路径则立即永久封禁 IP，仅后台解禁可恢复
         'ban_on_path_match' => [
             'enabled' => true,
@@ -608,6 +613,22 @@ class AttackDetector
             $this->persistAttackLog($banOnPathResult, $requestInfo);
             $this->markAttackSignaled($clientIp);
             return $banOnPathResult;
+        }
+
+        // 1.55 Dispatcher TCP 透传：每接受一条新连接（尚未有 HTTP 头）即调用本方法，method=CONNECT、uri=/。
+        // Worker 崩溃 / Fiber 全挂时，浏览器与 CDN 会并发重连，短时内同一 IP 可达数百次 TCP。
+        // 若仍按「每次 detect」做频率限流、暴增、攻击信号后续计数等，会把正常用户 IP 误封。
+        $probeRule = $this->rules['dispatcher_tls_connection_probe'] ?? [];
+        if (($probeRule['skip_heavy_checks'] ?? true)
+            && $headers === []
+            && \strtoupper($method) === 'CONNECT'
+            && $uri === '/') {
+            return [
+                'is_attack' => false,
+                'type' => 'none',
+                'reason' => '',
+                'should_block' => false,
+            ];
         }
 
         // 1.6 攻击信号后：已被标记为攻击者的 IP，在禁止路径外的请求多次则封禁
