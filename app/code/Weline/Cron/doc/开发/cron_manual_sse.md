@@ -7,7 +7,8 @@
 
 ## 行为
 
-- 真实执行 `php bin/w cron:task:run <execute_name> -f`；可选后缀 → 环境变量 `WELINE_CRON_MANUAL_ARGS`。
+- 真实执行 `php bin/w cron:task:run <execute_name> -f`；可选后缀 → `WELINE_CRON_MANUAL_ARGS`。
+- 子进程会设置 `WELINE_CRON_MANUAL_SSE=1`：`w_log` 的 notice/info/warning/error 等会同步写到 **stderr**，SSE 终端可见；任务 `execute()` 若返回空仍会打印一行摘要提示。
 
 ## ACL 链路（command:upgrade 收集）
 
