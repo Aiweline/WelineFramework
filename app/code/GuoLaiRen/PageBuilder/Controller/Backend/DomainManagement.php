@@ -14,6 +14,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\ServerIpService;
@@ -1089,6 +1090,16 @@ class DomainManagement extends BaseController
                     }
                 }
             }
+
+            $poolIdsForFlow = [];
+            foreach ($domains as $dRow) {
+                $fid = (int) ($dRow[DomainPool::schema_fields_ID] ?? 0);
+                if ($fid > 0) {
+                    $poolIdsForFlow[] = $fid;
+                }
+            }
+            $flowLogService = ObjectManager::getInstance(DomainPoolFlowLogService::class);
+            $recentFlowByPool = $flowLogService->getRecentByPoolIds($poolIdsForFlow, 12);
             
             // 格式化数据
             $data = [];
@@ -1114,6 +1125,7 @@ class DomainManagement extends BaseController
                         $cdnProviderName = $info['name'] ?? $cdnCode;
                     }
                 }
+                $poolRowId = (int) ($domain[DomainPool::schema_fields_ID] ?? 0);
                 $data[] = [
                     'pool_id' => $domain[DomainPool::schema_fields_ID] ?? 0,
                     'domain' => $d,
@@ -1138,6 +1150,7 @@ class DomainManagement extends BaseController
                     'is_registering' => !empty($registeringRoots[$root]),
                     'lifecycle_stage' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage'] ?? '',
                     'lifecycle_stage_label' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage_label'] ?? '',
+                    'flow_html' => $flowLogService->buildFlowDisplayHtml($domain, $recentFlowByPool[$poolRowId] ?? []),
                 ];
             }
             
@@ -1153,6 +1166,41 @@ class DomainManagement extends BaseController
             return $this->fetchJson([
                 'success' => false,
                 'msg' => __('查询失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 域名池流转时间线（与 Websites 域名管理一致）
+     */
+    public function postGetPoolFlowLog(): string
+    {
+        try {
+            $poolId = (int) ($this->request->getParam('pool_id', 0));
+            if ($poolId <= 0) {
+                return $this->fetchJson(['success' => false, 'msg' => __('参数错误')]);
+            }
+            $model = ObjectManager::getInstance(\Weline\Websites\Model\DomainPoolFlowLog::class);
+            $rows = $model->clearQuery()
+                ->where(\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_POOL_ID, $poolId)
+                ->order(\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_ID, 'DESC')
+                ->limit(80)
+                ->select()
+                ->fetchArray();
+            $items = [];
+            foreach ($rows as $r) {
+                $items[] = [
+                    'at' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_CREATED_AT] ?? ''),
+                    'kind' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_EVENT_KIND] ?? ''),
+                    'message' => (string) ($r[\Weline\Websites\Model\DomainPoolFlowLog::schema_fields_MESSAGE] ?? ''),
+                ];
+            }
+
+            return $this->fetchJson(['success' => true, 'data' => ['items' => $items]]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'msg' => $e->getMessage(),
             ]);
         }
     }
@@ -2335,7 +2383,7 @@ class DomainManagement extends BaseController
      * 将 DNS 记录同步到域名池（双保险）
      *
      * @param Domain $rootDomain 根域名模型
-     * @param array $records DNS 记录数组
+     * @param array $records DNS 记录数组（仅 A/AAAA 会写入域名池）
      * @param bool $createNonLocal 是否在非本机 IP 时也创建池记录（新增记录场景）
      * @return array{added:int, marked_non_local:int, skipped:int}
      */
@@ -2357,6 +2405,11 @@ class DomainManagement extends BaseController
             }
 
             $type = \strtoupper((string) ($record['type'] ?? $record['record_type'] ?? ''));
+            if ($type !== 'A' && $type !== 'AAAA') {
+                $skipped++;
+                continue;
+            }
+
             $host = \trim((string) ($record['host'] ?? $record['name'] ?? '@'));
             $value = \trim((string) ($record['value'] ?? $record['data'] ?? ''));
 
@@ -2397,6 +2450,9 @@ class DomainManagement extends BaseController
                 if ($type === 'AAAA') {
                     $poolDomain->setResolvedIpv6($value);
                 }
+                if ($isLocal) {
+                    $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
+                }
                 $poolDomain->calculateSiteReady();
                 $poolDomain->save();
                 $added++;
@@ -2422,6 +2478,12 @@ class DomainManagement extends BaseController
                 $poolDomain->setIsLocalServer($isLocal);
                 if ($wasLocal && !$isLocal) {
                     $markedNonLocal++;
+                }
+                if ($isLocal) {
+                    $st = \trim((string) $poolDomain->getPoolLifecycleStage());
+                    if ($st === '' || $st === DomainPool::LIFECYCLE_REGISTERED || $st === DomainPool::LIFECYCLE_AWAITING_ORIGIN) {
+                        $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
+                    }
                 }
             }
             $poolDomain->calculateSiteReady();
