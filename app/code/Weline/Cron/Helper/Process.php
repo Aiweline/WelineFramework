@@ -37,6 +37,10 @@ class Process
         );
         # 创建异步程序
         $process_log_path = Process::getLogProcessFilePath($process_name);
+        // 上一轮异常未归档时仍有内容；shell 重定向会截断，先移入 history 保留
+        if (\is_file($process_log_path) && (int) \filesize($process_log_path) > 0) {
+            self::moveCurrentLogToHistory($process_name);
+        }
         if (IS_WIN) {
             # 使用cmd命令行创建进程
             $command = ' cmd /c start /b ' . $process_name . ' > "' . $process_log_path . '"';
@@ -111,21 +115,75 @@ class Process
         return $path;
     }
 
-    static public function unsetLogProcessFilePath(string $pname)
+    /**
+     * 任务结束或切换进程时：将 var/cron/{任务}.log 移入 history，便于后台随时查看历史。
+     */
+    static public function unsetLogProcessFilePath(string $pname): bool
+    {
+        self::moveCurrentLogToHistory($pname);
+
+        return true;
+    }
+
+    private const HISTORY_MAX_FILES = 200;
+
+    public static function moveCurrentLogToHistory(string $pname): void
     {
         $path = self::getLogProcessFilePath($pname);
-        if (is_file($path)) {
-            // Windows 文件锁竞争：最多重试 3 次，每次间隔 100ms
-            for ($i = 0; $i < 3; $i++) {
-                if (@unlink($path)) {
-                    return true;
-                }
-                if ($i < 2) {
-                    usleep(100000);
-                }
-            }
+        if (!\is_file($path)) {
+            return;
         }
-        return true;
+        $size = (int) \filesize($path);
+        if ($size === 0) {
+            @\unlink($path);
+
+            return;
+        }
+        $base = \basename($path, '.log');
+        $histDir = Env::VAR_DIR . 'cron' . DS . 'history' . DS . $base;
+        if (!\is_dir($histDir) && !@\mkdir($histDir, 0777, true)) {
+            // 无法建目录时仍尝试删除，避免阻塞调度
+            for ($i = 0; $i < 3; $i++) {
+                if (@\unlink($path)) {
+                    break;
+                }
+                \usleep(100000);
+            }
+
+            return;
+        }
+        $dest = $histDir . DS . \date('Y-m-d_His') . '_' . \bin2hex(\random_bytes(3)) . '.log';
+        if (!@\rename($path, $dest)) {
+            for ($i = 0; $i < 3; $i++) {
+                if (@\unlink($path)) {
+                    break;
+                }
+                \usleep(100000);
+            }
+
+            return;
+        }
+        self::pruneHistoryDir($histDir, self::HISTORY_MAX_FILES);
+    }
+
+    private static function pruneHistoryDir(string $dir, int $maxFiles): void
+    {
+        $files = \glob($dir . DS . '*.log') ?: [];
+        if (\count($files) <= $maxFiles) {
+            return;
+        }
+        \usort($files, static function (string $a, string $b): int {
+            return \filemtime($b) <=> \filemtime($a);
+        });
+        foreach (\array_slice($files, $maxFiles) as $f) {
+            @\unlink($f);
+        }
+    }
+
+    /** 由 execute_name 得到与 getLogProcessFilePath 一致的 .log 基名（不含路径） */
+    public static function logBasenameForExecuteName(string $executeName): string
+    {
+        return \str_replace(':', '-', self::initTaskName($executeName));
     }
 
     static public function killPid(int $pid, string $pname)
