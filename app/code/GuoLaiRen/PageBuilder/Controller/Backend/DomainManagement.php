@@ -270,6 +270,79 @@ class DomainManagement extends BaseController
     }
 
     /**
+     * 业务上 DNS 应对接的目标代码（列表展示用）
+     *
+     * 同步/解析可能把 dns_provider 写成 share-dns，但 dns_account_id、nameservers、CDN 账户仍指向 Cloudflare。
+     */
+    private function resolveEffectiveDnsTargetCode(
+        array $domainRow,
+        string $registrarCode,
+        \Weline\Websites\Service\DnsProviderDetector $dnsDetector,
+        array &$registrarAccountCodeCache
+    ): string {
+        $reg = \strtolower(\trim($registrarCode));
+        $loadAccCode = function (int $id) use (&$registrarAccountCodeCache): string {
+            if ($id <= 0) {
+                return '';
+            }
+            if (!isset($registrarAccountCodeCache[$id])) {
+                $a = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                $a->load($id);
+                $registrarAccountCodeCache[$id] = \strtolower(\trim($a->getRegistrarCode() ?: ''));
+            }
+
+            return $registrarAccountCodeCache[$id];
+        };
+
+        $nsRaw = $domainRow['nameservers'] ?? '';
+        $nsArr = \is_array($nsRaw) ? $nsRaw : (\json_decode((string) $nsRaw, true) ?: []);
+        if (\is_array($nsArr) && $nsArr !== []) {
+            $t = $dnsDetector->detectProvider(\array_map(static fn ($v) => (string) $v, $nsArr));
+            if ($dnsDetector->isCdnProvider($t)) {
+                return $t;
+            }
+            if (
+                $t !== $reg && $t !== 'share_dns' && $t !== 'unknown'
+                && !$dnsDetector->isOriginalProvider($t, $reg)
+            ) {
+                return $t;
+            }
+        }
+
+        $dc = $loadAccCode((int) ($domainRow['dns_account_id'] ?? $domainRow[\Weline\Websites\Model\Domain::schema_fields_DNS_ACCOUNT_ID] ?? 0));
+        if (
+            $dc !== ''
+            && (
+                $dnsDetector->isCdnProvider($dc)
+                || ($dc !== $reg && !$dnsDetector->isOriginalProvider($dc, $reg))
+            )
+        ) {
+            return $dc;
+        }
+
+        $raw = \strtolower(\trim((string) ($domainRow['dns_provider'] ?? $domainRow[\Weline\Websites\Model\Domain::schema_fields_DNS_PROVIDER] ?? '')));
+        $cdnC = $loadAccCode((int) ($domainRow['cdn_account_id'] ?? $domainRow[\Weline\Websites\Model\Domain::schema_fields_CDN_ACCOUNT_ID] ?? 0));
+        if (
+            $cdnC !== ''
+            && $dnsDetector->isCdnProvider($cdnC)
+            && (
+                $raw === ''
+                || $raw === 'share_dns'
+                || $raw === $reg
+                || $dnsDetector->isOriginalProvider($raw, $reg)
+            )
+        ) {
+            return $cdnC;
+        }
+
+        if ($raw !== '') {
+            return $raw;
+        }
+
+        return $reg;
+    }
+
+    /**
      * AJAX: 查询域名列表（远程 + 本地合并，标记已拉取状态）
      */
     public function postGetDomains(): string
@@ -330,6 +403,7 @@ class DomainManagement extends BaseController
             $resolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
             $resolver = ObjectManager::getInstance(DomainRegistrarResolverService::class);
             $liveNsRootCache = [];
+            $dnsTargetAccountCodeCache = [];
 
             // 获取所有账户注册商信息（直接SQL，避免 ORM JOIN 字段冲突）
             $accountInfoCache = [];
@@ -491,18 +565,25 @@ class DomainManagement extends BaseController
                         $cdnProviderName = $cdnProvider ? $dnsDetector->getProviderInfo($cdnProvider)['name'] : '-';
 
                         $domainId = $isLocal ? (int) ($localData['domain_id'] ?? 0) : 0;
-                        $rawLocalDns = \trim((string) ($localData['dns_provider'] ?? ''));
                         $regCodeRow = (string) ($acctInfo['registrar_code'] ?? '');
-                        if ($isLocal && $domainId > 0 && $dnsDetector->shouldProbeLiveNsForConfiguredDns($rawLocalDns, $regCodeRow)) {
-                            if (!isset($liveNsRootCache[$domainName])) {
-                                $liveNsRootCache[$domainName] = $resolveService->getLiveNameservers($domainName);
-                            }
-                            $dnsProviderName = $dnsDetector->resolveDnsListDisplayName(
-                                $rawLocalDns,
+                        if ($isLocal && $domainId > 0) {
+                            $effectiveDns = $this->resolveEffectiveDnsTargetCode(
+                                $localData,
                                 $regCodeRow,
-                                $liveNsRootCache[$domainName],
-                                false
+                                $dnsDetector,
+                                $dnsTargetAccountCodeCache
                             );
+                            if ($dnsDetector->shouldProbeLiveNsForConfiguredDns($effectiveDns, $regCodeRow)) {
+                                if (!isset($liveNsRootCache[$domainName])) {
+                                    $liveNsRootCache[$domainName] = $resolveService->getLiveNameservers($domainName);
+                                }
+                                $dnsProviderName = $dnsDetector->resolveDnsListDisplayName(
+                                    $effectiveDns,
+                                    $regCodeRow,
+                                    $liveNsRootCache[$domainName],
+                                    false
+                                );
+                            }
                         }
                         // 根域可建站：自身 site_ready 或 至少一个池子域名可建站
                         $siteReady = 0;
@@ -1145,6 +1226,15 @@ class DomainManagement extends BaseController
             }
 
             $poolResolveService = ObjectManager::getInstance(\Weline\Websites\Service\DomainResolveService::class);
+            $poolDnsTargetAccountCodeCache = [];
+            $effectiveDnsByParentId = [];
+            foreach ($parentMap as $pDomId => $pRow) {
+                $pAcc = (int) ($pRow[Domain::schema_fields_ACCOUNT_ID] ?? 0);
+                $pReg = (string) ($accountCache[$pAcc]['registrar_code'] ?? '');
+                $effectiveDnsByParentId[(int) $pDomId] = isset($dnsDetector)
+                    ? $this->resolveEffectiveDnsTargetCode($pRow, $pReg, $dnsDetector, $poolDnsTargetAccountCodeCache)
+                    : $pReg;
+            }
             $poolRootsToProbe = [];
             foreach ($domains as $domain) {
                 $rootHost = \trim((string) ($domain[DomainPool::schema_fields_ROOT_DOMAIN] ?? ''));
@@ -1155,8 +1245,8 @@ class DomainManagement extends BaseController
                 }
                 $accId = (int) ($parent[Domain::schema_fields_ACCOUNT_ID] ?? 0);
                 $regC = (string) ($accountCache[$accId]['registrar_code'] ?? '');
-                $rawDns = \strtolower(\trim((string) ($parent[Domain::schema_fields_DNS_PROVIDER] ?? '')));
-                if ($dnsDetector->shouldProbeLiveNsForConfiguredDns($rawDns, $regC)) {
+                $effP = $effectiveDnsByParentId[$pid] ?? $regC;
+                if ($dnsDetector->shouldProbeLiveNsForConfiguredDns($effP, $regC)) {
                     $poolRootsToProbe[\strtolower($rootHost)] = $rootHost;
                 }
             }
@@ -1189,14 +1279,14 @@ class DomainManagement extends BaseController
                     $accId = (int) ($parent[Domain::schema_fields_ACCOUNT_ID] ?? 0);
                     $registrarName = $accountCache[$accId]['registrar_name'] ?? '-';
                     $regC = (string) ($accountCache[$accId]['registrar_code'] ?? '');
-                    $rawParentDns = \strtolower(\trim((string) ($parent[Domain::schema_fields_DNS_PROVIDER] ?? '')));
+                    $effParentDns = $effectiveDnsByParentId[$pid] ?? $regC;
                     $dnsCode = $parent[Domain::schema_fields_DNS_PROVIDER] ?? $domain[DomainPool::schema_fields_DNS_PROVIDER] ?? '';
                     $cdnCode = $parent[Domain::schema_fields_CDN_PROVIDER] ?? '';
-                    if ($rawParentDns !== '' && isset($dnsDetector) && $dnsDetector->shouldProbeLiveNsForConfiguredDns($rawParentDns, $regC)) {
+                    if (isset($dnsDetector) && $dnsDetector->shouldProbeLiveNsForConfiguredDns($effParentDns, $regC)) {
                         $rk = \strtolower(\trim((string) $root));
                         $liveNsPool = $liveNsByPoolRoot[$rk] ?? [];
                         $isSubRow = $d !== '' && $root !== '' && $d !== $root;
-                        $dnsProviderName = $dnsDetector->resolveDnsListDisplayName($rawParentDns, $regC, $liveNsPool, $isSubRow);
+                        $dnsProviderName = $dnsDetector->resolveDnsListDisplayName($effParentDns, $regC, $liveNsPool, $isSubRow);
                     } elseif ($dnsCode && isset($dnsDetector)) {
                         $info = $dnsDetector->getProviderInfo($dnsCode);
                         $dnsProviderName = $info['name'] ?? $dnsCode;
