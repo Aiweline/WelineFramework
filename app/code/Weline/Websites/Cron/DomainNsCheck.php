@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DnsProviderDetector;
+use Weline\Websites\Service\DomainRootRegistrationSelfCorrectService;
 use Weline\Websites\Service\SubdomainGeneratorService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -28,6 +29,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     manual_help: [
         '控制台 --domain= 只检测该根域 NS。',
         '后台「后缀」未解析时检测全部活跃根域。',
+        '执行前：子域已可建站而根域仍非 active 时先纠正根域状态。',
     ],
 )]
 class DomainNsCheck
@@ -39,6 +41,7 @@ class DomainNsCheck
         try {
             $domainModel = ObjectManager::getInstance(Domain::class);
             $dnsDetector = ObjectManager::getInstance(DnsProviderDetector::class);
+            $promoted = ObjectManager::getInstance(DomainRootRegistrationSelfCorrectService::class)->correctBatch(300);
 
             $domains = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
@@ -155,6 +158,9 @@ class DomainNsCheck
                 $original,
                 $errors
             );
+            if ($promoted > 0) {
+                $message .= \sprintf(', %s %d', (string) __('根域注册状态纠正'), $promoted);
+            }
             if ($poolAdded > 0) {
                 $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
             }
