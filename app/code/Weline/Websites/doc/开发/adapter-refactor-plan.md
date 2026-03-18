@@ -41,7 +41,7 @@
 | **收益** | 1. 新增供应商门槛降低 2. 消除 `method_exists()` 运行时检查 3. 类型安全的能力检查（`instanceof`） 4. 各能力独立演进 |
 | **缺陷/风险** | 1. 现有 5 个适配器需要调整 `implements` 声明 2. 调用方需从 `method_exists` 改为 `instanceof` 3. 接口拆分后不向后兼容（但现有适配器都在内部，影响可控） |
 | **影响范围** | Adapter/*.php（5 个）、DomainSyncService、WebsitesQueryProvider、DnsCdnAutoSwitch、DomainProvisioningService、DomainResolveService、Controller/Admin/Domain |
-| **关联模块** | Weline_Websites、Weline_Saas、GuoLaiRen_PageBuilder |
+| **关联模块** | Weline_Websites、GuoLaiRen_PageBuilder |
 | **应对方案** | 保留 `DomainRegistrarInterface` 继承组合新接口，旧代码可平滑迁移；先加接口、后改调用方 |
 | **安全隐患** | 无新增安全风险，纯重构 |
 | **命中技能** | code-generation-standards、module-development |

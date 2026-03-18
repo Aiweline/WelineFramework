@@ -7,7 +7,7 @@ use Weline\Websites\Model\ProvisioningOrder;
 use Weline\Websites\Model\ProvisioningStep;
 
 /**
- * w_query('websites', …) 一站式配置相关操作（原 Saas 查询器能力）。
+ * w_query('websites', …) 一站式配置相关操作。
  */
 final class ProvisioningQueryHandler
 {
