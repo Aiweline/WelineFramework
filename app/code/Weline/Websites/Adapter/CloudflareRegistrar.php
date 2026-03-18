@@ -12,7 +12,8 @@ declare(strict_types=1);
  * - 域名 Nameserver 切换（将域名切换到 Cloudflare DNS）
  * - 域名列表获取（查看托管在 Cloudflare 的域名）
  *
- * 注意：Cloudflare 域名注册功能仅限特定后缀，本适配器主要聚焦 DNS 管理。
+ * 可用性：Registrar API GET /accounts/{id}/registrar/domains/{domain}（需 Token 含 Registrar 读权限）。
+ * 新注下单：官方公开 API 仅含 List/Get/Update；购买接口若返回失败，请至控制台完成注册或使用支持 API 购买的注册商。
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -21,13 +22,18 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
+use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
-use Weline\Websites\Api\ZoneManagementInterface;
+use Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
 
-class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInterface
+class CloudflareRegistrar implements DomainRegistrarInterface
 {
+    use DomainRegistrarAccountDefaultsTrait;
     use DnsCdnZoneRecordsProviderTrait;
+    use DefaultDnsZoneOriginMatchTrait;
+    use RegistrarBatchCheckAvailabilityTrait;
     private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
     private const REQUEST_TIMEOUT = 30;
     private const CONNECT_TIMEOUT = 10;
@@ -80,22 +86,22 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
         return [
             'help_url' => 'https://dash.cloudflare.com/profile/api-tokens',
             'help_title' => __('Cloudflare API 配置获取指南'),
+            'purchase_help_steps' => [
+                __('【查可注册性 / 同步 CF 注册域名】必选：Account → Registrar → Read。无此项则批量购买前无法调用 Registrar API 判断域名是否可新注。'),
+                __('【购买后自动 DNS / 入池 / 切换解析】仍需：Account Settings Read、Zone Read、Zone Edit、DNS Edit；区域资源建议 All zones。'),
+                __('【新注扣款】Cloudflare 当前公开 API 无稳定下单接口；本系统「购买」可能失败，需在控制台 Registrar → Register domains 完成注册；若未来开放 API，一般还需 Registrar → Edit。'),
+                __('【账号要求】控制台须已验证邮箱；不支持 IDN（国际化域名）新注。'),
+            ],
             'help_steps' => [
                 __('【获取 API Token】'),
                 __('1. 登录 Cloudflare 控制台：https://dash.cloudflare.com/'),
                 __('2. 点击右上角头像 → My Profile（我的个人资料）'),
                 __('3. 左侧菜单选择 API Tokens（API 令牌）'),
-                __('4. 点击 Create Token（创建令牌）→ 使用 "Get started" 或 "Create Custom Token"'),
-                __('5. 权限必须包含以下四项（少一项都会导致部分功能报错）：'),
-                __('   • Account → Account Settings → Read（账户设置读：用于自动获取 Account ID）'),
-                __('   • Zone → Zone → Read（Zone 读：获取域名/站点列表与详情）'),
-                __('   • Zone → Zone → Edit（Zone 编辑/区域编辑：含「添加新站点」；控制台可能显示为「区域」→「区域」→「编辑」或 Zone 设置 → Edit，必选）'),
-                __('   • Zone → DNS → Edit（【非常重要】DNS 编辑：推送/搬迁 DNS 记录、增删改查；缺此项会报 Authentication error，无法添加或修改解析）'),
-                __('6. 【重要】若要支持「添加新域名/新站点」（如 DNS 切换时自动在 CF 建站），「区域资源」必须选 All zones（所有区域）；若只选「指定区域」会报 permission zone.create，无法创建新站点'),
-                __('7. 点击 Continue to summary → Create Token，复制生成的 Token 填入上方「API Token」字段'),
-                __('【Account ID（可选）】'),
-                __('若未填，系统会通过 Account Settings Read 权限自动获取。也可手动填写：'),
-                __('进入任意已添加的域名 → Overview → 右侧「API」区域复制 Account ID'),
+                __('4. 点击 Create Token → Create Custom Token'),
+                __('5. 权限（DNS/建站）：Account Settings Read、Zone Read、Zone Edit、DNS Edit；若要用本系统查购买可用性并同步注册域名：再加 Registrar Read（见上方蓝色框）。'),
+                __('6. 若要自动「添加新站点」，区域资源须选 All zones。'),
+                __('7. Create Token 后复制填入「API Token」。'),
+                __('【Account ID】可选；不填时凭 Account Settings Read 自动解析。'),
             ],
         ];
     }
@@ -117,28 +123,169 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
 
     public function checkAvailability(string $domain, array $credentials): array
     {
-        return [
-            'available' => false,
-            'domain' => $domain,
-            'message' => __('Cloudflare 主要是 DNS 服务提供商，域名注册功能有限。请通过其他域名商购买域名后，将 DNS 切换到 Cloudflare。'),
-        ];
-    }
-
-    public function batchCheckAvailability(array $domains, array $credentials): array
-    {
-        $results = [];
-        foreach ($domains as $domain) {
-            $results[] = $this->checkAvailability($domain, $credentials);
+        $this->validateCredentials($credentials);
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [
+                'available' => false,
+                'domain' => '',
+                'price' => 0.0,
+                'currency' => 'USD',
+                'premium' => false,
+                'message' => __('域名不能为空'),
+            ];
         }
-        return $results;
+
+        $accountId = $this->getAccountId($credentials);
+        if ($accountId === '') {
+            return [
+                'available' => false,
+                'domain' => $domain,
+                'price' => 0.0,
+                'currency' => 'USD',
+                'premium' => false,
+                'message' => __('请配置 Account ID 或授予 Token「Account → Account Settings → Read」以解析账户'),
+            ];
+        }
+
+        $path = '/accounts/' . $accountId . '/registrar/domains/' . \rawurlencode($domain);
+        $response = $this->makeRequest($path, 'GET', [], $credentials);
+
+        if (($response['success'] ?? false) && \is_array($response['result'] ?? null)) {
+            $r = $response['result'];
+            $supportedTld = (bool) ($r['supported_tld'] ?? false);
+            $canRegister = (bool) ($r['can_register'] ?? false);
+            $currentRegistrar = \strtolower(\trim((string) ($r['current_registrar'] ?? '')));
+            // 已在其他注册商注册 → 新注不可用（可转入 CF，本系统「购买」指新注）
+            if ($currentRegistrar !== '' && $currentRegistrar !== 'cloudflare') {
+                $canRegister = false;
+            }
+            $available = $supportedTld && $canRegister;
+            $price = $this->extractRegistrarPriceFromLookup($r);
+            $premium = (bool) ($r['premium'] ?? $r['is_premium'] ?? false);
+            $msg = $available
+                ? __('域名在 Cloudflare Registrar 可新注（以下单结果为准）')
+                : (!$supportedTld
+                    ? __('该后缀当前不受 Cloudflare Registrar 支持')
+                    : ($currentRegistrar !== '' && $currentRegistrar !== 'cloudflare'
+                        ? __('域名已在其他注册商注册，请使用转入或换名')
+                        : __('域名不可新注或已被注册')));
+
+            return [
+                'available' => $available,
+                'domain' => $domain,
+                'price' => $price,
+                'currency' => 'USD',
+                'premium' => $premium,
+                'message' => $msg,
+            ];
+        }
+
+        $errors = $response['errors'] ?? [];
+        $errMsg = !empty($errors) ? (string) ($errors[0]['message'] ?? '') : '';
+        if ($errMsg !== '' && !\str_contains(\strtolower($errMsg), 'not found')) {
+            return [
+                'available' => false,
+                'domain' => $domain,
+                'price' => 0.0,
+                'currency' => 'USD',
+                'premium' => false,
+                'message' => __('Registrar 查询失败：%{1}（请确认 Token 含 Account → Registrar → Read）', [$errMsg]),
+            ];
+        }
+
+        return $this->checkAvailabilityDnsFallback($domain);
     }
 
     public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array
     {
+        $this->validateCredentials($credentials);
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return ['success' => false, 'domain' => '', 'message' => __('域名不能为空')];
+        }
+
+        $accountId = $this->getAccountId($credentials);
+        if ($accountId === '') {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'message' => __('无法解析 Account ID，无法提交注册'),
+            ];
+        }
+
+        $contact = $this->buildCloudflareRegistrantContact($contactInfo);
+        if ($contact === null) {
+            return [
+                'success' => false,
+                'domain' => $domain,
+                'message' => __('请填写完整注册人信息：名、姓、邮箱、电话、地址、城市、州/省、邮编、国家（两位代码）'),
+            ];
+        }
+
+        $years = \max(1, \min(10, $years));
+        $privacy = !isset($contactInfo['privacy']) || (bool) $contactInfo['privacy'];
+
+        $payload = [
+            'domain' => $domain,
+            'name' => $domain,
+            'years' => $years,
+            'period' => $years,
+            'registrant_contact' => $contact,
+            'privacy' => $privacy,
+            'auto_renew' => true,
+        ];
+
+        $endpoints = [
+            '/accounts/' . $accountId . '/registrar/domains',
+            '/accounts/' . $accountId . '/registrar/domains/' . \rawurlencode($domain) . '/register',
+            '/accounts/' . $accountId . '/registrar/domains/' . \rawurlencode($domain),
+        ];
+
+        $lastMsg = '';
+        foreach ($endpoints as $ep) {
+            $body = $ep === $endpoints[0]
+                ? $payload
+                : [
+                    'years' => $years,
+                    'period' => $years,
+                    'registrant_contact' => $contact,
+                    'privacy' => $privacy,
+                    'auto_renew' => true,
+                ];
+            $response = $this->makeRequest($ep, 'POST', $body, $credentials);
+            if ($response['success'] ?? false) {
+                $res = $response['result'] ?? [];
+                $resArr = \is_array($res) ? $res : [];
+                $price = $this->extractRegistrarPriceFromLookup($resArr);
+                $orderId = $resArr['id'] ?? $resArr['name'] ?? $domain;
+
+                return [
+                    'success' => true,
+                    'domain' => $domain,
+                    'order_id' => (string) $orderId,
+                    'price' => $price,
+                    'currency' => 'USD',
+                    'message' => __('域名注册请求已提交'),
+                ];
+            }
+            $errors = $response['errors'] ?? [];
+            $lastMsg = !empty($errors) ? (string) ($errors[0]['message'] ?? '') : __('请求失败');
+            $code = (int) ($errors[0]['code'] ?? 0);
+            if ($code === 7003 || \str_contains(\strtolower($lastMsg), 'not allowed') || \str_contains(\strtolower($lastMsg), 'method')) {
+                continue;
+            }
+        }
+
         return [
             'success' => false,
             'domain' => $domain,
-            'message' => __('Cloudflare 域名注册功能暂不支持，请通过其他域名商购买后切换 DNS 到 Cloudflare。'),
+            'message' => __(
+                'Cloudflare 公开 API 未提供稳定的新注下单接口（常见返回：方法不允许或路由不存在）。'
+                . ' 请至控制台「Registrar → Register domains」完成购买：https://dash.cloudflare.com/ ，'
+                . ' 或使用 GName/GoDaddy 等支持 API 购买的注册商。最后错误：%{1}',
+                [$lastMsg]
+            ),
         ];
     }
 
@@ -807,6 +954,96 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
     }
 
     /**
+     * 从 Registrar GET 结果中提取展示用价格（字段名随 API 扩展可能变化）
+     *
+     * @param array<string, mixed> $r
+     */
+    private function extractRegistrarPriceFromLookup(array $r): float
+    {
+        foreach (['registration_price', 'register_price', 'price', 'retail_price', 'total_price'] as $k) {
+            if (isset($r[$k]) && \is_numeric($r[$k])) {
+                return (float) $r[$k];
+            }
+        }
+        foreach ($r as $v) {
+            if (\is_array($v) && isset($v['amount']) && \is_numeric($v['amount'])) {
+                return (float) $v['amount'];
+            }
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * Registrar API 不可用时用 DNS 启发式（与 GName 检查策略一致）
+     */
+    private function checkAvailabilityDnsFallback(string $domain): array
+    {
+        try {
+            $hasNs = @\dns_get_record($domain, \DNS_NS);
+            $hasA = @\dns_get_record($domain, \DNS_A | \DNS_AAAA);
+            $looks = (\is_array($hasNs) && $hasNs !== []) || (\is_array($hasA) && $hasA !== []);
+        } catch (\Throwable) {
+            $looks = false;
+        }
+
+        return [
+            'available' => !$looks,
+            'domain' => $domain,
+            'price' => 0.0,
+            'currency' => 'USD',
+            'premium' => false,
+            'message' => $looks
+                ? __('无法调用 Registrar API 或域名无记录；检测到 DNS，可能已被注册')
+                : __('无法调用 Registrar API；未检测到 DNS，可能可注册（请用控制台或换注册商确认）'),
+        ];
+    }
+
+    /**
+     * Cloudflare registrant_contact 结构（与官方 Domain 模型一致）
+     *
+     * @param array<string, mixed> $contactInfo
+     * @return array<string, string>|null
+     */
+    private function buildCloudflareRegistrantContact(array $contactInfo): ?array
+    {
+        $f = $contactInfo['purchase_contact_flat'] ?? [];
+        if (!\is_array($f)) {
+            $f = [];
+        }
+        $first = \trim((string) ($f['first_name'] ?? ''));
+        $last = \trim((string) ($f['last_name'] ?? ''));
+        $email = \trim((string) ($f['email'] ?? ''));
+        $phone = \trim((string) ($f['phone'] ?? ''));
+        $addr = \trim((string) ($f['address1'] ?? $f['address'] ?? ''));
+        $city = \trim((string) ($f['city'] ?? ''));
+        $state = \trim((string) ($f['state'] ?? ''));
+        $zip = \trim((string) ($f['postal_code'] ?? $f['zip'] ?? ''));
+        $country = \trim((string) ($f['country'] ?? ''));
+        if ($first === '' || $last === '' || $email === '' || $phone === '' || $addr === '' || $city === '' || $state === '' || $zip === '' || $country === '') {
+            return null;
+        }
+        $org = \trim((string) ($f['organization'] ?? ''));
+        if ($org === '') {
+            $org = $first . ' ' . $last;
+        }
+
+        return [
+            'first_name' => $first,
+            'last_name' => $last,
+            'email' => $email,
+            'phone' => $phone,
+            'address' => $addr,
+            'address2' => \trim((string) ($f['address2'] ?? '')),
+            'city' => $city,
+            'state' => $state,
+            'zip' => $zip,
+            'country' => \strtoupper(\substr($country, 0, 2)),
+            'organization' => $org,
+        ];
+    }
+
+    /**
      * 验证凭据
      */
     private function validateCredentials(array $credentials): void
@@ -896,12 +1133,10 @@ class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInt
     /**
      * @inheritDoc
      *
-     * Cloudflare 主要是 DNS/CDN 服务商，虽然有 Registrar 服务但使用率低。
-     * 根域列表只需要显示真正的域名注册商（GName、阿里云、AWS 等）。
-     * Cloudflare 账户用于 DNS 管理，不在根域列表中显示。
+     * 视为注册商：同步与购买走 Registrar API 域名列表；DNS/Zone 仍用现有 Zones 能力。
      */
     public function isDomainRegistrar(): bool
     {
-        return false;
+        return true;
     }
 }

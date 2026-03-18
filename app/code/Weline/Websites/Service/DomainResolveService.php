@@ -27,7 +27,7 @@ class DomainResolveService
     private ServerIpService $serverIpService;
     private DnsProviderDetector $dnsDetector;
     private DomainRegistrarResolverService $registrarResolver;
-    private AuthoritativeDnsOriginService $authoritativeDnsOriginService;
+    private DomainOriginMatchService $originMatch;
 
     public function __construct(
         Domain $domainModel,
@@ -36,7 +36,6 @@ class DomainResolveService
         ServerIpService $serverIpService,
         DnsProviderDetector $dnsDetector,
         DomainRegistrarResolverService $registrarResolver,
-        AuthoritativeDnsOriginService $authoritativeDnsOriginService,
     ) {
         $this->domainModel = $domainModel;
         $this->domainConfig = $domainConfig;
@@ -44,7 +43,8 @@ class DomainResolveService
         $this->serverIpService = $serverIpService;
         $this->dnsDetector = $dnsDetector;
         $this->registrarResolver = $registrarResolver;
-        $this->authoritativeDnsOriginService = $authoritativeDnsOriginService;
+        // 不在构造器注入：避免 compiled_factories 在部分环境下将第 7 参错解析为 AuthoritativeDnsOriginService
+        $this->originMatch = ObjectManager::getInstance(DomainOriginMatchService::class);
     }
 
     /**
@@ -58,51 +58,25 @@ class DomainResolveService
         $domainName = $domain->getDomain();
         $now = \date('Y-m-d H:i:s');
 
-        $ipv4 = '';
-        $ipv6 = '';
         $error = '';
+        $recordIps = $this->originMatch->collectPublicAaaaRecordIps($domainName);
+        $ipv4List = $recordIps['ipv4'];
+        $ipv6List = $recordIps['ipv6'];
 
-        try {
-            $ipv4 = $this->resolveA($domainName);
-        } catch (\Throwable $e) {
-            $error .= 'A: ' . $e->getMessage() . '; ';
-        }
-
-        try {
-            $ipv6 = $this->resolveAAAA($domainName);
-        } catch (\Throwable $e) {
-            // IPv6 失败不算错误，很多域名没有 AAAA 记录
-        }
-
-        $serverIpv4 = $this->serverIpService->getPublicIpv4();
-        $serverIpv6 = $this->serverIpService->getPublicIpv6();
-
-        $publicIsLocal = false;
-        if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $publicIsLocal = true;
-        }
-        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $publicIsLocal = true;
+        $ipv4 = $ipv4List !== [] ? $ipv4List[0] : '';
+        $ipv6 = $ipv6List !== [] ? $ipv6List[0] : '';
+        if ($ipv4 === '' && $ipv6 === '') {
+            $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
-        $isLocal = $publicIsLocal;
-        $dnsId = (int) $domain->getDnsAccountId();
-        $cdnId = (int) $domain->getCdnAccountId();
-        if ($dnsId > 0 || $cdnId > 0) {
-            $zone = \strtolower(\trim($domainName));
-            $auth = $this->authoritativeDnsOriginService->originPointsToServer(
-                $zone,
-                $zone,
-                $dnsId,
-                $cdnId,
-                $serverIpv4,
-                $serverIpv6,
-            );
-            if ($auth['api_ok'] && $auth['has_direct_records']) {
-                $isLocal = (bool) $auth['matches'];
-            }
-        }
+        $zone = \strtolower(\trim($domainName));
+        $isLocal = $this->originMatch->fqdnPointsToServer(
+            $domainName,
+            $zone,
+            (int) $domain->getDnsAccountId(),
+            (int) $domain->getCdnAccountId(),
+        );
 
         $resolveStatus = $resolved ? Domain::RESOLVE_STATUS_RESOLVED : Domain::RESOLVE_STATUS_ERROR;
 
@@ -646,31 +620,29 @@ class DomainResolveService
     }
 
     /**
-     * DNS A 记录查询
+     * @deprecated 请使用 DomainOriginMatchService::fqdnPointsToServer 或 publicAaaaRecordContentMatchesServer
      */
-    private function resolveA(string $domain): string
+    public function isDomainPointingToServerByRecordContent(string $domain, string $serverIpv4, string $serverIpv6): bool
     {
-        $records = @\dns_get_record($domain, DNS_A);
-
-        if ($records === false || $records === []) {
-            return '';
-        }
-
-        return $records[0]['ip'] ?? '';
+        return $this->originMatch->publicAaaaRecordContentMatchesServer($domain, $serverIpv4, $serverIpv6);
     }
 
     /**
-     * DNS AAAA 记录查询
+     * DNS A 记录查询（返回第一条，兼容其他调用）
+     */
+    private function resolveA(string $domain): string
+    {
+        $recordIps = $this->originMatch->collectPublicAaaaRecordIps($domain);
+        return $recordIps['ipv4'][0] ?? '';
+    }
+
+    /**
+     * DNS AAAA 记录查询（返回第一条，兼容其他调用）
      */
     private function resolveAAAA(string $domain): string
     {
-        $records = @\dns_get_record($domain, DNS_AAAA);
-
-        if ($records === false || $records === []) {
-            return '';
-        }
-
-        return $records[0]['ipv6'] ?? '';
+        $recordIps = $this->originMatch->collectPublicAaaaRecordIps($domain);
+        return $recordIps['ipv6'][0] ?? '';
     }
 
     /**
@@ -731,19 +703,42 @@ class DomainResolveService
     }
 
     /**
-     * 为域名池域名尝试添加 A 记录（当 DNS 解析失败时调用）
-     * 需要根域名已关联 DNS 账户
+     * 为域名池 FQDN 尝试添加指向源站的解析（IPv4→A，IPv6→AAAA；多级子域自动算相对 host）
      *
      * @param DomainPool $pool 域名池模型
-     * @param string $serverIp 目标服务器 IP
+     * @param string $serverIp 服务器公网 IPv4 或 IPv6
      * @return array{success: bool, message: string}
      */
     public function tryAddARecordForPoolDomain(DomainPool $pool, string $serverIp): array
     {
-        $poolDomain = $pool->getDomain();
+        $poolDomain = \strtolower(\trim($pool->getDomain()));
         $rootDomain = \strtolower(\trim((string) $pool->getRootDomain()));
         if ($rootDomain === '') {
             $rootDomain = $poolDomain;
+        }
+        if ($poolDomain === '' || $rootDomain === '') {
+            return [
+                'success' => false,
+                'message' => (string) __('域名池 FQDN 或根域无效'),
+            ];
+        }
+        if (!\str_ends_with($poolDomain, $rootDomain) && $poolDomain !== $rootDomain) {
+            return [
+                'success' => false,
+                'message' => (string) __('域名池 FQDN 与根域不匹配'),
+            ];
+        }
+
+        $serverIp = \trim($serverIp);
+        if (\filter_var($serverIp, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
+            $rrType = 'A';
+        } elseif (\filter_var($serverIp, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+            $rrType = 'AAAA';
+        } else {
+            return [
+                'success' => false,
+                'message' => (string) __('无效的服务器 IP（需为合法 IPv4 或 IPv6）'),
+            ];
         }
 
         $rootDomainModel = $this->resolveRootDomainForPool($pool);
@@ -762,9 +757,19 @@ class DomainResolveService
             ];
         }
 
-        $host = $poolDomain === $rootDomain ? '@' : \explode('.', $poolDomain)[0];
+        $host = '@';
+        if ($poolDomain !== $rootDomain) {
+            $suffix = '.' . $rootDomain;
+            if (\str_ends_with($poolDomain, $suffix)) {
+                $host = \substr($poolDomain, 0, -\strlen($suffix));
+            }
+            if ($host === '') {
+                $host = '@';
+            }
+        }
+
         $record = [
-            'type' => 'A',
+            'type' => $rrType,
             'host' => $host,
             'value' => $serverIp,
             'ttl' => 600,
@@ -773,11 +778,19 @@ class DomainResolveService
         try {
             $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
             if ($result['success'] ?? false) {
-                return ['success' => true, 'message' => (string) __('A 记录添加成功，请等待 DNS 生效后重试')];
+                $msg = $rrType === 'AAAA'
+                    ? (string) __('AAAA 记录添加成功，请等待 DNS 生效后重试')
+                    : (string) __('A 记录添加成功，请等待 DNS 生效后重试');
+
+                return ['success' => true, 'message' => $msg];
             }
+            $fail = $rrType === 'AAAA'
+                ? (string) __('添加 AAAA 记录失败')
+                : (string) __('添加 A 记录失败');
+
             return [
                 'success' => false,
-                'message' => (string) ($result['message'] ?? __('添加 A 记录失败')),
+                'message' => (string) ($result['message'] ?? $fail),
             ];
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];

@@ -347,7 +347,7 @@ class PageHelper
             return $apk;
         }
         if (preg_match('#^https?://#i', $u)) {
-            if (preg_match('#\.apk(\?|#|$)#i', $u)) {
+            if (preg_match('~\.apk(\?|#|$)~i', $u)) {
                 return $u;
             }
             $frag = strtolower((string)(parse_url($u, PHP_URL_FRAGMENT) ?? ''));
@@ -356,7 +356,8 @@ class PageHelper
             }
             return $u;
         }
-        if (preg_match('#/#(download|android)$#i', $u)) {
+        $tl = strtolower($u);
+        if (str_ends_with($tl, '/#download') || str_ends_with($tl, '/#android')) {
             return $apk;
         }
         return $u;

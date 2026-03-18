@@ -47,15 +47,26 @@ class TrendSiteQuota extends Model
      */
     public function getPageLocale(): string
     {
+        return $this->resolveArticleLocale();
+    }
+
+    /**
+     * AI 发文用语种：优先页面主语言（default_locale），无页面或为空时回退趋势全局配置
+     */
+    public function resolveArticleLocale(): string
+    {
+        $fallback = (string) TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
         $pageId = (int) $this->getData(self::schema_fields_PAGE_ID);
         if ($pageId <= 0) {
-            return 'en_US';
+            return $fallback !== '' ? $fallback : 'en_US';
         }
         $page = w_query('page_builder', 'getPageById', ['page_id' => $pageId]);
         if ($page === null) {
-            return 'en_US';
+            return $fallback !== '' ? $fallback : 'en_US';
         }
-        return (string) ($page['default_locale'] ?? '') ?: 'en_US';
+        $loc = \trim((string) ($page['default_locale'] ?? ''));
+
+        return $loc !== '' ? $loc : ($fallback !== '' ? $fallback : 'en_US');
     }
 
     /**

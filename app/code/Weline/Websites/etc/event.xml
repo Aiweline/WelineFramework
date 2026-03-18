@@ -29,6 +29,10 @@
                   instance="Weline\Websites\Observer\SyncHttpsStatus"
                   disabled="false"
                   shared="true" sort="10"/>
+        <observer name="Weline_Websites::certificate_issued_lifecycle"
+                  instance="Weline\Websites\Observer\CertificateIssuedLifecycle"
+                  disabled="false"
+                  shared="true" sort="20"/>
     </event>
     
     <!--证书禁用：回退 HTTPS 状态-->
@@ -77,6 +81,27 @@
     <event name="Weline_Websites::domain_pool::resolve_off_local">
         <observer name="Weline_Websites::domain_pool_resolve_off_local_notify"
                   instance="Weline\Websites\Observer\DomainPoolResolveOffLocalObserver"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+
+    <event name="Weline_Websites::domain::purchase_success">
+        <observer name="Weline_Websites::domain_purchase_success_lifecycle"
+                  instance="Weline\Websites\Observer\DomainPurchaseSuccess"
+                  disabled="false"
+                  shared="true" sort="20"/>
+    </event>
+
+    <event name="GuoLaiRen_PageBuilder::quickbuild::start_provisioning">
+        <observer name="Weline_Websites::handle_start_provisioning"
+                  instance="Weline\Websites\Observer\HandleStartProvisioning"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+
+    <event name="GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders">
+        <observer name="Weline_Websites::provide_provisioning_orders"
+                  instance="Weline\Websites\Observer\ProvideProvisioningOrders"
                   disabled="false"
                   shared="true" sort="10"/>
     </event>
