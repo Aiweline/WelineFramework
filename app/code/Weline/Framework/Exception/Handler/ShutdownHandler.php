@@ -129,8 +129,8 @@ class ShutdownHandler
 
         if (ExceptionBootstrap::isDevMode()) {
             if (PHP_SAPI === 'cli') {
-                fprintf(
-                    STDERR,
+                // STDERR 可能已关闭（管道 Broken pipe），避免再触发 NOTICE；详情见 crash.log
+                $cliMsg = sprintf(
                     "\n\033[41;37m FATAL ERROR \033[0m\n\n" .
                     "\033[31m[%s]\033[0m %s\n" .
                     "  in %s on line %d\n\n",
@@ -139,6 +139,7 @@ class ShutdownHandler
                     $error['file'],
                     $error['line']
                 );
+                @\fwrite(\STDERR, $cliMsg);
             } else {
                 echo sprintf(
                     '<div style="padding:20px;background:#4a0000;color:#ffffff;border:2px solid #ff0000;margin:20px;">
