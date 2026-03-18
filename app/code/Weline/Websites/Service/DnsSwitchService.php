@@ -22,7 +22,7 @@ use Weline\Websites\Model\DomainRegistrarAccount;
  *  4. 可选：等待 NS 生效（公网或注册商侧校验）
  *  5. 将本地记录推送到目标 DNS 服务商
  *  6. 同步/校验 DNS 记录，更新 Domain 与 DomainPool
- *  7. 可选：CDN 账户设置与 HEAD 校验
+     *  7. 可选：通过目标 DNS 适配器 {@see DomainRegistrarInterface::verifyCdnConfiguration} 校验 CDN/边缘
  *
  * @see executeDnsSwitch 主入口，通过 options 控制是否等待 NS、进度回调、CDN 等
  */
@@ -51,7 +51,7 @@ class DnsSwitchService
      * @param array $options 可选：wait_for_ns (bool), wait_max_seconds (int), wait_interval_seconds (int),
      *                       is_alive (callable), cdn_account_id (int), cdn_account (DomainRegistrarAccount|null),
      *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int).
-     *                       Step8 会 notify：verify_cdn、verify_cdn_attempt、verify_cdn_retry、verify_cdn_heartbeat、verify_cdn_done。
+     *                       Step8（verify_cdn）：适配器 verifyCdnConfiguration；不支持则跳过。
      *                       after_sync_records (callable(Domain, array $dnsRecords): void)
      * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int, client_aborted?: bool}
      */
@@ -242,36 +242,54 @@ class DnsSwitchService
         $cdnProvider = $cdnAccount !== null ? (string) $cdnAccount->getRegistrarCode() : ($this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '');
         $this->updateDomainPoolStatus($domainName, $targetCode, $cdnProvider);
 
-        // ── Step 8: 可选 CDN HEAD 校验（未通过则等待重试直至通过或超时） ──
+        // ── Step 8: 可选 CDN/边缘校验（由目标 DNS 适配器 API 实现，如 Cloudflare 代理状态） ──
         if ($verifyCdn) {
-            $notify('verify_cdn', ['domain' => $domainName, 'message' => __('步骤 5/5：校验 CDN 响应…')]);
-            $cdnCode = $cdnProvider !== '' ? $cdnProvider : $targetCode;
+            $notify('verify_cdn', ['domain' => $domainName, 'message' => __('步骤 5/5：校验 CDN/边缘配置…')]);
             $cdnWaitMax = (int) ($options['verify_cdn_wait_max_seconds'] ?? 5 * 60);
             $cdnWaitInterval = (int) ($options['verify_cdn_wait_interval_seconds'] ?? 15);
-            $cdnOk = false;
-            $cdnElapsed = 0;
-            $attempt = 0;
-            while ($cdnElapsed < $cdnWaitMax) {
-                if ($isAlive !== null && !$isAlive()) {
-                    break;
-                }
-                ++$attempt;
+            $cdnOk = true;
+            $probe = $targetAdapter->verifyCdnConfiguration($domainName, $targetCredentials);
+            if (!($probe['supported'] ?? false)) {
                 $notify('verify_cdn_attempt', [
                     'domain' => $domainName,
-                    'attempt' => $attempt,
-                    'message' => __('第 %{1} 次检测 CDN 响应（https/http，HEAD/GET）…', [(string) $attempt]),
+                    'attempt' => 0,
+                    'message' => __('当前 DNS 供应商未提供 CDN 接口校验，已跳过'),
                 ]);
-                $cdnOk = $this->verifyCdnByHead($domainName, $cdnCode);
-                if ($cdnOk) {
-                    break;
+            } else {
+                $cdnOk = (bool) ($probe['ok'] ?? false);
+                $cdnElapsed = 0;
+                $attempt = 0;
+                while (!$cdnOk && $cdnElapsed < $cdnWaitMax) {
+                    if ($isAlive !== null && !$isAlive()) {
+                        break;
+                    }
+                    ++$attempt;
+                    $msg = (string) ($probe['message'] ?? '');
+                    $notify('verify_cdn_attempt', [
+                        'domain' => $domainName,
+                        'attempt' => $attempt,
+                        'message' => $msg !== '' ? $msg : __('第 %{1} 次校验 CDN 配置…', [(string) $attempt]),
+                    ]);
+                    $notify('verify_cdn_retry', [
+                        'domain' => $domainName,
+                        'elapsed' => $cdnElapsed,
+                        'message' => __('%{1} 秒后重试（已等待 %{2} 秒）', [(string) $cdnWaitInterval, (string) $cdnElapsed]),
+                    ]);
+                    $this->sleepWithCdnVerifyHeartbeat($cdnWaitInterval, $isAlive, $notify, $domainName);
+                    $cdnElapsed += $cdnWaitInterval;
+                    if ($isAlive !== null && !$isAlive()) {
+                        break;
+                    }
+                    $probe = $targetAdapter->verifyCdnConfiguration($domainName, $targetCredentials);
+                    $cdnOk = (bool) ($probe['ok'] ?? false);
                 }
-                $notify('verify_cdn_retry', [
-                    'domain' => $domainName,
-                    'elapsed' => $cdnElapsed,
-                    'message' => __('CDN 校验未通过，%{1} 秒后重试（已等待 %{2} 秒）', [(string) $cdnWaitInterval, (string) $cdnElapsed]),
-                ]);
-                $this->sleepWithCdnVerifyHeartbeat($cdnWaitInterval, $isAlive, $notify, $domainName);
-                $cdnElapsed += $cdnWaitInterval;
+                if ($cdnOk && $attempt === 0 && ($probe['message'] ?? '') !== '') {
+                    $notify('verify_cdn_attempt', [
+                        'domain' => $domainName,
+                        'attempt' => 1,
+                        'message' => (string) $probe['message'],
+                    ]);
+                }
             }
             $notify('verify_cdn_done', ['domain' => $domainName, 'ok' => $cdnOk]);
         }
@@ -418,86 +436,6 @@ class DnsSwitchService
         } catch (\Throwable $e) {
             return ['supported' => true, 'raw' => null, 'normalized' => [], 'error' => $e->getMessage()];
         }
-    }
-
-    /**
-     * 从本机对根域发起轻量请求，根据响应头判断是否经目标 CDN（如 Cloudflare）回源。
-     * 顺序：HTTPS HEAD → HTTP HEAD → HTTPS GET（仅读 wrapper 头），避免「仅 HTTPS、仅 HEAD」导致的误判与长时间无响应。
-     */
-    private function verifyCdnByHead(string $domain, string $providerCode): bool
-    {
-        $headerStr = $this->fetchHeadersForCdnVerify($domain);
-        if ($headerStr === '') {
-            return false;
-        }
-        return $this->headersIndicateCdn($headerStr, $providerCode);
-    }
-
-    private function fetchHeadersForCdnVerify(string $domain): string
-    {
-        $ua = "User-Agent: Mozilla/5.0 (compatible; Weline-CdnVerify/1.0)\r\n";
-        $timeout = 8;
-        $ssl = ['verify_peer' => false, 'verify_peer_name' => false];
-
-        foreach (['https', 'http'] as $scheme) {
-            $url = $scheme . '://' . $domain . '/';
-            $ctx = \stream_context_create([
-                'http' => [
-                    'method' => 'HEAD',
-                    'timeout' => $timeout,
-                    'ignore_errors' => true,
-                    'header' => $ua,
-                ],
-                'ssl' => $ssl,
-            ]);
-            $headers = @\get_headers($url, false, $ctx);
-            if ($headers !== false && $headers !== []) {
-                return \implode("\n", $headers);
-            }
-        }
-
-        $url = 'https://' . $domain . '/';
-        $ctx = \stream_context_create([
-            'http' => [
-                'method' => 'GET',
-                'timeout' => $timeout,
-                'ignore_errors' => true,
-                'header' => $ua,
-            ],
-            'ssl' => $ssl,
-        ]);
-        $fh = @\fopen($url, 'r', false, $ctx);
-        if ($fh !== false) {
-            $meta = \stream_get_meta_data($fh);
-            \fclose($fh);
-            $w = $meta['wrapper_data'] ?? null;
-            if (\is_array($w)) {
-                return \implode("\n", $w);
-            }
-        }
-
-        return '';
-    }
-
-    private function headersIndicateCdn(string $headerStr, string $providerCode): bool
-    {
-        $h = \strtolower($headerStr);
-        $providerLower = \strtolower($providerCode);
-        if (\strpos($providerLower, 'cloudflare') !== false) {
-            return \str_contains($h, 'cf-ray')
-                || (\str_contains($h, 'server:') && \str_contains($h, 'cloudflare'));
-        }
-        if (\strpos($providerLower, 'cdn') !== false) {
-            return \str_contains($h, 'cf-ray')
-                || \str_contains($h, 'cf-cache-status')
-                || \str_contains($h, 'x-cache')
-                || \str_contains($h, 'x-served-by')
-                || (\str_contains($h, 'via:') && \str_contains($h, 'cloudflare'));
-        }
-
-        return \str_contains($h, 'cf-ray')
-            || \str_contains($h, 'cf-cache-status')
-            || \str_contains($h, 'x-cache');
     }
 
     /**
