@@ -453,7 +453,7 @@ class Account extends BackendController
         if (!\is_array($envConfig)) {
             return '';
         }
-        return (string)($envConfig['server']['origin_token'] ?? '');
+        return (string)(($envConfig['wls'] ?? [])['origin_token'] ?? '');
     }
 }
 

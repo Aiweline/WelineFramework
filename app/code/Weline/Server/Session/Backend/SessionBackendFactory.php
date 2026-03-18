@@ -70,8 +70,8 @@ final class SessionBackendFactory
      */
     private static function getWlsConfig(): array
     {
-        $sessionConfig = Env::getInstance()->getConfig('session') ?: [];
-        return $sessionConfig['wls'] ?? [];
+        $wlsSession = Env::getInstance()->getConfig('wls.session');
+        return \is_array($wlsSession) ? $wlsSession : [];
     }
 
     /**

@@ -821,7 +821,7 @@ class WlsRuntime implements RuntimeInterface
             return $this->performanceConfig;
         }
 
-        $serverConfig = Env::getInstance()->getConfig('server') ?? [];
+        $serverConfig = Env::getInstance()->getConfig('wls') ?? [];
         $performanceConfig = \is_array($serverConfig['performance'] ?? null) ? $serverConfig['performance'] : [];
         $this->performanceConfig = \array_merge([
             'slow_request_threshold_ms' => 500,

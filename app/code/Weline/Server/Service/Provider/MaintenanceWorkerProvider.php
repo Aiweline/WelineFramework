@@ -137,7 +137,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     public function enable(int $instanceCount = 0): void
     {
         $this->dynamicEnabled = true;
-        $this->dynamicInstanceCount = $instanceCount;
+        $this->dynamicInstanceCount = $instanceCount > 0 ? $instanceCount : 0;
     }
 
     /**

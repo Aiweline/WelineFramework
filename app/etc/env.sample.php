@@ -160,15 +160,7 @@ return [
                 'password' => '',
                 'timeout' => 2.0,
             ],
-            'wls' => [
-                'port' => 19970,
-                // WLS Session Server 内部 TTL（秒），建议不小于 session.lifetime。
-                'session_ttl' => 86400,
-                'max_sessions' => 50000,
-                'persist_interval' => 30,
-                'persist_on_writes' => 100,
-                'gc_interval' => 300,
-            ],
+            // WLS Session 连接与会话服务参数见顶层 wls.session
         ],
     ],
     
@@ -197,20 +189,15 @@ return [
         'debug' => 'var/log/debug.log',
         'db' => ['enabled' => false, 'file' => 'db'],
         'dev_sql' => ['enabled' => false, 'file' => 'dev_sql'],
-        'wls' => [
-            'enabled' => true,
-            'path' => 'var/log/wls/',
-            'level' => 'INFO',
-            'stdout' => 'auto',
-            'rotate' => 'daily',
-            'max_files' => 7,
-        ],
     ],
     
-    // ==================== 服务器配置 (WLS) ====================
-    'server' => [
+    // ==================== WLS（常驻服务：监听、Worker、编排、Session 服务、WLS 日志等）====================
+    'wls' => [
         'host' => '0.0.0.0',
         'port' => 443,
+        // HTTPS=443 时默认在 80 启 HTTP→HTTPS 独立进程；HTTPS 为非 443（如 9981）时默认不启（无人访问 port-1）。
+        // 需要额外明文端口时显式设置，或 CLI：--http-redirect-port 9080。0=关闭。
+        // 'http_redirect_port' => 9080,
         'https' => true,
         'performance' => [
             // 慢请求阈值（毫秒）
@@ -260,13 +247,63 @@ return [
         'pid' => null,
         'start_time' => null,
         'status' => 'stopped',
-        // WLS 编排器策略（server.orchestrator.*）
+        // WLS 进程日志（原 log.wls，现仅读 wls.log）
+        'log' => [
+            'enabled' => true,
+            'path' => 'var/log/wls/',
+            'level' => 'INFO',
+            'stdout' => 'auto',
+            'rotate' => 'daily',
+            'max_files' => 7,
+        ],
+        // Session Server 与 Worker 侧 Session 客户端（原 session.drivers.wls）
+        'session' => [
+            'port' => 19970,
+            'session_ttl' => 86400,
+            'max_sessions' => 50000,
+            'persist_interval' => 30,
+            'persist_on_writes' => 100,
+            'gc_interval' => 300,
+            'wls_server' => [
+                'host' => '127.0.0.1',
+                'port' => 19970,
+            ],
+        ],
+        // 多实例：命名实例覆盖默认 wls.*（含 health_allow_remote 等）
+        // 'servers' => [ 'api' => [ 'port' => 8443, 'health_allow_remote' => true ], ],
         'orchestrator' => [
+            'ha_mode' => true,
             'single_restart_first' => true,      // IPC 断开时优先单实例重启（可恢复角色）
+            // Session/Memory IPC 断开后 Master 本地拉起次数（每次断开独立计数），用尽后再整组重启；1–10
+            'infra_service_resurrect_attempts' => 3,
             'escalation_window_sec' => 60.0,     // 升级窗口（秒），窗口内超阈值则整组重启
             'escalation_threshold' => 3,         // 窗口内断开次数阈值
             'stabilization_sec' => 15.0,         // 滚动重启后稳定期（秒），稳定期内新实例断开仅单实例重启
             'critical_roles' => ['dispatcher', 'session_server', 'redirect'],  // 核心角色，断开直接整组重启
+            // --- Worker 存活与槽位补齐（与 ServiceOrchestrator 周期任务配合）---
+            // worker_liveness_interval_sec：编排器按该间隔做「存活审计」（向各 Worker 发 ping/统计在线数）。
+            //   0 = 关闭存活审计（不跑该定时逻辑；紧急拉起、无 HA 补槽等依赖审计结果的能力会受影响）。
+            'worker_liveness_interval_sec' => 8,
+            // worker_emergency_restart：审计发现「当前组内 Worker 存活数为 0」时，是否允许紧急整组拉起 Worker，
+            //   避免 Dispatcher 等全挂后服务长期无可用 Worker。false 则仅记录告警，由人工/外部拉起。
+            'worker_emergency_restart' => true,
+            // worker_emergency_cooldown_sec：两次「零存活紧急整组拉起」之间的最短间隔（秒），防止异常循环疯狂 fork。
+            'worker_emergency_cooldown_sec' => 20,
+            // master_self_audit_interval_sec：Master 周期性自检（控制面、各角色 READY+IPC+PID、缺槽/僵死则补齐或回收重启）。
+            //   0 = 关闭。默认 20。
+            'master_self_audit_interval_sec' => 20,
+            // reconcile_workers_without_ha：当 ha_mode=false（非高可用多机）时，是否仍按 worker_liveness 间隔
+            //   对照配置的 worker 槽位数补齐子进程。true = 单机下 Worker 意外全退也会自动补满；false = 仅 HA 模式下做槽位协调。
+            'reconcile_workers_without_ha' => true,
+            // worker_three_batch_min_count：Worker 槽位数 ≥ 此值时，滚动重启/代码重载均分为三批并行摘流量；
+            //   每批内全部 READY 后再通知 Dispatcher 加回端口；低于此值则逐个槽位重启（每批 1 个）。
+            'worker_three_batch_min_count' => 7,
+            // drain_timeout_sec：滚动重启/单实例 DRAIN 时 Master 等待 draining_complete 的上限（秒）；下发给 Worker 作强制收尾上限。
+            'drain_timeout_sec' => 120,
+            // maintenance_connection_drain_timeout_sec：启用维护时，Dispatcher 已切至维护 Worker 后，等待各业务 Worker 排空存量 TCP 再 ACK 的上限（秒）。
+            'maintenance_connection_drain_timeout_sec' => 300,
+            // maintenance_ready_timeout_sec：维护 Worker 子进程全部 READY 的等待上限（秒）。
+            'maintenance_ready_timeout_sec' => 90,
         ],
     ],
     
@@ -300,6 +337,15 @@ return [
         'update_time' => null,
         'config' => null,
         'static_version' => '1.0.0',
+    ],
+    
+    // PHP 内置 Web 服务器（php bin/w server:start --cli），与 WLS（wls）无关
+    'cli_server' => [
+        'host' => '127.0.0.1',
+        'port' => 9981,
+        'pid' => null,
+        'start_time' => null,
+        'status' => 'stopped',
     ],
     
     // ==================== 开发配置 ====================

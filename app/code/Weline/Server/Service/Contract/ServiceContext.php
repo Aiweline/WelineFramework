@@ -95,7 +95,8 @@ class ServiceContext
             return $this->dispatcherEnabled;
         }
         // 回退到 envConfig（仅显式禁用时为 false）
-        $envValue = $this->envConfig['server']['dispatcher_enabled'] ?? null;
+        $wls = $this->envConfig['wls'] ?? [];
+        $envValue = \is_array($wls) ? ($wls['dispatcher_enabled'] ?? null) : null;
         return $envValue !== false;
     }
 
@@ -110,7 +111,7 @@ class ServiceContext
         if ($this->workerBasePort !== null) {
             return $this->workerBasePort;
         }
-        return (int) ($this->envConfig['server']['worker_base_port'] ?? 10443);
+        return (int) (($this->envConfig['wls'] ?? [])['worker_base_port'] ?? 10443);
     }
 
     /**
@@ -124,7 +125,7 @@ class ServiceContext
         if ($this->workerCount !== null) {
             return $this->workerCount;
         }
-        return $this->envConfig['server']['worker_count'] ?? 'auto';
+        return ($this->envConfig['wls'] ?? [])['worker_count'] ?? 'auto';
     }
 
     /**

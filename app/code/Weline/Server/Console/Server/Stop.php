@@ -185,8 +185,7 @@ class Stop extends CommandAbstract
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
-            $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
-            $this->cleanupResidualProcesses($name, ['count' => $instanceInfo->workerCount]);
+            $this->runResidualCleanupPair($name, $instanceInfo);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -211,8 +210,7 @@ class Stop extends CommandAbstract
             Processer::killByPid($masterPid, true);
             SchedulerSystem::usleep(500000);
             
-            $this->cleanupResidualProcessesByInfo($name, $instanceInfo);
-            $this->cleanupResidualProcesses($name, ['count' => $instanceInfo->workerCount]);
+            $this->runResidualCleanupPair($name, $instanceInfo);
         }
         
         // 删除实例文件
@@ -298,14 +296,34 @@ class Stop extends CommandAbstract
     }
     
     /**
-     * 根据 ServerInstanceInfo 清理残留进程
-     * 
-     * 优化策略：优先使用已知 PID 直接杀（快速），仅在有残留时才按进程名前缀兜底
+     * 按 PID + 进程名前缀各扫一遍，控制台只输出一组「清理残留进程」提示。
      */
-    protected function cleanupResidualProcessesByInfo(string $name, ServerInstanceInfo $info): void
+    private function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
     {
         $this->printer->note(__('清理残留进程...'));
-        
+        $k = $this->cleanupResidualProcessesByInfo($name, $info, true);
+        $k += $this->cleanupResidualProcesses($name, ['count' => $info->workerCount], true);
+        if ($k > 0) {
+            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$k]));
+        } else {
+            $this->printer->note(__('  无残留进程'));
+        }
+    }
+
+    /**
+     * 根据 ServerInstanceInfo 清理残留进程
+     *
+     * 优化策略：优先使用已知 PID 直接杀（快速），仅在有残留时才按进程名前缀兜底
+     *
+     * @param bool $quiet 为 true 时不打印，仅返回终止/尝试数（供 runResidualCleanupPair 合并输出）
+     * @return int 已发送终止信号的 PID 数（quiet）或同上；非 quiet 时与原先展示一致
+     */
+    protected function cleanupResidualProcessesByInfo(string $name, ServerInstanceInfo $info, bool $quiet = false): int
+    {
+        if (!$quiet) {
+            $this->printer->note(__('清理残留进程...'));
+        }
+
         $totalKilled = 0;
         $pidsToKill = [];
         
@@ -341,13 +359,17 @@ class Stop extends CommandAbstract
         // 跳过此步骤以加速，因为已知 PID 已处理完毕
         // 如果用户发现有残留进程，可以手动运行 server:stop --all 进行彻底清理
         
-        if ($totalKilled > 0) {
-            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
-        } else {
-            $this->printer->note(__('  无残留进程'));
+        if (!$quiet) {
+            if ($totalKilled > 0) {
+                $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+            } else {
+                $this->printer->note(__('  无残留进程'));
+            }
         }
+
+        return $totalKilled;
     }
-    
+
     /**
      * 格式化 IPC 消息（带颜色）
      * 
@@ -588,12 +610,16 @@ class Stop extends CommandAbstract
     
     /**
      * 清理残留进程
-     * 
+     *
      * 当 Master IPC 失败时，按进程名前缀批量清理
+     *
+     * @param bool $quiet 为 true 时不打印，仅返回按前缀杀死的进程数
      */
-    protected function cleanupResidualProcesses(string $name, array $instanceData): void
+    protected function cleanupResidualProcesses(string $name, array $instanceData, bool $quiet = false): int
     {
-        $this->printer->note(__('清理残留进程...'));
+        if (!$quiet) {
+            $this->printer->note(__('清理残留进程...'));
+        }
         
         // 新前缀（当前版本使用）
         $prefixes = [
@@ -624,13 +650,17 @@ class Stop extends CommandAbstract
             }
         }
         
-        if ($totalKilled > 0) {
-            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
-        } else {
-            $this->printer->note(__('  无残留进程'));
+        if (!$quiet) {
+            if ($totalKilled > 0) {
+                $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+            } else {
+                $this->printer->note(__('  无残留进程'));
+            }
         }
+
+        return $totalKilled;
     }
-    
+
     /**
      * 清理 PID 文件
      */

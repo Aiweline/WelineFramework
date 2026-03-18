@@ -385,12 +385,12 @@ class Request extends CommandAbstract
      * 构建完整的URL
      * 
      * WLS 模式下 server:start 默认启用 HTTPS，故请求默认使用 https；
-     * 可通过 env server.https = false 改为 http。
+     * 可通过 wls.https = false 改为 http。
      */
     private function buildUrl(string $path, bool $isBackend, bool $isApiBackend = false, ?int $overridePort = null, ?bool $overrideHttps = null): string
     {
         $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
+        $serverConfig = $env->get('wls') ?? [];
         
         // 获取服务器配置（默认 0.0.0.0 监听所有网卡，支持公网访问）
         $host = $serverConfig['host'] ?? '0.0.0.0';
@@ -1363,8 +1363,8 @@ class Request extends CommandAbstract
                 '-m, method=<方法>' => '指定HTTP请求方法（默认GET）',
                 '-H, header=<头>' => '添加HTTP请求头',
                 '-d, data=<数据>' => '发送POST/PUT数据',
-                '-P, --port=<端口>' => '指定服务器端口（覆盖env.server.port）',
-                '--https' => '强制使用HTTPS协议（覆盖env.server.https）',
+                '-P, --port=<端口>' => '指定服务器端口（覆盖wls.port）',
+                '--https' => '强制使用HTTPS协议（覆盖wls.https）',
                 '-S, --sse' => '启用 SSE (Server-Sent Events) 模式，实时输出事件流',
                 '-C, --concurrent' => '启用并发请求模式（需配合-t使用）',
                 '-t, --times=<次数>' => '并发请求次数（默认1次）',
