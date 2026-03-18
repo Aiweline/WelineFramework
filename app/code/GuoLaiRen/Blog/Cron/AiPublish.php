@@ -35,12 +35,13 @@ class AiPublish implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('按站点+画像配额，从增长词记录中取词，调用 AI 生成标题+摘要+正文并写入博客（草稿或直接发布）');
+        return __('每 5 分钟执行：按站点+画像每日配额补量发文（单次可能仅 1 篇，高频运行才能贴近配额）；从增长词或画像关键词取词，AI 生成后写入博客。');
     }
 
     public function cron_time(): string
     {
-        return '0 8,20 * * *';
+        // 每日仅跑 2 次时，若单次只成功 1 篇则远达不到「每日 N 篇」；改为每 5 分钟检查一次直至当日配额满
+        return '*/5 * * * *';
     }
 
     /**
