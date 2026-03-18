@@ -15,8 +15,13 @@ namespace Weline\Cron\Controller;
 
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Model\CronTask;
+use Weline\Cron\Service\CronManualRunStreamer;
+use Weline\Cron\Service\CronTestDiscovery;
+use Weline\Framework\Acl\Acl;
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Security\Token;
 
 class Cron extends \Weline\Framework\App\Controller\BackendController
 {
@@ -191,5 +196,106 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             $this->redirect('*/cron/listing');
             return '';
         }
+    }
+
+    /**
+     * 计划任务手动运行说明（JSON），供列表弹层展示 Help。
+     */
+    #[Acl('Weline_Cron::cron_manual_run', '计划任务手动运行', 'mdi mdi-play-network', 'SSE 手动执行与 WELINE_CRON_MANUAL_ARGS 说明', 'Weline_Cron::system_cron')]
+    public function getRunHelp(): string
+    {
+        $this->layoutType = null;
+        $executeName = \trim((string) $this->request->getGet('execute_name', ''));
+        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+            $this->request->getResponse()->setHttpResponseCode(400);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('参数 execute_name 无效'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        $task = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
+            ->find()
+            ->fetch();
+        if (!$task->getId()) {
+            $this->request->getResponse()->setHttpResponseCode(404);
+
+            return (string) \json_encode([
+                'success' => false,
+                'message' => (string) __('任务不存在'),
+            ], JSON_UNESCAPED_UNICODE);
+        }
+
+        $tip = (string) ($task->getData(CronTask::schema_fields_TIP) ?? '');
+        $row = CronTestDiscovery::findById($executeName);
+        $description = '';
+        $examples = [];
+        if ($row !== null) {
+            $description = (string) ($row['description'] ?? '');
+            $examples = \is_array($row['examples'] ?? null) ? $row['examples'] : [];
+        }
+
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
+
+        return (string) \json_encode([
+            'success' => true,
+            'execute_name' => $executeName,
+            'name' => (string) ($task->getData(CronTask::schema_fields_NAME) ?? ''),
+            'tip' => $tip,
+            'test_help_description' => $description,
+            'test_help_examples' => $examples,
+            'manual_args_hint' => (string) __(
+                '可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。'
+            ),
+        ], JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * POST SSE：真实执行 cron:task:run &lt;execute_name&gt; -f。
+     */
+    #[Acl('Weline_Cron::cron_manual_run', '计划任务手动运行', 'mdi mdi-play-network', 'SSE 手动执行与 WELINE_CRON_MANUAL_ARGS 说明', 'Weline_Cron::system_cron')]
+    public function postRunStream(): void
+    {
+        $this->layoutType = null;
+        $csrfPost = (string) $this->request->getPost('csrf', '');
+        $csrfValid = Token::get('csrf');
+        if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
+            if (!\headers_sent()) {
+                \header('Content-Type: application/json; charset=utf-8', true, 403);
+            }
+            echo \json_encode(['error' => (string) __('CSRF 验证失败')], JSON_UNESCAPED_UNICODE);
+
+            return;
+        }
+
+        $executeName = \trim((string) $this->request->getPost('execute_name', ''));
+        if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) __('执行名无效'));
+            $sse->complete(['exit_code' => -1]);
+
+            return;
+        }
+
+        $task = ObjectManager::make(CronTask::class)->reset()
+            ->where(CronTask::schema_fields_EXECUTE_NAME, $executeName)
+            ->find()
+            ->fetch();
+        if (!$task->getId()) {
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) __('任务不存在'));
+            $sse->complete(['exit_code' => -1]);
+
+            return;
+        }
+
+        $suffix = (string) $this->request->getPost('suffix', '');
+        /** @var CronManualRunStreamer $streamer */
+        $streamer = ObjectManager::getInstance(CronManualRunStreamer::class);
+        $streamer->stream($executeName, $suffix, new SseWriter());
     }
 }
