@@ -91,9 +91,9 @@ class DomainLifecycleOrchestrationService
         return $processResult;
     }
 
-    public function processPendingOrders(int $limit = 20): array
+    public function processPendingOrders(int $limit = 20, ?string $domainFilter = null): array
     {
-        $rows = $this->orderModel->clearQuery()
+        $q = $this->orderModel->clearQuery()
             ->where(ProvisioningOrder::schema_fields_STATUS, [
                 ProvisioningOrder::STATUS_STEP_PURCHASE,
                 ProvisioningOrder::STATUS_STEP_DNS,
@@ -102,10 +102,11 @@ class DomainLifecycleOrchestrationService
                 ProvisioningOrder::STATUS_STEP_CDN,
                 ProvisioningOrder::STATUS_STEP_SSL,
             ], 'IN')
-            ->order(ProvisioningOrder::schema_fields_UPDATED_AT, 'ASC')
-            ->limit($limit)
-            ->select()
-            ->fetchArray();
+            ->order(ProvisioningOrder::schema_fields_UPDATED_AT, 'ASC');
+        if ($domainFilter !== null && $domainFilter !== '') {
+            $q->where(ProvisioningOrder::schema_fields_DOMAIN, \strtolower(\trim($domainFilter)));
+        }
+        $rows = $q->limit($limit)->select()->fetchArray();
 
         $processed = 0;
         $completed = 0;

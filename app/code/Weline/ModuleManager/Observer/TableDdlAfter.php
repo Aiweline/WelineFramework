@@ -42,6 +42,25 @@ class TableDdlAfter implements ObserverInterface
 
         /** @var ModuleTable $existingByName */
         $existingByName = $this->tableModel->reset()->where(ModuleTable::schema_fields_name, $tableName)->find()->fetch();
+        if ($existingByName->getId() && $existingByName->getModuleName() !== $moduleName) {
+            $policy = (string) ($existingByName->getData(ModuleTable::schema_fields_TABLE_POLICY) ?: ModuleTable::POLICY_OWNED);
+            $succ = trim((string) ($existingByName->getData(ModuleTable::schema_fields_SUCCESSOR_MODULE_NAME) ?: ''));
+            if ($policy === ModuleTable::POLICY_SUCCESSOR && $succ !== '' && $succ === $moduleName) {
+                $modelForRecord = $modelClass !== null && $modelClass !== ''
+                    ? $modelClass
+                    : 'Eav::' . $tableName;
+                $existingByName
+                    ->setModuleName($moduleName)
+                    ->setModel($modelForRecord)
+                    ->setData(ModuleTable::schema_fields_TABLE_POLICY, ModuleTable::POLICY_OWNED)
+                    ->setData(ModuleTable::schema_fields_OWNER_MODULE_NAME, null)
+                    ->setData(ModuleTable::schema_fields_SUCCESSOR_MODULE_NAME, null)
+                    ->setData(ModuleTable::schema_fields_DEPRECATED_AT, null)
+                    ->save(true);
+
+                return;
+            }
+        }
         if ($existingByName->getId() && $existingByName->getModuleName() !== $moduleName && $existingByName->getModel() !== (string) $modelClass) {
             throw new Exception($tableName . __(' 表已存在！该表已被：%{1} 模组下的 %{2} 模型创建。请为当前模型更换表名。', [$existingByName->getModuleName(), $existingByName->getModel()]));
         }
