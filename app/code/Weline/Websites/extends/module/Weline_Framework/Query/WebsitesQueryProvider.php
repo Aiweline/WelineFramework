@@ -1091,6 +1091,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'message' => (string)__('TXT 记录添加成功'),
                     'record_id' => (string)($result['record_id'] ?? ''),
                     'dns_response' => $dnsResponse,
+                    'dns_provider' => (string) $dnsResult['adapter']->getRegistrarCode(),
                 ];
             }
             return [
