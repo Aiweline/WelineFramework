@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Cdn\Observer;
 
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Output\Log;
@@ -40,13 +41,12 @@ class AttackRecoveryHandler implements ObserverInterface
         $this->log = $log;
     }
     
-    /**
-     * 执行观察者逻辑
-     *
-     * @param DataObject $data 事件数据
-     */
-    public function execute(DataObject $data): void
+    public function execute(Event &$event): void
     {
+        $data = $event->getData('data');
+        if (!$data instanceof DataObject) {
+            return;
+        }
         $domains = $data->getData('domains') ?: [];
         $startedAt = $data->getData('started_at');
         $recoveredAt = $data->getData('recovered_at');
