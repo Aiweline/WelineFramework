@@ -559,9 +559,36 @@ class DomainManagement extends BaseController
                     }
                 }
                 foreach ($groupItems as &$it) {
-                    $it['is_registering'] = !empty($registeringRoots[\strtolower(\trim((string) ($it['domain'] ?? '')))]);
+                    $rootKey = \strtolower(\trim((string) ($it['domain'] ?? '')));
+                    $it['is_registering'] = !empty($registeringRoots[$rootKey]);
+                    $registrarCode = (string) ($it['registrar_code'] ?? '');
+                    $dnsP = (string) ($it['dns_provider'] ?? '');
+                    $dnsFollowsRegistrar = $dnsP !== ''
+                        && \strtolower($dnsP) === \strtolower($registrarCode);
+                    $it['dns_status_hint'] = $dnsDetector->getDnsDelegationUserHint(
+                        $dnsP,
+                        $registrarCode,
+                        $it['is_registering'],
+                        $dnsFollowsRegistrar
+                    );
                 }
                 unset($it);
+
+                // allItems 与 groupItems 为不同数组副本，同步 is_registering / dns_status_hint
+                $rowIndexByDomain = [];
+                foreach ($allItems as $idx => $ai) {
+                    if ((int) ($ai['account_id'] ?? 0) === $acctId) {
+                        $rowIndexByDomain[\strtolower(\trim((string) ($ai['domain'] ?? '')))] = $idx;
+                    }
+                }
+                foreach ($groupItems as $gi) {
+                    $dk = \strtolower(\trim((string) ($gi['domain'] ?? '')));
+                    if ($dk !== '' && isset($rowIndexByDomain[$dk])) {
+                        $j = $rowIndexByDomain[$dk];
+                        $allItems[$j]['is_registering'] = $gi['is_registering'] ?? false;
+                        $allItems[$j]['dns_status_hint'] = $gi['dns_status_hint'] ?? '';
+                    }
+                }
 
                 $pulledCount = \count(\array_filter($groupItems, fn($i) => $i['is_pulled']));
                 $notPulledCount = \count($groupItems) - $pulledCount;
@@ -1687,11 +1714,15 @@ class DomainManagement extends BaseController
                     ]), 'step' => 2, 'elapsed' => $elapsed]);
                     return;
                 }
+                if ($event === 'wait_ns_public_stale') {
+                    $sse->sendEvent('info', ['message' => (string) ($data['message'] ?? ''), 'type' => 'warn']);
+                    return;
+                }
                 if ($event === 'wait_ns_verified') {
                     $by = (string) ($data['by'] ?? '');
                     $sse->sendEvent('progress', ['message' => $by === 'registrar'
-                        ? __('注册商已更新为目标 NS，继续搬迁（全球解析可能尚未完全生效）')
-                        : __('NS 已生效（公网解析已更新）'), 'step' => 2]);
+                        ? __('注册商处已是目标 NS；公网 dig 仍可能为旧 NS，属正常。将继续把记录写入 Cloudflare（与「外网已切过去」不是同一回事）。')
+                        : __('公网检测：NS 已解析到目标，可与注册商侧一致。将继续搬迁记录。'), 'step' => 2]);
                     return;
                 }
                 if ($event === 'push_records') {
@@ -1713,7 +1744,11 @@ class DomainManagement extends BaseController
                 }
                 if ($event === 'sync_verify_done') {
                     $count = (int) ($data['record_count'] ?? 0);
-                    $sse->sendEvent('progress', ['message' => __('校验完成，共 %{1} 条记录', [$count]), 'step' => 4]);
+                    $detail = (string) ($data['message'] ?? '');
+                    $sse->sendEvent('progress', [
+                        'message' => $detail !== '' ? $detail : __('校验完成，共 %{1} 条记录', [$count]),
+                        'step' => 4,
+                    ]);
                     return;
                 }
                 if ($event === 'verify_cdn') {
@@ -1733,7 +1768,13 @@ class DomainManagement extends BaseController
                     return;
                 }
                 if ($event === 'complete') {
-                    $sse->sendEvent('success', ['message' => __('DNS/CDN 切换完成')]);
+                    $done = __('DNS/CDN 切换完成');
+                    if (!empty($data['public_ns_propagation_pending'])) {
+                        $done .= ' — ' . __(
+                            '【说明】公网 NS 可能仍显示旧值（传播中，可达数小时）。注册商与 Cloudflare 控制台已就绪；请 dig/nslookup 待 NS 为 *.ns.cloudflare.com 后再验站点访问与证书。'
+                        );
+                    }
+                    $sse->sendEvent('success', ['message' => $done]);
                 }
             };
 

@@ -165,7 +165,13 @@ class DnsSwitchService
             w_log_error(__('[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}', [$domainName, $curStr, $wantStr]), [], $logCh);
             return $this->fail($failMsg);
         }
-        $notify('registrar_ns_updated', ['message' => __('注册商侧 NS 已与目标一致，切换已生效')]);
+        $notify('registrar_ns_updated', [
+            'message' => __(
+                '注册商处登记的 NS 已是目标值（注册局侧已更新或同步中）。公网 dig/nslookup 仍显示旧 NS（如 share-dns）很常见，不代表失败。'
+            ),
+        ]);
+
+        $publicNsPropagationPending = false;
 
         // ── Step 3b: 可选等待 NS 生效（公网或注册商侧） ──
         if ($waitForNs) {
@@ -186,6 +192,7 @@ class DnsSwitchService
             if (!($waitResult['verified'] ?? false)) {
                 return $this->fail(__('等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录', [(string) (\round($waitMaxSeconds / 60))]));
             }
+            $publicNsPropagationPending = (($waitResult['verified_by'] ?? '') === 'registrar');
         }
 
         // ── Step 4: 推送 DNS 记录到目标 ──
@@ -217,7 +224,14 @@ class DnsSwitchService
         }
         $dnsDetails = $this->resolveService->getDnsDetails($domain);
         $dnsRecords = \is_array($dnsDetails['records'] ?? null) ? $dnsDetails['records'] : [];
-        $notify('sync_verify_done', ['domain' => $domainName, 'record_count' => \count($dnsRecords)]);
+        $notify('sync_verify_done', [
+            'domain' => $domainName,
+            'record_count' => \count($dnsRecords),
+            'message' => __(
+                '已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。',
+                [(string) \count($dnsRecords)]
+            ),
+        ]);
         if ($afterSyncRecords !== null && $dnsRecords !== []) {
             $afterSyncRecords($domain, $dnsRecords);
         }
@@ -294,7 +308,11 @@ class DnsSwitchService
             $notify('verify_cdn_done', ['domain' => $domainName, 'ok' => $cdnOk]);
         }
 
-        $notify('complete', ['domain' => $domainName, 'message' => __('DNS/CDN 切换完成')]);
+        $notify('complete', [
+            'domain' => $domainName,
+            'message' => __('DNS/CDN 切换流程已结束'),
+            'public_ns_propagation_pending' => $publicNsPropagationPending,
+        ]);
         w_log_info(__('[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成', [$domainName]), [], $logCh);
 
         return [
@@ -310,7 +328,7 @@ class DnsSwitchService
     /**
      * 等待 NS 生效：公网解析或注册商侧已更新即通过
      *
-     * @return array{verified: bool, aborted: bool}
+     * @return array{verified: bool, aborted: bool, verified_by?: string}
      */
     private function waitForNameservers(
         string $domainName,
@@ -326,7 +344,7 @@ class DnsSwitchService
         while ($elapsed < $maxWaitSeconds) {
             \sleep($intervalSeconds);
             if ($isAlive !== null && !$isAlive()) {
-                return ['verified' => false, 'aborted' => true];
+                return ['verified' => false, 'aborted' => true, 'verified_by' => ''];
             }
             $elapsed += $intervalSeconds;
             $liveNs = $this->resolveService->getLiveNameservers($domainName);
@@ -346,14 +364,23 @@ class DnsSwitchService
             ]);
             if ($liveNormalized === $targetNsNormalized) {
                 $notify('wait_ns_verified', ['by' => 'public']);
-                return ['verified' => true, 'aborted' => false];
+                return ['verified' => true, 'aborted' => false, 'verified_by' => 'public'];
             }
             if ($registrarCheckNow['supported'] && $registrarCheckNow['error'] === '' && $regNormNow === $targetNsNormalized) {
+                if ($liveNormalized !== $targetNsNormalized) {
+                    $pub = $liveNormalized === [] ? __('(暂无或仍为旧 NS)') : \implode(', ', $liveNormalized);
+                    $notify('wait_ns_public_stale', [
+                        'message' => __(
+                            '【公网尚未跟上】递归 DNS 仍显示「%{1}」，注册商处已是 Cloudflare NS。后续搬迁/同步会照常进行；外网访问与证书需等公网 NS 变为 *.ns.cloudflare.com（常见数分钟～48 小时）。',
+                            [$pub]
+                        ),
+                    ]);
+                }
                 $notify('wait_ns_verified', ['by' => 'registrar']);
-                return ['verified' => true, 'aborted' => false];
+                return ['verified' => true, 'aborted' => false, 'verified_by' => 'registrar'];
             }
         }
-        return ['verified' => false, 'aborted' => false];
+        return ['verified' => false, 'aborted' => false, 'verified_by' => ''];
     }
 
     private function normalizeNameservers(array $nameservers): array
