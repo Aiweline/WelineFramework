@@ -1406,9 +1406,8 @@ CNF;
      * 1. 根域名映射（example.com）- 根域名可以使用泛域名证书
      * 2. 保留泛域名键（*.example.com）- 用于 fallback
      * 
-     * 当证书文件不存在时，会检查数据库记录：
-     * - 未过期：发出警告通知（证书文件丢失，需要重新申请或恢复）
-     * - 已过期：发出提示通知（证书已过期，需要续签）
+     * 当证书文件不存在时：先按路径探测 → 再从证书管理（DB 含 PEM）恢复磁盘；localhost/127.0.0.1 互查等价记录。
+     * 仅当仍无法恢复且未过期时，才发「证书文件丢失」通知；已过期则发续签提示。
      * 
      * @return array [domain => [cert => path, key => path], ...]
      */
@@ -1466,10 +1465,10 @@ CNF;
                 }
             }
 
-            // 标准目录探测后仍不可用时，再尝试从证书管理中保存的 PEM 内容恢复
+            // 标准目录探测后仍不可用时，再从证书管理（整行 PEM / 等价 localhost 记录）恢复
             if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
                 $isExpired = $expiresAt !== '' && \strtotime($expiresAt) < \time();
-                if (!$isExpired && $this->restoreCertificateFilesFromData($cert)) {
+                if (!$isExpired && $this->tryRestoreCertificateFromManagement($certId, $domain, $cert)) {
                     $restoredDir = $this->getCertificateDir((string) $domain);
                     $certPath = $restoredDir . 'fullchain.pem';
                     $keyPath = $restoredDir . 'privkey.pem';
@@ -1822,6 +1821,66 @@ CNF;
     }
 
     /**
+     * 从证书管理（DB）尽量写回磁盘：列表行 PEM → 按 cert_id 全字段加载 → localhost/127.0.0.1/::1 等价域互查 PEM。
+     */
+    protected function tryRestoreCertificateFromManagement(int $certId, string $domain, array $certRow): bool
+    {
+        if ($this->restoreCertificateFilesFromData($certRow)) {
+            return true;
+        }
+        if ($certId > 0) {
+            try {
+                $m = ObjectManager::getInstance(SslCertificate::class, [], false);
+                $m->load($certId);
+                if ($m->getCertId() && $this->restoreCertificateFilesFromData($m->getData())) {
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                w_log_warning('[SslCertificateService] 按 cert_id 加载 PEM 后恢复失败: ' . $e->getMessage());
+            }
+        }
+        foreach ($this->getLoopbackEquivalentDomains($domain) as $alt) {
+            try {
+                $m = ObjectManager::getInstance(SslCertificate::class, [], false);
+                $altModel = $m->clearQuery()->loadByDomain($alt);
+                if (!$altModel->getCertId()) {
+                    continue;
+                }
+                if ($altModel->getCertPem() === '' || $altModel->getKeyPem() === '') {
+                    continue;
+                }
+                $data = $altModel->getData();
+                $data[SslCertificate::schema_fields_DOMAIN] = \strtolower(\trim($domain));
+                $data[SslCertificate::schema_fields_ID] = $certId > 0 ? $certId : $altModel->getCertId();
+                if ($this->restoreCertificateFilesFromData($data)) {
+                    w_log_info(__('[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}', [$alt, $domain]));
+
+                    return true;
+                }
+            } catch (\Throwable $e) {
+                w_log_warning('[SslCertificateService] 等价域 ' . $alt . ' 恢复证书失败: ' . $e->getMessage());
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function getLoopbackEquivalentDomains(string $domain): array
+    {
+        $d = \strtolower(\trim($domain));
+
+        return match ($d) {
+            'localhost' => ['127.0.0.1', '::1'],
+            '127.0.0.1' => ['localhost', '::1'],
+            '::1' => ['localhost', '127.0.0.1'],
+            default => [],
+        };
+    }
+
+    /**
      * 从数据库恢复指定域名的证书文件到磁盘（供 WLS Worker 动态加载调用）。
      *
      * 查找该域名在证书管理表中的记录，若有有效 PEM 数据则恢复全部 6 个文件到 app/etc/ssl/{domain}/。
@@ -1840,17 +1899,12 @@ CNF;
                 return false;
             }
 
-            $certPem = $cert->getCertPem();
-            $keyPem = $cert->getKeyPem();
-            if ($certPem === '' || $keyPem === '') {
-                return false;
-            }
-
-            $result = $this->restoreCertificateFilesFromData($cert->getData());
-            if ($result) {
+            $ok = $this->tryRestoreCertificateFromManagement($cert->getCertId(), $domain, $cert->getData());
+            if ($ok) {
                 w_log_info(__('[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}', [$domain]));
             }
-            return $result;
+
+            return $ok;
         } catch (\Throwable $e) {
             w_log_error(__('[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}', [$domain, $e->getMessage()]));
             return false;

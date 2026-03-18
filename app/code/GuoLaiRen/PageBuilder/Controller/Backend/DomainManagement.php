@@ -527,6 +527,30 @@ class DomainManagement extends BaseController
                     return \strcmp($a['domain'], $b['domain']);
                 });
 
+                // 正在注册中的根域（未完成的生命周期订单）：用于前端禁用「切换 DNS」等操作并提示
+                $registeringRoots = [];
+                foreach ($groupItems as $i) {
+                    $root = \trim((string) ($i['domain'] ?? ''));
+                    if ($root === '' || isset($registeringRoots[$root])) {
+                        continue;
+                    }
+                    try {
+                        $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
+                        if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
+                            $status = (string) ($lifecycle['data']['order']['status'] ?? '');
+                            if ($status !== 'completed' && $status !== 'failed') {
+                                $registeringRoots[$root] = true;
+                            }
+                        }
+                    } catch (\Throwable) {
+                        // Saas 未安装或查询失败，视为非注册中
+                    }
+                }
+                foreach ($groupItems as &$it) {
+                    $it['is_registering'] = !empty($registeringRoots[\trim((string) ($it['domain'] ?? ''))]);
+                }
+                unset($it);
+
                 $pulledCount = \count(\array_filter($groupItems, fn($i) => $i['is_pulled']));
                 $notPulledCount = \count($groupItems) - $pulledCount;
 
@@ -827,6 +851,18 @@ class DomainManagement extends BaseController
             return $this->fetchJson(['success' => false, 'msg' => __('无有效域名')]);
         }
 
+        $cip = \trim((string) $this->request->getClientIp());
+        if ($cip !== '' && \filter_var($cip, FILTER_VALIDATE_IP)) {
+            $options['client_ip'] = $cip;
+        }
+        $pcRaw = $this->request->getParam('purchase_contact', '');
+        if (\is_string($pcRaw) && $pcRaw !== '') {
+            $decoded = \json_decode($pcRaw, true);
+            if (\is_array($decoded)) {
+                $options['purchase_contact'] = $decoded;
+            }
+        }
+
         try {
             $result = $this->aggregator->purchaseDomain($accountId, $items, $autoResolve, $options);
             return $this->fetchJson($result);
@@ -859,6 +895,18 @@ class DomainManagement extends BaseController
 
         if ($accountId <= 0 || $domain === '') {
             return $this->fetchJson(['success' => false, 'msg' => __('参数不完整')]);
+        }
+
+        $cip = \trim((string) $this->request->getClientIp());
+        if ($cip !== '' && \filter_var($cip, FILTER_VALIDATE_IP)) {
+            $options['client_ip'] = $cip;
+        }
+        $pcRaw = $this->request->getParam('purchase_contact', '');
+        if (\is_string($pcRaw) && $pcRaw !== '') {
+            $decoded = \json_decode($pcRaw, true);
+            if (\is_array($decoded)) {
+                $options['purchase_contact'] = $decoded;
+            }
         }
 
         try {
@@ -999,7 +1047,7 @@ class DomainManagement extends BaseController
                     continue;
                 }
                 try {
-                    $lifecycle = w_query('saas', 'getDomainLifecycleStatus', ['domain' => $root]);
+                    $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
                     if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
                         $orderData = $lifecycle['data']['order'];
                         $status = (string) ($orderData['status'] ?? '');
@@ -1488,6 +1536,21 @@ class DomainManagement extends BaseController
                 return;
             }
             $domainName = $domain->getDomain();
+
+            // 注册中的域名不执行切换，由定时任务在注册完成后自动处理
+            try {
+                $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $domainName]);
+                if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
+                    $status = (string) ($lifecycle['data']['order']['status'] ?? '');
+                    if ($status !== 'completed' && $status !== 'failed') {
+                        $sse->sendEvent('failed', ['message' => __('域名注册完成后将自动处理 DNS/CDN，无需手动切换。')]);
+                        $sse->close();
+                        return;
+                    }
+                }
+            } catch (\Throwable) {
+                // Saas 未安装或查询失败，允许继续切换
+            }
 
             $targetAccount = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
             $targetAccount->load($dnsAccountId);

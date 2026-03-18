@@ -22,5 +22,21 @@ return [
         'description' => __('域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。'),
         'doc' => 'domain_pool_resolve_off_local.md',
     ],
+    'Weline_Websites::provisioning::bind_dns' => [
+        'name' => __('一站式配置 - 绑定 DNS'),
+        'description' => __('一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。'),
+        'version' => '1.0.0',
+        'type' => 'provisioning',
+        'data_contract' => [
+            'data' => [
+                'provisioning_order_id' => ['type' => 'integer', 'description' => '配置订单 ID'],
+                'domain' => ['type' => 'string', 'description' => '域名'],
+                'dns_vendor' => ['type' => 'string', 'description' => 'DNS 供应商代码'],
+                'dns_account_id' => ['type' => 'integer', 'description' => 'DNS 账户 ID'],
+                'website_id' => ['type' => 'integer', 'description' => '网站 ID'],
+                'handled' => ['type' => 'bool', 'description' => '由观察者设为 true 表示已处理'],
+            ],
+        ],
+    ],
 ];
 

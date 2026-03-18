@@ -10,34 +10,25 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DnsProviderDetector;
 use Weline\Websites\Service\SubdomainGeneratorService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainNsCheck implements CronTaskInterface
+/**
+ * 由 {@see WebsitesOperationsMaintenance} 在每小时整点附带执行。
+ */
+#[CronTestHelp(
+    description: '根域 NS 检测与 DNS 服务商识别。',
+    examples: ['php bin/w cron:test --task=domain_ns_check --domain=example.com -v'],
+)]
+class DomainNsCheck
 {
-    public function name(): string
-    {
-        return __('根域 NS 归属检测');
-    }
-
-    public function execute_name(): string
-    {
-        return 'domain_ns_check';
-    }
-
-    public function tip(): string
-    {
-        return __('定期检测根域名的 NS 归属情况，识别是否托管到 Cloudflare 等外部 DNS 服务商');
-    }
-
-    public function cron_time(): string
-    {
-        return '0 * * * *';
-    }
+    use WebsitesCronTestRunnerTrait;
 
     public function execute(): string
     {
@@ -62,6 +53,12 @@ class DomainNsCheck implements CronTaskInterface
             foreach ($domains as $row) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
                 $domain->setData($row);
+                $dn = $domain->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
+                    WebsitesCronTestContext::skipNote($dn, 'ns check');
+                    continue;
+                }
+                WebsitesCronTestContext::detail('DomainNsCheck.row', ['domain' => $dn]);
 
                 // 无论 NS 查询成功或失败，都立即确保子域名接入域名池
                 try {
@@ -77,6 +74,7 @@ class DomainNsCheck implements CronTaskInterface
                     
                     // 实时查询 NS 记录
                     $liveNameservers = $this->queryNsRecords($domainName);
+                    WebsitesCronTestContext::detail('queryNsRecords', ['domain' => $domainName, 'ns' => $liveNameservers]);
                     $needsSave = false;
                     
                     // 更新 NS 记录
@@ -167,11 +165,6 @@ class DomainNsCheck implements CronTaskInterface
         }
     }
 
-    public function unlock_timeout(int $minute = 30): int
-    {
-        return $minute;
-    }
-    
     /**
      * 查询域名的 NS 记录
      */

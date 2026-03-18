@@ -17,7 +17,7 @@ class DomainPoolResolveService
 {
     public function __construct(
         private ServerIpService $serverIpService,
-        private AuthoritativeDnsOriginService $authoritativeDnsOriginService,
+        private DomainOriginMatchService $originMatch,
         private Domain $domainModel,
     ) {
     }
@@ -40,36 +40,21 @@ class DomainPoolResolveService
         $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVING);
         $poolDomain->save();
 
-        $ipv4 = '';
-        $ipv6 = '';
+        $recordIps = $this->originMatch->collectPublicAaaaRecordIps($domainName);
+        $ipv4List = $recordIps['ipv4'];
+        $ipv6List = $recordIps['ipv6'];
+
+        $ipv4 = $ipv4List !== [] ? $ipv4List[0] : '';
+        $ipv6 = $ipv6List !== [] ? $ipv6List[0] : '';
         $error = '';
-
-        try {
-            $ipv4 = $this->resolveA($domainName);
-        } catch (\Throwable $e) {
-            $error .= 'A: ' . $e->getMessage() . '; ';
-        }
-
-        try {
-            $ipv6 = $this->resolveAAAA($domainName);
-        } catch (\Throwable $e) {
-            // IPv6 失败不算错误，很多域名没有 AAAA 记录
-        }
 
         $serverIpv4 = $this->serverIpService->getPublicIpv4();
         $serverIpv6 = $this->serverIpService->getPublicIpv6();
 
-        $publicIsLocal = false;
-        if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $publicIsLocal = true;
-        }
-        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $publicIsLocal = true;
-        }
-
         $resolved = $ipv4 !== '' || $ipv6 !== '';
-        $localDecision = $this->resolveIsLocalFromDnsRecordContent($poolDomain, $publicIsLocal, $serverIpv4, $serverIpv6);
-        $isLocal = $localDecision['is_local'];
+        [$dnsId, $cdnId, $zoneRoot] = $this->resolvePoolOriginContext($poolDomain);
+        $localDecision = $this->originMatch->fqdnPointsToServerDecision($domainName, $zoneRoot, $dnsId, $cdnId);
+        $isLocal = $localDecision['points_to_server'];
         $isLocalViaAuthoritative = $localDecision['via_authoritative'];
 
         if (!$resolved && $error === '') {
@@ -120,35 +105,17 @@ class DomainPoolResolveService
         $poolDomain->setResolveStatus(DomainPool::RESOLVE_STATUS_RESOLVING);
         $poolDomain->save();
 
-        $ipv4 = '';
-        $ipv6 = '';
+        $recordIps = $this->originMatch->collectPublicAaaaRecordIps($domainName);
+        $ipv4List = $recordIps['ipv4'];
+        $ipv6List = $recordIps['ipv6'];
+
+        $ipv4 = $ipv4List !== [] ? $ipv4List[0] : '';
+        $ipv6 = $ipv6List !== [] ? $ipv6List[0] : '';
         $error = '';
 
-        try {
-            $ipv4 = $this->resolveA($domainName);
-        } catch (\Throwable $e) {
-            $error .= 'A: ' . $e->getMessage() . '; ';
-        }
-
-        try {
-            $ipv6 = $this->resolveAAAA($domainName);
-        } catch (\Throwable $e) {
-            // IPv6 失败不视为错误
-        }
-
-        $serverIpv4 = $this->serverIpService->getPublicIpv4();
-        $serverIpv6 = $this->serverIpService->getPublicIpv6();
-
-        $publicIsLocal = false;
-        if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $publicIsLocal = true;
-        }
-        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $publicIsLocal = true;
-        }
-
         $resolved = $ipv4 !== '' || $ipv6 !== '';
-        $isLocal = $this->resolveIsLocalFromDnsRecordContent($poolDomain, $publicIsLocal, $serverIpv4, $serverIpv6)['is_local'];
+        [$dnsId, $cdnId, $zoneRoot] = $this->resolvePoolOriginContext($poolDomain);
+        $isLocal = $this->originMatch->fqdnPointsToServer($domainName, $zoneRoot, $dnsId, $cdnId);
 
         if (!$resolved && $error === '') {
             $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
@@ -173,6 +140,8 @@ class DomainPoolResolveService
             $poolDomain->save();
         }
 
+        $serverIpv4 = $this->serverIpService->getPublicIpv4();
+        $serverIpv6 = $this->serverIpService->getPublicIpv6();
         $result = $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $poolDomain->getData(DomainPool::schema_fields_SITE_READY) ?: false, \trim($error, '; '), false, $serverIpv4, $serverIpv6);
         $result['updated'] = $changed;
         return $result;
@@ -214,42 +183,21 @@ class DomainPoolResolveService
     }
 
     /**
-     * 有 DNS/CDN 账户且 API 能列出记录时：仅当该 FQDN 存在 A/AAAA 则用记录 value 与源站 IP 判定；否则回退公网解析结果。
-     *
-     * @return array{is_local: bool, via_authoritative: bool}
+     * @return array{0: int, 1: int, 2: string} dnsAccountId, cdnAccountId, zoneRoot
      */
-    private function resolveIsLocalFromDnsRecordContent(
-        DomainPool $poolDomain,
-        bool $publicIsLocal,
-        string $serverIpv4,
-        string $serverIpv6,
-    ): array {
+    private function resolvePoolOriginContext(DomainPool $poolDomain): array
+    {
         $parent = $this->loadParentDomainForPool($poolDomain);
-        if ($parent === null) {
-            return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
-        }
-        $dnsId = (int) $parent->getDnsAccountId();
-        $cdnId = (int) $parent->getCdnAccountId();
-        if ($dnsId <= 0 && $cdnId <= 0) {
-            return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
-        }
+        $dnsId = $parent !== null ? (int) $parent->getDnsAccountId() : 0;
+        $cdnId = $parent !== null ? (int) $parent->getCdnAccountId() : 0;
         $zoneRoot = \trim($poolDomain->getRootDomain());
-        if ($zoneRoot === '') {
+        if ($zoneRoot === '' && $parent !== null) {
             $zoneRoot = \trim($parent->getDomain());
         }
-        $auth = $this->authoritativeDnsOriginService->originPointsToServer(
-            \trim($poolDomain->getDomain()),
-            $zoneRoot,
-            $dnsId,
-            $cdnId,
-            $serverIpv4,
-            $serverIpv6,
-        );
-        if ($auth['api_ok'] && $auth['has_direct_records']) {
-            return ['is_local' => (bool) $auth['matches'], 'via_authoritative' => true];
+        if ($zoneRoot === '') {
+            $zoneRoot = \trim($poolDomain->getDomain());
         }
-
-        return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
+        return [$dnsId, $cdnId, $zoneRoot];
     }
 
     private function loadParentDomainForPool(DomainPool $poolDomain): ?Domain
@@ -328,31 +276,4 @@ class DomainPoolResolveService
         ];
     }
 
-    /**
-     * DNS A 记录查询
-     */
-    private function resolveA(string $domain): string
-    {
-        $records = @\dns_get_record($domain, DNS_A);
-
-        if ($records === false || $records === []) {
-            return '';
-        }
-
-        return $records[0]['ip'] ?? '';
-    }
-
-    /**
-     * DNS AAAA 记录查询
-     */
-    private function resolveAAAA(string $domain): string
-    {
-        $records = @\dns_get_record($domain, DNS_AAAA);
-
-        if ($records === false || $records === []) {
-            return '';
-        }
-
-        return $records[0]['ipv6'] ?? '';
-    }
 }
