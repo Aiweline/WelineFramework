@@ -15,6 +15,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     examples: [
         'php bin/w cron:test --task=domain_lifecycle_orchestration --domain=example.com -v',
     ],
+    manual_help: [
+        '控制台 --domain= 仅处理该根域生命周期订单。',
+        '后台「后缀」未解析时与定时全量一致。',
+    ],
 )]
 class DomainLifecycleOrchestration implements CronTaskInterface
 {
