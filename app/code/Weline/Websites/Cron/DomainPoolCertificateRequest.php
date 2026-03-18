@@ -7,6 +7,7 @@ declare(strict_types=1);
  * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
  * 带域名池 id 时仅按每条记录的域名申请单域证书，不做泛域（*.xxx）解析与申请。
  * 【证书阶段】仅处理 pool_lifecycle_stage = origin_ready | cert_pending；不在解析阶段写 https pending。
+ * ACME 挑战策略为 auto：本机可 HTTP-01 时用 HTTP-01（公网 NS 未切到 Cloudflare 时仍可能成功）；否则用 DNS-01。
  * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
@@ -91,6 +92,10 @@ class DomainPoolCertificateRequest
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
             $processLogs[] = __('域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请');
             $this->echoLine($processLogs[\count($processLogs) - 1]);
+            $hint = __('挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需公网 NS 与 DNS 账户一致）。');
+            $processLogs[] = $hint;
+            $this->echoLine($hint);
+            w_log_info('[DomainPoolCertificateRequest] ' . $hint, [], 'domain_pool_cert');
 
             foreach ($domains as $row) {
                 $fq = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
@@ -204,7 +209,7 @@ class DomainPoolCertificateRequest
                 'cert_strategy' => $strategy,
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => 'dns01',
+                'challenge_strategy' => 'auto',
                 '_on_progress' => $onProgress,
             ]);
 

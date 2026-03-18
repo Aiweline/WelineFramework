@@ -1407,7 +1407,8 @@ CNF;
      * 2. 保留泛域名键（*.example.com）- 用于 fallback
      * 
      * 当证书文件不存在时：先按路径探测 → 再从证书管理（DB 含 PEM）恢复磁盘；localhost/127.0.0.1 互查等价记录。
-     * 仅当仍无法恢复且未过期时，才发「证书文件丢失」通知；已过期则发续签提示。
+     * 暂无法从磁盘/DB 恢复且未过期时：不再弹系统通知、不把证书记录标为 ERROR（证书任务会自行恢复，避免误报）。
+     * 已过期则仍发续签提示。
      * 
      * @return array [domain => [cert => path, key => path], ...]
      */
@@ -1557,8 +1558,9 @@ CNF;
     }
     
     /**
-     * 通知证书文件缺失
-     * 
+     * 证书文件当前不可用（探测与 PEM 恢复均未命中）。
+     * 不弹系统通知、不标 ERROR：多由同步/任务时序导致，证书会由定时任务或下次加载自行恢复。
+     *
      * @param array $missingCerts 缺失的证书列表
      */
     protected function notifyMissingCertificates(array $missingCerts): void
@@ -1567,36 +1569,10 @@ CNF;
             $domain = $cert['domain'];
             $expiresAt = $cert['expires_at'];
             $certPath = $cert['cert_path'];
-            
-            $title = __('域名 %{1} 的证书文件丢失', [$domain]);
-            $content = __('证书路径：%{1}，到期时间：%{2}。请检查文件是否被删除，或重新申请证书。', [$certPath, $expiresAt ?: '未知']);
-            
-            // 发送系统通知
-            w_msg('ssl_cert_missing', 'warning', $title, $content, [
-                'priority' => 8,
-                'icon' => 'ri-shield-keyhole-line',
-                'metadata' => [
-                    'domain' => $domain,
-                    'cert_id' => $cert['cert_id'],
-                    'expires_at' => $expiresAt,
-                    'action' => 'renew',
-                ],
-            ]);
-            
-            w_log_warning('[SslCertificateService] ' . $title . ' - ' . $content);
-            
-            // 更新证书记录状态为错误
-            try {
-                $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(SslCertificate::class, [], false);
-                $certModel->load($cert['cert_id']);
-                if ($certModel->getCertId()) {
-                    $certModel->setStatus(SslCertificate::STATUS_ERROR)
-                        ->setRenewError(__('证书文件丢失'))
-                        ->save();
-                }
-            } catch (\Throwable $e) {
-                w_log_error('[SslCertificateService] 更新证书记录状态失败: ' . $e->getMessage());
-            }
+            w_log_debug(
+                '[SslCertificateService] 证书文件暂未就绪（等待自动恢复） domain=' . $domain
+                . ' cert_path=' . $certPath . ' expires_at=' . ($expiresAt ?: '未知'),
+            );
         }
     }
     
