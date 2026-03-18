@@ -17,8 +17,11 @@ use Weline\Framework\App\Env;
 use Weline\Websites\Api\AccountInfoInterface;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
+use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
+
 class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
 {
+    use DnsCdnZoneRecordsProviderTrait;
     /** API 地址 */
     private const API_BASE_URL = 'https://api.godaddy.com';
     private const API_BASE_URL_OTE = 'https://api.ote-godaddy.com'; // 测试环境

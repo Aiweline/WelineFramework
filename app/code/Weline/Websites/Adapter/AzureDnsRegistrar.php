@@ -13,10 +13,12 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Adapter;
 
+use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
 class AzureDnsRegistrar implements DomainRegistrarInterface
 {
+    use DnsCdnZoneRecordsProviderTrait;
     public function getRegistrarCode(): string
     {
         return 'azure_dns';

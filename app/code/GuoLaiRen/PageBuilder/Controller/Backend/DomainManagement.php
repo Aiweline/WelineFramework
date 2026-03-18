@@ -572,6 +572,8 @@ class DomainManagement extends BaseController
         $accountId = (int) $this->request->getPost('account_id', 0);
         $domains = $this->request->getPost('domains');
         $autoResolve = $this->request->getPost('auto_resolve', '0') === '1' || $this->request->getPost('auto_resolve', '') === 1;
+        $bindDns = (int) $this->request->getPost('bind_dns_account_id', 0);
+        $bindCdn = (int) $this->request->getPost('bind_cdn_account_id', 0);
 
         if (\is_string($domains)) {
             $domains = \json_decode($domains, true) ?: [];
@@ -587,7 +589,7 @@ class DomainManagement extends BaseController
         try {
             // 如果指定了账户，直接使用
             if ($accountId > 0) {
-                $result = $this->aggregator->importDomains($accountId, $domains, $autoResolve);
+                $result = $this->aggregator->importDomains($accountId, $domains, $autoResolve, $bindDns, $bindCdn);
                 return $this->fetchJson($result);
             }
 
@@ -639,7 +641,7 @@ class DomainManagement extends BaseController
             $errors = [];
             foreach ($accountDomains as $acctId => $acctDomains) {
                 try {
-                    $result = $this->aggregator->importDomains($acctId, $acctDomains, $autoResolve);
+                    $result = $this->aggregator->importDomains($acctId, $acctDomains, $autoResolve, $bindDns, $bindCdn);
                     if ($result['success'] ?? false) {
                         $totalImported += $result['imported'] ?? \count($acctDomains);
                         if ($result['auto_resolve_queued'] ?? false) {

@@ -338,12 +338,19 @@ class QuickBuildAggregator
     /**
      * 导入远程域名到本地
      */
-    public function importDomains(int $accountId, array $domains, bool|string $resolveMode): array
-    {
+    public function importDomains(
+        int $accountId,
+        array $domains,
+        bool|string $resolveMode,
+        int $bindDnsAccountId = 0,
+        int $bindCdnAccountId = 0,
+    ): array {
         return $this->queryService->execute('websites', 'importDomains', [
             'account_id' => $accountId,
             'domains' => $domains,
             'resolve_mode' => $resolveMode,
+            'bind_dns_account_id' => $bindDnsAccountId,
+            'bind_cdn_account_id' => $bindCdnAccountId,
         ]);
     }
 
