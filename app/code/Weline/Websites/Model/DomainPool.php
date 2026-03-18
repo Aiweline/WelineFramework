@@ -823,18 +823,58 @@ class DomainPool extends Model
      */
     public function getDomainsNeedCertificate(int $limit = 50): array
     {
-        return $this->clearQuery()
+        $httpsNeed = [
+            self::HTTPS_STATUS_NONE,
+            self::HTTPS_STATUS_EXPIRED,
+            self::HTTPS_STATUS_ERROR,
+            self::HTTPS_STATUS_PENDING,
+        ];
+        /** @var self $q1 */
+        $q1 = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+        $primary = $q1->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 0)
             ->where(self::schema_fields_SITE_CREATED, 0)
             ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_ORIGIN_READY, self::LIFECYCLE_CERT_PENDING], 'IN')
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where(self::schema_fields_HTTPS_STATUS, [self::HTTPS_STATUS_NONE, self::HTTPS_STATUS_EXPIRED, self::HTTPS_STATUS_ERROR, self::HTTPS_STATUS_PENDING], 'IN')
+            ->where(self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
             ->order(self::schema_fields_HTTPS_STATUS, 'ASC')
             ->limit($limit)
             ->select()
             ->fetchArray();
+        if (\count($primary) >= $limit) {
+            return $primary;
+        }
+        // 兜底：已解析且指向本机但阶段仍为 registered/awaiting_origin（未跑过带生命周期推进的检测）
+        $ids = [];
+        foreach ($primary as $r) {
+            $ids[] = (int) ($r[self::schema_fields_ID] ?? 0);
+        }
+        /** @var self $q2 */
+        $q2 = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+        $b = $q2->clearQuery()
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_SITE_READY, 0)
+            ->where(self::schema_fields_SITE_CREATED, 0)
+            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_REGISTERED, self::LIFECYCLE_AWAITING_ORIGIN], 'IN')
+            ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
+            ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
+            ->where(self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
+            ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
+            ->limit($limit + 20)
+            ->select();
+        if ($ids !== []) {
+            $b->where(self::schema_fields_ID, $ids, 'NOT IN');
+        }
+        foreach ($b->fetchArray() as $r) {
+            if (\count($primary) >= $limit) {
+                break;
+            }
+            $primary[] = $r;
+        }
+
+        return $primary;
     }
     
     /**
