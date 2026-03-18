@@ -405,9 +405,9 @@ body {
 })();
 
 (function(){
-    var buttonUrl = <?= json_encode($buttonUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var buttonUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl), JSON_UNESCAPED_SLASHES) ?>;
     document.querySelectorAll('#<?= $componentId ?> .tpmst-dark-download-trigger').forEach(function(el){
-        el.addEventListener('click', function(){ window.location.href = buttonUrl; });
+        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = buttonUrl; });
     });
 })();
 </script>
