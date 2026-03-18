@@ -23,18 +23,12 @@ use Weline\Websites\Service\SubdomainGeneratorService;
 
 class DomainSyncService
 {
-    private Domain $domainModel;
-    private DomainRegistrarAccount $accountModel;
-    private DomainRegistrarResolverService $registrarResolver;
-
     public function __construct(
-        Domain $domainModel,
-        DomainRegistrarAccount $accountModel,
-        DomainRegistrarResolverService $registrarResolver
+        private Domain $domainModel,
+        private DomainRegistrarAccount $accountModel,
+        private DomainRegistrarResolverService $registrarResolver,
+        private DomainDnsCdnBindingService $dnsCdnBindingService,
     ) {
-        $this->domainModel = $domainModel;
-        $this->accountModel = $accountModel;
-        $this->registrarResolver = $registrarResolver;
     }
 
     /**
@@ -597,12 +591,17 @@ class DomainSyncService
      * @param int $accountId 账户ID
      * @param array $domainNames 要导入的域名列表
      * @param bool|string $autoResolveOrMode 是否自动解析到本地（兼容）或 resolve_mode: batch_to_local|keep_each_dns
-     *   默认 batch_to_local：批量解析到本服务器公网 IP，否则不导入
-     *   keep_each_dns：保持各域名当前 DNS，不入池自动解析任务
+     * @param int $bindDnsAccountId 拉取后绑定的 DNS 管理账户（与 CDN 至少一项大于 0）
+     * @param int $bindCdnAccountId 拉取后绑定的 CDN 管理账户
      * @return array{success: bool, message: string, added: int, skipped: int, pool_added?: int, auto_resolve_queued?: bool}
      */
-    public function importDomains(int $accountId, array $domainNames, bool|string $autoResolveOrMode = self::RESOLVE_MODE_BATCH_TO_LOCAL): array
-    {
+    public function importDomains(
+        int $accountId,
+        array $domainNames,
+        bool|string $autoResolveOrMode = self::RESOLVE_MODE_BATCH_TO_LOCAL,
+        int $bindDnsAccountId = 0,
+        int $bindCdnAccountId = 0,
+    ): array {
         if ($domainNames === []) {
             return [
                 'success' => false,
@@ -610,6 +609,40 @@ class DomainSyncService
                 'added' => 0,
                 'skipped' => 0,
             ];
+        }
+
+        if ($bindDnsAccountId <= 0 && $bindCdnAccountId <= 0) {
+            return [
+                'success' => false,
+                'message' => __('拉取域名前须指定至少一个 DNS 或 CDN 管理账户，以便读取权威解析（含 CDN 代理场景）并走建站流程'),
+                'added' => 0,
+                'skipped' => 0,
+            ];
+        }
+
+        if ($bindDnsAccountId > 0) {
+            $a = clone $this->accountModel;
+            $a->load($bindDnsAccountId);
+            if (!$a->getAccountId()) {
+                return [
+                    'success' => false,
+                    'message' => __('所选 DNS 管理账户不存在'),
+                    'added' => 0,
+                    'skipped' => 0,
+                ];
+            }
+        }
+        if ($bindCdnAccountId > 0) {
+            $a = clone $this->accountModel;
+            $a->load($bindCdnAccountId);
+            if (!$a->getAccountId()) {
+                return [
+                    'success' => false,
+                    'message' => __('所选 CDN 管理账户不存在'),
+                    'added' => 0,
+                    'skipped' => 0,
+                ];
+            }
         }
 
         $account = $this->loadAccount($accountId);
@@ -708,12 +741,14 @@ class DomainSyncService
                             w_log_warning("创建自动解析任务失败: {$domainName}, " . $e->getMessage(), [], 'domain_sync');
                         }
                     }
+
+                    $this->dnsCdnBindingService->applyBindingToRootDomain($dm, $bindDnsAccountId, $bindCdnAccountId);
                 }
             }
 
             return [
                 'success' => true,
-                'message' => __('导入完成：新增 %{1}，已存在 %{2}，入池 %{3}', [
+                'message' => __('导入完成：新增 %{1}，已存在 %{2}，入池 %{3}，已绑定 DNS/CDN 账户', [
                     $result['added'],
                     $result['updated'],
                     $poolAdded,
