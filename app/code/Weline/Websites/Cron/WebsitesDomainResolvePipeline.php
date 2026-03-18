@@ -17,6 +17,10 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
         'php bin/w cron:test --task=websites_domain_resolve_pipeline -v',
         'php bin/w cron:test --task=websites_domain_resolve_pipeline --domain=example.com -v',
     ],
+    manual_help: [
+        '控制台 cron:test：--domain= 限定根域、-v 详细日志。',
+        '后台「后缀」未由 execute() 解析时与定时一致；需按域名过滤请用控制台。',
+    ],
 )]
 class WebsitesDomainResolvePipeline implements CronTaskInterface
 {

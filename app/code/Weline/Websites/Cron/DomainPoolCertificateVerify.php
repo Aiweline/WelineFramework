@@ -28,6 +28,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '池内 https_status=valid 的 PEM/文件校验。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_verify --domain=www.example.com -v'],
+    manual_help: [
+        '控制台 --domain= 限定校验该 FQDN 池记录。',
+        '后台「后缀」未解析时扫全部待校验记录。',
+    ],
 )]
 class DomainPoolCertificateVerify
 {
