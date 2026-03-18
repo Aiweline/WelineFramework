@@ -1192,6 +1192,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
         return $domainModel->getDomainId() ? $domainModel : null;
     }
 
+    /** 仅将 A/AAAA 对应主机写入域名池（TXT/CNAME 等不入池）。 */
     private function syncDnsRecordsToDomainPool(Domain $rootDomain, array $records, bool $createNonLocal = false): array
     {
         $originMatch = ObjectManager::getInstance(DomainOriginMatchService::class);
@@ -1210,6 +1211,11 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
 
             $type = \strtoupper((string)($record['type'] ?? $record['record_type'] ?? ''));
+            if ($type !== 'A' && $type !== 'AAAA') {
+                $skipped++;
+                continue;
+            }
+
             $host = \trim((string)($record['host'] ?? $record['name'] ?? '@'));
             $value = \trim((string)($record['value'] ?? $record['data'] ?? ''));
 
@@ -1250,6 +1256,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 if ($type === 'AAAA') {
                     $poolDomain->setResolvedIpv6($value);
                 }
+                if ($isLocal) {
+                    $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
+                }
                 $poolDomain->calculateSiteReady();
                 $poolDomain->save();
                 $added++;
@@ -1278,6 +1287,12 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 $poolDomain->setIsLocalServer($newLocal);
                 if ($wasLocal && !$newLocal) {
                     $markedNonLocal++;
+                }
+                if ($newLocal) {
+                    $st = \trim((string) $poolDomain->getPoolLifecycleStage());
+                    if ($st === '' || $st === DomainPool::LIFECYCLE_REGISTERED || $st === DomainPool::LIFECYCLE_AWAITING_ORIGIN) {
+                        $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
+                    }
                 }
             }
             $poolDomain->calculateSiteReady();
