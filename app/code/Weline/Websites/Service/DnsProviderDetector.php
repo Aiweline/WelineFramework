@@ -273,4 +273,50 @@ class DnsProviderDetector
             'is_cdn' => $this->isCdnProvider($code),
         ];
     }
+
+    /**
+     * 公网 DNS 委派状态说明（列表/弹窗提示用）
+     *
+     * 避免用户将「仍为注册商默认 NS / share-dns」误解为「域名未注册」。
+     */
+    public function getDnsDelegationUserHint(
+        string $detectedProvider,
+        string $registrarCode,
+        bool $isRegistering,
+        bool $dnsFollowsRegistrar = false
+    ): string {
+        if ($isRegistering) {
+            return __(
+                '域名尚在开通或注册流程中。公网仍显示注册商默认解析很常见，不代表注册失败；流程结束后会按配置处理 DNS，无需仅凭当前 NS 判断注册是否成功。'
+            );
+        }
+        $p = \strtolower(\trim($detectedProvider));
+        if ($p === 'share_dns') {
+            return __(
+                '当前公网 NS 为注册商默认 DNS（如 share-dns），通常表示域名已成功注册，只是解析仍由注册商托管。若已提交改 NS 至 Cloudflare 等，全球生效常需数十分钟至数小时，请在注册商后台核对 NS 是否已变更。'
+            );
+        }
+        if ($p === 'cloudflare') {
+            return __('当前公网 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。');
+        }
+        if ($dnsFollowsRegistrar && $p !== '') {
+            return __(
+                'DNS 与注册商一致（默认托管）。公网多为注册商提供的解析，一般表示域名已注册；若要使用 Cloudflare 等，需在注册商处修改 NS 并等待全球生效。'
+            );
+        }
+        if ($p === 'unknown' || $p === '') {
+            return __(
+                '暂无法从当前数据判断公网 DNS 归属。未拉取的域名请以注册商后台或 dig NS 为准；拉取后仍会随同步更新。'
+            );
+        }
+        if ($this->isOriginalProvider($p, $registrarCode)) {
+            return __(
+                '当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。'
+            );
+        }
+
+        return __(
+            '当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。'
+        );
+    }
 }

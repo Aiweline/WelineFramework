@@ -2003,7 +2003,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 html += '<table class="pb-dm-table" style="margin:0;border-radius:0;"><thead><tr>' +
                     '<th style="width:40px;"><input type="checkbox" class="pb-dm-select-all-group" data-account-id="' + group.account_id + '"></th>' +
                     '<th><?= __('域名') ?></th>' +
-                    '<th><?= __('服务商') ?></th>' +
+                    '<th title="<?= __('DNS 列旁 ℹ 可查看：注册商默认 NS / 传播中 / 与「是否已注册」的关系说明') ?>"><?= __('服务商') ?> <small class="pb-dm-text-muted">(ℹ DNS)</small></th>' +
                     '<th><?= __('可建站') ?></th>' +
                     '<th><?= __('已建站') ?></th>' +
                     '<th><?= __('本地状态') ?></th>' +
@@ -2045,7 +2045,12 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                         '</div>' +
                         '<div class="pb-dm-provider-row">' +
                             '<span class="pb-dm-provider-label">DNS</span>' +
-                            '<span class="pb-dm-provider-badge ' + dnsClass + '">' + escapeHtml(dnsName) + '</span>' +
+                            '<span class="pb-dm-provider-badge ' + dnsClass + '" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;">' +
+                            escapeHtml(dnsName) +
+                            (d.dns_status_hint
+                                ? '<i class="mdi mdi-information-outline pb-dm-dns-hint-icon" style="cursor:help;opacity:0.85;flex-shrink:0;" title="' + escapeAttr(d.dns_status_hint) + '" aria-label="<?= __('DNS 状态说明') ?>"></i>'
+                                : '') +
+                            '</span>' +
                         '</div>' +
                         '<div class="pb-dm-provider-row">' +
                             '<span class="pb-dm-provider-label">CDN</span>' +
@@ -2181,6 +2186,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+    }
+
+    function escapeAttr(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
     }
 
     function updatePagination() {

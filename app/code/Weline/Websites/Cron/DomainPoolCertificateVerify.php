@@ -246,7 +246,7 @@ class DomainPoolCertificateVerify
                 'cert_strategy' => 'single',
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => 'dns01',
+                'challenge_strategy' => 'auto',
                 '_on_progress' => $onProgress,
             ]);
 
