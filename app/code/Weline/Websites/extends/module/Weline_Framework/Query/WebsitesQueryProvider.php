@@ -13,6 +13,7 @@ use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Service\DomainOriginMatchService;
+use Weline\Websites\Service\DnsSiteHostRules;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainPurchaseService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
@@ -1274,6 +1275,10 @@ class WebsitesQueryProvider implements QueryProviderInterface
             }
 
             $host = \trim((string)($record['host'] ?? $record['name'] ?? '@'));
+            if (DnsSiteHostRules::isUnderscoreTechnicalDnsHost($host)) {
+                $skipped++;
+                continue;
+            }
             $value = \trim((string)($record['value'] ?? $record['data'] ?? ''));
 
             $fullDomain = $this->buildFullDomainFromHost($rootDomainName, $host);
