@@ -196,6 +196,9 @@ class DomainResolveService
             if ($host === '') {
                 continue;
             }
+            if (DnsSiteHostRules::isUnderscoreTechnicalDnsHost($host)) {
+                continue;
+            }
 
             if ($recordType === 'A' && $serverIpv4 !== '') {
                 $records[] = [
