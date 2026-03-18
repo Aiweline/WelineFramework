@@ -31,7 +31,7 @@ class ProviderTest extends TestCase
             debug: true,
             frontend: false,
             envConfig: [
-                'server' => [
+                'wls' => [
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'dispatcher_port' => 18080,
@@ -136,9 +136,56 @@ class ProviderTest extends TestCase
         $provider = new HttpRedirectProvider();
         $command = $provider->buildCommand(0, $this->context);
 
-        $this->assertStringContainsString('http_redirect.php', $command->script);
-        $this->assertContains('--port=80', $command->arguments);
-        $this->assertContains('--target_port=443', $command->arguments);
+        $this->assertStringContainsString('http_redirect_worker.php', $command->script);
+        $this->assertContains('80', $command->arguments);
+        $this->assertContains('443', $command->arguments);
+    }
+
+    public function testHttpRedirectDisabledWhenHttpsNotStandardPort(): void
+    {
+        $provider = new HttpRedirectProvider();
+        $ctx = new ServiceContext(
+            instanceName: 't',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 1,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: true,
+            sslCert: '/c',
+            sslKey: '/k',
+            mode: 'multi',
+            daemon: false,
+            debug: false,
+            frontend: false,
+            envConfig: [],
+            httpRedirectPort: 0,
+        );
+        $this->assertFalse($provider->isEnabled($ctx));
+    }
+
+    public function testHttpRedirectEnabledWhenMasterPassesPort(): void
+    {
+        $provider = new HttpRedirectProvider();
+        $ctx = new ServiceContext(
+            instanceName: 't',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 1,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: true,
+            sslCert: '/c',
+            sslKey: '/k',
+            mode: 'multi',
+            daemon: false,
+            debug: false,
+            frontend: false,
+            envConfig: [],
+            httpRedirectPort: 9080,
+        );
+        $this->assertTrue($provider->isEnabled($ctx));
+        $this->assertSame(9080, $provider->getPort(0, $ctx));
     }
 
     public function testHttpRedirectProviderIsEnabledOnlyWithSSL(): void

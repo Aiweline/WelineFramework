@@ -108,7 +108,7 @@ class MasterResurrector
     {
         try {
             $config = Env::getInstance()->getConfig() ?: [];
-            return (bool)($config['server']['orchestrator']['allow_child_resurrection'] ?? false);
+            return (bool)($config['wls']['orchestrator']['allow_child_resurrection'] ?? false);
         } catch (\Throwable) {
             return false;
         }
