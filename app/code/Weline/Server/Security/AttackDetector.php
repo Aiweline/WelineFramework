@@ -364,12 +364,12 @@ class AttackDetector
     
     /**
      * 从 env.php 加载 IP 白名单
-     * 配置路径：server.attack_detector.ip_whitelist
+     * 配置路径：wls.attack_detector.ip_whitelist
      */
     private function loadEnvWhitelist(): void
     {
         try {
-            $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig('server');
+            $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig('wls');
             if (!empty($envConfig['attack_detector']['ip_whitelist'])) {
                 $envWhitelist = $envConfig['attack_detector']['ip_whitelist'];
                 

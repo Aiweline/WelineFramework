@@ -27,7 +27,7 @@ class ServiceContextTest extends TestCase
             debug: true,
             frontend: false,
             envConfig: [
-                'server' => [
+                'wls' => [
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                 ],
@@ -54,8 +54,8 @@ class ServiceContextTest extends TestCase
 
     public function testGetConfig(): void
     {
-        $this->assertEquals(4, $this->context->getConfig('server.worker_count'));
-        $this->assertEquals(10443, $this->context->getConfig('server.worker_base_port'));
+        $this->assertEquals(4, $this->context->getConfig('wls.worker_count'));
+        $this->assertEquals(10443, $this->context->getConfig('wls.worker_base_port'));
         $this->assertEquals('localhost', $this->context->getConfig('database.host'));
     }
 

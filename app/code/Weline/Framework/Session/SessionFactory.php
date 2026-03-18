@@ -147,6 +147,13 @@ class SessionFactory
 
         $drivers = $this->config['drivers'] ?? [];
 
+        if ($type === 'wls') {
+            $wlsSession = \Weline\Framework\App\Env::getInstance()->getConfig('wls.session');
+            $wlsSession = \is_array($wlsSession) ? $wlsSession : [];
+
+            return \array_merge($baseConfig, $wlsSession);
+        }
+
         return \array_merge($baseConfig, $drivers[$type] ?? []);
     }
 
