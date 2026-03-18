@@ -138,9 +138,9 @@ test('ServiceContext::getConfig()', function () {
         daemon: false,
         debug: true,
         frontend: false,
-        envConfig: ['server' => ['worker_count' => 4]],
+        envConfig: ['wls' => ['worker_count' => 4]],
     );
-    assertEqual(4, $context->getConfig('server.worker_count'));
+    assertEqual(4, $context->getConfig('wls.worker_count'));
     assertEqual('default', $context->getConfig('nonexistent', 'default'));
 });
 
@@ -198,7 +198,7 @@ $context = new ServiceContext(
     debug: true,
     frontend: false,
     envConfig: [
-        'server' => [
+        'wls' => [
             'worker_count' => 4,
             'worker_base_port' => 10443,
             'dispatcher_port' => 18080,

@@ -309,12 +309,12 @@ class SharedStateAdminService
     private function getEndpointConfig(string $role): array
     {
         if ($role === self::ROLE_MEMORY) {
-            $host = (string)(Env::get('server.memory_service.host') ?? '127.0.0.1');
+            $host = (string)(Env::get('wls.memory_service.host') ?? '127.0.0.1');
             $host = \trim($host);
             if ($host === '') {
                 $host = '127.0.0.1';
             }
-            $port = (int)(Env::get('server.memory_service.port') ?? 19971);
+            $port = (int)(Env::get('wls.memory_service.port') ?? 19971);
             return [
                 'host' => $host,
                 'port' => $port > 0 ? $port : 19971,
