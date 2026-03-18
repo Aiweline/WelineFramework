@@ -245,7 +245,18 @@ class Response implements ResponseInterface
     public function renderJson(array $data): string
     {
         $this->setHeader('Content-Type', 'application/json; charset=utf-8');
-        return \json_encode($data);
+        $flags = \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE;
+        if (\defined('JSON_PARTIAL_OUTPUT_ON_ERROR')) {
+            $flags |= \JSON_PARTIAL_OUTPUT_ON_ERROR;
+        }
+        $json = \json_encode($data, $flags);
+        if ($json === false) {
+            $json = \json_encode(
+                ['code' => 500, 'msg' => 'JSON encode failed', 'data' => []],
+                \JSON_UNESCAPED_UNICODE | \JSON_INVALID_UTF8_SUBSTITUTE
+            );
+        }
+        return $json !== false ? $json : '{}';
     }
 
     /**

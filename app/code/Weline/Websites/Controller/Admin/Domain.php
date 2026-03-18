@@ -4173,10 +4173,11 @@ class Domain extends BackendController
         try {
             $resolverService = ObjectManager::getInstance(DomainRegistrarResolverService::class);
 
-            // 获取所有账户
+            // 获取所有账户（须 getItems()，不可对 fetch() 返回的模型直接 foreach）
             $accounts = $this->registrarAccount->clearQuery()
                 ->select()
-                ->fetch();
+                ->fetch()
+                ->getItems();
 
             $totalDeleted = 0;
             $totalPoolDeleted = 0;
