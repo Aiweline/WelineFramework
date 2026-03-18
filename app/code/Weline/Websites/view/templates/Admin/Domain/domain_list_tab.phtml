@@ -994,6 +994,48 @@ $accounts = $accounts ?? [];
     </div>
 </div>
 
+<div class="modal fade" id="weline-import-domain-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('拉取域名：确认 DNS / CDN 管理账户') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3"><?= __('请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。') ?></p>
+                <div class="mb-3">
+                    <label class="form-label"><?= __('DNS 管理账户') ?></label>
+                    <select class="form-select" id="weline-import-bind-dns">
+                        <option value="0"><?= __('不指定') ?></option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><?= __('CDN 管理账户') ?></label>
+                    <select class="form-select" id="weline-import-bind-cdn">
+                        <option value="0"><?= __('不指定') ?></option>
+                    </select>
+                </div>
+                <p class="text-danger small mb-3 d-none" id="weline-import-bind-hint"><?= __('请至少选择 DNS 或 CDN 中的一项') ?></p>
+                <div class="mb-2">
+                    <label class="form-label d-block"><?= __('拉取后的解析策略') ?></label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="weline-import-resolve-mode" id="weline-import-mode-local" value="batch_to_local" checked>
+                        <label class="form-check-label" for="weline-import-mode-local"><?= __('尝试在注册商处自动添加 A 记录指向本服务器') ?></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="weline-import-resolve-mode" id="weline-import-mode-keep" value="keep_each_dns">
+                        <label class="form-check-label" for="weline-import-mode-keep"><?= __('保持现有解析，不自动改记录（适合已配好 DNS/CDN）') ?></label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="weline-import-confirm-btn"><?= __('确认拉取') ?></button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 (function() {
     'use strict';
@@ -1037,6 +1079,90 @@ $accounts = $accounts ?? [];
     var importModal = null;
     var remoteDomainData = [];
     var hideImported = false;
+    var pendingImportByAccount = {};
+
+    function escapeOptLabel(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    }
+
+    function loadImportDnsCdnSelects(callback) {
+        fetch(urls.getDnsAccounts)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var sd = document.getElementById('weline-import-bind-dns');
+                var sc = document.getElementById('weline-import-bind-cdn');
+                if (!sd || !sc) {
+                    if (callback) callback();
+                    return;
+                }
+                sd.innerHTML = '<option value="0">' + '<?= __('不指定') ?>' + '</option>';
+                sc.innerHTML = '<option value="0">' + '<?= __('不指定') ?>' + '</option>';
+                if (data.code === 200 && data.data) {
+                    (data.data.dns_accounts || []).forEach(function(a) {
+                        sd.innerHTML += '<option value="' + a.account_id + '">' + escapeOptLabel(a.name) + ' (' + escapeOptLabel(a.registrar_name || a.registrar_code) + ')</option>';
+                    });
+                    (data.data.cdn_accounts || []).forEach(function(a) {
+                        sc.innerHTML += '<option value="' + a.account_id + '">' + escapeOptLabel(a.name) + ' (' + escapeOptLabel(a.registrar_name || a.registrar_code) + ')</option>';
+                    });
+                }
+                if (callback) callback();
+            })
+            .catch(function() {
+                if (callback) callback();
+            });
+    }
+
+    function runImportWithBinding(domainsByAccount, bindDns, bindCdn, resolveMode) {
+        var accountIds = Object.keys(domainsByAccount);
+        var importedCount = 0;
+        var totalCount = 0;
+        accountIds.forEach(function(aid) {
+            totalCount += (domainsByAccount[aid] || []).length;
+        });
+        var errors = [];
+        var done = 0;
+
+        accountIds.forEach(function(accountId) {
+            var domains = domainsByAccount[accountId];
+            var fd = new FormData();
+            fd.append('account_id', accountId);
+            fd.append('resolve_mode', resolveMode);
+            fd.append('bind_dns_account_id', String(bindDns));
+            fd.append('bind_cdn_account_id', String(bindCdn));
+            domains.forEach(function(d) { fd.append('domains[]', d); });
+
+            fetch(urls.importDomains, { method: 'POST', body: fd })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.code === 200) {
+                        importedCount += domains.length;
+                    } else {
+                        errors.push(data.msg || '<?= __('导入失败') ?>');
+                    }
+                })
+                .catch(function() {
+                    errors.push('<?= __('请求失败') ?>');
+                })
+                .finally(function() {
+                    done++;
+                    if (done >= accountIds.length) {
+                        if (errors.length > 0) {
+                            toast('<?= __('部分导入失败') ?>: ' + errors.join(', '), 'warning');
+                        } else {
+                            toast('<?= __('导入成功') ?> ' + importedCount + ' <?= __('个域名') ?>', 'success');
+                        }
+                        autoFetchTriggered = false;
+                        remoteDomainsDisplayMode = false;
+                        var tw = document.querySelector('#weline-domain-list-body');
+                        if (tw && tw.closest('.table-responsive') && tw.closest('.table-responsive').parentElement) {
+                            tw.closest('.table-responsive').parentElement.querySelectorAll('.alert').forEach(function(el) { el.remove(); });
+                        }
+                        loadDomains(1);
+                    }
+                });
+        });
+    }
 
     function toast(msg, type) {
         if (typeof BackendToast !== 'undefined') {
@@ -1259,61 +1385,23 @@ $accounts = $accounts ?? [];
             return;
         }
 
-        // 按账户分组
-        var domainsByAccount = {};
+        pendingImportByAccount = {};
         checkboxes.forEach(function(cb) {
             var accountId = cb.dataset.accountId;
-            if (!domainsByAccount[accountId]) {
-                domainsByAccount[accountId] = [];
+            if (!pendingImportByAccount[accountId]) {
+                pendingImportByAccount[accountId] = [];
             }
-            domainsByAccount[accountId].push(cb.value);
+            pendingImportByAccount[accountId].push(cb.value);
         });
 
-        toast('<?= __('正在导入域名...') ?>', 'info');
-
-        var accountIds = Object.keys(domainsByAccount);
-        var importedCount = 0;
-        var totalCount = checkboxes.length;
-        var errors = [];
-
-        accountIds.forEach(function(accountId) {
-            var domains = domainsByAccount[accountId];
-            var fd = new FormData();
-            fd.append('account_id', accountId);
-            fd.append('auto_resolve', '1');
-            domains.forEach(function(d) { fd.append('domains[]', d); });
-
-            fetch(urls.importDomains, { method: 'POST', body: fd })
-                .then(function(r) { return r.json(); })
-                .then(function(data) {
-                    if (data.code === 200) {
-                        importedCount += domains.length;
-                    } else {
-                        errors.push(data.msg || '<?= __('导入失败') ?>');
-                    }
-                })
-                .catch(function() {
-                    errors.push('<?= __('请求失败') ?>');
-                })
-                .finally(function() {
-                    if (importedCount + errors.length >= totalCount || accountIds.indexOf(accountId) === accountIds.length - 1) {
-                        if (errors.length > 0) {
-                            toast('<?= __('部分导入失败') ?>: ' + errors.join(', '), 'warning');
-                        } else {
-                            toast('<?= __('导入成功') ?> ' + importedCount + ' <?= __('个域名') ?>', 'success');
-                        }
-                        // 重置状态并重新加载
-                        autoFetchTriggered = false;
-                        remoteDomainsDisplayMode = false;
-                        // 移除所有提示条（包括错误和信息提示）
-                        var tableWrapper = document.querySelector('#weline-domain-list-body').closest('.table-responsive');
-                        if (tableWrapper && tableWrapper.parentElement) {
-                            var alerts = tableWrapper.parentElement.querySelectorAll('.alert');
-                            alerts.forEach(function(el) { el.remove(); });
-                        }
-                        loadDomains(1);
-                    }
-                });
+        var hint = document.getElementById('weline-import-bind-hint');
+        if (hint) { hint.classList.add('d-none'); }
+        loadImportDnsCdnSelects(function() {
+            var el = document.getElementById('weline-import-domain-modal');
+            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                importModal = new bootstrap.Modal(el);
+                importModal.show();
+            }
         });
     }
 
@@ -1321,25 +1409,46 @@ $accounts = $accounts ?? [];
      * 导入单个远程域名
      */
     function importSingleRemoteDomain(domain, accountId) {
-        toast('<?= __('正在导入域名...') ?>', 'info');
-        var fd = new FormData();
-        fd.append('account_id', accountId);
-        fd.append('auto_resolve', '1');
-        fd.append('domains[]', domain);
-
-        fetch(urls.importDomains, { method: 'POST', body: fd })
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                if (data.code === 200) {
-                    toast(data.msg || '<?= __('导入成功') ?>', 'success');
-                    // 重新获取远程列表更新状态
-                    loadRemoteDomainsForDisplay();
-                } else {
-                    toast(data.msg || '<?= __('导入失败') ?>', 'error');
-                }
-            })
-            .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
+        pendingImportByAccount = {};
+        pendingImportByAccount[String(accountId)] = [domain];
+        var hint = document.getElementById('weline-import-bind-hint');
+        if (hint) { hint.classList.add('d-none'); }
+        loadImportDnsCdnSelects(function() {
+            var el = document.getElementById('weline-import-domain-modal');
+            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                importModal = new bootstrap.Modal(el);
+                importModal.show();
+            }
+        });
     }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var btn = document.getElementById('weline-import-confirm-btn');
+        if (!btn) return;
+        btn.addEventListener('click', function() {
+            var dns = parseInt(document.getElementById('weline-import-bind-dns').value, 10) || 0;
+            var cdn = parseInt(document.getElementById('weline-import-bind-cdn').value, 10) || 0;
+            var hintEl = document.getElementById('weline-import-bind-hint');
+            if (dns <= 0 && cdn <= 0) {
+                if (hintEl) hintEl.classList.remove('d-none');
+                return;
+            }
+            if (hintEl) hintEl.classList.add('d-none');
+            var modeEl = document.querySelector('input[name="weline-import-resolve-mode"]:checked');
+            var mode = modeEl ? modeEl.value : 'batch_to_local';
+            var elModal = document.getElementById('weline-import-domain-modal');
+            if (elModal && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                var inst = bootstrap.Modal.getInstance(elModal);
+                if (inst) inst.hide();
+            }
+            runImportWithBinding(pendingImportByAccount, dns, cdn, mode);
+            var singleRemote = Object.keys(pendingImportByAccount).length === 1 &&
+                pendingImportByAccount[Object.keys(pendingImportByAccount)[0]].length === 1;
+            if (singleRemote && typeof loadRemoteDomainsForDisplay === 'function') {
+                setTimeout(function() { loadRemoteDomainsForDisplay(); }, 800);
+            }
+        });
+    });
 
     function renderDomainList(items, autoFetchRemote, hasFilters) {
         var tbody = document.getElementById('weline-domain-list-body');

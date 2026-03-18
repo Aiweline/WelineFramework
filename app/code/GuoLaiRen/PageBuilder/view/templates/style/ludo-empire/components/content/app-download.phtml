@@ -303,13 +303,13 @@ $instanceId = 'le-download-' . uniqid();
     </style>
     <script>
     (function(){
-        var androidUrl = <?= json_encode($androidUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var androidUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$androidUrl), JSON_UNESCAPED_SLASHES) ?>;
         var iosUrl = <?= json_encode($iosUrl, JSON_UNESCAPED_SLASHES) ?>;
         document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="android"]').forEach(function(el){
-            el.addEventListener('click', function(){ window.location.href = androidUrl; });
+            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = androidUrl; });
         });
         document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="ios"]').forEach(function(el){
-            el.addEventListener('click', function(){ window.location.href = iosUrl; });
+            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = iosUrl; });
         });
     })();
     </script>
