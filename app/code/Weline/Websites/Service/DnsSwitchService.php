@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Websites\Api\NameserverSwitchInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -127,10 +126,6 @@ class DnsSwitchService
         w_log_info(__('[DnsSwitchService] %{1} Step2: 目标 NS=%{2}', [$domainName, \implode(', ', $targetNs)]), [], $logCh);
 
         // ── Step 3: 在注册商处修改 NS ──
-        if (!($sourceAdapter instanceof NameserverSwitchInterface)) {
-            return $this->fail(__('注册商 %{1} 不支持修改 NS', [$sourceAccount->getRegistrarCode()]));
-        }
-
         $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
         $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
         $updateSuccess = (bool) ($updateResult['success'] ?? false);

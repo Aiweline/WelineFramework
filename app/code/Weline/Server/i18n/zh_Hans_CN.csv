@@ -376,7 +376,7 @@ P99：%{1},P99：%{1}
 "无法启动：实例 [%{1}] 正在被另一个进程启动中","无法启动：实例 [%{1}] 正在被另一个进程启动中"
 请稍后重试，或检查是否有其他终端正在启动服务器,请稍后重试，或检查是否有其他终端正在启动服务器
 "使用已保存的实例配置：%{1} (%{2}:%{3})","使用已保存的实例配置：%{1} (%{2}:%{3})"
-"以 HTTP 运行（端口 %{1}）。由 env.server.https=false 或 --no-ssl 生效。","以 HTTP 运行（端口 %{1}）。由 env.server.https=false 或 --no-ssl 生效。"
+"以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。","以 HTTP 运行（端口 %{1}）。由 wls.https=false 或 --no-ssl 生效。"
 已生成新证书：%{1},已生成新证书：%{1}
 使用已有证书：%{1},使用已有证书：%{1}
 证书有效期至：%{1},证书有效期至：%{1}
@@ -395,8 +395,9 @@ P99：%{1},P99：%{1}
 "禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）","禁用 Dispatcher，每个 Worker 使用独立端口（智能分配）"
 "使用 Dispatcher 模式（TCP 透传）","使用 Dispatcher 模式（TCP 透传）"
 "HTTP 重定向已禁用（--http-redirect-port 0）","HTTP 重定向已禁用（--http-redirect-port 0）"
-"HTTP 重定向已禁用（env.server.http_redirect_port = 0）","HTTP 重定向已禁用（env.server.http_redirect_port = 0）"
-"HTTP 重定向端口无效: %{1}，将使用默认端口 80","HTTP 重定向端口无效: %{1}，将使用默认端口 80"
+"HTTP 重定向已禁用（wls.http_redirect_port = 0）","HTTP 重定向已禁用（wls.http_redirect_port = 0）"
+"HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS","HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS"
+"HTTP 重定向端口无效: %{1}","HTTP 重定向端口无效: %{1}"
 "默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}","默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}"
 "主端口 %{1} 被非框架进程占用","主端口 %{1} 被非框架进程占用"
 主端口是业务入口，不会自动切换以避免服务地址变化,主端口是业务入口，不会自动切换以避免服务地址变化
@@ -449,8 +450,8 @@ P99：%{1},P99：%{1}
 ╚════════════════════════════════════════════════════╝,╚════════════════════════════════════════════════════╝
 默认值,默认值
 "已保存实例配置 (%{1})","已保存实例配置 (%{1})"
-env.servers.%{1},env.servers.%{1}
-env.server,env.server
+env.wls.servers.%{1},env.wls.servers.%{1}
+env.wls,env.wls
 命令行参数,命令行参数
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动"
 "SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动","SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动"
@@ -537,7 +538,7 @@ env.server,env.server
 "JIT 缓冲区大小","JIT 缓冲区大小"
 "（Windows 建议不超过 CPU 核心数）","（Windows 建议不超过 CPU 核心数）"
 "当前 Worker 数：%{1}，推荐：%{2}","当前 Worker 数：%{1}，推荐：%{2}"
-"使用 -c %{1} 参数或在 env.server.worker_count 设置","使用 -c %{1} 参数或在 env.server.worker_count 设置"
+"使用 -c %{1} 参数或在 wls.worker_count 设置","使用 -c %{1} 参数或在 wls.worker_count 设置"
 缺少扩展：%{1},缺少扩展：%{1}
 "在 php.ini 中启用：extension=%{1}","在 php.ini 中启用：extension=%{1}"
 函数被禁用：proc_open,函数被禁用：proc_open
@@ -602,7 +603,7 @@ env.server,env.server
 "独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口","独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口"
 "强制 Dispatcher 模式（默认）","强制 Dispatcher 模式（默认）"
 配置优先级,配置优先级
-"命令行参数 > 已保存实例配置 > env.servers.[name] > env.server > 默认值","命令行参数 > 已保存实例配置 > env.servers.[name] > env.server > 默认值"
+"命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值","命令行参数 > 已保存实例配置 > wls.servers.[name] > wls > 默认值"
 多实例支持,多实例支持
 "可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动","可同时运行多个命名实例，每个实例使用不同端口。首次指定 -p 后配置会自动记住，下次直接用实例名启动"
 配置记忆,配置记忆
@@ -615,7 +616,7 @@ env.server,env.server
 "HTTPS 支持","HTTPS 支持"
 "自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key","自动检测 app/etc/ 下的证书，或手动指定 --ssl-cert 和 --ssl-key"
 "禁用 HTTPS","禁用 HTTPS"
-"env.server.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址","env.server.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址"
+"wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址","wls.https = false 或 命令行 --no-ssl，二者任一即可；同时影响 http:request 等生成地址"
 "SSL 协议","SSL 协议"
 "支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本","支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本"
 "Master 进程","Master 进程"
@@ -698,9 +699,9 @@ unknown,unknown
 "IPC 超时，强制终止 Master 并清理该实例下所有进程...","IPC 超时，强制终止 Master 并清理该实例下所有进程..."
 "实例 [%{1}] 已停止 ✓","实例 [%{1}] 已停止 ✓"
 清理残留进程...,清理残留进程...
-"已向 %{1} 个进程发送终止信号","已向 %{1} 个进程发送终止信号"
 "清理了 %{1} 个进程 ✓","清理了 %{1} 个进程 ✓"
 无残留进程,无残留进程
+"已向 %{1} 个进程发送终止信号","已向 %{1} 个进程发送终止信号"
 "启动锁已释放 ✓","启动锁已释放 ✓"
 "清理了 %{1} 个残留 WLS 进程","清理了 %{1} 个残留 WLS 进程"
 没有正在运行的实例,没有正在运行的实例
@@ -1175,6 +1176,8 @@ DDoS攻击,DDoS攻击
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
+"IPC 清场：已取消 Fiber 池统计请求","IPC 清场：已取消 Fiber 池统计请求"
+"IPC 清场：已由更高优先级控制指令中断","IPC 清场：已由更高优先级控制指令中断"
 服务器已就绪,服务器已就绪
 "服务实例: %{1} 个已就绪","服务实例: %{1} 个已就绪"
 使用说明：,使用说明：
@@ -1182,6 +1185,7 @@ DDoS攻击,DDoS攻击
 "外网访问需用 Nginx/Caddy 等反向代理转发到","外网访问需用 Nginx/Caddy 等反向代理转发到"
 "Nginx 示例：","Nginx 示例："
 需直连外网时：,需直连外网时：
+控制面正执行独占指令(%{1})，请稍后再试,控制面正执行独占指令(%{1})，请稍后再试
 "已通知 %{1} 个 Dispatcher 清空封禁列表","已通知 %{1} 个 Dispatcher 清空封禁列表"
 "已通知 %{1} 个 Dispatcher 解封 IP %{2}","已通知 %{1} 个 Dispatcher 解封 IP %{2}"
 "未指定 ip 或 clear_all","未指定 ip 或 clear_all"
@@ -1191,6 +1195,10 @@ DDoS攻击,DDoS攻击
 "无已连接 Worker","无已连接 Worker"
 "已聚合 %{1} 个 Worker 的 Fiber 池统计","已聚合 %{1} 个 Worker 的 Fiber 池统计"
 "Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据","Fiber 统计已超时，返回已收到的 %{1} 个 Worker 数据"
+"维护 Worker #%{1} 启动失败","维护 Worker #%{1} 启动失败"
+"维护 Worker 未在 %{1}s 内全部 READY（IPC）","维护 Worker 未在 %{1}s 内全部 READY（IPC）"
+"维护切换超时或存量连接未排空，缺失 ACK: %{1}","维护切换超时或存量连接未排空，缺失 ACK: %{1}"
+"维护模式已启用: 业务 Worker 排空确认 %{1} 个, 维护进程 %{2} 个","维护模式已启用: 业务 Worker 排空确认 %{1} 个, 维护进程 %{2} 个"
 "当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}","当前为 Windows 且未安装 PHP event 扩展。申请证书后若要启用 HTTPS，需先安装 event 扩展，否则无法启动 HTTPS 服务。请先安装 event 后再申请证书。下载：%{1}"
 "[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书","[SslCertificateService] 泛域名 *.%{1} 已过期，子域 %{2} 不使用泛域证书"
 "[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请","[SslCertificateService] 子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接写入泛域证书，跳过 ACME 申请"
@@ -1219,6 +1227,7 @@ DDoS攻击,DDoS攻击
 "域名 %{1} 的证书已过期","域名 %{1} 的证书已过期"
 "过期时间：%{1}。请续签证书以恢复 HTTPS 服务。","过期时间：%{1}。请续签证书以恢复 HTTPS 服务。"
 证书已过期,证书已过期
+"[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}","[SslCertificateService] 已从等价域 %{1} 的 PEM 恢复到 %{2}"
 "[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}","[SslCertificateService] 已从数据库恢复证书到磁盘：%{1}"
 "[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}","[SslCertificateService] 从数据库恢复证书失败：%{1} - %{2}"
 证书源文件不存在且无法从证书管理恢复：%{1},证书源文件不存在且无法从证书管理恢复：%{1}

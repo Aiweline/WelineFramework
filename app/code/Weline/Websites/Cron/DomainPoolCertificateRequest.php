@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
  * 带域名池 id 时仅按每条记录的域名申请单域证书，不做泛域（*.xxx）解析与申请。
- * 条件：resolve_status=resolved + is_local_server=1（含公网 IP 匹配或 DNS/CDN 提供商权威 A/AAAA 指向源站）+ https_status in (none, expired, error, pending)
+ * 【证书阶段】仅处理 pool_lifecycle_stage = origin_ready | cert_pending；不在解析阶段写 https pending。
  * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
@@ -15,14 +15,27 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Websites\Service\DomainPoolFlowLogService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainPoolCertificateRequest implements CronTaskInterface
+/**
+ * 由 {@see WebsitesPoolCertificateMaintenance} 统一调度。
+ */
+#[CronTestHelp(
+    description: '域名池待申请证书队列（单域证书）。',
+    examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
+)]
+class DomainPoolCertificateRequest
 {
+    use WebsitesCronTestRunnerTrait;
+
     private const DEFAULT_CERT_STRATEGY = 'wildcard_prefer';
 
     /** CLI 下同时输出到屏幕，便于手动执行时查看 */
@@ -31,26 +44,6 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         if (\PHP_SAPI === 'cli') {
             echo $line . "\n";
         }
-    }
-
-    public function name(): string
-    {
-        return __('域名池证书自动申请');
-    }
-
-    public function execute_name(): string
-    {
-        return 'domain_pool_certificate_request';
-    }
-
-    public function tip(): string
-    {
-        return __('每 5 分钟执行，仅处理状态为待申请证书的域名池记录，向 CA 申请 Let\'s Encrypt 证书');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/5 * * * *';
     }
 
     public function execute(): string
@@ -67,6 +60,17 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         try {
             $domainPoolModel = ObjectManager::getInstance(DomainPool::class);
             $domains = $domainPoolModel->getDomainsNeedCertificate(50);
+            if (WebsitesCronTestContext::getDomainFilter() !== null) {
+                $domains = \array_values(\array_filter(
+                    $domains,
+                    static function (array $r): bool {
+                        $fq = (string) ($r[DomainPool::schema_fields_DOMAIN] ?? '');
+                        $rt = (string) ($r[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+
+                        return WebsitesCronTestContext::matchesSubject($fq, $rt !== '' ? $rt : null);
+                    }
+                ));
+            }
             $results['checked'] = \count($domains);
             if ($domains === []) {
                 $msg = __('没有需要申请证书的域名池域名');
@@ -85,6 +89,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             $this->echoLine($processLogs[\count($processLogs) - 1]);
 
             foreach ($domains as $row) {
+                $fq = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
+                $rt = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+                WebsitesCronTestContext::detail('DomainPoolCertificateRequest.row', [
+                    'domain' => $fq,
+                    'pool_id' => (int) ($row[DomainPool::schema_fields_ID] ?? 0),
+                    'stage' => $row[DomainPool::schema_fields_POOL_LIFECYCLE_STAGE] ?? '',
+                ]);
                 $singleResult = $this->requestByRow($row, $webroot, $email, 'single', false, $processLogs);
                 $results['requested'] += $singleResult['requested'];
                 $results['success'] += $singleResult['success'];
@@ -154,7 +165,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
 
         $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
         $poolDomain->setHttpsError('');
+        $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_PENDING);
         $poolDomain->save();
+        ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+            $poolId,
+            DomainPoolFlowLog::KIND_CERT_START,
+            (string) __('开始向 CA 申请：%{1}', [$requestDomain]),
+        );
 
         $counter['requested']++;
         $line = "[{$requestDomain}] " . __('开始向 CA 申请证书（%{1}），阻塞直至申请完成', [$isWildcard ? '泛域' : '单域']);
@@ -196,6 +213,11 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                     $poolDomain->setHttpsError((string)__('证书已签发，HTTPS 连通性校验未通过，等待下次检测'));
                     $poolDomain->setSiteReady(false);
                     $poolDomain->save();
+                    ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                        $poolId,
+                        DomainPoolFlowLog::KIND_CERT_OK,
+                        (string) __('证书已签发，HTTPS 校验待通过：%{1}', [$requestDomain]),
+                    );
                     $line = "[{$requestDomain}] " . __('CA 返回成功，但 HTTPS 连通性校验未通过，已标记待下次检测');
                     $processLogs[] = $line;
                     $this->echoLine($line);
@@ -203,8 +225,21 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 } else {
                     $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
                     $poolDomain->setHttpsError('');
+                    $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
                     $poolDomain->calculateSiteReady();
                     $poolDomain->save();
+                    ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                        $poolId,
+                        DomainPoolFlowLog::KIND_CERT_OK,
+                        (string) __('证书有效：%{1}', [$requestDomain]),
+                    );
+                    if ($poolDomain->isSiteReady()) {
+                        ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                            $poolId,
+                            DomainPoolFlowLog::KIND_SITE_READY,
+                            (string) __('已满足可建站条件'),
+                        );
+                    }
                     $line = "[{$requestDomain}] " . __('证书申请成功，已更新 HTTPS 状态与可建站');
                     $processLogs[] = $line;
                     $this->echoLine($line);
@@ -216,7 +251,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
                 $msg = $resultMessage ?: (string) __('未知错误');
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
                 $poolDomain->setHttpsError($msg);
+                $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
                 $poolDomain->save();
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    $poolId,
+                    DomainPoolFlowLog::KIND_CERT_FAIL,
+                    $msg,
+                );
                 $line = "[{$requestDomain}] " . __('证书申请失败: %{1}', [$msg]);
                 $processLogs[] = $line;
                 $this->echoLine($line);
@@ -243,7 +284,13 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             $errMsg = $e->getMessage();
             $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_ERROR);
             $poolDomain->setHttpsError($errMsg);
+            $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
             $poolDomain->save();
+            ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                $poolId,
+                DomainPoolFlowLog::KIND_CERT_FAIL,
+                $errMsg,
+            );
             $line = "[{$requestDomain}] " . __('证书申请异常: %{1}', [$errMsg]);
             $processLogs[] = $line;
             $this->echoLine($line);
@@ -279,8 +326,17 @@ class DomainPoolCertificateRequest implements CronTaskInterface
             $pool->setData($row);
             $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
             $pool->setHttpsError('');
+            $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
             $pool->calculateSiteReady();
             $pool->save();
+            $fid = $pool->getPoolId();
+            if ($fid > 0) {
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    $fid,
+                    DomainPoolFlowLog::KIND_CERT_OK,
+                    (string) __('泛域证书覆盖'),
+                );
+            }
         }
         $line = __('泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效', [\count($rows)]);
         $this->echoLine($line);
@@ -302,10 +358,5 @@ class DomainPoolCertificateRequest implements CronTaskInterface
         $httpCode = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
         \curl_close($ch);
         return $httpCode >= 200 && $httpCode < 500;
-    }
-
-    public function unlock_timeout(int $minute = 30): int
-    {
-        return $minute;
     }
 }

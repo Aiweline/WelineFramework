@@ -68,7 +68,7 @@ class QuickBuildAggregator
             // 没有模块处理该事件，返回详细诊断信息
             return [
                 'success' => false,
-                'message' => __('无可用配置服务。请检查 Weline_Saas 模块是否已安装并正确注册事件观察者 (GuoLaiRen_PageBuilder::quickbuild::start_provisioning)。'),
+                'message' => __('无可用配置服务。请确认 Weline_Websites 已启用并已注册 quickbuild::start_provisioning 观察者。'),
             ];
         }
         
@@ -90,7 +90,7 @@ class QuickBuildAggregator
         if (!empty($filter['domain'])) {
             $params['domain'] = $filter['domain'];
         }
-        $result = $this->queryService->execute('saas', 'getOrders', $params);
+        $result = $this->queryService->execute('websites', 'getOrders', $params);
         return is_array($result['items'] ?? null) ? $result['items'] : [];
     }
 
@@ -181,7 +181,7 @@ class QuickBuildAggregator
      */
     public function purchaseDomain(int $accountId, array $items, bool $autoResolve = false, array $options = []): array
     {
-        return $this->queryService->execute('websites', 'purchaseDomain', [
+        $params = [
             'account_id' => $accountId,
             'items' => $items,
             'auto_resolve' => $autoResolve,
@@ -195,7 +195,16 @@ class QuickBuildAggregator
             'cdn_provider' => $options['cdn_provider'] ?? '',
             'cdn_account_id' => $options['cdn_account_id'] ?? 0,
             'start_lifecycle' => $options['start_lifecycle'] ?? '1',
-        ]);
+        ];
+        if (!empty($options['purchase_contact']) && \is_array($options['purchase_contact'])) {
+            $params['purchase_contact'] = $options['purchase_contact'];
+        }
+        $cip = \trim((string) ($options['client_ip'] ?? $options['user_client_ip'] ?? ''));
+        if ($cip !== '' && \filter_var($cip, FILTER_VALIDATE_IP)) {
+            $params['client_ip'] = $cip;
+        }
+
+        return $this->queryService->execute('websites', 'purchaseDomain', $params);
     }
 
     /**

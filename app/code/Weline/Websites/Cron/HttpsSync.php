@@ -12,9 +12,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\HealthCheckService;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
  * HTTPS 状态同步定时任务
@@ -24,51 +26,24 @@ use Weline\Websites\Service\HealthCheckService;
  * - 证书有效则启用 HTTPS
  * - 证书无效/过期则自动回退到 HTTP
  */
-class HttpsSync implements CronTaskInterface
+/**
+ * 由 {@see WebsitesOperationsMaintenance} 在每小时整点附带执行。
+ */
+#[CronTestHelp(
+    description: '按证书有效性同步站点 HTTPS 开关。',
+    examples: ['php bin/w cron:test --task=https_sync --domain=www.example.com -v'],
+)]
+class HttpsSync
 {
-    /**
-     * @inheritDoc
-     */
-    public function name(): string
-    {
-        return 'websites_https_sync';
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function execute_name(): string
-    {
-        return __('网站 HTTPS 状态同步');
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function tip(): string
-    {
-        return __('根据证书有效性自动同步域名的 HTTPS 状态，证书失效自动回退 HTTP');
-    }
-    
-    /**
-     * @inheritDoc
-     * 
-     * 每小时执行一次
-     */
-    public function cron_time(): string
-    {
-        return '0 * * * *';
-    }
-    
-    /**
-     * @inheritDoc
-     */
+    use WebsitesCronTestRunnerTrait;
+
     public function execute(): string
     {
         try {
             /** @var HealthCheckService $healthService */
             $healthService = ObjectManager::getInstance(HealthCheckService::class);
-            
+            WebsitesCronTestContext::detail('HttpsSync.execute', ['domain_filter' => WebsitesCronTestContext::getDomainFilter()]);
+
             // 同步 HTTPS 状态
             $results = $healthService->syncAllHttpsStatus();
             
@@ -93,13 +68,5 @@ class HttpsSync implements CronTaskInterface
             w_log_error('[HttpsSync] ' . $error);
             return $error;
         }
-    }
-    
-    /**
-     * @inheritDoc
-     */
-    public function unlock_timeout(int $minute = 30): int
-    {
-        return 15; // 15 分钟超时
     }
 }

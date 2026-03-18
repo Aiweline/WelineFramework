@@ -281,19 +281,31 @@ window.onRegistrarChange = function(code) {
             pendingEditData = null;
         }
         
-        // 渲染帮助信息
-        if (help.help_steps && help.help_steps.length) {
-            var helpHtml = '<strong>';
-            if (help.help_url) {
-                helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <i class="mdi mdi-open-in-new"></i></a>';
-            } else {
-                helpHtml += (help.help_title || '<?= __('配置获取指南') ?>');
+        // 渲染帮助信息（购买权限指引优先，便于填账号时对照）
+        var purchaseSteps = help.purchase_help_steps || [];
+        var generalSteps = help.help_steps || [];
+        if (purchaseSteps.length || generalSteps.length) {
+            var helpHtml = '';
+            if (purchaseSteps.length) {
+                helpHtml += '<div class="alert alert-info py-2 px-3 mb-3"><div class="fw-bold mb-2"><i class="mdi mdi-shopping me-1"></i><?= __('域名购买所需权限（批量购买前请核对）') ?></div><ol class="mb-0 ps-3 small">';
+                purchaseSteps.forEach(function(step) {
+                    helpHtml += '<li class="mb-1">' + step + '</li>';
+                });
+                helpHtml += '</ol></div>';
             }
-            helpHtml += '</strong><ol class="mb-0 mt-2 ps-3">';
-            help.help_steps.forEach(function(step) {
-                helpHtml += '<li>' + step + '</li>';
-            });
-            helpHtml += '</ol>';
+            if (generalSteps.length) {
+                helpHtml += '<strong>';
+                if (help.help_url) {
+                    helpHtml += '<a href="' + help.help_url + '" target="_blank">' + (help.help_title || '<?= __('配置获取指南') ?>') + ' <i class="mdi mdi-open-in-new"></i></a>';
+                } else {
+                    helpHtml += (help.help_title || '<?= __('配置获取指南') ?>');
+                }
+                helpHtml += '</strong><ol class="mb-0 mt-2 ps-3">';
+                generalSteps.forEach(function(step) {
+                    helpHtml += '<li>' + step + '</li>';
+                });
+                helpHtml += '</ol>';
+            }
             helpInfoDiv.innerHTML = helpHtml;
             helpInfoDiv.style.display = 'block';
         }

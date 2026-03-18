@@ -45,6 +45,13 @@
              action="*/backend/site-builder-agent/index"
              icon="mdi mdi-robot"
              order="50"/>
+
+        <menu source="Weline_Websites::provisioning"
+             name="websites_provisioning"
+             title="一站式配置订单"
+             action="*/backend/provisioning/index"
+             icon="mdi mdi-cogs"
+             order="55"/>
     </menu>
     
     <!-- 建站智能体 - 同时挂在 page_builder_group 下 -->

@@ -31,6 +31,18 @@ class ModuleTable extends Model
     public const schema_fields_name = 'name';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: '模块模型')]
     public const schema_fields_model = 'model';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'owned', comment: 'owned|shared|successor')]
+    public const schema_fields_TABLE_POLICY = 'table_policy';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'shared 时 DDL owner 模块')]
+    public const schema_fields_OWNER_MODULE_NAME = 'owner_module_name';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: '承接模块')]
+    public const schema_fields_SUCCESSOR_MODULE_NAME = 'successor_module_name';
+    #[Col(type: 'varchar', length: 32, nullable: true, comment: '弃用时间')]
+    public const schema_fields_DEPRECATED_AT = 'deprecated_at';
+
+    public const POLICY_OWNED = 'owned';
+    public const POLICY_SHARED = 'shared';
+    public const POLICY_SUCCESSOR = 'successor';
 
     public function setModuleName(string $module_name): static
     {

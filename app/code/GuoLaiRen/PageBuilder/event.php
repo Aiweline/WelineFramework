@@ -26,7 +26,7 @@ return [
 
     'GuoLaiRen_PageBuilder::quickbuild::start_provisioning' => [
         'name' => __('快速建站 - 启动一站式配置'),
-        'description' => __('启动一站式配置流程（DNS→CDN→SSL），由 Weline_Saas 的 DomainProvisioningService 执行。'),
+        'description' => __('启动一站式配置流程（DNS→CDN→SSL），由 Weline_Websites 执行。'),
         'version' => '1.0.0',
         'type' => 'integration',
         'data_contract' => [
@@ -39,7 +39,7 @@ return [
 
     'GuoLaiRen_PageBuilder::quickbuild::query_provisioning_orders' => [
         'name' => __('快速建站 - 查询配置订单'),
-        'description' => __('查询配置订单列表，由 Weline_Saas 响应。'),
+        'description' => __('查询配置订单列表，由 Weline_Websites 响应。'),
         'version' => '1.0.0',
         'type' => 'integration',
         'data_contract' => [

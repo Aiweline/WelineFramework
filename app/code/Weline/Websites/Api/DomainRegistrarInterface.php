@@ -2,33 +2,120 @@
 declare(strict_types=1);
 
 /**
- * 域名商适配器聚合接口
- *
- * 继承四个核心能力接口，所有域名商适配器实现此接口即拥有完整能力。
- * 第三方模块可通过 extends 机制扩展新的域名商适配器。
- *
- * 能力拆分：
- * - ProviderInfoInterface    — 供应商元数据（code、name、config、连接测试）
- * - DomainPurchaseInterface  — 域名购买（check、purchase、list、detail）
- * - DnsManagementInterface   — DNS 记录管理（CRUD、批量）
- * - DnsCdnZoneRecordsProviderInterface — 按账户拉取 zone 权威解析（绑定 DNS/CDN 账户必用）
- * - NameserverSwitchInterface — NS 切换（updateNameservers、getProviderNameservers）
- *
- * 可选能力（按需额外 implements）：
- * - AccountInfoInterface     — 账户余额、TLD 价格、联系人模板
- * - ZoneManagementInterface  — Zone 管理（Cloudflare 类需先创建 Zone）
- *
- * @author Aiweline
- * @email aiweline@qq.com
+ * 域名商 / DNS(CDN) 适配器唯一约定：一个接口涵盖元数据、购买、DNS、权威区记录、源站判定、NS、账户与 Zone。
+ * 不适用的能力在适配器内返回空数据或 success:false；可用 {@see \Weline\Websites\Adapter\Concern\DomainRegistrarOptionalDefaultsTrait} 填默认实现。
  */
 
 namespace Weline\Websites\Api;
 
-interface DomainRegistrarInterface extends
-    ProviderInfoInterface,
-    DomainPurchaseInterface,
-    DnsManagementInterface,
-    DnsCdnZoneRecordsProviderInterface,
-    NameserverSwitchInterface
+interface DomainRegistrarInterface
 {
+    // --- Provider ---
+
+    public function getRegistrarCode(): string;
+
+    public function getRegistrarName(): string;
+
+    public function getDescription(): string;
+
+    public function getVersion(): string;
+
+    /** @return array<array{name: string, label: string, type: string, required: bool, placeholder?: string, options?: array}> */
+    public function getConfigFields(): array;
+
+    /**
+     * @return array{
+     *   help_url: string,
+     *   help_title: string,
+     *   help_steps: array<string>,
+     *   purchase_help_steps?: array<string>
+     * } purchase_help_steps 非空时，账号表单会优先展示「域名购买所需权限」
+     */
+    public function getConfigHelp(): array;
+
+    public function testConnection(array $credentials): bool;
+
+    public function isDomainRegistrar(): bool;
+
+    // --- Purchase ---
+
+    /** @return array{available: bool, domain: string, price?: float, currency?: string, premium?: bool, message?: string} */
+    public function checkAvailability(string $domain, array $credentials): array;
+
+    /** @return array<array{available: bool, domain: string, price?: float, currency?: string, premium?: bool, message?: string}> */
+    public function batchCheckAvailability(array $domains, array $credentials): array;
+
+    /** @return array{success: bool, domain: string, order_id?: string, price?: float, message?: string} */
+    public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array;
+
+    /** @return array<array{domain: string, status: string, expires_at?: string, auto_renew?: bool}> */
+    public function getDomainList(array $credentials): array;
+
+    /** @return array{domain: string, status: string, nameservers?: array, expires_at?: string, registrar?: string} */
+    public function getDomainDetail(string $domain, array $credentials): array;
+
+    // --- DNS CRUD ---
+
+    public function supportsDnsManagement(): bool;
+
+    /** @return array<array{record_id: string, type: string, host: string, value: string, ttl: int, priority?: int}> */
+    public function getDnsRecords(string $domain, array $credentials): array;
+
+    /** @return array{success: bool, record_id?: string, message?: string} */
+    public function addDnsRecord(string $domain, array $record, array $credentials): array;
+
+    /** @return array{success: bool, message?: string} */
+    public function updateDnsRecord(string $domain, string $recordId, array $record, array $credentials): array;
+
+    /** @return array{success: bool, message?: string} */
+    public function deleteDnsRecord(string $domain, string $recordId, array $credentials): array;
+
+    /** @return array{success: bool, added: int, failed: int, errors?: array} */
+    public function batchAddDnsRecords(string $domain, array $records, array $credentials): array;
+
+    /**
+     * 按账户拉取根域权威解析记录
+     *
+     * @return list<array{record_id: string, type: string, host: string, value: string, ttl: int, priority?: int, proxied?: bool}>
+     */
+    public function listZoneDnsRecordsForAccount(string $zoneRoot, array $credentials): array;
+
+    /**
+     * 权威记录判定 FQDN 是否指向源站 IP（IPv4/IPv6）
+     *
+     * @return array{matches: bool, api_ok: bool, has_direct_records: bool, origin_ipv4: string, origin_ipv6: string, error: string}
+     */
+    public function checkFqdnOriginPointsToServer(
+        string $fqdn,
+        string $zoneRoot,
+        array $credentials,
+        string $serverIpv4,
+        string $serverIpv6,
+    ): array;
+
+    // --- Nameserver ---
+
+    /** @return array{success: bool, message?: string} */
+    public function updateNameservers(string $domain, array $nameservers, array $credentials): array;
+
+    /** @return array{success: bool, nameservers: array<string>, message?: string} */
+    public function getProviderNameservers(array $credentials, string $domain = ''): array;
+
+    // --- Account（注册商增值能力，DNS 供应商可返回空）---
+
+    /** @return array{balance: string, currency: string} */
+    public function getAccountBalance(array $credentials): array;
+
+    /** @return array<array{Tld: string, Register: string, Renew: string, Transfer: string}> */
+    public function getTldPrices(array $credentials): array;
+
+    public function getContactTemplates(array $credentials): array;
+
+    // --- Zone（Cloudflare 类；注册商可返回不支持）---
+
+    /** @return array{success: bool, zone_id?: string, nameservers?: array, message?: string} */
+    public function addZone(string $domain, array $credentials): array;
+
+    /** @return array<array{domain: string, status: string, nameservers?: array, zone_id?: string}> */
+    public function getHostedDomainList(array $credentials): array;
 }

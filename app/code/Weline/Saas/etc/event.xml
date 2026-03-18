@@ -2,37 +2,5 @@
 <config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
         xs:noNamespaceSchemaLocation="urn:Weline_Framework::Event/etc/xsd/event.xsd"
         xmlns="urn:Weline_Framework::Event/etc/xsd/event.xsd">
-    <!-- 域名购买成功：推进流程到 DNS 步骤 -->
-    <event name="Weline_Websites::domain::purchase_success">
-        <observer name="Weline_Saas::domain_purchase_success"
-                  instance="Weline\Saas\Observer\DomainPurchaseSuccess"
-                  disabled="false"
-                  shared="true" sort="20"/>
-    </event>
-    <!-- 证书签发完成：标记流程完成或推进 -->
-    <event name="Weline_Server::domain::certificate_issued">
-        <observer name="Weline_Saas::certificate_issued"
-                  instance="Weline\Saas\Observer\CertificateIssued"
-                  disabled="false"
-                  shared="true" sort="20"/>
-    </event>
-    
-    <!-- ========== PageBuilder 快速建站事件观察者 ========== -->
-    
-    <!--注册一站式配置服务能力-->
-    <event name="GuoLaiRen_PageBuilder::quickbuild::query_services">
-        <observer name="Weline_Saas::register_quickbuild_services" 
-                  instance="Weline\Saas\Observer\RegisterQuickBuildServices"
-                  disabled="false"
-                  shared="true" sort="50"/>
-    </event>
-    
-    <!--启动一站式配置流程-->
-    <event name="GuoLaiRen_PageBuilder::quickbuild::start_provisioning">
-        <observer name="Weline_Saas::handle_start_provisioning" 
-                  instance="Weline\Saas\Observer\HandleStartProvisioning"
-                  disabled="false"
-                  shared="true" sort="10"/>
-    </event>
-
+    <!-- 编排与观察者已并入 Weline_Websites；本模块事件配置留空。 -->
 </config>

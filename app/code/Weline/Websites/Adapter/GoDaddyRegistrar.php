@@ -14,14 +14,22 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
-use Weline\Websites\Api\AccountInfoInterface;
+use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
+use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
+use Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
+use Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
-use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
-
-class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
+class GoDaddyRegistrar implements DomainRegistrarInterface
 {
+    use DomainRegistrarZoneDefaultsTrait;
+    use RegistrarMapsDomainListToHostedTrait {
+        RegistrarMapsDomainListToHostedTrait::getHostedDomainList insteadof DomainRegistrarZoneDefaultsTrait;
+    }
     use DnsCdnZoneRecordsProviderTrait;
+    use DefaultDnsZoneOriginMatchTrait;
+    use RegistrarBatchCheckAvailabilityTrait;
     /** API 地址 */
     private const API_BASE_URL = 'https://api.godaddy.com';
     private const API_BASE_URL_OTE = 'https://api.ote-godaddy.com'; // 测试环境
@@ -101,22 +109,19 @@ class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         return [
             'help_url' => 'https://developer.godaddy.com/keys',
             'help_title' => __('GoDaddy API 配置获取指南'),
+            'purchase_help_steps' => [
+                __('【环境】必须使用 Production（生产环境）API Key 才能真实查价与购买；OTE 仅测试，无法完成真实扣款。'),
+                __('【账户】生产密钥关联的 GoDaddy 账户须完成身份验证，并已绑定有效付款方式（信用卡/PayPal 等）。'),
+                __('【权限】API Key 即代表该账户调用域名 API；需具备域名购买权限（一般主账户密钥即可；子账户需在 GoDaddy 中为该用户开通域名/商店相关权限）。'),
+                __('【联系人】批量购买时须在本系统填写注册人信息（姓名、邮箱、电话、地址等），与 GoDaddy 控制台要求一致。'),
+                __('【限额】Production 约 60 次/分钟，批量购买时请控制并发。'),
+            ],
             'help_steps' => [
                 __('【获取 API Key 和 Secret】'),
-                __('1. 登录 GoDaddy 账号：https://www.godaddy.com/'),
-                __('2. 访问 API Keys 页面：https://developer.godaddy.com/keys'),
-                __('3. 点击「Create New API Key」按钮'),
-                __('4. 选择环境：'),
-                __('   • Production（生产环境）：用于真实操作，需要账户完成实名认证'),
-                __('   • OTE（测试环境）：用于开发测试，可免费申请'),
-                __('5. 复制生成的 Key 和 Secret'),
-                __('6. 将 Key 填入上方「API Key」字段'),
-                __('7. 将 Secret 填入上方「API Secret」字段'),
-                __('【注意事项】'),
-                __('• API Secret 只显示一次，请务必保存'),
-                __('• Production API Key 需要账户完成实名认证'),
-                __('• 测试环境（OTE）需要先在 https://developer.godaddy.com/ 注册测试账户'),
-                __('• API 调用频率限制：Production 60次/分钟，OTE 5次/分钟'),
+                __('1. 登录 GoDaddy：https://www.godaddy.com/'),
+                __('2. 打开 https://developer.godaddy.com/keys → Create New API Key'),
+                __('3. 选择 Production，复制 Key 与 Secret 填入上方字段'),
+                __('【注意】Secret 仅显示一次；OTE 不能真实购买。'),
             ],
         ];
     }
@@ -182,38 +187,42 @@ class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         ];
     }
 
-    public function batchCheckAvailability(array $domains, array $credentials): array
-    {
-        $results = [];
-        foreach ($domains as $domain) {
-            $results[] = $this->checkAvailability($domain, $credentials);
-        }
-        return $results;
-    }
-
     public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array
     {
         $this->validateCredentials($credentials);
 
-        // GoDaddy 购买域名需要联系人信息
         $body = [
             'domain' => $domain,
             'renewAuto' => true,
             'period' => $years,
         ];
 
-        // 添加联系人信息（GoDaddy 要求）
-        if (!empty($contactInfo['contact'])) {
+        if (!empty($contactInfo['contact']) && is_array($contactInfo['contact'])) {
             $body['contact'] = $contactInfo['contact'];
+        } elseif (!empty($contactInfo['contactRegistrant']) && is_array($contactInfo['contactRegistrant'])
+            && \trim((string) ($contactInfo['contactRegistrant']['email'] ?? '')) !== ''
+            && \trim((string) ($contactInfo['contactRegistrant']['nameFirst'] ?? '')) !== ''
+            && \trim((string) ($contactInfo['contactRegistrant']['nameLast'] ?? '')) !== '') {
+            $body['contactRegistrant'] = $contactInfo['contactRegistrant'];
+            $body['contactAdmin'] = $contactInfo['contactAdmin'] ?? $contactInfo['contactRegistrant'];
+            $body['contactTech'] = $contactInfo['contactTech'] ?? $contactInfo['contactRegistrant'];
+            $body['contactBilling'] = $contactInfo['contactBilling'] ?? $contactInfo['contactRegistrant'];
         } else {
-            // 尝试使用默认联系人模板
-            $body['contactRegistrant'] = $contactInfo['contactRegistrant'] ?? [];
-            $body['contactAdmin'] = $contactInfo['contactAdmin'] ?? [];
-            $body['contactTech'] = $contactInfo['contactTech'] ?? [];
-            $body['contactBilling'] = $contactInfo['contactBilling'] ?? [];
+            $flat = $contactInfo['purchase_contact_flat'] ?? [];
+            $reg = \is_array($flat) ? $this->buildGoDaddyContactFromFlat($flat) : null;
+            if ($reg === null) {
+                return [
+                    'success' => false,
+                    'domain' => $domain,
+                    'message' => __('请填写完整注册联系人（名、姓、邮箱、电话 E.164、地址、城市、州/省、邮编、国家代码）。'),
+                ];
+            }
+            $body['contactRegistrant'] = $reg;
+            $body['contactAdmin'] = $reg;
+            $body['contactTech'] = $reg;
+            $body['contactBilling'] = $reg;
         }
 
-        // 如果有指定的隐私保护选项
         if (isset($contactInfo['privacy'])) {
             $body['privacy'] = (bool) $contactInfo['privacy'];
         }
@@ -246,6 +255,47 @@ class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
             'success' => false,
             'domain' => $domain,
             'message' => __('域名购买失败：%{1}', [$errorMsg]),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $flat
+     * @return array<string, mixed>|null
+     */
+    private function buildGoDaddyContactFromFlat(array $flat): ?array
+    {
+        $first = \trim((string) ($flat['first_name'] ?? ''));
+        $last = \trim((string) ($flat['last_name'] ?? ''));
+        $email = \trim((string) ($flat['email'] ?? ''));
+        $phone = \trim((string) ($flat['phone'] ?? ''));
+        $a1 = \trim((string) ($flat['address1'] ?? ''));
+        $city = \trim((string) ($flat['city'] ?? ''));
+        $state = \trim((string) ($flat['state'] ?? ''));
+        $zip = \trim((string) ($flat['postal_code'] ?? ''));
+        $country = \strtoupper(\substr((string) ($flat['country'] ?? 'US'), 0, 2));
+        if ($first === '' || $last === '' || $email === '' || $phone === '' || $a1 === '' || $city === '' || $zip === '' || $country === '') {
+            return null;
+        }
+        if (($country === 'US' || $country === 'CA') && $state === '') {
+            return null;
+        }
+        if ($phone !== '' && !\str_starts_with($phone, '+')) {
+            $digits = \preg_replace('/\D/', '', $phone) ?? '';
+            $phone = ($country === 'US' || $country === 'CA') ? ('+1.' . $digits) : ('+' . $digits);
+        }
+
+        return [
+            'nameFirst' => $first,
+            'nameLast' => $last,
+            'email' => $email,
+            'phone' => $phone,
+            'addressMailing' => [
+                'address1' => $a1,
+                'city' => $city,
+                'state' => $state !== '' ? $state : 'N/A',
+                'postalCode' => $zip,
+                'country' => $country,
+            ],
         ];
     }
 
@@ -320,10 +370,6 @@ class GoDaddyRegistrar implements DomainRegistrarInterface, AccountInfoInterface
             'registrar' => 'GoDaddy',
         ];
     }
-
-    // ──────────────────────────────────────────
-    // AccountInfoInterface 实现
-    // ──────────────────────────────────────────
 
     public function getAccountBalance(array $credentials): array
     {

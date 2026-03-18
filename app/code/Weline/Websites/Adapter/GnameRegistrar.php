@@ -15,12 +15,19 @@ namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
-use Weline\Websites\Api\AccountInfoInterface;
+use Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
+use Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
-class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
+class GnameRegistrar implements DomainRegistrarInterface
 {
+    use DomainRegistrarZoneDefaultsTrait;
+    use RegistrarMapsDomainListToHostedTrait {
+        RegistrarMapsDomainListToHostedTrait::getHostedDomainList insteadof DomainRegistrarZoneDefaultsTrait;
+    }
     use DnsCdnZoneRecordsProviderTrait;
+    use RegistrarBatchCheckAvailabilityTrait;
     /** 官方接口域名 */
     private const DEFAULT_API_HOST = 'api.gname.com';
     private const REQUEST_TIMEOUT = 30;
@@ -90,20 +97,16 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         return [
             'help_url' => 'https://www.gname.com/domain/api',
             'help_title' => __('GName API 配置获取指南'),
+            'purchase_help_steps' => [
+                __('【资质】须为 GName 经销商并完成 API 服务协议签署，否则无法调用注册接口（api/domain/reg）。'),
+                __('【账户余额】注册会从经销商账户扣款，请保证余额充足。'),
+                __('【联系人模板】建议在凭据「默认模板 ID」或购买弹窗中填写 template_id（mbid），对应控制台已审核的联系人模板；否则可能注册失败。'),
+                __('【溢价域名】若返回溢价价，需在本系统填写确认金额后再提交。'),
+            ],
             'help_steps' => [
-                __('【前置条件】'),
-                __('1. 注册 GName 账号：https://www.gname.com/register'),
-                __('2. 升级为经销商账号：https://www.gname.com/agent'),
-                __('3. 签署 API 服务协议（企业/平台必需）'),
-                __('   - 联系商务邮箱：business@gname.com'),
-                __('   - 或提交工单：https://www.gname.com/user#/wt_add'),
-                __('   - 或拨打热线：+65-65189986'),
-                __('【获取 API 凭证】'),
-                __('4. 登录后进入「控制中心」→「API 管理」'),
-                __('5. 协议签署完成后可查看 APP ID 和 APP Key'),
-                __('6. 将 APP ID 填入上方「APP ID」字段'),
-                __('7. 将 APP Key 填入上方「APP Key」字段'),
-                __('8. API 域名为 api.gname.com（官方接口），请勿填写错误地址。'),
+                __('【开通 API】注册账号 → 升级经销商 → 签署 API 协议（商务 business@gname.com / 工单 / +65-65189986）'),
+                __('【凭证】控制中心 → API 管理 → 复制 APP ID、APP Key 填入上方'),
+                __('【接口地址】api.gname.com，勿填错。'),
             ],
         ];
     }
@@ -194,15 +197,6 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         } catch (\Throwable) {
             return false;
         }
-    }
-
-    public function batchCheckAvailability(array $domains, array $credentials): array
-    {
-        $results = [];
-        foreach ($domains as $domain) {
-            $results[] = $this->checkAvailability($domain, $credentials);
-        }
-        return $results;
     }
 
     public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array
@@ -1013,6 +1007,82 @@ class GnameRegistrar implements DomainRegistrarInterface, AccountInfoInterface
         } while ($page <= 500);
 
         return $records;
+    }
+
+    /**
+     * GName 权威解析列表字段与 host 归一化逻辑见 {@see getDnsRecords}，此处按相同规则将记录映射到 FQDN 再比对 A/AAAA。
+     */
+    public function checkFqdnOriginPointsToServer(
+        string $fqdn,
+        string $zoneRoot,
+        array $credentials,
+        string $serverIpv4,
+        string $serverIpv6,
+    ): array {
+        $base = [
+            'matches' => false,
+            'api_ok' => false,
+            'has_direct_records' => false,
+            'origin_ipv4' => '',
+            'origin_ipv6' => '',
+            'error' => '',
+        ];
+        $fqdn = \strtolower(\trim($fqdn));
+        $zoneRoot = \strtolower(\trim($zoneRoot));
+        if ($fqdn === '' || $zoneRoot === '') {
+            return $base;
+        }
+        if (!\str_ends_with($fqdn, $zoneRoot) && $fqdn !== $zoneRoot) {
+            return \array_merge($base, ['error' => __('FQDN 与 Zone 根域不匹配')]);
+        }
+        try {
+            $records = $this->getDnsRecords($zoneRoot, $credentials);
+        } catch (\Throwable $e) {
+            return \array_merge($base, ['error' => $e->getMessage()]);
+        }
+        $ipv4 = [];
+        $ipv6 = [];
+        foreach ($records as $r) {
+            if (!\is_array($r)) {
+                continue;
+            }
+            $host = \strtolower(\trim((string) ($r['host'] ?? '@'), '.'));
+            $recordFqdn = ($host === '' || $host === '@') ? $zoneRoot : ($host . '.' . $zoneRoot);
+            if ($recordFqdn !== $fqdn) {
+                continue;
+            }
+            $type = \strtoupper((string) ($r['type'] ?? ''));
+            $val = \trim((string) ($r['value'] ?? ''));
+            if ($type === 'A' && $val !== '') {
+                $ipv4[] = $val;
+            }
+            if ($type === 'AAAA' && $val !== '') {
+                $ipv6[] = \strtolower($val);
+            }
+        }
+        if ($ipv4 === [] && $ipv6 === []) {
+            return [
+                'matches' => false,
+                'api_ok' => true,
+                'has_direct_records' => false,
+                'origin_ipv4' => '',
+                'origin_ipv6' => '',
+                'error' => '',
+            ];
+        }
+        $originV4 = \implode(',', $ipv4);
+        $originV6 = \implode(',', $ipv6);
+        $matchV4 = $serverIpv4 !== '' && \in_array($serverIpv4, $ipv4, true);
+        $matchV6 = $serverIpv6 !== '' && \in_array(\strtolower($serverIpv6), $ipv6, true);
+
+        return [
+            'matches' => $matchV4 || $matchV6,
+            'api_ok' => true,
+            'has_direct_records' => true,
+            'origin_ipv4' => $originV4,
+            'origin_ipv6' => $originV6,
+            'error' => '',
+        ];
     }
 
     /**

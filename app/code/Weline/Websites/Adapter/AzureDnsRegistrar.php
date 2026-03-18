@@ -13,12 +13,18 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Adapter;
 
+use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
+use Weline\Websites\Adapter\Concern\DomainRegistrarOptionalDefaultsTrait;
+use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
 class AzureDnsRegistrar implements DomainRegistrarInterface
 {
     use DnsCdnZoneRecordsProviderTrait;
+    use DefaultDnsZoneOriginMatchTrait;
+    use DomainRegistrarOptionalDefaultsTrait;
+    use RegistrarBatchCheckAvailabilityTrait;
     public function getRegistrarCode(): string
     {
         return 'azure_dns';
@@ -79,16 +85,15 @@ class AzureDnsRegistrar implements DomainRegistrarInterface
         return [
             'help_url' => 'https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade',
             'help_title' => __('Azure DNS 配置获取指南'),
+            'purchase_help_steps' => [
+                __('本适配器仅对接 Azure DNS（解析），不支持通过 API 在本系统内购买域名；批量购买请选择 GoDaddy、GName、阿里云域名、AWS Route53 等注册商账号。'),
+            ],
             'help_steps' => [
                 __('1. 登录 Azure 门户：https://portal.azure.com'),
-                __('2. 进入「Azure Active Directory」→「应用注册」→「新注册」'),
-                __('3. 创建应用后，在「概述」页面获取：'),
-                __('   - 应用程序(客户端) ID → 填入「客户端 ID」'),
-                __('   - 目录(租户) ID → 填入「租户 ID」'),
-                __('4. 在「证书和密码」→「新客户端密码」创建密钥'),
-                __('   - 复制密钥值 → 填入「客户端密钥」（仅显示一次）'),
-                __('5. 进入「订阅」，复制订阅 ID → 填入「订阅 ID」'),
-                __('6. 在订阅的「访问控制(IAM)」中，为应用分配「DNS Zone 参与者」角色'),
+                __('2. 「应用注册」→ 新注册 → 获取客户端 ID、租户 ID'),
+                __('3. 「证书和密码」创建客户端密钥'),
+                __('4. 订阅 ID 填入对应字段'),
+                __('5. 订阅 IAM 中为应用分配「DNS Zone 参与者」'),
             ],
         ];
     }
@@ -114,15 +119,6 @@ class AzureDnsRegistrar implements DomainRegistrarInterface
             'premium' => false,
             'message' => __('Azure DNS 适配器尚未完成 API 对接，请稍后再试。'),
         ];
-    }
-
-    public function batchCheckAvailability(array $domains, array $credentials): array
-    {
-        $results = [];
-        foreach ($domains as $domain) {
-            $results[] = $this->checkAvailability($domain, $credentials);
-        }
-        return $results;
     }
 
     public function purchaseDomain(string $domain, int $years, array $credentials, array $contactInfo = []): array

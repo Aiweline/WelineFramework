@@ -15,6 +15,7 @@
  * - server: WLS 服务器配置
  * - router: 路由配置
  * - theme: 主题配置
+ * - console: CLI 控制台编码（bin/w）
  * - dev: 开发工具配置
  */
 
@@ -339,6 +340,13 @@ return [
         'static_version' => '1.0.0',
     ],
     
+    // ==================== CLI 控制台（php bin/w …）====================
+    'console' => [
+        // true：Windows 下将控制台设为 UTF-8（65001），并尝试启用 VT100；Linux/Mac 下设置 UTF-8 locale。避免中文、表格线乱码。
+        // false：不修改控制台编码（若出现乱码可尝试手动 chcp 65001 或关闭此项后自行处理）。
+        'utf8_output' => true,
+    ],
+
     // PHP 内置 Web 服务器（php bin/w server:start --cli），与 WLS（wls）无关
     'cli_server' => [
         'host' => '127.0.0.1',
