@@ -50,7 +50,8 @@ class DnsSwitchService
      * @param callable|null $onStep 进度回调 fn(string $event, array $data): void，用于 SSE 等
      * @param array $options 可选：wait_for_ns (bool), wait_max_seconds (int), wait_interval_seconds (int),
      *                       is_alive (callable), cdn_account_id (int), cdn_account (DomainRegistrarAccount|null),
-     *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int),
+     *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int).
+     *                       Step8 会 notify：verify_cdn、verify_cdn_attempt、verify_cdn_retry、verify_cdn_heartbeat、verify_cdn_done。
      *                       after_sync_records (callable(Domain, array $dnsRecords): void)
      * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int, client_aborted?: bool}
      */
@@ -67,7 +68,7 @@ class DnsSwitchService
         $logCh = 'dns_cdn_switch';
         $waitForNs = (bool) ($options['wait_for_ns'] ?? false);
         $waitMaxSeconds = (int) ($options['wait_max_seconds'] ?? 30 * 60);
-        $waitIntervalSeconds = (int) ($options['wait_interval_seconds'] ?? 15);
+        $waitIntervalSeconds = (int) ($options['wait_interval_seconds'] ?? 5);
         $isAlive = $options['is_alive'] ?? null;
         $cdnAccount = $options['cdn_account'] ?? null;
         $verifyCdn = (bool) ($options['verify_cdn'] ?? false);
@@ -249,10 +250,17 @@ class DnsSwitchService
             $cdnWaitInterval = (int) ($options['verify_cdn_wait_interval_seconds'] ?? 15);
             $cdnOk = false;
             $cdnElapsed = 0;
+            $attempt = 0;
             while ($cdnElapsed < $cdnWaitMax) {
                 if ($isAlive !== null && !$isAlive()) {
                     break;
                 }
+                ++$attempt;
+                $notify('verify_cdn_attempt', [
+                    'domain' => $domainName,
+                    'attempt' => $attempt,
+                    'message' => __('第 %{1} 次检测 CDN 响应（https/http，HEAD/GET）…', [(string) $attempt]),
+                ]);
                 $cdnOk = $this->verifyCdnByHead($domainName, $cdnCode);
                 if ($cdnOk) {
                     break;
@@ -262,7 +270,7 @@ class DnsSwitchService
                     'elapsed' => $cdnElapsed,
                     'message' => __('CDN 校验未通过，%{1} 秒后重试（已等待 %{2} 秒）', [(string) $cdnWaitInterval, (string) $cdnElapsed]),
                 ]);
-                \sleep($cdnWaitInterval);
+                $this->sleepWithCdnVerifyHeartbeat($cdnWaitInterval, $isAlive, $notify, $domainName);
                 $cdnElapsed += $cdnWaitInterval;
             }
             $notify('verify_cdn_done', ['domain' => $domainName, 'ok' => $cdnOk]);
@@ -412,30 +420,110 @@ class DnsSwitchService
         }
     }
 
+    /**
+     * 从本机对根域发起轻量请求，根据响应头判断是否经目标 CDN（如 Cloudflare）回源。
+     * 顺序：HTTPS HEAD → HTTP HEAD → HTTPS GET（仅读 wrapper 头），避免「仅 HTTPS、仅 HEAD」导致的误判与长时间无响应。
+     */
     private function verifyCdnByHead(string $domain, string $providerCode): bool
     {
+        $headerStr = $this->fetchHeadersForCdnVerify($domain);
+        if ($headerStr === '') {
+            return false;
+        }
+        return $this->headersIndicateCdn($headerStr, $providerCode);
+    }
+
+    private function fetchHeadersForCdnVerify(string $domain): string
+    {
+        $ua = "User-Agent: Mozilla/5.0 (compatible; Weline-CdnVerify/1.0)\r\n";
+        $timeout = 8;
+        $ssl = ['verify_peer' => false, 'verify_peer_name' => false];
+
+        foreach (['https', 'http'] as $scheme) {
+            $url = $scheme . '://' . $domain . '/';
+            $ctx = \stream_context_create([
+                'http' => [
+                    'method' => 'HEAD',
+                    'timeout' => $timeout,
+                    'ignore_errors' => true,
+                    'header' => $ua,
+                ],
+                'ssl' => $ssl,
+            ]);
+            $headers = @\get_headers($url, false, $ctx);
+            if ($headers !== false && $headers !== []) {
+                return \implode("\n", $headers);
+            }
+        }
+
         $url = 'https://' . $domain . '/';
         $ctx = \stream_context_create([
             'http' => [
-                'method' => 'HEAD',
-                'timeout' => 10,
+                'method' => 'GET',
+                'timeout' => $timeout,
                 'ignore_errors' => true,
+                'header' => $ua,
             ],
-            'ssl' => ['verify_peer' => false, 'verify_peer_name' => false],
+            'ssl' => $ssl,
         ]);
-        $headers = @\get_headers($url, false, $ctx);
-        if ($headers === false || $headers === []) {
-            return false;
+        $fh = @\fopen($url, 'r', false, $ctx);
+        if ($fh !== false) {
+            $meta = \stream_get_meta_data($fh);
+            \fclose($fh);
+            $w = $meta['wrapper_data'] ?? null;
+            if (\is_array($w)) {
+                return \implode("\n", $w);
+            }
         }
-        $headerStr = \implode(' ', $headers);
+
+        return '';
+    }
+
+    private function headersIndicateCdn(string $headerStr, string $providerCode): bool
+    {
+        $h = \strtolower($headerStr);
         $providerLower = \strtolower($providerCode);
-        if (\strpos($providerLower, 'cloudflare') !== false && \stripos($headerStr, 'server') !== false && \stripos($headerStr, 'cloudflare') !== false) {
-            return true;
+        if (\strpos($providerLower, 'cloudflare') !== false) {
+            return \str_contains($h, 'cf-ray')
+                || (\str_contains($h, 'server:') && \str_contains($h, 'cloudflare'));
         }
-        if (\strpos($providerLower, 'cdn') !== false && (\stripos($headerStr, 'cf-') !== false || \stripos($headerStr, 'x-cache') !== false)) {
-            return true;
+        if (\strpos($providerLower, 'cdn') !== false) {
+            return \str_contains($h, 'cf-ray')
+                || \str_contains($h, 'cf-cache-status')
+                || \str_contains($h, 'x-cache')
+                || \str_contains($h, 'x-served-by')
+                || (\str_contains($h, 'via:') && \str_contains($h, 'cloudflare'));
         }
-        return false;
+
+        return \str_contains($h, 'cf-ray')
+            || \str_contains($h, 'cf-cache-status')
+            || \str_contains($h, 'x-cache');
+    }
+
+    /**
+     * 分段 sleep 并推送心跳，避免 SSE 长时间无包被网关/浏览器断开。
+     */
+    private function sleepWithCdnVerifyHeartbeat(int $totalSeconds, ?callable $isAlive, callable $notify, string $domainName): void
+    {
+        if ($totalSeconds <= 0) {
+            return;
+        }
+        $chunk = 5;
+        $left = $totalSeconds;
+        while ($left > 0) {
+            $step = \min($chunk, $left);
+            \sleep($step);
+            $left -= $step;
+            if ($isAlive !== null && !$isAlive()) {
+                return;
+            }
+            if ($left > 0) {
+                $notify('verify_cdn_heartbeat', [
+                    'domain' => $domainName,
+                    'message' => __('CDN 校验等待中（保持连接）…'),
+                ]);
+            }
+        }
     }
 
     /**
