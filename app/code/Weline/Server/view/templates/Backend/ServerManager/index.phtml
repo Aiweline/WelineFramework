@@ -685,8 +685,14 @@ async function showSessionDetail(encodedSessionId) {
     const idEl = document.getElementById('session-detail-id');
     const bodyEl = document.getElementById('session-detail-body');
     if (!offcanvasEl || !bodyEl) return;
+    if (typeof bootstrap === 'undefined' || !bootstrap.Offcanvas) return;
 
-    const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+    let bsOffcanvas;
+    if (typeof bootstrap.Offcanvas.getOrCreateInstance === 'function') {
+        bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+    } else {
+        bsOffcanvas = bootstrap.Offcanvas.getInstance(offcanvasEl) || new bootstrap.Offcanvas(offcanvasEl);
+    }
     bsOffcanvas.show();
     loadingEl.classList.remove('d-none');
     contentEl.classList.add('d-none');
