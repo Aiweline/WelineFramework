@@ -1095,12 +1095,25 @@ class WebsitesQueryProvider implements QueryProviderInterface
         if ($dnsResult['error'] !== '') {
             return ['success' => false, 'message' => $dnsResult['error'], 'record_id' => ''];
         }
+        $rootDomain = \strtolower((string) $rootDomainModel->getDomain());
+        $providerCode = (string) ($dnsResult['adapter']->getRegistrarCode());
+        $nsGate = $resolveService->validateAuthoritativeDnsMatchesProvider($rootDomain, $providerCode);
+        if (!$nsGate['ok']) {
+            if ($onProgress) {
+                $onProgress($nsGate['message'], ['step' => 'ns_not_authoritative', 'live_ns' => $nsGate['live_ns'], 'detected' => $nsGate['detected']]);
+            }
+            return [
+                'success' => false,
+                'message' => $nsGate['message'],
+                'record_id' => '',
+                'dns_provider' => $providerCode,
+            ];
+        }
         $providerName = $dnsResult['adapter']->getRegistrarName() ?? (string)__('DNS 供应商');
         if ($onProgress) {
             $onProgress((string)__('使用 %{1} 添加 TXT 记录', [$providerName]), ['step' => 'add', 'dns_provider' => $providerName]);
         }
 
-        $rootDomain = \strtolower((string)$rootDomainModel->getDomain());
         $domain = \strtolower($domain);
         if ($domain === $rootDomain || \str_starts_with($domain, '*.')) {
             $host = '_acme-challenge';

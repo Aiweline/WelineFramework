@@ -13,6 +13,7 @@ use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Service\DomainResolveService;
+use Weline\Websites\Service\DomainRootRegistrationSelfCorrectService;
 use Weline\Websites\Service\SubdomainGeneratorService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -26,6 +27,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     manual_help: [
         '控制台 --domain= 针对该根域及子域入池逻辑。',
         '后台「后缀」未解析时按批次扫 site_ready=0 根域。',
+        '含：子域已可建站时根域仍 pending/注册中 → 自我纠正为 active。',
     ],
 )]
 class DomainResolveCheck
@@ -39,6 +41,8 @@ class DomainResolveCheck
         try {
             $domainModel = ObjectManager::getInstance(Domain::class);
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+            $selfCorrect = ObjectManager::getInstance(DomainRootRegistrationSelfCorrectService::class);
+            $batchPromoted = $selfCorrect->correctBatch(200);
 
             // 未建站就绪根域，每轮限量避免单次超时；多轮 cron 扫完。
             $domains = $domainModel->clearQuery()
@@ -54,12 +58,19 @@ class DomainResolveCheck
             $local = 0;
             $errors = 0;
             $poolAdded = 0;
+            $loopPromoted = 0;
 
             $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
 
             foreach ($domains as $row) {
-                $domain = clone $domainModel;
-                $domain->setData($row);
+                $domain = ObjectManager::getInstance(Domain::class, [], false);
+                $domain->clearQuery()
+                    ->where(Domain::schema_fields_ID, (int) ($row[Domain::schema_fields_ID] ?? 0))
+                    ->find()
+                    ->fetch();
+                if (!$domain->getDomainId()) {
+                    continue;
+                }
                 $dn = $domain->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
                     WebsitesCronTestContext::skipNote($dn, 'root resolve check');
@@ -107,6 +118,14 @@ class DomainResolveCheck
             }
             if ($poolAdded > 0) {
                 $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
+            }
+            if ($batchPromoted > 0 || $loopPromoted > 0) {
+                $message .= \sprintf(
+                    ', %s %d+%d',
+                    (string) __('根域注册状态纠正'),
+                    $batchPromoted,
+                    $loopPromoted
+                );
             }
 
             w_log_info($message, [], 'domain_resolve_check');
