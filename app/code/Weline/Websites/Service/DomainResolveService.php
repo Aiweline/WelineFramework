@@ -658,11 +658,31 @@ class DomainResolveService
             $nsStr = \implode(', ', $live);
             $detName = $this->dnsDetector->getProviderDisplayName($detected);
             $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
+            $suffix = '';
+            if ($providerCode === 'cloudflare' && \in_array($detected, ['share_dns', 'gname', 'godaddy', 'unknown'], true)) {
+                $suffix = ' ' . (string) __(
+                    '请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。'
+                );
+            }
+            $boundCf = false;
+            try {
+                $dm = ObjectManager::getInstance(Domain::class, [], false);
+                $dm->clearQuery()->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+                if ($dm->getDomainId() > 0 && \strtolower(\trim((string) $dm->getDnsProvider())) === 'cloudflare') {
+                    $boundCf = true;
+                }
+            } catch (\Throwable) {
+            }
+            if ($boundCf && $providerCode === 'cloudflare' && $detected !== 'cloudflare') {
+                $suffix .= ' ' . (string) __(
+                    '[常见误解] 您在后台把 DNS 选成了 Cloudflare，仅代表「用 Cloudflare API 管理解析」。公网 NS 仍显示注册商 DNS，说明注册商处的 NS 尚未改成 Cloudflare 的两条（或未完成「切换 DNS/CDN」整流程、或改后仍在全球生效中）。请用 dig/nslookup 查 NS，并在注册商控制台确认已为 *.ns.cloudflare.com。'
+                );
+            }
             return [
                 'ok' => false,
                 'message' => (string) __(
-                    '域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。',
-                    [$rootDomain, $detName, $nsStr, $expName]
+                    '域名「%{1}」当前公网 NS 为「%{2}」（%{3}），权威解析不在「%{4}」。向 %{4} API 写入的 TXT 不会出现在公网，DNS-01 证书必败。%{5}',
+                    [$rootDomain, $detName, $nsStr, $expName, $suffix]
                 ),
                 'live_ns' => $live,
                 'detected' => $detected,
