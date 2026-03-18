@@ -1820,7 +1820,8 @@ while (true) {
                 $requestLine = \substr($requestBuffers[$connId], 0, $firstLineEnd);
                 if (\preg_match('/^(\w+)\s+([^\s]+)/', $requestLine, $matches)) {
                     $method = $matches[1];
-                    $uri = \parse_url($matches[2], PHP_URL_PATH) ?? '/';
+                    $_p = \parse_url($matches[2], PHP_URL_PATH);
+                    $uri = (\is_string($_p) && $_p !== '') ? $_p : '/';
                     $requestCount++;
                     WlsLogger::info_("→ {$method} {$uri}");
                     $requestLogged[$connId] = true;
@@ -1845,7 +1846,8 @@ while (true) {
         if (!$isDev) {
             $uri = '/';
             if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
-                $uri = \parse_url($matches[1], PHP_URL_PATH) ?? '/';
+                $_p = \parse_url($matches[1], PHP_URL_PATH);
+                $uri = (\is_string($_p) && $_p !== '') ? $_p : '/';
             }
             $method = 'GET';
             if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
@@ -2370,10 +2372,11 @@ function handleRequest(
     string $originTokenHeader,
     bool $originTokenAllowLocal
 ): string {
-    // 解析请求 URI
+    // 解析请求 URI（parse_url 失败时返回 false，?? 无法兜底，须显式归一为 string）
     $uri = '/';
     if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
-        $uri = \parse_url($matches[1], PHP_URL_PATH) ?? '/';
+        $path = \parse_url($matches[1], PHP_URL_PATH);
+        $uri = (\is_string($path) && $path !== '') ? $path : '/';
     }
     $method = 'GET';
     if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
@@ -2822,7 +2825,8 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     ];
     
     // 解析文件扩展名（去除查询字符串）
-    $uriPath = \parse_url($uri, PHP_URL_PATH) ?? $uri;
+    $_up = \parse_url($uri, PHP_URL_PATH);
+    $uriPath = (\is_string($_up) && $_up !== '') ? $_up : $uri;
     $extension = \strtolower(\pathinfo($uriPath, PATHINFO_EXTENSION));
     
     // 不是静态文件，交给框架处理

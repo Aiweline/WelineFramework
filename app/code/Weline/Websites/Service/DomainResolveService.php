@@ -27,6 +27,7 @@ class DomainResolveService
     private ServerIpService $serverIpService;
     private DnsProviderDetector $dnsDetector;
     private DomainRegistrarResolverService $registrarResolver;
+    private AuthoritativeDnsOriginService $authoritativeDnsOriginService;
 
     public function __construct(
         Domain $domainModel,
@@ -34,7 +35,8 @@ class DomainResolveService
         DomainDnsRecord $dnsRecordModel,
         ServerIpService $serverIpService,
         DnsProviderDetector $dnsDetector,
-        DomainRegistrarResolverService $registrarResolver
+        DomainRegistrarResolverService $registrarResolver,
+        AuthoritativeDnsOriginService $authoritativeDnsOriginService,
     ) {
         $this->domainModel = $domainModel;
         $this->domainConfig = $domainConfig;
@@ -42,6 +44,7 @@ class DomainResolveService
         $this->serverIpService = $serverIpService;
         $this->dnsDetector = $dnsDetector;
         $this->registrarResolver = $registrarResolver;
+        $this->authoritativeDnsOriginService = $authoritativeDnsOriginService;
     }
 
     /**
@@ -74,15 +77,33 @@ class DomainResolveService
         $serverIpv4 = $this->serverIpService->getPublicIpv4();
         $serverIpv6 = $this->serverIpService->getPublicIpv6();
 
-        $isLocal = false;
+        $publicIsLocal = false;
         if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $isLocal = true;
+            $publicIsLocal = true;
         }
-        if (!$isLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $isLocal = true;
+        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
+            $publicIsLocal = true;
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
+        $isLocal = $publicIsLocal;
+        $dnsId = (int) $domain->getDnsAccountId();
+        $cdnId = (int) $domain->getCdnAccountId();
+        if ($dnsId > 0 || $cdnId > 0) {
+            $zone = \strtolower(\trim($domainName));
+            $auth = $this->authoritativeDnsOriginService->originPointsToServer(
+                $zone,
+                $zone,
+                $dnsId,
+                $cdnId,
+                $serverIpv4,
+                $serverIpv6,
+            );
+            if ($auth['api_ok'] && $auth['has_direct_records']) {
+                $isLocal = (bool) $auth['matches'];
+            }
+        }
+
         $resolveStatus = $resolved ? Domain::RESOLVE_STATUS_RESOLVED : Domain::RESOLVE_STATUS_ERROR;
 
         if ($error !== '' && !$resolved) {
