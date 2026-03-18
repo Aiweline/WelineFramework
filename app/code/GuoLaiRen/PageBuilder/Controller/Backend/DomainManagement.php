@@ -1562,7 +1562,7 @@ class DomainManagement extends BaseController
 
     /**
      * SSE 流式输出根域名 DNS/CDN 切换过程
-     * GET: domain_id, dns_account_id, cdn_account_id (可选)
+     * GET: domain_id, dns_account_id, cdn_account_id (可选), verify_cdn=1 (可选，默认不校验：建站前域名常无 HTTP 响应)
      * 委托 DnsSwitchService 统一执行，通过进度回调推送 SSE 事件。
      */
     public function getDnsSwitchStream(): void
@@ -1570,6 +1570,7 @@ class DomainManagement extends BaseController
         $domainId = (int) $this->request->getParam('domain_id', 0);
         $dnsAccountId = (int) $this->request->getParam('dns_account_id', 0);
         $cdnAccountId = (int) $this->request->getParam('cdn_account_id', 0);
+        $verifyCdn = (int) $this->request->getParam('verify_cdn', 0) === 1;
 
         $sse = new SseWriter();
         $sse->setRetryInterval(86400000);
@@ -1725,9 +1726,9 @@ class DomainManagement extends BaseController
                 }
                 if ($event === 'verify_cdn_done') {
                     if (($data['ok'] ?? false)) {
-                        $sse->sendEvent('progress', ['message' => __('CDN 校验通过（响应头符合预期）'), 'step' => 5]);
+                        $sse->sendEvent('progress', ['message' => __('CDN/边缘配置校验通过（或已跳过）'), 'step' => 5]);
                     } else {
-                        $sse->sendEvent('info', ['message' => __('CDN 头校验未命中，可能尚未生效或非该 CDN 节点，请稍后自行确认')]);
+                        $sse->sendEvent('info', ['message' => __('CDN/边缘未通过供应商接口校验，请确认 DNS 记录与代理设置')]);
                     }
                     return;
                 }
@@ -1744,7 +1745,7 @@ class DomainManagement extends BaseController
                     return $sse->isAlive() && !\connection_aborted();
                 },
                 'cdn_account' => $cdnAccount,
-                'verify_cdn' => $cdnAccountId > 0 || ObjectManager::getInstance(\Weline\Websites\Service\DnsProviderDetector::class)->isCdnProvider($targetAccount->getRegistrarCode()),
+                'verify_cdn' => $verifyCdn,
                 'verify_cdn_wait_max_seconds' => 5 * 60,
                 'verify_cdn_wait_interval_seconds' => 15,
                 'records_to_push' => $resolveService->getRecordsForPush($domain),
