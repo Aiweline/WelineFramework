@@ -30,7 +30,7 @@ class CliServerService
     public function getCliServerStatus(): ?array
     {
         $env = Env::getInstance();
-        $serverConfig = $env->get('server') ?? [];
+        $serverConfig = $env->get('cli_server') ?? [];
         
         if (empty($serverConfig)) {
             return null;

@@ -8,7 +8,7 @@ declare(strict_types=1);
  * 
  * 启用条件：
  * - 开发模式（deploy=dev）：默认启用（前台运行时自动启动）
- * - 生产模式（deploy=prod）：默认关闭（可通过 env.server.hot_reload=true 显式开启）
+ * - 生产模式（deploy=prod）：默认关闭（可通过 wls.hot_reload=true 显式开启）
  * - 需要前台运行（-frontend 或 --no-daemon）才会实际启动监控进程
  * 
  * 文件变更触发 code 级别重载（Worker 重启加载新代码）

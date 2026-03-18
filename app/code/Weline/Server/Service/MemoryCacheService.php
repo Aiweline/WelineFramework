@@ -130,7 +130,7 @@ class MemoryCacheService
             return;
         }
 
-        $config = Env::getInstance()->getConfig('server') ?? [];
+        $config = Env::getInstance()->getConfig('wls') ?? [];
         $memoryConfig = $config['memory_cache'] ?? [];
 
         if (isset($memoryConfig['max_size'])) {
