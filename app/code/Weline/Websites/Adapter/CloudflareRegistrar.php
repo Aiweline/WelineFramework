@@ -515,6 +515,11 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         return $records;
     }
 
+    /**
+     * 创建 DNS 记录：官方 https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/
+     * TXT 仅需 type、name、content、ttl；proxied 仅 A/AAAA/CNAME 可用，TXT 必须为 DNS-only（本类对 TXT 传 proxied=false）。
+     * 无 GName 式「非 MX 须填 mx=0」等额外必填项。
+     */
     public function addDnsRecord(string $domain, array $record, array $credentials): array
     {
         $this->validateCredentials($credentials);

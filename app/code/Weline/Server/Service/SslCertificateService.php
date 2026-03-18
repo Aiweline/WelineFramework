@@ -2574,40 +2574,69 @@ CNF;
                 return ['success' => false, 'message' => __('账户注册失败')];
             }
 
-            $onProg(__('正在创建证书订单...'), ['step' => 'order']);
-            $this->lastAcmeError = '';
-            $orderUrl = $this->createOrder($directory['newOrder'], [$domain], $accountUrl);
-            if (!$orderUrl) {
-                $detail = $this->lastAcmeError !== '' ? $this->lastAcmeError : __('CA 未返回订单地址');
-                return ['success' => false, 'message' => __('创建订单失败：%{1}', [$detail])];
-            }
+            $dnsOrderMaxTries = ($strategy === self::CHALLENGE_DNS01) ? 2 : 1;
+            $orderUrl = '';
 
-            $onProg(__('正在获取授权信息...'), ['step' => 'authorizations']);
-            $order = $this->getResource($orderUrl, $accountUrl);
-            if (!$order || empty($order['authorizations'])) {
-                return ['success' => false, 'message' => __('获取授权失败')];
-            }
-
-            foreach ($order['authorizations'] as $authUrl) {
-                $auth = $this->getResource($authUrl, $accountUrl);
-                if (!$auth) {
-                    return ['success' => false, 'message' => __('获取授权详情失败')];
+            for ($orderTry = 1; $orderTry <= $dnsOrderMaxTries; $orderTry++) {
+                if ($orderTry > 1) {
+                    $onProg(
+                        (string)__(
+                            '证书机构查询 DNS TXT 超时，已重新创建订单并自动重试（将写入新的 TXT 验证值，与上次不同）...'
+                        ),
+                        ['step' => 'dns01_retry_order']
+                    );
+                } else {
+                    $onProg(__('正在创建证书订单...'), ['step' => 'order']);
+                }
+                $this->lastAcmeError = '';
+                $orderUrl = $this->createOrder($directory['newOrder'], [$domain], $accountUrl);
+                if (!$orderUrl) {
+                    $detail = $this->lastAcmeError !== '' ? $this->lastAcmeError : __('CA 未返回订单地址');
+                    return ['success' => false, 'message' => __('创建订单失败：%{1}', [$detail])];
                 }
 
-                $challengeResult = $strategy === self::CHALLENGE_DNS01
-                    ? $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress)
-                    : $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot, $onProgress);
+                $onProg(__('正在获取授权信息...'), ['step' => 'authorizations']);
+                $order = $this->getResource($orderUrl, $accountUrl);
+                if (!$order || empty($order['authorizations'])) {
+                    return ['success' => false, 'message' => __('获取授权失败')];
+                }
 
-                if (!($challengeResult['validated'] ?? false)) {
-                    $detail = $challengeResult['error'] ?? '';
-                    $msg = $detail !== '' ? __('域名验证失败：%{1}', [$detail]) : __('域名验证失败');
-                    $detailLower = \strtolower($detail);
-                    if (\str_contains($detailLower, 'txt record') || \str_contains($detailLower, 'no txt')) {
-                        $msg .= ' ' . __('（DNS 传播可能需要更长时间，请 2–5 分钟后重试）');
-                    } elseif (\str_contains($detailLower, 'query timed out') || \str_contains($detailLower, 'looking up a for') || \str_contains($detailLower, 'looking up aaaa for')) {
-                        $msg .= ' ' . __('（CA 无法解析该域名：公网 DNS 超时或未生效，请确认域名 A/AAAA 已正确解析到本机，或改用 DNS-01 验证）');
+                $allChallengesOk = true;
+                $lastFailDetail = '';
+                foreach ($order['authorizations'] as $authUrl) {
+                    $auth = $this->getResource($authUrl, $accountUrl);
+                    if (!$auth) {
+                        return ['success' => false, 'message' => __('获取授权详情失败')];
                     }
-                    return ['success' => false, 'message' => $msg];
+
+                    $challengeResult = $strategy === self::CHALLENGE_DNS01
+                        ? $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress)
+                        : $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot, $onProgress);
+
+                    if (!($challengeResult['validated'] ?? false)) {
+                        $allChallengesOk = false;
+                        $lastFailDetail = (string) ($challengeResult['error'] ?? '');
+                        $retryTxtTimeout = $strategy === self::CHALLENGE_DNS01
+                            && $orderTry < $dnsOrderMaxTries
+                            && $this->isAcmeDns01TxtQueryTimeout($lastFailDetail);
+                        if ($retryTxtTimeout) {
+                            break;
+                        }
+                        return [
+                            'success' => false,
+                            'message' => $this->formatAcmeChallengeFailureMessage($lastFailDetail),
+                        ];
+                    }
+                }
+
+                if ($allChallengesOk) {
+                    break;
+                }
+                if ($orderTry >= $dnsOrderMaxTries || !$this->isAcmeDns01TxtQueryTimeout($lastFailDetail)) {
+                    return [
+                        'success' => false,
+                        'message' => $this->formatAcmeChallengeFailureMessage($lastFailDetail),
+                    ];
                 }
             }
 
@@ -2811,21 +2840,30 @@ CNF;
         }
         // 先轮询公网 TXT 是否可见，避免 Gname 等未真正生效时白等 3+7 分钟
         $txtFqdn = '_acme-challenge.' . $domain;
-        // GName 等平台 API 返回成功到公网可解析常需更久，90s 易误判失败
-        $pollMaxSeconds = ($dnsProviderCode === 'gname') ? 180 : 90;
+        // GName / Cloudflare 等 API 返回成功到公网 TXT 可解析常需更久，90s 易误判失败
+        $pollMaxSeconds = \in_array($dnsProviderCode, ['gname', 'cloudflare'], true) ? 180 : 90;
         $pollIntervalSeconds = 10;
         $txtVisible = false;
         if ($onProgress) {
-            $onProgress((string)__('检查 TXT 记录是否在公网生效（最多 %{1} 秒）...', [$pollMaxSeconds]), ['step' => 'dns_visibility']);
+            $onProgress(
+                (string)__('检查 TXT 是否在公网生效（本机+公共 DNS，最多 %{1} 秒；GName、Cloudflare 等写入后公网可见常需 1～3 分钟）', [$pollMaxSeconds]),
+                ['step' => 'dns_visibility']
+            );
         }
-        for ($p = 0; $p < $pollMaxSeconds; $p += $pollIntervalSeconds) {
-            $this->waitSeconds(\min($pollIntervalSeconds, $pollMaxSeconds - $p));
-            if ($onProgress && $p > 0) {
-                $onProgress((string)__('检查 TXT 生效中...（%{1}s）', [$p + $pollIntervalSeconds]), ['progress' => 40]);
-            }
+        $elapsed = 0;
+        while ($elapsed <= $pollMaxSeconds) {
             $txtVisible = $this->isAcmeTxtVisible($txtFqdn, $challengeValue);
             if ($txtVisible) {
                 break;
+            }
+            if ($elapsed >= $pollMaxSeconds) {
+                break;
+            }
+            $wait = \min($pollIntervalSeconds, $pollMaxSeconds - $elapsed);
+            $this->waitSeconds($wait);
+            $elapsed += $wait;
+            if ($onProgress && $elapsed <= $pollMaxSeconds) {
+                $onProgress((string)__('检查 TXT 生效中...（已等待 %{1}s / 最多 %{2}s）', [$elapsed, $pollMaxSeconds]), ['progress' => 40]);
             }
         }
         if (!$txtVisible) {
@@ -2837,20 +2875,21 @@ CNF;
                     'domain_id' => $domainId,
                 ]);
             }
-            $err = (string)__('TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname）。请确认域名 NS 已指向当前 DNS 服务商后重试。');
+            $err = (string)__('TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname、Cloudflare）。请确认域名 NS 已指向当前 DNS 服务商后重试。');
             if ($onProgress) {
                 $onProgress($err, ['step' => 'dns_visibility_fail']);
             }
             return ['validated' => false, 'error' => $err];
         }
-        // TXT 已可见，短等后通知 CA（Gname 等 CA 侧查询仍可能滞后，适当加长）
-        $dnsWaitSeconds = ($dnsProviderCode === 'gname') ? 90 : 60;
+        // 公网已能解析 TXT 即可通知 CA；本系统检测路径与 LE 全球多点查询权威 NS 的路径不同，后者偶发超时不代表 TXT 未写入
         if ($onProgress) {
-            $onProgress((string)__('TXT 已生效，等待 %{1} 秒后通知 CA...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
-        }
-        $this->waitSeconds($dnsWaitSeconds);
-        if ($onProgress) {
-            $onProgress((string)__('正在通知 CA 进行验证...'), ['step' => 'notify_ca']);
+            $onProgress((string)__('TXT 已在公网生效，正在通知 CA 验证...'), ['step' => 'notify_ca']);
+            $onProgress(
+                (string)__(
+                    '说明：本系统与证书机构使用不同 DNS 路径。证书机构从全球多点直连您域名的权威 DNS；若 GName 等对 CA 查询响应慢，仍可能报「查询超时」，与「记录已生效」不矛盾，可稍后重试或换更快 DNS 托管。'
+                ),
+                ['step' => 'notify_ca_hint']
+            );
         }
         $this->notifyChallenge($dnsChallenge['url'] ?? '', $accountUrl);
 
@@ -2908,6 +2947,32 @@ CNF;
         return ['validated' => $validated, 'error' => $error];
     }
 
+    private function isAcmeDns01TxtQueryTimeout(string $detail): bool
+    {
+        $d = \strtolower($detail);
+        if (!\str_contains($d, 'txt')) {
+            return false;
+        }
+        return \str_contains($d, 'looking up txt')
+            && (\str_contains($d, 'timed out') || \str_contains($d, 'timeout') || \str_contains($d, 'query timed out'));
+    }
+
+    private function formatAcmeChallengeFailureMessage(string $detail): string
+    {
+        $msg = $detail !== '' ? __('域名验证失败：%{1}', [$detail]) : __('域名验证失败');
+        $detailLower = \strtolower($detail);
+        if (\str_contains($detailLower, 'txt record') || \str_contains($detailLower, 'no txt')) {
+            $msg .= ' ' . __('（DNS 传播可能需要更长时间，请 2–5 分钟后重试）');
+        } elseif ($this->isAcmeDns01TxtQueryTimeout($detail)) {
+            $msg .= ' ' . __(
+                '（DNS-01：CA 从全球多点查您权威 DNS 上的 TXT。若同款流程在把域名 NS 换到 Cloudflare 后即可签发，基本可认定原 DNS 托管（如注册商自带解析）对 TXT 的全球查询不稳定或未正确对外服务；建议长期用 Cloudflare 等做 DNS 托管。）'
+            );
+        } elseif (\str_contains($detailLower, 'looking up a for') || \str_contains($detailLower, 'looking up aaaa for') || (\str_contains($detailLower, 'query timed out') && !\str_contains($detailLower, 'txt'))) {
+            $msg .= ' ' . __('（HTTP 验证场景：CA 查询 A/AAAA 超时或未生效；若站点经 CDN，请改用 DNS-01 或保证源站可达。）');
+        }
+        return $msg;
+    }
+
     protected function getAccountKeyThumbprint(): string
     {
         $key = \openssl_pkey_get_private(\file_get_contents($this->accountKeyPath));
@@ -2928,9 +2993,17 @@ CNF;
     }
 
     /**
-     * 检查 ACME TXT 记录是否在公网可见（用于添加后快速失败，避免 Gname 等未生效时长时间等待）
+     * 检查 ACME TXT 是否在公网可见：先本机解析，再 Google/Cloudflare DoH（绕过本机缓存，常比单用 dns_get_record 早看到 GName 等）
      */
     protected function isAcmeTxtVisible(string $txtFqdn, string $expectedValue): bool
+    {
+        if ($this->acmeTxtMatchesDnsGetRecord($txtFqdn, $expectedValue)) {
+            return true;
+        }
+        return $this->isAcmeTxtVisibleViaPublicDoh($txtFqdn, $expectedValue);
+    }
+
+    private function acmeTxtMatchesDnsGetRecord(string $txtFqdn, string $expectedValue): bool
     {
         $records = @\dns_get_record($txtFqdn, \DNS_TXT);
         if (!\is_array($records)) {
@@ -2946,6 +3019,79 @@ CNF;
                     if ($t === $expectedValue) {
                         return true;
                     }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @see https://developers.google.com/speed/public-dns/docs/doh-json
+     */
+    private function isAcmeTxtVisibleViaPublicDoh(string $txtFqdn, string $expectedValue): bool
+    {
+        if (!\function_exists('curl_init')) {
+            return false;
+        }
+        $qname = \rtrim(\strtolower($txtFqdn), '.') . '.';
+        $enc = \rawurlencode($qname);
+        $endpoints = [
+            ['url' => 'https://dns.google/resolve?name=' . $enc . '&type=TXT', 'accept' => ''],
+            ['url' => 'https://cloudflare-dns.com/dns-query?name=' . $enc . '&type=TXT', 'accept' => 'application/dns-json'],
+        ];
+        foreach ($endpoints as $ep) {
+            $ch = \curl_init($ep['url']);
+            if ($ch === false) {
+                continue;
+            }
+            $headers = ['User-Agent: Weline-Server/1.0 ACME-TXT-Check'];
+            if ($ep['accept'] !== '') {
+                $headers[] = 'Accept: ' . $ep['accept'];
+            }
+            \curl_setopt_array($ch, [
+                \CURLOPT_RETURNTRANSFER => true,
+                \CURLOPT_TIMEOUT => 6,
+                \CURLOPT_CONNECTTIMEOUT => 3,
+                \CURLOPT_HTTPHEADER => $headers,
+                \CURLOPT_SSL_VERIFYPEER => true,
+            ]);
+            $raw = \curl_exec($ch);
+            \curl_close($ch);
+            if (!\is_string($raw) || $raw === '') {
+                continue;
+            }
+            $json = \json_decode($raw, true);
+            if (!\is_array($json) || (int) ($json['Status'] ?? -1) !== 0) {
+                continue;
+            }
+            foreach ($json['Answer'] ?? [] as $a) {
+                if ((int) ($a['type'] ?? 0) !== 16) {
+                    continue;
+                }
+                $data = (string) ($a['data'] ?? '');
+                if ($this->acmeTxtDataMatchesExpected($data, $expectedValue)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private function acmeTxtDataMatchesExpected(string $data, string $expectedValue): bool
+    {
+        $data = \trim($data);
+        if ($data === $expectedValue) {
+            return true;
+        }
+        if (\str_starts_with($data, '"') && \str_ends_with($data, '"') && \strlen($data) >= 2) {
+            if (\substr($data, 1, -1) === $expectedValue) {
+                return true;
+            }
+        }
+        if (\preg_match_all('/"((?:\\\\.|[^"\\\\])*)"/', $data, $m)) {
+            foreach ($m[1] as $seg) {
+                if (\stripcslashes((string) $seg) === $expectedValue) {
+                    return true;
                 }
             }
         }
