@@ -31,11 +31,12 @@ class SessionServerProvider extends AbstractServiceProvider
     }
 
     /**
-     * 多 Worker 时启用（>1）；也可通过 env server.session_server.enabled 强制开启。
+     * 多 Worker 时启用（>1）；也可通过 wls.session_server.enabled 强制开启。
      */
     public function isEnabled(ServiceContext $context): bool
     {
-        $force = $context->envConfig['server']['session_server']['enabled'] ?? null;
+        $ss = ($context->envConfig['wls'] ?? [])['session_server'] ?? [];
+        $force = $ss['enabled'] ?? null;
         if ($force !== null) {
             return (bool) $force;
         }

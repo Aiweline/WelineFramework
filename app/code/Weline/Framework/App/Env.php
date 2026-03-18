@@ -246,11 +246,6 @@ class Env extends DataObject
             'redis' => [
                 'tip' => '开发中...',
             ],
-            'wls' => [
-                'port' => 19970,
-                'session_ttl' => 86400,
-                'max_sessions' => 50000,
-            ],
         ],
     ];
 
@@ -605,7 +600,7 @@ class Env extends DataObject
     
     /**
      * 维护模式缓存刷新间隔（秒）
-     * 默认 1 秒，可通过 env.server.maintenance_check_interval 配置
+     * 默认 1 秒，可通过 wls.maintenance_check_interval 配置
      */
     private const MAINTENANCE_CHECK_INTERVAL = 1.0;
     
@@ -634,7 +629,7 @@ class Env extends DataObject
     {
         $now = \microtime(true);
 
-        $interval = ($this->config['server'] ?? [])['maintenance_check_interval']
+        $interval = ($this->config['wls'] ?? [])['maintenance_check_interval']
                     ?? self::MAINTENANCE_CHECK_INTERVAL;
 
         if (self::$maintenanceCached !== null

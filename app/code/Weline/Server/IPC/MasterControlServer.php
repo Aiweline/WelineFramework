@@ -409,6 +409,11 @@ class MasterControlServer
         $this->removeClient($clientId);
     }
 
+    public function clientExists(int $clientId): bool
+    {
+        return isset($this->clients[$clientId]);
+    }
+
     /**
      * 移除客户端连接（断开时）
      */
