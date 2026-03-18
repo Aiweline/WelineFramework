@@ -620,6 +620,52 @@ class DomainResolveService
     }
 
     /**
+     * 校验公网权威 NS 是否由指定 DNS 供应商托管。
+     *
+     * Gname 等注册商允许在 NS 仍指向 Cloudflare 等外部时通过 API 添加解析，
+     * 控制台显示「等待生效」，公网权威区并不含该 TXT，ACME DNS-01 必然失败。
+     *
+     * @return array{ok: bool, message: string, live_ns: array<string>, detected: string}
+     */
+    public function validateAuthoritativeDnsMatchesProvider(string $rootDomain, string $providerCode): array
+    {
+        $rootDomain = \strtolower(\trim($rootDomain));
+        $providerCode = \strtolower(\trim($providerCode));
+        if ($rootDomain === '' || $providerCode === '') {
+            return ['ok' => false, 'message' => (string) __('参数无效'), 'live_ns' => [], 'detected' => 'unknown'];
+        }
+        $live = $this->getLiveNameservers($rootDomain);
+        $detected = $this->dnsDetector->detectProvider($live);
+        if ($live === []) {
+            return [
+                'ok' => false,
+                'message' => (string) __(
+                    '无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。',
+                    [$rootDomain]
+                ),
+                'live_ns' => [],
+                'detected' => 'unknown',
+            ];
+        }
+        if ($detected !== $providerCode) {
+            $nsStr = \implode(', ', $live);
+            $detName = $this->dnsDetector->getProviderDisplayName($detected);
+            $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
+            return [
+                'ok' => false,
+                'message' => (string) __(
+                    '域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。',
+                    [$rootDomain, $detName, $nsStr, $expName]
+                ),
+                'live_ns' => $live,
+                'detected' => $detected,
+            ];
+        }
+
+        return ['ok' => true, 'message' => '', 'live_ns' => $live, 'detected' => $detected];
+    }
+
+    /**
      * @deprecated 请使用 DomainOriginMatchService::fqdnPointsToServer 或 publicAaaaRecordContentMatchesServer
      */
     public function isDomainPointingToServerByRecordContent(string $domain, string $serverIpv4, string $serverIpv6): bool
