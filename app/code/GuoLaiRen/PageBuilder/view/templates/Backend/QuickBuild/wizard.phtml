@@ -1548,7 +1548,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         if (step4Hint) step4Hint.style.display = '';
         
         // 使用框架生成的完整后台 URL，避免“当前路由路径拼接”导致 404
-        var sseBaseUrl = '<?= addslashes($this->getBackendUrl('saas/backend/api/provisioning/stream')) ?>';
+        var sseBaseUrl = '<?= addslashes($this->getBackendUrl('websites/backend/api/provisioning/stream')) ?>';
         var params = new URLSearchParams({
             domain: selectedDomain,
             registrar_account_id: selectedAccountId,

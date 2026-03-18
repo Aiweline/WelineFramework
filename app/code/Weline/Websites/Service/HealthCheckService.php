@@ -14,6 +14,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
  * 健康检查服务
@@ -64,7 +65,17 @@ class HealthCheckService
     public function checkAllDomains(): array
     {
         $domains = $this->domainModel->getAllActiveDomainsForHealthCheck();
-        
+        if (WebsitesCronTestContext::getDomainFilter() !== null) {
+            $domains = \array_values(\array_filter(
+                $domains,
+                static fn (array $d): bool => WebsitesCronTestContext::matchesSubject(
+                    (string) ($d[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
+                    null
+                )
+            ));
+            WebsitesCronTestContext::detail('HealthCheck.filtered_domains', ['count' => \count($domains)]);
+        }
+
         $results = [
             'total' => \count($domains),
             'healthy' => 0,
@@ -78,9 +89,11 @@ class HealthCheckService
             $domainId = (int) $domainData[WebsiteDomain::schema_fields_ID];
             $hasHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
             $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
-            
+            WebsitesCronTestContext::detail('HealthCheck.checkDomain', ['domain' => $domain, 'https' => $hasHttps]);
+
             // 执行健康检查
             $checkResult = $this->checkDomain($domain, $hasHttps);
+            WebsitesCronTestContext::detail('HealthCheck.result', ['domain' => $domain, 'checkResult' => $checkResult]);
             
             // 更新数据库
             $this->domainModel->updateHealthCheck(
@@ -305,7 +318,16 @@ class HealthCheckService
     public function syncAllHttpsStatus(): array
     {
         $domains = $this->domainModel->getAllActiveDomainsForHealthCheck();
-        
+        if (WebsitesCronTestContext::getDomainFilter() !== null) {
+            $domains = \array_values(\array_filter(
+                $domains,
+                static fn (array $d): bool => WebsitesCronTestContext::matchesSubject(
+                    (string) ($d[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
+                    null
+                )
+            ));
+        }
+
         $results = [
             'total' => \count($domains),
             'https_enabled' => 0,
@@ -317,7 +339,8 @@ class HealthCheckService
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
             $currentHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
             $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
-            
+            WebsitesCronTestContext::detail('HttpsSync.row', ['domain' => $domain, 'https_enabled' => $currentHttps]);
+
             // 创建一个临时模型实例来检查证书有效性
             $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
             $domainModel->setData($domainData);

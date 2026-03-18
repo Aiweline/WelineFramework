@@ -2,48 +2,38 @@
 declare(strict_types=1);
 
 /**
- * Weline Websites - 域名池全流程检测定时任务
+ * Weline Websites - 域名池 ——【解析阶段】定时任务
  *
- * 流程：1. 查询所有未建站就绪的域名 → 2. 检测 DNS → 3. 标记待申请 HTTPS（不在此任务内同步申请）→ 4. 若 HTTPS 已有效则更新可建站状态
- * - DNS 未设置：尝试自动添加 A 记录后跳过，下次再检
- * - DNS 已就绪且 HTTPS 无效：仅标记为待申请，由定时任务「域名池证书自动申请」统一同步申请
- * - 错误时发送消息并继续处理后续域名
+ * 仅处理生命周期 registered / awaiting_origin：检测解析与源站，推进至 origin_ready。
+ * 不在本任务内标记 https pending / 不申请证书（由【证书阶段】任务承接）。
+ * 另：cert_valid 且未 site_ready 时本任务第二段仅刷新可建站标记。
  */
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainPoolLifecycleService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\ServerIpService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainPoolResolveCheck implements CronTaskInterface
+/**
+ * 由 {@see WebsitesDomainResolvePipeline} 统一调度。
+ */
+#[CronTestHelp(
+    description: '域名池解析阶段（registered/awaiting_origin）。',
+    examples: ['php bin/w cron:test --task=domain_pool_resolve_check --domain=www.example.com -v'],
+)]
+class DomainPoolResolveCheck
 {
+    use WebsitesCronTestRunnerTrait;
+
     private const LOG_KEY = 'domain_pool_resolve_check';
-
-    public function name(): string
-    {
-        return __('域名池解析状态检测');
-    }
-
-    public function execute_name(): string
-    {
-        return 'domain_pool_resolve_check';
-    }
-
-    public function tip(): string
-    {
-        return __('定期检测未建站就绪域名的 DNS 解析，自动添加 A 记录，标记待申请证书并由证书任务统一申请，更新可建站状态');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/10 * * * *';
-    }
 
     public function execute(): string
     {
@@ -52,7 +42,7 @@ class DomainPoolResolveCheck implements CronTaskInterface
         $errorDetails = [];
         $dnsAdded = 0;
         $dnsSkipped = 0;
-        $httpsApplied = 0;
+        $originReadyAdvanced = 0;
         $siteReadyUpdated = 0;
 
         try {
@@ -61,16 +51,14 @@ class DomainPoolResolveCheck implements CronTaskInterface
             $domainResolveService = ObjectManager::getInstance(DomainResolveService::class);
             $serverIpService = ObjectManager::getInstance(ServerIpService::class);
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
+            $lifecycle = ObjectManager::getInstance(DomainPoolLifecycleService::class);
 
-            $domains = $domainPoolModel->getDomainsNotSiteReady(100);
+            $domains = $domainPoolModel->getDomainsNeedResolveCheck(100);
             $total = \count($domains);
+            WebsitesCronTestContext::detail('DomainPoolResolveCheck.batch', ['raw_count' => $total]);
 
-            $logs[] = __('共获取 %{1} 个待处理域名', [$total]);
+            $logs[] = __('【解析阶段】本批 %{1} 条（registered/awaiting_origin，距上次检测≥约10分钟）', [$total]);
             w_log_info($logs[\count($logs) - 1], [], self::LOG_KEY);
-
-            if ($total === 0) {
-                return __('没有需要处理的域名池域名');
-            }
 
             $serverIp = $serverIpService->getPublicIpv4() ?: $serverIpService->getPublicIpv6() ?? '';
 
@@ -78,27 +66,20 @@ class DomainPoolResolveCheck implements CronTaskInterface
                 $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
                 $poolDomain->setData($row);
                 $domainName = $row[DomainPool::schema_fields_DOMAIN] ?? '';
+                $logPrefix = "[{$domainName}] ";
                 $parentDomainId = (int) ($row[DomainPool::schema_fields_PARENT_DOMAIN_ID] ?? 0);
                 $parentDomain = ObjectManager::getInstance(Domain::class, [], false);
                 if ($parentDomainId > 0) {
                     $parentDomain->load($parentDomainId);
                 }
                 $hasDnsOrCdnAccount = $parentDomain->getDnsAccountId() > 0 || $parentDomain->getCdnAccountId() > 0;
-                if (!$hasDnsOrCdnAccount) {
-                    $dnsSkipped++;
-                    $logPrefix = "[{$domainName}] ";
-                    $logs[] = $logPrefix . __('DNS/CDN 账户为空，定时任务跳过检测与证书标记');
-                    w_log_info($logPrefix . __('DNS/CDN 账户为空，定时任务跳过检测与证书标记'), [], self::LOG_KEY);
-                    continue;
-                }
 
                 try {
-                    $logPrefix = "[{$domainName}] ";
                     $logs[] = $logPrefix . __('开始处理');
                     w_log_info($logPrefix . __('开始处理'), [], self::LOG_KEY);
 
-                    // Step 2: DNS 检测
                     $result = $resolveService->checkResolve($poolDomain);
+                    WebsitesCronTestContext::detail('checkResolve', ['domain' => $domainName, 'result' => $result]);
                     $resolvedIp = $result['ipv4'] ?: $result['ipv6'] ?? '';
                     $logs[] = $logPrefix . __('DNS 检测结果: resolved=%{1}, ip=%{2}', [$result['resolved'] ? 'true' : 'false', $resolvedIp ?: '-']);
                     w_log_info($logPrefix . __('DNS 检测结果') . ' resolved=' . ($result['resolved'] ? '1' : '0') . ' ip=' . $resolvedIp, [], self::LOG_KEY);
@@ -106,17 +87,17 @@ class DomainPoolResolveCheck implements CronTaskInterface
                     if (!$result['resolved']) {
                         $errMsg = $result['error'] ?? __('DNS 未解析');
                         $logs[] = $logPrefix . __('DNS 未解析: %{1}', [$errMsg]);
-                        w_log_info($logPrefix . __('DNS 未解析，尝试添加 A 记录'), [], self::LOG_KEY);
 
-                        if ($serverIp !== '') {
+                        if ($serverIp !== '' && $hasDnsOrCdnAccount) {
+                            w_log_info($logPrefix . __('尝试添加 A/AAAA 记录'), [], self::LOG_KEY);
                             $addResult = $domainResolveService->tryAddARecordForPoolDomain($poolDomain, $serverIp);
                             if ($addResult['success']) {
                                 $dnsAdded++;
-                                $logs[] = $logPrefix . __('已尝试添加 A 记录，等待 DNS 生效');
+                                $logs[] = $logPrefix . $addResult['message'];
                                 w_log_info($logPrefix . $addResult['message'], [], self::LOG_KEY);
                             } else {
                                 $dnsSkipped++;
-                                $logs[] = $logPrefix . __('添加 A 记录失败: %{1}', [$addResult['message']]);
+                                $logs[] = $logPrefix . __('添加记录失败: %{1}', [$addResult['message']]);
                                 w_log_warning($logPrefix . $addResult['message'], [], self::LOG_KEY);
                                 $errors++;
                                 $errorDetails[] = $domainName . ': ' . $addResult['message'];
@@ -128,11 +109,15 @@ class DomainPoolResolveCheck implements CronTaskInterface
                                     ['icon' => 'ri-error-warning-line']
                                 );
                             }
+                        } elseif (!$hasDnsOrCdnAccount) {
+                            $dnsSkipped++;
+                            w_log_info($logPrefix . __('无 DNS 管理账户，无法代写记录；请在外部 DNS 配置后等待生效'), [], self::LOG_KEY);
                         } else {
                             $dnsSkipped++;
                             $errors++;
                             $errorDetails[] = $domainName . ': ' . $errMsg;
                         }
+                        $lifecycle->applyAfterResolvePass($poolDomain, ['resolved' => false, 'is_local' => false]);
                         continue;
                     }
 
@@ -148,35 +133,20 @@ class DomainPoolResolveCheck implements CronTaskInterface
                         $eventsManager->dispatch('Weline_Websites::domain_pool::resolve_off_local', $eventData);
                     }
                     if (!$result['is_local']) {
-                        $logs[] = $logPrefix . __('解析正常但公网 IP 与源站不一致且提供商权威记录未指向本站，跳过证书标记');
-                        w_log_info($logPrefix . __('未判定为指向本站（公网/权威均未匹配源站）'), [], self::LOG_KEY);
+                        $logs[] = $logPrefix . __('已解析但未指向本站，阶段保持 awaiting_origin');
+                        w_log_info($logPrefix . __('未判定为指向本站'), [], self::LOG_KEY);
+                        $lifecycle->applyAfterResolvePass($poolDomain, ['resolved' => true, 'is_local' => false]);
                         continue;
                     }
                     if (!empty($result['is_local_via_authoritative'])) {
-                        $logs[] = $logPrefix . __('经 DNS/CDN 提供商权威记录确认源站指向本站（公网可能为 CDN 边缘 IP）');
+                        $logs[] = $logPrefix . __('权威记录确认源站指向本站');
                         w_log_info($logPrefix . __('权威记录指向本站'), [], self::LOG_KEY);
                     }
 
-                    // Step 3: DNS 已就绪，处理 HTTPS 状态（本任务不实际申请证书，仅标记或更新可建站）
-                    $httpsStatus = $poolDomain->getHttpsStatus();
-                    $logs[] = $logPrefix . __('当前 HTTPS 状态: %{1}', [$httpsStatus ?: 'none']);
-
-                    if ($httpsStatus === DomainPool::HTTPS_STATUS_VALID) {
-                        $poolDomain->calculateSiteReady();
-                        $poolDomain->save();
-                        $siteReadyUpdated++;
-                        $logs[] = $logPrefix . __('证书已有效，仅更新可建站状态（本任务不申请证书）');
-                        w_log_info($logPrefix . __('已更新可建站状态'), [], self::LOG_KEY);
-                        continue;
-                    }
-
-                    // 需要申请 HTTPS：仅标记为「待申请」，由定时任务「域名池证书自动申请」实际调用 CA 申请
-                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
-                    $poolDomain->setHttpsError('');
-                    $poolDomain->save();
-                    $httpsApplied++;
-                    $logs[] = $logPrefix . __('仅标记为「待申请证书」，将由证书定时任务实际向 CA 申请（本任务不发起申请）');
-                    w_log_info($logPrefix . __('已标记待申请证书，由定时任务「域名池证书自动申请」统一处理'), [], self::LOG_KEY);
+                    $lifecycle->applyAfterResolvePass($poolDomain, ['resolved' => true, 'is_local' => true]);
+                    $originReadyAdvanced++;
+                    $logs[] = $logPrefix . __('【解析阶段完成】已进入 origin_ready，下一节拍由「证书申请」任务处理');
+                    w_log_info($logPrefix . __('阶段→origin_ready'), [], self::LOG_KEY);
                 } catch (\Throwable $e) {
                     $errors++;
                     $errMsg = $e->getMessage();
@@ -193,12 +163,34 @@ class DomainPoolResolveCheck implements CronTaskInterface
                 }
             }
 
+            $refresh = $domainPoolModel->getPoolsCertValidNeedSiteReadyRefresh(40);
+            foreach ($refresh as $rrow) {
+                $rfq = (string) ($rrow[DomainPool::schema_fields_DOMAIN] ?? '');
+                $rrt = (string) ($rrow[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+                if (!WebsitesCronTestContext::matchesSubject($rfq, $rrt !== '' ? $rrt : null)) {
+                    WebsitesCronTestContext::skipNote($rfq, 'cert_valid site_ready refresh');
+                    continue;
+                }
+                $p = ObjectManager::getInstance(DomainPool::class, [], false);
+                $p->setData($rrow);
+                try {
+                    $p->calculateSiteReady();
+                    $p->save();
+                    $siteReadyUpdated++;
+                    w_log_info('[cert_valid→site_ready] ' . $p->getDomain(), [], self::LOG_KEY);
+                } catch (\Throwable) {
+                }
+            }
+            if ($refresh !== []) {
+                $logs[] = __('【cert_valid 阶段】刷新可建站 %{1} 条', [\count($refresh)]);
+            }
+
             $message = \sprintf(
-                __('检测完成: 共 %d 个域名，添加 A 记录 %d 个，跳过 %d 个，已标记待证书申请 %d 个（由证书任务实际申请），可建站更新 %d 个，错误 %d 个'),
+                __('解析阶段完成: 处理 %d 条，推进 origin_ready %d 条，代写记录成功 %d，跳过 %d，cert_valid 刷新建站 %d，错误 %d'),
                 $total,
+                $originReadyAdvanced,
                 $dnsAdded,
                 $dnsSkipped,
-                $httpsApplied,
                 $siteReadyUpdated,
                 $errors
             );
@@ -225,10 +217,5 @@ class DomainPoolResolveCheck implements CronTaskInterface
             w_log_error($errorMsg, [], self::LOG_KEY);
             return $errorMsg;
         }
-    }
-
-    public function unlock_timeout(int $minute = 20): int
-    {
-        return $minute;
     }
 }

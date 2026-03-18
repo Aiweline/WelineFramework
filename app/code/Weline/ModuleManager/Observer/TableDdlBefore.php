@@ -41,6 +41,28 @@ class TableDdlBefore implements ObserverInterface
             return;
         }
 
+        $policy = (string) ($existing->getData(ModuleTable::schema_fields_TABLE_POLICY) ?: ModuleTable::POLICY_OWNED);
+        if ($policy === ModuleTable::POLICY_SUCCESSOR) {
+            $succ = trim((string) ($existing->getData(ModuleTable::schema_fields_SUCCESSOR_MODULE_NAME) ?: ''));
+            if ($succ !== '' && $succ === $moduleName) {
+                return;
+            }
+        }
+        if ($policy === ModuleTable::POLICY_SHARED) {
+            $owner = trim((string) ($existing->getData(ModuleTable::schema_fields_OWNER_MODULE_NAME) ?: ''));
+            if ($owner === '') {
+                $owner = $existing->getModuleName();
+            }
+            if ($moduleName === $owner) {
+                return;
+            }
+            throw new Exception(__('表 %{1} 为 shared，仅结构负责模块 %{2} 可执行 DDL；当前模块 %{3} 不可改结构。', [
+                $tableName,
+                $owner,
+                $moduleName,
+            ]));
+        }
+
         throw new Exception(__('【冲突模组：%{1} 和 %{2}】：表 %{3} 已被模块 %{4} 的模型 %{5} 使用。请为当前模型更换表名或联系管理员。', [
             $moduleName,
             $existing->getModuleName(),

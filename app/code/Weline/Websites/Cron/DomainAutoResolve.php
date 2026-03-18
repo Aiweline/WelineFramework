@@ -11,7 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
@@ -20,33 +20,29 @@ use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
-use Weline\Websites\Service\AuthoritativeDnsOriginService;
+use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\ServerIpService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainAutoResolve implements CronTaskInterface
+/**
+ * 逻辑由 {@see WebsitesDomainResolvePipeline} 统一调度（每 10 分钟），本类仅保留可执行体。
+ */
+#[CronTestHelp(
+    description: '仅跑购买自动解析任务、DNS 迁移、全局自动解析（不跑域名池/根域解析）。',
+    examples: [
+        'php bin/w cron:test --task=domain_auto_resolve --domain=example.com -v',
+    ],
+)]
+class DomainAutoResolve
 {
-    public function name(): string
-    {
-        return __('域名自动解析');
-    }
+    use WebsitesCronTestRunnerTrait;
 
-    public function execute_name(): string
-    {
-        return 'domain_auto_resolve';
-    }
-
-    public function tip(): string
-    {
-        return __('自动为未解析到本服务器的域名添加 DNS 记录');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/5 * * * *';
-    }
+    private const STALE_PROCESSING_MINUTES = 45;
+    private const GLOBAL_AUTO_RESOLVE_BATCH = 50;
 
     public function execute(): string
     {
@@ -82,17 +78,35 @@ class DomainAutoResolve implements CronTaskInterface
 
             $serverIp = $serverIpService->getPublicIpv4();
             $serverIpv6 = $serverIpService->getPublicIpv6();
+            WebsitesCronTestContext::detail('DomainAutoResolve.processPurchaseTasks', [
+                'server_ipv4' => $serverIp !== '' ? $serverIp : null,
+                'server_ipv6' => $serverIpv6 !== '' ? $serverIpv6 : null,
+            ]);
             if ($serverIp === '' && $serverIpv6 === '') {
                 return '无法获取服务器公网IP，跳过自动解析任务';
             }
-            $authOriginService = ObjectManager::getInstance(AuthoritativeDnsOriginService::class);
+            $originMatch = ObjectManager::getInstance(DomainOriginMatchService::class);
+
+            $staleBefore = \date('Y-m-d H:i:s', \time() - self::STALE_PROCESSING_MINUTES * 60);
+            $stuck = $taskModel->clearQuery()
+                ->where(DomainAutoResolveTask::schema_fields_STATUS, DomainAutoResolveTask::STATUS_PROCESSING)
+                ->where(DomainAutoResolveTask::schema_fields_UPDATED_AT, $staleBefore, '<')
+                ->select()
+                ->fetchArray();
+            foreach ($stuck as $stuckRow) {
+                $t = clone $taskModel;
+                $t->setData($stuckRow);
+                $t->setStatus(DomainAutoResolveTask::STATUS_PENDING);
+                $t->setLastError((string) __('任务长时间未结束，已重置为待处理'));
+                $t->save();
+            }
 
             $tasks = $taskModel->clearQuery()
                 ->where(DomainAutoResolveTask::schema_fields_STATUS, DomainAutoResolveTask::STATUS_PENDING)
                 ->select()
                 ->fetchArray();
 
-            if (empty($tasks)) {
+            if ($tasks === []) {
                 return '无待处理的自动解析任务';
             }
 
@@ -107,7 +121,17 @@ class DomainAutoResolve implements CronTaskInterface
                 $task = clone $taskModel;
                 $task->setData($row);
                 $domain = $task->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($domain, $domain)) {
+                    WebsitesCronTestContext::skipNote($domain, 'purchase task domain filter');
+                    continue;
+                }
                 $accountId = $task->getAccountId();
+                WebsitesCronTestContext::detail('task_start', [
+                    'domain' => $domain,
+                    'account_id' => $accountId,
+                    'status' => $task->getStatus(),
+                    'retry' => $task->getRetryCount(),
+                ]);
 
                 $task->setStatus(DomainAutoResolveTask::STATUS_PROCESSING);
                 $task->save();
@@ -118,27 +142,9 @@ class DomainAutoResolve implements CronTaskInterface
                         ->where(Domain::schema_fields_DOMAIN, $domain)
                         ->find()
                         ->fetch();
-                    if ($domainRow->getDomainId() > 0
-                        && ($domainRow->getDnsAccountId() > 0 || $domainRow->getCdnAccountId() > 0)) {
-                        $boundAuth = $authOriginService->originPointsToServer(
-                            $domain,
-                            $domain,
-                            (int) $domainRow->getDnsAccountId(),
-                            (int) $domainRow->getCdnAccountId(),
-                            $serverIp,
-                            $serverIpv6,
-                        );
-                        if ($boundAuth['api_ok'] && $boundAuth['has_direct_records'] && $boundAuth['matches']) {
-                            $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
-                            $task->save();
-                            $success++;
-                            $successfulDomains[$domain] = true;
-                            continue;
-                        }
-                    }
-
-                    $resolved = @\gethostbyname($domain);
-                    if ($resolved !== $domain && $resolved !== '' && $serverIp !== '' && $resolved === $serverIp) {
+                    $dnsId = $domainRow->getDomainId() > 0 ? (int) $domainRow->getDnsAccountId() : 0;
+                    $cdnId = $domainRow->getDomainId() > 0 ? (int) $domainRow->getCdnAccountId() : 0;
+                    if ($originMatch->fqdnPointsToServer($domain, $domain, $dnsId, $cdnId)) {
                         $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                         $task->save();
                         $success++;
@@ -156,14 +162,7 @@ class DomainAutoResolve implements CronTaskInterface
                         continue;
                     }
 
-                    $authCheck = $authOriginService->originPointsToServerForAccount(
-                        $domain,
-                        $domain,
-                        $accountId,
-                        $serverIp,
-                        $serverIpv6,
-                    );
-                    if ($authCheck['api_ok'] && $authCheck['has_direct_records'] && $authCheck['matches']) {
+                    if ($originMatch->fqdnPointsToServerForRegistrarAccount($domain, $domain, $accountId)) {
                         $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                         $task->save();
                         $success++;
@@ -185,24 +184,40 @@ class DomainAutoResolve implements CronTaskInterface
 
                     $credentials = $account->getCredentials();
 
-                    $records = [
-                        ['type' => 'A', 'name' => '@', 'value' => $serverIp, 'ttl' => 600],
-                        ['type' => 'A', 'name' => 'www', 'value' => $serverIp, 'ttl' => 600],
-                    ];
+                    $records = [];
+                    if ($serverIp !== '' && \filter_var($serverIp, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
+                        $records[] = ['type' => 'A', 'name' => '@', 'value' => $serverIp, 'ttl' => 600];
+                        $records[] = ['type' => 'A', 'name' => 'www', 'value' => $serverIp, 'ttl' => 600];
+                    }
+                    if ($serverIpv6 !== '' && \filter_var($serverIpv6, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV6)) {
+                        $records[] = ['type' => 'AAAA', 'name' => '@', 'value' => $serverIpv6, 'ttl' => 600];
+                        $records[] = ['type' => 'AAAA', 'name' => 'www', 'value' => $serverIpv6, 'ttl' => 600];
+                    }
+                    if ($records === []) {
+                        $task->setStatus(DomainAutoResolveTask::STATUS_FAILED);
+                        $task->setLastError((string) __('服务器公网 IP 无效，无法写入解析'));
+                        $task->save();
+                        $failed++;
+                        continue;
+                    }
 
                     $allSuccess = true;
                     $errors = [];
 
                     foreach ($records as $record) {
                         try {
+                            WebsitesCronTestContext::detail('addDnsRecord', ['domain' => $domain, 'record' => $record]);
                             $result = $adapter->addDnsRecord($domain, $record, $credentials);
+                            WebsitesCronTestContext::detail('addDnsRecord_result', ['success' => $result['success'] ?? false, 'message' => $result['message'] ?? '']);
                             if (!($result['success'] ?? false)) {
                                 $allSuccess = false;
-                                $errors[] = ($record['name'] ?? '@') . ': ' . ($result['message'] ?? '未知错误');
+                                $label = ($record['type'] ?? '') . ' ' . ($record['name'] ?? '@');
+                                $errors[] = $label . ': ' . ($result['message'] ?? '未知错误');
                             }
                         } catch (\Throwable $e) {
                             $allSuccess = false;
-                            $errors[] = ($record['name'] ?? '@') . ': ' . $e->getMessage();
+                            $label = ($record['type'] ?? '') . ' ' . ($record['name'] ?? '@');
+                            $errors[] = $label . ': ' . $e->getMessage();
                         }
                     }
 
@@ -252,6 +267,9 @@ class DomainAutoResolve implements CronTaskInterface
                 $poolModel = ObjectManager::getInstance(DomainPool::class);
                 $poolResolveService = ObjectManager::getInstance(DomainPoolResolveService::class);
                 foreach (\array_keys($successfulDomains) as $rootDomain) {
+                    if (!WebsitesCronTestContext::matchesSubject($rootDomain, $rootDomain)) {
+                        continue;
+                    }
                     try {
                         $poolRows = $poolModel->clearQuery()
                             ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
@@ -259,9 +277,16 @@ class DomainAutoResolve implements CronTaskInterface
                             ->select()
                             ->fetchArray();
                         foreach ($poolRows as $poolRow) {
+                            $poolFqdn = (string) ($poolRow[DomainPool::schema_fields_DOMAIN] ?? '');
+                            $poolRoot = (string) ($poolRow[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
+                            if (!WebsitesCronTestContext::matchesSubject($poolFqdn, $poolRoot !== '' ? $poolRoot : null)) {
+                                WebsitesCronTestContext::skipNote($poolFqdn, 'pool row after purchase resolve');
+                                continue;
+                            }
                             $pool = ObjectManager::getInstance(DomainPool::class, [], false);
                             $pool->setData($poolRow);
                             $r = $poolResolveService->checkAndUpdateIfChanged($pool);
+                            WebsitesCronTestContext::detail('pool_after_resolve', ['domain' => $poolFqdn, 'updated' => $r['updated'] ?? false]);
                             $poolChecked++;
                             if ($r['updated'] ?? false) {
                                 $poolUpdated++;
@@ -317,7 +342,12 @@ class DomainAutoResolve implements CronTaskInterface
                 $domain = clone $domainModel;
                 $domain->setData($row);
                 $domainName = $domain->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($domainName, $domainName)) {
+                    WebsitesCronTestContext::skipNote($domainName, 'dns migration filter');
+                    continue;
+                }
                 $targetAccountId = (int) $domain->getDnsAccountId();
+                WebsitesCronTestContext::detail('dns_migration_row', ['domain' => $domainName, 'target_dns_account_id' => $targetAccountId]);
 
                 if ($targetAccountId <= 0) {
                     w_log_warning(__('[DnsMigration] %{1} 目标 DNS 账户未设置，跳过', [$domainName]), [], $logCh);
@@ -384,6 +414,8 @@ class DomainAutoResolve implements CronTaskInterface
             $domains = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_STATUS, Domain::STATUS_ACTIVE)
                 ->where(Domain::schema_fields_IS_LOCAL_SERVER, 0)
+                ->order(Domain::schema_fields_DOMAIN, 'ASC')
+                ->limit(self::GLOBAL_AUTO_RESOLVE_BATCH)
                 ->select()
                 ->fetchArray();
 
@@ -399,9 +431,16 @@ class DomainAutoResolve implements CronTaskInterface
             foreach ($domains as $row) {
                 $domain = clone $domainModel;
                 $domain->setData($row);
+                $dn = $domain->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
+                    WebsitesCronTestContext::skipNote($dn, 'global auto resolve filter');
+                    continue;
+                }
+                WebsitesCronTestContext::detail('global_auto_resolve', ['domain' => $dn]);
 
                 try {
                     $result = $resolveService->autoResolveToLocal($domain);
+                    WebsitesCronTestContext::detail('global_auto_resolve_result', ['domain' => $dn, 'success' => $result['success'] ?? false, 'errors' => $result['errors'] ?? []]);
 
                     if ($result['success']) {
                         $success++;
@@ -419,15 +458,15 @@ class DomainAutoResolve implements CronTaskInterface
                 w_log_warning("全局解析失败详情:\n" . \implode("\n", \array_slice($errors, 0, 10)), [], 'domain_auto_resolve');
             }
 
-            return \sprintf('全局解析: 共%d个, 成功%d, 失败%d', $total, $success, $failed);
+            $msg = \sprintf('全局解析: 本批%d个, 成功%d, 失败%d', $total, $success, $failed);
+            if ($total >= self::GLOBAL_AUTO_RESOLVE_BATCH) {
+                $msg .= '；' . (string) __('未就绪域名较多时将分多轮处理');
+            }
+
+            return $msg;
         } catch (\Throwable $e) {
             w_log_error('全局自动解析异常: ' . $e->getMessage(), [], 'domain_auto_resolve');
             return '';
         }
-    }
-
-    public function unlock_timeout(int $minute = 30): int
-    {
-        return $minute;
     }
 }
