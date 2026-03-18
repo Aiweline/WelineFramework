@@ -29,6 +29,7 @@ use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DnsSwitchService;
+use Weline\Websites\Service\DomainPoolMaintenanceService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainParserService;
 use Weline\Websites\Service\DomainResolveService;
@@ -122,56 +123,18 @@ class Domain extends BackendController
         return $out;
     }
 
-    // ============================================================
-    // 域名管理主页
-    // ============================================================
-
     /**
-     * 域名管理主页（Tab 布局）
+     * 为域名池列表行补充注册商 / DNS / CDN 展示名
+     *
+     * @param list<array<string, mixed>> $poolRows
+     * @return list<array<string, mixed>>
      */
-    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
-    public function index()
+    private function enrichDomainPoolRows(array $poolRows): array
     {
-        // 获取已注册的适配器列表（供前端下拉选择使用）
-        $adapterOptions = $this->resolverService->getAdapterOptions();
-        $this->assign('adapter_options', $adapterOptions);
-
-        // 获取所有账号（含域名商信息）
-        $accounts = $this->registrarAccount->getAccountsWithRegistrar();
-        $this->assign('accounts', $accounts);
-
-        // 获取所有域名商
-        $registrars = $this->registrar->getAllRegistrars();
-        $this->assign('registrars', $registrars);
-
-        // 获取网站列表（供购买时绑定选择）
-        $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-        $websiteModel->clearData(true);
-        $websites = $websiteModel->order('name', 'ASC')->select()->fetchArray();
-        $this->assign('websites', $websites);
-
-        // 当前 Tab
-        $this->assign('active_tab', $this->request->getGet('tab', 'domain_list'));
-
-        $this->assign('cronInstalled', $this->isCronInstalled());
-
-        // 域名列表（初始数据，前端会通过 AJAX 加载分页）
-        $domains = $this->domainModel->clearQuery()
-            ->order(DomainModel::schema_fields_CREATED_AT, 'DESC')
-            ->select()
-            ->fetchArray();
-        $this->assign('domains', \array_slice($domains, 0, 20));
-
-        // 域名池列表（含服务商、已建站，供 Tab 使用）
-        $poolModel = ObjectManager::getInstance(DomainPool::class);
-        $poolRows = $poolModel->clearQuery()
-            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
-            ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
-            ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
-            ->pagination(1, 300)
-            ->select()
-            ->fetchArray();
-        $parentIds = array_unique(array_filter(array_column($poolRows, DomainPool::schema_fields_PARENT_DOMAIN_ID)));
+        if ($poolRows === []) {
+            return [];
+        }
+        $parentIds = \array_unique(\array_filter(\array_column($poolRows, DomainPool::schema_fields_PARENT_DOMAIN_ID)));
         $parentDomainMap = [];
         if ($parentIds !== []) {
             $parentDomains = $this->domainModel->clearQuery()
@@ -220,9 +183,168 @@ class Domain extends BackendController
             }
         }
         unset($poolRow);
-        $this->assign('domain_pool_rows', $poolRows);
+
+        return $poolRows;
+    }
+
+    // ============================================================
+    // 域名管理主页
+    // ============================================================
+
+    /**
+     * 域名管理主页（Tab 布局）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    public function index()
+    {
+        // 获取已注册的适配器列表（供前端下拉选择使用）
+        $adapterOptions = $this->resolverService->getAdapterOptions();
+        $this->assign('adapter_options', $adapterOptions);
+
+        // 获取所有账号（含域名商信息）
+        $accounts = $this->registrarAccount->getAccountsWithRegistrar();
+        $this->assign('accounts', $accounts);
+
+        // 获取所有域名商
+        $registrars = $this->registrar->getAllRegistrars();
+        $this->assign('registrars', $registrars);
+
+        // 获取网站列表（供购买时绑定选择）
+        $websiteModel = ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
+        $websiteModel->clearData(true);
+        $websites = $websiteModel->order('name', 'ASC')->select()->fetchArray();
+        $this->assign('websites', $websites);
+
+        // 当前 Tab
+        $this->assign('active_tab', $this->request->getGet('tab', 'domain_list'));
+
+        $this->assign('cronInstalled', $this->isCronInstalled());
+
+        // 域名列表（初始数据，前端会通过 AJAX 加载分页）
+        $domains = $this->domainModel->clearQuery()
+            ->order(DomainModel::schema_fields_CREATED_AT, 'DESC')
+            ->select()
+            ->fetchArray();
+        $this->assign('domains', \array_slice($domains, 0, 20));
+
+        // 域名池：分页与总数（Tab 内可翻页或 AJAX）
+        $poolModel = ObjectManager::getInstance(DomainPool::class);
+        $poolLimit = 20;
+        $poolPage = max(1, (int) $this->request->getGet('pool_page', 1));
+        $poolTotal = (int) $poolModel->clearQuery()
+            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+            ->count();
+        $poolRows = $poolModel->clearQuery()
+            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+            ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
+            ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
+            ->pagination($poolPage, $poolLimit)
+            ->select()
+            ->fetchArray();
+        $this->assign('domain_pool_rows', $this->enrichDomainPoolRows($poolRows));
+        $this->assign('domain_pool_total', $poolTotal);
+        $this->assign('domain_pool_page', $poolPage);
+        $this->assign('domain_pool_limit', $poolLimit);
+        $this->assign('domain_pool_pages', max(1, (int) \ceil($poolTotal / $poolLimit)));
 
         return $this->fetch();
+    }
+
+    /**
+     * 域名池列表（分页，供 Tab AJAX）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    public function getDomainPoolList()
+    {
+        try {
+            $page = max(1, (int) $this->request->getGet('page', 1));
+            $pageSize = min(100, max(5, (int) ($this->request->getGet('page_size') ?: $this->request->getGet('limit', 20))));
+            $poolModel = ObjectManager::getInstance(DomainPool::class);
+            $total = (int) $poolModel->clearQuery()
+                ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+                ->count();
+            $poolRows = $poolModel->clearQuery()
+                ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
+                ->order(DomainPool::schema_fields_ROOT_DOMAIN, 'ASC')
+                ->order(DomainPool::schema_fields_DOMAIN, 'ASC')
+                ->pagination($page, $pageSize)
+                ->select()
+                ->fetchArray();
+            $items = $this->enrichDomainPoolRows($poolRows);
+            $pages = max(1, (int) \ceil($total / $pageSize));
+
+            return $this->fetchJson([
+                'code' => 200,
+                'data' => [
+                    'items' => $items,
+                    'total' => $total,
+                    'page' => $page,
+                    'pages' => $pages,
+                    'limit' => $pageSize,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('获取域名池列表失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 清理域名池中误同步的非法记录（如含 [] 的域名串）
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    public function postCleanPoolInvalidDomains()
+    {
+        try {
+            $dryRun = \filter_var($this->request->getPost('dry_run', ''), FILTER_VALIDATE_BOOLEAN)
+                || $this->request->getPost('dry_run') === '1';
+            $svc = ObjectManager::getInstance(DomainPoolMaintenanceService::class);
+            $r = $svc->cleanInvalidPoolDomains($dryRun);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $dryRun
+                    ? __('试运行：发现 %{1} 条可清理记录', [(string) $r['deleted']])
+                    : __('已清理 %{1} 条非法域名池记录', [(string) $r['deleted']]),
+                'data' => $r,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('清理失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
+    }
+
+    /**
+     * 根域 @ 上未指向本机公网的 A/AAAA（非 CF 橙云）从 DNS 商删除，并移除该根下域名池条目
+     */
+    #[Acl('Weline_Websites::domain_index', '域名管理', 'mdi mdi-domain', '域名管理首页')]
+    public function postCleanPoolMispointedApexDns()
+    {
+        try {
+            $dryRun = \filter_var($this->request->getPost('dry_run', ''), FILTER_VALIDATE_BOOLEAN)
+                || $this->request->getPost('dry_run') === '1';
+            $svc = ObjectManager::getInstance(DomainPoolMaintenanceService::class);
+            $r = $svc->cleanMispointedApexDnsAndPool($dryRun);
+            $nDns = \count($r['dns_deleted']);
+            $msg = $dryRun
+                ? __('将删除 %{n} 条 DNS 记录，并移除 %{p} 条域名池记录（试运行）', ['n' => (string) $nDns, 'p' => (string) $r['pool_removed']])
+                : __('已删除 %{n} 条 DNS 记录，已移除 %{p} 条域名池记录', ['n' => (string) $nDns, 'p' => (string) $r['pool_removed']]);
+
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $msg,
+                'data' => $r,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson([
+                'code' => 500,
+                'msg' => __('操作失败：%{1}', [$e->getMessage()]),
+            ]);
+        }
     }
 
     // ============================================================
