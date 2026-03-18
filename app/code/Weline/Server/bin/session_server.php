@@ -109,7 +109,8 @@ unset($_envFile);
 $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
     || ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev');
 
-$sessionConfig = $envConfig['session']['drivers']['wls'] ?? $envConfig['session']['wls']['wls_server'] ?? [];
+$sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
+    ? $envConfig['wls']['session'] : [];
 $sessionConfig['port'] = $port;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
 $safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';

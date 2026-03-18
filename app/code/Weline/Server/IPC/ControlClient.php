@@ -269,6 +269,11 @@ class ControlClient
     /**
      * 发送 draining_complete 消息
      */
+    public function sendWorkerLoopStarted(int $workerId, int $port, int $pid): bool
+    {
+        return $this->send(ControlMessage::workerLoopStarted($workerId, $port, $pid));
+    }
+
     public function sendDrainingComplete(int $workerId = 0, int $port = 0): bool
     {
         if ($workerId === 0 && $this->registerInfo) {

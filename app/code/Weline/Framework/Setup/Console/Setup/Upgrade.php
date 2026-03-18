@@ -2539,7 +2539,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         $this->printing->note(__('正在执行热更新...'));
         
         // 读取服务器配置
-        $serverConfig = Env::getInstance()->getConfig('server');
+        $serverConfig = Env::getInstance()->getConfig('wls');
         if (empty($serverConfig) || empty($serverConfig['instances'])) {
             $this->printing->warning(__('未检测到运行中的 WLS 服务器实例。'));
             $this->printing->note(__('请先启动服务器：php bin/w server:start'));
@@ -2588,7 +2588,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function notifyWlsReload(): void
     {
         // 检查是否有运行中的 WLS 服务器
-        $serverConfig = Env::getInstance()->getConfig('server');
+        $serverConfig = Env::getInstance()->getConfig('wls');
         if (empty($serverConfig) || empty($serverConfig['instances'])) {
             return;
         }

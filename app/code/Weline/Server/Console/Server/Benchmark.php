@@ -163,11 +163,11 @@ class Benchmark extends CommandAbstract
             }
         }
         
-        // 3. 从 env.server 读取配置
+        // 3. 从 wls 读取配置
         $envConfig = Env::getInstance()->getConfig();
-        if (isset($envConfig['server']['port'])) {
-            $host = $envConfig['server']['host'] ?? '127.0.0.1';
-            $port = (int) $envConfig['server']['port'];
+        if (isset(($envConfig['wls'] ?? [])['port'])) {
+            $host = ($envConfig['wls'] ?? [])['host'] ?? '127.0.0.1';
+            $port = (int) $envConfig['wls']['port'];
             $socket = @\fsockopen($host, $port, $errno, $errstr, 1);
             if ($socket) {
                 \fclose($socket);
@@ -175,8 +175,8 @@ class Benchmark extends CommandAbstract
                     $instances['env'] = [
                         'host' => $host,
                         'port' => $port,
-                        'worker_count' => $envConfig['server']['worker_count'] ?? 1,
-                        'ssl' => (bool)($envConfig['server']['ssl_enabled'] ?? false),
+                        'worker_count' => ($envConfig['wls'] ?? [])['worker_count'] ?? 1,
+                        'ssl' => (bool)(($envConfig['wls'] ?? [])['ssl_enabled'] ?? false),
                     ];
                 }
             }
