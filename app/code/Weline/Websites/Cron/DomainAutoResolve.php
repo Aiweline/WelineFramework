@@ -36,6 +36,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     examples: [
         'php bin/w cron:test --task=domain_auto_resolve --domain=example.com -v',
     ],
+    manual_help: [
+        '控制台 --domain= 聚焦该根域相关自动解析任务。',
+        '后台「后缀」未解析时与管道内定时行为一致。',
+    ],
 )]
 class DomainAutoResolve
 {

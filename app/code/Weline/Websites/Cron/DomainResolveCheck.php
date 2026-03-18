@@ -23,6 +23,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '根域解析检测（site_ready=0 批次）与子域入池。',
     examples: ['php bin/w cron:test --task=domain_resolve_check --domain=example.com -v'],
+    manual_help: [
+        '控制台 --domain= 针对该根域及子域入池逻辑。',
+        '后台「后缀」未解析时按批次扫 site_ready=0 根域。',
+    ],
 )]
 class DomainResolveCheck
 {
