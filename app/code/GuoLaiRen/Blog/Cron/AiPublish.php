@@ -567,7 +567,13 @@ class AiPublish implements CronTaskInterface
     {
         $base = preg_replace('/[^a-z0-9\-]/', '-', strtolower($title));
         $base = trim(preg_replace('/-+/', '-', $base), '-') ?: 'post';
-        $slug = $base . '-' . date('YmdHis');
+        $suffix = '-' . date('YmdHis');
+        $maxBase = 255 - \strlen($suffix);
+        if ($maxBase > 10 && \strlen($base) > $maxBase) {
+            $base = \mb_substr($base, 0, $maxBase);
+            $base = \rtrim($base, '-');
+        }
+        $slug = $base . $suffix;
         $post = ObjectManager::getInstance(PostModel::class);
         $exists = $post->clear()
             ->where(PostModel::schema_fields_SLUG, $slug)

@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -45,6 +46,53 @@ class HealthCheckService
     public function __construct()
     {
         $this->domainModel = ObjectManager::getInstance(WebsiteDomain::class);
+    }
+
+    /**
+     * @return array{local_endpoint_probe?: bool, local_bind_address?: string}
+     */
+    public static function getHealthCheckProbeConfig(): array
+    {
+        $cfg = Env::getInstance()->getConfig();
+
+        return (array) (($cfg['websites'] ?? [])['health_check'] ?? []);
+    }
+
+    /**
+     * CURLOPT_RESOLVE 将主机解析到环回，URL 不变，SNI/证书校验仍针对原主机名。
+     *
+     * @param resource|\CurlHandle $ch
+     */
+    public static function applyLocalEndpointProbeToCurl($ch, string $url): void
+    {
+        $hc = self::getHealthCheckProbeConfig();
+        if (!($hc['local_endpoint_probe'] ?? true)) {
+            return;
+        }
+        $bind = \trim((string) ($hc['local_bind_address'] ?? '127.0.0.1'));
+        if ($bind === '') {
+            $bind = '127.0.0.1';
+        }
+        $parts = \parse_url($url);
+        if ($parts === false || ($parts['host'] ?? '') === '') {
+            return;
+        }
+        $scheme = \strtolower((string) ($parts['scheme'] ?? ''));
+        if ($scheme !== 'https' && $scheme !== 'http') {
+            return;
+        }
+        $host = (string) $parts['host'];
+        if ($host === '127.0.0.1' || $host === 'localhost' || $host === '[::1]' || $host === '::1') {
+            return;
+        }
+        $port = isset($parts['port']) ? (int) $parts['port'] : ($scheme === 'https' ? 443 : 80);
+        if ($port < 1 || $port > 65535) {
+            return;
+        }
+        $addr = \str_contains($bind, ':') && !\str_starts_with($bind, '[')
+            ? '[' . $bind . ']'
+            : $bind;
+        \curl_setopt($ch, CURLOPT_RESOLVE, ["{$host}:{$port}:{$addr}"]);
     }
     
     /**
@@ -229,6 +277,7 @@ class HealthCheckService
             CURLOPT_NOBODY => true,
             CURLOPT_HEADER => true,
         ]);
+        self::applyLocalEndpointProbeToCurl($ch, $url);
         
         $response = \curl_exec($ch);
         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);

@@ -63,7 +63,14 @@ class QueryProviderRegistry
                             $this->providers[$name] = $instance;
                         }
                     }
-                } catch (\Throwable) {
+                } catch (\Throwable $e) {
+                    if (\function_exists('w_log_warning')) {
+                        \w_log_warning(
+                            (string)\__('QueryProvider 加载失败（已跳过）：%{1} — %{2}', $className, $e->getMessage()),
+                            ['class' => $className, 'file' => $sourceFile],
+                            'query_provider'
+                        );
+                    }
                 }
             }
         }
