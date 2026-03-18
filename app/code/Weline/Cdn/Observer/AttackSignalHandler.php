@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Weline\Cdn\Observer;
 
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Output\Log;
@@ -47,12 +48,14 @@ class AttackSignalHandler implements ObserverInterface
     }
     
     /**
-     * 执行观察者逻辑
-     *
-     * @param DataObject $data 事件数据
+     * 执行观察者逻辑（事件负载在 $event->getData('data')，与 EventsManager::dispatch 约定一致）
      */
-    public function execute(DataObject $data): void
+    public function execute(Event &$event): void
     {
+        $data = $event->getData('data');
+        if (!$data instanceof DataObject) {
+            return;
+        }
         $signal = $data->getData('signal');
         $summary = $data->getData('summary');
         $targetDomain = $data->getData('domain');
