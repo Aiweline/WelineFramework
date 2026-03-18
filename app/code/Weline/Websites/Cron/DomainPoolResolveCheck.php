@@ -148,9 +148,13 @@ class DomainPoolResolveCheck implements CronTaskInterface
                         $eventsManager->dispatch('Weline_Websites::domain_pool::resolve_off_local', $eventData);
                     }
                     if (!$result['is_local']) {
-                        $logs[] = $logPrefix . __('解析正常但未指向本服务器 (is_local=false)，跳过，不标记证书');
-                        w_log_info($logPrefix . __('解析正常但未指向本服务器'), [], self::LOG_KEY);
+                        $logs[] = $logPrefix . __('解析正常但公网 IP 与源站不一致且提供商权威记录未指向本站，跳过证书标记');
+                        w_log_info($logPrefix . __('未判定为指向本站（公网/权威均未匹配源站）'), [], self::LOG_KEY);
                         continue;
+                    }
+                    if (!empty($result['is_local_via_authoritative'])) {
+                        $logs[] = $logPrefix . __('经 DNS/CDN 提供商权威记录确认源站指向本站（公网可能为 CDN 边缘 IP）');
+                        w_log_info($logPrefix . __('权威记录指向本站'), [], self::LOG_KEY);
                     }
 
                     // Step 3: DNS 已就绪，处理 HTTPS 状态（本任务不实际申请证书，仅标记或更新可建站）

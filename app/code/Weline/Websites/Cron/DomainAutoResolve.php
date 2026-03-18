@@ -20,6 +20,7 @@ use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\AuthoritativeDnsOriginService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
 use Weline\Websites\Service\DomainResolveService;
@@ -80,9 +81,11 @@ class DomainAutoResolve implements CronTaskInterface
             $registrarModel = ObjectManager::getInstance(DomainRegistrar::class);
 
             $serverIp = $serverIpService->getPublicIpv4();
-            if ($serverIp === '') {
+            $serverIpv6 = $serverIpService->getPublicIpv6();
+            if ($serverIp === '' && $serverIpv6 === '') {
                 return '无法获取服务器公网IP，跳过自动解析任务';
             }
+            $authOriginService = ObjectManager::getInstance(AuthoritativeDnsOriginService::class);
 
             $tasks = $taskModel->clearQuery()
                 ->where(DomainAutoResolveTask::schema_fields_STATUS, DomainAutoResolveTask::STATUS_PENDING)
@@ -110,15 +113,37 @@ class DomainAutoResolve implements CronTaskInterface
                 $task->save();
 
                 try {
-                    $resolved = @\gethostbyname($domain);
-                    if ($resolved !== $domain) {
-                        if ($resolved === $serverIp) {
+                    $domainRow = ObjectManager::getInstance(Domain::class, [], false);
+                    $domainRow->clearQuery()
+                        ->where(Domain::schema_fields_DOMAIN, $domain)
+                        ->find()
+                        ->fetch();
+                    if ($domainRow->getDomainId() > 0
+                        && ($domainRow->getDnsAccountId() > 0 || $domainRow->getCdnAccountId() > 0)) {
+                        $boundAuth = $authOriginService->originPointsToServer(
+                            $domain,
+                            $domain,
+                            (int) $domainRow->getDnsAccountId(),
+                            (int) $domainRow->getCdnAccountId(),
+                            $serverIp,
+                            $serverIpv6,
+                        );
+                        if ($boundAuth['api_ok'] && $boundAuth['has_direct_records'] && $boundAuth['matches']) {
                             $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                             $task->save();
                             $success++;
                             $successfulDomains[$domain] = true;
                             continue;
                         }
+                    }
+
+                    $resolved = @\gethostbyname($domain);
+                    if ($resolved !== $domain && $resolved !== '' && $serverIp !== '' && $resolved === $serverIp) {
+                        $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
+                        $task->save();
+                        $success++;
+                        $successfulDomains[$domain] = true;
+                        continue;
                     }
 
                     $account = clone $accountModel;
@@ -128,6 +153,21 @@ class DomainAutoResolve implements CronTaskInterface
                         $task->setLastError('域名商账户不存在');
                         $task->save();
                         $failed++;
+                        continue;
+                    }
+
+                    $authCheck = $authOriginService->originPointsToServerForAccount(
+                        $domain,
+                        $domain,
+                        $accountId,
+                        $serverIp,
+                        $serverIpv6,
+                    );
+                    if ($authCheck['api_ok'] && $authCheck['has_direct_records'] && $authCheck['matches']) {
+                        $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
+                        $task->save();
+                        $success++;
+                        $successfulDomains[$domain] = true;
                         continue;
                     }
 

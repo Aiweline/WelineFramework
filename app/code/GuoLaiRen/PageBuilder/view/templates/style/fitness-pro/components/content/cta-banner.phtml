@@ -65,13 +65,13 @@ $instanceId = 'fp-cta-' . uniqid();
     </style>
     <script>
     (function(){
-        var primaryUrl = <?= json_encode($primaryUrl, JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode($secondaryUrl, JSON_UNESCAPED_SLASHES) ?>;
+        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryUrl), JSON_UNESCAPED_SLASHES) ?>;
+        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryUrl), JSON_UNESCAPED_SLASHES) ?>;
         document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(){ window.location.href = primaryUrl; });
+            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
         });
         document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(){ window.location.href = secondaryUrl; });
+            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
         });
     })();
     </script>
