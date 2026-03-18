@@ -19,6 +19,7 @@ class DomainPoolResolveService
         private ServerIpService $serverIpService,
         private DomainOriginMatchService $originMatch,
         private Domain $domainModel,
+        private DomainPoolLifecycleService $poolLifecycle,
     ) {
     }
 
@@ -80,6 +81,14 @@ class DomainPoolResolveService
         $siteReady = $poolDomain->calculateSiteReady();
         
         $poolDomain->save();
+
+        // 与解析定时任务一致：任意路径（后台点「检测解析」、API）完成后推进阶段，否则阶段卡在 registered，证书队列永远选不中
+        if ($poolDomain->getPoolId() > 0 && !$poolDomain->isSiteCreated()) {
+            $this->poolLifecycle->applyAfterResolvePass($poolDomain, [
+                'resolved' => $resolved,
+                'is_local' => $isLocal,
+            ]);
+        }
 
         $resolveOffLocal = $wasLocalBefore && !$isLocal;
 
