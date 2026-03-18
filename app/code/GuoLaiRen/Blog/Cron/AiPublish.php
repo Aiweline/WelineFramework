@@ -204,12 +204,25 @@ class AiPublish implements CronTaskInterface
                     continue;
                 }
                 $usedKeywords = $this->getUsedKeywordsForQuota($siteId, $profileId);
-                $keywords = array_values(array_diff($rawKeywords, array_keys($usedKeywords)));
-                $keywords = array_slice($keywords, 0, $need);
-                $total = count($keywords);
-                if ($total === 0 && !empty($rawKeywords) && $onProgress) {
-                    $onProgress('skip', ['reason' => '该画像下关键词均已生成过文章，请添加新关键词或使用趋势同步', 'profile_id' => $profileId]);
+                $unused = array_values(array_diff($rawKeywords, array_keys($usedKeywords)));
+                if ($unused === []) {
+                    // 兜底模式：关键词都曾发过文时仍按每日配额发文，复用关键词池（slug/时间不同，避免「有配额却 0 篇」）
+                    if ($onProgress) {
+                        $onProgress('fallback_reuse_keywords', [
+                            'message' => __('该画像关键词均已用于发文，本次按配额复用关键词继续生成。'),
+                            'profile_id' => $profileId,
+                            'need' => $need,
+                        ]);
+                    }
+                    $keywords = [];
+                    $n = count($rawKeywords);
+                    for ($i = 0; $i < $need; $i++) {
+                        $keywords[] = $rawKeywords[$i % $n];
+                    }
+                } else {
+                    $keywords = array_slice($unused, 0, $need);
                 }
+                $total = count($keywords);
                 if ($onProgress && $total > 0) {
                     $onProgress('fallback_keywords', ['profile_id' => $profileId, 'keywords_count' => $total, 'keywords' => $keywords]);
                 }
@@ -450,7 +463,9 @@ class AiPublish implements CronTaskInterface
         }
 
         if (empty($article['title']) || empty($article['content'])) {
-            return false;
+            throw new \RuntimeException(
+                __('AI 返回的标题或正文为空，请检查模型、提示词或关键词是否过短。')
+            );
         }
 
         $slug = $this->uniqueSlug($article['title'], $siteId);
