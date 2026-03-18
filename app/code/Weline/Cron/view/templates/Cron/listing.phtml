@@ -221,6 +221,13 @@
                                 </td>
                                 <td class="weline-cron-actions-cell" onclick="event.stopPropagation();">
                                     <div class="weline-cron-actions">
+                                        <button type="button"
+                                                class="btn btn-outline-primary btn-sm weline-cron-run-btn mb-1"
+                                                title="@lang{真实执行（SSE）}"
+                                                data-execute-name="{{task.execute_name}}"
+                                                data-task-name="{{task.name}}">
+                                            <i class="mdi mdi-play"></i> <lang>运行</lang>
+                                        </button>
                                         <if condition="task.status === 'block'">
                                             <form action="@backend-url('*/cron/unlock')" method="post" class="d-inline">
                                                 <csrf/>
@@ -437,6 +444,63 @@
 .weline-cron-tip-accordion { padding-left: 4px; }
 .weline-cron-tip-full { white-space: pre-wrap; word-break: break-word; }
 
+.weline-cron-run-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 10050;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+.weline-cron-run-modal.is-open { display: flex; }
+.weline-cron-run-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backend-color-bg-overlay, rgba(0, 0, 0, 0.5));
+}
+.weline-cron-run-modal-dialog {
+    position: relative;
+    width: 92%;
+    max-width: 720px;
+    max-height: 90vh;
+    background: var(--backend-color-card-bg, #fff);
+    border-radius: var(--backend-border-radius-md, 8px);
+    box-shadow: var(--backend-shadow-lg, 0 8px 32px rgba(0,0,0,0.15));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.weline-cron-run-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--backend-color-border-default, #e9ecef);
+}
+.weline-cron-run-modal-body { padding: 12px 16px; overflow-y: auto; flex: 1; min-height: 0; }
+.weline-cron-run-modal-footer {
+    padding: 10px 16px;
+    border-top: 1px solid var(--backend-color-border-default, #e9ecef);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+}
+.weline-cron-run-help-details { margin-bottom: 12px; }
+.weline-cron-run-help-details summary { cursor: pointer; font-weight: 600; color: var(--backend-color-text-primary, #333); }
+.weline-cron-run-help-pre {
+    margin: 8px 0 0;
+    padding: 10px;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: var(--backend-color-bg-surface, #f8f9fa);
+    border-radius: 6px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
 @media (max-width: 768px) {
     .weline-cron-search { min-width: 100%; }
     .weline-cron-stat-card { padding: var(--backend-spacing-sm, 12px); }
@@ -489,6 +553,125 @@
                 if (!ev.target.closest('.weline-cron-actions-cell')) toggleTaskDetail(tr);
             }
         });
+    });
+})();
+</script>
+
+<?php
+use Weline\Framework\Security\Token;
+$welineCronSseCsrf = Token::create('csrf', 9, 3600);
+$welineCronRunStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/cron/post-run-stream'), ENT_QUOTES, 'UTF-8');
+$welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/cron/run-help'), ENT_QUOTES, 'UTF-8');
+?>
+<div id="weline-cron-run-modal" class="weline-cron-run-modal" role="dialog" aria-modal="true" aria-labelledby="weline-cron-run-modal-title">
+    <div class="weline-cron-run-modal-backdrop" id="weline-cron-run-modal-backdrop"></div>
+    <div class="weline-cron-run-modal-dialog">
+        <div class="weline-cron-run-modal-header">
+            <h5 class="mb-0" id="weline-cron-run-modal-title">
+                <i class="mdi mdi-console-line"></i> <lang>手动运行</lang>
+                <small class="text-muted ms-1" id="weline-cron-run-modal-title-task"></small>
+            </h5>
+            <button type="button" class="btn btn-sm btn-light" id="weline-cron-run-modal-close" aria-label="<?= htmlspecialchars((string) __('关闭')) ?>">
+                <i class="mdi mdi-close"></i>
+            </button>
+        </div>
+        <div class="weline-cron-run-modal-body">
+            <input type="hidden" id="weline-cron-run-execute-name" value="" />
+            <input type="hidden" id="weline-cron-sse-csrf" value="<?= htmlspecialchars((string) $welineCronSseCsrf, ENT_QUOTES, 'UTF-8') ?>" />
+            <details class="weline-cron-run-help-details" id="weline-cron-run-help-details">
+                <summary><lang>帮助说明</lang></summary>
+                <div id="weline-cron-run-help-body" class="text-muted small"><lang>加载中</lang>…</div>
+            </details>
+            <div class="mb-2">
+                <label for="weline-cron-run-suffix" class="form-label small mb-1"><lang>后缀</lang>（<lang>可选</lang>，<lang>写入</lang> WELINE_CRON_MANUAL_ARGS）</label>
+                <input type="text" class="form-control form-control-sm" id="weline-cron-run-suffix" name="suffix" autocomplete="off"
+                       placeholder="<?= htmlspecialchars((string) __('留空则与定时调度一致')) ?>" />
+            </div>
+            <w:theme:sse-terminal id="weline-cron-run-terminal" title="<?= htmlspecialchars((string) __('输出')) ?>" height="280px" events="start,progress,chunk,done,error" show-toolbar="true" />
+        </div>
+        <div class="weline-cron-run-modal-footer">
+            <span class="text-muted small me-auto" id="weline-cron-run-hint"></span>
+            <button type="button" class="btn btn-primary btn-sm" id="weline-cron-run-start-btn">
+                <i class="mdi mdi-play"></i> <lang>开始执行</lang>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="weline-cron-run-close-btn"><lang>关闭</lang></button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    var runStreamUrl = '<?= $welineCronRunStreamUrl ?>';
+    var runHelpUrl = '<?= $welineCronRunHelpUrl ?>';
+    var modal = document.getElementById('weline-cron-run-modal');
+    if (!modal) return;
+
+    function closeModal() {
+        modal.classList.remove('is-open');
+        var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-run-terminal'];
+        if (term && typeof term.stop === 'function') term.stop();
+    }
+    function openModal() {
+        modal.classList.add('is-open');
+    }
+
+    function fillHelp(executeName) {
+        var body = document.getElementById('weline-cron-run-help-body');
+        if (!body) return;
+        body.textContent = '<?= addslashes((string) __('加载中')) ?>…';
+        fetch(runHelpUrl + '?execute_name=' + encodeURIComponent(executeName), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (!j || !j.success) {
+                body.textContent = (j && j.message) ? j.message : '<?= addslashes((string) __('加载失败')) ?>';
+                return;
+            }
+            var parts = [];
+            parts.push('<?= addslashes((string) __('调度说明')) ?>\n' + (j.tip || '-'));
+            if (j.manual_args_hint) parts.push('\n\n<?= addslashes((string) __('手动参数')) ?>\n' + j.manual_args_hint);
+            if (j.test_help_description) parts.push('\n\n<?= addslashes((string) __('测试说明')) ?>\n' + j.test_help_description);
+            if (j.test_help_examples && j.test_help_examples.length) {
+                parts.push('\n\n<?= addslashes((string) __('示例')) ?>:\n' + j.test_help_examples.join('\n'));
+            }
+            body.textContent = parts.join('');
+        }).catch(function() {
+            body.textContent = '<?= addslashes((string) __('加载失败')) ?>';
+        });
+    }
+
+    document.querySelectorAll('.weline-cron-run-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            var en = btn.getAttribute('data-execute-name') || '';
+            var tn = btn.getAttribute('data-task-name') || '';
+            document.getElementById('weline-cron-run-execute-name').value = en;
+            var sub = document.getElementById('weline-cron-run-modal-title-task');
+            if (sub) sub.textContent = en ? '(' + en + ')' : '';
+            document.getElementById('weline-cron-run-suffix').value = '';
+            var details = document.getElementById('weline-cron-run-help-details');
+            if (details) details.open = false;
+            fillHelp(en);
+            openModal();
+        });
+    });
+
+    ['weline-cron-run-modal-close', 'weline-cron-run-close-btn', 'weline-cron-run-modal-backdrop'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('click', function() { closeModal(); });
+    });
+
+    document.getElementById('weline-cron-run-start-btn').addEventListener('click', function() {
+        var term = window.WelineSseTerminal && window.WelineSseTerminal['weline-cron-run-terminal'];
+        if (!term) return;
+        var fd = new FormData();
+        fd.append('csrf', document.getElementById('weline-cron-sse-csrf').value);
+        fd.append('execute_name', document.getElementById('weline-cron-run-execute-name').value);
+        fd.append('suffix', document.getElementById('weline-cron-run-suffix').value);
+        if (typeof term.clear === 'function') term.clear();
+        term.start(runStreamUrl, { method: 'POST', body: fd });
     });
 })();
 </script>
