@@ -17,6 +17,7 @@ use Weline\Framework\App\Env;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait;
 use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
+use Weline\Websites\Adapter\Concern\RegistrarProvisioningNormalizeNoopTrait;
 use Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 
@@ -28,6 +29,7 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
     use DnsCdnZoneRecordsProviderTrait;
     use RegistrarBatchCheckAvailabilityTrait;
+    use RegistrarProvisioningNormalizeNoopTrait;
     /** 官方接口域名 */
     private const DEFAULT_API_HOST = 'api.gname.com';
     private const REQUEST_TIMEOUT = 30;
@@ -586,8 +588,13 @@ class GnameRegistrar implements DomainRegistrarInterface
             );
         }
 
-        $appId = (string) $credentials['appid'];
-        $appKey = (string) $credentials['appkey'];
+        $appId = \trim((string) ($credentials['appid'] ?? ''));
+        $appKey = \trim((string) ($credentials['appkey'] ?? ''));
+        if ($appId === '' || $appKey === '') {
+            throw new \InvalidArgumentException(
+                __('Gname 凭据不完整：请配置 appid 与 appkey')
+            );
+        }
         $apiHost = \trim((string) ($credentials['api_host'] ?? ''));
         if ($apiHost === '') {
             $apiHost = self::DEFAULT_API_HOST;

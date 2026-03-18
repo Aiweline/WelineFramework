@@ -22,11 +22,14 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait;
 use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 use Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait;
 use Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait;
+use Weline\Websites\Model\DomainRegistrar;
+use Weline\Websites\Model\DomainRegistrarAccount;
 
 class CloudflareRegistrar implements DomainRegistrarInterface
 {
@@ -50,7 +53,197 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
     public function getDescription(): string
     {
-        return __('Cloudflare DNS 服务提供商，支持 DNS 记录管理、CDN 加速、DDoS 防护。可用于将域名的 DNS 解析切换到 Cloudflare。');
+        return __(
+            'Cloudflare：权威 DNS 与 CDN（代理、规则、缓存）同属一个 Zone，须使用同一 API Token。'
+            . ' 一站式配置中 DNS 切到 Cloudflare 后，CDN 步骤只能继续走 Cloudflare，不可用其他 CDN 供应商另绑。'
+            . ' 加速依赖 DNS 记录开启「代理状态」(橙云)。'
+        );
+    }
+
+    /**
+     * 是否要求 DNS 与 CDN 使用同一套凭据/Zone（CF 专属；其他供应商返回 false 即可扩展）。
+     */
+    public function isDnsCdnCoupledProvider(): bool
+    {
+        return true;
+    }
+
+    /**
+     * 用当前 Token 解析根域 Zone ID（与 Weline_Cdn Cloudflare::ensureZone 查询一致，供 DNS 已托管后的 CDN 步骤使用）。
+     *
+     * @return array{success: bool, zone_id?: string, message?: string}
+     */
+    public function resolveZoneIdForDomain(string $domain, array $credentials): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return ['success' => false, 'message' => __('域名为空')];
+        }
+        try {
+            $this->validateCredentials($credentials);
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+        $zoneId = $this->getZoneId($domain, $credentials);
+        if ($zoneId === '') {
+            return [
+                'success' => false,
+                'message' => __(
+                    '在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。'
+                ),
+            ];
+        }
+
+        return ['success' => true, 'zone_id' => $zoneId];
+    }
+
+    /**
+     * @inheritDoc
+     */
+    public function normalizeProvisioningDnsCdnAccounts(array $context): array
+    {
+        $dnsV = \strtolower(\trim((string) ($context['dns_vendor'] ?? '')));
+        $cdnV = \strtolower(\trim((string) ($context['cdn_vendor'] ?? '')));
+        $dnsId = (int) ($context['dns_account_id'] ?? 0);
+        $cdnId = (int) ($context['cdn_account_id'] ?? 0);
+
+        if ($dnsV !== 'cloudflare' && $cdnV !== 'cloudflare') {
+            return [];
+        }
+
+        $dnsIsCf = $dnsV === 'cloudflare' && $dnsId > 0;
+        $cdnIsCf = $cdnV === 'cloudflare' && $cdnId > 0;
+
+        if (($dnsV === 'cloudflare' && $dnsId <= 0 && !$cdnIsCf) || ($cdnV === 'cloudflare' && $cdnId <= 0 && !$dnsIsCf)) {
+            return ['_error' => __('Cloudflare：请至少填写 DNS（域名商）或 CDN 侧有效的 Cloudflare 账户 ID。')];
+        }
+
+        if (!$dnsIsCf && !$cdnIsCf) {
+            return ['_error' => __('Cloudflare：账户 ID 无效，请检查 DNS 或 CDN 配置。')];
+        }
+
+        $dnsToken = '';
+        if ($dnsIsCf) {
+            $acc = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $acc->clearQuery()->load($dnsId);
+            if ($acc->getAccountId() <= 0 || \strtolower(\trim((string) $acc->getRegistrarCode())) !== 'cloudflare') {
+                return ['_error' => __('Cloudflare DNS（域名商）账户无效或非 Cloudflare 渠道。')];
+            }
+            $dnsToken = \trim((string) ($acc->getCredentials()['api_secret'] ?? ''));
+        }
+
+        $cdnToken = '';
+        if ($cdnIsCf) {
+            if (!\function_exists('w_query')) {
+                return ['_error' => __('Cloudflare CDN 账户校验需要 CDN 模块。')];
+            }
+            $info = w_query('cdn', 'getAccount', ['account_id' => $cdnId]);
+            if (!\is_array($info) || ($info['adapter'] ?? '') !== 'cloudflare') {
+                return ['_error' => __('Cloudflare CDN 账户无效。')];
+            }
+            $cdnToken = \trim((string) (($info['credentials'] ?? [])['api_token'] ?? ''));
+        }
+
+        if ($dnsIsCf && $cdnIsCf) {
+            if ($dnsToken === '' || $cdnToken === '' || !\hash_equals($dnsToken, $cdnToken)) {
+                return ['_error' => __('Cloudflare：DNS（域名商）与 CDN 须为同一 API Token。')];
+            }
+
+            return [
+                'dns_vendor' => 'cloudflare',
+                'dns_account_id' => $dnsId,
+                'cdn_vendor' => 'cloudflare',
+                'cdn_account_id' => $cdnId,
+            ];
+        }
+
+        if ($dnsIsCf) {
+            $cdnAccId = $this->findCloudflareCdnAccountIdByApiToken($dnsToken);
+            if ($cdnAccId <= 0) {
+                return ['_error' => __('Cloudflare：请在「CDN 管理」添加与当前 DNS 账户相同 API Token 的 Cloudflare 账户。')];
+            }
+
+            return [
+                'dns_vendor' => 'cloudflare',
+                'dns_account_id' => $dnsId,
+                'cdn_vendor' => 'cloudflare',
+                'cdn_account_id' => $cdnAccId,
+            ];
+        }
+
+        $regAccId = $this->findCloudflareRegistrarAccountIdByApiToken($cdnToken);
+        if ($regAccId <= 0) {
+            return ['_error' => __('Cloudflare：请在「域名管理」添加与当前 CDN 账户相同 API Token 的 Cloudflare DNS 账户。')];
+        }
+
+        return [
+            'dns_vendor' => 'cloudflare',
+            'dns_account_id' => $regAccId,
+            'cdn_vendor' => 'cloudflare',
+            'cdn_account_id' => $cdnId,
+        ];
+    }
+
+    private function findCloudflareRegistrarAccountIdByApiToken(string $token): int
+    {
+        if ($token === '') {
+            return 0;
+        }
+        $reg = ObjectManager::getInstance(DomainRegistrar::class);
+        $reg->clearQuery()->where(DomainRegistrar::schema_fields_CODE, 'cloudflare')->find()->fetch();
+        if ($reg->getRegistrarId() <= 0) {
+            return 0;
+        }
+        $accM = ObjectManager::getInstance(DomainRegistrarAccount::class);
+        $rows = $accM->clearQuery()
+            ->where(DomainRegistrarAccount::schema_fields_REGISTRAR_ID, $reg->getRegistrarId())
+            ->where(DomainRegistrarAccount::schema_fields_STATUS, DomainRegistrarAccount::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        foreach ($rows as $row) {
+            $aid = (int) ($row[DomainRegistrarAccount::schema_fields_ID] ?? 0);
+            if ($aid <= 0) {
+                continue;
+            }
+            $acc = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $acc->clearQuery()->load($aid);
+            if ($acc->getAccountId() <= 0) {
+                continue;
+            }
+            $t = \trim((string) ($acc->getCredentials()['api_secret'] ?? ''));
+            if ($t !== '' && \hash_equals($token, $t)) {
+                return $acc->getAccountId();
+            }
+        }
+
+        return 0;
+    }
+
+    private function findCloudflareCdnAccountIdByApiToken(string $token): int
+    {
+        if ($token === '' || !\function_exists('w_query')) {
+            return 0;
+        }
+        $list = w_query('cdn', 'getAccounts', ['adapter' => 'cloudflare']);
+        if (!\is_array($list)) {
+            return 0;
+        }
+        foreach ($list as $a) {
+            $id = (int) ($a['account_id'] ?? 0);
+            if ($id <= 0) {
+                continue;
+            }
+            $info = w_query('cdn', 'getAccount', ['account_id' => $id]);
+            if (!\is_array($info) || ($info['adapter'] ?? '') !== 'cloudflare') {
+                continue;
+            }
+            $t = \trim((string) (($info['credentials'] ?? [])['api_token'] ?? ''));
+            if ($t !== '' && \hash_equals($token, $t)) {
+                return $id;
+            }
+        }
+
+        return 0;
     }
 
     public function getVersion(): string
@@ -517,8 +710,8 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
     /**
      * 创建 DNS 记录：官方 https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/create/
-     * TXT 仅需 type、name、content、ttl；proxied 仅 A/AAAA/CNAME 可用，TXT 必须为 DNS-only（本类对 TXT 传 proxied=false）。
-     * 无 GName 式「非 MX 须填 mx=0」等额外必填项。
+     * 同源 CDN：A/AAAA/CNAME 默认开启代理（橙云），解析与 CDN 一并生效；TXT/MX 等不可代理。
+     * 开启代理时 TTL 须为 1（Auto），否则 API 会报错或忽略。
      */
     public function addDnsRecord(string $domain, array $record, array $credentials): array
     {
@@ -536,12 +729,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         $name = $host === '@' ? $domain : ($host . '.' . $domain);
 
         $recordType = \strtoupper((string) ($record['type'] ?? 'A'));
+        $proxied = $this->resolveProxiedValue($recordType, $record);
         $data = [
             'type' => $recordType,
             'name' => $name,
             'content' => $record['value'] ?? '',
-            'ttl' => (int) ($record['ttl'] ?? 1),
-            'proxied' => $this->resolveProxiedValue($recordType, $record),
+            'ttl' => $proxied ? 1 : (int) ($record['ttl'] ?? 1),
+            'proxied' => $proxied,
         ];
 
         if (\in_array($data['type'], ['MX', 'SRV'], true)) {
@@ -615,12 +809,13 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         $name = $host === '@' ? $domain : ($host . '.' . $domain);
 
         $recordType = \strtoupper((string) ($record['type'] ?? 'A'));
+        $proxied = $this->resolveProxiedValue($recordType, $record);
         $data = [
             'type' => $recordType,
             'name' => $name,
             'content' => $record['value'] ?? '',
-            'ttl' => (int) ($record['ttl'] ?? 1),
-            'proxied' => $this->resolveProxiedValue($recordType, $record),
+            'ttl' => $proxied ? 1 : (int) ($record['ttl'] ?? 1),
+            'proxied' => $proxied,
         ];
 
         if (\in_array($data['type'], ['MX', 'SRV'], true)) {
@@ -937,9 +1132,9 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     }
 
     /**
-     * 计算 Cloudflare 的 proxied 标记：
+     * 计算 Cloudflare 的 proxied 标记（同源：解析即开 CDN 代理）：
      * - 记录显式传入 proxied 时优先使用（便于上层按需覆盖）
-     * - 未显式传入时，CF 可代理的记录类型默认开启代理
+     * - 未显式传入时，A/AAAA/CNAME 默认开启代理（橙云），与 DNS 一并生效
      */
     private function resolveProxiedValue(string $recordType, array $record): bool
     {
