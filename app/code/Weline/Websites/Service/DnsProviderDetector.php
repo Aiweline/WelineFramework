@@ -22,6 +22,10 @@ class DnsProviderDetector
         'gname-dns.com' => 'gname',
         'dns.gname.com' => 'gname',
 
+        // 部分注册商默认 NS（未改 NS 前常见；与 Cloudflare 等外部 DNS 并存时需先改 NS）
+        'share-dns.com' => 'share_dns',
+        'share-dns.net' => 'share_dns',
+
         // Aliyun / 阿里云
         'alidns.com' => 'aliyun',
         'hichina.com' => 'aliyun',
@@ -93,6 +97,7 @@ class DnsProviderDetector
     private const PROVIDER_NAMES = [
         'cloudflare' => 'Cloudflare',
         'gname' => 'GName',
+        'share_dns' => '注册商 DNS（share-dns）',
         'aliyun' => '阿里云',
         'dnspod' => 'DNSPod/腾讯云',
         'aws' => 'AWS Route53',
