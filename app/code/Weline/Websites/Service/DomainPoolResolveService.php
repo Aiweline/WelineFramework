@@ -9,17 +9,17 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 
 class DomainPoolResolveService
 {
-    private ServerIpService $serverIpService;
-
-    public function __construct(ServerIpService $serverIpService)
-    {
-        $this->serverIpService = $serverIpService;
+    public function __construct(
+        private ServerIpService $serverIpService,
+        private AuthoritativeDnsOriginService $authoritativeDnsOriginService,
+        private Domain $domainModel,
+    ) {
     }
 
     /**
@@ -59,15 +59,19 @@ class DomainPoolResolveService
         $serverIpv4 = $this->serverIpService->getPublicIpv4();
         $serverIpv6 = $this->serverIpService->getPublicIpv6();
 
-        $isLocal = false;
+        $publicIsLocal = false;
         if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $isLocal = true;
+            $publicIsLocal = true;
         }
-        if (!$isLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $isLocal = true;
+        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
+            $publicIsLocal = true;
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
+        $localDecision = $this->resolveIsLocalFromDnsRecordContent($poolDomain, $publicIsLocal, $serverIpv4, $serverIpv6);
+        $isLocal = $localDecision['is_local'];
+        $isLocalViaAuthoritative = $localDecision['via_authoritative'];
+
         if (!$resolved && $error === '') {
             $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
         }
@@ -94,7 +98,7 @@ class DomainPoolResolveService
 
         $resolveOffLocal = $wasLocalBefore && !$isLocal;
 
-        return $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $siteReady, $error, $resolveOffLocal, $serverIpv4, $serverIpv6);
+        return $this->buildCheckResult($resolved, $ipv4, $ipv6, $isLocal, $siteReady, $error, $resolveOffLocal, $serverIpv4, $serverIpv6, $isLocalViaAuthoritative);
     }
 
     /**
@@ -135,15 +139,17 @@ class DomainPoolResolveService
         $serverIpv4 = $this->serverIpService->getPublicIpv4();
         $serverIpv6 = $this->serverIpService->getPublicIpv6();
 
-        $isLocal = false;
+        $publicIsLocal = false;
         if ($ipv4 !== '' && $serverIpv4 !== '' && $ipv4 === $serverIpv4) {
-            $isLocal = true;
+            $publicIsLocal = true;
         }
-        if (!$isLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
-            $isLocal = true;
+        if (!$publicIsLocal && $ipv6 !== '' && $serverIpv6 !== '' && \strtolower($ipv6) === \strtolower($serverIpv6)) {
+            $publicIsLocal = true;
         }
 
         $resolved = $ipv4 !== '' || $ipv6 !== '';
+        $isLocal = $this->resolveIsLocalFromDnsRecordContent($poolDomain, $publicIsLocal, $serverIpv4, $serverIpv6)['is_local'];
+
         if (!$resolved && $error === '') {
             $error = __('未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录');
         }
@@ -172,8 +178,18 @@ class DomainPoolResolveService
         return $result;
     }
 
-    private function buildCheckResult(bool $resolved, string $ipv4, string $ipv6, bool $isLocal, $siteReady, string $error, bool $resolveOffLocal, string $serverIpv4 = '', string $serverIpv6 = ''): array
-    {
+    private function buildCheckResult(
+        bool $resolved,
+        string $ipv4,
+        string $ipv6,
+        bool $isLocal,
+        $siteReady,
+        string $error,
+        bool $resolveOffLocal,
+        string $serverIpv4 = '',
+        string $serverIpv6 = '',
+        bool $isLocalViaAuthoritative = false,
+    ): array {
         $result = [
             'resolved' => $resolved,
             'ipv4' => $ipv4,
@@ -186,11 +202,79 @@ class DomainPoolResolveService
         if ($resolveOffLocal) {
             $result['resolve_off_local'] = true;
         }
+        if ($isLocalViaAuthoritative) {
+            $result['is_local_via_authoritative'] = true;
+        }
         if ($serverIpv4 !== '' || $serverIpv6 !== '') {
             $result['server_ipv4'] = $serverIpv4;
             $result['server_ipv6'] = $serverIpv6;
         }
+
         return $result;
+    }
+
+    /**
+     * 有 DNS/CDN 账户且 API 能列出记录时：仅当该 FQDN 存在 A/AAAA 则用记录 value 与源站 IP 判定；否则回退公网解析结果。
+     *
+     * @return array{is_local: bool, via_authoritative: bool}
+     */
+    private function resolveIsLocalFromDnsRecordContent(
+        DomainPool $poolDomain,
+        bool $publicIsLocal,
+        string $serverIpv4,
+        string $serverIpv6,
+    ): array {
+        $parent = $this->loadParentDomainForPool($poolDomain);
+        if ($parent === null) {
+            return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
+        }
+        $dnsId = (int) $parent->getDnsAccountId();
+        $cdnId = (int) $parent->getCdnAccountId();
+        if ($dnsId <= 0 && $cdnId <= 0) {
+            return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
+        }
+        $zoneRoot = \trim($poolDomain->getRootDomain());
+        if ($zoneRoot === '') {
+            $zoneRoot = \trim($parent->getDomain());
+        }
+        $auth = $this->authoritativeDnsOriginService->originPointsToServer(
+            \trim($poolDomain->getDomain()),
+            $zoneRoot,
+            $dnsId,
+            $cdnId,
+            $serverIpv4,
+            $serverIpv6,
+        );
+        if ($auth['api_ok'] && $auth['has_direct_records']) {
+            return ['is_local' => (bool) $auth['matches'], 'via_authoritative' => true];
+        }
+
+        return ['is_local' => $publicIsLocal, 'via_authoritative' => false];
+    }
+
+    private function loadParentDomainForPool(DomainPool $poolDomain): ?Domain
+    {
+        $pid = $poolDomain->getParentDomainId();
+        if ($pid > 0) {
+            $d = clone $this->domainModel;
+            $d->load($pid);
+            if ($d->getDomainId() > 0) {
+                return $d;
+            }
+        }
+        $root = \trim($poolDomain->getRootDomain());
+        if ($root !== '') {
+            $d = clone $this->domainModel;
+            $d->clearQuery()
+                ->where(Domain::schema_fields_DOMAIN, $root)
+                ->find()
+                ->fetch();
+            if ($d->getDomainId() > 0) {
+                return $d;
+            }
+        }
+
+        return null;
     }
 
     /**

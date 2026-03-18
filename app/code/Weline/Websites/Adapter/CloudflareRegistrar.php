@@ -21,11 +21,13 @@ declare(strict_types=1);
 namespace Weline\Websites\Adapter;
 
 use Weline\Framework\App\Env;
+use Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait;
 use Weline\Websites\Api\DomainRegistrarInterface;
 use Weline\Websites\Api\ZoneManagementInterface;
 
 class CloudflareRegistrar implements DomainRegistrarInterface, ZoneManagementInterface
 {
+    use DnsCdnZoneRecordsProviderTrait;
     private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
     private const REQUEST_TIMEOUT = 30;
     private const CONNECT_TIMEOUT = 10;

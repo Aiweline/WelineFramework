@@ -11,6 +11,7 @@ declare(strict_types=1);
  * - ProviderInfoInterface    — 供应商元数据（code、name、config、连接测试）
  * - DomainPurchaseInterface  — 域名购买（check、purchase、list、detail）
  * - DnsManagementInterface   — DNS 记录管理（CRUD、批量）
+ * - DnsCdnZoneRecordsProviderInterface — 按账户拉取 zone 权威解析（绑定 DNS/CDN 账户必用）
  * - NameserverSwitchInterface — NS 切换（updateNameservers、getProviderNameservers）
  *
  * 可选能力（按需额外 implements）：
@@ -27,6 +28,7 @@ interface DomainRegistrarInterface extends
     ProviderInfoInterface,
     DomainPurchaseInterface,
     DnsManagementInterface,
+    DnsCdnZoneRecordsProviderInterface,
     NameserverSwitchInterface
 {
 }

@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
  * 带域名池 id 时仅按每条记录的域名申请单域证书，不做泛域（*.xxx）解析与申请。
- * 条件：resolve_status=resolved + is_local_server=1 + https_status in (none, expired, error, pending)
+ * 条件：resolve_status=resolved + is_local_server=1（含公网 IP 匹配或 DNS/CDN 提供商权威 A/AAAA 指向源站）+ https_status in (none, expired, error, pending)
  * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
