@@ -36,11 +36,12 @@ class QueryProviderRegistry
         $crud = ObjectManager::getInstance(DefaultCrudProvider::class);
         $this->providers[$crud->getProviderName()] = $crud;
 
+        $queryPathPrefix = 'extends/module/weline_framework/query/';
         $extendedBy = ExtendsData::getExtendedBy('Weline_Framework');
         foreach ($extendedBy as $sourceModule => $extensions) {
             foreach ($extensions as $extension) {
-                $relativePath = $extension['relative_path'] ?? '';
-                if (!str_starts_with($relativePath, 'extends/module/Weline_Framework/Query/')) {
+                $relativePath = str_replace('\\', '/', (string) ($extension['relative_path'] ?? ''));
+                if (!str_starts_with(strtolower($relativePath), $queryPathPrefix)) {
                     continue;
                 }
                 $sourceFile = $extension['source_file'] ?? '';
@@ -66,7 +67,7 @@ class QueryProviderRegistry
                 } catch (\Throwable $e) {
                     if (\function_exists('w_log_warning')) {
                         \w_log_warning(
-                            (string)\__('QueryProvider 加载失败（已跳过）：%{1} — %{2}', $className, $e->getMessage()),
+                            (string)\__('QueryProvider 加载失败（已跳过）：%{1} — %{2}', [$className, $e->getMessage()]),
                             ['class' => $className, 'file' => $sourceFile],
                             'query_provider'
                         );
@@ -81,6 +82,10 @@ class QueryProviderRegistry
      */
     private function resolveClassName(array $extension): ?string
     {
+        $fromScan = \trim((string) ($extension['class_name'] ?? ''));
+        if ($fromScan !== '') {
+            return $fromScan;
+        }
         $sourceFile = $extension['source_file'] ?? '';
         if ($sourceFile === '' || !file_exists($sourceFile)) {
             return null;
