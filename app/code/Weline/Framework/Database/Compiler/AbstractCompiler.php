@@ -116,11 +116,19 @@ abstract class AbstractCompiler implements CompilerInterface
             }
 
             if (count($where) === 1) {
-                $parts[] = '(' . $where[0] . ')' . $logic;
+                $raw = $where[0];
+                // PostgreSQL：单标识符 (column) 为列值（varchar 等），不能作为 AND 的操作数；改为 IS NOT NULL 得到 boolean
+                if (is_string($raw) && preg_match('/^[a-zA-Z_][a-zA-Z0-9_]*$/i', trim(str_replace(['"', '`'], '', $raw)))) {
+                    $parts[] = '(' . $this->quoteFieldExpression($raw) . ' IS NOT NULL)' . $logic;
+                } else {
+                    $parts[] = '(' . $raw . ')' . $logic;
+                }
                 continue;
             }
             if (($where[2] ?? null) === null) {
-                $parts[] = '(' . $fieldQuoted . ')' . $logic;
+                $op = strtolower(trim((string)($where[1] ?? '=')));
+                $isNot = in_array($op, ['!=', '<>', 'not', 'not ='], true);
+                $parts[] = '(' . $fieldQuoted . ($isNot ? ' IS NOT NULL' : ' IS NULL') . ')' . $logic;
                 continue;
             }
 
