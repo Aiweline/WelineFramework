@@ -1719,6 +1719,10 @@ class DomainManagement extends BaseController
                     $sse->sendEvent('progress', ['message' => __('步骤 5/5：校验 CDN 响应…'), 'step' => 5]);
                     return;
                 }
+                if ($event === 'verify_cdn_attempt' || $event === 'verify_cdn_retry' || $event === 'verify_cdn_heartbeat') {
+                    $sse->sendEvent('info', ['message' => $msg]);
+                    return;
+                }
                 if ($event === 'verify_cdn_done') {
                     if (($data['ok'] ?? false)) {
                         $sse->sendEvent('progress', ['message' => __('CDN 校验通过（响应头符合预期）'), 'step' => 5]);
@@ -1735,7 +1739,7 @@ class DomainManagement extends BaseController
             $options = [
                 'wait_for_ns' => true,
                 'wait_max_seconds' => 30 * 60,
-                'wait_interval_seconds' => 15,
+                'wait_interval_seconds' => 5,
                 'is_alive' => static function () use ($sse): bool {
                     return $sse->isAlive() && !\connection_aborted();
                 },

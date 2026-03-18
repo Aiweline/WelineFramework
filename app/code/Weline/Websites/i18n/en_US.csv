@@ -58,7 +58,16 @@
 "Azure DNS 适配器尚未完成 API 对接，请稍后再试。","Azure DNS adapter API integration not yet complete. Please try again later."
 "Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。","Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
 "Azure DNS Nameserver 获取功能尚未完成 API 对接","Azure DNS Nameserver retrieval API not implemented yet"
-"Cloudflare DNS 服务提供商，支持 DNS 记录管理、CDN 加速、DDoS 防护。可用于将域名的 DNS 解析切换到 Cloudflare。","Cloudflare DNS provider, supports DNS record management, CDN acceleration, DDoS protection. Can be used to switch domain DNS resolution to Cloudflare."
+域名为空,域名为空
+"在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。","在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。"
+"Cloudflare：请至少填写 DNS（域名商）或 CDN 侧有效的 Cloudflare 账户 ID。","Cloudflare：请至少填写 DNS（域名商）或 CDN 侧有效的 Cloudflare 账户 ID。"
+"Cloudflare：账户 ID 无效，请检查 DNS 或 CDN 配置。","Cloudflare：账户 ID 无效，请检查 DNS 或 CDN 配置。"
+"Cloudflare DNS（域名商）账户无效或非 Cloudflare 渠道。","Cloudflare DNS（域名商）账户无效或非 Cloudflare 渠道。"
+"Cloudflare CDN 账户校验需要 CDN 模块。","Cloudflare CDN 账户校验需要 CDN 模块。"
+"Cloudflare CDN 账户无效。","Cloudflare CDN 账户无效。"
+"Cloudflare：DNS（域名商）与 CDN 须为同一 API Token。","Cloudflare：DNS（域名商）与 CDN 须为同一 API Token。"
+"Cloudflare：请在「CDN 管理」添加与当前 DNS 账户相同 API Token 的 Cloudflare 账户。","Cloudflare：请在「CDN 管理」添加与当前 DNS 账户相同 API Token 的 Cloudflare 账户。"
+"Cloudflare：请在「域名管理」添加与当前 CDN 账户相同 API Token 的 Cloudflare DNS 账户。","Cloudflare：请在「域名管理」添加与当前 CDN 账户相同 API Token 的 Cloudflare DNS 账户。"
 "API Token","API Token"
 "Cloudflare API Token","Cloudflare API Token"
 "Account ID","Account ID"
@@ -187,6 +196,7 @@
 "GName APP ID 不能为空","GName APP ID 不能为空"
 "GName APP Key 不能为空","GName APP Key 不能为空"
 安全限制：禁止使用注册接口执行可用性检查，以避免误购买,安全限制：禁止使用注册接口执行可用性检查，以避免误购买
+"Gname 凭据不完整：请配置 appid 与 appkey","Gname 凭据不完整：请配置 appid 与 appkey"
 "GName API 请求失败：%{1}","GName API 请求失败：%{1}"
 网络错误,网络错误
 "HTTP 状态: %{1} | 请求 URL: %{2} | 响应内容摘要: %{3}","HTTP 状态: %{1} | 请求 URL: %{2} | 响应内容摘要: %{3}"
@@ -204,7 +214,9 @@
 "DNS 记录更新失败：%{1}（错误码：%{2}）","DNS 记录更新失败：%{1}（错误码：%{2}）"
 "DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
 "[GName] updateNameservers：domain=%{1}, ns=%{2}","[GName] updateNameservers：domain=%{1}, ns=%{2}"
-"GName 默认 DNS 服务器","GName default DNS servers"
+"GName 默认 DNS 服务器（来自 api/dns/list）","GName 默认 DNS 服务器（来自 api/dns/list）"
+"GName 默认 DNS 服务器（回退）","GName 默认 DNS 服务器（回退）"
+"[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}","[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}"
 "GoDaddy 域名注册商，全球最大的域名注册商之一，支持域名注册、续费、转入、DNS 管理和域名交易。","GoDaddy domain registrar, one of the world's largest domain registrars, supporting domain registration, renewal, transfer, DNS management and domain trading."
 "API Key","API Key"
 "GoDaddy 平台分配的 API Key","API Key assigned by GoDaddy platform"
@@ -568,8 +580,10 @@ SSL,SSL
 域名生命周期编排,域名生命周期编排
 "轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程","轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程"
 "域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条","域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条"
+"（脏数据修复：同步根域 %{1} 条，补标完成 %{2} 条）","（脏数据修复：同步根域 %{1} 条，补标完成 %{2} 条）"
 域名生命周期轮询失败：%{error},域名生命周期轮询失败：%{error}
 "子域名入池失败: %{1}, %{2}","子域名入池失败: %{1}, %{2}"
+根域注册状态纠正,根域注册状态纠正
 没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
 "本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程","本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程"
 域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请,域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请
@@ -720,6 +734,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "获取域名池列表（用于 SSL/建站选择）","获取域名池列表（用于 SSL/建站选择）"
 "获取域名 DNS 记录（查询层自动同步域名池）","获取域名 DNS 记录（查询层自动同步域名池）"
 "添加 ACME DNS-01 验证 TXT 记录","添加 ACME DNS-01 验证 TXT 记录"
+"解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）","解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）"
 "删除 ACME DNS-01 验证 TXT 记录","删除 ACME DNS-01 验证 TXT 记录"
 注册商代码和账号名称不能为空,注册商代码和账号名称不能为空
 未找到注册商适配器：%{1},未找到注册商适配器：%{1}
@@ -832,13 +847,16 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "在注册商 %{1} 切换 NS","在注册商 %{1} 切换 NS"
 "NS 切换失败","NS 切换失败"
 "[DnsSwitchService] %{1} NS 切换失败：%{2}","[DnsSwitchService] %{1} NS 切换失败：%{2}"
-"NS 切换成功（API 返回：%{1}）","NS 切换成功（API 返回：%{1}）"
-"[DnsSwitchService] %{1} Step3: NS 切换成功","[DnsSwitchService] %{1} Step3: NS 切换成功"
-"[步骤2后] 注册商 getDomainDetail 不支持或未实现，跳过注册商侧校验","[步骤2后] 注册商 getDomainDetail 不支持或未实现，跳过注册商侧校验"
-"[步骤2后] 注册商 NS 查询异常：%{1}","[步骤2后] 注册商 NS 查询异常：%{1}"
-"注册商侧已更新为目标 NS，提交已生效","注册商侧已更新为目标 NS，提交已生效"
+"NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…","NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…"
+"[DnsSwitchService] %{1} Step3: NS API 成功，开始注册商侧轮询校验","[DnsSwitchService] %{1} Step3: NS API 成功，开始注册商侧轮询校验"
+"注册商 getDomainDetail 不支持，无法二次校验 NS，请自行在注册商确认 NS 已为目标值","注册商 getDomainDetail 不支持，无法二次校验 NS，请自行在注册商确认 NS 已为目标值"
+"注册商 NS 查询异常（已重试）：%{1}","注册商 NS 查询异常（已重试）：%{1}"
+"[DnsSwitchService] %{1} 注册商 NS 校验异常：%{2}","[DnsSwitchService] %{1} 注册商 NS 校验异常：%{2}"
+"NS 切换后无法从注册商读取当前 NS，请检查 API 权限或稍后重试：%{1}","NS 切换后无法从注册商读取当前 NS，请检查 API 权限或稍后重试：%{1}"
 (空),(空)
-"[步骤2后] 注册商侧当前 NS：%{1}","[步骤2后] 注册商侧当前 NS：%{1}"
+"NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。","NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。"
+"[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}","[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}"
+"注册商侧 NS 已与目标一致，切换已生效","注册商侧 NS 已与目标一致，切换已生效"
 "[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟","[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟"
 已由用户断开,已由用户断开
 "等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录","等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录"
@@ -875,6 +893,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 等待访问验证,等待访问验证
 切换CDN中,切换CDN中
 申请HTTPS中,申请HTTPS中
+"生命周期订单已完成，联动更新根域状态：%{1} → active","生命周期订单已完成，联动更新根域状态：%{1} → active"
+"生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条","生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条"
 已入池,已入池
 入池,入池
 解析,解析
@@ -937,6 +957,9 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 没有可添加的解析记录,没有可添加的解析记录
 "域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。","域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。"
 "目标账户不支持 DNS 记录管理","目标账户不支持 DNS 记录管理"
+参数无效,参数无效
+"无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。","无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。"
+"域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。","域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。"
 "域名池 FQDN 或根域无效","域名池 FQDN 或根域无效"
 "域名池 FQDN 与根域不匹配","域名池 FQDN 与根域不匹配"
 "无效的服务器 IP（需为合法 IPv4 或 IPv6）","无效的服务器 IP（需为合法 IPv4 或 IPv6）"
@@ -946,6 +969,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "A 记录添加成功，请等待 DNS 生效后重试","A 记录添加成功，请等待 DNS 生效后重试"
 "添加 AAAA 记录失败","添加 AAAA 记录失败"
 "添加 A 记录失败","添加 A 记录失败"
+"根域状态自我纠正：%{1} 已标为正常（存在可建站子域）","根域状态自我纠正：%{1} 已标为正常（存在可建站子域）"
 账户未启用,账户未启用
 账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）
 账户「%{1}」的域名商适配器「%{2}」未注册,账户「%{1}」的域名商适配器「%{2}」未注册
