@@ -47,6 +47,19 @@ class RegisterQuickBuildServices implements ObserverInterface
             ];
         }
 
+        if ($category === 'all' || $category === 'provisioning') {
+            $services[] = [
+                'module' => 'Weline_Websites',
+                'category' => 'provisioning',
+                'name' => __('一站式配置'),
+                'description' => __('域名购买→DNS→CDN→SSL 全自动配置流程'),
+                'admin_url' => 'websites/backend/provisioning/index',
+                'icon' => 'mdi-cogs',
+                'order' => 50,
+                'available' => true,
+            ];
+        }
+
         $data['services'] = $services;
         $event->setData('data', $data);
     }

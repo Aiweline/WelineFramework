@@ -16,6 +16,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
@@ -81,6 +82,56 @@ class DomainPurchaseService
             ];
         }
 
+        $skippedEmpty = 0;
+        $skippedMalformed = 0;
+        $items = \array_values(\array_filter(
+            $items,
+            static function (mixed $row) use (&$skippedEmpty, &$skippedMalformed): bool {
+                if (!\is_array($row)) {
+                    ++$skippedMalformed;
+
+                    return false;
+                }
+                $d = \strtolower(\trim((string) ($row['domain'] ?? '')));
+                if ($d === '') {
+                    ++$skippedEmpty;
+
+                    return false;
+                }
+
+                return true;
+            }
+        ));
+        if ($items === []) {
+            $parts = [];
+            if ($skippedEmpty > 0) {
+                $parts[] = __('空域名 %{n} 条', ['n' => $skippedEmpty]);
+            }
+            if ($skippedMalformed > 0) {
+                $parts[] = __('无效条目 %{n} 条（非对象）', ['n' => $skippedMalformed]);
+            }
+
+            return [
+                'success' => false,
+                'message' => $parts !== []
+                    ? __('没有有效的域名（已跳过：%{detail}）', ['detail' => \implode('，', $parts)])
+                    : __('没有有效的域名'),
+            ];
+        }
+
+        $defaultPc = Env::module_env('Weline_Websites', 'domain_purchase_default_contact');
+        if (\is_array($defaultPc) && $defaultPc !== []) {
+            foreach ($items as &$row) {
+                $existing = [];
+                if (isset($row['purchase_contact'])) {
+                    $raw = $row['purchase_contact'];
+                    $existing = \is_string($raw) ? (\json_decode($raw, true) ?: []) : (array) $raw;
+                }
+                $row['purchase_contact'] = \array_merge($defaultPc, $existing);
+            }
+            unset($row);
+        }
+
         // 获取账号和适配器
         $account = clone $this->accountModel;
         $account->load($accountId);
@@ -119,7 +170,7 @@ class DomainPurchaseService
         // 逐个处理购买条目
         foreach ($items as $itemData) {
             $domain = \strtolower(\trim($itemData['domain'] ?? ''));
-            $years = (int) ($itemData['years'] ?? 1);
+            $years = \max(1, \min(10, (int) ($itemData['years'] ?? 1)));
             $websiteId = (int) ($itemData['website_id'] ?? 0);
             $autoCreateSite = ($itemData['auto_create_site'] ?? 'no') === 'yes' ? 'yes' : 'no';
             $resolveToLocal = isset($itemData['resolve_to_local'])
@@ -137,10 +188,6 @@ class DomainPurchaseService
             $subdomains = $itemData['subdomains'] ?? ['@', 'www'];
             $subdomains = $this->normalizeSubdomains($subdomains);
 
-            if (empty($domain)) {
-                continue;
-            }
-
             // 创建购买条目
             $item = clone $this->itemModel;
             $item->setData(DomainPurchaseItem::schema_fields_ORDER_ID, $orderId);
@@ -150,12 +197,14 @@ class DomainPurchaseService
             $item->setData(DomainPurchaseItem::schema_fields_AUTO_CREATE_SITE, $autoCreateSite);
             $item->setData(DomainPurchaseItem::schema_fields_STATUS, DomainPurchaseItem::STATUS_PENDING);
 
+            $lifecycleResult = [
+                'attempted' => false,
+                'success' => false,
+                'order_id' => 0,
+                'message' => '',
+            ];
             try {
-                // 调用适配器购买域名
-                $contactInfo = [];
-                if ($dnsChoice === 'custom_nameservers' && $dnsNameservers !== '') {
-                    $contactInfo['dns'] = $dnsNameservers;
-                }
+                $contactInfo = $this->buildAdapterContactInfo($itemData, $dnsChoice, $dnsNameservers);
                 $purchaseResult = $adapter->purchaseDomain($domain, $years, $credentials, $contactInfo);
 
                 if ($purchaseResult['success'] ?? false) {
@@ -298,6 +347,19 @@ class DomainPurchaseService
                 'count' => $lifecycleFailCount,
             ]);
         }
+        if ($skippedEmpty > 0 || $skippedMalformed > 0) {
+            $skipMsg = [];
+            if ($skippedEmpty > 0) {
+                $skipMsg[] = __('空 %{n} 条', ['n' => $skippedEmpty]);
+            }
+            if ($skippedMalformed > 0) {
+                $skipMsg[] = __('无效结构 %{n} 条', ['n' => $skippedMalformed]);
+            }
+            $message = __('%{message}（提交时已忽略：%{detail}）', [
+                'message' => $message,
+                'detail' => \implode('，', $skipMsg),
+            ]);
+        }
 
         return [
             'success' => $successCount > 0,
@@ -306,6 +368,73 @@ class DomainPurchaseService
             'order_no' => $order->getOrderNo(),
             'results' => $results,
         ];
+    }
+
+    /**
+     * 合并自定义 NS、Gname 模板/溢价、各注册商联系人（purchase_contact 与条目级字段）。
+     *
+     * @param array<string, mixed> $itemData
+     * @return array<string, mixed>
+     */
+    private function buildAdapterContactInfo(array $itemData, string $dnsChoice, string $dnsNameservers): array
+    {
+        $info = [];
+        if ($dnsChoice === 'custom_nameservers' && $dnsNameservers !== '') {
+            $info['dns'] = $dnsNameservers;
+        }
+        $pc = $itemData['purchase_contact'] ?? [];
+        if (\is_string($pc)) {
+            $decoded = \json_decode($pc, true);
+            $pc = \is_array($decoded) ? $decoded : [];
+        }
+        $flat = \is_array($pc) ? $pc : [];
+        $mergeKeys = [
+            'first_name', 'last_name', 'email', 'phone', 'address1', 'city', 'state',
+            'postal_code', 'country', 'organization', 'privacy',
+            'gname_template_id', 'template_id', 'premium_amount',
+        ];
+        foreach ($mergeKeys as $k) {
+            if (isset($itemData[$k]) && $itemData[$k] !== '' && $itemData[$k] !== null) {
+                $flat[$k] = $itemData[$k];
+            }
+        }
+        if ($flat !== []) {
+            $info['purchase_contact_flat'] = $flat;
+        }
+        $tid = \trim((string) ($itemData['template_id'] ?? $flat['gname_template_id'] ?? $flat['template_id'] ?? ''));
+        if ($tid !== '') {
+            $info['template_id'] = $tid;
+        }
+        if (isset($flat['premium_amount']) && (float) $flat['premium_amount'] > 0) {
+            $info['premium_amount'] = (float) $flat['premium_amount'];
+        }
+        if (\array_key_exists('privacy', $flat)) {
+            $info['privacy'] = \filter_var($flat['privacy'], FILTER_VALIDATE_BOOLEAN)
+                || $flat['privacy'] === '1' || $flat['privacy'] === 1;
+        }
+        foreach (
+            [
+                'contact',
+                'contactRegistrant',
+                'contactAdmin',
+                'contactTech',
+                'contactBilling',
+                'aws_admin_contact',
+            ] as $k
+        ) {
+            if (!empty($itemData[$k]) && \is_array($itemData[$k])) {
+                $info[$k] = $itemData[$k];
+            }
+        }
+        if (!empty($itemData['aliyun_contact_json'])) {
+            $info['aliyun_contact_json'] = $itemData['aliyun_contact_json'];
+        }
+        $uip = \trim((string) ($itemData['user_client_ip'] ?? ''));
+        if ($uip !== '' && \filter_var($uip, FILTER_VALIDATE_IP)) {
+            $info['user_client_ip'] = $uip;
+        }
+
+        return $info;
     }
 
     /**
@@ -493,16 +622,12 @@ class DomainPurchaseService
                     $needSwitch = true;
                 }
             }
-            $rootDomain->save();
 
+            // 购买后不立即执行 DNS/CDN 切换：域名可能仍在注册中，等注册完成由定时任务自动处理
             if ($needSwitch) {
-                $switchService = ObjectManager::getInstance(DnsSwitchService::class);
-                $switchService->markPendingSwitch(
-                    $rootDomain,
-                    $selectedDnsAccountId ?: $selectedCdnAccountId,
-                    $selectedDnsProvider ?: $selectedCdnProvider
-                );
+                $rootDomain->setDnsSwitchDeferred(1);
             }
+            $rootDomain->save();
         } catch (\Throwable $e) {
             w_log_error(__('购买后同步域名 DNS 元数据失败：%{1}', [$e->getMessage()]));
         }
@@ -570,7 +695,7 @@ class DomainPurchaseService
     private function startLifecycleTracking(string $domain, int $accountId, array $options): array
     {
         try {
-            $serviceClass = \Weline\Saas\Service\DomainLifecycleOrchestrationService::class;
+            $serviceClass = \Weline\Websites\Service\DomainLifecycleOrchestrationService::class;
             if (!\class_exists($serviceClass)) {
                 return [
                     'attempted' => false,
@@ -624,7 +749,7 @@ class DomainPurchaseService
     private function getLifecycleTrackingStatus(string $domain): array
     {
         try {
-            $serviceClass = \Weline\Saas\Service\DomainLifecycleOrchestrationService::class;
+            $serviceClass = \Weline\Websites\Service\DomainLifecycleOrchestrationService::class;
             if (!\class_exists($serviceClass)) {
                 return [
                     'attempted' => false,
