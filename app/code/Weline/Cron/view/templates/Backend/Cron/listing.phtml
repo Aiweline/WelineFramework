@@ -27,7 +27,7 @@
 <!-- 统计卡片 -->
 <div class="row weline-cron-stats">
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')" class="weline-cron-stat-card weline-cron-stat-all">
+        <a href="@backend-url('*/backend/cron/listing')" class="weline-cron-stat-card weline-cron-stat-all">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-format-list-bulleted"></i>
             </div>
@@ -38,7 +38,7 @@
         </a>
     </div>
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')?status=pending" class="weline-cron-stat-card weline-cron-stat-pending">
+        <a href="@backend-url('*/backend/cron/listing')?status=pending" class="weline-cron-stat-card weline-cron-stat-pending">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-clock-outline"></i>
             </div>
@@ -49,7 +49,7 @@
         </a>
     </div>
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')?status=running" class="weline-cron-stat-card weline-cron-stat-running">
+        <a href="@backend-url('*/backend/cron/listing')?status=running" class="weline-cron-stat-card weline-cron-stat-running">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-play-circle-outline"></i>
             </div>
@@ -60,7 +60,7 @@
         </a>
     </div>
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')?status=success" class="weline-cron-stat-card weline-cron-stat-success">
+        <a href="@backend-url('*/backend/cron/listing')?status=success" class="weline-cron-stat-card weline-cron-stat-success">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-check-circle-outline"></i>
             </div>
@@ -71,7 +71,7 @@
         </a>
     </div>
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')?status=block" class="weline-cron-stat-card weline-cron-stat-block">
+        <a href="@backend-url('*/backend/cron/listing')?status=block" class="weline-cron-stat-card weline-cron-stat-block">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-lock-outline"></i>
             </div>
@@ -82,7 +82,7 @@
         </a>
     </div>
     <div class="col-xl-2 col-md-4 col-6">
-        <a href="@backend-url('*/cron/listing')?status=fail" class="weline-cron-stat-card weline-cron-stat-fail">
+        <a href="@backend-url('*/backend/cron/listing')?status=fail" class="weline-cron-stat-card weline-cron-stat-fail">
             <div class="weline-cron-stat-icon">
                 <i class="mdi mdi-alert-circle-outline"></i>
             </div>
@@ -104,7 +104,7 @@
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="weline-cron-search">
                             <block class='Weline\Component\Block\Form\Search' id='cron-search'
-                                   action='*/cron/listing'
+                                   action='*/backend/cron/listing'
                                    params="status,module"
                                    vars="filterSearch"
                                    method='get' keyword='q'
@@ -229,7 +229,7 @@
                                             <i class="mdi mdi-play"></i> <lang>运行</lang>
                                         </button>
                                         <if condition="task.status === 'block'">
-                                            <form action="@backend-url('*/cron/unlock')" method="post" class="d-inline">
+                                            <form action="@backend-url('*/backend/cron/unlock')" method="post" class="d-inline">
                                                 <csrf/>
                                                 <input type="hidden" name="task_id" value="{{task.id}}">
                                                 <button type="submit" class="btn btn-outline-success weline-cron-action-btn" title="@lang{解锁}">
@@ -237,7 +237,7 @@
                                                 </button>
                                             </form>
                                         <else/>
-                                            <form action="@backend-url('*/cron/lock')" method="post" class="d-inline">
+                                            <form action="@backend-url('*/backend/cron/lock')" method="post" class="d-inline">
                                                 <csrf/>
                                                 <input type="hidden" name="task_id" value="{{task.id}}">
                                                 <button type="submit" class="btn btn-outline-warning weline-cron-action-btn" title="@lang{锁定}">
@@ -513,7 +513,7 @@
 <script>
 (function() {
     'use strict';
-    var baseUrl = '<?= htmlspecialchars((string)$this->getBackendUrl('*/cron/listing')) ?>';
+    var baseUrl = '<?= htmlspecialchars((string)$this->getBackendUrl('*/backend/cron/listing')) ?>';
     var params = new URLSearchParams(window.location.search);
     function applyFilters(overrides) {
         var url = new URL(baseUrl, window.location.origin);
@@ -560,8 +560,8 @@
 <?php
 use Weline\Framework\Security\Token;
 $welineCronSseCsrf = Token::create('csrf', 9, 3600);
-$welineCronRunStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/cron/post-run-stream'), ENT_QUOTES, 'UTF-8');
-$welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/cron/run-help'), ENT_QUOTES, 'UTF-8');
+$welineCronRunStreamUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/post-run-stream'), ENT_QUOTES, 'UTF-8');
+$welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backend/cron/run-help'), ENT_QUOTES, 'UTF-8');
 ?>
 <div id="weline-cron-run-modal" class="weline-cron-run-modal" role="dialog" aria-modal="true" aria-labelledby="weline-cron-run-modal-title">
     <div class="weline-cron-run-modal-backdrop" id="weline-cron-run-modal-backdrop"></div>

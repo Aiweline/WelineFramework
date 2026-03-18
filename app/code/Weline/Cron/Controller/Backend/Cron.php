@@ -11,7 +11,7 @@ declare(strict_types=1);
  * 日期：2022/10/30 15:05:57
  */
 
-namespace Weline\Cron\Controller;
+namespace Weline\Cron\Controller\Backend;
 
 use Weline\Cron\Helper\CronStatus;
 use Weline\Cron\Model\CronTask;
@@ -23,20 +23,27 @@ use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Security\Token;
 
+/**
+ * 类级 ACL 挂菜单 Weline_Cron::system_cron 下，子方法 ACL 才能被 ControllerAttributes 收集。
+ */
+#[Acl(
+    'Weline_Cron::cron_pc_root',
+    '计划任务接口',
+    'mdi mdi-clock-outline',
+    '计划任务后台（列表、锁定、手动运行等）',
+    'Weline_Cron::system_cron'
+)]
 class Cron extends \Weline\Framework\App\Controller\BackendController
 {
-    /**
-     * @var \Weline\Cron\Model\CronTask
-     */
     private CronTask $cronTask;
 
     public function __construct(
         CronTask $cronTask
-    )
-    {
+    ) {
         $this->cronTask = $cronTask;
     }
 
+    #[Acl('Weline_Cron::cron_listing', '计划任务列表', 'mdi mdi-format-list-bulleted', '查看计划任务列表')]
     public function listing()
     {
         $status = $this->request->getGet('status');
@@ -87,12 +94,10 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $this->assign('filterSearch', $search);
         $this->assign('filterModule', $module);
         $this->assign('moduleOptions', $moduleOptions);
+
         return $this->fetch();
     }
 
-    /**
-     * 获取定时任务表中出现的所有模块名（用于模块筛选下拉）
-     */
     private function getDistinctModules(): array
     {
         /** @var CronTask $m */
@@ -110,12 +115,10 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
                 $list[] = $name;
             }
         }
+
         return $list;
     }
 
-    /**
-     * 将秒数格式化为人性化时长（如 2分30秒、1小时5分）
-     */
     private function humanizeDuration(int $seconds): string
     {
         if ($seconds < 0) {
@@ -127,15 +130,18 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         if ($seconds < 3600) {
             $m = (int) floor($seconds / 60);
             $s = $seconds % 60;
+
             return $s > 0 ? $m . __('分') . $s . __('秒') : $m . __('分');
         }
         if ($seconds < 86400) {
             $h = (int) floor($seconds / 3600);
             $m = (int) floor(($seconds % 3600) / 60);
+
             return $m > 0 ? $h . __('小时') . $m . __('分') : $h . __('小时');
         }
         $d = (int) floor($seconds / 86400);
         $h = (int) floor(($seconds % 86400) / 3600);
+
         return $h > 0 ? $d . __('天') . $h . __('小时') : $d . __('天');
     }
 
@@ -150,6 +156,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $blockCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::BLOCK->value)->count('id');
         $failCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::FAIL->value)->count('id');
         $missCount = (int) $m->reset()->where(CronTask::schema_fields_STATUS, CronStatus::MISS->value)->count('id');
+
         return [
             'all' => $allCount,
             'pending' => $pendingCount,
@@ -161,6 +168,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         ];
     }
 
+    #[Acl('Weline_Cron::cron_lock', '锁定计划任务', 'mdi mdi-lock', '锁定定时任务')]
     public function lock(): string
     {
         $task_id = $this->request->getPost('task_id');
@@ -168,18 +176,19 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             $task = $this->cronTask->load($task_id);
             $task->setData($task::schema_fields_STATUS, CronStatus::BLOCK->value)
                 ->save();
-//            return $this->fetchJson($this->success(__('锁定任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('锁定任务：%{1}', $task->getData('name')));
-            $this->redirect('*/cron/listing');
+            $this->redirect('*/backend/cron/listing');
+
             return '';
         } catch (\ReflectionException|Core $e) {
             $this->getMessageManager()->addError(__('锁定任务失败：%{1}', $e->getMessage()));
-            $this->redirect('*/cron/listing');
+            $this->redirect('*/backend/cron/listing');
+
             return '';
-//            return $this->fetchJson($this->error($e->getMessage()));
         }
     }
 
+    #[Acl('Weline_Cron::cron_unlock', '解锁计划任务', 'mdi mdi-lock-open', '解锁定时任务')]
     public function unlock(): string
     {
         $task_id = $this->request->getPost('task_id');
@@ -187,21 +196,19 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             $task = $this->cronTask->load($task_id);
             $task->setData($task::schema_fields_STATUS, CronStatus::PENDING->value)
                 ->save();
-//            return $this->fetchJson($this->success(__('解锁任务：%{1}', $task->getData('name'))));
             $this->getMessageManager()->addSuccess(__('解锁任务：%{1}', $task->getData('name')));
-            $this->redirect('*/cron/listing');
+            $this->redirect('*/backend/cron/listing');
+
             return '';
         } catch (\ReflectionException|Core $e) {
             $this->getMessageManager()->addError(__('解锁任务失败：%{1}', $e->getMessage()));
-            $this->redirect('*/cron/listing');
+            $this->redirect('*/backend/cron/listing');
+
             return '';
         }
     }
 
-    /**
-     * 计划任务手动运行说明（JSON），供列表弹层展示 Help。
-     */
-    #[Acl('Weline_Cron::cron_manual_run', '计划任务手动运行', 'mdi mdi-play-network', 'SSE 手动执行与 WELINE_CRON_MANUAL_ARGS 说明', 'Weline_Cron::system_cron')]
+    #[Acl('Weline_Cron::cron_run_help', '手动运行帮助', 'mdi mdi-help-circle-outline', '计划任务 SSE 手动运行说明 JSON')]
     public function getRunHelp(): string
     {
         $this->layoutType = null;
@@ -252,10 +259,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         ], JSON_UNESCAPED_UNICODE);
     }
 
-    /**
-     * POST SSE：真实执行 cron:task:run &lt;execute_name&gt; -f。
-     */
-    #[Acl('Weline_Cron::cron_manual_run', '计划任务手动运行', 'mdi mdi-play-network', 'SSE 手动执行与 WELINE_CRON_MANUAL_ARGS 说明', 'Weline_Cron::system_cron')]
+    #[Acl('Weline_Cron::cron_run_stream', '手动运行SSE', 'mdi mdi-play-network', '计划任务真实执行 SSE 流')]
     public function postRunStream(): void
     {
         $this->layoutType = null;
