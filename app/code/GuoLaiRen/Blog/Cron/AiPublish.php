@@ -331,6 +331,41 @@ class AiPublish implements CronTaskInterface
     }
 
     /**
+     * 记录跳过原因（与 cron 返回文案一致），并推送到 SSE：skip 事件带 message 字段
+     *
+     * @param callable|null $onProgress
+     * @param list<string> $skipReasons
+     * @param array<string, mixed> $ctx
+     */
+    private function recordSkip(?callable $onProgress, array &$skipReasons, string $code, array $ctx): void
+    {
+        $siteId = (int)($ctx['site_id'] ?? 0);
+        $profileId = (int)($ctx['profile_id'] ?? 0);
+        $loc = ($siteId > 0 || $profileId > 0)
+            ? ' ' . __('[站点#%{s} 画像#%{p}]', ['s' => (string)$siteId, 'p' => (string)$profileId])
+            : '';
+        $msg = match ($code) {
+            'no_quotas' => __('请先在「趋势站点配额」中配置：站点、画像、每日篇数、默认分类。'),
+            'no_category' => __('配额未设置默认分类') . $loc,
+            'category_missing' => __('默认分类不存在（请检查配额中的分类 ID）') . $loc
+                . ($ctx['category_id'] ?? null ? ' [category_id=' . (int)$ctx['category_id'] . ']' : ''),
+            'category_wrong_site' => __('默认分类不属于该站点，请重新选择分类') . $loc,
+            'quota_full' => __('今日该配额已发满，明日再试') . $loc,
+            'profile_missing' => __('画像不存在') . $loc,
+            'profile_inactive' => __('请启用画像后再发文') . $loc,
+            'profile_no_keywords' => __('请在该画像中配置关键词') . $loc,
+            'trend_no_unused' => __('当前无未使用的增长词，请先运行「趋势同步」或明日再试') . $loc,
+            default => $code . $loc,
+        };
+        if (!in_array($msg, $skipReasons, true)) {
+            $skipReasons[] = $msg;
+        }
+        if ($onProgress !== null) {
+            $onProgress('skip', array_merge(['reason' => $code, 'message' => $msg], $ctx));
+        }
+    }
+
+    /**
      * 当本次发布 0 篇时，返回友好说明（供前端 Toast 展示）
      */
     public static function getZeroPublishHint(): string

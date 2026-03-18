@@ -400,7 +400,7 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
                 path="blog/backend/post/trigger-ai-publish-sse"
                 title="AI 生成进度"
                 height="400px"
-                events="start,progress,done,error,info,success,article_start,article_done,article_error"
+                events="start,progress,done,error,info,success,warning,article_start,article_done,article_error,skip,quota_info,fallback_reuse_keywords,fallback_keywords"
             />
         </div>
         <div class="blog-sse-modal-footer">
@@ -579,12 +579,23 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
             
             try {
                 var d = JSON.parse(e.data || '{}');
-                var published = d.published || 0;
+                var published = parseInt(d.published, 10) || 0;
+                if (d.result && terminal.log) {
+                    var lines = String(d.result).split('\n').filter(Boolean);
+                    terminal.log(lines[0], published > 0 ? 'success' : 'info');
+                    var skipAlreadyLogged = published === 0 && d.skip_reasons && d.skip_reasons.length > 0;
+                    if (lines.length > 1 && !skipAlreadyLogged) {
+                        for (var li = 1; li < lines.length; li++) {
+                            terminal.log(lines[li], 'warning');
+                        }
+                    }
+                }
                 if (published > 0) {
                     updateHint('<?= __('成功生成') ?> ' + published + ' <?= __('篇文章，即将刷新页面...') ?>', 'success');
                     setTimeout(function() { window.location.reload(); }, 2000);
                 } else {
-                    updateHint('<?= __('未生成文章，请检查配额与关键词配置。') ?>', 'error');
+                    var foot = (d.hint || '').trim() || (d.skip_reasons && d.skip_reasons.join('；')) || '';
+                    updateHint(foot || '<?= __('未生成文章，请查看终端内具体原因。') ?>', 'error');
                 }
             } catch (err) {
                 updateHint('<?= __('执行完成') ?>', 'success');
@@ -599,7 +610,11 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
             try {
                 if (e && e.data) {
                     var d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-                    if (d && d.message) hintMsg = d.message;
+                    if (d) {
+                        if (d.detail) hintMsg = d.detail;
+                        else if (d.message) hintMsg = d.message;
+                        if (d.file && d.line) hintMsg += ' (' + String(d.file).split('/').pop() + ':' + d.line + ')';
+                    }
                 }
             } catch (err) {}
             updateHint(hintMsg, 'error');
@@ -632,7 +647,6 @@ $aiModeLabel = (string)($this->getData('ai_mode_label') ?? __('画像关键词�
                 if (terminal.log) terminal.log(msg, 'error');
             } catch (err) {}
         });
-        
         terminal.start();
     });
     
