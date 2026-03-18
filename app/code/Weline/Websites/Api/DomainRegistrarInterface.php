@@ -128,4 +128,21 @@ interface DomainRegistrarInterface
      * @return array<string, mixed>
      */
     public function normalizeProvisioningDnsCdnAccounts(array $context): array;
+
+    // --- CDN / 边缘（DNS 同源代理等，由各适配器实现；默认见 DomainRegistrarCdnDefaultsTrait）---
+
+    /**
+     * 推送到 DNS 供应商前，按本供应商规则写入 CDN/边缘字段（如 Cloudflare proxied）。
+     *
+     * @param list<array<string, mixed>> $records
+     * @return list<array<string, mixed>>
+     */
+    public function applyCdnSettingsToDnsRecords(string $domain, array $records): array;
+
+    /**
+     * 通过供应商 API 校验 CDN/边缘是否已配置（不依赖站点 HTTP）。
+     *
+     * @return array{supported: bool, ok: bool, message: string} supported=false 表示无此能力，上层应跳过校验
+     */
+    public function verifyCdnConfiguration(string $domain, array $credentials): array;
 }
