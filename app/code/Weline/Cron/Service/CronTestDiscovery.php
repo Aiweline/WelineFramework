@@ -15,7 +15,7 @@ use Weline\Framework\System\File\Scan;
 final class CronTestDiscovery
 {
     /**
-     * @return list<array{id: string, class: string, module: string, description: string, examples: list<string>, has_test: bool, execute_name: ?string, tip: string}>
+     * @return list<array{id: string, class: string, module: string, description: string, examples: list<string>, manual_help: list<string>, has_test: bool, execute_name: ?string, tip: string}>
      */
     public static function discover(): array
     {
@@ -60,11 +60,13 @@ final class CronTestDiscovery
 
                 $description = '';
                 $examples = [];
+                $manualHelp = [];
                 if ($helpAttrs !== []) {
                     /** @var CronTestHelp $h */
                     $h = $helpAttrs[0]->newInstance();
                     $description = $h->description;
                     $examples = $h->examples;
+                    $manualHelp = $h->manual_help;
                 }
 
                 $executeName = null;
@@ -95,6 +97,7 @@ final class CronTestDiscovery
                     'module' => (string) ($module['name'] ?? ''),
                     'description' => $description,
                     'examples' => $examples,
+                    'manual_help' => $manualHelp,
                     'has_test' => $hasTest,
                     'execute_name' => $executeName,
                     'tip' => $tip,

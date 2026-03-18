@@ -240,9 +240,54 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $row = CronTestDiscovery::findById($executeName);
         $description = '';
         $examples = [];
+        $manualHelp = [];
         if ($row !== null) {
             $description = (string) ($row['description'] ?? '');
             $examples = \is_array($row['examples'] ?? null) ? $row['examples'] : [];
+            $manualHelp = \is_array($row['manual_help'] ?? null) ? $row['manual_help'] : [];
+        }
+        $manualItems = [];
+        foreach ($manualHelp as $line) {
+            $s = \trim((string) $line);
+            if ($s !== '') {
+                $manualItems[] = $s;
+            }
+        }
+        $manualFallback = (string) __(
+            '本任务未在 #[CronTestHelp] 中配置 manual_help。「后缀」会写入 WELINE_CRON_MANUAL_ARGS，是否生效取决于 execute() 是否解析；留空同定时。'
+        );
+
+        $helpRows = [
+            [
+                'k' => (string) __('调度说明'),
+                'fmt' => 'text',
+                'v' => $tip !== '' ? $tip : '-',
+            ],
+            $manualItems !== []
+                ? [
+                    'k' => (string) __('手动参数'),
+                    'fmt' => 'list',
+                    'items' => $manualItems,
+                ]
+                : [
+                    'k' => (string) __('手动参数'),
+                    'fmt' => 'text',
+                    'v' => $manualFallback,
+                ],
+        ];
+        if ($description !== '') {
+            $helpRows[] = [
+                'k' => (string) __('测试说明'),
+                'fmt' => 'text',
+                'v' => $description,
+            ];
+        }
+        if ($examples !== []) {
+            $helpRows[] = [
+                'k' => (string) __('示例'),
+                'fmt' => 'pre_lines',
+                'items' => $examples,
+            ];
         }
 
         $this->request->getResponse()->setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -257,6 +302,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             'manual_args_hint' => (string) __(
                 '可选「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS；任务可在 execute() 内 getenv 读取。留空则与定时调度一致。'
             ),
+            'help_rows' => $helpRows,
         ], JSON_UNESCAPED_UNICODE);
     }
 
