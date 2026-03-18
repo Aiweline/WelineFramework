@@ -86,9 +86,21 @@ class Run implements CommandInterface
             }
             /**@var CronTaskInterface $instance */
             $instance = ObjectManager::getInstance($class);
+            $sseManual = ($v = \getenv('WELINE_CRON_MANUAL_SSE')) !== false && $v !== '' && $v !== '0';
+            if ($sseManual) {
+                $this->printing->note((string) __('【后台手动运行】%{1} 开始执行…', [$executeName]));
+                $this->flushCronCliStreams();
+            }
             $result = $instance->execute();
             if ($result !== '' && $result !== null) {
                 $this->printing->success((string) $result);
+            } elseif ($sseManual) {
+                $this->printing->note(
+                    (string) __('【摘要】任务未返回简短摘要（若上方无其它行，可能本轮无待处理项；详情见 var/log）')
+                );
+            }
+            if ($sseManual) {
+                $this->flushCronCliStreams();
             }
             $task->setData($task::schema_fields_RUN_TIMES, (int)$task->getData($task::schema_fields_RUN_TIMES) + 1);
             # 设置程序运行数据
@@ -236,6 +248,18 @@ class Run implements CommandInterface
             }
         }
 
+    }
+
+    private function flushCronCliStreams(): void
+    {
+        if (\function_exists('fflush')) {
+            if (\defined('STDOUT')) {
+                @\fflush(\STDOUT);
+            }
+            if (\defined('STDERR')) {
+                @\fflush(\STDERR);
+            }
+        }
     }
 
     /**
