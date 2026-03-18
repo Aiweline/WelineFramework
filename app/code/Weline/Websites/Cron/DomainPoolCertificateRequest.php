@@ -345,10 +345,12 @@ class DomainPoolCertificateRequest
 
     private function validateHttpsAccess(string $domain): bool
     {
-        $ch = \curl_init('https://' . $domain);
+        $url = 'https://' . $domain;
+        $ch = \curl_init($url);
         if ($ch === false) {
             return false;
         }
+        \Weline\Websites\Service\HealthCheckService::applyLocalEndpointProbeToCurl($ch, $url);
         \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         \curl_setopt($ch, CURLOPT_NOBODY, true);
         \curl_setopt($ch, CURLOPT_TIMEOUT, 8);

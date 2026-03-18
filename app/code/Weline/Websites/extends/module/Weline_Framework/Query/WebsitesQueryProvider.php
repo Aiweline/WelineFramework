@@ -31,7 +31,6 @@ class WebsitesQueryProvider implements QueryProviderInterface
         private readonly Website $websiteModel,
         private readonly WebsiteLanguage $websiteLanguageModel,
         private readonly DnsProviderDetector $dnsProviderDetector,
-        private readonly ProvisioningQueryHandler $provisioningQueryHandler
     ) {
     }
 
@@ -43,7 +42,16 @@ class WebsitesQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         if (\in_array($operation, ProvisioningQueryHandler::operationNames(), true)) {
-            return $this->provisioningQueryHandler->execute($operation, $params);
+            try {
+                $handler = ObjectManager::getInstance(ProvisioningQueryHandler::class);
+            } catch (\Throwable $e) {
+                throw new \RuntimeException(
+                    (string)__('域名配置编排服务暂不可用：%{1}', $e->getMessage()),
+                    0,
+                    $e
+                );
+            }
+            return $handler->execute($operation, $params);
         }
 
         return match ($operation) {
@@ -299,8 +307,18 @@ class WebsitesQueryProvider implements QueryProviderInterface
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false],
                     ],
                 ],
-            ], $this->provisioningQueryHandler->getDescriptorOperations()),
+            ], $this->getProvisioningDescriptorOperations()),
         ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function getProvisioningDescriptorOperations(): array
+    {
+        try {
+            return ObjectManager::getInstance(ProvisioningQueryHandler::class)->getDescriptorOperations();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function getRegistrars(): array
