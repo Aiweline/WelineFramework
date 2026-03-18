@@ -56,7 +56,6 @@ class AiPublish implements CronTaskInterface
         $published = 0;
         $errors = []; // 收集错误信息
         $skipReasons = []; // 与定时任务日志一致：每次跳过发文的明确原因（供 SSE / 返回文案）
-        $locale = TrendsConfig::get(TrendsConfig::KEY_DEFAULT_LANGUAGE, 'en_US');
         $asDraft = TrendsConfig::publishAsDraft();
         $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
 
@@ -99,6 +98,9 @@ class AiPublish implements CronTaskInterface
                 continue;
             }
 
+            /** @var TrendSiteQuota $quota */
+            $locale = $quota->resolveArticleLocale();
+
             $postModel = ObjectManager::getInstance(PostModel::class);
             $already = $postModel->clear()
                 ->where(PostModel::schema_fields_SITE_ID, $siteId)
@@ -117,7 +119,15 @@ class AiPublish implements CronTaskInterface
             }
 
             if ($onProgress) {
-                $onProgress('quota_info', ['site_id' => $siteId, 'profile_id' => $profileId, 'per_day' => $perDay, 'already' => $already, 'need' => $need, 'category_id' => $categoryId]);
+                $onProgress('quota_info', [
+                    'site_id' => $siteId,
+                    'profile_id' => $profileId,
+                    'per_day' => $perDay,
+                    'already' => $already,
+                    'need' => $need,
+                    'category_id' => $categoryId,
+                    'locale' => $locale,
+                ]);
             }
 
             if ($hasTrendSource) {

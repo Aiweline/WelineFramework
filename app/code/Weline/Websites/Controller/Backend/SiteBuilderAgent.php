@@ -81,6 +81,11 @@ class SiteBuilderAgent extends BackendController
                 $description = $domain;
             }
 
+            $itemExtras = [];
+            $cip = \trim((string) $this->request->getClientIp());
+            if ($cip !== '' && \filter_var($cip, FILTER_VALIDATE_IP)) {
+                $itemExtras['user_client_ip'] = $cip;
+            }
             /** @var WebsiteAgentService $agentService */
             $agentService = ObjectManager::getInstance(WebsiteAgentService::class);
             $result = $agentService->buildFromDescription(
@@ -89,7 +94,8 @@ class SiteBuilderAgent extends BackendController
                 $accountId,
                 function (string $event, array $data) use ($sse): void {
                     $sse->sendEvent($event, $data);
-                }
+                },
+                $itemExtras
             );
 
             if ($result['success']) {

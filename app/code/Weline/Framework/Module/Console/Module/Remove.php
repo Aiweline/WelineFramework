@@ -145,7 +145,7 @@ class Remove extends CommandAbstract
             $eventManager->dispatch('Weline_Framework_Module::remove_before_backup', $beforeBackupEventData);
             $backupResult = $beforeBackupEventData['result'] ?? null;
             if (is_array($backupResult) && isset($backupResult['success'])) {
-                $this->printer->note(__('开始为模块 %{1} 备份数据库表...', [$module]));
+                $this->printer->note(__('开始为模块 %{1} 生成 MDP 数据包并重命名备份表...', [$module]));
                 $dbBackupInfo = $backupResult;
                 if (empty($dbBackupInfo['success'])) {
                     $this->printer->error(__('模块 %{1} 数据库备份失败：%{2}，已取消卸载。', [

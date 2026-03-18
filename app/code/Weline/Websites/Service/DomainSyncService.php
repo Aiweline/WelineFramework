@@ -15,7 +15,6 @@ namespace Weline\Websites\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Api\DomainRegistrarInterface;
-use Weline\Websites\Api\NameserverSwitchInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainAutoResolveTask;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -428,13 +427,8 @@ class DomainSyncService
             }
 
             try {
-                if ($cached['adapter'] instanceof NameserverSwitchInterface) {
-                    $nsList = \array_filter(\array_map('trim', \explode(',', $dnsServers)));
-                    $result = $cached['adapter']->updateNameservers($domainName, $nsList, $cached['credentials']);
-                    $results[$domainName] = $result;
-                } else {
-                    $results[$domainName] = ['success' => false, 'message' => __('适配器不支持修改 DNS')];
-                }
+                $nsList = \array_filter(\array_map('trim', \explode(',', $dnsServers)));
+                $results[$domainName] = $cached['adapter']->updateNameservers($domainName, $nsList, $cached['credentials']);
             } catch (\Throwable $e) {
                 $results[$domainName] = ['success' => false, 'message' => $e->getMessage()];
             }

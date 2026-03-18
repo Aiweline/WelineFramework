@@ -9,33 +9,26 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\SubdomainGeneratorService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainResolveCheck implements CronTaskInterface
+/**
+ * 由 {@see WebsitesDomainResolvePipeline} 统一调度。
+ */
+#[CronTestHelp(
+    description: '根域解析检测（site_ready=0 批次）与子域入池。',
+    examples: ['php bin/w cron:test --task=domain_resolve_check --domain=example.com -v'],
+)]
+class DomainResolveCheck
 {
-    public function name(): string
-    {
-        return __('域名解析状态检测');
-    }
+    use WebsitesCronTestRunnerTrait;
 
-    public function execute_name(): string
-    {
-        return 'domain_resolve_check';
-    }
-
-    public function tip(): string
-    {
-        return __('定期检测域名 DNS 解析状态，验证是否指向本服务器');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/10 * * * *';
-    }
+    private const ROOT_RESOLVE_BATCH = 200;
 
     public function execute(): string
     {
@@ -43,13 +36,16 @@ class DomainResolveCheck implements CronTaskInterface
             $domainModel = ObjectManager::getInstance(Domain::class);
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
 
-            // 仅检测“需要处理”的域名：未建站就绪（site_ready != 1）。
+            // 未建站就绪根域，每轮限量避免单次超时；多轮 cron 扫完。
             $domains = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_SITE_READY, 0)
+                ->order(Domain::schema_fields_DOMAIN, 'ASC')
+                ->limit(self::ROOT_RESOLVE_BATCH)
                 ->select()
                 ->fetchArray();
 
             $total = \count($domains);
+            WebsitesCronTestContext::detail('DomainResolveCheck.batch', ['site_ready_0_count' => $total]);
             $resolved = 0;
             $local = 0;
             $errors = 0;
@@ -60,10 +56,17 @@ class DomainResolveCheck implements CronTaskInterface
             foreach ($domains as $row) {
                 $domain = clone $domainModel;
                 $domain->setData($row);
+                $dn = $domain->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
+                    WebsitesCronTestContext::skipNote($dn, 'root resolve check');
+                    continue;
+                }
+                WebsitesCronTestContext::detail('root_resolve_row', ['domain' => $dn, 'site_ready' => $domain->isSiteReady()]);
 
                 // 无论解析成功或失败，都立即确保子域名接入域名池
                 try {
                     $poolResult = $subdomainGenerator->generateDefaultSubdomains($domain);
+                    WebsitesCronTestContext::detail('generateDefaultSubdomains', ['domain' => $dn, 'poolResult' => $poolResult]);
                     $poolAdded += $poolResult['added'] ?? 0;
                 } catch (\Throwable $e) {
                     w_log_warning(__('子域名入池失败: %{1}, %{2}', [$domain->getDomain(), $e->getMessage()]), [], 'domain_resolve_check');
@@ -71,6 +74,7 @@ class DomainResolveCheck implements CronTaskInterface
 
                 try {
                     $result = $resolveService->checkResolve($domain);
+                    WebsitesCronTestContext::detail('checkResolve_root', ['domain' => $dn, 'result' => $result]);
 
                     if ($result['resolved']) {
                         $resolved++;
@@ -88,12 +92,15 @@ class DomainResolveCheck implements CronTaskInterface
             }
 
             $message = \sprintf(
-                '检测完成: 共 %d 个域名, %d 个已解析, %d 个指向本服务器, %d 个错误',
+                '检测完成: 本批 %d 个域名, %d 个已解析, %d 个指向本服务器, %d 个错误',
                 $total,
                 $resolved,
                 $local,
                 $errors
             );
+            if ($total >= self::ROOT_RESOLVE_BATCH) {
+                $message .= '；' . (string) __('未就绪根域较多时将分多轮检测');
+            }
             if ($poolAdded > 0) {
                 $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
             }
@@ -106,10 +113,5 @@ class DomainResolveCheck implements CronTaskInterface
             w_log_error($errorMsg, [], 'domain_resolve_check');
             return $errorMsg;
         }
-    }
-
-    public function unlock_timeout(int $minute = 20): int
-    {
-        return $minute;
     }
 }

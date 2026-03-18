@@ -4,53 +4,77 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainRegistrarAccount;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\DnsSwitchService;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
  * 定时任务：域名购买后自动切换 DNS/CDN 服务商
  *
- * 当购买域名时选择了非注册商自带的 DNS/CDN 服务商（如 Cloudflare），
- * 本任务在域名生命周期完成（就绪）后，通过 DnsSwitchService 完成切换。
+ * 由 {@see WebsitesOperationsMaintenance} 统一调度。
  */
-class DnsCdnAutoSwitch implements CronTaskInterface
+#[CronTestHelp(
+    description: '购买后 DNS/CDN 自动切换（含延迟队列转 pending）。',
+    examples: ['php bin/w cron:test --task=dns_cdn_auto_switch --domain=example.com -v'],
+)]
+class DnsCdnAutoSwitch
 {
-    public function name(): string
-    {
-        return __('DNS/CDN 自动切换');
-    }
-
-    public function execute_name(): string
-    {
-        return 'dns_cdn_auto_switch';
-    }
-
-    public function tip(): string
-    {
-        return __('域名就绪后自动切换 DNS/CDN 服务商并迁移记录');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/3 * * * *';
-    }
-
-    public function unlock_timeout(int $minute = 10): int
-    {
-        return $minute;
-    }
+    use WebsitesCronTestRunnerTrait;
 
     public function execute(): string
     {
         try {
             $domainModel = ObjectManager::getInstance(Domain::class);
+
+            // 将「延迟切换」中已注册完成的域名转为待执行（注册中不尝试切换，等生命周期 completed 后再执行）
+            $deferredRows = $domainModel->clearQuery()
+                ->where(Domain::schema_fields_DNS_SWITCH_DEFERRED, 1)
+                ->select()
+                ->fetchArray();
+            foreach ($deferredRows as $row) {
+                $d = clone $domainModel;
+                $d->setData($row);
+                $domainName = $d->getDomain();
+                if (!WebsitesCronTestContext::matchesSubject($domainName, $domainName)) {
+                    WebsitesCronTestContext::skipNote($domainName, 'deferred dns switch');
+                    continue;
+                }
+                try {
+                    $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $domainName]);
+                    WebsitesCronTestContext::detail('deferred_lifecycle', ['domain' => $domainName, 'lifecycle' => $lifecycle]);
+                    if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
+                        $status = (string) ($lifecycle['data']['order']['status'] ?? '');
+                        if ($status === 'completed') {
+                            $d->setDnsSwitchPending(1);
+                            $d->setDnsSwitchDeferred(0);
+                            $d->forceCheck(false)->save();
+                            w_log_info(__('[DnsCdnAutoSwitch] 域名 %{1} 注册已完成，已加入待切换队列', [$domainName]), [], 'dns_cdn_auto_switch');
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    w_log_warning(__('[DnsCdnAutoSwitch] 检查延迟切换 %{1} 生命周期失败：%{2}', [$domainName, $e->getMessage()]), [], 'dns_cdn_auto_switch');
+                }
+            }
+
             $rows = $domainModel->clearQuery()
                 ->where(Domain::schema_fields_DNS_SWITCH_PENDING, 1)
                 ->select()
                 ->fetchArray();
+            if (WebsitesCronTestContext::getDomainFilter() !== null) {
+                $rows = \array_values(\array_filter(
+                    $rows,
+                    static function (array $r) use ($domainModel): bool {
+                        $m = clone $domainModel;
+                        $m->setData($r);
+
+                        return WebsitesCronTestContext::matchesSubject($m->getDomain(), $m->getDomain());
+                    }
+                ));
+            }
 
             if ($rows === []) {
                 return '';
@@ -68,6 +92,12 @@ class DnsCdnAutoSwitch implements CronTaskInterface
                 $domain = clone $domainModel;
                 $domain->setData($row);
                 $domainName = $domain->getDomain();
+                WebsitesCronTestContext::detail('pending_switch_row', [
+                    'domain' => $domainName,
+                    'dns_account_id' => $domain->getDnsAccountId(),
+                    'cdn_account_id' => $domain->getCdnAccountId(),
+                    'dns_switch_pending' => $domain->getDnsSwitchPending(),
+                ]);
 
                 try {
                     w_log_info(__('[DnsCdnAutoSwitch] 开始处理域名：%{1}', [$domainName]), [], 'dns_cdn_auto_switch');
@@ -131,7 +161,7 @@ class DnsCdnAutoSwitch implements CronTaskInterface
         // ── 生命周期检查 ──
         w_log_info(__('[DnsCdnAutoSwitch] %{1} 目标 DNS 账户 ID=%{2}，检查生命周期', [$domainName, (string) $targetDnsAccountId]), [], $logCh);
         try {
-            $lifecycle = w_query('saas', 'getDomainLifecycleStatus', ['domain' => $domainName]);
+            $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $domainName]);
             if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
                 $status = (string) ($lifecycle['data']['order']['status'] ?? '');
                 w_log_info(__('[DnsCdnAutoSwitch] %{1} 生命周期状态=%{2}', [$domainName, $status]), [], $logCh);
@@ -148,7 +178,7 @@ class DnsCdnAutoSwitch implements CronTaskInterface
                 w_log_info(__('[DnsCdnAutoSwitch] %{1} 无生命周期数据，视为可切换', [$domainName]), [], $logCh);
             }
         } catch (\Throwable $e) {
-            w_log_info(__('[DnsCdnAutoSwitch] %{1} Saas 查询失败（%{2}），视为可切换', [$domainName, $e->getMessage()]), [], $logCh);
+            w_log_info(__('[DnsCdnAutoSwitch] %{1} 生命周期查询失败（%{2}），视为可切换', [$domainName, $e->getMessage()]), [], $logCh);
         }
 
         // ── 加载目标账户 ──
@@ -169,6 +199,7 @@ class DnsCdnAutoSwitch implements CronTaskInterface
         // dns_switch_pending 由 DnsSwitchService 在切换成功时置 0
         // 失败时不触碰标记，下次 cron 继续重试
         $result = $switchService->executeDnsSwitch($domain, $targetAccount);
+        WebsitesCronTestContext::detail('executeDnsSwitch', ['domain' => $domainName, 'result' => $result]);
 
         if ($result['success']) {
             return true;

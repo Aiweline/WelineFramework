@@ -24,6 +24,14 @@ class DomainPurchaseSuccess implements ObserverInterface
         if ($domain === '') {
             return;
         }
+        $startLifecycle = $data['start_lifecycle'] ?? true;
+        if ($startLifecycle === false || $startLifecycle === '0' || $startLifecycle === 'no') {
+            return;
+        }
+        $lr = $data['lifecycle_result'] ?? [];
+        if (($lr['success'] ?? false) && (int) ($lr['order_id'] ?? 0) > 0) {
+            return;
+        }
 
         try {
             /** @var DomainLifecycleOrchestrationService $service */

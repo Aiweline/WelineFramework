@@ -37,6 +37,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_https_status', columns: ['https_status'])]
 #[Index(name: 'idx_site_ready', columns: ['site_ready'])]
 #[Index(name: 'idx_site_created', columns: ['site_created'])]
+#[Index(name: 'idx_pool_lifecycle', columns: ['pool_lifecycle_stage'])]
 #[Index(name: 'idx_cert', columns: ['cert_id'])]
 class DomainPool extends Model
 {
@@ -83,6 +84,8 @@ class DomainPool extends Model
     public const schema_fields_SITE_READY = 'site_ready';
     #[Col('smallint', 1, nullable: true, default: 0, comment: '是否已建站（已被网站使用，创建站点时不再展示）')]
     public const schema_fields_SITE_CREATED = 'site_created';
+    #[Col('varchar', 32, nullable: true, default: 'registered', comment: '生命周期阶段：解析任务仅处理 registered/awaiting_origin；证书任务仅 origin_ready/cert_pending')]
+    public const schema_fields_POOL_LIFECYCLE_STAGE = 'pool_lifecycle_stage';
     #[Col('varchar', 50, nullable: true, default: '', comment: 'DNS服务商代码')]
     public const schema_fields_DNS_PROVIDER = 'dns_provider';
     #[Col('datetime', nullable: true, comment: '创建时间')]
@@ -112,6 +115,14 @@ class DomainPool extends Model
     public const HTTPS_STATUS_VALID = 'valid';
     public const HTTPS_STATUS_EXPIRED = 'expired';
     public const HTTPS_STATUS_ERROR = 'error';
+
+    public const LIFECYCLE_REGISTERED = 'registered';
+    public const LIFECYCLE_AWAITING_ORIGIN = 'awaiting_origin';
+    public const LIFECYCLE_ORIGIN_READY = 'origin_ready';
+    public const LIFECYCLE_CERT_PENDING = 'cert_pending';
+    public const LIFECYCLE_CERT_VALID = 'cert_valid';
+    public const LIFECYCLE_SITE_LIVE = 'site_live';
+    public const LIFECYCLE_BLOCKED = 'blocked';
     
     /**
      * 保存前自动更新时间戳并解析根域名
@@ -125,6 +136,13 @@ class DomainPool extends Model
         
         if (!$this->getData(self::schema_fields_ID)) {
             $this->setData(self::schema_fields_CREATED_AT, $now);
+        }
+
+        if ($this->isSiteCreated()) {
+            $this->setData(self::schema_fields_POOL_LIFECYCLE_STAGE, self::LIFECYCLE_SITE_LIVE);
+        } elseif (\trim((string) $this->getData(self::schema_fields_POOL_LIFECYCLE_STAGE)) === ''
+            && !$this->getData(self::schema_fields_ID)) {
+            $this->setData(self::schema_fields_POOL_LIFECYCLE_STAGE, self::LIFECYCLE_REGISTERED);
         }
         
         // 域名转小写并解析根域
@@ -377,6 +395,20 @@ class DomainPool extends Model
     {
         return (int) $this->getData(self::schema_fields_SITE_CREATED) === 1;
     }
+
+    public function getPoolLifecycleStage(): string
+    {
+        $s = \trim((string) $this->getData(self::schema_fields_POOL_LIFECYCLE_STAGE));
+
+        return $s !== '' ? $s : self::LIFECYCLE_REGISTERED;
+    }
+
+    public function setPoolLifecycleStage(string $stage): self
+    {
+        $this->setData(self::schema_fields_POOL_LIFECYCLE_STAGE, \trim($stage));
+
+        return $this;
+    }
     
     /**
      * 根据 website_domain 表同步所有 pool 的 site_created 状态
@@ -435,11 +467,10 @@ class DomainPool extends Model
     public function calculateSiteReady(): bool
     {
         $isReady = $this->getResolveStatus() === self::RESOLVE_STATUS_RESOLVED
-            && $this->getDnsStatus() === self::INFRA_STATUS_READY
-            && $this->getCdnStatus() === self::INFRA_STATUS_READY
             && $this->isLocalServer()
-            && $this->getHttpsStatus() === self::HTTPS_STATUS_VALID;
-        
+            && $this->getHttpsStatus() === self::HTTPS_STATUS_VALID
+            && $this->getStatus() === self::STATUS_ACTIVE;
+
         $this->setSiteReady($isReady);
         return $isReady;
     }
@@ -730,30 +761,62 @@ class DomainPool extends Model
      */
     public function getDomainsNeedResolveCheck(int $limit = 100): array
     {
-        $thresholdTime = date('Y-m-d H:i:s', time() - 600);
+        $thresholdTime = \date('Y-m-d H:i:s', \time() - 600);
+        $fetchCap = \max(300, $limit * 10);
         $domains = $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 0)
+            ->where(self::schema_fields_SITE_CREATED, 0)
+            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, self::resolveStagesForCron(), 'IN')
             ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
+            ->limit($fetchCap)
             ->select()
             ->fetchArray();
         $result = [];
         foreach ($domains as $domain) {
-            $checkedAt = (string)($domain[self::schema_fields_RESOLVE_CHECKED_AT] ?? '');
+            $checkedAt = (string) ($domain[self::schema_fields_RESOLVE_CHECKED_AT] ?? '');
             if ($checkedAt === '' || $checkedAt < $thresholdTime) {
                 $result[] = $domain;
-                if (count($result) >= $limit) {
+                if (\count($result) >= $limit) {
                     break;
                 }
             }
         }
+
         return $result;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function resolveStagesForCron(): array
+    {
+        return [self::LIFECYCLE_REGISTERED, self::LIFECYCLE_AWAITING_ORIGIN];
+    }
+
+    /**
+     * 阶段 cert_valid：仅刷新 site_ready（与解析/申证书分离的另一节拍）
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getPoolsCertValidNeedSiteReadyRefresh(int $limit = 40): array
+    {
+        return $this->clearQuery()
+            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where(self::schema_fields_SITE_READY, 0)
+            ->where(self::schema_fields_SITE_CREATED, 0)
+            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, self::LIFECYCLE_CERT_VALID)
+            ->where(self::schema_fields_HTTPS_STATUS, self::HTTPS_STATUS_VALID)
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
     }
     
     /**
      * 获取需要申请证书的域名列表（仅未建站就绪的域名）
      *
-     * 条件：解析正常 + 指向本服务器 + 没有有效证书 + 未建站就绪
+     * 条件：解析正常 + 指向本服务器 + 没有有效证书 + 未建站就绪。
+     * 不再强制 dns/cdn infra READY：手动 DNS、仅公网解析到源站也应能进入申请队列。
      *
      * @param int $limit
      * @return array
@@ -763,9 +826,9 @@ class DomainPool extends Model
         return $this->clearQuery()
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 0)
+            ->where(self::schema_fields_SITE_CREATED, 0)
+            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_ORIGIN_READY, self::LIFECYCLE_CERT_PENDING], 'IN')
             ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
-            ->where(self::schema_fields_DNS_STATUS, self::INFRA_STATUS_READY)
-            ->where(self::schema_fields_CDN_STATUS, self::INFRA_STATUS_READY)
             ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
             ->where(self::schema_fields_HTTPS_STATUS, [self::HTTPS_STATUS_NONE, self::HTTPS_STATUS_EXPIRED, self::HTTPS_STATUS_ERROR, self::HTTPS_STATUS_PENDING], 'IN')
             ->order(self::schema_fields_HTTPS_STATUS, 'ASC')
