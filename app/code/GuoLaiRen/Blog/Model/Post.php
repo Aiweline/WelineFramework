@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\Blog\Model;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -95,8 +96,16 @@ class Post extends Model
             $this->setData(self::schema_fields_PUBLISHED_AT, null);
         }
         $sk = $this->getData(self::schema_fields_SOURCE_KEYWORD);
-        if (\is_string($sk) && \mb_strlen($sk) > 60000) {
-            $this->setData(self::schema_fields_SOURCE_KEYWORD, \mb_substr($sk, 0, 60000));
+        if (!\is_string($sk) || $sk === '') {
+            return;
+        }
+        $cfg = Env::getInstance()->getConfig();
+        $max = (int) (($cfg['guolairen_blog'] ?? [])['source_keyword_db_max'] ?? 255);
+        if ($max <= 0) {
+            $max = 65535;
+        }
+        if (\mb_strlen($sk) > $max) {
+            $this->setData(self::schema_fields_SOURCE_KEYWORD, \mb_substr($sk, 0, $max));
         }
     }
 
