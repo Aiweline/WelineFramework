@@ -25,6 +25,8 @@ class AliyunDomainRegistrar implements DomainRegistrarInterface
     use DnsCdnZoneRecordsProviderTrait;
     use DefaultDnsZoneOriginMatchTrait;
     use DomainRegistrarOptionalDefaultsTrait;
+    use RegistrarBatchCheckAvailabilityTrait;
+
     public function getRegistrarCode(): string
     {
         return 'aliyun_domain';
