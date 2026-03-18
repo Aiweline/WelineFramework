@@ -1,0 +1,106 @@
+<?php
+/**
+ * 一站式配置订单列表
+ * @var \Weline\Framework\View\Template $this
+ */
+$items = $this->getData('items') ?: [];
+$total = (int) $this->getData('total');
+$page = (int) $this->getData('page');
+$pageSize = (int) $this->getData('pageSize');
+$totalPages = (int) $this->getData('totalPages');
+$search = (string) $this->getData('search');
+$status = (string) $this->getData('status');
+$statusList = $this->getData('statusList') ?: [];
+$orderIdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_ORDER_ID;
+$domainField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_DOMAIN;
+$statusField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_STATUS;
+$currentStepField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CURRENT_STEP;
+$errorField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_ERROR_MESSAGE;
+$createdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CREATED_AT;
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <i class="mdi mdi-cloud-check text-primary"></i> <?= __('一站式配置订单') ?>
+            </h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                    <li class="breadcrumb-item"><?= __('网站服务') ?></li>
+                    <li class="breadcrumb-item active"><?= __('配置订单') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row"><template>Weline_Component::message.phtml</template></div>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <form method="get" class="d-flex flex-nowrap gap-2 align-items-center">
+            <input type="text" name="search" class="form-control form-control-sm" style="max-width:220px;" placeholder="<?= __('搜索域名') ?>" value="<?= htmlspecialchars($search) ?>">
+            <select name="status" class="form-select form-select-sm" style="max-width:120px;">
+                <?php foreach ($statusList as $k => $v): ?>
+                    <option value="<?= htmlspecialchars((string) $k) ?>" <?= $status === (string) $k ? 'selected' : '' ?>><?= htmlspecialchars((string) $v) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary flex-shrink-0"><i class="mdi mdi-magnify"></i> <?= __('搜索') ?></button>
+            <a href="<?= $this->getBackendUrl('*/backend/provisioning/index') ?>" class="btn btn-sm btn-secondary flex-shrink-0"><i class="mdi mdi-refresh"></i> <?= __('重置') ?></a>
+        </form>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-bordered">
+                        <thead>
+                            <tr>
+                                <th><?= __('订单ID') ?></th>
+                                <th><?= __('域名') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('当前步骤') ?></th>
+                                <th><?= __('错误信息') ?></th>
+                                <th><?= __('创建时间') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($items)): ?>
+                                <tr><td colspan="6" class="text-center text-muted"><?= __('暂无数据') ?></td></tr>
+                            <?php else: ?>
+                                <?php foreach ($items as $row): ?>
+                                    <tr>
+                                        <td><?= (int) ($row[$orderIdField] ?? 0) ?></td>
+                                        <td><?= htmlspecialchars((string) ($row[$domainField] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string) ($row[$statusField] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string) ($row[$currentStepField] ?? '')) ?></td>
+                                        <td class="text-danger small"><?= htmlspecialchars((string) ($row[$errorField] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string) ($row[$createdField] ?? '')) ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php if ($totalPages > 1): ?>
+                <div class="d-flex justify-content-between align-items-center mt-2">
+                    <span class="text-muted"><?= __('共 %{total} 条', ['total' => $total]) ?></span>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0">
+                            <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                                <li class="page-item <?= $i === $page ? 'active' : '' ?>">
+                                    <a class="page-link" href="?page=<?= $i ?>&search=<?= urlencode($search) ?>&status=<?= urlencode($status) ?>"><?= $i ?></a>
+                                </li>
+                            <?php endfor; ?>
+                        </ul>
+                    </nav>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
