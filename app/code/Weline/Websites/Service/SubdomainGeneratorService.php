@@ -51,8 +51,11 @@ class SubdomainGeneratorService
                     continue;
                 }
             }
-            if ($s === '@' || \preg_match('/^[a-zA-Z0-9][a-zA-Z0-9-]*$/i', $s)) {
-                $result[] = $s === '@' ? '@' : \strtolower($s);
+            if ($s === '@') {
+                $result[] = '@';
+            } elseif (!DnsSiteHostRules::isUnderscoreTechnicalDnsHost($s)
+                && \preg_match('/^[a-zA-Z0-9][a-zA-Z0-9-]*$/i', $s)) {
+                $result[] = \strtolower($s);
             }
         }
         return \array_values(\array_unique($result));
