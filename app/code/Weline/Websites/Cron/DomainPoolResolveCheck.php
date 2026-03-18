@@ -28,6 +28,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '域名池解析阶段（registered/awaiting_origin）。',
     examples: ['php bin/w cron:test --task=domain_pool_resolve_check --domain=www.example.com -v'],
+    manual_help: [
+        '控制台 --domain= 限定单条池域名解析检测。',
+        '后台「后缀」未解析时按定时批量处理。',
+    ],
 )]
 class DomainPoolResolveCheck
 {

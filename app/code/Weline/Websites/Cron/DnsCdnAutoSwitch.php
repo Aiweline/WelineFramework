@@ -20,6 +20,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '购买后 DNS/CDN 自动切换（含延迟队列转 pending）。',
     examples: ['php bin/w cron:test --task=dns_cdn_auto_switch --domain=example.com -v'],
+    manual_help: [
+        '控制台 --domain= 只处理该根域的切换队列。',
+        '后台「后缀」未解析时处理全部待切换域名。',
+    ],
 )]
 class DnsCdnAutoSwitch
 {
