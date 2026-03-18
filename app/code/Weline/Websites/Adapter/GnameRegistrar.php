@@ -1086,26 +1086,28 @@ class GnameRegistrar implements DomainRegistrarInterface
     }
 
     /**
+     * 新增解析：官方文档 https://www.gname.com/zhcn/domain/api/jiexi/add
+     * POST /api/resolution/add — ym,lx,zj,jlz,mx,ttl,xl；lx 含 TXT；zj 为主机记录（如 _acme-challenge 或 _acme-challenge.www）。
+     * 文档表「MX 值 mx」为必填：非 MX 类型须传 0（此前 TXT 未传 mx 可能与官方约定不一致）。
+     *
      * @inheritDoc
      */
     public function addDnsRecord(string $domain, array $record, array $credentials): array
     {
         $this->validateCredentials($credentials);
 
+        $lx = \strtoupper((string) ($record['type'] ?? 'A'));
         $params = [
             'ym' => $domain,
-            'lx' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'lx' => $lx,
             'zj' => (string) ($record['host'] ?? '@'),
             'jlz' => (string) ($record['value'] ?? ''),
             'ttl' => (string) ($record['ttl'] ?? '600'),
             'xl' => (string) ($record['line'] ?? '0'),
+            'mx' => $lx === 'MX' ? (string) (int) ($record['priority'] ?? 10) : '0',
         ];
 
-        if (!empty($record['priority']) || \strtoupper((string) ($record['type'] ?? 'A')) === 'MX') {
-            $params['mx'] = (string) $record['priority'];
-        }
-
-        // 官方文档「添加域名解析」请求 URL 为 /api/resolution/add
+        // API 成功 ≠ 全球权威查询稳定，见类注释
         $response = $this->makeRequest('api/resolution/add', $params, $credentials);
 
         $code = (int) ($response['code'] ?? 0);
@@ -1117,7 +1119,12 @@ class GnameRegistrar implements DomainRegistrarInterface
         ];
 
         if ($code === 1) {
-            $recordId = (string) ($response['data']['id'] ?? $response['data']['jid'] ?? $response['data'] ?? '');
+            $data = $response['data'] ?? null;
+            if (\is_array($data)) {
+                $recordId = (string) ($data['id'] ?? $data['jid'] ?? '');
+            } else {
+                $recordId = ($data !== null && $data !== '') ? (string) $data : '';
+            }
             return [
                 'success' => true,
                 'record_id' => $recordId,
@@ -1154,21 +1161,19 @@ class GnameRegistrar implements DomainRegistrarInterface
     {
         $this->validateCredentials($credentials);
 
+        $lx = \strtoupper((string) ($record['type'] ?? 'A'));
         $params = [
             'ym' => $domain,
             'jxid' => $recordId,
-            'lx' => \strtoupper((string) ($record['type'] ?? 'A')),
+            'lx' => $lx,
             'zj' => (string) ($record['host'] ?? '@'),
             'jlz' => (string) ($record['value'] ?? ''),
             'ttl' => (string) ($record['ttl'] ?? '600'),
             'xl' => (string) ($record['line'] ?? '0'),
+            'mx' => $lx === 'MX' ? (string) (int) ($record['priority'] ?? 10) : '0',
         ];
 
-        if (!empty($record['priority']) || \strtoupper((string) ($record['type'] ?? 'A')) === 'MX') {
-            $params['mx'] = (string) $record['priority'];
-        }
-
-        // 官方文档「修改域名解析」请求 URL 为 /api/resolution/edit
+        // 官方文档「修改域名解析」https://www.gname.com/zhcn/domain/api/jiexi/edit
         $response = $this->makeRequest('api/resolution/edit', $params, $credentials);
 
         $code = (int) ($response['code'] ?? 0);
