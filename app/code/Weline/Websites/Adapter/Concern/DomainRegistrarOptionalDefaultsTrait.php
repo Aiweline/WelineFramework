@@ -41,6 +41,7 @@ trait DomainRegistrarZoneDefaultsTrait
 trait DomainRegistrarOptionalDefaultsTrait
 {
     use DomainRegistrarAccountDefaultsTrait;
+    use DomainRegistrarCdnDefaultsTrait;
     use DomainRegistrarZoneDefaultsTrait;
     use RegistrarProvisioningNormalizeNoopTrait;
 }
