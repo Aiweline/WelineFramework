@@ -1,4 +1,4 @@
-﻿"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
+"系统定时任务：%{1} ,已安装！","系统定时任务：%{1} ,已安装！"
 "系统定时任务：%{1} ,未安装！","系统定时任务：%{1} ,未安装！"
 系统-其他定时任务：,系统-其他定时任务：
 "检测到 crontab 命令不可用，正在尝试自动安装依赖...","Crontab command not found"
@@ -107,3 +107,7 @@ ID,ID
 测试说明,测试说明
 示例,示例
 请先点击列表中的「运行」选择任务,请先点击列表中的「运行」选择任务
+"Cron 手动运行：填写的「后缀」会写入子进程环境变量 WELINE_CRON_MANUAL_ARGS。","Manual run: optional suffix is passed to the child as env WELINE_CRON_MANUAL_ARGS."
+"Cron 手动运行：任务在 execute() 中可通过 getenv('WELINE_CRON_MANUAL_ARGS') 读取。","Read it in execute() via getenv('WELINE_CRON_MANUAL_ARGS')."
+"Cron 手动运行：后缀留空则不设置该变量，与定时调度一致。","Leave empty to match scheduled runs (env not set)."
+"本任务未在 #[CronTestHelp] 中配置 manual_help。「后缀」会写入 WELINE_CRON_MANUAL_ARGS，是否生效取决于 execute() 是否解析；留空同定时。","This task has no #[CronTestHelp] manual_help. Suffix sets WELINE_CRON_MANUAL_ARGS; only effective if execute() reads it. Empty = scheduled behavior."
