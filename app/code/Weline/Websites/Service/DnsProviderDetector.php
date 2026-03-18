@@ -319,4 +319,78 @@ class DnsProviderDetector
             '当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。'
         );
     }
+
+    /**
+     * 列表展示用：本地配置的目标 DNS 与公网 NS 不一致时的文案
+     *
+     * - 根域列表：Cloudflare（注册商 DNS（share-dns）广播中…）
+     * - 子域（池子）行：公网仍为旧 NS 时只显示公网侧名称，避免与根域长文案重复
+     *
+     * @param string $configuredDnsCode Domain.dns_provider（空则视为跟随注册商）
+     * @param string $registrarCode     注册商代码
+     * @param array<string> $liveNameservers 公网 NS 列表（如 dns_get_record）
+     * @param bool $subdomainRow       true=池子子域行，不匹配时仅显示公网检测名
+     */
+    public function resolveDnsListDisplayName(
+        string $configuredDnsCode,
+        string $registrarCode,
+        array $liveNameservers,
+        bool $subdomainRow
+    ): string {
+        $configuredDnsCode = \strtolower(\trim($configuredDnsCode));
+        $registrarCode = \strtolower(\trim($registrarCode));
+        if ($configuredDnsCode === '') {
+            $configuredDnsCode = $registrarCode;
+        }
+        $cfgName = $this->getProviderDisplayName($configuredDnsCode);
+
+        if ($liveNameservers === []) {
+            return $cfgName;
+        }
+        $liveCode = $this->detectProvider($liveNameservers);
+        $liveName = $this->getProviderDisplayName($liveCode);
+
+        if ($liveCode === $configuredDnsCode) {
+            return $cfgName;
+        }
+
+        $wantsExternalDns = $this->isCdnProvider($configuredDnsCode)
+            || (
+                $configuredDnsCode !== ''
+                && $configuredDnsCode !== $registrarCode
+                && !$this->isOriginalProvider($configuredDnsCode, $registrarCode)
+            );
+
+        if (!$wantsExternalDns) {
+            return $cfgName;
+        }
+
+        if ($liveCode === 'unknown') {
+            return $cfgName;
+        }
+
+        if ($subdomainRow) {
+            return $liveName;
+        }
+
+        return $cfgName . '（' . $liveName . __('广播中…') . '）';
+    }
+
+    /**
+     * 是否应在列表加载时对根域查公网 NS（与本地配置比对）
+     */
+    public function shouldProbeLiveNsForConfiguredDns(string $configuredDnsCode, string $registrarCode): bool
+    {
+        $configuredDnsCode = \strtolower(\trim($configuredDnsCode));
+        $registrarCode = \strtolower(\trim($registrarCode));
+        if ($configuredDnsCode === '') {
+            return false;
+        }
+
+        return $this->isCdnProvider($configuredDnsCode)
+            || (
+                $configuredDnsCode !== $registrarCode
+                && !$this->isOriginalProvider($configuredDnsCode, $registrarCode)
+            );
+    }
 }
