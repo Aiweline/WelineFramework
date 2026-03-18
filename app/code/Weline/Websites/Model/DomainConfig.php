@@ -10,6 +10,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Model;
 
 use Weline\Framework\Database\Model;
+use Weline\Websites\Service\DnsSiteHostRules;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -171,7 +172,13 @@ class DomainConfig extends Model
     public function getAutoResolveSubdomains(): array
     {
         $value = $this->getValue(self::CONFIG_AUTO_RESOLVE_SUBDOMAINS, '@,www');
-        return \array_filter(\array_map('trim', \explode(',', $value)));
+        $parts = \array_values(\array_filter(\array_map('trim', \explode(',', $value))));
+        $parts = \array_values(\array_filter(
+            $parts,
+            static fn(string $s): bool => $s !== '' && !DnsSiteHostRules::isUnderscoreTechnicalDnsHost($s)
+        ));
+
+        return $parts !== [] ? $parts : ['@', 'www'];
     }
 
     /**
