@@ -79,8 +79,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getWebsiteLanguageCodes' => $this->getWebsiteLanguageCodes($params),
             'getDomainPoolList'      => $this->getDomainPoolList($params),
             'getDnsRecords'          => $this->getDnsRecords($params),
-            'addAcmeTxtRecord'       => $this->addAcmeTxtRecord($params),
-            'removeAcmeTxtRecord'    => $this->removeAcmeTxtRecord($params),
+            'addAcmeTxtRecord'         => $this->addAcmeTxtRecord($params),
+            'getAcmeDnsProviderCode'   => $this->getAcmeDnsProviderCode($params),
+            'removeAcmeTxtRecord'      => $this->removeAcmeTxtRecord($params),
             'getDnsCdnAccounts'      => $this->getDnsCdnAccounts($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Websites 查询器不支持的操作：%{1}', $operation)
@@ -293,6 +294,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
                     'params'      => [
                         ['name' => 'domain', 'type' => 'string', 'required' => true],
                         ['name' => 'challenge_value', 'type' => 'string', 'required' => true],
+                        ['name' => 'pool_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getAcmeDnsProviderCode',
+                    'description' => __('解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true],
                         ['name' => 'pool_id', 'type' => 'int', 'required' => false],
                         ['name' => 'domain_id', 'type' => 'int', 'required' => false],
                     ],
@@ -1025,6 +1035,36 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 'pool_sync' => $poolSync,
                 'sync_error' => $syncError,
             ],
+        ];
+    }
+
+    /**
+     * 与 addAcmeTxtRecord 相同的根域与 DNS 账户解析，仅返回供应商代码（不写入 DNS）。
+     * 证书服务在公网 TXT 轮询前调用，避免依赖 addAcmeTxtRecord 返回值是否含 dns_provider。
+     *
+     * @return array{provider_code: string, provider_name?: string, error?: string}
+     */
+    private function getAcmeDnsProviderCode(array $params): array
+    {
+        $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
+        $poolId = (int) ($params['pool_id'] ?? 0);
+        $domainId = (int) ($params['domain_id'] ?? 0);
+        if ($domain === '') {
+            return ['provider_code' => '', 'error' => 'empty_domain'];
+        }
+        $rootDomainModel = $this->resolveRootDomainForAcme($domain, $poolId, $domainId);
+        if ($rootDomainModel === null) {
+            return ['provider_code' => '', 'error' => 'resolve_root_failed'];
+        }
+        /** @var DomainResolveService $resolveService */
+        $resolveService = ObjectManager::getInstance(DomainResolveService::class);
+        $dnsResult = $resolveService->getDnsManagementAccount($rootDomainModel, false);
+        if ($dnsResult['error'] !== '') {
+            return ['provider_code' => '', 'error' => $dnsResult['error']];
+        }
+        return [
+            'provider_code' => (string) $dnsResult['adapter']->getRegistrarCode(),
+            'provider_name' => (string) ($dnsResult['adapter']->getRegistrarName() ?? ''),
         ];
     }
 
