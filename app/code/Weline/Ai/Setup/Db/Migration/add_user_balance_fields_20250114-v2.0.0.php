@@ -4,77 +4,144 @@ declare(strict_types=1);
 
 namespace Weline\Ai\Setup\Db\Migration;
 
-use Weline\Framework\Database\Api\Db\Ddl\TableInterface;
-use Weline\Framework\Setup\Db\ModelSetup;
-use Weline\Framework\Setup\Data\Context;
-use Weline\Framework\Setup\Db\Schema;
+use Weline\Database\AbstractMigration;
+use Weline\Framework\Database\Connection\Api\Sql\TableInterface;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Frontend\Model\FrontendUser;
 
 /**
- * 为frontend_user表添加余额相关字段
- * 支持API计费系统
+ * 为 frontend_user 表添加余额相关字段（与 MigrationService 文件名推导类名一致）
  */
-class add_user_balance_fields_20250114_v2_0_0
+class AddUserBalanceFields20250114V200 extends AbstractMigration
 {
-    public function upgrade(ModelSetup $setup, Context $context): void
+    public function getDescription(): string
     {
-        $table = $setup->getConnection()->getTableName('frontend_user');
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'balance')) {
-            $setup->getConnection()->addColumn(
-                $table,
+        return 'frontend_user 余额、充值、消费、货币字段及 balance 索引';
+    }
+
+    public function getVersion(): string
+    {
+        return '2.0.0';
+    }
+
+    public function install(): bool
+    {
+        $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        $table = ObjectManager::getInstance(FrontendUser::class)->getTable();
+        $alter = $connection->alterTable()->forTable($table, FrontendUser::schema_primary_key, '');
+
+        $hasField = $this->columnExistsFn($connection);
+
+        if (!$hasField($table, 'balance')) {
+            $alter->addColumn(
                 'balance',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
+                '',
+                TableInterface::column_type_DECIMAL,
+                '12,4',
+                'NOT NULL DEFAULT 0.0000',
                 '账户余额'
             );
-            echo "✅ 已添加 frontend_user.balance 字段\n";
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'total_recharge')) {
-            $setup->getConnection()->addColumn(
-                $table,
+        if (!$hasField($table, 'total_recharge')) {
+            $alter->addColumn(
                 'total_recharge',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
+                '',
+                TableInterface::column_type_DECIMAL,
+                '12,4',
+                'NOT NULL DEFAULT 0.0000',
                 '累计充值金额'
             );
-            echo "✅ 已添加 frontend_user.total_recharge 字段\n";
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'total_consumption')) {
-            $setup->getConnection()->addColumn(
-                $table,
+        if (!$hasField($table, 'total_consumption')) {
+            $alter->addColumn(
                 'total_consumption',
-                TableInterface::column_type_DECIMAL . '(12,4)',
-                0.0000,
+                '',
+                TableInterface::column_type_DECIMAL,
+                '12,4',
+                'NOT NULL DEFAULT 0.0000',
                 '累计消费金额'
             );
-            echo "✅ 已添加 frontend_user.total_consumption 字段\n";
         }
-        
-        if (!$setup->getConnection()->tableColumnExist($table, 'currency')) {
-            $setup->getConnection()->addColumn(
-                $table,
+        if (!$hasField($table, 'currency')) {
+            $alter->addColumn(
                 'currency',
-                TableInterface::column_type_VARCHAR . '(10)',
-                'CNY',
+                '',
+                TableInterface::column_type_VARCHAR,
+                '10',
+                "NOT NULL DEFAULT 'CNY'",
                 '货币类型'
             );
-            echo "✅ 已添加 frontend_user.currency 字段\n";
         }
-        
-        // 添加索引
-        if (!$setup->getConnection()->indexExist($table, 'idx_balance')) {
-            $setup->getConnection()->addIndex(
-                $table,
-                'idx_balance',
-                'balance',
-                TableInterface::index_type_DEFAULT
-            );
-            echo "✅ 已添加 frontend_user.balance 索引\n";
+        $alter->alter();
+
+        if ($hasField($table, 'balance') && !$this->indexExists($connection, $table, 'idx_balance')) {
+            try {
+                $connection->query("ALTER TABLE `{$table}` ADD INDEX `idx_balance` (`balance`)")->fetch();
+            } catch (\Throwable) {
+                // 索引可能已存在或引擎不支持
+            }
         }
-        
-        echo "✅ 用户余额字段迁移完成\n";
+
+        return true;
+    }
+
+    public function uninstall(): bool
+    {
+        $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        $table = ObjectManager::getInstance(FrontendUser::class)->getTable();
+        $hasField = $this->columnExistsFn($connection);
+
+        try {
+            $connection->query("ALTER TABLE `{$table}` DROP INDEX `idx_balance`")->fetch();
+        } catch (\Throwable) {
+        }
+
+        $alter = $connection->alterTable()->forTable($table, FrontendUser::schema_primary_key, '');
+        foreach (['currency', 'total_consumption', 'total_recharge', 'balance'] as $col) {
+            if ($hasField($table, $col)) {
+                $alter->deleteColumn($col);
+            }
+        }
+        $alter->alter();
+
+        return true;
+    }
+
+    /** @return callable(string,string):bool */
+    private function columnExistsFn(object $connection): callable
+    {
+        return function (string $t, string $f) use ($connection): bool {
+            if (method_exists($connection, 'hasField')) {
+                return $connection->hasField($t, $f);
+            }
+            foreach ($connection->getTableColumns($t) as $col) {
+                $name = $col['Field'] ?? $col['field'] ?? $col['column_name'] ?? '';
+                if (strcasecmp((string) $name, $f) === 0) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+    }
+
+    private function indexExists(object $connection, string $table, string $indexName): bool
+    {
+        try {
+            $rows = $connection->query('SHOW INDEX FROM `' . str_replace('`', '``', $table) . '`')->fetch();
+            if (!is_array($rows)) {
+                return false;
+            }
+            foreach ($rows as $row) {
+                $key = $row['Key_name'] ?? $row['key_name'] ?? '';
+                if (strcasecmp((string) $key, $indexName) === 0) {
+                    return true;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return false;
     }
 }
-

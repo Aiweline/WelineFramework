@@ -14,6 +14,8 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Websites\Service\DomainPoolFlowLogService;
 
 class SubdomainGeneratorService
 {
@@ -113,6 +115,13 @@ class SubdomainGeneratorService
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
                 $poolDomain->setSiteReady(false);
                 $poolDomain->save();
+                if ($poolDomain->getPoolId() > 0) {
+                    ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                        $poolDomain->getPoolId(),
+                        DomainPoolFlowLog::KIND_POOL_CREATED,
+                        (string) __('域名入池：%{1}', [$fullDomain]),
+                    );
+                }
                 $added++;
             } catch (\Throwable $e) {
                 $errors[] = $fullDomain . ': ' . $e->getMessage();
@@ -185,6 +194,13 @@ class SubdomainGeneratorService
             $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_NONE);
             $poolDomain->setSiteReady(false);
             $poolDomain->save();
+            if ($poolDomain->getPoolId() > 0) {
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    $poolDomain->getPoolId(),
+                    DomainPoolFlowLog::KIND_POOL_CREATED,
+                    (string) __('域名入池：%{1}', [$subdomain]),
+                );
+            }
 
             return [
                 'success' => true,

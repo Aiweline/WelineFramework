@@ -40,7 +40,11 @@ class QuickBuildAggregatorTest extends TestCase
         $this->assertContains('Weline_Websites', $modules, '应包含域名服务模块');
         $this->assertContains('Weline_Cdn', $modules, '应包含 CDN 服务模块');
         $this->assertContains('Weline_Server', $modules, '应包含 SSL 服务模块');
-        $this->assertContains('Weline_Saas', $modules, '应包含一站式配置模块');
+        $provisioningModules = array_column(
+            array_filter($services, static fn (array $s): bool => ($s['category'] ?? '') === 'provisioning'),
+            'module'
+        );
+        $this->assertContains('Weline_Websites', $provisioningModules, '一站式配置应由 Websites 提供');
     }
 
     public function testQueryServicesCategoryFilter(): void
