@@ -84,6 +84,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
                 }
             }
         }
+        unset($task);
         $stats = $this->getCronStats();
         $moduleOptions = $this->getDistinctModules();
         $this->assign('tasks', $tasks);
