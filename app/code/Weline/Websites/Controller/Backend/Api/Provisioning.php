@@ -6,7 +6,9 @@ namespace Weline\Websites\Controller\Backend\Api;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\ProvisioningOrder;
+use Weline\Websites\Service\DomainLifecycleOrchestrationService;
 use Weline\Websites\Service\DomainProvisioningService;
 
 /** 一站式配置 SSE 实时进度 API（URL: websites/backend/api/provisioning/stream） */
@@ -233,6 +235,12 @@ class Provisioning extends BaseController
                 $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
                 $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
                 $order->save();
+                try {
+                    ObjectManager::getInstance(DomainLifecycleOrchestrationService::class)
+                        ->syncRootDomainStatusWhenOrderCompleted($order);
+                } catch (\Throwable $e) {
+                    // 非致命
+                }
             }
 
             $sse->sendEvent('done', [
