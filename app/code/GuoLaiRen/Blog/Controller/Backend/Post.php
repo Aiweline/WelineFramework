@@ -312,10 +312,14 @@ class Post extends BackendController
         } catch (\Throwable $e) {
             $msg = $e->getMessage();
             $code = $e->getCode();
+            $detail = $msg !== '' ? $msg : \get_class($e);
+            $detail .= ' @' . \basename($e->getFile()) . ':' . $e->getLine();
             $sse->sendEvent('error', [
-                'message' => $msg,
+                'message' => $msg !== '' ? $msg : \get_class($e),
                 'code' => \is_int($code) ? $code : 0,
-                'detail' => __('执行出错：%{message}', ['message' => $msg]),
+                'detail' => __('执行出错：%{detail}', ['detail' => $detail]),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
             ]);
         }
 
@@ -341,11 +345,8 @@ class Post extends BackendController
             
             $result = $cron->execute($onProgress);
 
+            // execute() 在 0 篇时已附带跳过原因/异常/getZeroPublishHint，勿再拼一遍
             $message = __('当前模式：%{mode}；%{result}', ['mode' => $modeText, 'result' => $result]);
-            if (str_contains($result, '0 篇')) {
-                $hint = AiPublish::getZeroPublishHint();
-                $message .= "\n" . $hint;
-            }
 
             return json_encode([
                 'success' => true,
