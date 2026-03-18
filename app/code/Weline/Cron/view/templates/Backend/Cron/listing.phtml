@@ -585,9 +585,9 @@ $welineCronRunHelpUrl = htmlspecialchars((string) $this->getBackendUrl('*/backen
             <div class="mb-2">
                 <label for="weline-cron-run-suffix" class="form-label small mb-1"><lang>后缀</lang>（<lang>可选</lang>，<lang>写入</lang> WELINE_CRON_MANUAL_ARGS）</label>
                 <input type="text" class="form-control form-control-sm" id="weline-cron-run-suffix" name="suffix" autocomplete="off"
-                       placeholder="<?= htmlspecialchars((string) __('留空则与定时调度一致')) ?>" />
+                       placeholder="@lang{留空则与定时调度一致}" />
             </div>
-            <w:theme:sse-terminal id="weline-cron-run-terminal" title="<?= htmlspecialchars((string) __('输出')) ?>" height="280px" events="start,progress,chunk,done,error" show-toolbar="true" />
+            <w:theme:sse-terminal id="weline-cron-run-terminal" title="@lang{输出}" height="280px" events="start,progress,chunk,done,error" show-toolbar="true" />
         </div>
         <div class="weline-cron-run-modal-footer">
             <span class="text-muted small me-auto" id="weline-cron-run-hint"></span>
