@@ -957,11 +957,14 @@ class Domain extends BackendController
                 ]);
             }
 
+            $bindDns = (int) $this->request->getPost('bind_dns_account_id', 0);
+            $bindCdn = (int) $this->request->getPost('bind_cdn_account_id', 0);
+
             $sync = $this->syncService;
             $mode = ($resolveMode === $sync::RESOLVE_MODE_KEEP_EACH_DNS || $resolveMode === $sync::RESOLVE_MODE_BATCH_TO_LOCAL)
                 ? $resolveMode
                 : ($autoResolve ? $sync::RESOLVE_MODE_BATCH_TO_LOCAL : $sync::RESOLVE_MODE_KEEP_EACH_DNS);
-            $result = $sync->importDomains($accountId, $domains, $mode);
+            $result = $sync->importDomains($accountId, $domains, $mode, $bindDns, $bindCdn);
 
             return $this->fetchJson([
                 'code' => $result['success'] ? 200 : 400,
@@ -2034,10 +2037,11 @@ class Domain extends BackendController
 
             $serverIpService = ObjectManager::getInstance(\Weline\Websites\Service\ServerIpService::class);
             $subdomainGenerator = ObjectManager::getInstance(\Weline\Websites\Service\SubdomainGeneratorService::class);
-            $domainModel = ObjectManager::getInstance(\Weline\Websites\Model\Domain::class);
+            $authOrigin = ObjectManager::getInstance(\Weline\Websites\Service\AuthoritativeDnsOriginService::class);
 
             $serverIp = $serverIpService->getPublicIpv4();
-            if ($serverIp === '') {
+            $serverIpv6 = $serverIpService->getPublicIpv6();
+            if ($serverIp === '' && $serverIpv6 === '') {
                 return $this->fetchJson([
                     'code' => 500,
                     'msg' => __('无法获取服务器公网IP'),
@@ -2063,9 +2067,28 @@ class Domain extends BackendController
                 }
 
                 $domainName = $domain->getDomain();
-                $resolvedIp = \gethostbyname($domainName);
+                $pointsToLocal = false;
+                $dnsId = (int) $domain->getDnsAccountId();
+                $cdnId = (int) $domain->getCdnAccountId();
+                if ($dnsId > 0 || $cdnId > 0) {
+                    $auth = $authOrigin->originPointsToServer(
+                        $domainName,
+                        $domainName,
+                        $dnsId,
+                        $cdnId,
+                        $serverIp,
+                        $serverIpv6,
+                    );
+                    if ($auth['api_ok'] && $auth['has_direct_records']) {
+                        $pointsToLocal = (bool) ($auth['matches']);
+                    }
+                }
+                if (!$pointsToLocal && $serverIp !== '') {
+                    $resolvedIp = @\gethostbyname($domainName);
+                    $pointsToLocal = $resolvedIp !== $domainName && $serverIpService->isLocalServer($resolvedIp);
+                }
 
-                if ($resolvedIp === $domainName || !$serverIpService->isLocalServer($resolvedIp)) {
+                if (!$pointsToLocal) {
                     $totalSkipped++;
                     $skippedDomains[] = $domainName;
                     continue;

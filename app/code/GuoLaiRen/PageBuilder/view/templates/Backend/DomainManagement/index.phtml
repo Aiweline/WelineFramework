@@ -1245,6 +1245,44 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     </div>
 </div>
 
+<!-- ==================== 拉取域名：确认 DNS/CDN 账户 ==================== -->
+<div class="pb-dm-form-modal" id="pb-dm-pull-bind-modal">
+    <div class="pb-dm-form-dialog" style="max-width:520px;">
+        <div class="pb-dm-form-dialog-title">
+            <span><i class="mdi mdi-dns"></i> <lang>拉取域名：确认 DNS / CDN 管理账户</lang></span>
+            <button type="button" class="pb-dm-form-dialog-close" id="pb-dm-pull-bind-close">&times;</button>
+        </div>
+        <div class="pb-dm-form-body" style="padding:var(--backend-spacing-lg,20px);">
+            <p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);margin-bottom:16px;">
+                <lang>请选择能管理该域名解析的账户；判断是否指向本站时优先通过服务商 API 读取 A/AAAA 的源站 IP（适合 CDN 代理）。至少选择一项。</lang>
+            </p>
+            <div class="pb-dm-fg" style="margin-bottom:12px;">
+                <label><lang>DNS 管理账户</lang></label>
+                <select id="pb-dm-pull-bind-dns" class="pb-dm-select" style="width:100%;">
+                    <option value="0"><lang>不指定</lang></option>
+                </select>
+            </div>
+            <div class="pb-dm-fg" style="margin-bottom:12px;">
+                <label><lang>CDN 管理账户</lang></label>
+                <select id="pb-dm-pull-bind-cdn" class="pb-dm-select" style="width:100%;">
+                    <option value="0"><lang>不指定</lang></option>
+                </select>
+            </div>
+            <p class="pb-dm-alert pb-dm-alert-danger" id="pb-dm-pull-bind-warn" style="display:none;font-size:0.85rem;padding:8px 12px;">
+                <lang>请至少选择 DNS 或 CDN 中的一项</lang>
+            </p>
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;margin-top:12px;">
+                <input type="checkbox" id="pb-dm-pull-bind-auto-resolve" checked style="margin-top:3px;">
+                <span style="font-size:0.88rem;"><lang>拉取后尝试在注册商处自动添加 A 记录指向本服务器</lang></span>
+            </label>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;padding:0 var(--backend-spacing-lg,20px) var(--backend-spacing-lg,20px);">
+            <button type="button" class="pb-dm-btn pb-dm-btn-outline" id="pb-dm-pull-bind-cancel"><lang>取消</lang></button>
+            <button type="button" class="pb-dm-btn pb-dm-btn-success" id="pb-dm-pull-bind-confirm"><lang>确认拉取</lang></button>
+        </div>
+    </div>
+</div>
+
 <!-- ==================== HTTPS 证书申请弹窗 ==================== -->
 <div class="pb-dm-form-modal" id="pb-dm-https-request-modal">
     <div class="pb-dm-form-dialog pb-dm-modal-md">
@@ -2083,22 +2121,27 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     return;
                 }
 
-                setBtnLoading(btn, true);
-                postForm(API.pullDomains, {
-                    account_id: accountId,
-                    domains: notPulledDomains
-                }).then(function(res) {
-                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
-                    if (res.success) {
-                        BackendToast.success(res.message || '<?= __('拉取成功') ?>');
-                        loadDomainList();
-                    } else {
-                        BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
-                    }
-                }).catch(function() {
-                    setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
-                    BackendToast.error('<?= __('网络错误') ?>');
-                });
+                openPullBindModal(function(bindDns, bindCdn, ar) {
+                    setBtnLoading(btn, true);
+                    postForm(API.pullDomains, {
+                        account_id: accountId,
+                        domains: notPulledDomains,
+                        auto_resolve: ar ? '1' : '0',
+                        bind_dns_account_id: bindDns,
+                        bind_cdn_account_id: bindCdn
+                    }).then(function(res) {
+                        setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                        if (res.success) {
+                            BackendToast.success(res.message || res.msg || '<?= __('拉取成功') ?>');
+                            loadDomainList();
+                        } else {
+                            BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
+                        }
+                    }).catch(function() {
+                        setBtnLoading(btn, false, '<i class="mdi mdi-download-multiple"></i>');
+                        BackendToast.error('<?= __('网络错误') ?>');
+                    });
+                }, true);
             });
         });
 
@@ -2257,6 +2300,80 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         });
     }
 
+    var pullBindModalEl = document.getElementById('pb-dm-pull-bind-modal');
+    var pullBindOnConfirm = null;
+
+    function closePullBindModal() {
+        if (pullBindModalEl) {
+            pullBindModalEl.classList.remove('pb-dm-form-modal--open');
+        }
+    }
+
+    function fillPullBindSelects() {
+        var sd = document.getElementById('pb-dm-pull-bind-dns');
+        var sc = document.getElementById('pb-dm-pull-bind-cdn');
+        if (!sd || !sc) return;
+        sd.innerHTML = '<option value="0"><?= __('不指定') ?></option>';
+        sc.innerHTML = '<option value="0"><?= __('不指定') ?></option>';
+        fetch(API.getDnsAccounts).then(function(r) { return r.json(); }).then(function(data) {
+            if (data.code === 200 && data.data) {
+                (data.data.dns_accounts || []).forEach(function(a) {
+                    sd.innerHTML += '<option value="' + a.account_id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.registrar_name || a.registrar_code || '') + ')</option>';
+                });
+                (data.data.cdn_accounts || []).forEach(function(a) {
+                    sc.innerHTML += '<option value="' + a.account_id + '">' + escapeHtml(a.name) + ' (' + escapeHtml(a.registrar_name || a.registrar_code || '') + ')</option>';
+                });
+            }
+        }).catch(function() {});
+    }
+
+    function openPullBindModal(onConfirm, defaultAutoResolve) {
+        pullBindOnConfirm = onConfirm;
+        var ar = document.getElementById('pb-dm-pull-bind-auto-resolve');
+        if (ar) ar.checked = defaultAutoResolve !== false;
+        var w = document.getElementById('pb-dm-pull-bind-warn');
+        if (w) w.style.display = 'none';
+        fillPullBindSelects();
+        if (pullBindModalEl) pullBindModalEl.classList.add('pb-dm-form-modal--open');
+    }
+
+    (function bindPullBindModal() {
+        var c = document.getElementById('pb-dm-pull-bind-confirm');
+        if (c) {
+            c.addEventListener('click', function() {
+                var dns = parseInt(document.getElementById('pb-dm-pull-bind-dns').value, 10) || 0;
+                var cdn = parseInt(document.getElementById('pb-dm-pull-bind-cdn').value, 10) || 0;
+                var w = document.getElementById('pb-dm-pull-bind-warn');
+                if (dns <= 0 && cdn <= 0) {
+                    if (w) w.style.display = 'block';
+                    return;
+                }
+                if (w) w.style.display = 'none';
+                var arChk = document.getElementById('pb-dm-pull-bind-auto-resolve');
+                var ar = !!(arChk && arChk.checked);
+                var fn = pullBindOnConfirm;
+                pullBindOnConfirm = null;
+                closePullBindModal();
+                if (fn) fn(dns, cdn, ar);
+            });
+        }
+        ['pb-dm-pull-bind-close', 'pb-dm-pull-bind-cancel'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('click', function() {
+                pullBindOnConfirm = null;
+                closePullBindModal();
+            });
+        });
+        if (pullBindModalEl) {
+            pullBindModalEl.addEventListener('click', function(e) {
+                if (e.target === pullBindModalEl) {
+                    pullBindOnConfirm = null;
+                    closePullBindModal();
+                }
+            });
+        }
+    })();
+
     function pullDomains(domainList, btn, accountId, autoResolve) {
         if (!domainList || domainList.length === 0) {
             BackendToast.warning('<?= __('请选择要拉取的域名') ?>');
@@ -2264,60 +2381,61 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }
 
         accountId = accountId || domainListState.accountId || 0;
-        autoResolve = autoResolve !== false;
-
-        if (btn) setBtnLoading(btn, true);
-
-        postForm(API.pullDomains, {
-            account_id: accountId,
-            domains: domainList,
-            auto_resolve: autoResolve ? '1' : '0'
-        }).then(function(res) {
-            if (res.success) {
-                var msg = res.message || '<?= __('拉取成功') ?>';
-                if (autoResolve && res.auto_resolve_queued) {
-                    msg += ' <?= __('（自动解析任务已创建）') ?>';
-                }
-                BackendToast.success(msg);
-                if (btn && res.domains && domainList.length === 1) {
-                    var domain = domainList[0];
-                    var domainId = res.domains[domain] || 0;
-                    if (domainId > 0) {
-                        btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
-                        btn.setAttribute('data-domain-id', domainId);
-                        btn.setAttribute('data-domain', domain);
-                        btn.setAttribute('title', '<?= __('解析到本地') ?>');
-                        btn.innerHTML = '<i class="mdi mdi-dns"></i>';
-                        btn.onclick = function(e) {
-                            e.stopPropagation();
-                            resolveDns(domainId, domain, btn);
-                        };
-                        var row = btn.closest('tr');
-                        if (row) {
-                            var pullBadge = row.querySelector('.pb-dm-badge--warn');
-                            if (pullBadge) {
-                                pullBadge.className = 'pb-dm-badge pb-dm-badge--ok';
-                                pullBadge.textContent = '<?= __('已拉取') ?>';
+        openPullBindModal(function(bindDns, bindCdn, ar) {
+            if (btn) setBtnLoading(btn, true);
+            postForm(API.pullDomains, {
+                account_id: accountId,
+                domains: domainList,
+                auto_resolve: ar ? '1' : '0',
+                bind_dns_account_id: bindDns,
+                bind_cdn_account_id: bindCdn
+            }).then(function(res) {
+                if (res.success) {
+                    var msg = res.message || res.msg || '<?= __('拉取成功') ?>';
+                    if (ar && res.auto_resolve_queued) {
+                        msg += ' <?= __('（自动解析任务已创建）') ?>';
+                    }
+                    BackendToast.success(msg);
+                    if (btn && res.domains && domainList.length === 1) {
+                        var domain = domainList[0];
+                        var domainId = res.domains[domain] || 0;
+                        if (domainId > 0) {
+                            btn.className = 'pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn';
+                            btn.setAttribute('data-domain-id', domainId);
+                            btn.setAttribute('data-domain', domain);
+                            btn.setAttribute('title', '<?= __('解析到本地') ?>');
+                            btn.innerHTML = '<i class="mdi mdi-dns"></i>';
+                            btn.onclick = function(e) {
+                                e.stopPropagation();
+                                resolveDns(domainId, domain, btn);
+                            };
+                            var row = btn.closest('tr');
+                            if (row) {
+                                var pullBadge = row.querySelector('.pb-dm-badge--warn');
+                                if (pullBadge) {
+                                    pullBadge.className = 'pb-dm-badge pb-dm-badge--ok';
+                                    pullBadge.textContent = '<?= __('已拉取') ?>';
+                                }
+                                var checkbox = row.querySelector('.pb-dm-domain-select');
+                                if (checkbox) {
+                                    checkbox.checked = false;
+                                }
                             }
-                            var checkbox = row.querySelector('.pb-dm-domain-select');
-                            if (checkbox) {
-                                checkbox.checked = false;
-                            }
+                        } else {
+                            setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
                         }
-                    } else {
+                    } else if (btn) {
                         setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
                     }
-                } else if (btn) {
-                    setBtnLoading(btn, false, '<i class="mdi mdi-check"></i>');
+                } else {
+                    if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
+                    BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
                 }
-            } else {
+            }).catch(function() {
                 if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
-            }
-        }).catch(function() {
-            if (btn) setBtnLoading(btn, false, '<i class="mdi mdi-download"></i>');
-            BackendToast.error('<?= __('网络错误') ?>');
-        });
+                BackendToast.error('<?= __('网络错误') ?>');
+            });
+        }, autoResolve !== false);
     }
 
     function resolveDns(domainId, domainName, btn) {
@@ -2779,7 +2897,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         var btn = this;
         var domainIds = selected.map(function(d) { return d.domain_id; });
 
-        BackendConfirm.show('<?= __('确定批量转存') ?> ' + selected.length + ' <?= __('个域名到域名池？') ?>\n\n<?= __('注意：只有解析到本服务器IP的域名才会被转存，其他将跳过。') ?>', {
+        BackendConfirm.show('<?= __('确定批量转存') ?> ' + selected.length + ' <?= __('个域名到域名池？') ?>\n\n<?= __('注意：已绑定 DNS/CDN 账户的域名将按服务商记录中的源站 IP 判断；否则按公网解析 IP。未指向本机的将跳过。') ?>', {
             title: '<?= __('批量转存确认') ?>',
             confirmText: '<?= __('确认转存') ?>',
             cancelText: '<?= __('取消') ?>'
@@ -3740,31 +3858,34 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         }
 
         var autoResolveCheckbox = document.getElementById('pb-dm-batch-pull-auto-resolve');
-        var autoResolve = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
+        var defaultAr = autoResolveCheckbox ? autoResolveCheckbox.checked : true;
 
-        setBtnLoading(batchSearchPullBtn, true);
-
-        postForm(API.pullDomains, {
-            account_id: domainListState.accountId,
-            domains: selectedDomains,
-            auto_resolve: autoResolve ? '1' : '0'
-        }).then(function(res) {
-            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
-            if (res.success) {
-                var msg = res.message || '<?= __('拉取成功') ?>';
-                if (autoResolve && res.auto_resolve_queued) {
-                    msg += ' <?= __('（自动解析任务已创建）') ?>';
+        openPullBindModal(function(bindDns, bindCdn, ar) {
+            setBtnLoading(batchSearchPullBtn, true);
+            postForm(API.pullDomains, {
+                account_id: domainListState.accountId,
+                domains: selectedDomains,
+                auto_resolve: ar ? '1' : '0',
+                bind_dns_account_id: bindDns,
+                bind_cdn_account_id: bindCdn
+            }).then(function(res) {
+                setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
+                if (res.success) {
+                    var msg = res.message || res.msg || '<?= __('拉取成功') ?>';
+                    if (ar && res.auto_resolve_queued) {
+                        msg += ' <?= __('（自动解析任务已创建）') ?>';
+                    }
+                    BackendToast.success(msg);
+                    closeBatchSearchModal();
+                    loadDomainList();
+                } else {
+                    BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
                 }
-                BackendToast.success(msg);
-                closeBatchSearchModal();
-                loadDomainList();
-            } else {
-                BackendToast.error(res.message || res.msg || '<?= __('拉取失败') ?>');
-            }
-        }).catch(function() {
-            setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
-            BackendToast.error('<?= __('网络错误') ?>');
-        });
+            }).catch(function() {
+                setBtnLoading(batchSearchPullBtn, false, '<i class="mdi mdi-download"></i> <?= __('拉取选中') ?>');
+                BackendToast.error('<?= __('网络错误') ?>');
+            });
+        }, defaultAr);
     });
 
     /* ========== 域名注册 ========== */

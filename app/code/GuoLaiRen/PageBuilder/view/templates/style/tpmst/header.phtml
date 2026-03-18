@@ -877,9 +877,13 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
 })();
 
 (function(){
-    var tpmstNavDownloadUrl = <?= json_encode($downloadBtnUrl, JSON_UNESCAPED_SLASHES) ?>;
+    var tpmstNavDownloadUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
     document.querySelectorAll('.tpmst-nav-download-btn.tpmst-download-trigger').forEach(function(el){
-        el.addEventListener('click', function(){ window.location.href = tpmstNavDownloadUrl; });
+        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = tpmstNavDownloadUrl; });
+    });
+    document.querySelectorAll('.slider-inner p.download-btn').forEach(function(el){
+        el.style.cursor = 'pointer';
+        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = tpmstNavDownloadUrl; });
     });
 })();
 </script>
