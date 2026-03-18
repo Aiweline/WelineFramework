@@ -16,6 +16,11 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     examples: [
         'php bin/w cron:test --task=websites_pool_certificate_maintenance --domain=example.com -v --cert_full=1',
     ],
+    manual_help: [
+        '整点/半点跑 PEM 校验段，其余节拍仅证书申请；与定时逻辑一致。',
+        '控制台调试：cron:test 可加 --domain=、-v、--cert_full=1 或 --hourly。',
+        '后台「后缀」写入 WELINE_CRON_MANUAL_ARGS；本任务 execute() 未解析时与留空相同。',
+    ],
 )]
 class WebsitesPoolCertificateMaintenance implements CronTaskInterface
 {

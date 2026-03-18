@@ -31,6 +31,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '域名池待申请证书队列（单域证书）。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
+    manual_help: [
+        '控制台 --domain= 可限定池子域名（子域 FQDN）。',
+        '单任务 cron:task:run 时后台「后缀」未解析则处理全队列，与定时一致。',
+    ],
 )]
 class DomainPoolCertificateRequest
 {
