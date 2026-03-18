@@ -17,8 +17,9 @@ class DnsProviderDetector
         'cloudflare.com' => 'cloudflare',
         'ns.cloudflare.com' => 'cloudflare',
 
-        // GName
+        // GName（官网默认 DNS 为 ns1.gname-dns.com / ns2.gname-dns.com，须都能识别）
         'gname.com' => 'gname',
+        'gname-dns.com' => 'gname',
         'dns.gname.com' => 'gname',
 
         // Aliyun / 阿里云
