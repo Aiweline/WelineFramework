@@ -29,16 +29,16 @@ class BlogPostSummarySourceKeywordText20250318V102 extends AbstractMigration
         $c = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
         $table = ObjectManager::getInstance(Post::class)->getTable();
         $tableSql = $this->tableSqlIdent($table);
-        $driver = strtolower((string) $c->getDriverType());
+        $driver = strtolower((string) $c->getConfigProvider()->getDbType());
 
-        if (str_contains($driver, 'pgsql')) {
+        if ($driver === 'pgsql') {
             $c->query(
                 "ALTER TABLE {$tableSql} ALTER COLUMN \"summary\" TYPE TEXT USING \"summary\"::text"
             )->fetch();
             $c->query(
                 "ALTER TABLE {$tableSql} ALTER COLUMN \"source_keyword\" TYPE TEXT USING \"source_keyword\"::text"
             )->fetch();
-        } elseif (str_contains($driver, 'mysql') || str_contains($driver, 'mariadb')) {
+        } elseif (str_contains($driver, 'mysql') || $driver === 'mariadb') {
             $c->query(
                 "ALTER TABLE {$tableSql} MODIFY COLUMN `summary` TEXT NULL, MODIFY COLUMN `source_keyword` TEXT NULL"
             )->fetch();
