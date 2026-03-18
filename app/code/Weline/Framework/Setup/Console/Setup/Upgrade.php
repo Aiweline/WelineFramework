@@ -133,8 +133,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         private Printing $printing
     )
     {
-        // 构造函数只负责初始化，不执行具体逻辑
-        // 所有逻辑都在 execute() 方法中按正确顺序执行
+        // 勿在构造函数里收集 extends/注册表：无升级锁、无 defer 上下文，且实例可能被多次构造，会导致顺序错乱或退化为逐模块递归扫描。
+        // extends（generated/extends.php）须在 prepareUpgrade() 内、紧接「延迟注册表 + recollect 标记」之后作为第一步聚合，见该处步骤 4。
     }
 
     /**
@@ -507,27 +507,26 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 3. 创建标识符文件，标记需要再次收集（升级过程中可能有新模块安装）
         $this->createRecollectFlag();
-        
-        // 4. 运行 composer dump-autoload（必须在注册表收集之前）
-        $this->runComposerDump();
-        
-        // 5. 环境依赖检测（必须在 extends/注册表更新前执行）
-        $this->checkEnvironmentDependencies($args);
-        
-        // 6. 收集框架注册表（必须在升级前完成，确保系统可用）
-        // 如果指定了模块，则使用增量更新模式
+
+        // 4. 最先聚合框架注册表（含 generated/extends.php）。须先于 composer 与后续收集，否则易退化为逐模块递归扫描。
         $this->printing->note(__('正在准备系统环境...'));
         $argsModule = $this->parseModuleArgs($args);
         $this->collectFrameworkRegistries(true, $argsModule);
-        
+
+        // 5. composer dump-autoload（刷新类映射，供后续模块升级与运行时加载）
+        $this->runComposerDump();
+
+        // 6. 环境依赖检测
+        $this->checkEnvironmentDependencies($args);
+
         // 7. 验证框架约束规则（必须在模块升级前验证，遵循框架约束）
         $this->validateFrameworkRules();
     }
     
     /**
      * 环境依赖检测
-     * 
-     * 在 extends/注册表更新运行前执行环境依赖检测。
+     *
+     * 在 extends 聚合与 composer dump-autoload 之后执行。
      * 如果检测不通过，提示用户并提供自动修复选项。
      * 
      * @param array $args 命令参数
@@ -1059,22 +1058,23 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $registryService = ObjectManager::getInstance(RegistryUpdateService::class);
             
             if (!empty($moduleNames)) {
-                // 增量更新模式：只更新指定模块的注册表
-                $this->printing->note(__('正在增量更新模块 %{1} 的注册表...', [implode(', ', $moduleNames)]));
+                $this->printing->note(
+                    __('正在增量更新 Extends 及模块 %{1} 相关注册表…', [implode(', ', $moduleNames)])
+                );
                 $ok = $registryService->updateModuleRegistriesIncremental($moduleNames);
                 if ($ok) {
-                    $this->printing->success(__('✓ 模块注册表增量更新完成。'));
+                    $this->printing->success(__('✓ Extends 与模块注册表增量更新完成。'));
                 } else {
                     $this->printing->warning(__('部分注册表增量更新失败，但将继续执行。'));
                 }
             } else {
-                // 全量更新模式：更新所有注册表
-                $this->printing->note(__('正在更新所有注册表...'));
+                $this->printing->note(
+                    __('正在收集 Extends 及框架注册表（插件、事件、Hook、命令）…')
+                );
                 // 传入 false 强制跳过自动编译（升级流程中会在后面统一编译一次）
-                // 跳过命令更新（第三个参数 true），因为 setup:upgrade 会在后面第 961-964 行单独执行 command:upgrade
                 $ok = $registryService->updateAllRegistries(false, false, true);
                 if ($ok) {
-                    $this->printing->success(__('✓ 所有注册表已更新完成。'));
+                    $this->printing->success(__('✓ Extends 与框架注册表已更新完成。'));
                 } else {
                     $this->printing->warning(__('部分注册表更新失败，但将继续执行。'));
                 }
