@@ -393,7 +393,37 @@ function start(url, options) {
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             signal: postAbortController.signal
         }).then(function(res) {
-            if (!res.ok) throw new Error(res.statusText || 'Request failed');
+            var ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+            if (ct === 'application/json' || (ct.length > 0 && ct.indexOf('json') >= 0 && ct.indexOf('event-stream') < 0)) {
+                return res.text().then(function(text) {
+                    var msg = text;
+                    try {
+                        var j = text ? JSON.parse(text) : {};
+                        msg = (j && (j.error || j.message || j.msg)) ? String(j.error || j.message || j.msg) : (text || '$t_connection_failed');
+                    } catch (e1) {
+                        msg = text || (res.statusText || 'Request failed');
+                    }
+                    setStatus('error', '$t_error');
+                    log(String(msg), 'error');
+                    if (eventCallbacks.error) eventCallbacks.error(new Error(String(msg)));
+                    stop();
+                });
+            }
+            if (!res.ok) {
+                return res.text().then(function(text) {
+                    var msg = text;
+                    try {
+                        var j = text ? JSON.parse(text) : {};
+                        msg = (j && (j.error || j.message || j.msg)) ? String(j.error || j.message || j.msg) : (text || (res.status + ' ' + (res.statusText || '')));
+                    } catch (e2) {
+                        msg = text || (res.statusText || 'Request failed');
+                    }
+                    setStatus('error', '$t_error');
+                    log(String(msg), 'error');
+                    if (eventCallbacks.error) eventCallbacks.error(new Error(String(msg)));
+                    stop();
+                });
+            }
             if (!res.body) throw new Error('Stream not supported');
             setStatus('connected', '$t_connected');
             log('$t_connected', 'success');
