@@ -2787,7 +2787,9 @@ CNF;
         $recordId = (string)($addResult['record_id'] ?? '');
         // 先轮询公网 TXT 是否可见，避免 Gname 等未真正生效时白等 3+7 分钟
         $txtFqdn = '_acme-challenge.' . $domain;
-        $pollMaxSeconds = 90;
+        $dnsProviderCode = \strtolower(\trim((string)($addResult['dns_provider'] ?? ($addResult['dns_response']['provider'] ?? ''))));
+        // GName 等平台 API 返回成功到公网可解析常需更久，90s 易误判失败
+        $pollMaxSeconds = ($dnsProviderCode === 'gname') ? 180 : 90;
         $pollIntervalSeconds = 10;
         $txtVisible = false;
         if ($onProgress) {
@@ -2818,8 +2820,8 @@ CNF;
             }
             return ['validated' => false, 'error' => $err];
         }
-        // TXT 已可见，短等后通知 CA（Gname 等 CA 查询可能仍慢，后续 CA 轮询保持）
-        $dnsWaitSeconds = 60;
+        // TXT 已可见，短等后通知 CA（Gname 等 CA 侧查询仍可能滞后，适当加长）
+        $dnsWaitSeconds = ($dnsProviderCode === 'gname') ? 90 : 60;
         if ($onProgress) {
             $onProgress((string)__('TXT 已生效，等待 %{1} 秒后通知 CA...', [$dnsWaitSeconds]), ['step' => 'dns_propagation']);
         }
