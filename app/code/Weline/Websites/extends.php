@@ -33,7 +33,7 @@ return [
                 ],
                 'implementation' => [
                     'interface' => 'Weline\\Websites\\Api\\DomainRegistrarInterface',
-                    'description' => __('必须实现 DomainRegistrarInterface（含 listZoneDnsRecordsForAccount，见 DnsCdnZoneRecordsProviderInterface）'),
+                    'description' => __('仅实现 DomainRegistrarInterface 单一接口（元数据、购买、DNS、权威区、源站判定、NS、账户与 Zone）'),
                     'required_methods' => [
                         'getRegistrarCode' => __('返回适配器唯一标识'),
                         'getRegistrarName' => __('返回适配器显示名称'),

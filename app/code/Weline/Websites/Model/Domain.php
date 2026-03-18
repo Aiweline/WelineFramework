@@ -92,6 +92,9 @@ class Domain extends Model
     #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS/CDN服务切换待执行：1=生命周期完成后定时任务将自动切换DNS/CDN服务商')]
     public const schema_fields_DNS_SWITCH_PENDING = 'dns_switch_pending';
 
+    #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS/CDN 延迟切换：1=购买时未立即切换（等注册完成），定时任务在生命周期完成后转为 dns_switch_pending 并执行')]
+    public const schema_fields_DNS_SWITCH_DEFERRED = 'dns_switch_deferred';
+
     #[Col('varchar', 20, nullable: true, default: 'pending', comment: '解析状态')]
     public const schema_fields_RESOLVE_STATUS = 'resolve_status';
 
@@ -348,6 +351,17 @@ class Domain extends Model
     public function setDnsSwitchPending(int $value): self
     {
         $this->setData(self::schema_fields_DNS_SWITCH_PENDING, $value);
+        return $this;
+    }
+
+    public function getDnsSwitchDeferred(): int
+    {
+        return (int) ($this->getData(self::schema_fields_DNS_SWITCH_DEFERRED) ?? 0);
+    }
+
+    public function setDnsSwitchDeferred(int $value): self
+    {
+        $this->setData(self::schema_fields_DNS_SWITCH_DEFERRED, $value);
         return $this;
     }
 

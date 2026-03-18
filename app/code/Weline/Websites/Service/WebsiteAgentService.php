@@ -34,13 +34,15 @@ class WebsiteAgentService
      * @param string $domain 要购买的域名（必填）
      * @param int $accountId 域名商账号 ID
      * @param callable|null $onProgress function(string $event, array $data): void
+     * @param array<string, mixed> $itemExtras 合并进购买条目（如 user_client_ip、purchase_contact 片段）
      * @return array{success: bool, message: string, domain?: string, website_id?: int, order_id?: int}
      */
     public function buildFromDescription(
         string $description,
         string $domain,
         int $accountId,
-        ?callable $onProgress = null
+        ?callable $onProgress = null,
+        array $itemExtras = []
     ): array {
         $emit = function (string $event, array $data) use ($onProgress): void {
             if ($onProgress) {
@@ -82,7 +84,7 @@ class WebsiteAgentService
         // 2. 购买域名（含自动解析、自动建站）
         $emit('progress', ['message' => __('正在购买域名...'), 'progress' => 20]);
         $items = [
-            [
+            \array_merge([
                 'domain' => $domain,
                 'years' => 1,
                 'website_id' => 0,
@@ -90,7 +92,7 @@ class WebsiteAgentService
                 'resolve_to_local' => 'yes',
                 'start_lifecycle' => '1',
                 'subdomains' => ['@', 'www'],
-            ],
+            ], $itemExtras),
         ];
         $purchaseResult = $this->purchaseService->createAndProcessOrder($accountId, $items, true);
         if (!$purchaseResult['success']) {

@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * 将 listZoneDnsRecordsForAccount 委托给 getDnsRecords（DnsManagementInterface）。
+ * 将 listZoneDnsRecordsForAccount 委托给 getDnsRecords。
  * 不支持 DNS API 的适配器不得作为域名的 DNS/CDN 管理账户绑定。
  */
 

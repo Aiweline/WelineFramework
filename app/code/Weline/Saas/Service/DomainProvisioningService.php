@@ -215,7 +215,7 @@ class DomainProvisioningService
                 'website_id' => (int) $order->getData(ProvisioningOrder::schema_fields_WEBSITE_ID),
             ],
         ];
-        $this->eventsManager->dispatch('Weline_Saas::provisioning::bind_dns', $eventData);
+        $this->eventsManager->dispatch('Weline_Websites::provisioning::bind_dns', $eventData);
 
         $handled = $eventData['data']['handled'] ?? false;
         if ($handled) {

@@ -15,6 +15,7 @@ if (!is_array($poolRows)) {
 }
 
 $poolListUrl = $this->getUrl('*/admin/domain/get-domain-pool-list');
+$poolFlowLogUrl = $this->getUrl('*/admin/domain/get-pool-flow-log');
 $cleanInvalidUrl = $this->getUrl('*/admin/domain/clean-pool-invalid-domains');
 $cleanMispointedUrl = $this->getUrl('*/admin/domain/clean-pool-mispointed-apex-dns');
 $formKey = method_exists($this, 'getFormKey') ? (string) $this->getFormKey() : '';
@@ -99,12 +100,13 @@ $formKey = method_exists($this, 'getFormKey') ? (string) $this->getFormKey() : '
             <th><?= __('HTTPS') ?></th>
             <th><?= __('可建站') ?></th>
             <th><?= __('已建站') ?></th>
+            <th style="min-width:14rem;"><?= __('流转') ?></th>
         </tr>
         </thead>
         <tbody id="weline-pool-tbody">
         <?php if ($poolTotal === 0): ?>
             <tr>
-                <td colspan="8" class="text-center py-5 text-muted">
+                <td colspan="9" class="text-center py-5 text-muted">
                     <i class="mdi mdi-database-remove" style="font-size:2rem;"></i>
                     <p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p>
                     <small><?= __('请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池') ?></small>
@@ -120,6 +122,8 @@ $formKey = method_exists($this, 'getFormKey') ? (string) $this->getFormKey() : '
                 $httpsStatus = (string) ($row[DomainPool::schema_fields_HTTPS_STATUS] ?? DomainPool::HTTPS_STATUS_NONE);
                 $siteReady = (int) ($row[DomainPool::schema_fields_SITE_READY] ?? 0) === 1;
                 $siteCreated = (int) ($row[DomainPool::schema_fields_SITE_CREATED] ?? 0) === 1;
+                $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
+                $flowHtml = (string) ($row['_flow_html'] ?? '');
                 $registrarName = (string) ($row['_registrar_name'] ?? '-');
                 $dnsProviderName = (string) ($row['_dns_provider_name'] ?? '-');
                 $cdnProviderName = (string) ($row['_cdn_provider_name'] ?? '-');
@@ -175,6 +179,14 @@ $formKey = method_exists($this, 'getFormKey') ? (string) $this->getFormKey() : '
                             <span class="badge bg-secondary"><?= __('否') ?></span>
                         <?php endif; ?>
                     </td>
+                    <td class="align-top">
+                        <?= $flowHtml !== '' ? $flowHtml : '<span class="text-muted small">—</span>' ?>
+                        <?php if ($poolId > 0): ?>
+                            <div class="mt-1">
+                                <button type="button" class="btn btn-link btn-sm p-0 weline-pool-flow-log-btn" data-pool-id="<?= (int) $poolId ?>"><?= __('时间线') ?></button>
+                            </div>
+                        <?php endif; ?>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         <?php endif; ?>
@@ -205,6 +217,8 @@ function rowHtml(row) {
     var hs = row.https_status || 'none';
     var sr = parseInt(row.site_ready, 10) === 1;
     var sc = parseInt(row.site_created, 10) === 1;
+    var pid = parseInt(row.pool_id, 10) || 0;
+    var flowH = row._flow_html || '';
     var reg = row._registrar_name || '-';
     var dns = row._dns_provider_name || '-';
     var cdn = row._cdn_provider_name || '-';
@@ -225,6 +239,27 @@ function rowHtml(row) {
         '<div><span class="text-muted">CDN:</span> ' + escapeHtml(cdn) + '</div></div></td>' +
         '<td>' + resolveBadge + '</td><td>' + localBadge + '</td><td>' + httpsBadge + '</td><td>' + readyBadge + '</td><td>' + createdBadge + '</td></tr>';
 }
+function openWelinePoolFlowLogModal(title, htmlInner) {
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:1rem;';
+    var dlg = document.createElement('div');
+    dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:720px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);';
+    dlg.innerHTML = '<h5 class="mb-3" style="margin:0 0 12px;font-size:1.1rem;">' + escapeHtml(title) + '</h5>' +
+        '<div class="weline-pool-flow-body">' + htmlInner + '</div>' +
+        '<button type="button" class="btn btn-primary mt-3 weline-pool-flow-close"><?= __('关闭') ?></button>';
+    overlay.appendChild(dlg);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = 'hidden';
+    function close() {
+        overlay.remove();
+        document.body.style.overflow = '';
+    }
+    dlg.querySelector('.weline-pool-flow-close').addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', function kw(e) {
+        if (e.key === 'Escape') { document.removeEventListener('keydown', kw); close(); }
+    });
+}
 function escapeHtml(s) {
     if (!s) return '';
     var el = document.createElement('div');
@@ -235,11 +270,11 @@ function loadPage(page) {
     currentPage = page || 1;
     var tbody = document.getElementById('weline-pool-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
     var u = poolListUrl + (poolListUrl.indexOf('?') >= 0 ? '&' : '?') + 'page=' + encodeURIComponent(currentPage) + '&page_size=' + encodeURIComponent(pageSize);
     fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
             return;
         }
         var d = data.data;
@@ -252,13 +287,13 @@ function loadPage(page) {
             : '<?= __('暂无数据') ?>';
         var items = d.items || [];
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-muted"><i class="mdi mdi-database-remove" style="font-size:2rem;"></i><p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center py-5 text-muted"><i class="mdi mdi-database-remove" style="font-size:2rem;"></i><p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p></td></tr>';
         } else {
             tbody.innerHTML = items.map(rowHtml).join('');
         }
         renderPager(parseInt(d.page, 10) || 1, pages);
     }).catch(function(){
-        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4"><?= __('请求失败') ?></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-danger py-4"><?= __('请求失败') ?></td></tr>';
     });
 }
 function renderPager(page, lastPage) {
@@ -347,6 +382,23 @@ document.getElementById('weline-pool-btn-clean-invalid').addEventListener('click
 });
 document.getElementById('weline-pool-btn-clean-dns').addEventListener('click', function(){
     runDryThenCommit(cleanMispointedUrl, '<?= __('将检查根域 @ 的 A/AAAA 是否指向本机公网（橙云代理不删）。继续试运行？') ?>');
+});
+document.getElementById('weline-pool-tbody').addEventListener('click', function(ev){
+    var t = ev.target;
+    if (!t || !t.classList || !t.classList.contains('weline-pool-flow-log-btn')) return;
+    var id = t.getAttribute('data-pool-id');
+    if (!id) return;
+    var u = poolFlowLogUrl + (poolFlowLogUrl.indexOf('?') >= 0 ? '&' : '?') + 'pool_id=' + encodeURIComponent(id);
+    fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
+        if (data.code !== 200 || !data.data || !data.data.items) {
+            if (typeof BackendToast !== 'undefined') BackendToast.error(data.msg || 'Error');
+            return;
+        }
+        var lines = data.data.items.map(function(x){ return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || ''); });
+        var body = lines.length ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
+            lines.map(function(s){ return escapeHtml(s); }).join('\n') + '</pre>' : '<?= __('暂无记录') ?>';
+        openWelinePoolFlowLogModal('<?= __('流转记录') ?> #' + id, body);
+    }).catch(function(){ if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>'); });
 });
 })();
 </script>

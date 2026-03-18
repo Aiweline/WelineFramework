@@ -11,6 +11,7 @@ use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Service\DomainPoolLifecycleService;
 
 class Upgrade implements UpgradeInterface
 {
@@ -26,6 +27,12 @@ class Upgrade implements UpgradeInterface
         /** @var DomainPool $pool */
         $pool = ObjectManager::getInstance(DomainPool::class);
         $pool->syncSiteCreatedFromWebsiteDomainTable();
+        /** @var DomainPoolLifecycleService $lifecycle */
+        $lifecycle = ObjectManager::getInstance(DomainPoolLifecycleService::class);
+        $n = $lifecycle->backfillAllPoolStages();
+        if ($n > 0 && \function_exists('w_log_info')) {
+            \w_log_info(\sprintf('[Websites Upgrade] 已回填域名池生命周期阶段 %d 条', $n), [], 'websites_upgrade');
+        }
     }
 
     /**

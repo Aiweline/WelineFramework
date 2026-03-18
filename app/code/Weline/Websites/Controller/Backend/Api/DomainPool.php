@@ -13,8 +13,11 @@ namespace Weline\Websites\Controller\Backend\Api;
 
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\DomainPool as DomainPoolModel;
+use Weline\Websites\Model\DomainPoolFlowLog;
 use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Service\DomainPoolFlowLogService;
 
 #[Acl('Weline_Websites::domain_pool_api', '域名池API', 'mdi-api', '域名池数据查询接口', 'Weline_Websites::domain_service')]
 class DomainPool extends BaseController
@@ -241,7 +244,14 @@ class DomainPool extends BaseController
             $newPool->setHttpsStatus(DomainPoolModel::HTTPS_STATUS_NONE);
             $newPool->setSiteReady(false);
             $newPool->save();
-            
+            if ($newPool->getPoolId() > 0) {
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    (int) $newPool->getPoolId(),
+                    DomainPoolFlowLog::KIND_POOL_CREATED,
+                    __('API 添加：%{1}', [$domain])
+                );
+            }
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('子域名添加成功'),

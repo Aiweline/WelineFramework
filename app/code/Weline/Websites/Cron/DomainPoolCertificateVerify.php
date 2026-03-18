@@ -11,15 +11,28 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Cron;
 
-use Weline\Cron\CronTaskInterface;
+use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Domain;
+use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Websites\Service\DomainPoolFlowLogService;
+use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
+use Weline\Websites\Service\WebsitesCronTestContext;
 
-class DomainPoolCertificateVerify implements CronTaskInterface
+/**
+ * 由 {@see WebsitesPoolCertificateMaintenance} 统一调度。
+ */
+#[CronTestHelp(
+    description: '池内 https_status=valid 的 PEM/文件校验。',
+    examples: ['php bin/w cron:test --task=domain_pool_certificate_verify --domain=www.example.com -v'],
+)]
+class DomainPoolCertificateVerify
 {
+    use WebsitesCronTestRunnerTrait;
+
     private const LOG_KEY = 'domain_pool_cert';
 
     private function echoLine(string $line): void
@@ -27,26 +40,6 @@ class DomainPoolCertificateVerify implements CronTaskInterface
         if (\PHP_SAPI === 'cli') {
             echo $line . "\n";
         }
-    }
-
-    public function name(): string
-    {
-        return __('域名池证书有效性校验');
-    }
-
-    public function execute_name(): string
-    {
-        return 'domain_pool_certificate_verify';
-    }
-
-    public function tip(): string
-    {
-        return __('检查域名池中标记为有效证书的记录，证书丢失时回退 HTTPS 状态，已建站则立即重新申请');
-    }
-
-    public function cron_time(): string
-    {
-        return '*/30 * * * *';
     }
 
     public function execute(): string
@@ -75,6 +68,7 @@ class DomainPoolCertificateVerify implements CronTaskInterface
 
             foreach ($domains as $row) {
                 $domain = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
+                $poolRoot = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
                 $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
                 $certId = $row[DomainPool::schema_fields_CERT_ID] ?? null;
                 $siteCreated = (int) ($row[DomainPool::schema_fields_SITE_CREATED] ?? 0) === 1;
@@ -82,8 +76,10 @@ class DomainPoolCertificateVerify implements CronTaskInterface
                 if ($domain === '' || $poolId <= 0) {
                     continue;
                 }
+                WebsitesCronTestContext::detail('DomainPoolCertificateVerify.row', ['domain' => $domain, 'pool_id' => $poolId, 'cert_id' => $certId]);
 
                 $certValid = $this->isCertificateAvailable($domain, $certId);
+                WebsitesCronTestContext::detail('isCertificateAvailable', ['domain' => $domain, 'valid' => $certValid]);
 
                 if ($certValid) {
                     $results['ok']++;
@@ -109,7 +105,13 @@ class DomainPoolCertificateVerify implements CronTaskInterface
                 $poolDomain->setHttpsExpiresAt(null);
                 $poolDomain->setCertId(null);
                 $poolDomain->setSiteReady(false);
+                $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_ORIGIN_READY);
                 $poolDomain->save();
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    $poolId,
+                    DomainPoolFlowLog::KIND_CERT_INVALID,
+                    (string) __('证书在库中无效或 PEM 丢失，已回退 HTTPS'),
+                );
 
                 if ($siteCreated) {
                     $results['re_requested']++;
@@ -217,6 +219,7 @@ class DomainPoolCertificateVerify implements CronTaskInterface
 
         $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
         $poolDomain->setHttpsError('');
+        $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_PENDING);
         $poolDomain->save();
 
         $webroot = \defined('PUB') ? PUB : (BP . 'pub');
@@ -247,6 +250,7 @@ class DomainPoolCertificateVerify implements CronTaskInterface
             if ($success) {
                 $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
                 $poolDomain->setHttpsError('');
+                $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
                 $poolDomain->calculateSiteReady();
                 $poolDomain->save();
                 $this->echoLine(__('[%{1}] 证书重新申请成功', [$domain]));
@@ -269,10 +273,5 @@ class DomainPoolCertificateVerify implements CronTaskInterface
             w_log_error(__('[DomainPoolCertificateVerify] 域名 %{1} 证书重新申请异常：%{2}', [$domain, $e->getMessage()]), [], self::LOG_KEY);
             return false;
         }
-    }
-
-    public function unlock_timeout(int $minute = 30): int
-    {
-        return $minute;
     }
 }
