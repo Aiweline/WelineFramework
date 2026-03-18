@@ -2424,6 +2424,10 @@ class DomainManagement extends BaseController
             }
 
             $host = \trim((string) ($record['host'] ?? $record['name'] ?? '@'));
+            if (\Weline\Websites\Service\DnsSiteHostRules::isUnderscoreTechnicalDnsHost($host)) {
+                $skipped++;
+                continue;
+            }
             $value = \trim((string) ($record['value'] ?? $record['data'] ?? ''));
 
             $fullDomain = $this->buildFullDomainFromHost($rootDomainName, $host);
