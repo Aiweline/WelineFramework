@@ -503,6 +503,114 @@ class DomainLifecycleOrchestrationService
         $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
         $order->setData(ProvisioningOrder::schema_fields_ERROR_MESSAGE, '');
         $order->save();
+        $this->syncRootDomainStatusWhenOrderCompleted($order);
+    }
+
+    /**
+     * 生命周期订单标为已完成时，联动将根域 Domain 的 status 置为 active，避免「订单已完成、列表仍显示正在注册」的脏数据。
+     * 供本类 markCompleted 及定时修复、ProvisioningService/Api 等将订单标完成处调用。
+     */
+    public function syncRootDomainStatusWhenOrderCompleted(ProvisioningOrder $order): void
+    {
+        $domainName = \strtolower(\trim((string) $order->getDomain()));
+        if ($domainName === '') {
+            return;
+        }
+        $accountId = (int) $order->getData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID);
+        $root = $this->loadRootDomain($domainName, $accountId);
+        if ($root === null || $root->getDomainId() <= 0) {
+            return;
+        }
+        if (\strtolower((string) $root->getStatus()) === Domain::STATUS_ACTIVE) {
+            return;
+        }
+        $root->setStatus(Domain::STATUS_ACTIVE);
+        $root->save();
+        w_log_info(
+            __('生命周期订单已完成，联动更新根域状态：%{1} → active', [$domainName]),
+            [],
+            'domain_lifecycle'
+        );
+    }
+
+    /**
+     * 定时任务用：修复生命周期与根域状态不一致的脏数据，再继续正常轮询。
+     * 1）订单已 completed 但根域非 active → 将根域置为 active；
+     * 2）订单未 completed 且根域已 active 或已有可建站证据 → 将订单标 completed 并同步根域。
+     *
+     * @param string|null $domainFilter 仅处理该根域（与 processPendingOrders 一致）
+     * @param int $limitOrders 每类最多处理条数，避免单次过长
+     * @return array{synced_domain_count: int, marked_completed_count: int}
+     */
+    public function repairLifecycleDirtyData(?string $domainFilter = null, int $limitOrders = 100): array
+    {
+        $syncedDomainCount = 0;
+        $markedCompletedCount = 0;
+        $selfCorrect = null;
+
+        $qCompleted = $this->orderModel->clearQuery()
+            ->where(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED)
+            ->limit($limitOrders);
+        if ($domainFilter !== null && $domainFilter !== '') {
+            $qCompleted->where(ProvisioningOrder::schema_fields_DOMAIN, \strtolower(\trim($domainFilter)));
+        }
+        $rowsCompleted = $qCompleted->select()->fetchArray();
+        foreach ($rowsCompleted as $row) {
+            $order = clone $this->orderModel;
+            $order->setData($row);
+            $this->syncRootDomainStatusWhenOrderCompleted($order);
+            $syncedDomainCount++;
+        }
+
+        $inProgressStatuses = [
+            ProvisioningOrder::STATUS_STEP_PURCHASE,
+            ProvisioningOrder::STATUS_STEP_DNS,
+            ProvisioningOrder::STATUS_STEP_RESOLVE,
+            ProvisioningOrder::STATUS_STEP_VERIFY,
+            ProvisioningOrder::STATUS_STEP_CDN,
+            ProvisioningOrder::STATUS_STEP_SSL,
+        ];
+        $qInProgress = $this->orderModel->clearQuery()
+            ->where(ProvisioningOrder::schema_fields_STATUS, $inProgressStatuses, 'IN')
+            ->limit($limitOrders);
+        if ($domainFilter !== null && $domainFilter !== '') {
+            $qInProgress->where(ProvisioningOrder::schema_fields_DOMAIN, \strtolower(\trim($domainFilter)));
+        }
+        $rowsInProgress = $qInProgress->select()->fetchArray();
+
+        foreach ($rowsInProgress as $row) {
+            $order = clone $this->orderModel;
+            $order->setData($row);
+            $domainName = \strtolower(\trim((string) $order->getDomain()));
+            $accountId = (int) $order->getData(ProvisioningOrder::schema_fields_REGISTRAR_ACCOUNT_ID);
+            $root = $this->loadRootDomain($domainName, $accountId);
+            if ($root === null || $root->getDomainId() <= 0) {
+                continue;
+            }
+            $rootStatus = \strtolower((string) $root->getStatus());
+            $operationallyReady = $rootStatus === Domain::STATUS_ACTIVE;
+            if (!$operationallyReady && \class_exists(DomainRootRegistrationSelfCorrectService::class)) {
+                if ($selfCorrect === null) {
+                    $selfCorrect = ObjectManager::getInstance(DomainRootRegistrationSelfCorrectService::class);
+                }
+                $operationallyReady = $selfCorrect->hasReadyPoolEvidence($root);
+            }
+            if (!$operationallyReady) {
+                continue;
+            }
+            $this->markCompleted($order);
+            $markedCompletedCount++;
+        }
+
+        if ($syncedDomainCount > 0 || $markedCompletedCount > 0) {
+            w_log_info(
+                __('生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条', [(string) $syncedDomainCount, (string) $markedCompletedCount]),
+                [],
+                'domain_lifecycle'
+            );
+        }
+
+        return ['synced_domain_count' => $syncedDomainCount, 'marked_completed_count' => $markedCompletedCount];
     }
 
     private function markFailed(ProvisioningOrder $order, string $message): void

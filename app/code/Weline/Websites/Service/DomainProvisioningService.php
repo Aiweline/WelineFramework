@@ -6,6 +6,7 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\ProvisioningOrder;
 use Weline\Websites\Model\ProvisioningStep;
 
@@ -337,6 +338,7 @@ class DomainProvisioningService
             $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
             $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
             $order->save();
+            $this->syncRootDomainStatusWhenOrderCompleted($order);
             return ['success' => true, 'message' => __('已跳过 SSL，流程完成')];
         }
 
@@ -364,6 +366,7 @@ class DomainProvisioningService
             $order->setData(ProvisioningOrder::schema_fields_STATUS, ProvisioningOrder::STATUS_COMPLETED);
             $order->setData(ProvisioningOrder::schema_fields_CURRENT_STEP, '');
             $order->save();
+            $this->syncRootDomainStatusWhenOrderCompleted($order);
             return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $result['cert'] ?? null];
         }
 
@@ -486,5 +489,16 @@ class DomainProvisioningService
         $step->setData(ProvisioningStep::schema_fields_RESULT_JSON, $result === [] ? '' : json_encode($result, JSON_UNESCAPED_UNICODE));
         $step->setData(ProvisioningStep::schema_fields_ERROR_MESSAGE, $errorMessage);
         $step->save();
+    }
+
+    /** 订单标为已完成时联动更新根域 Domain.status=active */
+    private function syncRootDomainStatusWhenOrderCompleted(ProvisioningOrder $order): void
+    {
+        try {
+            ObjectManager::getInstance(DomainLifecycleOrchestrationService::class)
+                ->syncRootDomainStatusWhenOrderCompleted($order);
+        } catch (\Throwable $e) {
+            // 非致命
+        }
     }
 }
