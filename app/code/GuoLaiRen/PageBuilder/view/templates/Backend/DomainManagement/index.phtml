@@ -161,6 +161,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-site-ready { min-width: 6em; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-ip { min-width: 8em; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-time { min-width: 10em; white-space: nowrap; }
+.pb-dm-table#pb-dm-pool-table .pb-dm-col-flow { min-width: 12rem; max-width: 28rem; vertical-align: top; }
 .pb-dm-table#pb-dm-pool-table .pb-dm-col-ops { min-width: 12em; }
 .pb-dm-table#pb-dm-pool-table { direction: inherit; }
 .pb-dm-pool-ops {
@@ -1423,6 +1424,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         purchase:         '<backend-url>pagebuilder/backend/domain-management/purchase</backend-url>',
         batchPurchase:    '<backend-url>pagebuilder/backend/domain-management/batch-purchase</backend-url>',
         getDomainPool:    '<backend-url>pagebuilder/backend/domain-management/get-domain-pool</backend-url>',
+        getPoolFlowLog:   '<backend-url>pagebuilder/backend/domain-management/get-pool-flow-log</backend-url>',
         addSubdomain:     '<backend-url>pagebuilder/backend/domain-management/add-subdomain</backend-url>',
         checkResolve:     '<backend-url>pagebuilder/backend/domain-management/check-resolve</backend-url>',
         deletePoolDomain: '<backend-url>pagebuilder/backend/domain-management/delete-pool-domain</backend-url>',
@@ -4140,6 +4142,28 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         items: []
     };
 
+    function openPbDmPoolFlowModal(title, bodyHtml) {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10002;display:flex;align-items:center;justify-content:center;padding:1rem;';
+        var dlg = document.createElement('div');
+        dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:720px;max-height:85vh;overflow:auto;box-shadow:0 8px 32px rgba(0,0,0,.2);';
+        dlg.innerHTML = '<h5 class="mb-3" style="margin:0 0 12px;font-size:1.1rem;">' + escapeHtml(title) + '</h5>' +
+            '<div class="pb-dm-pool-flow-body">' + bodyHtml + '</div>' +
+            '<button type="button" class="pb-dm-btn pb-dm-btn-primary mt-3 pb-dm-pool-flow-close"><?= __('关闭') ?></button>';
+        overlay.appendChild(dlg);
+        document.body.appendChild(overlay);
+        document.body.style.overflow = 'hidden';
+        function close() {
+            overlay.remove();
+            document.body.style.overflow = '';
+        }
+        dlg.querySelector('.pb-dm-pool-flow-close').addEventListener('click', close);
+        overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+        document.addEventListener('keydown', function kw(e) {
+            if (e.key === 'Escape') { document.removeEventListener('keydown', kw); close(); }
+        });
+    }
+
     function loadDomainPool(page) {
         poolState.page = page || 1;
         poolState.search = document.getElementById('pb-dm-pool-search').value.trim();
@@ -4391,6 +4415,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             '<th class="pb-dm-col-site-created"><?= __('已建站') ?></th>' +
             '<th class="pb-dm-col-ip"><?= __('解析IP') ?></th>' +
             '<th class="pb-dm-col-time"><?= __('入池时间') ?></th>' +
+            '<th class="pb-dm-col-flow"><?= __('流转') ?></th>' +
             '<th class="pb-dm-col-ops"><?= __('操作') ?></th>' +
             '</tr></thead><tbody>';
 
@@ -4448,6 +4473,10 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __('从域名池删除') ?>"><i class="mdi mdi-delete-outline"></i></button>')
                 : '';
             var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
+            var flowHtml = (item.flow_html && String(item.flow_html).trim() !== '') ? String(item.flow_html) : '<span class="text-muted small">—</span>';
+            var flowTimeline = poolId > 0
+                ? '<div class="mt-1"><button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-flow-log-btn" data-pool-id="' + poolId + '" style="font-size:0.75rem;padding:2px 8px;"><?= __('时间线') ?></button></div>'
+                : '';
 
             html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
                 '<td class="pb-dm-col-domain"><strong>' + escapeHtml(item.full_domain || item.domain || '') + '</strong></td>' +
@@ -4460,6 +4489,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 '<td class="pb-dm-col-site-created">' + siteCreatedBadge + '</td>' +
                 '<td class="pb-dm-col-ip">' + resolvedDisplay + '</td>' +
                 '<td class="pb-dm-col-time">' + (item.allocated_at || '-') + '</td>' +
+                '<td class="pb-dm-col-flow">' + flowHtml + flowTimeline + '</td>' +
                 '<td class="pb-dm-col-ops">' + opHtml + '</td>' +
                 '</tr>';
         });
@@ -4488,6 +4518,28 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 var domain = this.getAttribute('data-domain') || '';
                 if (poolId <= 0) return;
                 doPoolDelete(poolId, domain, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-flow-log-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var pid = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                if (pid <= 0) return;
+                postForm(API.getPoolFlowLog, { pool_id: String(pid) }).then(function(res) {
+                    if (!res || !res.success || !res.data || !res.data.items) {
+                        if (typeof BackendToast !== 'undefined') BackendToast.error((res && res.msg) || 'Error');
+                        return;
+                    }
+                    var lines = res.data.items.map(function(x) {
+                        return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || '');
+                    });
+                    var body = lines.length
+                        ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
+                          lines.map(function(s) { return escapeHtml(s); }).join('\n') + '</pre>'
+                        : '<?= __('暂无记录') ?>';
+                    openPbDmPoolFlowModal('<?= __('流转记录') ?> #' + pid, body);
+                }).catch(function() {
+                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>');
+                });
             });
         });
     }
