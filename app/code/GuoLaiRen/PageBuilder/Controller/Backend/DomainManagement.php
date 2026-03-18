@@ -528,19 +528,25 @@ class DomainManagement extends BaseController
                     return \strcmp($a['domain'], $b['domain']);
                 });
 
-                // 正在注册中的根域（未完成的生命周期订单）：用于前端禁用「切换 DNS」等操作并提示
+                // 正在注册/开通流程中的根域（生命周期订单未完成）：用于前端禁用「切换 DNS」等
                 $registeringRoots = [];
+                $seenLifecycleRoot = [];
                 foreach ($groupItems as $i) {
                     $root = \trim((string) ($i['domain'] ?? ''));
-                    if ($root === '' || isset($registeringRoots[$root])) {
+                    if ($root === '') {
                         continue;
                     }
+                    $rootLower = \strtolower($root);
+                    if (isset($seenLifecycleRoot[$rootLower])) {
+                        continue;
+                    }
+                    $seenLifecycleRoot[$rootLower] = true;
                     try {
                         $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
                         if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
                             $status = (string) ($lifecycle['data']['order']['status'] ?? '');
                             if ($status !== 'completed' && $status !== 'failed') {
-                                $registeringRoots[$root] = true;
+                                $registeringRoots[$rootLower] = true;
                             }
                         }
                     } catch (\Throwable) {
@@ -548,7 +554,7 @@ class DomainManagement extends BaseController
                     }
                 }
                 foreach ($groupItems as &$it) {
-                    $it['is_registering'] = !empty($registeringRoots[\trim((string) ($it['domain'] ?? ''))]);
+                    $it['is_registering'] = !empty($registeringRoots[\strtolower(\trim((string) ($it['domain'] ?? '')))]);
                 }
                 unset($it);
 
@@ -1019,23 +1025,8 @@ class DomainManagement extends BaseController
             $domains = $model->select()->fetchArray();
             $pagination = $model->pagination ?? [];
 
-            // 正在注册中的根域（有未完成的生命周期订单）：这些域名的操作按钮需置灰并提示
-            // 若根域已在域名表（已拉取/已经注册），则不视为「正在注册中」，允许子域进行 DNS 检查
+            // 正在注册/开通流程中的根域（生命周期订单未完成）：须禁用「切换 DNS」等；已拉取进域名表≠流程结束
             $rootDomains = array_unique(array_filter(array_column($domains, DomainPool::schema_fields_ROOT_DOMAIN)));
-            $rootsInDomainTable = [];
-            if ($rootDomains !== []) {
-                $domainModel = ObjectManager::getInstance(Domain::class);
-                $domainRows = $domainModel->clearQuery()
-                    ->fields(Domain::schema_fields_DOMAIN)
-                    ->select()
-                    ->fetchArray();
-                foreach ($domainRows as $row) {
-                    $d = \strtolower(\trim((string) ($row[Domain::schema_fields_DOMAIN] ?? '')));
-                    if ($d !== '') {
-                        $rootsInDomainTable[$d] = true;
-                    }
-                }
-            }
             $registeringRoots = [];
             $lifecycleStages = [];
             foreach ($rootDomains as $root) {
@@ -1044,16 +1035,13 @@ class DomainManagement extends BaseController
                     continue;
                 }
                 $rootLower = \strtolower(\trim($root));
-                if (!empty($rootsInDomainTable[$rootLower])) {
-                    continue;
-                }
                 try {
                     $lifecycle = w_query('websites', 'getDomainLifecycleStatus', ['domain' => $root]);
                     if (!empty($lifecycle['success']) && !empty($lifecycle['data']['order'])) {
                         $orderData = $lifecycle['data']['order'];
                         $status = (string) ($orderData['status'] ?? '');
                         if ($status !== 'completed' && $status !== 'failed') {
-                            $registeringRoots[$root] = true;
+                            $registeringRoots[$rootLower] = true;
                         }
                         $lifecycleStages[$rootLower] = [
                             'lifecycle_stage' => (string) ($orderData['lifecycle_stage'] ?? ''),
@@ -1147,7 +1135,7 @@ class DomainManagement extends BaseController
                     'registrar_name' => $registrarName,
                     'dns_provider_name' => $dnsProviderName,
                     'cdn_provider_name' => $cdnProviderName,
-                    'is_registering' => !empty($registeringRoots[$root]),
+                    'is_registering' => !empty($registeringRoots[\strtolower(\trim((string) $root))]),
                     'lifecycle_stage' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage'] ?? '',
                     'lifecycle_stage_label' => $lifecycleStages[\strtolower(\trim((string) $root))]['lifecycle_stage_label'] ?? '',
                     'flow_html' => $flowLogService->buildFlowDisplayHtml($domain, $recentFlowByPool[$poolRowId] ?? []),
