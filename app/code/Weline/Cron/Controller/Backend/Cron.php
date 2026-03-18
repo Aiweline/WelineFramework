@@ -314,10 +314,10 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $csrfPost = (string) $this->request->getPost('csrf', '');
         $csrfValid = Token::get('csrf');
         if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
-            if (!\headers_sent()) {
-                \header('Content-Type: application/json; charset=utf-8', true, 403);
-            }
-            echo \json_encode(['error' => (string) __('CSRF 验证失败')], JSON_UNESCAPED_UNICODE);
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) __('CSRF 验证失败'));
+            $sse->complete(['exit_code' => -1]);
 
             return;
         }
@@ -412,10 +412,10 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
         $csrfPost = (string) $this->request->getPost('csrf', '');
         $csrfValid = Token::get('csrf');
         if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
-            if (!\headers_sent()) {
-                \header('Content-Type: application/json; charset=utf-8', true, 403);
-            }
-            echo \json_encode(['error' => (string) \__('CSRF 验证失败')], JSON_UNESCAPED_UNICODE);
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) \__('CSRF 验证失败'));
+            $sse->complete(['exit_code' => -1]);
 
             return;
         }
