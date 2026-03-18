@@ -25,6 +25,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 #[CronTestHelp(
     description: '根域 NS 检测与 DNS 服务商识别。',
     examples: ['php bin/w cron:test --task=domain_ns_check --domain=example.com -v'],
+    manual_help: [
+        '控制台 --domain= 只检测该根域 NS。',
+        '后台「后缀」未解析时检测全部活跃根域。',
+    ],
 )]
 class DomainNsCheck
 {
