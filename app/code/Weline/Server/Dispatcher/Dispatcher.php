@@ -1238,9 +1238,6 @@ class Dispatcher
         if (isset($this->clientConnections[$connId])) {
             $clientSocket = $this->clientConnections[$connId];
             
-            // 快速关闭检测：在关闭连接前获取信息并检测疑似 SSL 握手失败
-            $this->detectSuspectSslFailure($connId, $clientSocket);
-            
             // 关闭透传核心中的连接
             $this->passthroughCore->closeConnection($clientSocket);
             
@@ -1255,76 +1252,6 @@ class Dispatcher
             $this->connectionLastActivity[$connId],
             $this->connectionBytes[$connId]
         );
-    }
-    
-    /**
-     * 检测疑似 SSL 握手失败（快速关闭模式）
-     *
-     * 判断条件（必须同时满足）：
-     * 1. 连接在极短时间内关闭（< 阈值秒，默认 0.3 秒）
-     * 2. 几乎无数据交换（入站 + 出站字节数 = 0）
-     *
-     * 典型场景：客户端拒绝自签名证书 → 发送 SSL alert → 立即断开连接（无 HTTP 数据交换）
-     *
-     * @param int      $connId       连接 ID
-     * @param resource $clientSocket 客户端 socket
-     */
-    private function detectSuspectSslFailure(int $connId, $clientSocket): void
-    {
-        if (!isset($this->connectionAcceptTime[$connId])) {
-            return;
-        }
-        
-        $connInfo = $this->passthroughCore->getConnectionInfo($clientSocket);
-        if ($connInfo === null) {
-            return;
-        }
-        
-        $clientIp = $connInfo['client_ip'] ?? 'unknown';
-        $duration = \microtime(true) - $this->connectionAcceptTime[$connId];
-        $threshold = $this->attackDetector->getSslFastCloseThreshold();
-        
-        // 条件 1：连接存活时长 < 阈值
-        if ($duration >= $threshold) {
-            return;
-        }
-        
-        // 条件 2：没有任何有效数据交换
-        // 如果有数据交换，说明 SSL 握手成功了，只是请求完成得快，不是 SSL 失败
-        $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
-        $totalBytes = $bytes['in'] + $bytes['out'];
-        if ($totalBytes > 0) {
-            // 有数据交换，不是 SSL 握手失败，是正常的快速请求
-            return;
-        }
-        
-        $durationMs = \round($duration * 1000);
-        
-        // 本地和 CDN 回源白名单：只记录日志，不封禁
-        $isLocalIp = $this->isTrustedSourceIp($clientIp);
-        
-        if ($isLocalIp) {
-            // 本地 IP：仅记录，不追踪封禁
-            // 开发环境下自签名证书导致的 SSL 失败属于正常现象
-            return;
-        }
-        
-        // 非本地 IP：记录到攻击检测器并追踪
-        $result = $this->attackDetector->recordSslFailure($clientIp, $duration);
-        
-        if ($result['banned']) {
-            // 触发封禁 → 红色告警
-            $this->log(
-                "SSL 握手失败频繁: {$clientIp} ({$result['count']}次/60秒内) → 已封禁 {$result['ban_duration']} 秒",
-                'BAN'
-            );
-        } else {
-            // 未触发封禁 → 红色警告（累计进度）
-            $this->log(
-                "疑似 SSL 握手失败: {$clientIp} ({$durationMs}ms, 无数据交换) [累计: {$result['count']}/{$result['threshold']}]",
-                'SSL_FAIL'
-            );
-        }
     }
     
     /**
