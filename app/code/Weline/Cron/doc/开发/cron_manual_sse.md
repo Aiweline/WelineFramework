@@ -3,7 +3,8 @@
 ## 路由
 
 - 控制器：`Weline\Cron\Controller\Backend\Cron`（`system/backend/cron/...`）。
-- 列表：`system/backend/cron/listing`；帮助：`GET …/run-help`；SSE：`POST …/post-run-stream`。
+- 列表：`system/backend/cron/listing`；帮助：`GET …/run-help`；手动执行 SSE：`POST …/post-run-stream`。
+- 调度日志（系统 cron 跑的输出）：`GET …/run-log-list?execute_name=`、`GET …/run-log-content?execute_name=&file=`、`POST …/post-run-log-stream`（实时尾随当前 `var/cron/{execute_name}.log`）。历史在 `var/cron/history/{execute_name}/`（每任务最多保留约 200 个文件）。
 
 ## 行为
 
