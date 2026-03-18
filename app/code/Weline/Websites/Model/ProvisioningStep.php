@@ -9,7 +9,10 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
-/** 配置流程步骤记录（每订单每步骤一条，用于重试与历史） */
+/**
+ * 配置流程步骤记录（每订单每步骤一条，用于重试与历史）。
+ * 物理表名 saas_provisioning_step 为历史命名，与代码模块无关。
+ */
 #[Table(comment: 'Websites 配置步骤表')]
 #[Index(name: 'idx_order_id', columns: ['provisioning_order_id'])]
 #[Index(name: 'idx_step_name', columns: ['step_name'])]
