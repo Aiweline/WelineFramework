@@ -431,16 +431,8 @@ class DomainResolveService
             }));
         }
 
-        // Cloudflare 同源：推送时对可代理类型显式开启 CDN 代理（橙云），与解析一并生效
-        $targetCode = \strtolower(\trim((string) $targetAccount->getRegistrarCode()));
-        if ($targetCode === 'cloudflare' && $records !== []) {
-            $records = \array_map(static function (array $r) {
-                $type = \strtoupper($r['type'] ?? 'A');
-                if (\in_array($type, ['A', 'AAAA', 'CNAME'], true)) {
-                    $r['proxied'] = true;
-                }
-                return $r;
-            }, $records);
+        if ($records !== []) {
+            $records = $adapter->applyCdnSettingsToDnsRecords($domain->getDomain(), $records);
         }
 
         if ($records === []) {
