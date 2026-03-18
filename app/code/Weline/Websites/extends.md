@@ -60,12 +60,12 @@ class YourRegistrar implements DomainRegistrarInterface
 - **HTTPS / ACME**：`SslCertificateService` 仍按 **DomainPool**（含 `root_domain`）拉子域参与证书；与购买后 `addToDomainPoolWithSubdomains` 一致。
 - **站点域名同步**：`Server` 侧 `WebsiteDomain` 同步与购买里 **bindToWebsite** 写入的站点域名一致。
 
-### 3. Weline_Saas 生命周期（可选）
+### 3. 生命周期编排（可选）
 
 - 购买成功且勾选 **启动全流程**（或 API `start_lifecycle`）：`DomainPurchaseService` 内先调 **`DomainLifecycleOrchestrationService::startPurchasedLifecycle`**。
 - 事件 **`Weline_Websites::domain::purchase_success`** → **`DomainPurchaseSuccess` Observer**：
   - **仅当** `start_lifecycle` 为真，且服务内尚未成功建单时，才再次调用 `startPurchasedLifecycle`（作补救）；已建单则跳过，避免重复 `processOrder`。
-  - **未勾选**生命周期时 Observer **不再**强行建 SaaS 单，与后台弹窗一致。
+  - **未勾选**生命周期时 Observer **不再**强行创建配置订单（`ProvisioningOrder`），与后台弹窗一致。
 - 编排后续步骤：**DNS → 解析校验 → 验证 → SSL** 等仍由 **`DomainLifecycleOrchestration` Cron** 与 `processPendingOrders` 推进。
 
 ### 4. 阿里云待支付
