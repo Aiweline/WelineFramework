@@ -220,6 +220,19 @@ class SseWriter
     {
         return $this->sendComment('heartbeat');
     }
+
+    /**
+     * 仅当超过心跳间隔时才发送，避免长任务循环内每秒一条 : heartbeat
+     */
+    public function maybeHeartbeat(): self
+    {
+        $now = \time();
+        if ($now - $this->lastHeartbeat >= $this->heartbeatInterval) {
+            $this->sendHeartbeat();
+        }
+
+        return $this;
+    }
     
     /**
      * 检查并发送心跳

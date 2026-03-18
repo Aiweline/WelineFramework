@@ -45,9 +45,11 @@ class SseTerminal implements TaglibInterface
             'auto-scroll' => false,  // 是否自动滚动到底部，默认 true
             'show-timestamp' => false, // 是否显示时间戳，默认 true
             'show-toolbar' => false, // 是否显示工具栏，默认 true
+            'show-start-toggle' => false, // 是否显示播放/停止（仅 POST 流时请 false，由页面按钮 term.start(url,{method,body}) 启动）
             'allow-html' => false,   // 是否将消息按 HTML 渲染（仅限可信后端内容，有 XSS 风险）
             'class' => false,        // 额外CSS类
             'style' => false,        // 内联样式
+            'max-stream-chars' => false, // 流式 chunk 单块最大字符数，超出截断尾部保留，防 DOM/内存拖垮浏览器，0 表示不限制
         ];
     }
 
@@ -65,9 +67,14 @@ class SseTerminal implements TaglibInterface
             $autoScroll = !isset($attributes['auto-scroll']) || $attributes['auto-scroll'] !== 'false';
             $showTimestamp = !isset($attributes['show-timestamp']) || $attributes['show-timestamp'] !== 'false';
             $showToolbar = !isset($attributes['show-toolbar']) || $attributes['show-toolbar'] !== 'false';
+            $showStartToggle = !isset($attributes['show-start-toggle']) || $attributes['show-start-toggle'] !== 'false';
             $allowHtml = isset($attributes['allow-html']) && \in_array(\strtolower((string) $attributes['allow-html']), ['true', '1', 'yes'], true);
             $class = $attributes['class'] ?? '';
             $style = $attributes['style'] ?? '';
+            $maxStreamChars = isset($attributes['max-stream-chars']) ? (int) $attributes['max-stream-chars'] : 400000;
+            if ($maxStreamChars < 0) {
+                $maxStreamChars = 0;
+            }
 
             // 翻译文本
             $t_connecting = addslashes(__('正在连接...'));
@@ -105,9 +112,11 @@ class SseTerminal implements TaglibInterface
                 $html[] = '      <span class="weline-sse-terminal-status-text" id="' . htmlspecialchars($id) . '_status">' . $t_disconnected . '</span>';
                 $html[] = '    </div>';
                 $html[] = '    <div class="weline-sse-terminal-actions">';
-                $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
-                $html[] = '        <i class="mdi mdi-play"></i>';
-                $html[] = '      </button>';
+                if ($showStartToggle) {
+                    $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_toggle" title="' . $t_start . '">';
+                    $html[] = '        <i class="mdi mdi-play"></i>';
+                    $html[] = '      </button>';
+                }
                 $html[] = '      <button type="button" class="weline-sse-terminal-btn" id="' . htmlspecialchars($id) . '_btn_copy" title="' . $t_copy . '">';
                 $html[] = '        <i class="mdi mdi-content-copy"></i>';
                 $html[] = '      </button>';
@@ -177,6 +186,9 @@ class SseTerminal implements TaglibInterface
             $html[] = 'var autoScroll = ' . ($autoScroll ? 'true' : 'false') . ';';
             $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
             $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
+            $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
+            $tStreamTrunc = addslashes(__('【输出过长，已省略前部】'));
+            $html[] = 'var streamTruncMsg = ' . json_encode($tStreamTrunc . "\n", JSON_UNESCAPED_UNICODE) . ';';
 
             $html[] = <<<JS
 
@@ -247,8 +259,9 @@ function log(text, type) {
     }
 }
 
-function appendChunk(text) {
-    var s = typeof text === 'string' ? text : '';
+var chunkRafPending = '';
+var chunkRafScheduled = false;
+function appendChunkDom(s) {
     if (!s) return;
     if (!streamingLine) {
         streamingLine = document.createElement('div');
@@ -259,14 +272,35 @@ function appendChunk(text) {
             time.textContent = '[' + formatTime() + ']';
             streamingLine.appendChild(time);
         }
-        var textEl = document.createElement('span');
-        textEl.className = 'weline-sse-terminal-text';
-        streamingLine.appendChild(textEl);
+        var textEl0 = document.createElement('span');
+        textEl0.className = 'weline-sse-terminal-text';
+        streamingLine.appendChild(textEl0);
         content.appendChild(streamingLine);
     }
     var textEl = streamingLine.querySelector('.weline-sse-terminal-text') || streamingLine.lastChild;
-    if (textEl) textEl.textContent += s;
+    if (textEl) {
+        textEl.textContent += s;
+        if (maxStreamChars > 0 && textEl.textContent.length > maxStreamChars) {
+            var keep = Math.floor(maxStreamChars * 0.85);
+            textEl.textContent = streamTruncMsg + textEl.textContent.slice(-keep);
+        }
+    }
     if (autoScroll) body.scrollTop = body.scrollHeight;
+}
+function flushChunkRaf() {
+    chunkRafScheduled = false;
+    var batch = chunkRafPending;
+    chunkRafPending = '';
+    if (batch) appendChunkDom(batch);
+}
+function appendChunk(text) {
+    var s = typeof text === 'string' ? text : '';
+    if (!s) return;
+    chunkRafPending += s;
+    if (!chunkRafScheduled) {
+        chunkRafScheduled = true;
+        requestAnimationFrame(flushChunkRaf);
+    }
 }
 
 function setProgress(percent) {
@@ -490,6 +524,9 @@ function clear() {
     content.innerHTML = '';
     progressBar.style.width = '0%';
     progressContainer.style.display = 'none';
+    streamingLine = null;
+    chunkRafPending = '';
+    chunkRafScheduled = false;
 }
 
 // 绑定按钮事件
@@ -569,6 +606,7 @@ JS;
     <li><code>auto-scroll</code>：是否自动滚动到底部，默认 true</li>
     <li><code>show-timestamp</code>：是否显示时间戳，默认 true</li>
     <li><code>show-toolbar</code>：是否显示工具栏，默认 true</li>
+    <li><code>show-start-toggle</code>：是否显示播放/停止（默认 true）。仅 POST 流时请设 false，由页面 <code>term.start(url,{method:\'POST\',body:fd})</code> 启动，避免误触 GET 导致 404</li>
     <li><code>allow-html</code>：是否按 HTML 渲染消息（默认 false，设为 true 时支持富文本，仅限可信后端内容）</li>
     <li><code>class</code>：额外CSS类</li>
     <li><code>style</code>：内联样式</li>
