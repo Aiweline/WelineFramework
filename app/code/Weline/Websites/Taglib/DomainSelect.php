@@ -109,8 +109,12 @@ class DomainSelect implements TaglibInterface
             $websiteIdAttr = trim((string) ($attributes['website-id'] ?? ''));
             $websiteId = str_contains($websiteIdAttr, '<?=') ? 0 : (int) $websiteIdAttr;
 
-            $bindRootWwwRaw = $attributes['bind-root-www'] ?? 'false';
-            $bindRootWww = $isMultiple && \in_array(\strtolower(\trim((string) $bindRootWwwRaw)), ['true', '1', 'yes'], true);
+            // bind-root-www：属性为字面量 true/false（及 1/0/yes/no）时编译期直接定值；否则为变量名，渲染期用 $Taglib__bind_root_www（见 $__wds_brw_*）
+            $bindRootWwwRaw = \trim((string) ($attributes['bind-root-www'] ?? 'false'));
+            $bindRootWwwLower = \strtolower($bindRootWwwRaw);
+            $bindRootWwwLiteralTrue = \in_array($bindRootWwwLower, ['true', '1', 'yes'], true);
+            $bindRootWwwLiteralFalse = \in_array($bindRootWwwLower, ['false', '0', 'no'], true);
+            $bindRootWwwIsLiteral = $bindRootWwwLiteralTrue || $bindRootWwwLiteralFalse;
             
             /** @var Url $url */
             $url = w_obj(Url::class);
@@ -123,8 +127,19 @@ class DomainSelect implements TaglibInterface
             
             // 解析所有属性
             $code = \Weline\Taglib\Taglib::attributes($attributes);
+            $idAttr = (string) ($attributes['id'] ?? 'domain_select');
+            $brwSuffix = \preg_replace('/[^a-zA-Z0-9_]/', '_', $idAttr) ?: 'domain_select';
+            if ($brwSuffix !== '' && \preg_match('/^[0-9]/', $brwSuffix)) {
+                $brwSuffix = 'ds_' . $brwSuffix;
+            }
+            $imPhp = $isMultiple ? 'true' : 'false';
             $html = [];
-            $html[] = '<?php ' . $code . ' ?>';
+            if ($bindRootWwwIsLiteral) {
+                $effectiveBrw = $isMultiple && $bindRootWwwLiteralTrue;
+                $html[] = '<?php ' . $code . ' $__wds_brw_' . $brwSuffix . ' = ' . ($effectiveBrw ? 'true' : 'false') . '; ?>';
+            } else {
+                $html[] = '<?php ' . $code . ' $__wds_brw_' . $brwSuffix . ' = ' . $imPhp . ' && in_array(strtolower(trim((string)($Taglib__bind_root_www ?? \'false\'))), [\'true\', \'1\', \'yes\'], true); ?>';
+            }
             
             $html[] = '<style>';
             $html[] = '.weline-domain-select {';
@@ -329,9 +344,9 @@ class DomainSelect implements TaglibInterface
             $html[] = '    </div>';
             $html[] = '  </div>';
             if ($isMultiple) {
-                $html[] = '  <small class="weline-domain-select-hint">' . ($bindRootWww
-                    ? __('点击选择多个域名，选中后点击确定。根域与 www 子域成对绑定：选其一将自动勾选另一（若列表中存在）。')
-                    : __('点击选择多个域名，选中后点击确定')) . '</small>';
+                $hintLong = \htmlspecialchars(__('点击选择多个域名，选中后点击确定。根域与 www 子域成对绑定：选其一将自动勾选另一（若列表中存在）。'), ENT_QUOTES, 'UTF-8');
+                $hintShort = \htmlspecialchars(__('点击选择多个域名，选中后点击确定'), ENT_QUOTES, 'UTF-8');
+                $html[] = '  <small class="weline-domain-select-hint"><?php if ($__wds_brw_' . $brwSuffix . '): ?>' . $hintLong . '<?php else: ?>' . $hintShort . '<?php endif; ?></small>';
             } else {
                 $html[] = '  <small class="weline-domain-select-hint">' . __('点击选择域名，选择后将自动填充相关字段') . '</small>';
             }
@@ -406,7 +421,7 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'var limit = ' . $limit . ';';
             $html[] = 'var isMultiple = ' . ($isMultiple ? 'true' : 'false') . ';';
-            $html[] = 'var bindRootWww = ' . ($bindRootWww ? 'true' : 'false') . ';';
+            $html[] = 'var bindRootWww = <?php echo ($__wds_brw_' . $brwSuffix . ') ? \'true\' : \'false\'; ?>;';
             $html[] = 'var siteReadyOnly = ' . ($siteReadyOnly ? 'true' : 'false') . ';';
             $html[] = 'var valueType = ' . json_encode($valueType) . ';';
             $html[] = 'var websiteId = ' . (str_contains($websiteIdAttr, '<?=')
