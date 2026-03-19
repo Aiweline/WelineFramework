@@ -2,7 +2,9 @@
 declare(strict_types=1);
 
 /**
- * 合并调度：证书 PEM 校验（原约 30 分钟一次）+ 待申请证书队列（原 5 分钟一次）
+ * 合并调度：子域 HTTPS 证书两段维护
+ * ① 证书校验：整点/半点校验已签发证书的 PEM 与文件，无效则回退状态并触发重新申请
+ * ② 证书申请：每节拍处理待申请队列（origin_ready/cert_pending 子域，ACME 单域/泛域）
  */
 
 namespace Weline\Websites\Cron;
@@ -12,21 +14,20 @@ use Weline\Cron\CronTaskInterface;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: '证书 PEM 校验 + 待申请队列。测试时加 --cert_full 或 --hourly 可强制执行校验段（否则非整点/半点会跳过校验）。',
+    description: '子域 HTTPS 证书维护：整点/半点校验已签发证书的 PEM；每节拍处理待申请队列。--cert_full 或 --hourly 可强制执行校验段。',
     examples: [
         'php bin/w cron:test --task=websites_pool_certificate_maintenance --domain=example.com -v --cert_full=1',
     ],
     manual_help: [
-        '整点/半点跑 PEM 校验段，其余节拍仅证书申请；与定时逻辑一致。',
-        '控制台调试：cron:test 可加 --domain=、-v、--cert_full=1 或 --hourly。',
-        '后台「后缀」写入 WELINE_CRON_MANUAL_ARGS；本任务 execute() 未解析时与留空相同。',
+        '① 证书校验：仅整点/半点执行。检查池内 https_status=valid 的证书在服务器上是否仍有有效 PEM/文件；丢失或无效则回退为 none 并标记需重新申请。',
+        '② 证书申请：每 10 分钟执行。对生命周期 origin_ready 或 cert_pending 的子域发起 ACME 申请（HTTP-01 或 DNS-01），成功后更新为可建站。',
     ],
 )]
 class WebsitesPoolCertificateMaintenance implements CronTaskInterface
 {
     public function name(): string
     {
-        return __('域名池证书维护');
+        return __('子域 HTTPS 证书维护');
     }
 
     public function execute_name(): string
@@ -36,7 +37,7 @@ class WebsitesPoolCertificateMaintenance implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('合并：校验池内有效证书的 PEM/文件；为 origin_ready 等状态申请证书');
+        return __('① 整点/半点校验已签发证书 ② 每节拍处理待申请队列');
     }
 
     public function cron_time(): string
@@ -79,16 +80,16 @@ class WebsitesPoolCertificateMaintenance implements CronTaskInterface
         // 原 Verify 为 */30，在整点与半点附近执行校验，其余节拍仅跑申请
         if ($minute === 0 || $minute === 30 || WebsitesCronTestContext::forcePoolCertVerify()) {
             try {
-                $parts[] = '[1/2 ' . __('证书校验') . '] ' . (new DomainPoolCertificateVerify())->execute();
+                $parts[] = '[1/2 ' . __('① 证书校验') . '] ' . (new DomainPoolCertificateVerify())->execute();
             } catch (\Throwable $e) {
                 $parts[] = '[1/2] ' . $e->getMessage();
                 w_log_error('[websites_pool_certificate_maintenance] verify: ' . $e->getMessage(), [], 'domain_pool_cert');
             }
         } else {
-            $parts[] = '[1/2 ' . __('证书校验') . '] ' . (string) __('本节拍跳过（整点/半点执行）');
+            $parts[] = '[1/2 ' . __('① 证书校验') . '] ' . (string) __('本节拍跳过（整点/半点执行）');
         }
         try {
-            $parts[] = '[2/2 ' . __('证书申请') . '] ' . (new DomainPoolCertificateRequest())->execute();
+            $parts[] = '[2/2 ' . __('② 证书申请') . '] ' . (new DomainPoolCertificateRequest())->execute();
         } catch (\Throwable $e) {
             $parts[] = '[2/2] ' . $e->getMessage();
             w_log_error('[websites_pool_certificate_maintenance] request: ' . $e->getMessage(), [], 'domain_pool_cert');
