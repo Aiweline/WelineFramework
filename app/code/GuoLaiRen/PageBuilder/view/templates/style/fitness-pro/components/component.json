@@ -185,6 +185,21 @@
                 "brand.description": "Transform your body and mind with expert-led fitness programs.",
                 "copyright.text": "All rights reserved."
             }
+        },
+        "legal-content": {
+            "name": "法律文档",
+            "name_en": "Legal Content",
+            "description": "隐私政策、服务条款等；无本地文件时使用共享 legal-content 组件",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-file-earmark-text",
+            "sort_order": 90,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "legal-content.phtml",
+            "default_config": []
         }
     },
     "nav_config": {
