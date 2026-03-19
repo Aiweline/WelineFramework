@@ -43,6 +43,14 @@ class SslCertificateService
     public const PROVIDER_LETS_ENCRYPT = 'letsencrypt';
     public const PROVIDER_LITESSL = 'litessl';
     public const PROVIDER_SELF_SIGNED = 'self_signed';
+
+    /**
+     * ACME 申请进行中锁文件（位于 app/etc/ssl/{domain}/），用于避免颁发过程中 sync/页面同步覆盖证书记录
+     */
+    public const SSL_ISSUANCE_LOCK_FILENAME = '.ssl_issuing';
+
+    /** 锁文件超过此时长视为进程异常退出残留，允许自动清除（秒） */
+    protected const SSL_ISSUANCE_LOCK_STALE_SECONDS = 7200;
     
     /**
      * Let's Encrypt ACME 目录
@@ -1234,6 +1242,74 @@ CNF;
     }
 
     /**
+     * 指定域名是否处于 SSL 颁发流程中（存在未过期的锁文件）
+     */
+    public function isDomainSslIssuanceInProgress(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+        $lockPath = $this->certBaseDir . $domain . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
+        if (!\is_file($lockPath)) {
+            return false;
+        }
+        $age = \time() - (int)@\filemtime($lockPath);
+        if ($age > self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
+            @\unlink($lockPath);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 若域名正在申请证书，返回提示文案；否则返回空字符串（供后台/API 拦截写操作）
+     */
+    public function getSslIssuanceConflictMessage(string $domain): string
+    {
+        return $this->isDomainSslIssuanceInProgress($domain)
+            ? (string) __('该域名正在申请 SSL 证书，请等待证书成功下载并入库后再修改证书管理。')
+            : '';
+    }
+
+    /**
+     * 创建颁发流程锁（目录由 getCertificateDir 确保存在）
+     */
+    protected function acquireSslIssuanceLock(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+        $certDir = $this->getCertificateDir($domain);
+        $lockPath = $certDir . self::SSL_ISSUANCE_LOCK_FILENAME;
+        if (\is_file($lockPath)) {
+            $age = \time() - (int)@\filemtime($lockPath);
+            if ($age <= self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
+                return false;
+            }
+            @\unlink($lockPath);
+        }
+        $payload = (string)\getmypid() . "\n" . \date('c');
+        return @\file_put_contents($lockPath, $payload) !== false;
+    }
+
+    /**
+     * 释放颁发流程锁
+     */
+    protected function releaseSslIssuanceLock(string $domain): void
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return;
+        }
+        $lockPath = $this->certBaseDir . $domain . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
+        if (\is_file($lockPath)) {
+            @\unlink($lockPath);
+        }
+    }
+
+    /**
      * 将当前正在使用的证书路径同步到证书表（框架级兜底）。
      *
      * 适用于以下场景：
@@ -1251,6 +1327,10 @@ CNF;
     ): ?SslCertificate {
         $domain = \strtolower(\trim($domain));
         if ($domain === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+        // 颁发过程中禁止用磁盘扫描结果覆盖证书记录，避免「尚未成功下载」时管理器数据被改坏
+        if ($this->isDomainSslIssuanceInProgress($domain)) {
             return null;
         }
 
@@ -1986,6 +2066,10 @@ CNF;
                 if (!\is_dir($domainDir)) {
                     continue;
                 }
+                if ($this->isDomainSslIssuanceInProgress($domain)) {
+                    $skipped++;
+                    continue;
+                }
                 $matched = false;
                 foreach ($certFormats as $format) {
                     $certPath = $domainDir . $format['cert'];
@@ -2102,24 +2186,26 @@ CNF;
                 return ['success' => false, 'message' => __('无法创建账户密钥'), 'cert' => null];
             }
             
-            // 2. 创建或获取证书记录
+            // 2. 准备内存中的证书记录（成功下载并校验写入磁盘后才 save 入库，避免颁发中途污染证书管理器）
             $normalizedDomain = \strtolower(\trim($domain));
             if ($normalizedDomain === '') {
                 return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
             }
             $cert = $this->certModel->clearQuery()->loadByDomain($normalizedDomain);
             $loadedDomain = \strtolower(\trim((string) $cert->getDomain()));
-            if (!$cert->getCertId() || $loadedDomain !== $normalizedDomain) {
+            $hadPersistedRow = $cert->getCertId() > 0 && $loadedDomain === $normalizedDomain;
+            $priorCertId = $hadPersistedRow ? (int) $cert->getCertId() : 0;
+            $priorStatus = $hadPersistedRow ? (string) $cert->getStatus() : '';
+            if (!$hadPersistedRow) {
                 $cert = ObjectManager::getInstance(SslCertificate::class);
                 $cert->clearData(true);
-                $certType = \str_starts_with($normalizedDomain, '*.') 
-                    ? SslCertificate::CERT_TYPE_WILDCARD 
+                $certType = \str_starts_with($normalizedDomain, '*.')
+                    ? SslCertificate::CERT_TYPE_WILDCARD
                     : SslCertificate::CERT_TYPE_EXACT;
                 $cert->setDomain($normalizedDomain)
                     ->setWebsiteId($websiteId)
                     ->setCertType($certType)
                     ->setProvider($provider)
-                    ->setStatus(SslCertificate::STATUS_PENDING)
                     ->setAutoRenew(true);
             } else {
                 $cert->setDomain($normalizedDomain)
@@ -2150,79 +2236,104 @@ CNF;
                 }
             }
 
-            $cert->setCertPath($certPath)
-                ->setKeyPath($keyPath)
-                ->setChainPath($chainPath);
+            if (!$this->acquireSslIssuanceLock($normalizedDomain)) {
+                return [
+                    'success' => false,
+                    'message' => __('该域名正在申请证书中，请等待当前流程结束后再试。'),
+                    'cert' => null,
+                ];
+            }
+            try {
+                $cert->setCertPath($certPath)
+                    ->setKeyPath($keyPath)
+                    ->setChainPath($chainPath);
 
-            // 4. 使用 ACME 协议申请证书
-            $result = $this->performAcmeChallenge($normalizedDomain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
+                // 4. 使用 ACME 协议申请证书
+                $result = $this->performAcmeChallenge($normalizedDomain, $webroot, $email, $certDir, $challengeStrategy, $poolId, $domainId, $onProgress);
 
-            if ($result['success']) {
-                if ($onProgress) {
-                    $onProgress((string) __('证书已保存到：%{1}', [$certDir]), ['cert_dir' => $certDir, 'cert_path' => $certPath]);
-                    $onProgress((string) __('正在保存证书管理记录…'), ['step' => 'save_record']);
-                }
-                // 更新证书信息
-                $certInfo = $this->parseCertificate($certPath);
-                $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
-                $issuer = ((string) ($certInfo['issuer'] ?? '')) !== '' ? (string) $certInfo['issuer'] : $this->getIssuerByProvider($provider);
-
-                // 将 PEM 内容写入证书记录，供 server:ssl:reload 等场景从 DB 恢复证书
-                $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
-                // ACME 只生成 fullchain.pem + privkey.pem，补全 chain.pem + cert.pem 到磁盘
-                if ($certContents['chain_pem'] !== '' && !\is_file($chainPath)) {
-                    @\file_put_contents($chainPath, $certContents['chain_pem']);
-                }
-                $leafCertPath = $certDir . 'cert.pem';
-                if (!\is_file($leafCertPath) && $certContents['cert_pem'] !== '') {
-                    $leafPem = $this->extractLeafCertFromFullchain($certContents['cert_pem']);
-                    if ($leafPem !== '') {
-                        @\file_put_contents($leafCertPath, $leafPem);
+                if ($result['success']) {
+                    if ($onProgress) {
+                        $onProgress((string) __('证书已保存到：%{1}', [$certDir]), ['cert_dir' => $certDir, 'cert_path' => $certPath]);
+                        $onProgress((string) __('正在保存证书管理记录…'), ['step' => 'save_record']);
                     }
+                    // 更新证书信息
+                    $certInfo = $this->parseCertificate($certPath);
+                    $expiresAt = $certInfo['expires_at'] ?? \date('Y-m-d H:i:s', \strtotime('+90 days'));
+                    $issuer = ((string) ($certInfo['issuer'] ?? '')) !== '' ? (string) $certInfo['issuer'] : $this->getIssuerByProvider($provider);
+
+                    // 将 PEM 内容写入证书记录，供 server:ssl:reload 等场景从 DB 恢复证书
+                    $certContents = $this->readCertificateContents($certPath, $keyPath, $chainPath);
+                    // ACME 只生成 fullchain.pem + privkey.pem，补全 chain.pem + cert.pem 到磁盘
+                    if ($certContents['chain_pem'] !== '' && !\is_file($chainPath)) {
+                        @\file_put_contents($chainPath, $certContents['chain_pem']);
+                    }
+                    $leafCertPath = $certDir . 'cert.pem';
+                    if (!\is_file($leafCertPath) && $certContents['cert_pem'] !== '') {
+                        $leafPem = $this->extractLeafCertFromFullchain($certContents['cert_pem']);
+                        if ($leafPem !== '') {
+                            @\file_put_contents($leafCertPath, $leafPem);
+                        }
+                    }
+                    $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
+                        ->setExpiresAt($expiresAt)
+                        ->setIssuer($issuer)
+                        ->setProvider($provider)
+                        ->setStatus(SslCertificate::STATUS_ACTIVE)
+                        ->setLastRenewAt(\date('Y-m-d H:i:s'))
+                        ->setRenewError('')
+                        ->setAutoRenew(true)
+                        ->setCertPem($certContents['cert_pem'])
+                        ->setKeyPem($certContents['key_pem'])
+                        ->setChainPem($certContents['chain_pem'])
+                        ->setCsrPem($certContents['csr_pem']);
+                    $cert = $this->resolveDuplicateDomainCert($cert);
+                    $cert->setDomain($normalizedDomain)
+                        ->setProvider($provider);
+                    $cert->save();
+
+                    if ($onProgress) {
+                        $onProgress((string) __('证书管理记录已保存，cert_id=%{1}', [$cert->getCertId()]), ['cert_id' => $cert->getCertId()]);
+                    }
+
+                    // 触发证书签发事件（通过事件解耦模块间依赖）
+                    $this->dispatchCertificateIssuedEvent(
+                        $domain,
+                        $cert->getCertId(),
+                        $certPath,
+                        $keyPath,
+                        $issuer,
+                        $expiresAt,
+                        $cert->getCertType()
+                    );
+
+                    // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
+                    $this->regenerateCertificateMap();
+
+                    return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
                 }
-                $cert->setIssuedAt($certInfo['issued_at'] ?? \date('Y-m-d H:i:s'))
-                    ->setExpiresAt($expiresAt)
-                    ->setIssuer($issuer)
-                    ->setProvider($provider)
-                    ->setStatus(SslCertificate::STATUS_ACTIVE)
-                    ->setLastRenewAt(\date('Y-m-d H:i:s'))
-                    ->setRenewError('')
-                    ->setAutoRenew(true)
-                    ->setCertPem($certContents['cert_pem'])
-                    ->setKeyPem($certContents['key_pem'])
-                    ->setChainPem($certContents['chain_pem'])
-                    ->setCsrPem($certContents['csr_pem']);
-                $cert = $this->resolveDuplicateDomainCert($cert);
-                $cert->setDomain($normalizedDomain)
-                    ->setProvider($provider);
-                $cert->save();
 
-                if ($onProgress) {
-                    $onProgress((string) __('证书管理记录已保存，cert_id=%{1}', [$cert->getCertId()]), ['cert_id' => $cert->getCertId()]);
+                // 失败：正在使用的 active 记录不写库，避免续签/重申请失败把线上证书条目标成 error
+                if ($priorCertId > 0 && $priorStatus === SslCertificate::STATUS_ACTIVE) {
+                    $unchanged = $this->certModel->clearQuery()->load($priorCertId);
+                    $unchangedCert = ($unchanged->getCertId() === $priorCertId) ? $unchanged : null;
+                    return [
+                        'success' => false,
+                        'message' => $result['message'],
+                        'cert' => $unchangedCert,
+                    ];
                 }
-
-                // 触发证书签发事件（通过事件解耦模块间依赖）
-                $this->dispatchCertificateIssuedEvent(
-                    $domain,
-                    $cert->getCertId(),
-                    $certPath,
-                    $keyPath,
-                    $issuer,
-                    $expiresAt,
-                    $cert->getCertType()
-                );
-
-                // 重新生成证书映射文件（确保泛域名证书展开后子域名能正确匹配）
-                $this->regenerateCertificateMap();
-
-                return ['success' => true, 'message' => __('证书申请成功'), 'cert' => $cert];
-            } else {
+                // 首次申请（库中无行）：失败不落库
+                if ($priorCertId === 0) {
+                    return ['success' => false, 'message' => $result['message'], 'cert' => null];
+                }
                 $cert->setStatus(SslCertificate::STATUS_ERROR)
                     ->setRenewError($result['message']);
                 $cert = $this->resolveDuplicateDomainCert($cert);
                 $cert->setDomain($normalizedDomain);
                 $cert->save();
                 return ['success' => false, 'message' => $result['message'], 'cert' => $cert];
+            } finally {
+                $this->releaseSslIssuanceLock($normalizedDomain);
             }
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage(), 'cert' => null];
@@ -2257,6 +2368,10 @@ CNF;
 
         if ($domain === '') {
             return ['success' => false, 'message' => __('域名不能为空'), 'cert' => null];
+        }
+        $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
+        if ($issuingMsg !== '') {
+            return ['success' => false, 'message' => $issuingMsg, 'cert' => null];
         }
         if ($fullchainPem === '') {
             return ['success' => false, 'message' => __('证书内容不能为空'), 'cert' => null];
@@ -3631,6 +3746,11 @@ CNF;
     public function toggleHttps(string $domain, bool $enabled): array
     {
         try {
+            $issuingMsg = $this->getSslIssuanceConflictMessage($domain);
+            if ($issuingMsg !== '') {
+                return ['success' => false, 'message' => $issuingMsg];
+            }
+
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
             
             if (!$cert->getCertId()) {
