@@ -172,9 +172,6 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
     <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
     <?php endif; ?>
     
-    <!-- 统计代码 -->
-    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
-    
     <!-- 本地CSS资源 -->
     <?php $localCssUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/tpmst/asset/css/home.css'); ?>
     <link rel="stylesheet" type="text/css" href="<?= htmlspecialchars($localCssUrl) ?>">
@@ -244,44 +241,7 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
             color: rgba(255,255,255,0.5);
         }
     </style>
-    
-    <!-- 像素统计 -->
-    <?php if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode): ?>
-        <?php
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
-        
-        // 获取网站信息（用于像素统计）
-        $websiteUrl = '';
-        $websiteCode = '';
-        try {
-            if (class_exists('\Weline\Websites\Model\Website')) {
-                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                $website = clone $websiteModel;
-                $website->clear()->load($websiteId);
-                if ($website->getId()) {
-                    $websiteUrl = $website->getData('url') ?? '';
-                    $websiteCode = $website->getData('code') ?? '';
-                }
-            }
-        } catch (\Exception $e) {
-            // 如果获取网站信息失败，不影响像素功能
-        }
-        
-        // 设置 website_url Cookie
-        if (!empty($websiteUrl)) {
-            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
-        }
-        
-        // 设置 website_code Cookie，用于区分不同站点
-        if (!empty($websiteCode)) {
-            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
-        }
-        
-        $this->assign('pixel_name', htmlspecialchars($pixelName));
-        $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
-        ?>
-        <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
-    <?php endif; ?>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
 </head>
 <body>
     <div class="tpmst-layout" data-template="tpmst" data-page-id="<?= $pageId ?>">
@@ -356,5 +316,6 @@ $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
     ?>
     <script src="<?= htmlspecialchars($localZeptoUrl) ?>" defer></script>
     <script src="<?= htmlspecialchars($localCommonJsUrl) ?>" defer></script>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
 </body>
 </html>

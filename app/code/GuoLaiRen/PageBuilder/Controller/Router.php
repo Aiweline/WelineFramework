@@ -384,5 +384,30 @@ class Router implements RouterInterface
     {
         self::$handleCache = [];
     }
+
+    /**
+     * 按页面粒度清理 handle 存在性缓存（WLS Worker 进程内静态缓存）。
+     *
+     * 首页 handle 变更会影响「首页前缀 + 子路径」类 handle，故首页保存时清除该站点下全部 handle 缓存项。
+     */
+    public static function clearHandleCacheForPage(int $websiteId, string $handle, bool $isHomePage): void
+    {
+        if ($isHomePage) {
+            $prefix = (string)$websiteId . '_';
+            foreach (\array_keys(self::$handleCache) as $key) {
+                if (\is_string($key) && \str_starts_with($key, $prefix)) {
+                    unset(self::$handleCache[$key]);
+                }
+            }
+
+            return;
+        }
+        if ($handle !== '') {
+            unset(
+                self::$handleCache[$websiteId . '_' . $handle],
+                self::$handleCache[$websiteId . '_' . $handle . '_preview']
+            );
+        }
+    }
 }
 

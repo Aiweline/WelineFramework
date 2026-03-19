@@ -195,6 +195,105 @@ class SmtpSender extends \Weline\Framework\App\Helper
         $this->mail->AltBody = $alt;
         $this->mail->isHTML(true);  // Html格式发送邮件
         $this->mail->send();
+        $this->writeSendLog($module);
+        return true;
+    }
+
+    /**
+     * 使用显式配置数组发送（用于多发件人按 code 选择）
+     *
+     * @param array $config 必须含 smtp_host, smtp_port, smtp_username, smtp_password，可选 smtp_secure/smtp_auth
+     */
+    public function sendWithConfig(
+        string|array $from,
+        string|array $to,
+        string $subject,
+        string $content,
+        string $alt = '',
+        string|array $attachment = '',
+        string|array $reply_to = '',
+        string|array $cc = '',
+        string|array $bcc = '',
+        array $config = [],
+        string $module = 'Weline_Smtp'
+    ): bool {
+        $host = trim((string)($config['smtp_host'] ?? ''));
+        $username = trim((string)($config['smtp_username'] ?? ''));
+        if ($host === '' || $username === '') {
+            throw new Exception(__('发件人配置不完整：缺少 host 或 username'));
+        }
+        $this->mail->Host = $host;
+        $this->mail->SMTPAuth = true;
+        $this->mail->Username = $username;
+        $this->mail->Password = (string)($config['smtp_password'] ?? '');
+        $this->mail->Port = (int)($config['smtp_port'] ?? 465);
+        $secure = (string)($config['smtp_secure'] ?? '1');
+        $this->mail->SMTPSecure = $secure === '0' ? PHPMailer::ENCRYPTION_STARTTLS : PHPMailer::ENCRYPTION_SMTPS;
+
+        if (is_string($from)) {
+            $this->mail->setFrom($from);
+        } else {
+            $this->mail->setFrom($from['email'], $from['name'] ?? '');
+        }
+        if (is_string($to)) {
+            $this->mail->addAddress($to);
+        } else {
+            if (isset($to['email'])) {
+                $this->mail->addAddress($to['email'], $to['name'] ?? '');
+            } else {
+                foreach ($to as $to_email) {
+                    if (is_array($to_email) && isset($to_email['email'])) {
+                        $this->mail->addAddress($to_email['email'], $to_email['name'] ?? '');
+                    } elseif (is_string($to_email)) {
+                        $this->mail->addAddress($to_email);
+                    }
+                }
+            }
+        }
+        if (!$this->mail->getToAddresses()) {
+            throw new Exception(__('接受者邮箱为空：请正确设置接收邮箱！'));
+        }
+        if ($reply_to) {
+            if (is_string($reply_to)) {
+                $this->mail->addReplyTo($reply_to);
+            } elseif (isset($reply_to['email'])) {
+                $this->mail->addReplyTo($reply_to['email'], $reply_to['name'] ?? '');
+            }
+        }
+        if ($cc) {
+            if (is_string($cc)) {
+                $this->mail->addCC($cc);
+            } elseif (isset($cc['email'])) {
+                $this->mail->addCC($cc['email'], $cc['name'] ?? '');
+            }
+        }
+        if ($bcc) {
+            if (is_string($bcc)) {
+                $this->mail->addBCC($bcc);
+            } elseif (isset($bcc['email'])) {
+                $this->mail->addBCC($bcc['email'], $bcc['name'] ?? '');
+            }
+        }
+        if ($attachment) {
+            if (is_string($attachment)) {
+                $this->mail->addAttachment($attachment);
+            } else {
+                foreach (is_array($attachment) && isset($attachment['path']) ? [$attachment] : (array)$attachment as $a) {
+                    $this->mail->addAttachment($a['path'] ?? '', $a['name'] ?? '');
+                }
+            }
+        }
+        $this->mail->Subject = $subject;
+        $this->mail->Body = $content;
+        $this->mail->AltBody = $alt;
+        $this->mail->isHTML(true);
+        $this->mail->send();
+        $this->writeSendLog($module, $config);
+        return true;
+    }
+
+    private function writeSendLog(string $module, ?array $config = null): void
+    {
         /** @var \Weline\Smtp\Model\SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
         try {
@@ -208,15 +307,13 @@ class SmtpSender extends \Weline\Framework\App\Helper
                 ->setData($sendLog::schema_fields_ATTACHMENT, json_encode($this->mail->getAttachments()))
                 ->setData($sendLog::schema_fields_CC, json_encode($this->mail->getCcAddresses()))
                 ->setData($sendLog::schema_fields_BCC, json_encode($this->mail->getBccAddresses()))
-                ->setData($sendLog::schema_fields_PROXY, $this->data->get($this->data::smtp_username, $module))
+                ->setData($sendLog::schema_fields_PROXY, $config !== null ? ($config['smtp_username'] ?? '') : $this->data->get($this->data::smtp_username, $module))
                 ->setData($sendLog::schema_fields_MODULE, $module)
                 ->save();
         } catch (\ReflectionException|Exception|ModelException $e) {
             if (DEV) {
                 throw new Exception($e->getMessage());
             }
-            return false;
         }
-        return true;
     }
 }

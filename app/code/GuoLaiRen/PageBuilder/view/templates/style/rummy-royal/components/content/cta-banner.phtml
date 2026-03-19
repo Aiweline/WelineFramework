@@ -44,6 +44,11 @@ $primaryBtnUrl = $config['buttons.primary_url'] ?? '#';
 $secondaryBtnText = $config['buttons.secondary_text'] ?? 'Download App';
 $secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['buttons.secondary_url'] ?? '#download');
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'rr-cta-' . uniqid();
 ?>
 
@@ -183,32 +188,20 @@ $instanceId = 'rr-cta-' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <div class="rr-cta-container">
         <h2 class="rr-cta-title"><?= htmlspecialchars($title) ?></h2>
         <p class="rr-cta-desc"><?= htmlspecialchars($description) ?></p>
         
         <div class="rr-cta-buttons">
             <?php if ($primaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="rr-cta-btn-primary" data-download-trigger="primary">
+            <a role="button" tabindex="0" class="rr-cta-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="rr-cta-btn-secondary" data-download-trigger="secondary">
+            <a role="button" tabindex="0" class="rr-cta-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                 <?= htmlspecialchars($secondaryBtnText) ?>
             </a>
             <?php endif; ?>

@@ -373,6 +373,7 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
             background: <?= sk_color($colors, 'accent_primary_light', '#a855f7') ?>;
         }
     </style>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
 </head>
 <body>
     <!-- ========== HEADER 区域 ========== -->
@@ -449,5 +450,6 @@ $bodyBg = sk_color($colors, 'body_bg', '#0a0a1a');
             lastScroll = currentScroll;
         });
     </script>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
 </body>
 </html>

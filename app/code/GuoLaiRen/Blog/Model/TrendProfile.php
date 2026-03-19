@@ -40,7 +40,7 @@ class TrendProfile extends Model
     public const schema_fields_UPDATED_AT = 'updated_at';
 
     /**
-     * 关键词字符串转数组（逗号分隔）
+     * 关键词字符串转数组（支持英文/中文逗号、分号、顿号、换行等分隔）
      */
     public function getKeywordsArray(): array
     {
@@ -48,7 +48,18 @@ class TrendProfile extends Model
         if ($kw === null || $kw === '') {
             return [];
         }
-        return array_values(array_filter(array_map('trim', explode(',', (string)$kw))));
+        $parts = preg_split('/[,，;；\r\n、]+/u', (string)$kw);
+        if ($parts === false) {
+            return [];
+        }
+        $out = [];
+        foreach ($parts as $p) {
+            $t = trim((string)$p);
+            if ($t !== '') {
+                $out[] = $t;
+            }
+        }
+        return array_values($out);
     }
 
     /**

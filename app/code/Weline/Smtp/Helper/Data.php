@@ -34,6 +34,11 @@ class Data extends \Weline\Backend\Model\Config
         self::smtp_test_address,
     ];
 
+    /** 多发件人配置存储 key，值为 JSON 数组 [{ code, name, smtp_host, ... }] */
+    const key_smtp_senders = 'smtp_senders';
+    /** 发件人 code 对应的默认联系人（收件邮箱）存储 key，值为 JSON 对象 { "code": "to_email" } */
+    const key_smtp_sender_contacts = 'smtp_sender_contacts';
+
     private array $smtp = [];
 
     function get(string $key = '', string $module = 'Weline_Smtp'): string|array
@@ -81,5 +86,86 @@ class Data extends \Weline\Backend\Model\Config
         }
         $this->setConfig($key, $data, $module);
         return $this;
+    }
+
+    /**
+     * 获取所有发件人配置（含从旧版单配置迁移的 default）
+     */
+    public function getSenders(string $module = 'Weline_Smtp'): array
+    {
+        $raw = $this->getConfig(self::key_smtp_senders, $module);
+        if ($raw !== null && $raw !== '') {
+            $decoded = json_decode((string) $raw, true);
+            if (is_array($decoded)) {
+                return $decoded;
+            }
+        }
+        $legacy = $this->get('', $module);
+        if (!empty($legacy['smtp_host']) && !empty($legacy['smtp_username'])) {
+            return [
+                [
+                    'code' => 'default',
+                    'name' => __('默认发件人'),
+                    'smtp_host' => $legacy['smtp_host'] ?? '',
+                    'smtp_port' => $legacy['smtp_port'] ?? '465',
+                    'smtp_username' => $legacy['smtp_username'] ?? '',
+                    'smtp_password' => $legacy['smtp_password'] ?? '',
+                    'smtp_secure' => $legacy['smtp_secure'] ?? '1',
+                    'smtp_auth' => $legacy['smtp_auth'] ?? '1',
+                    'smtp_test_address' => $legacy['smtp_test_address'] ?? '',
+                ],
+            ];
+        }
+        return [];
+    }
+
+    /**
+     * 按 code 获取发件人配置
+     */
+    public function getSenderByCode(string $code, string $module = 'Weline_Smtp'): ?array
+    {
+        foreach ($this->getSenders($module) as $sender) {
+            if (($sender['code'] ?? '') === $code) {
+                return $sender;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 保存发件人列表（完整覆盖）
+     */
+    public function setSenders(array $senders, string $module = 'Weline_Smtp'): bool
+    {
+        $this->setConfig(self::key_smtp_senders, json_encode($senders, JSON_UNESCAPED_UNICODE), $module);
+        $this->smtp[$module] = [];
+        return true;
+    }
+
+    /**
+     * 获取某发件人 code 的默认联系人（收件邮箱）
+     */
+    public function getSenderContact(string $senderCode, string $module = 'Weline_Smtp'): string
+    {
+        $raw = $this->getConfig(self::key_smtp_sender_contacts, $module);
+        if ($raw === null || $raw === '') {
+            return '';
+        }
+        $decoded = json_decode((string) $raw, true);
+        if (!is_array($decoded)) {
+            return '';
+        }
+        return trim((string) ($decoded[$senderCode] ?? ''));
+    }
+
+    /**
+     * 设置某发件人 code 的默认联系人（收件邮箱），供 w_query 等调用
+     */
+    public function setSenderContact(string $senderCode, string $toEmail, string $module = 'Weline_Smtp'): bool
+    {
+        $raw = $this->getConfig(self::key_smtp_sender_contacts, $module);
+        $contacts = ($raw !== null && $raw !== '') && is_array(json_decode((string) $raw, true)) ? json_decode((string) $raw, true) : [];
+        $contacts[$senderCode] = $toEmail;
+        return (bool) $this->setConfig(self::key_smtp_sender_contacts, json_encode($contacts, JSON_UNESCAPED_UNICODE), $module);
     }
 }
