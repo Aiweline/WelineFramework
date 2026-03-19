@@ -35,8 +35,18 @@ class Config extends BackendController
     #[Acl('Weline_Smtp::smtp_config_index', '配置页', 'mdi-cog', '查看 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function index(): string
     {
-        $smtp = $this->data->get();
-        $this->assign($smtp);
+        $senders = $this->data->getSenders('Weline_Smtp');
+        $contacts = [];
+        foreach ($senders as $s) {
+            $code = $s['code'] ?? '';
+            if ($code !== '') {
+                $contacts[$code] = $this->data->getSenderContact($code, 'Weline_Smtp');
+            }
+        }
+        $legacy = $this->data->get();
+        $this->assign('senders', $senders);
+        $this->assign('sender_contacts', $contacts);
+        $this->assign('legacy', $legacy);
         return $this->fetch('Weline_Smtp::Backend/Config');
     }
 
@@ -72,25 +82,96 @@ class Config extends BackendController
     public function postTest(): string
     {
         $test_email = $this->request->getPost('smtp_test_address');
-        try {
-            $this->data->set('smtp_test_address', $test_email);
-        } catch (Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
-            $this->redirect($this->getBackendUrl('smtp/backend/config'));
-        }
-        /** @var SmtpSender $smtpSender */
-        $smtpSender = ObjectManager::getInstance(SmtpSender::class);
-        try {
-            $smtpSender->sender(
-                ['email' => $this->data->get($this->data::smtp_username), 'name' => '发送者'],
-                ['email' => $test_email, 'name' => '接收者'],
-                'WelineFramework 框架Smtp测试！',
-                'WelineFramework 框架Smtp测试！这只是一个测试邮件。'
-            );
-            $this->getMessageManager()->addSuccess(__('邮件发送成功！'));
-        } catch (\PHPMailer\PHPMailer\Exception|Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+        $sender_code = $this->request->getPost('sender_code', '');
+        $module = 'Weline_Smtp';
+        if ($sender_code !== '') {
+            $result = w_query('smtp', 'send', [
+                'sender_code' => $sender_code,
+                'to' => $test_email,
+                'subject' => __('[SMTP 测试] 发件人 %{1}', [$sender_code]),
+                'content' => __('这是一封测试邮件。如果您收到此邮件，说明该发件人配置正确。'),
+                'module' => $module,
+            ]);
+            if ($result['success']) {
+                $this->getMessageManager()->addSuccess(__('邮件发送成功！'));
+            } else {
+                $this->getMessageManager()->addError($result['message'] ?? __('发送失败'));
+            }
+        } else {
+            try {
+                $this->data->set('smtp_test_address', $test_email);
+            } catch (Exception $e) {
+                $this->getMessageManager()->addError($e->getMessage());
+            }
+            try {
+                $smtpSender = ObjectManager::getInstance(SmtpSender::class);
+                $smtpSender->sender(
+                    ['email' => $this->data->get($this->data::smtp_username), 'name' => __('发送者')],
+                    $test_email,
+                    __('WelineFramework SMTP 测试'),
+                    __('这是一封测试邮件。')
+                );
+                $this->getMessageManager()->addSuccess(__('邮件发送成功！'));
+            } catch (\Throwable $e) {
+                $this->getMessageManager()->addError($e->getMessage());
+            }
         }
         $this->redirect($this->getBackendUrl('smtp/backend/config'));
+    }
+
+    /** 保存多发件人配置（JSON）及联系人 */
+    #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'mdi-content-save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
+    public function saveSenders(): string
+    {
+        if (!$this->request->isPost()) {
+            return $this->jsonError(__('无效的请求方法'));
+        }
+        $module = 'Weline_Smtp';
+        $sendersJson = $this->request->getPost('senders');
+        $contactsJson = $this->request->getPost('sender_contacts');
+        if ($sendersJson !== null && $sendersJson !== '') {
+            $senders = json_decode($sendersJson, true);
+            if (is_array($senders)) {
+                $existing = $this->data->getSenders($module);
+                $existingByCode = [];
+                foreach ($existing as $e) {
+                    $c = $e['code'] ?? '';
+                    if ($c !== '') {
+                        $existingByCode[$c] = $e;
+                    }
+                }
+                foreach ($senders as &$s) {
+                    $code = $s['code'] ?? '';
+                    if ($code !== '' && (trim((string)($s['smtp_password'] ?? '')) === '') && isset($existingByCode[$code]['smtp_password'])) {
+                        $s['smtp_password'] = $existingByCode[$code]['smtp_password'];
+                    }
+                }
+                unset($s);
+                $this->data->setSenders($senders, $module);
+            }
+        }
+        if ($contactsJson !== null && $contactsJson !== '') {
+            $contacts = json_decode($contactsJson, true);
+            if (is_array($contacts)) {
+                foreach ($contacts as $code => $toEmail) {
+                    if (is_string($code) && $code !== '') {
+                        $this->data->setSenderContact($code, trim((string) $toEmail), $module);
+                    }
+                }
+            }
+        }
+        return $this->jsonSuccess(__('保存成功'));
+    }
+
+    private function jsonSuccess(string $msg): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode(['success' => true, 'message' => $msg], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function jsonError(string $msg): string
+    {
+        $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+        return json_encode(['success' => false, 'message' => $msg], JSON_UNESCAPED_UNICODE);
     }
 }

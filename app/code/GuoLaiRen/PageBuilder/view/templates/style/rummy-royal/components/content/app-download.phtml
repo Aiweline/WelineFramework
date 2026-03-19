@@ -86,6 +86,11 @@ foreach ($cLines as $line) {
     }
 }
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'rr-download-' . uniqid();
 ?>
 
@@ -306,18 +311,6 @@ $instanceId = 'rr-download-' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <div class="rr-dl-container">
         <div class="rr-dl-header">
             <div class="rr-dl-badge">
@@ -336,11 +329,11 @@ $instanceId = 'rr-download-' . uniqid();
                 </div>
                 
                 <div class="rr-dl-btns">
-                    <a href="javascript:void(0)" role="button" class="rr-dl-btn-primary" data-download-trigger="primary">
+                    <a role="button" tabindex="0" class="rr-dl-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                         <svg viewBox="0 0 24 24"><path d="M3,20.5V3.5C3,2.91 3.34,2.39 3.84,2.15L13.69,12L3.84,21.85C3.34,21.61 3,21.09 3,20.5M16.81,15.12L6.05,21.34L14.54,12.85L16.81,15.12M20.16,10.81C20.5,11.08 20.75,11.5 20.75,12C20.75,12.5 20.53,12.9 20.18,13.18L17.89,14.5L15.39,12L17.89,9.5L20.16,10.81M6.05,2.66L16.81,8.88L14.54,11.15L6.05,2.66Z"/></svg>
                         <?= htmlspecialchars($primaryBtnText) ?>
                     </a>
-                    <a href="javascript:void(0)" role="button" class="rr-dl-btn-secondary" data-download-trigger="secondary">
+                    <a role="button" tabindex="0" class="rr-dl-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                         <?= htmlspecialchars($secondaryBtnText) ?>
                     </a>
                 </div>
