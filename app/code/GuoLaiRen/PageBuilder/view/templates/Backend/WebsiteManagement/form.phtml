@@ -4,9 +4,9 @@
  * 内容模板 - 由布局系统自动包裹
  *
  * 新建/编辑站点入口（均走 WebsiteManagement::add / ::edit，共用本模板；域名多选 bind-root-www 一处生效即可）：
- * - 网站列表工具栏「新建站点」：w:websites:website:build → */backend/websiteManagement/add
+ * - 网站列表工具栏「新建站点」：w:websites:website:build → 路由 backend/websiteManagement/add
  * - 页面列表侧栏「快速新建站点」：同上
- * - 页面表单（Page/form）侧栏 iframe：加载 */backend/websiteManagement/add
+ * - 页面表单（Page/form）侧栏 iframe 加载同上路由（backend/websiteManagement/add）
  *
  * 另：菜单「快速建站向导」QuickBuild/wizard 使用独立域名列表，非 w:websites:domain:select。
  *
