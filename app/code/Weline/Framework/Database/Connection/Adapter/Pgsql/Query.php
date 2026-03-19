@@ -19,6 +19,7 @@ use Weline\Framework\Database\Compiler\PgsqlCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
@@ -316,9 +317,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $this->fields = $fields;
         } else {
             $this->fields = $fields . ',' . $this->fields;
-            $fields = explode(',', $this->fields);
-            $fields = array_unique($fields);
-            $this->fields = implode(',', $fields);
+            $mergedParts = SelectFieldListSplitter::split($this->fields);
+            $mergedParts = array_unique($mergedParts);
+            $this->fields = implode(',', $mergedParts);
         }
         return $this;
     }
@@ -370,10 +371,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     public function group(string $fields): QueryInterface
     {
         // 规范化字段列表（使用双引号）
-        $fieldList = array_map('trim', explode(',', $fields));
+        $fieldList = SelectFieldListSplitter::split($fields);
         $formattedFields = [];
         foreach ($fieldList as $field) {
+            $field = trim($field);
             if (!str_contains($field, '"') && !str_contains($field, '`')) {
+                if (str_contains($field, '(') && str_contains($field, ')')) {
+                    $formattedFields[] = $field;
+                    continue;
+                }
                 if (str_contains($field, '.')) {
                     $parts = explode('.', $field);
                     $field = '"' . implode('"."', $parts) . '"';
@@ -779,6 +785,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
 
     /**
+     * 按 SELECT 列表的「顶层逗号」分割字段（括号内的逗号不拆，避免 COALESCE(SUM(x), 0) 等被拆坏）
+     *
+     * @return list<string>
+     */
+    protected function splitSelectFieldList(string $fields): array
+    {
+        return SelectFieldListSplitter::split($fields);
+    }
+
+    /**
      * 格式化字段列表（PostgreSQL 使用双引号）
      */
     protected function formatFieldsForPgsql(string $fields): string
@@ -787,8 +803,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '*';
         }
         
-        // 分割字段列表
-        $fieldList = array_map('trim', explode(',', $fields));
+        // 分割字段列表（不可简单 explode 逗号：函数实参中含逗号）
+        $fieldList = $this->splitSelectFieldList($fields);
         $formattedFields = [];
         
         foreach ($fieldList as $field) {
@@ -804,7 +820,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 $formattedFields[] = $this->formatFieldExpression($field);
             }
         }
-        
+
         return implode(', ', $formattedFields);
     }
 
