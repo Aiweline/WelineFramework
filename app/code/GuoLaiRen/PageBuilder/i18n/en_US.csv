@@ -1,4 +1,4 @@
-﻿开始扫描样式模板...,开始扫描样式模板...
+开始扫描样式模板...,开始扫描样式模板...
 扫描样式：%{1},扫描样式：%{1}
 缺少必需文件：%{1},缺少必需文件：%{1}
 "✓ 已更新","✓ 已更新"
@@ -2124,8 +2124,14 @@ php.ini,php.ini
 暂无证书内容,暂无证书内容
 暂无证书链内容,暂无证书链内容
 暂无私钥内容,暂无私钥内容
-证书详情请求失败,证书详情请求失败
-请先从域名池选择域名并填写邮箱,请先从域名池选择域名并填写邮箱
+证书详情请求失败,Certificate detail request failed
+接口未返回JSON可能未登录,The server did not return JSON (often a login redirect HTML page). Please sign in again and retry.
+接口返回内容不是合法JSON,The response is not valid JSON. Check the network tab or contact an administrator.
+服务器返回空内容,The server returned an empty body. Check your session and retry.
+证书详情展示失败,Failed to render certificate details
+网络请求失败,Network request failed
+自签证书,Self-signed
+请先从域名池选择域名并填写邮箱,Please select a domain from the pool and enter email
 申请成功,申请成功
 申请失败,申请失败
 申请请求失败,申请请求失败
