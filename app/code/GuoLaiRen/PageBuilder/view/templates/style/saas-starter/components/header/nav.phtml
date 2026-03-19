@@ -33,6 +33,8 @@ $navLinksRaw = $config['navigation.links'] ?? "Features=>#features\nPricing=>#pr
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Start Free Trial';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#pricing');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 $accentPrimary = $colors['accent_primary'] ?? '#10b981';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)';
@@ -112,7 +114,7 @@ $instanceId = 'ss-nav-' . uniqid();
                 <?php endforeach; ?>
             </ul>
             <?php if ($showCta === 'yes'): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ss-header-cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="ss-header-cta">
                 <span><?= htmlspecialchars($ctaText) ?></span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>

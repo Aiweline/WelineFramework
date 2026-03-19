@@ -165,9 +165,6 @@ $navBgColor = pa_color($colors, 'nav_bg', 'rgba(6, 13, 8, 0.95)');
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <?php endif; ?>
     
-    <!-- 统计代码 -->
-    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
-    
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -407,6 +404,7 @@ $navBgColor = pa_color($colors, 'nav_bg', 'rgba(6, 13, 8, 0.95)');
         /* ========== Selection ========== */
         ::selection { background: rgba(4, 120, 87, 0.3); color: #ecfdf5; }
     </style>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
 </head>
 <body>
     <!-- ========== HEADER 区域 ========== -->
@@ -477,5 +475,6 @@ $navBgColor = pa_color($colors, 'nav_bg', 'rgba(6, 13, 8, 0.95)');
             }
         });
     </script>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
 </body>
 </html>
