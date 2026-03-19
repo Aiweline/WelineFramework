@@ -135,16 +135,30 @@ class DnsSwitchService
         $notify('add_zone_done', ['domain' => $domainName, 'nameservers' => $targetNs, 'message' => __('目标 NS：%{1}', [\implode(', ', $targetNs)])]);
         w_log_info(__('[DnsSwitchService] %{1} Step2: 目标 NS=%{2}', [$domainName, \implode(', ', $targetNs)]), [], $logCh);
 
-        // 同服务商不执行 NS 修改：注册商即目标 DNS 时（如 Gname 购买且选 Gname DNS），注册商已在购买时自动配置，无需再调修改接口
+        // 同服务商不执行 NS 修改；异注册商时若注册商侧 NS 已与目标一致（用户已手动切 NS），则跳过 updateNameservers
         $sourceCode = \strtolower((string) $sourceAccount->getRegistrarCode());
         $sameProvider = ($sourceCode !== '' && $sourceCode === \strtolower($targetCode));
+        $skipRegistrarNsUpdate = $sameProvider;
+        if (!$skipRegistrarNsUpdate) {
+            $preNs = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $sourceAccount->getCredentials());
+            if ($preNs['supported'] && $preNs['error'] === '' && $preNs['normalized'] === $targetNsNormalized) {
+                $skipRegistrarNsUpdate = true;
+            }
+        }
 
-        if ($sameProvider) {
+        if ($skipRegistrarNsUpdate) {
+            $skipMsg = $sameProvider
+                ? __('当前已是同注册商 DNS（%{1}），无需调用修改 NS 接口；直接同步/推送记录。', [$targetCode])
+                : __('注册商登记的 NS 已与目标 DNS 一致，跳过修改 NS 接口；直接同步/推送记录。');
             $notify('switch_ns_skip', [
                 'domain' => $domainName,
-                'message' => __('当前已是同注册商 DNS（%{1}），无需调用修改 NS 接口；直接同步/推送记录。', [$targetCode]),
+                'message' => $skipMsg,
             ]);
-            w_log_info(__('[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）', [$domainName, $targetCode]), [], $logCh);
+            if ($sameProvider) {
+                w_log_info(__('[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）', [$domainName, $targetCode]), [], $logCh);
+            } else {
+                w_log_info(__('[DnsSwitchService] %{1} Step3: 注册商 NS 已与目标一致，跳过改 NS 接口', [$domainName]), [], $logCh);
+            }
         } else {
             // ── Step 3: 在注册商处修改 NS ──
             $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
@@ -263,6 +277,7 @@ class DnsSwitchService
         $domain->setDnsProvider($targetCode);
         $domain->setDnsAccountId($targetAccountId);
         $domain->setDnsSwitchPending(0);
+        $domain->setDnsCutoverComplete(1);
         $domain->setDnsMigrationPending($pushSuccess ? 0 : 1);
         if ($cdnAccount !== null && $cdnAccount->getAccountId()) {
             $domain->setCdnProvider((string) $cdnAccount->getRegistrarCode());

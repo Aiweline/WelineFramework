@@ -59,6 +59,9 @@ class HttpsSync
                 $results['https_disabled'],
                 $results['unchanged']
             );
+            if (($results['skipped_cron_lock'] ?? 0) > 0) {
+                $message .= ' ' . (string) __('（建站锁定跳过 %{1} 个）', [(string) (int) $results['skipped_cron_lock']]);
+            }
             
             // 如果有状态变化，记录日志
             if ($results['https_enabled'] > 0 || $results['https_disabled'] > 0) {

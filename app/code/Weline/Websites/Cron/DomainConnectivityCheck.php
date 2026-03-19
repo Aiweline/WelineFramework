@@ -15,18 +15,20 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DomainConnectivityService;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: '对根域与子域做 HTTP(S) 探测，更新「是否可访问」状态与详情（列表 hover 展示）。--domain= 可限定根域或子域。',
+    description: '对根域与子域做连通性探测：优先 HTTP；失败时再试 HTTPS 且不校验证书（仅看是否响应）。证书是否有效以详情中「证书管理」摘要（读证书表）为准。--domain= 可限定根域或子域。',
     examples: [
         'php bin/w cron:test --task=domain_connectivity_check --domain=example.com -v',
         'php bin/w cron:test --task=domain_connectivity_check --domain=www.example.com -v',
     ],
     manual_help: [
-        '逻辑：先试 HTTPS，失败再试 HTTP；2xx/3xx 视为可访问。结果写入 connectivity_status / connectivity_checked_at / connectivity_detail。',
+        '逻辑：先 HTTP；失败再 HTTPS（关闭 TLS 证书校验，仅判断 443 是否返回 HTTP 状态）。不以带校验的 HTTPS 推断证书有效性；hover 详情含「证书管理：…」来自 SSL 证书表。',
         '每 15 分钟跑一批根域与一批子域，用于后台列表「连通性」列与 hover 详情，不参与建站就绪判断。',
+        '根域/池子所属根域 cron_resolved=1 时跳过探测，避免锁定后重复写 connectivity_*。',
     ],
 )]
 class DomainConnectivityCheck implements CronTaskInterface
@@ -49,7 +51,7 @@ class DomainConnectivityCheck implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('HTTP(S) 探测根域与子域，更新可访问状态与详情（列表 hover）');
+        return __('HTTP/HTTPS(不校验证书) 探测连通性；证书摘要来自证书管理表（列表 hover）');
     }
 
     public function cron_time(): string
@@ -74,6 +76,7 @@ class DomainConnectivityCheck implements CronTaskInterface
         $poolErr = 0;
 
         $domainModel = ObjectManager::getInstance(Domain::class);
+        $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
         $rootRows = $domainModel->clearQuery()
             ->order(Domain::schema_fields_DOMAIN, 'ASC')
             ->limit(self::ROOT_BATCH)
@@ -86,6 +89,9 @@ class DomainConnectivityCheck implements CronTaskInterface
                 continue;
             }
             if ($domainFilter !== null && !WebsitesCronTestContext::matchesSubject($domainName, $domainName)) {
+                continue;
+            }
+            if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($domainName)) {
                 continue;
             }
             $result = $service->probe($domainName);
@@ -116,6 +122,9 @@ class DomainConnectivityCheck implements CronTaskInterface
                 continue;
             }
             if ($domainFilter !== null && !WebsitesCronTestContext::matchesSubject($domainName, $domainName)) {
+                continue;
+            }
+            if ($cronLock->shouldSkipNonCertificateWorkForPoolRow($row)) {
                 continue;
             }
             $result = $service->probe($domainName);
