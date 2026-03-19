@@ -1986,7 +1986,7 @@ while (true) {
                     $_resp = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$_wwwUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                     @\fwrite($conn, $_resp);
                     @\fclose($conn);
-                    unset($connections[$connId], $connectionTimes[$connId], $requestBuffers[$connId]);
+                    unset($connections[$connId], $connectionLastActivity[$connId], $requestBuffers[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId]);
                     $activeRequests--;
                     continue;
                 }
