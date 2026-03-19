@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Weline\Backend\test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Backend\Service\ContactService;
 use Weline\Backend\Service\NotificationRouter;
-use Weline\Backend\Service\UserContactService;
 use Weline\Backend\Model\BackendUser;
 use Weline\Backend\Model\UserNotificationSubscription;
 use Weline\Backend\Model\NotificationChannel;
@@ -16,14 +16,14 @@ use Weline\Framework\Manager\ObjectManager;
 class NotificationRouterTest extends TestCase
 {
     private ?NotificationRouter $router = null;
-    private ?UserContactService $contactService = null;
+    private ?ContactService $contactService = null;
     private int $testUserId = 0;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->router = ObjectManager::getInstance(NotificationRouter::class);
-        $this->contactService = ObjectManager::getInstance(UserContactService::class);
+        $this->contactService = ObjectManager::getInstance(ContactService::class);
         
         $userModel = ObjectManager::getInstance(BackendUser::class);
         $user = $userModel->clearQuery()

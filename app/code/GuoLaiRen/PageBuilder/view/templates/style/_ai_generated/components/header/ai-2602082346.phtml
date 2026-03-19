@@ -3,6 +3,9 @@ $showGoldEffect = $getConfig('style.gold_effect', 'yes') !== 'no';
 $showShadows = $getConfig('style.shadows', 'yes') !== 'no';
 $headerHeight = (int)$getConfig('style.height', 90);
 $stickyHeader = $getConfig('style.sticky', 'yes') !== 'no';
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)($ctaUrl ?? '#'));
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 ?>
 <header id="<?= $componentId ?>" class="bj-header">
     <div class="bj-header-container">
@@ -32,7 +35,7 @@ $stickyHeader = $getConfig('style.sticky', 'yes') !== 'no';
 
         <div class="bj-header-actions">
             <?php if ($showCta): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="bj-header-cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="bj-header-cta">
                 <?= htmlspecialchars($ctaText) ?>
             </a>
             <?php endif; ?>

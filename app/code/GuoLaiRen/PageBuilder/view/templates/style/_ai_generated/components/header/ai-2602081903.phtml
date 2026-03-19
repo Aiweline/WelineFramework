@@ -1,5 +1,8 @@
 <?php
 $luxurySlogan = $getConfig('luxury.slogan', 'EXCLUSIVE LUXURY');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)($ctaUrl ?? '#'));
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 ?>
 <header id="<?= $componentId ?>" class="ai-header-luxury" data-config='{"showLogo":"<?= $showLogo ? 'true' : 'false' ?>","showNav":"<?= $showNav ? 'true' : 'false' ?>","showCta":"<?= $showCta ? 'true' : 'false' ?>"}'>
     <div class="ai-header-luxury__container">
@@ -40,7 +43,7 @@ $luxurySlogan = $getConfig('luxury.slogan', 'EXCLUSIVE LUXURY');
         <!-- CTA区域 -->
         <div class="ai-header-luxury__actions">
             <?php if ($showCta): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ai-header-luxury__cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="ai-header-luxury__cta">
                 <span class="ai-header-luxury__cta-text"><?= htmlspecialchars($ctaText) ?></span>
                 <span class="ai-header-luxury__cta-icon">→</span>
             </a>

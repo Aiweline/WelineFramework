@@ -84,6 +84,8 @@ $navLinksRaw = le_getConfig($styleSettings, 'navigation.links', "Home=>/\nGames=
 $showCta = le_getConfig($styleSettings, 'navigation.show_cta', 'yes');
 $ctaText = le_getConfig($styleSettings, 'navigation.cta_text', 'Play Now');
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(le_getConfig($styleSettings, 'navigation.cta_url', '#games'));
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 // 颜色配置
 $accentPrimary = le_color($colors, 'accent_primary', '#8b5cf6');
@@ -248,7 +250,7 @@ foreach ($lines as $line) {
             </ul>
             
             <?php if ($showCta === 'yes'): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="le-cta-btn">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="le-cta-btn">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <span><?= htmlspecialchars($ctaText) ?></span>
             </a>
@@ -256,54 +258,4 @@ foreach ($lines as $line) {
         </nav>
     </div>
 </header>
-<?php endif; ?>
-
-<?php
-// === 像素统计代码 ===
-$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
-if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
-    $isPreviewMode = true;
-}
-
-$pixelEnabled = le_getConfig($styleSettings, 'pixel.enabled', 'yes');
-$pixelEnabled = (string)($pixelEnabled ?? 'yes');
-$pixelName = le_getConfig($styleSettings, 'pixel.name', '');
-
-if (empty($pixelName) && $page) {
-    $pixelName = $page->getData('handle') ?? '';
-}
-
-$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
-
-if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
-    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
-    
-    $websiteUrl = '';
-    $websiteCode = '';
-    try {
-        if (class_exists('\Weline\Websites\Model\Website')) {
-            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $website = clone $websiteModel;
-            $website->clear()->load($websiteId);
-            if ($website->getId()) {
-                $websiteUrl = $website->getData('url') ?? '';
-                $websiteCode = $website->getData('code') ?? '';
-            }
-        }
-    } catch (\Exception $e) {
-        // 如果获取网站信息失败，不影响像素功能
-    }
-    
-    if (!empty($websiteUrl)) {
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
-    }
-    
-    if (!empty($websiteCode)) {
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
-    }
-    
-    $this->assign('pixel_name', htmlspecialchars($pixelName));
-    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
-?>
-    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
 <?php endif; ?>

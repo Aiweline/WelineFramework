@@ -30,6 +30,7 @@ alwaysApply: false
 | SSE/流式/EventSource/text/event-stream | sse-streaming |
 | 新增/修改规则技能 | cursor-as-reference |
 | 翻译/i18n/taglib 属性中的文案/@lang/w: 标签属性 | i18n-internationalization |
+| PageBuilder 主题 style/layout/下载/data-glr/head-common | pagebuilder-style-templates |
 
 ## 禁止
 

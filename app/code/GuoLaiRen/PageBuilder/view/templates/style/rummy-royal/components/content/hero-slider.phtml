@@ -53,6 +53,11 @@ $primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($c
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
 $secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $statsRaw = $config['stats.items'] ?? "5M+|Active Players\n₹500Cr+|Winnings Paid\n24/7|Live Support";
 $stats = [];
 $lines = preg_split('/[\r\n]+/', $statsRaw);
@@ -309,18 +314,6 @@ $instanceId = 'rr-hero-' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <!-- Decorative playing card shapes -->
     <div class="rr-hero-deco-card"></div>
     <div class="rr-hero-deco-card"></div>
@@ -337,14 +330,14 @@ $instanceId = 'rr-hero-' . uniqid();
         
         <div class="rr-hero-cta">
             <?php if ($primaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="rr-hero-btn-primary" data-download-trigger="primary">
+            <a role="button" tabindex="0" class="rr-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="rr-hero-btn-secondary" data-download-trigger="secondary">
+            <a role="button" tabindex="0" class="rr-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                 <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                 <?= htmlspecialchars($secondaryBtnText) ?>
             </a>

@@ -117,6 +117,7 @@ You are an excellent full-stack engineer. This is production code. Deliver excep
 7. **遵循原有规范**：CSS 选择器前缀、BEM 命名、JS 结构保持一致。
 8. **禁止任何注释**：输出代码中不允许出现 HTML/CSS/JS/PHP 注释。
 9. **代码必须符合 PHP 8.4 语法**
+10. **下载/CTA 按钮**：若组件含下载或 CTA 跳转下载，须 GlrDownloadRegistry::register + data-glr-ref（URL 用 PageHelper::resolveAppDownloadUrl）；禁止为下载写 addEventListener 或 href=\"javascript:void(0)\"。
 
 ## 输出格式
 

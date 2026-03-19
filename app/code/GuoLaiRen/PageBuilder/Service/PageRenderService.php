@@ -28,6 +28,10 @@ use Weline\Framework\View\Template;
 
 class PageRenderService
 {
+    /** 与 layout.phtml 一致的公用片段（服务层拼整页时必须显式注入，否则 cleanHtmlDocumentTags* 会剥掉组件内 <head>） */
+    private const SHARED_PARTIAL_HEAD = 'GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml';
+    private const SHARED_PARTIAL_FOOTER = 'GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml';
+
     /** 渲染模式常量 */
     public const MODE_VISUAL = 'visual';   // 可视化编辑模式
     public const MODE_PREVIEW = 'preview'; // 预览模式
@@ -106,6 +110,16 @@ class PageRenderService
     {
         $result = $this->getTemplate()->fetch($templatePath, $this->templateVars);
         return is_string($result) ? $result : '';
+    }
+
+    private function fetchSharedHeadHtml(): string
+    {
+        return trim($this->fetch(self::SHARED_PARTIAL_HEAD));
+    }
+
+    private function fetchSharedFooterHtml(): string
+    {
+        return trim($this->fetch(self::SHARED_PARTIAL_FOOTER));
     }
     
     /**
@@ -1254,7 +1268,11 @@ class PageRenderService
         $pageTitle = $page ? ($page->getData('title') ?: 'Preview') : 'Preview';
         $templateHelper = Template::getInstance();
         $baseCssUrl = $templateHelper->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/' . $styleCode . '/asset/css/home.css');
-        
+        $sharedHeadHtml = $this->fetchSharedHeadHtml();
+        $sharedHeadBlock = $sharedHeadHtml !== '' ? "\n    " . $sharedHeadHtml : '';
+        $sharedFooterHtml = $this->fetchSharedFooterHtml();
+        $sharedFooterBlock = $sharedFooterHtml !== '' ? "\n    " . $sharedFooterHtml : '';
+
         return '<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1266,7 +1284,7 @@ class PageRenderService
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    </style>
+    </style>' . $sharedHeadBlock . '
 </head>
 <body>
     ' . $debugInfo . '
@@ -1274,6 +1292,7 @@ class PageRenderService
     <div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>
     <div class="pb-slot pb-slot-content" data-region="content" data-multiple="true" data-slot-name="Content">' . $contentHtml . '</div>
     <div class="pb-slot pb-slot-footer" data-region="footer" data-multiple="false" data-slot-name="Footer">' . $footerHtml . '</div>
+    ' . $sharedFooterBlock . '
     ' . $dropZoneScripts . '
 </body>
 </html>';
@@ -1308,8 +1327,12 @@ class PageRenderService
         $headerCustomCode = $page->getData(Page::schema_fields_HEADER_CUSTOM_CODE) ?? '';
         $footerCustomCode = $page->getData(Page::schema_fields_FOOTER_CUSTOM_CODE) ?? '';
 
-        $headEnd = (!empty($headerCustomCode) ? "\n    " . $headerCustomCode : '') . "\n</head>";
-        $bodyEnd = (!empty($footerCustomCode) ? "\n    " . $footerCustomCode : '') . "\n</body>";
+        $sharedHeadHtml = $this->fetchSharedHeadHtml();
+        $sharedFooterHtml = $this->fetchSharedFooterHtml();
+        $headEnd = (!empty($sharedHeadHtml) ? "\n    " . $sharedHeadHtml : '')
+            . (!empty($headerCustomCode) ? "\n    " . $headerCustomCode : '') . "\n</head>";
+        $bodyEnd = (!empty($sharedFooterHtml) ? "\n    " . $sharedFooterHtml : '')
+            . (!empty($footerCustomCode) ? "\n    " . $footerCustomCode : '') . "\n</body>";
 
         $headContent = '    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

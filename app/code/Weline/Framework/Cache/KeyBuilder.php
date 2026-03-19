@@ -239,4 +239,32 @@ class KeyBuilder
 
         return self::build('router', 'unified:' . $fullUri . ':' . $method);
     }
+
+    /**
+     * 按「完整请求 URI」（与 WLS 下 WELINE_FULL_REQUEST_URI 形式一致，含 scheme://host[:port]/path?query）
+     * 生成 router 池中与 Core::route 写入相关的键（统一 dispatch 缓存 + url/rule/start + 可选旧版 fpc:）。
+     *
+     * @param list<string> $legacyFpcLangLocals 语言标记列表（与 State::getLangLocal 一致），用于删除旧 fpc: 键
+     * @return list<string>
+     */
+    public static function routerPoolKeysForFullRequestUri(
+        string $fullUri,
+        string $method = 'GET',
+        array $legacyFpcLangLocals = []
+    ): array {
+        $keys = [
+            self::build('router', 'unified:' . $fullUri . ':' . $method),
+            self::build('router', 'url:' . $fullUri . ':' . $method),
+            self::build('router', 'rule:' . $fullUri . ':' . $method),
+            self::build('router', 'start:' . $fullUri . ':' . $method),
+        ];
+        foreach ($legacyFpcLangLocals as $lang) {
+            if (!\is_string($lang)) {
+                continue;
+            }
+            $keys[] = self::build('router', 'fpc:' . $fullUri . ':' . $lang);
+        }
+
+        return $keys;
+    }
 }

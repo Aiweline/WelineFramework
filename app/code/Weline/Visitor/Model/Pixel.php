@@ -321,6 +321,63 @@ class Pixel extends Model
     }
     
     /**
+     * 按 IP 去重统计 UV（独立访客数）
+     * 默认统计按 IP 过滤形成 UV；PV 为同一时间段内该站点总条数（即 UV 访问产生的浏览次数）
+     *
+     * @param int $websiteId 站点ID
+     * @param string|null $startDate 开始时间 Y-m-d H:i:s
+     * @param string|null $endDate 结束时间 Y-m-d H:i:s
+     * @return int
+     */
+    public static function getUvCountByDateRange(int $websiteId, ?string $startDate = null, ?string $endDate = null): int
+    {
+        $model = w_obj(self::class);
+        $connector = $model->getConnection()->getConnector();
+        $prefix = $model->getConnection()->getConfigProvider()->getPrefix();
+        $table = $prefix . self::schema_table;
+        $sql = "SELECT COUNT(DISTINCT `" . self::schema_fields_IP . "`) AS uv FROM `{$table}` WHERE `" . self::schema_fields_WEBSITE_ID . "` = :website_id";
+        $params = [':website_id' => $websiteId];
+        if ($startDate !== null && $startDate !== '') {
+            $sql .= " AND `" . self::schema_fields_CREATED_AT . "` >= :start_date";
+            $params[':start_date'] = $startDate;
+        }
+        if ($endDate !== null && $endDate !== '') {
+            $sql .= " AND `" . self::schema_fields_CREATED_AT . "` <= :end_date";
+            $params[':end_date'] = $endDate;
+        }
+        try {
+            $pdo = $connector->getLink();
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+            return (int)($row['uv'] ?? 0);
+        } catch (\Throwable $e) {
+            return 0;
+        }
+    }
+    
+    /**
+     * 获取指定时间范围内的 PV（页面浏览量，即像素记录条数）
+     * 与 getUvCountByDateRange 同一时间范围时，PV 即为 UV 访问产生的路径浏览次数
+     *
+     * @param int $websiteId 站点ID
+     * @param string|null $startDate 开始时间 Y-m-d H:i:s
+     * @param string|null $endDate 结束时间 Y-m-d H:i:s
+     * @return int
+     */
+    public static function getPvCountByDateRange(int $websiteId, ?string $startDate = null, ?string $endDate = null): int
+    {
+        $model = w_obj(self::class)->reset()->where(self::schema_fields_WEBSITE_ID, $websiteId);
+        if ($startDate !== null && $startDate !== '') {
+            $model->where(self::schema_fields_CREATED_AT, $startDate, '>=');
+        }
+        if ($endDate !== null && $endDate !== '') {
+            $model->where(self::schema_fields_CREATED_AT, $endDate, '<=');
+        }
+        return (int)$model->count();
+    }
+    
+    /**
      * 获取商业价值分析数据（按时间维度）
      * 
      * @param int $websiteId 站点ID

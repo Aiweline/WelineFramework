@@ -33,6 +33,8 @@ $navLinksRaw = $config['navigation.links'] ?? "Programs=>#programs\nResults=>#st
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Join Now';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#cta');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 $accentPrimary = $colors['accent_primary'] ?? '#f97316';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)';
@@ -111,7 +113,7 @@ $instanceId = 'fp-nav-' . uniqid();
                 <?php endforeach; ?>
             </ul>
             <?php if ($showCta === 'yes'): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="fp-header-cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="fp-header-cta">
                 <span><?= htmlspecialchars($ctaText) ?></span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>

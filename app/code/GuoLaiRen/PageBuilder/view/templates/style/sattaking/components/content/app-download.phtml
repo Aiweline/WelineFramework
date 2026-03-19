@@ -91,6 +91,11 @@ foreach ($lines as $line) {
     }
 }
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'sk-download-' . uniqid();
 ?>
 
@@ -316,18 +321,6 @@ $instanceId = 'sk-download-' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <div class="sk-download-container">
         <div class="sk-download-header">
             <div class="sk-download-badge">
@@ -352,8 +345,8 @@ $instanceId = 'sk-download-' . uniqid();
                 <p class="sk-download-card-desc"><?= htmlspecialchars($downloadDesc) ?></p>
                 
                 <div class="sk-download-btns">
-                    <a href="javascript:void(0)" role="button" class="sk-download-btn-primary" data-download-trigger="primary"><?= htmlspecialchars($primaryBtnText) ?></a>
-                    <a href="javascript:void(0)" role="button" class="sk-download-btn-secondary" data-download-trigger="secondary"><?= htmlspecialchars($secondaryBtnText) ?></a>
+                    <a role="button" tabindex="0" class="sk-download-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>"><?= htmlspecialchars($primaryBtnText) ?></a>
+                    <a role="button" tabindex="0" class="sk-download-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>"><?= htmlspecialchars($secondaryBtnText) ?></a>
                 </div>
                 
                 <?php if (!empty($features)): ?>
