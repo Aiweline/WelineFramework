@@ -2370,6 +2370,10 @@ class Domain extends BackendController
 
     /**
      * AJAX: 批量切换域名 DNS 服务器
+     *
+     * 仅调用注册商 {@see \Weline\Websites\Api\DomainRegistrarInterface::updateNameservers} 并写入 Domain.nameservers，
+     * **非** {@see DnsSwitchService::executeDnsSwitch} 全量流水线（无推送记录、无 dns_cutover_complete）。
+     * 购买/迁移场景请用 {@see postSwitchDnsAccount} 或 SSE {@see getDnsSwitchSse}。
      */
     public function postBatchChangeNameservers(): string
     {
@@ -2674,6 +2678,9 @@ class Domain extends BackendController
 
     /**
      * AJAX: 批量切换域名到目标账户（一键切换）
+     *
+     * 仅获取目标 NS 后在注册商侧 {@see \Weline\Websites\Api\DomainRegistrarInterface::updateNameservers}，**非**
+     * {@see DnsSwitchService::executeDnsSwitch}。全量切换请用 {@see postSwitchDnsAccount} / {@see getDnsSwitchSse}。
      */
     public function postBatchSwitchToAccount(): string
     {
@@ -3237,7 +3244,7 @@ class Domain extends BackendController
                 }
 
                 $this->dnsSwitchService->markPoolSwitching($domain->getDomain(), (string) $targetAccount->getRegistrarCode());
-                $result = $this->dnsSwitchService->executeDnsSwitch($domain, $targetAccount);
+                $result = $this->dnsSwitchService->executeDnsSwitchWithStandardOptions($domain, $targetAccount);
 
                 if ($result['success']) {
                     $success++;
@@ -3358,12 +3365,14 @@ class Domain extends BackendController
 
                 $domainName = $domain->getDomain();
 
-                if ((int) $domain->getDnsAccountId() === $targetAccountId) {
+                if ((int) $domain->getDnsAccountId() === $targetAccountId
+                    && (int) $domain->getDnsSwitchPending() === 0
+                    && (int) $domain->getDnsCutoverComplete() === 1) {
                     $skipped++;
                     $sse->sendEvent('step_skip', [
                         'step' => $step, 'total' => $total,
                         'domain' => $domainName,
-                        'message' => __('已是该账户，跳过'),
+                        'message' => __('已是该账户且切换已完成，跳过'),
                         'time' => $ts(),
                     ]);
                     continue;
@@ -3373,7 +3382,7 @@ class Domain extends BackendController
 
                 $this->dnsSwitchService->markPoolSwitching($domainName, $targetCode);
 
-                $result = $this->dnsSwitchService->executeDnsSwitch(
+                $result = $this->dnsSwitchService->executeDnsSwitchWithStandardOptions(
                     $domain,
                     $targetAccount,
                     static function (string $event, array $data) use ($sse, $step, $total, $ts): void {
@@ -3382,7 +3391,12 @@ class Domain extends BackendController
                             'total' => $total,
                             'time' => $ts(),
                         ]));
-                    }
+                    },
+                    [
+                        'is_alive' => static function () use ($sse): bool {
+                            return $sse->isAlive() && !\connection_aborted();
+                        },
+                    ]
                 );
 
                 if ($result['success']) {

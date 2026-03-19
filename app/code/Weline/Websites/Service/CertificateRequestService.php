@@ -8,8 +8,8 @@ use Weline\Framework\App\Env;
 /**
  * 证书申请统一入口
  *
- * 人工申请与自动化任务均经本服务调用 w_query('server', 'requestCertificate', ...)，
- * 保证 webroot、email、challenge_strategy、pool_id/domain_id 等参数与默认值一致，逻辑统一。
+ * 人工申请与自动化任务均经本服务调用 w_query('server', 'requestCertificate', ...)。
+ * 默认使用调用方传入的物理 webroot；仅当显式传入 use_wls_virtual_http01 时才走 WLS 虚拟 HTTP-01（与后台 SSL 默认行为一致）。
  */
 class CertificateRequestService
 {
