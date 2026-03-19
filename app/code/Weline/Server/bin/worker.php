@@ -598,6 +598,17 @@ if ($controlPort > 0) {
                     WlsLogger::info_("收到 cache_clear 命令，已清理缓存");
                     break;
 
+                case \Weline\Server\IPC\ControlMessage::TYPE_PAGEBUILDER_PAGE_INVALIDATE:
+                    $pbWid = (int)($msg['website_id'] ?? 0);
+                    $pbHandle = (string)($msg['handle'] ?? '');
+                    $pbHome = (bool)($msg['is_home_page'] ?? false);
+                    if (\class_exists(\GuoLaiRen\PageBuilder\Controller\Router::class)) {
+                        \GuoLaiRen\PageBuilder\Controller\Router::clearHandleCacheForPage($pbWid, $pbHandle, $pbHome);
+                    }
+                    \Weline\Framework\Manager\ObjectManager::clearInstances();
+                    WlsLogger::info_('收到 pagebuilder_page_invalidate，已清理 PageBuilder handle 缓存并重置 ObjectManager');
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
                     // 非 SSL Worker 不处理证书重载，仅记录
                     break;

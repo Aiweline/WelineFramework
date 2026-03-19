@@ -55,6 +55,8 @@ $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nAdvan
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Join Table';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#register');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 // 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
 $navItems = [];
@@ -349,7 +351,7 @@ $instanceId = 'pa-nav-' . uniqid();
             <?php endforeach; ?>
         </div>
         <?php if ($showCta): ?>
-        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="pa-nav-cta">
+        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="pa-nav-cta">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
             <?= htmlspecialchars($ctaText) ?>
         </a>

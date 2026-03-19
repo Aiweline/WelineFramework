@@ -6,8 +6,6 @@ namespace Weline\Backend\Adapter\Notification;
 
 use Weline\Backend\Api\Notification\ChannelAdapterInterface;
 use Weline\Backend\Enum\NotificationType;
-use Weline\Framework\App\Env;
-use Weline\Framework\Manager\ObjectManager;
 
 class EmailAdapter implements ChannelAdapterInterface
 {
@@ -23,38 +21,31 @@ class EmailAdapter implements ChannelAdapterInterface
 
     public function send(array $notification, array $config): bool
     {
-        $toEmail = '';
-
-        if (isset($notification['contact']['contact_value'])) {
-            $toEmail = $notification['contact']['contact_value'];
-        }
-
-        if (empty($toEmail)) {
-            $toEmail = $config['to_email'] ?? '';
-        }
-
-        if (empty($toEmail)) {
+        $toEmail = trim((string) ($config['to_email'] ?? ''));
+        if ($toEmail === '') {
             return false;
         }
 
         $message = $this->formatMessage($notification);
+        $params = [
+            'to' => $toEmail,
+            'subject' => $message['subject'],
+            'content' => $message['body'],
+            'module' => 'Weline_Smtp',
+        ];
+        $senderCode = $config['sender_code'] ?? $config['code'] ?? null;
+        if ($senderCode !== null && $senderCode !== '') {
+            $params['sender_code'] = $senderCode;
+        }
 
         try {
-            $mailer = ObjectManager::getInstance(\Weline\Smtp\Helper\Mailer::class);
-            if (!$mailer) {
-                w_log_warning('EmailAdapter: Mailer not available', [], 'email');
-                return false;
+            $result = w_query('smtp', 'send', $params);
+            $success = (bool) ($result['success'] ?? false);
+            if (!$success) {
+                w_log_warning('EmailAdapter::send failed: ' . ($result['message'] ?? 'unknown'), [], 'notification');
             }
-
-            $mailer->send(
-                $toEmail,
-                $message['subject'],
-                $message['body'],
-                true
-            );
-
-            return true;
-        } catch (\Exception $e) {
+            return $success;
+        } catch (\Throwable $e) {
             w_log_error('EmailAdapter::send failed: ' . $e->getMessage(), [], 'notification');
             return false;
         }
@@ -122,7 +113,7 @@ HTML;
 
     public function getConfigFields(): array
     {
-        return [
+        $fields = [
             [
                 'name' => 'to_email',
                 'label' => __('收件邮箱'),
@@ -131,5 +122,31 @@ HTML;
                 'placeholder' => 'admin@example.com',
             ],
         ];
+        if (function_exists('w_query')) {
+            try {
+                $senders = w_query('smtp', 'getSenders', []);
+                if (!empty($senders)) {
+                    $options = [];
+                    foreach ($senders as $s) {
+                        $code = $s['code'] ?? '';
+                        if ($code !== '') {
+                            $options[$code] = ($s['name'] ?? $code) . ' (' . $code . ')';
+                        }
+                    }
+                    if (!empty($options)) {
+                        $fields[] = [
+                            'name' => 'sender_code',
+                            'label' => __('发件人（可选）'),
+                            'type' => 'select',
+                            'required' => false,
+                            'placeholder' => __('使用默认'),
+                            'options' => $options,
+                        ];
+                    }
+                }
+            } catch (\Throwable $e) {
+            }
+        }
+        return $fields;
     }
 }

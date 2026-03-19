@@ -55,6 +55,11 @@ $primaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($c
 $secondaryBtnText = $config['cta.secondary_text'] ?? 'Download App';
 $secondaryBtnUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['cta.secondary_url'] ?? '#download');
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $statsRaw = $config['stats.items'] ?? "\$10M+|Prize Pools\n500K+|Players\n1000+|Daily Tournaments\n24/7|Action";
 $stats = [];
 foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
@@ -272,18 +277,6 @@ $instanceId = 'pa-hero-' . uniqid();
             #<?= $instanceId ?> .pa-hero-stat::after { display: none; }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <!-- Floating card suit decorations -->
     <span class="pa-hero-suit">♠</span>
     <span class="pa-hero-suit">♥</span>
@@ -302,13 +295,13 @@ $instanceId = 'pa-hero-' . uniqid();
         
         <div class="pa-hero-cta">
             <?php if ($primaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="pa-hero-btn-primary" data-download-trigger="primary">
+            <a role="button" tabindex="0" class="pa-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                 <?= htmlspecialchars($primaryBtnText) ?>
             </a>
             <?php endif; ?>
             
             <?php if ($secondaryBtnText): ?>
-            <a href="javascript:void(0)" role="button" class="pa-hero-btn-secondary" data-download-trigger="secondary">
+            <a role="button" tabindex="0" class="pa-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                 <?= htmlspecialchars($secondaryBtnText) ?>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>

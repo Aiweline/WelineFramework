@@ -89,6 +89,8 @@ $downloadBtnDisplayRaw = tpmst_hs_getConfig($config, 'download_btn.display', 'ye
 $downloadBtnDisplay = ($downloadBtnDisplayRaw === 'yes' || $downloadBtnDisplayRaw === true || $downloadBtnDisplayRaw === 'true' || $downloadBtnDisplayRaw === 0 || $downloadBtnDisplayRaw === '0');
 $downloadBtnAlt = (string)(tpmst_hs_getConfig($config, 'download_btn.alt', 'DOWNLOAD APP') ?? '');
 $downloadBtnUrl = tpmst_hs_getConfig($config, 'download_btn.url', '#download');
+$downloadHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
+$downloadRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadHref, 'url');
 
 // 布局配置
 $sliderClasses = tpmst_hs_getConfig($config, 'layout.slider_classes', 'rs-slider slider-style2');
@@ -201,14 +203,6 @@ $instanceId = 'tpmst-hero-slider-' . uniqid();
             50% { transform: scale(1.02); }
         }
     </style>
-    <script>
-    (function(){
-        var downloadUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="url"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = downloadUrl; });
-        });
-    })();
-    </script>
     <div class="<?= htmlspecialchars($fullSliderClasses) ?>">
         <div class="slider slider-slide-1">
             <div class="slider-item">
@@ -234,7 +228,7 @@ $instanceId = 'tpmst-hero-slider-' . uniqid();
                             </picture>
                         </div>
                         <?php if ($downloadBtnDisplay && $finalDownloadBtn): ?>
-                        <a href="javascript:void(0)" role="button" class="download-btn" data-download-trigger="url">
+                        <a role="button" tabindex="0" class="download-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadRef) ?>">
                             <img class="download-icon animation-scale lazy-loading" 
                                  src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
                                  data-src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
