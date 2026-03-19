@@ -11,6 +11,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Database\Connection\Api\Sql;
 
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
+
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\ConnectionInterface as DbConnectionInterface;
 use Weline\Framework\Database\Exception\DbException;
@@ -419,6 +421,16 @@ trait SqlTrait
     }
 
     /**
+     * 按 SELECT 列表顶层逗号分割（忽略括号内逗号），与 Pgsql\Query::splitSelectFieldList 语义一致
+     *
+     * @return list<string>
+     */
+    protected function splitSqlSelectFieldList(string $fields): array
+    {
+        return SelectFieldListSplitter::split($fields);
+    }
+
+    /**
      * 清理 AST 字段表达式：移除引号但保留函数调用和结构
      * AST 是操作结构，不应该包含方言特定的语法信息（如引号）
      * 
@@ -428,23 +440,23 @@ trait SqlTrait
     protected function cleanAstFields(string $fields): string
     {
         $fields = trim($fields);
-        
+
         // 如果是 *，直接返回
         if ($fields === '*') {
             return $fields;
         }
-        
-        // 处理逗号分隔的多个字段
+
         if (str_contains($fields, ',')) {
-            $fieldList = array_map('trim', explode(',', $fields));
+            // 处理逗号分隔的多个字段（不可简单 explode：COALESCE(a, 0) 等实参含逗号）
+            $fieldList = $this->splitSqlSelectFieldList($fields);
             $cleanedFields = [];
             foreach ($fieldList as $field) {
                 $cleanedFields[] = $this->cleanSingleField($field);
             }
+
             return implode(', ', $cleanedFields);
         }
-        
-        // 单个字段
+
         return $this->cleanSingleField($fields);
     }
     
