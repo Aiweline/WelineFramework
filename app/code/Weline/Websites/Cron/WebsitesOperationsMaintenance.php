@@ -4,9 +4,9 @@ declare(strict_types=1);
 /**
  * 合并调度：站点运维四块
  * ① DNS/CDN 自动切换（购买后待切换队列）
- * ② 已绑定站点的域名健康检查（可访问性 + HTTPS 状态）
+ * ② 已绑定站点的域名健康检查（连通性探测 + 按证书管理表同步 HTTPS 开关，二者解耦）
  * ③ 整点：根域 NS 归属检测与 DNS 服务商识别
- * ④ 整点：按证书有效性同步站点 HTTPS 开关
+ * ④ 整点：按证书管理表同步站点 HTTPS 开关（不依赖 HTTPS 请求校验证书）
  */
 
 namespace Weline\Websites\Cron;
@@ -22,10 +22,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
         'php bin/w cron:test --task=websites_operations_maintenance --domain=example.com -v --hourly',
     ],
     manual_help: [
-        '① 每 5 分钟：处理购买后待切换 DNS/CDN 的根域，将 NS 切到目标服务商。',
-        '② 每 5 分钟：对已绑定网站的域名（website_domain）做 HTTP(S) 探测，更新健康状态与 HTTPS 开关，并同步根域 Domain / 域名池 DomainPool 连通性与 HTTPS 状态。',
-        '③ 仅整点：检测根域 Nameserver 归属，识别 DNS 服务商（如 Cloudflare）。',
-        '④ 仅整点：根据证书有效性同步各站点域名的 HTTPS 启用状态（证书无效则回退 HTTP）。',
+        '① 每 5 分钟：处理购买后待切换 DNS/CDN 的根域（DnsSwitchService NS 预检 + 可选 CDN verify）。',
+        '② 每 5 分钟：健康检查更新可访问性；根域建站锁定（cron_resolved）的站点绑定域名可跳过探测与写库（见 HealthCheckService）。',
+        '③ 仅整点：根域 NS 检测；cron_resolved 的根域跳过。',
+        '④ 仅整点：HttpsSync；建站锁定的绑定域名跳过。',
     ],
 )]
 class WebsitesOperationsMaintenance implements CronTaskInterface

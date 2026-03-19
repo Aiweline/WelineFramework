@@ -18,7 +18,8 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     manual_help: [
         '① 先执行 DnsCdnAutoSwitch：识别需设置 DNS 的根域（dns_switch_deferred/ dns_switch_pending），调用统一切换逻辑并标记根域与子域 DNS/CDN 完成。',
         '② 脏数据修复与订单推进：读取待处理的域名生命周期订单，按状态推进（如同步根域、创建子域入池、修正脏数据、标记完成）。',
-        '实际解析与证书由「DNS 解析与子域入池」「子域 HTTPS 证书维护」执行。',
+        '根域 cron_resolved=1 时不再推进订单（证书与健康由白名单任务维护）。',
+        'VERIFY 步仅检查 HTTP 连通性（HealthCheckService::checkDomain(..., false)）；不通过 HTTPS 请求判断证书是否有效。证书由「子域 HTTPS 证书维护」与 SSL 证书管理表处理。',
     ],
 )]
 class DomainLifecycleOrchestration implements CronTaskInterface

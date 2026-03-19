@@ -20,7 +20,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     description: '购买后 DNS/CDN 自动切换：将「延迟切换」中已注册完成的根域转为待执行，再对「待执行」根域调用 DNS 接口把 Nameserver 切到目标服务商。',
     examples: ['php bin/w cron:test --task=dns_cdn_auto_switch --domain=example.com -v'],
     manual_help: [
-        '逻辑：① dns_switch_deferred=1 且生命周期已完成的根域 → 置为 dns_switch_pending ② dns_switch_pending=1 的根域 → 调用域名商/DNS 接口切换 NS，成功后清标记。',
+        '逻辑：① dns_switch_deferred=1 且生命周期已完成的根域 → 置为 dns_switch_pending ② dns_switch_pending=1 的根域 → DnsSwitchService：同服务商跳过改 NS；异注册商时若注册商侧 NS 已与目标一致也跳过 updateNameservers；成功后 dns_cutover_complete=1，并默认传入 cdn_account + verify_cdn（若根域已绑 CDN 账户）。',
         '--domain= 仅处理该根域；不指定则处理全部待切换。',
     ],
 )]
@@ -202,6 +202,15 @@ class DnsCdnAutoSwitch
         // dns_switch_pending 由 DnsSwitchService 在切换成功时置 0
         // 失败时不触碰标记，下次 cron 继续重试
         $switchOptions = $this->buildDnsSwitchWaitOptions($targetAccount);
+        $cdnId = (int) $domain->getCdnAccountId();
+        if ($cdnId > 0) {
+            $cdnAcc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $cdnAcc->load($cdnId);
+            if ((int) $cdnAcc->getAccountId() > 0) {
+                $switchOptions['cdn_account'] = $cdnAcc;
+                $switchOptions['verify_cdn'] = true;
+            }
+        }
         $result = $switchService->executeDnsSwitch($domain, $targetAccount, null, $switchOptions);
         WebsitesCronTestContext::detail('executeDnsSwitch', ['domain' => $domainName, 'result' => $result]);
 

@@ -167,6 +167,21 @@ class DomainPool extends Model
             $this->setData(self::schema_fields_ROOT_DOMAIN, $rootDomain);
         }
     }
+
+    public function save_after(): void
+    {
+        parent::save_after();
+        try {
+            $pid = (int) $this->getData(self::schema_fields_PARENT_DOMAIN_ID);
+            if ($pid > 0 && $this->isSiteReady()) {
+                \Weline\Framework\Manager\ObjectManager::getInstance(
+                    \Weline\Websites\Service\DomainCronLockService::class
+                )->evaluateParentAfterPoolChange($pid);
+            }
+        } catch (\Throwable) {
+            // 避免保存失败
+        }
+    }
     
     /**
      * 使用 DomainParserService 解析根域名
@@ -877,6 +892,13 @@ class DomainPool extends Model
         /** @var self $q1 */
         $q1 = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
         $primary = $q1->clearQuery()
+            ->joinModel(
+                Domain::class,
+                'pd',
+                'main_table.' . self::schema_fields_PARENT_DOMAIN_ID . '=pd.' . Domain::schema_fields_ID,
+                'inner'
+            )
+            ->where('pd.' . Domain::schema_fields_DNS_CUTOVER_COMPLETE, 1)
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 0)
             ->where(self::schema_fields_SITE_CREATED, 0)
@@ -899,6 +921,13 @@ class DomainPool extends Model
         /** @var self $q2 */
         $q2 = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
         $b = $q2->clearQuery()
+            ->joinModel(
+                Domain::class,
+                'pd',
+                'main_table.' . self::schema_fields_PARENT_DOMAIN_ID . '=pd.' . Domain::schema_fields_ID,
+                'inner'
+            )
+            ->where('pd.' . Domain::schema_fields_DNS_CUTOVER_COMPLETE, 1)
             ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
             ->where(self::schema_fields_SITE_READY, 0)
             ->where(self::schema_fields_SITE_CREATED, 0)

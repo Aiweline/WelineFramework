@@ -12,6 +12,7 @@ namespace Weline\Websites\Cron;
 use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainRootRegistrationSelfCorrectService;
 use Weline\Websites\Service\SubdomainGeneratorService;
@@ -65,6 +66,7 @@ class DomainResolveCheck
             $loopPromoted = 0;
 
             $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             foreach ($domains as $row) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -78,6 +80,10 @@ class DomainResolveCheck
                 $dn = $domain->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
                     WebsitesCronTestContext::skipNote($dn, 'root resolve check');
+                    continue;
+                }
+                if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($dn)) {
+                    WebsitesCronTestContext::skipNote($dn, 'cron_resolved lock');
                     continue;
                 }
                 WebsitesCronTestContext::detail('root_resolve_row', ['domain' => $dn, 'site_ready' => $domain->isSiteReady()]);
