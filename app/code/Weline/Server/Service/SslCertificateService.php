@@ -2045,6 +2045,11 @@ CNF;
     public const CHALLENGE_AUTO = 'auto';
 
     /**
+     * Webroot 占位符：使用 WLS 虚拟 HTTP-01 校验（校验码存 generated/acme-http01，由 worker 直接响应）
+     */
+    public const WEBROOT_WLS_VIRTUAL = '__wls_virtual__';
+
+    /**
      * 为域名申请证书
      *
      * @param string $domain 域名
@@ -2587,7 +2592,7 @@ CNF;
 
                     $challengeResult = $strategy === self::CHALLENGE_DNS01
                         ? $this->performDns01Challenge($auth, $authUrl, $accountUrl, $domain, $poolId, $domainId, $onProgress)
-                        : $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $webroot, $onProgress);
+                        : $this->performHttp01Challenge($auth, $authUrl, $accountUrl, $domain, $webroot, $onProgress);
 
                     if (!($challengeResult['validated'] ?? false)) {
                         $allChallengesOk = false;
@@ -2677,6 +2682,7 @@ CNF;
         array $auth,
         string $authUrl,
         string $accountUrl,
+        string $domain,
         string $webroot,
         ?\Closure $onProgress = null
     ): array {
@@ -2697,9 +2703,20 @@ CNF;
             }
         };
 
+        $useWlsVirtual = $webroot === '' || $webroot === self::WEBROOT_WLS_VIRTUAL;
+        $token = $httpChallenge['token'];
+
         $onProg(__('正在创建 HTTP-01 验证文件'), ['progress' => 35]);
-        if (!$this->createHttpChallenge($webroot, $httpChallenge['token'], $httpChallenge['token'])) {
-            return ['validated' => false, 'error' => __('创建验证文件失败')];
+        if ($useWlsVirtual) {
+            $thumbprint = $this->getAccountThumbprint();
+            $keyAuth = $token . '.' . $thumbprint;
+            if (!$this->registerWlsHttp01Challenge($domain, $token, $keyAuth)) {
+                return ['validated' => false, 'error' => __('登记 WLS 虚拟校验失败')];
+            }
+        } else {
+            if (!$this->createHttpChallenge($webroot, $token, $token)) {
+                return ['validated' => false, 'error' => __('创建验证文件失败')];
+            }
         }
 
         $onProg(__('正在通知 CA 服务器进行验证'), ['progress' => 50]);
@@ -2726,7 +2743,11 @@ CNF;
         }
 
         $onProg(__('正在清理验证文件'), ['progress' => 90]);
-        $this->cleanupHttpChallenge($webroot, $httpChallenge['token']);
+        if ($useWlsVirtual) {
+            $this->cleanupWlsHttp01Challenge($domain);
+        } else {
+            $this->cleanupHttpChallenge($webroot, $token);
+        }
 
         $error = '';
         if (!$validated && $lastAuth && ($lastAuth['status'] ?? '') === 'invalid') {
@@ -3234,7 +3255,44 @@ CNF;
             @\unlink($file);
         }
     }
-    
+
+    /**
+     * 域名转 WLS 虚拟 HTTP-01 存储文件名（与 worker 内规则一致）
+     */
+    public static function domainToAcmeChallengeFilename(string $domain): string
+    {
+        $s = \strtolower(\trim($domain));
+        $s = \str_replace('.', '_', $s);
+        return \preg_replace('/[^a-z0-9_]/', '', $s) ?: 'default';
+    }
+
+    /**
+     * 登记 WLS 虚拟 HTTP-01 校验（写入 generated/acme-http01，由 worker 响应 /.well-known/acme-challenge/<token>）
+     */
+    protected function registerWlsHttp01Challenge(string $domain, string $token, string $keyAuth): bool
+    {
+        $base = \defined('BP') ? \rtrim(BP, \DIRECTORY_SEPARATOR) : \dirname(__DIR__, 4);
+        $dir = $base . DS . 'generated' . DS . 'acme-http01' . DS;
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        $file = $dir . self::domainToAcmeChallengeFilename($domain) . '.json';
+        $data = ['token' => $token, 'keyAuth' => $keyAuth];
+        return (bool) \file_put_contents($file, \json_encode($data, JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * 清理 WLS 虚拟 HTTP-01 校验文件（验证完成后必须删除）
+     */
+    protected function cleanupWlsHttp01Challenge(string $domain): void
+    {
+        $base = \defined('BP') ? \rtrim(BP, \DIRECTORY_SEPARATOR) : \dirname(__DIR__, 4);
+        $file = $base . DS . 'generated' . DS . 'acme-http01' . DS . self::domainToAcmeChallengeFilename($domain) . '.json';
+        if (\is_file($file)) {
+            @\unlink($file);
+        }
+    }
+
     /**
      * 通知验证
      */

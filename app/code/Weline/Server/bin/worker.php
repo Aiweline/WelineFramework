@@ -1782,6 +1782,40 @@ function handleRequest(
         }
     }
     // ========== Origin Token 回源校验结束 ==========
+
+    // ========== ACME HTTP-01 校验（WLS 虚拟：从 generated/acme-http01 按域名返回 keyAuth，验证完由证书流程删除） ==========
+    if ($method === 'GET' && \preg_match('#^/\.well-known/acme-challenge/([^/]+)/?$#', $uri, $acmeMatches)) {
+        $requestToken = $acmeMatches[1];
+        $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+        if (\strpos($hostHeader, ':') !== false) {
+            $hostHeader = \trim((string)\explode(':', $hostHeader, 2)[0]);
+        }
+        $safeDomain = \preg_replace('/[^a-z0-9_]/', '', \str_replace('.', '_', \strtolower($hostHeader)));
+        $safeDomain = $safeDomain !== '' ? $safeDomain : 'default';
+        if (\defined('BP')) {
+            $acmeFile = \rtrim(BP, \DIRECTORY_SEPARATOR) . \DIRECTORY_SEPARATOR . 'generated' . \DIRECTORY_SEPARATOR . 'acme-http01' . \DIRECTORY_SEPARATOR . $safeDomain . '.json';
+            if (\is_file($acmeFile)) {
+                $json = @\file_get_contents($acmeFile);
+                if ($json !== false) {
+                    $data = \json_decode($json, true);
+                    if (\is_array($data) && isset($data['keyAuth']) && \is_string($data['keyAuth'])
+                        && (string)($data['token'] ?? '') === (string)$requestToken) {
+                        $body = $data['keyAuth'];
+                        $len = \strlen($body);
+                        $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
+                        $hasClose = \stripos($rawRequest, 'Connection: close') !== false;
+                        $keepAlive = $isHttp11 && !$hasClose;
+                        return $keepAlive
+                            ? "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: keep-alive\r\n\r\n{$body}"
+                            : "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=UTF-8\r\nCache-Control: no-store\r\nContent-Length: {$len}\r\nConnection: close\r\n\r\n{$body}";
+                    }
+                }
+            }
+        }
+        $notFoundBody = 'ACME challenge not found';
+        return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: " . \strlen($notFoundBody) . "\r\nConnection: close\r\n\r\n{$notFoundBody}";
+    }
+    // ========== ACME HTTP-01 校验结束 ==========
     
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticResponse = handleStaticFile($uri, $rawRequest);
