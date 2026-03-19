@@ -25,6 +25,17 @@
             "sort_order": 20,
             "compatible_styles": ["*"],
             "file": "feature-cards.phtml"
+        },
+        "legal-content": {
+            "name": "法律文档正文",
+            "name_en": "Legal Content",
+            "description": "隐私政策/服务条款等；默认段落由布局 JSON 配置，页面 content 可为空",
+            "category": "content",
+            "region": "content",
+            "type": "section",
+            "sort_order": 35,
+            "compatible_styles": ["*"],
+            "file": "legal-content.phtml"
         }
     }
 }

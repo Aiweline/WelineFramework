@@ -400,7 +400,7 @@ class TemplateValidator
                 continue; // 已在 validateComponentConfig 中报告
             }
             
-            $filePath = $this->pathResolver->getComponentFilePath($styleCode, $file);
+            $filePath = $this->pathResolver->resolveComponentFilesystemPath($styleCode, $file);
             if (!is_file($filePath)) {
                 $this->errors[] = "组件 '{$code}' 的文件不存在: {$file}";
             }
