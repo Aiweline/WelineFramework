@@ -23,6 +23,7 @@ use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPoolFlowLog;
 use Weline\Websites\Service\CertificateRequestService;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -34,7 +35,8 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     description: '子域 HTTPS 证书申请：从池内取生命周期 origin_ready 或 cert_pending 的子域，按队列逐个发起 ACME 申请（HTTP-01 或 DNS-01），成功后更新为可建站。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
     manual_help: [
-        '逻辑：取待申请证书的子域（单域或泛域策略），同步阻塞直至当前域名申请完成；校验 HTTPS 可访问后更新 https_status、site_ready。日志写 domain_pool_cert。',
+        '逻辑：取待申请证书的子域（单域或泛域策略），同步阻塞直至当前域名申请完成；CA 成功后按证书管理数据更新 https_status、site_ready（不以 HTTPS 连通性探测判定证书状态）。日志写 domain_pool_cert。',
+        '父根域 dns_cutover_complete=0 时不会进入队列；根域 cron_resolved=1 时跳过申请（建站已锁定）。',
         '--domain= 仅处理该子域（FQDN）；不指定则按队列处理。',
     ],
 )]
@@ -98,7 +100,12 @@ class DomainPoolCertificateRequest
             $this->echoLine($hint);
             w_log_info('[DomainPoolCertificateRequest] ' . $hint, [], 'domain_pool_cert');
 
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
             foreach ($domains as $row) {
+                if ($cronLock->shouldSkipNonCertificateWorkForPoolRow($row)) {
+                    $results['skipped']++;
+                    continue;
+                }
                 $fq = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
                 $rt = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
                 WebsitesCronTestContext::detail('DomainPoolCertificateRequest.row', [
@@ -113,8 +120,9 @@ class DomainPoolCertificateRequest
                 $results['skipped'] += $singleResult['skipped'];
             }
 
-            $summary = __('域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个', [
+            $summary = __('域名池证书申请完成：检查 %{1} 个，跳过 %{2} 个，申请 %{3} 个，成功 %{4} 个，失败 %{5} 个', [
                 $results['checked'],
+                $results['skipped'],
                 $results['requested'],
                 $results['success'],
                 $results['failed'],
@@ -220,43 +228,27 @@ class DomainPoolCertificateRequest
             $resultMessage = (string) ($result['message'] ?? '');
 
             if ($success) {
-                if (!$isWildcard && !$this->validateHttpsAccess($domain)) {
-                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_PENDING);
-                    $poolDomain->setHttpsError((string)__('证书已签发，HTTPS 连通性校验未通过，等待下次检测'));
-                    $poolDomain->setSiteReady(false);
-                    $poolDomain->save();
+                $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+                $poolDomain->setHttpsError('');
+                $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
+                $poolDomain->calculateSiteReady();
+                $poolDomain->save();
+                ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+                    $poolId,
+                    DomainPoolFlowLog::KIND_CERT_OK,
+                    (string) __('证书有效：%{1}', [$requestDomain]),
+                );
+                if ($poolDomain->isSiteReady()) {
                     ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
                         $poolId,
-                        DomainPoolFlowLog::KIND_CERT_OK,
-                        (string) __('证书已签发，HTTPS 校验待通过：%{1}', [$requestDomain]),
+                        DomainPoolFlowLog::KIND_SITE_READY,
+                        (string) __('已满足可建站条件'),
                     );
-                    $line = "[{$requestDomain}] " . __('CA 返回成功，但 HTTPS 连通性校验未通过，已标记待下次检测');
-                    $processLogs[] = $line;
-                    $this->echoLine($line);
-                    w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功但 HTTPS 校验未通过，保持待检测', [$requestDomain]), [], 'domain_pool_cert');
-                } else {
-                    $poolDomain->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
-                    $poolDomain->setHttpsError('');
-                    $poolDomain->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
-                    $poolDomain->calculateSiteReady();
-                    $poolDomain->save();
-                    ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
-                        $poolId,
-                        DomainPoolFlowLog::KIND_CERT_OK,
-                        (string) __('证书有效：%{1}', [$requestDomain]),
-                    );
-                    if ($poolDomain->isSiteReady()) {
-                        ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
-                            $poolId,
-                            DomainPoolFlowLog::KIND_SITE_READY,
-                            (string) __('已满足可建站条件'),
-                        );
-                    }
-                    $line = "[{$requestDomain}] " . __('证书申请成功，已更新 HTTPS 状态与可建站');
-                    $processLogs[] = $line;
-                    $this->echoLine($line);
-                    w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功，已更新为可建站', [$requestDomain]), [], 'domain_pool_cert');
                 }
+                $line = "[{$requestDomain}] " . __('证书申请成功，已更新 HTTPS 状态与可建站');
+                $processLogs[] = $line;
+                $this->echoLine($line);
+                w_log_info('[DomainPoolCertificateRequest] ' . __('证书申请结束：%{1}，成功，已更新为可建站', [$requestDomain]), [], 'domain_pool_cert');
                 $counter['success']++;
             } else {
                 $counter['failed']++;
@@ -353,24 +345,5 @@ class DomainPoolCertificateRequest
         $line = __('泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效', [\count($rows)]);
         $this->echoLine($line);
         w_log_info('[DomainPoolCertificateRequest] ' . $line, [], 'domain_pool_cert');
-    }
-
-    private function validateHttpsAccess(string $domain): bool
-    {
-        $url = 'https://' . $domain;
-        $ch = \curl_init($url);
-        if ($ch === false) {
-            return false;
-        }
-        \Weline\Websites\Service\HealthCheckService::applyLocalEndpointProbeToCurl($ch, $url);
-        \curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        \curl_setopt($ch, CURLOPT_NOBODY, true);
-        \curl_setopt($ch, CURLOPT_TIMEOUT, 8);
-        \curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
-        \curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        @\curl_exec($ch);
-        $httpCode = (int) \curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        \curl_close($ch);
-        return $httpCode >= 200 && $httpCode < 500;
     }
 }

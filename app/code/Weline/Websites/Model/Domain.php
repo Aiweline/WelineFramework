@@ -36,6 +36,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_resolve_status', columns: ['resolve_status'])]
 #[Index(name: 'idx_https_status', columns: ['https_status'])]
 #[Index(name: 'idx_site_ready', columns: ['site_ready'])]
+#[Index(name: 'idx_cron_resolved', columns: ['cron_resolved'])]
+#[Index(name: 'idx_dns_cutover_complete', columns: ['dns_cutover_complete'])]
 class Domain extends Model
 {
     public const schema_table = 'weline_websites_domain';
@@ -134,6 +136,15 @@ class Domain extends Model
     public const schema_fields_CONNECTIVITY_CHECKED_AT = 'connectivity_checked_at';
     #[Col('text', nullable: true, comment: '连通性详情（hover 展示）')]
     public const schema_fields_CONNECTIVITY_DETAIL = 'connectivity_detail';
+
+    #[Col('smallint', 1, nullable: true, default: 0, comment: '1=默认可建站子域已全部就绪，非证书类定时任务不再处理该根域')]
+    public const schema_fields_CRON_RESOLVED = 'cron_resolved';
+
+    #[Col('datetime', nullable: true, comment: 'cron_resolved 置位时间')]
+    public const schema_fields_CRON_RESOLVED_AT = 'cron_resolved_at';
+
+    #[Col('smallint', 1, nullable: true, default: 1, comment: '1=DNS 切换流程已完成或未要求切换，允许进入证书申请；0=待切换/切换中')]
+    public const schema_fields_DNS_CUTOVER_COMPLETE = 'dns_cutover_complete';
 
     // 状态常量
     public const STATUS_ACTIVE = 'active';
@@ -375,6 +386,53 @@ class Domain extends Model
     {
         $this->setData(self::schema_fields_DNS_SWITCH_DEFERRED, $value);
         return $this;
+    }
+
+    public function getCronResolved(): int
+    {
+        return (int) ($this->getData(self::schema_fields_CRON_RESOLVED) ?? 0);
+    }
+
+    public function setCronResolved(int $value): self
+    {
+        $this->setData(self::schema_fields_CRON_RESOLVED, $value);
+        return $this;
+    }
+
+    public function isCronResolved(): bool
+    {
+        return $this->getCronResolved() === 1;
+    }
+
+    public function getCronResolvedAt(): ?string
+    {
+        $v = $this->getData(self::schema_fields_CRON_RESOLVED_AT);
+
+        return ($v !== null && $v !== '') ? (string) $v : null;
+    }
+
+    public function setCronResolvedAt(?string $datetime): self
+    {
+        $this->setData(self::schema_fields_CRON_RESOLVED_AT, $datetime);
+        return $this;
+    }
+
+    public function getDnsCutoverComplete(): int
+    {
+        $v = $this->getData(self::schema_fields_DNS_CUTOVER_COMPLETE);
+
+        return $v === null || $v === '' ? 1 : (int) $v;
+    }
+
+    public function setDnsCutoverComplete(int $value): self
+    {
+        $this->setData(self::schema_fields_DNS_CUTOVER_COMPLETE, $value);
+        return $this;
+    }
+
+    public function isDnsCutoverComplete(): bool
+    {
+        return $this->getDnsCutoverComplete() === 1;
     }
 
     public function getResolveStatus(): string

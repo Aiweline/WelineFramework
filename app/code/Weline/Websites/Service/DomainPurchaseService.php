@@ -639,6 +639,35 @@ class DomainPurchaseService
                 }
             }
 
+            // 未显式选 CDN 账户时：非 Cloudflare DNS 可绑定 env 默认 CDN 账户（CF 由 DNS 适配器与 verify_cdn 处理，不重复绑账户）
+            $dnsProvLower = \strtolower(\trim((string) $rootDomain->getDnsProvider()));
+            $isCfDns = ($dnsProvLower === 'cloudflare');
+            if ($cdnChoice !== 'provider_account' || (int) $rootDomain->getCdnAccountId() <= 0) {
+                if (!$isCfDns) {
+                    $defCdnId = (int) (Env::module_env('Weline_Websites', 'default_cdn_account_id') ?? 0);
+                    if ($defCdnId > 0) {
+                        $cdnAcc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+                        $cdnAcc->load($defCdnId);
+                        if ((int) $cdnAcc->getAccountId() > 0) {
+                            $rootDomain->setCdnAccountId($defCdnId);
+                            $defProv = \strtolower(\trim((string) (Env::module_env('Weline_Websites', 'default_cdn_provider') ?? ''))));
+                            $rootDomain->setCdnProvider($defProv !== '' ? $defProv : \strtolower((string) $cdnAcc->getRegistrarCode()));
+                            w_log_info(
+                                __('[DomainPurchase] %{1} 已绑定默认 CDN 账户 ID=%{2}', [$rootDomain->getDomain(), (string) $defCdnId]),
+                                [],
+                                'domain_purchase'
+                            );
+                        } else {
+                            w_log_warning(
+                                __('[DomainPurchase] default_cdn_account_id=%{1} 不存在，跳过默认 CDN 绑定', [(string) $defCdnId]),
+                                [],
+                                'domain_purchase'
+                            );
+                        }
+                    }
+                }
+            }
+
             $needSwitch = false;
             if ($dnsChoice === 'provider_account' && $selectedDnsProvider !== '' && $selectedDnsAccountId > 0) {
                 if ($selectedDnsProvider !== $currentNsProvider) {
@@ -649,6 +678,13 @@ class DomainPurchaseService
                 if ($selectedCdnProvider !== $currentNsProvider) {
                     $needSwitch = true;
                 }
+            }
+
+            // DNS 切换门闸：待切换完成前不允许进入证书申请队列（dns_cutover_complete=0）
+            if ($needSwitch) {
+                $rootDomain->setDnsCutoverComplete(0);
+            } else {
+                $rootDomain->setDnsCutoverComplete(1);
             }
 
             // 购买后不立即执行 DNS/CDN 切换：域名可能仍在注册中，等注册完成由定时任务自动处理
