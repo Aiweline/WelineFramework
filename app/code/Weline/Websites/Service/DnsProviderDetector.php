@@ -393,4 +393,29 @@ class DnsProviderDetector
                 && !$this->isOriginalProvider($configuredDnsCode, $registrarCode)
             );
     }
+
+    /**
+     * 公网 NS 识别出的服务商是否与「配置的 DNS 管理账户」所属服务商一致（用于运维告警，避免误判）。
+     *
+     * 例：GName 账户下域名仍使用注册商默认 share-dns 时，探测为 share_dns，与账户 registrar gname 视为一致。
+     */
+    public function liveProviderMatchesDnsAccountRegistrar(string $detectedProvider, string $dnsAccountRegistrarCode): bool
+    {
+        $detected = \strtolower(\trim($detectedProvider));
+        $accountCode = \strtolower(\trim($dnsAccountRegistrarCode));
+        if ($detected === '' || $accountCode === '') {
+            return true;
+        }
+        if ($detected === 'unknown') {
+            return true;
+        }
+        if ($detected === $accountCode) {
+            return true;
+        }
+        if ($accountCode === 'gname' && $detected === 'share_dns') {
+            return true;
+        }
+
+        return false;
+    }
 }
