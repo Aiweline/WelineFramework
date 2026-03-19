@@ -371,32 +371,38 @@ class WebsiteDomain extends Model
     public function hasValidCertificate(): bool
     {
         $certId = $this->getCertId();
-        if (!$certId) {
-            return false;
-        }
-        
         try {
-            // 检查证书状态
             if (\class_exists(\Weline\Server\Model\SslCertificate::class)) {
-                /** @var \Weline\Server\Model\SslCertificate $certModel */
-                $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(
-                    \Weline\Server\Model\SslCertificate::class
+                if ($certId) {
+                    /** @var \Weline\Server\Model\SslCertificate $certModel */
+                    $certModel = \Weline\Framework\Manager\ObjectManager::getInstance(
+                        \Weline\Server\Model\SslCertificate::class
+                    );
+                    $certModel->clearQuery()
+                        ->where('cert_id', $certId)
+                        ->find()
+                        ->fetch();
+
+                    if ($certModel->getCertId()) {
+                        return $certModel->getStatus() === \Weline\Server\Model\SslCertificate::STATUS_ACTIVE
+                            && !$certModel->isExpired();
+                    }
+                }
+
+                // 未绑定 cert_id 时仍以证书管理表中覆盖本域名的记录为准（不依赖 HTTPS 探测）
+                $resolved = \Weline\Server\Model\SslCertificate::resolveForWebsiteInfrastructure(
+                    null,
+                    $this->getDomain()
                 );
-                $certModel->clearQuery()
-                    ->where('cert_id', $certId)
-                    ->find()
-                    ->fetch();
-                
-                if ($certModel->getCertId()) {
-                    // 证书存在且有效（未过期）
-                    return $certModel->getStatus() === \Weline\Server\Model\SslCertificate::STATUS_ACTIVE
-                        && !$certModel->isExpired();
+                if ($resolved !== null && $resolved->getCertId() > 0) {
+                    return $resolved->getStatus() === \Weline\Server\Model\SslCertificate::STATUS_ACTIVE
+                        && !$resolved->isExpired();
                 }
             }
         } catch (\Throwable $e) {
             // 忽略错误
         }
-        
+
         return false;
     }
     
