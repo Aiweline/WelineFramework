@@ -13,8 +13,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service\Template;
 
-use Weline\Framework\Manager\ObjectManager;
-
 class TemplatePathResolver
 {
     /**
@@ -119,7 +117,33 @@ class TemplatePathResolver
      */
     public function getComponentTemplateReference(string $styleCode, string $file): string
     {
+        $fs = $this->resolveComponentFilesystemPath($styleCode, $file);
+        $sharedFs = $this->getComponentFilePath(self::SHARED_STYLE_CODE, 'legal-content.phtml');
+        if ($fs === $sharedFs && is_file($sharedFs)) {
+            return self::TEMPLATE_REFERENCE_PREFIX . '/' . self::SHARED_STYLE_CODE . '/components/legal-content.phtml';
+        }
+
         return self::TEMPLATE_REFERENCE_PREFIX . "/{$styleCode}/components/{$file}";
+    }
+
+    /**
+     * 解析组件物理路径：当前主题下文件存在则用主题文件；否则 legal-content 回退到 style/_shared/components/legal-content.phtml。
+     */
+    public function resolveComponentFilesystemPath(string $styleCode, string $file): string
+    {
+        $primary = $this->getComponentFilePath($styleCode, $file);
+        if (is_file($primary)) {
+            return $primary;
+        }
+        $norm = str_replace('\\', '/', $file);
+        if (str_ends_with($norm, 'legal-content.phtml')) {
+            $shared = $this->getComponentFilePath(self::SHARED_STYLE_CODE, 'legal-content.phtml');
+            if (is_file($shared)) {
+                return $shared;
+            }
+        }
+
+        return $primary;
     }
     
     /**
