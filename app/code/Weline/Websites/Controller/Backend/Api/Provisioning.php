@@ -7,6 +7,7 @@ use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\ProvisioningOrder;
 use Weline\Websites\Service\DomainLifecycleOrchestrationService;
 use Weline\Websites\Service\DomainProvisioningService;
@@ -90,64 +91,21 @@ class Provisioning extends BaseController
                     'step' => 'purchase',
                     'message' => __('域名购买成功，订单号: #%{1}', [$orderId]),
                 ]);
-            }
-
-            $sse->sendEvent('step_start', [
-                'step' => 'dns',
-                'message' => __('开始配置 DNS...'),
-            ]);
-
-            $dnsResult = $this->provisioningService->runStepDns($orderId);
-
-            if ($dnsResult['success'] ?? false) {
-                $sse->sendEvent('step_success', [
-                    'step' => 'dns',
-                    'message' => $dnsResult['message'] ?? __('DNS 配置完成'),
-                ]);
-            } else {
-                $sse->sendEvent('step_warning', [
-                    'step' => 'dns',
-                    'message' => $dnsResult['message'] ?? __('DNS 配置需要手动处理'),
-                ]);
-            }
-
-            $sse->sendEvent('step_start', [
-                'step' => 'cdn',
-                'message' => __('开始绑定 CDN...'),
-            ]);
-
-            $cdnResult = $this->provisioningService->runStepCdn($orderId, $cdnVendor !== '' ? $cdnVendor : null, $cdnAccountId > 0 ? $cdnAccountId : null);
-
-            if ($cdnResult['success'] ?? false) {
-                $sse->sendEvent('step_success', [
-                    'step' => 'cdn',
-                    'message' => $cdnResult['message'] ?? __('CDN 绑定成功'),
-                ]);
-
-                if (!empty($cdnResult['nameservers'])) {
+                $rootDomain = ObjectManager::getInstance(Domain::class);
+                $rootDomain->loadByDomainAndAccount($domain, $registrarAccountId);
+                if ($rootDomain->getDomainId() && $rootDomain->getDnsSwitchDeferred() === 1) {
                     $sse->sendEvent('step_info', [
-                        'step' => 'cdn',
-                        'message' => __('正在切换 NS 服务器...'),
+                        'step' => 'purchase',
+                        'message' => __('若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。'),
+                        'dns_cdn_tip' => true,
                     ]);
-                    $nsResult = $this->provisioningService->switchNameservers($orderId, $cdnResult['nameservers']);
-                    if ($nsResult['success'] ?? false) {
-                        $sse->sendEvent('step_info', [
-                            'step' => 'cdn',
-                            'message' => __('NS 服务器切换成功'),
-                        ]);
-                    } else {
-                        $sse->sendEvent('step_warning', [
-                            'step' => 'cdn',
-                            'message' => __('NS 切换失败: %{1}', [$nsResult['message'] ?? '']),
-                        ]);
-                    }
                 }
-            } else {
-                $sse->sendEvent('step_failed', [
-                    'step' => 'cdn',
-                    'message' => $cdnResult['message'] ?? __('CDN 绑定失败'),
-                ]);
             }
+
+            $sse->sendEvent('step_info', [
+                'step' => 'dns_cdn',
+                'message' => __('DNS/CDN 切换由定时任务在约 5–10 分钟内自动完成，无需等待。'),
+            ]);
 
             $sse->sendEvent('step_start', [
                 'step' => 'resolve',

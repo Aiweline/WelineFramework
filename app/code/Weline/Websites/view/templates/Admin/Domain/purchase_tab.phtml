@@ -661,8 +661,10 @@ function executePurchase(accountId, items, dialogResult) {
             if (dialogResult.start_lifecycle === '1') {
                 msg += ' <?= __('请前往域名状态页搜索当前根域名查看进度。') ?>';
             }
-            if (dialogResult.dns_choice === 'provider_account' || dialogResult.cdn_choice === 'provider_account') {
-                msg += ' <?= __('DNS/CDN 将在域名注册完成后自动处理。') ?>';
+            if (data.data && data.data.dns_cdn_tip) {
+                msg += ' ' + data.data.dns_cdn_tip;
+            } else if (dialogResult.dns_choice === 'provider_account' || dialogResult.cdn_choice === 'provider_account') {
+                msg += ' <?= __('若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。') ?>';
             }
             showToast(msg, 'success');
             var results = (data.data && data.data.results) || [];
