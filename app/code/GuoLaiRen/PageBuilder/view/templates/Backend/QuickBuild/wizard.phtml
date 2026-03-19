@@ -226,6 +226,8 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
 .pb-qb-domain-item:last-child { border-bottom: none; }
 .pb-qb-domain-item:hover { background: var(--backend-color-bg-secondary, #f8f9fa); }
 .pb-qb-domain-item.selected { background: var(--backend-color-primary-light, #e8ebff); }
+/* 与根域/www 同组另一条在池中时，与当前选中行一并标示 */
+.pb-qb-domain-item.pb-qb-domain-pair-linked { box-shadow: inset 3px 0 0 var(--backend-color-primary, #556ee6); }
 .pb-qb-domain-item input[type="radio"] { margin: 0; }
 .pb-qb-summary-item { margin-bottom: 12px; }
 .pb-qb-summary-item strong { color: var(--backend-color-text-secondary, #6c757d); }
@@ -446,6 +448,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                     <i class="mdi mdi-refresh"></i> <lang>加载可建站域名</lang>
                 </button>
                 <div id="pb-qb-domain-list-container"></div>
+                <div id="pb-qb-domain-pair-hint" class="form-text small mt-1" style="display:none;color:var(--backend-color-text-secondary,#6c757d);"></div>
             </div>
         </div>
 
@@ -1067,6 +1070,15 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
             setScopeState('selected_account_id', '0');
             domainPurchased = false;
             domainOwned = false;
+            var pairHintEl = document.getElementById('pb-qb-domain-pair-hint');
+            if (pairHintEl) {
+                pairHintEl.style.display = 'none';
+                pairHintEl.textContent = '';
+            }
+            var dlc = document.getElementById('pb-qb-domain-list-container');
+            if (dlc) {
+                dlc.querySelectorAll('.pb-qb-domain-pair-linked').forEach(function(el) { el.classList.remove('pb-qb-domain-pair-linked'); });
+            }
             updateFollowRegistrarLabels();
             updateNextButtonState();
         });
@@ -1304,6 +1316,46 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                 html += '</div>';
                 container.innerHTML = html;
 
+                function getPairedRootWwwFqdnWizard(d) {
+                    var x = (d || '').toLowerCase().trim();
+                    if (!x) return '';
+                    if (x.indexOf('www.') === 0) return x.substring(4);
+                    return 'www.' + x;
+                }
+                function applyWizardDomainPairUi(clickedDomain) {
+                    var inner = container.querySelector('#pb-qb-domain-list-inner');
+                    var hint = document.getElementById('pb-qb-domain-pair-hint');
+                    if (inner) {
+                        inner.querySelectorAll('.pb-qb-domain-item').forEach(function(i) { i.classList.remove('pb-qb-domain-pair-linked'); });
+                    }
+                    if (hint) {
+                        hint.style.display = 'none';
+                        hint.textContent = '';
+                    }
+                    if (!inner || !clickedDomain) return;
+                    var pairKey = getPairedRootWwwFqdnWizard(clickedDomain);
+                    var pairCanon = null;
+                    for (var di = 0; di < domains.length; di++) {
+                        var nm = String(domains[di].domain || domains[di].full_domain || '').trim();
+                        if (nm.toLowerCase() === pairKey) {
+                            pairCanon = nm;
+                            break;
+                        }
+                    }
+                    if (pairCanon && pairCanon.toLowerCase() !== String(clickedDomain).toLowerCase()) {
+                        inner.querySelectorAll('.pb-qb-domain-item').forEach(function(item) {
+                            var idm = (item.getAttribute('data-domain') || '').toLowerCase();
+                            if (idm === String(clickedDomain).toLowerCase() || idm === pairCanon.toLowerCase()) {
+                                item.classList.add('pb-qb-domain-pair-linked');
+                            }
+                        });
+                        if (hint) {
+                            hint.textContent = <?= json_encode(__('根域与 www 已在列表中成组标示；向导以当前选中域名为准，若需在站点上同时绑定二者请使用「网站管理 → 新建站点」多选域名。')) ?>;
+                            hint.style.display = '';
+                        }
+                    }
+                }
+
                 // 绑定域名选择事件
                 function bindDomainClickEvents() {
                     container.querySelectorAll('.pb-qb-domain-item').forEach(function(item) {
@@ -1320,6 +1372,7 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
                             domainPurchased = false;
                             updateFollowRegistrarLabels();
                             updateNextButtonState();
+                            applyWizardDomainPairUi(selectedDomain);
                         });
                     });
                 }

@@ -23,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Websites\Service\CertificateRequestService;
 use Weline\Websites\Service\DomainCronLockService;
@@ -37,7 +38,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     description: '子域 HTTPS 证书申请：从池内取生命周期 origin_ready 或 cert_pending 的子域，按队列逐个发起 ACME 申请（默认 DNS-01，需父域 DNS/CDN 账户），成功后更新为可建站。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
     manual_help: [
-        '逻辑：取待申请证书的子域（单域或泛域策略），同步阻塞直至当前域名申请完成；CA 成功后按证书管理数据更新 https_status、site_ready（不以 HTTPS 连通性探测判定证书状态）。日志写 domain_pool_cert。',
+        '逻辑：取待申请队列候选后，用 SSL 证书管理器（表+PEM/文件+未临期）判断是否已健康；不健康才向 CA 申请。池子 https_status 不作为入队依据。日志写 domain_pool_cert。',
         '父根域 dns_cutover_complete=0 时不会进入队列；根域 cron_resolved=1 时跳过申请（建站已锁定）。',
         '--domain= 仅处理该子域（FQDN）；不指定则按队列处理。',
     ],
@@ -69,10 +70,10 @@ class DomainPoolCertificateRequest
 
         try {
             $domainPoolModel = ObjectManager::getInstance(DomainPool::class);
-            $domains = $domainPoolModel->getDomainsNeedCertificate(50);
+            $candidates = $domainPoolModel->getDomainsNeedCertificate(200);
             if (WebsitesCronTestContext::getDomainFilter() !== null) {
-                $domains = \array_values(\array_filter(
-                    $domains,
+                $candidates = \array_values(\array_filter(
+                    $candidates,
                     static function (array $r): bool {
                         $fq = (string) ($r[DomainPool::schema_fields_DOMAIN] ?? '');
                         $rt = (string) ($r[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
@@ -80,6 +81,22 @@ class DomainPoolCertificateRequest
                         return WebsitesCronTestContext::matchesSubject($fq, $rt !== '' ? $rt : null);
                     }
                 ));
+            }
+            $sslSvc = ObjectManager::getInstance(SslCertificateService::class);
+            $domains = [];
+            foreach ($candidates as $row) {
+                $fq = \strtolower(\trim((string) ($row[DomainPool::schema_fields_DOMAIN] ?? '')));
+                if ($fq === '') {
+                    continue;
+                }
+                if ($sslSvc->isManagedCertificateHealthyForHostname($fq)) {
+                    $this->reconcilePoolWithManagedCertificateIfOutOfSync($row, $fq);
+                    continue;
+                }
+                $domains[] = $row;
+                if (\count($domains) >= 50) {
+                    break;
+                }
             }
             $results['checked'] = \count($domains);
             if ($domains === []) {
@@ -319,6 +336,52 @@ class DomainPoolCertificateRequest
         }
 
         return $counter;
+    }
+
+    /**
+     * 管理器已有健康证书时，将池子 https/阶段/cert_id 与之一致（消除与域名池字段的漂移）。
+     *
+     * @param array<string, mixed> $row
+     */
+    private function reconcilePoolWithManagedCertificateIfOutOfSync(array $row, string $fqdn): void
+    {
+        $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
+        if ($poolId <= 0) {
+            return;
+        }
+        $certProbe = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $certRow = $certProbe->findCertificateForDomain($fqdn);
+        if ($certRow === null || (int) $certRow->getCertId() <= 0) {
+            return;
+        }
+        $pool = ObjectManager::getInstance(DomainPool::class, [], false);
+        $pool->load($poolId);
+        if ((int) $pool->getPoolId() <= 0) {
+            return;
+        }
+        $exp = \trim((string) $certRow->getExpiresAt());
+        $poolExp = $pool->getHttpsExpiresAt();
+        $poolExpStr = $poolExp !== null && $poolExp !== '' ? \trim((string) $poolExp) : '';
+        if ($pool->getHttpsStatus() === DomainPool::HTTPS_STATUS_VALID
+            && $pool->getPoolLifecycleStage() === DomainPool::LIFECYCLE_CERT_VALID
+            && (int) $pool->getCertId() === (int) $certRow->getCertId()
+            && ($exp === $poolExpStr || ($exp === '' && $poolExpStr === ''))) {
+            return;
+        }
+        $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
+        $pool->setHttpsError('');
+        $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
+        $pool->setCertId((int) $certRow->getCertId());
+        if ($exp !== '') {
+            $pool->setHttpsExpiresAt($exp);
+        }
+        $pool->calculateSiteReady();
+        $pool->save();
+        ObjectManager::getInstance(DomainPoolFlowLogService::class)->append(
+            $poolId,
+            DomainPoolFlowLog::KIND_CERT_OK,
+            (string) __('已与 SSL 证书管理器同步（池状态此前与有效证书记录不一致）'),
+        );
     }
 
     /**
