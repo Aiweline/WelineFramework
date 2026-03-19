@@ -84,6 +84,7 @@ class YourRegistrar implements DomainRegistrarInterface
 |------|------|-------------|------|
 | **Cron `DomainAutoResolve`** | 否 | **`getAdapter` → `addDnsRecord`** | 仅解析任务，走统一适配器。 |
 | **Cron `DnsCdnAutoSwitch` + `DnsSwitchService`** | 否 | **`executeDnsSwitchWithStandardOptions` → `executeDnsSwitch`** | 与 Admin `postSwitchDnsAccount`/SSE 同默认 options；PageBuilder SSE 在 `buildStandardSwitchOptions` 上 merge。 |
+| **铁律：委派 NS** | — | **`Domain.account_id`** 对应注册商 → `sourceAdapter->updateNameservers` | 改注册局 NS 只用注册商账户；**`dns_account_id`** 仅为托管目标（Zone/记录），`CloudflareRegistrar::updateNameservers` 固定失败并提示去注册商。 |
 | **Cron `DomainLifecycleOrchestration` 等** | 否 | 经 **`DomainResolveService` / Pool** | 不直接 purchase；依赖已入池域名。 |
 | **Admin `Domain` 控制器** | **`DomainPurchaseService`** | **`DomainRegistrarResolverService` / `w_query`** | 与抽象一致。 |
 | **SSE `SiteBuilderAgent::getTriggerSse`** | **`WebsiteAgentService` → `createAndProcessOrder`** | 后续解析/证书同全局链路 | 已透传 **`user_client_ip`**；联系人仍靠 **env 默认** 或账号（如 Gname）。 |
