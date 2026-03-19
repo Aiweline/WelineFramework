@@ -650,7 +650,7 @@ class DomainPurchaseService
                         $cdnAcc->load($defCdnId);
                         if ((int) $cdnAcc->getAccountId() > 0) {
                             $rootDomain->setCdnAccountId($defCdnId);
-                            $defProv = \strtolower(\trim((string) (Env::module_env('Weline_Websites', 'default_cdn_provider') ?? ''))));
+                            $defProv = \strtolower(\trim((string) (Env::module_env('Weline_Websites', 'default_cdn_provider') ?? '')));
                             $rootDomain->setCdnProvider($defProv !== '' ? $defProv : \strtolower((string) $cdnAcc->getRegistrarCode()));
                             w_log_info(
                                 __('[DomainPurchase] %{1} 已绑定默认 CDN 账户 ID=%{2}', [$rootDomain->getDomain(), (string) $defCdnId]),
