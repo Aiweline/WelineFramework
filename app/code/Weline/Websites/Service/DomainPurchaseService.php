@@ -166,6 +166,7 @@ class DomainPurchaseService
         $successCount = 0;
         $failCount = 0;
         $lifecycleFailCount = 0;
+        $anyDnsCdnDeferred = false;
         $results = [];
 
         // 逐个处理购买条目
@@ -222,7 +223,7 @@ class DomainPurchaseService
 
                     // 本站购买成功：统一自动拉取落库（根域入 Domain 表 + 默认池子子域）
                     $rootDomain = $this->pullPurchasedDomainToLocal($domain, $accountId, $subdomains);
-                    $this->persistPurchasedDomainDnsMetadata(
+                    if ($this->persistPurchasedDomainDnsMetadata(
                         $domain,
                         $accountId,
                         (string)$registrar->getCode(),
@@ -235,7 +236,9 @@ class DomainPurchaseService
                         $cdnProvider,
                         $cdnAccountId,
                         $rootDomain
-                    );
+                    )) {
+                        $anyDnsCdnDeferred = true;
+                    }
 
                     // 绑定站点
                     if ($websiteId > 0 || $autoCreateSite === 'yes') {
@@ -362,13 +365,17 @@ class DomainPurchaseService
             ]);
         }
 
-        return [
+        $out = [
             'success' => $successCount > 0,
             'message' => $message,
             'order_id' => $orderId,
             'order_no' => $order->getOrderNo(),
             'results' => $results,
         ];
+        if ($anyDnsCdnDeferred) {
+            $out['dns_cdn_tip'] = __('若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。');
+        }
+        return $out;
     }
 
     /**
@@ -556,6 +563,8 @@ class DomainPurchaseService
     /**
      * 购买后仅持久化 DNS 元数据，不调用注册商修改 NS 接口。
      * 注册商在购买时会自动配置 NS；仅当用户选择了「其他 DNS 服务商」时才标记延迟切换，由定时任务在注册完成后执行（同服务商时 DnsSwitchService 会跳过修改 NS）。
+     *
+     * @return bool 是否设置了 dns_switch_deferred（需由定时任务在 5–10 分钟内完成切换）
      */
     private function persistPurchasedDomainDnsMetadata(
         string $domain,
@@ -570,7 +579,7 @@ class DomainPurchaseService
         string $selectedCdnProvider,
         int $selectedCdnAccountId,
         ?Domain $rootDomain = null
-    ): void {
+    ): bool {
         try {
             if ($rootDomain === null || !$rootDomain->getDomainId()) {
                 $domainModel = ObjectManager::getInstance(Domain::class);
@@ -578,7 +587,7 @@ class DomainPurchaseService
                 $rootDomain->loadByDomainAndAccount($domain, $accountId);
             }
             if (!$rootDomain->getDomainId()) {
-                return;
+                return false;
             }
 
             $nameservers = [];
@@ -647,8 +656,10 @@ class DomainPurchaseService
                 $rootDomain->setDnsSwitchDeferred(1);
             }
             $rootDomain->save();
+            return $needSwitch;
         } catch (\Throwable $e) {
             w_log_error(__('购买后同步域名 DNS 元数据失败：%{1}', [$e->getMessage()]));
+            return false;
         }
     }
 
