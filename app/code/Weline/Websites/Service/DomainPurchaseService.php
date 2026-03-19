@@ -7,7 +7,8 @@ declare(strict_types=1);
  * 处理批量域名购买逻辑：
  * - 创建购买订单
  * - 逐个调用适配器 API 购买域名
- * - 购买成功后自动入域名池
+ * - 本站购买成功后统一自动拉取落库：根域入 Domain 表并生成默认池子子域（@、www 等），
+ *   无论通过本类 createAndProcessOrder、Provisioning、w_query('websites','purchaseDomain') 等哪条入口，均通过 pullPurchasedDomainToLocal 统一口径。
  * - 可选绑定站点或自动新建站点
  *
  * @author Aiweline
@@ -219,8 +220,8 @@ class DomainPurchaseService
                     $item->setData(DomainPurchaseItem::schema_fields_CURRENCY, $purchaseResult['currency'] ?? 'USD');
                     $successCount++;
 
-                    // 购买成功后入域名池（含 @、www 等子域）
-                    $rootDomain = $this->addToDomainPoolWithSubdomains($domain, $accountId, $subdomains);
+                    // 本站购买成功：统一自动拉取落库（根域入 Domain 表 + 默认池子子域）
+                    $rootDomain = $this->pullPurchasedDomainToLocal($domain, $accountId, $subdomains);
                     $this->persistPurchasedDomainDnsMetadata(
                         $domain,
                         $accountId,
@@ -473,17 +474,19 @@ class DomainPurchaseService
     }
 
     /**
-     * 将域名及其子域（@、www 等）添加到域名池
+     * 本站购买成功后自动拉取落库（统一口径）
      *
-     * @param string $domain 根域名
-     * @param int $accountId 域名商账号 ID
+     * 根域写入 Domain 表，并生成默认池子子域（@、www 等）。所有购买成功路径（含 createAndProcessOrder、
+     * Provisioning 调 w_query purchaseDomain）均应通过本方法或调用本方法的 addToDomainPoolWithSubdomains 保证落库。
+     *
+     * @param string $domain   根域名
+     * @param int $accountId  域名商账号 ID
      * @param array $prefixes 子域前缀，如 ['@','www']
      * @return Domain|null 创建/加载到的根域模型，失败时返回 null
      */
-    private function addToDomainPoolWithSubdomains(string $domain, int $accountId, array $prefixes = ['@', 'www']): ?Domain
+    public function pullPurchasedDomainToLocal(string $domain, int $accountId, array $prefixes = ['@', 'www']): ?Domain
     {
         try {
-            // 确保 Domain 记录存在（供 SubdomainGenerator 使用）
             $domainModel = ObjectManager::getInstance(Domain::class);
             $domainModel->syncDomains($accountId, [
                 [
@@ -499,16 +502,28 @@ class DomainPurchaseService
                 $subdomainGenerator->generateDefaultSubdomains($rootDomain, $prefixes);
                 return $rootDomain;
             }
-            // 若无法加载 Domain，则仅添加根域到池
             $this->addToDomainPool($domain);
             return null;
         } catch (\Exception $e) {
-            w_log_error(__('域名入池失败: %{domain}, 错误: %{error}', [
+            w_log_error(__('域名购买后拉取落库失败: %{domain}, 错误: %{error}', [
                 'domain' => $domain,
                 'error' => $e->getMessage(),
             ]));
             return null;
         }
+    }
+
+    /**
+     * 将域名及其子域（@、www 等）添加到域名池（内部委托 pullPurchasedDomainToLocal）
+     *
+     * @param string $domain 根域名
+     * @param int $accountId 域名商账号 ID
+     * @param array $prefixes 子域前缀，如 ['@','www']
+     * @return Domain|null 创建/加载到的根域模型，失败时返回 null
+     */
+    private function addToDomainPoolWithSubdomains(string $domain, int $accountId, array $prefixes = ['@', 'www']): ?Domain
+    {
+        return $this->pullPurchasedDomainToLocal($domain, $accountId, $prefixes);
     }
 
     /**

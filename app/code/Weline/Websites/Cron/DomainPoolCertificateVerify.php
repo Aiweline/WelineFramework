@@ -18,6 +18,7 @@ use Weline\Server\Model\SslCertificate;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Websites\Service\CertificateRequestService;
 use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -236,7 +237,8 @@ class DomainPoolCertificateVerify
         };
 
         try {
-            $result = w_query('server', 'requestCertificate', [
+            $certRequestService = ObjectManager::getInstance(CertificateRequestService::class);
+            $result = $certRequestService->requestCertificate([
                 'domain' => $domain,
                 'webroot' => $webroot,
                 'email' => $reqEmail,
