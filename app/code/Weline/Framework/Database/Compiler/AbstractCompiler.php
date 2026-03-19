@@ -6,6 +6,7 @@ namespace Weline\Framework\Database\Compiler;
 
 use Weline\Framework\Database\Compiler\Dialect\DialectInterface;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 
 /**
  * SQL 编译器抽象基类，提取 WHERE/JOIN/ORDER 等公共逻辑
@@ -216,7 +217,8 @@ abstract class AbstractCompiler implements CompilerInterface
         if ($fields === '*' || $fields === '') {
             return '*';
         }
-        $list = array_map('trim', explode(',', $fields));
+        // 不可 explode(',')：COALESCE(SUM(x), 0) 等实参含逗号（与 AST cleanAstFields 语义一致）
+        $list = SelectFieldListSplitter::split($fields);
         $out = [];
         foreach ($list as $field) {
             if (preg_match('/^(.+?)\s+(AS|as)\s+(.+)$/i', $field, $m)) {

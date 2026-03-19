@@ -17,6 +17,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Compiler\SqliteCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -484,8 +485,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '*';
         }
         
-        // 分割字段列表
-        $fieldList = array_map('trim', explode(',', $fields));
+        // 分割字段列表（不可简单 explode：函数实参中含逗号）
+        $fieldList = SelectFieldListSplitter::split($fields);
         $formattedFields = [];
         
         foreach ($fieldList as $field) {
