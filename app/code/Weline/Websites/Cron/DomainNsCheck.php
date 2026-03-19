@@ -14,6 +14,7 @@ use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DnsProviderDetector;
 use Weline\Websites\Service\DomainNsMismatchNotifier;
 use Weline\Websites\Service\DomainRootRegistrationSelfCorrectService;
@@ -60,6 +61,7 @@ class DomainNsCheck
 
             $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
             $nsMismatchNotifier = ObjectManager::getInstance(DomainNsMismatchNotifier::class);
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             foreach ($domains as $row) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -67,6 +69,10 @@ class DomainNsCheck
                 $dn = $domain->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
                     WebsitesCronTestContext::skipNote($dn, 'ns check');
+                    continue;
+                }
+                if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($dn)) {
+                    WebsitesCronTestContext::skipNote($dn, 'cron_resolved lock');
                     continue;
                 }
                 WebsitesCronTestContext::detail('DomainNsCheck.row', ['domain' => $dn]);

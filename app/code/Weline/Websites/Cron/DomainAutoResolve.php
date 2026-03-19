@@ -20,6 +20,7 @@ use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainRegistrar;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainOriginMatchService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainRegistrarResolverService;
@@ -40,6 +41,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
         '① 购买自动解析：处理 domain_auto_resolve_task 表中待执行任务，调用 DNS 接口为根域添加 @、www 的 A 记录指向本机。',
         '② DNS 迁移：将 dns_migration_pending=1 的根域在「新 DNS 账户」上推送 A/AAAA 等记录。',
         '③ 全局自动解析：若开启全局自动解析，对尚未解析的根域批量添加 @、www 指向本机。',
+        '根域 cron_resolved=1 时：购买任务标成功并跳过；迁移/全局自动解析跳过该根域。',
         '--domain= 仅处理该根域相关任务。',
     ],
 )]
@@ -122,6 +124,7 @@ class DomainAutoResolve
             $failed = 0;
             /** @var array<string, true> 解析成功的根域名，用于任务结束后检查并更新域名池记录 */
             $successfulDomains = [];
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             foreach ($tasks as $row) {
                 $task = clone $taskModel;
@@ -129,6 +132,13 @@ class DomainAutoResolve
                 $domain = $task->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($domain, $domain)) {
                     WebsitesCronTestContext::skipNote($domain, 'purchase task domain filter');
+                    continue;
+                }
+                if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($domain)) {
+                    $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
+                    $task->setLastError((string) __('建站已锁定，跳过自动解析任务'));
+                    $task->save();
+                    $skipped++;
                     continue;
                 }
                 $accountId = $task->getAccountId();
@@ -343,6 +353,7 @@ class DomainAutoResolve
 
             $success = 0;
             $failed = 0;
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             foreach ($rows as $row) {
                 $domain = clone $domainModel;
@@ -350,6 +361,9 @@ class DomainAutoResolve
                 $domainName = $domain->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($domainName, $domainName)) {
                     WebsitesCronTestContext::skipNote($domainName, 'dns migration filter');
+                    continue;
+                }
+                if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($domainName)) {
                     continue;
                 }
                 $targetAccountId = (int) $domain->getDnsAccountId();
@@ -433,6 +447,7 @@ class DomainAutoResolve
             $success = 0;
             $failed = 0;
             $errors = [];
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             foreach ($domains as $row) {
                 $domain = clone $domainModel;
@@ -440,6 +455,9 @@ class DomainAutoResolve
                 $dn = $domain->getDomain();
                 if (!WebsitesCronTestContext::matchesSubject($dn, $dn)) {
                     WebsitesCronTestContext::skipNote($dn, 'global auto resolve filter');
+                    continue;
+                }
+                if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($dn)) {
                     continue;
                 }
                 WebsitesCronTestContext::detail('global_auto_resolve', ['domain' => $dn]);

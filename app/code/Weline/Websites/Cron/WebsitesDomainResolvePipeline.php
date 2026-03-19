@@ -24,6 +24,8 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
         '① 自动解析：执行购买时创建的解析任务、DNS 迁移待推送、全局自动解析未解析根域。',
         '② 子域解析：池内生命周期 registered/awaiting_origin 的子域做 A/AAAA 检测，指向本机则推进到 origin_ready。',
         '③ 根域解析：未建站就绪的根域做解析检测，并确保默认子域（@、www）入池；子域已可建站则纠正根域状态。',
+        '根域 cron_resolved=1（默认可建站子域已全部 site_ready）时，本流水线各步跳过该根域/池子，减少无效解析写入。',
+        '本流水线不包含 HTTPS 证书校验；证书申请见 websites_certificate_health_daily + websites_pool_certificate_maintenance。',
     ],
 )]
 class WebsitesDomainResolvePipeline implements CronTaskInterface

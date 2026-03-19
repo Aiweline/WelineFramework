@@ -41,6 +41,15 @@ return [
         'ns_probe_use_cloudflare_doh' => true,
     ],
 
+    /**
+     * 购买落库默认 CDN（非 Cloudflare DNS 时）：未显式选 CDN 账户则绑定此处 registrar 账户 ID。
+     * Cloudflare DNS 不写入（由 CF 适配器与 DnsSwitchService verify_cdn 处理）。
+     * 未配置或账户不存在时仅打日志，不静默绑定。
+     */
+    'default_cdn_account_id' => 0,
+    /** 可选；留空则用账户的 registrar_code 作为 cdn_provider */
+    'default_cdn_provider' => '',
+
     // 是否禁止未匹配的域名访问（默认不禁止）
     // true: 如果查不到匹配的站点，返回404错误
     // false: 查不到站点也没关系，继续处理（默认）
