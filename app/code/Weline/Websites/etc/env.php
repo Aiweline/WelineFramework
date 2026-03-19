@@ -47,7 +47,7 @@ return [
     /**
      * ACME DNS-01：
      * - **写 TXT 前门闸**：{@see \Weline\Websites\Service\DomainResolveService::validateAcmeDns01HostingViaAdapters}（仅注册商 + DNS 托管适配器 API）。
-     * - **写 TXT 后等待**：由 {@see \Weline\Server\Service\SslCertificateService::performDns01Challenge} 按下列键轮询，直到 {@see dns_get_record}(TXT) 命中挑战值（默认可选再查公共 DoH）。
+     * - **写 TXT 后等待**：{@see \Weline\Server\Service\SslCertificateService::performDns01Challenge} 通过 w_query `getAcmeChallengeTxtFqdn` 与写入同名轮询 {@see dns_get_record}(TXT)；本机递归长期不更新时可设 `txt_visible_use_public_doh` => true。
      */
     'acme_dns' => [
         'wait_public_ns_max_seconds' => 0,
