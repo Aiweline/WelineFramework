@@ -1,4 +1,4 @@
-﻿支持的预览格式,支持的预览格式
+支持的预览格式,支持的预览格式
 "允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。","允许其他模块注册可预览的文件格式。Observer 可向 formats 数组添加 MIME 类型。"
 文件上传前,文件上传前
 文件上传到存储之前触发，可用于验证或修改上传参数。,文件上传到存储之前触发，可用于验证或修改上传参数。
@@ -66,6 +66,9 @@ OK,OK
 预览,预览
 打开,Open
 下载,下载
+复制URL,Copy URL
+链接已复制到剪贴板,Link copied to clipboard
+复制失败，请手动复制,"Copy failed; please copy manually"
 删除,删除
 退出选择模式,"Exit Selection Mode"
 清除选择,"Clear Selection"
