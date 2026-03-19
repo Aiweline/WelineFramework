@@ -126,50 +126,62 @@ class DnsSwitchService
         $notify('add_zone_done', ['domain' => $domainName, 'nameservers' => $targetNs, 'message' => __('目标 NS：%{1}', [\implode(', ', $targetNs)])]);
         w_log_info(__('[DnsSwitchService] %{1} Step2: 目标 NS=%{2}', [$domainName, \implode(', ', $targetNs)]), [], $logCh);
 
-        // ── Step 3: 在注册商处修改 NS ──
-        $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
-        $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
-        $updateSuccess = (bool) ($updateResult['success'] ?? false);
-        $updateMsg = (string) ($updateResult['message'] ?? __('NS 切换失败'));
-        if (!$updateSuccess) {
-            $notify('switch_ns_error', ['message' => $updateMsg, 'raw' => $updateResult]);
-            w_log_error(__('[DnsSwitchService] %{1} NS 切换失败：%{2}', [$domainName, $updateMsg]), [], $logCh);
-            return $this->fail($updateMsg);
-        }
-        $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…', [$updateMsg])]);
-        w_log_info(__('[DnsSwitchService] %{1} Step3: NS API 成功，开始注册商侧轮询校验', [$domainName]), [], $logCh);
+        // 同服务商不执行 NS 修改：注册商即目标 DNS 时（如 Gname 购买且选 Gname DNS），注册商已在购买时自动配置，无需再调修改接口
+        $sourceCode = \strtolower((string) $sourceAccount->getRegistrarCode());
+        $sameProvider = ($sourceCode !== '' && $sourceCode === \strtolower($targetCode));
 
-        // 注册商接口可能返回成功但 NS 未实际变更（Gname 等）；此前仅提示仍继续会导致「显示切换成功、解析未切回」
-        $registrarVerify = $this->pollRegistrarNsMatchesTarget(
-            $sourceAdapter,
-            $domainName,
-            $sourceAccount->getCredentials(),
-            $targetNsNormalized,
-            6,
-            5
-        );
-        if ($registrarVerify['supported'] === false) {
-            $notify('registrar_ns_check', ['message' => __('注册商 getDomainDetail 不支持，无法二次校验 NS，请自行在注册商确认 NS 已为目标值')]);
-        } elseif ($registrarVerify['error'] !== '') {
-            $notify('registrar_ns_check', ['message' => __('注册商 NS 查询异常（已重试）：%{1}', [$registrarVerify['error']]), 'error' => $registrarVerify['error']]);
-            w_log_error(__('[DnsSwitchService] %{1} 注册商 NS 校验异常：%{2}', [$domainName, $registrarVerify['error']]), [], $logCh);
-            return $this->fail(__('NS 切换后无法从注册商读取当前 NS，请检查 API 权限或稍后重试：%{1}', [$registrarVerify['error']]));
-        } elseif ($registrarVerify['match'] === false) {
-            $curStr = $registrarVerify['normalized'] === [] ? (string) __('(空)') : \implode(', ', $registrarVerify['normalized']);
-            $wantStr = \implode(', ', $targetNs);
-            $failMsg = (string) __(
-                'NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。',
-                [$curStr, $wantStr]
+        if ($sameProvider) {
+            $notify('switch_ns_skip', [
+                'domain' => $domainName,
+                'message' => __('当前已是同注册商 DNS（%{1}），无需调用修改 NS 接口；直接同步/推送记录。', [$targetCode]),
+            ]);
+            w_log_info(__('[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）', [$domainName, $targetCode]), [], $logCh);
+        } else {
+            // ── Step 3: 在注册商处修改 NS ──
+            $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
+            $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
+            $updateSuccess = (bool) ($updateResult['success'] ?? false);
+            $updateMsg = (string) ($updateResult['message'] ?? __('NS 切换失败'));
+            if (!$updateSuccess) {
+                $notify('switch_ns_error', ['message' => $updateMsg, 'raw' => $updateResult]);
+                w_log_error(__('[DnsSwitchService] %{1} NS 切换失败：%{2}', [$domainName, $updateMsg]), [], $logCh);
+                return $this->fail($updateMsg);
+            }
+            $notify('switch_ns_done', ['domain' => $domainName, 'message' => __('NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…', [$updateMsg])]);
+            w_log_info(__('[DnsSwitchService] %{1} Step3: NS API 成功，开始注册商侧轮询校验', [$domainName]), [], $logCh);
+
+            // 注册商接口可能返回成功但 NS 未实际变更（Gname 等）；此前仅提示仍继续会导致「显示切换成功、解析未切回」
+            $registrarVerify = $this->pollRegistrarNsMatchesTarget(
+                $sourceAdapter,
+                $domainName,
+                $sourceAccount->getCredentials(),
+                $targetNsNormalized,
+                6,
+                5
             );
-            $notify('switch_ns_verify_fail', ['message' => $failMsg, 'current_ns' => $registrarVerify['normalized'], 'target_ns' => $targetNs]);
-            w_log_error(__('[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}', [$domainName, $curStr, $wantStr]), [], $logCh);
-            return $this->fail($failMsg);
+            if ($registrarVerify['supported'] === false) {
+                $notify('registrar_ns_check', ['message' => __('注册商 getDomainDetail 不支持，无法二次校验 NS，请自行在注册商确认 NS 已为目标值')]);
+            } elseif ($registrarVerify['error'] !== '') {
+                $notify('registrar_ns_check', ['message' => __('注册商 NS 查询异常（已重试）：%{1}', [$registrarVerify['error']]), 'error' => $registrarVerify['error']]);
+                w_log_error(__('[DnsSwitchService] %{1} 注册商 NS 校验异常：%{2}', [$domainName, $registrarVerify['error']]), [], $logCh);
+                return $this->fail(__('NS 切换后无法从注册商读取当前 NS，请检查 API 权限或稍后重试：%{1}', [$registrarVerify['error']]));
+            } elseif ($registrarVerify['match'] === false) {
+                $curStr = $registrarVerify['normalized'] === [] ? (string) __('(空)') : \implode(', ', $registrarVerify['normalized']);
+                $wantStr = \implode(', ', $targetNs);
+                $failMsg = (string) __(
+                    'NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。',
+                    [$curStr, $wantStr]
+                );
+                $notify('switch_ns_verify_fail', ['message' => $failMsg, 'current_ns' => $registrarVerify['normalized'], 'target_ns' => $targetNs]);
+                w_log_error(__('[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}', [$domainName, $curStr, $wantStr]), [], $logCh);
+                return $this->fail($failMsg);
+            }
+            $notify('registrar_ns_updated', [
+                'message' => __(
+                    '注册商处登记的 NS 已是目标值（注册局侧已更新或同步中）。公网 dig/nslookup 仍显示旧 NS（如 share-dns）很常见，不代表失败。'
+                ),
+            ]);
         }
-        $notify('registrar_ns_updated', [
-            'message' => __(
-                '注册商处登记的 NS 已是目标值（注册局侧已更新或同步中）。公网 dig/nslookup 仍显示旧 NS（如 share-dns）很常见，不代表失败。'
-            ),
-        ]);
 
         $publicNsPropagationPending = false;
 

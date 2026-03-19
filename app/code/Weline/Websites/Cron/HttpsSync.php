@@ -27,14 +27,14 @@ use Weline\Websites\Service\WebsitesCronTestContext;
  * - 证书无效/过期则自动回退到 HTTP
  */
 /**
- * 由 {@see WebsitesOperationsMaintenance} 在每小时整点附带执行。
+ * 由 {@see WebsitesOperationsMaintenance} 整点调用。
  */
 #[CronTestHelp(
-    description: '按证书有效性同步站点 HTTPS 开关。',
+    description: '按证书有效性同步站点 HTTPS 开关：检查 website_domain 各条绑定的证书是否仍有效；有效则启用 HTTPS，无效/过期则关闭 HTTPS（回退 HTTP）。',
     examples: ['php bin/w cron:test --task=https_sync --domain=www.example.com -v'],
     manual_help: [
-        '控制台 --domain= 仅同步该站点域名记录。',
-        '后台「后缀」未解析时处理全表（受任务内批量逻辑限制）。',
+        '逻辑：遍历已绑定网站的域名，根据关联证书的 PEM/有效期判断；hasValidCertificate 与当前 https_enabled 不一致时，写库同步（启用或回退）。不发起 HTTP 请求，仅读证书状态。',
+        '--domain= 仅同步包含该域名的站点记录。',
     ],
 )]
 class HttpsSync

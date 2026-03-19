@@ -28,14 +28,14 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 由 {@see WebsitesPoolCertificateMaintenance} 统一调度。
+ * 由 {@see WebsitesPoolCertificateMaintenance} 第二步调用。
  */
 #[CronTestHelp(
-    description: '域名池待申请证书队列（单域证书）。',
+    description: '子域 HTTPS 证书申请：从池内取生命周期 origin_ready 或 cert_pending 的子域，按队列逐个发起 ACME 申请（HTTP-01 或 DNS-01），成功后更新为可建站。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
     manual_help: [
-        '控制台 --domain= 可限定池子域名（子域 FQDN）。',
-        '单任务 cron:task:run 时后台「后缀」未解析则处理全队列，与定时一致。',
+        '逻辑：取待申请证书的子域（单域或泛域策略），同步阻塞直至当前域名申请完成；校验 HTTPS 可访问后更新 https_status、site_ready。日志写 domain_pool_cert。',
+        '--domain= 仅处理该子域（FQDN）；不指定则按队列处理。',
     ],
 )]
 class DomainPoolCertificateRequest
