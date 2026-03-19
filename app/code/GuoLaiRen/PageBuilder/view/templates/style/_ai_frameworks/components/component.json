@@ -1,0 +1,37 @@
+{
+    "template": "_ai_frameworks",
+    "name": "AI Frameworks",
+    "description": "AI 生成用框架片段目录；仅注册跨主题共享组件",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "accepts": ["header"]
+        },
+        "content": {
+            "name": "内容区域",
+            "accepts": ["content", "widget"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "accepts": ["footer"]
+        }
+    },
+    "components": {
+        "legal-content": {
+            "name": "法律文档",
+            "name_en": "Legal Content",
+            "description": "隐私政策、服务条款等；物理文件使用 style/_shared/components/legal-content.phtml",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-file-earmark-text",
+            "sort_order": 90,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "legal-content.phtml",
+            "default_config": []
+        }
+    }
+}
