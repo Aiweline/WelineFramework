@@ -19,16 +19,14 @@ use Weline\Websites\Service\HealthCheckService;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 健康检查定时任务
- *
- * 由 {@see WebsitesOperationsMaintenance} 统一调度。
+ * 由 {@see WebsitesOperationsMaintenance} 调用。
  */
 #[CronTestHelp(
-    description: '站点域名健康检查与 HTTPS 探测（website_domain 表）。',
+    description: '已绑定站点的域名健康检查：对 website_domain 表中的域名做 HTTP(S) 探测，更新健康状态；证书失效时自动回退 HTTPS 为 HTTP。',
     examples: ['php bin/w cron:test --task=health_check --domain=www.example.com -v'],
     manual_help: [
-        '控制台 --domain= 只检查匹配该域名的站点行。',
-        '后台「后缀」未解析时按任务默认批量检查。',
+        '逻辑：取已绑定网站的域名列表，逐个请求 HTTP 或 HTTPS；2xx/3xx 视为健康。若期望 HTTPS 但证书失败则尝试 HTTP，成功则更新为「已回退 HTTP」并同步数据库 HTTPS 开关。',
+        '--domain= 仅检查包含该域名的站点记录。',
     ],
 )]
 class HealthCheck

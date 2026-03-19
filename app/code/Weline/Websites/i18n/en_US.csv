@@ -151,6 +151,9 @@
 "域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}","Domain added to Cloudflare. Please switch Nameservers to: %{1}"
 "获取 Cloudflare Account ID 失败：%{1}","获取 Cloudflare Account ID 失败：%{1}"
 "Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限","Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限"
+"已检测到 %{1} 记录（%{2}）开启 Cloudflare 代理","已检测到 %{1} 记录（%{2}）开启 Cloudflare 代理"
+根域,根域
+"根域或 www 下未找到已开启代理的 A/AAAA/CNAME 记录","根域或 www 下未找到已开启代理的 A/AAAA/CNAME 记录"
 "无法调用 Registrar API 或域名无记录；检测到 DNS，可能已被注册","Registrar API unavailable or no data; DNS records found — likely already registered"
 "无法调用 Registrar API；未检测到 DNS，可能可注册（请用控制台或换注册商确认）","Registrar API unavailable; no DNS found — may be available (confirm in dashboard or another registrar)"
 "Cloudflare API Token 不能为空","Cloudflare API Token cannot be empty"
@@ -577,6 +580,9 @@ SSL,SSL
 "[DnsMigration] %{1} 推送失败：%{2}","[DnsMigration] %{1} 推送失败：%{2}"
 "[DnsMigration] %{1}","[DnsMigration] %{1}"
 未就绪域名较多时将分多轮处理,未就绪域名较多时将分多轮处理
+域名连通性检测,域名连通性检测
+"检测根域与子域 HTTP(S) 可访问性，更新连通性状态与详情（hover 展示）","检测根域与子域 HTTP(S) 可访问性，更新连通性状态与详情（hover 展示）"
+"连通性检测：根域 %d 成功 / %d 失败，子域 %d 成功 / %d 失败","连通性检测：根域 %d 成功 / %d 失败，子域 %d 成功 / %d 失败"
 域名生命周期编排,域名生命周期编排
 "轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程","轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程"
 "域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条","域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条"
@@ -587,6 +593,7 @@ SSL,SSL
 没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
 "本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程","本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程"
 域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请,域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请
+"挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需公网 NS 与 DNS 账户一致）。","挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需公网 NS 与 DNS 账户一致）。"
 "域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个","域名池证书申请完成：检查 %{1} 个，申请 %{2} 个，成功 %{3} 个，失败 %{4} 个"
 域名池证书申请任务异常：%{1},域名池证书申请任务异常：%{1}
 "跳过: domain 或 pool_id 为空","跳过: domain 或 pool_id 为空"
@@ -594,7 +601,7 @@ SSL,SSL
 "开始向 CA 申请：%{1}","开始向 CA 申请：%{1}"
 "开始向 CA 申请证书（%{1}），阻塞直至申请完成","开始向 CA 申请证书（%{1}），阻塞直至申请完成"
 开始同步申请证书：%{1}，阻塞直至申请完成,开始同步申请证书：%{1}，阻塞直至申请完成
-"调用 requestCertificate，等待 CA 响应…","调用 requestCertificate，等待 CA 响应…"
+"调用统一证书申请入口，等待 CA 响应…","调用统一证书申请入口，等待 CA 响应…"
 "证书已签发，HTTPS 连通性校验未通过，等待下次检测","证书已签发，HTTPS 连通性校验未通过，等待下次检测"
 "证书已签发，HTTPS 校验待通过：%{1}","证书已签发，HTTPS 校验待通过：%{1}"
 "CA 返回成功，但 HTTPS 连通性校验未通过，已标记待下次检测","CA 返回成功，但 HTTPS 连通性校验未通过，已标记待下次检测"
@@ -832,6 +839,14 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "Route53 Domains HTTP %{code}：%{body}","Route53 Domains HTTP %{code}：%{body}"
 "Route53 Domains 返回非 JSON：%{1}","Route53 Domains 返回非 JSON：%{1}"
 "Route53 Domains 请求失败","Route53 Domains 请求失败"
+"域名尚在开通或注册流程中。公网仍显示注册商默认解析很常见，不代表注册失败；流程结束后会按配置处理 DNS，无需仅凭当前 NS 判断注册是否成功。","域名尚在开通或注册流程中。公网仍显示注册商默认解析很常见，不代表注册失败；流程结束后会按配置处理 DNS，无需仅凭当前 NS 判断注册是否成功。"
+"当前公网 NS 为注册商默认 DNS（如 share-dns），通常表示域名已成功注册，只是解析仍由注册商托管。若已提交改 NS 至 Cloudflare 等，全球生效常需数十分钟至数小时，请在注册商后台核对 NS 是否已变更。","当前公网 NS 为注册商默认 DNS（如 share-dns），通常表示域名已成功注册，只是解析仍由注册商托管。若已提交改 NS 至 Cloudflare 等，全球生效常需数十分钟至数小时，请在注册商后台核对 NS 是否已变更。"
+"当前公网 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。","当前公网 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。"
+"DNS 与注册商一致（默认托管）。公网多为注册商提供的解析，一般表示域名已注册；若要使用 Cloudflare 等，需在注册商处修改 NS 并等待全球生效。","DNS 与注册商一致（默认托管）。公网多为注册商提供的解析，一般表示域名已注册；若要使用 Cloudflare 等，需在注册商处修改 NS 并等待全球生效。"
+"暂无法从当前数据判断公网 DNS 归属。未拉取的域名请以注册商后台或 dig NS 为准；拉取后仍会随同步更新。","暂无法从当前数据判断公网 DNS 归属。未拉取的域名请以注册商后台或 dig NS 为准；拉取后仍会随同步更新。"
+"当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。","当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。"
+"当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。","当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。"
+广播中…,广播中…
 "目标账户 %{1} 不支持 DNS 管理","目标账户 %{1} 不支持 DNS 管理"
 "从注册商同步 DNS 记录到本地","从注册商同步 DNS 记录到本地"
 "域名 %{1} 未关联注册商账户，无法切换","域名 %{1} 未关联注册商账户，无法切换"
@@ -856,7 +871,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 (空),(空)
 "NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。","NS 修改接口返回成功，但注册商侧多次查询后 NS 仍未变为目标值（当前：%{1}，目标：%{2}）。Gname 等平台可能需人工在控制台确认；在注册商处真正改 NS 之前，勿认为已切换成功。"
 "[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}","[DnsSwitchService] %{1} NS 注册商校验失败：current=%{2} target=%{3}"
-"注册商侧 NS 已与目标一致，切换已生效","注册商侧 NS 已与目标一致，切换已生效"
+"注册商处登记的 NS 已是目标值（注册局侧已更新或同步中）。公网 dig/nslookup 仍显示旧 NS（如 share-dns）很常见，不代表失败。","注册商处登记的 NS 已是目标值（注册局侧已更新或同步中）。公网 dig/nslookup 仍显示旧 NS（如 share-dns）很常见，不代表失败。"
 "[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟","[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟"
 已由用户断开,已由用户断开
 "等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录","等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录"
@@ -866,18 +881,30 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "同步并校验 DNS 记录","同步并校验 DNS 记录"
 "[DnsSwitchService] %{1} 同步/校验记录失败：%{2}","[DnsSwitchService] %{1} 同步/校验记录失败：%{2}"
 同步/校验记录失败：%{1},同步/校验记录失败：%{1}
+"已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。","已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。"
 "[DnsSwitchService] %{1} Step6: 域名标记已更新","[DnsSwitchService] %{1} Step6: 域名标记已更新"
-"步骤 5/5：校验 CDN 响应…","Step 5/5: Verifying CDN response…"
-"CDN 校验未通过，%{1} 秒后重试（已等待 %{2} 秒）","CDN check not passed, retry in %{1}s (waited %{2}s)"
-"DNS/CDN 切换完成","DNS/CDN switch complete"
+"步骤 5/5：校验 CDN/边缘配置…","步骤 5/5：校验 CDN/边缘配置…"
+"当前 DNS 供应商未提供 CDN 接口校验，已跳过","当前 DNS 供应商未提供 CDN 接口校验，已跳过"
+"第 %{1} 次校验 CDN 配置…","第 %{1} 次校验 CDN 配置…"
+"%{1} 秒后重试（已等待 %{2} 秒）","%{1} 秒后重试（已等待 %{2} 秒）"
+"DNS/CDN 切换流程已结束","DNS/CDN 切换流程已结束"
 "[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成","[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成"
 "DNS 切换成功：%{1} → %{2}","DNS 切换成功：%{1} → %{2}"
 "注册商侧 NS：%{1}","注册商侧 NS：%{1}"
 注册商侧查询异常：%{1},注册商侧查询异常：%{1}
+"(暂无或仍为旧 NS)","(暂无或仍为旧 NS)"
+"【公网尚未跟上】递归 DNS 仍显示「%{1}」，注册商处已是 Cloudflare NS。后续搬迁/同步会照常进行；外网访问与证书需等公网 NS 变为 *.ns.cloudflare.com（常见数分钟～48 小时）。","【公网尚未跟上】递归 DNS 仍显示「%{1}」，注册商处已是 Cloudflare NS。后续搬迁/同步会照常进行；外网访问与证书需等公网 NS 变为 *.ns.cloudflare.com（常见数分钟～48 小时）。"
 "适配器无 getDomainDetail 方法","适配器无 getDomainDetail 方法"
+"CDN 校验等待中（保持连接）…","CDN 校验等待中（保持连接）…"
 "[DnsSwitchService] 域名 %{1} 已标记 dns_switch_pending=1, target=%{2}, account_id=%{3}","[DnsSwitchService] 域名 %{1} 已标记 dns_switch_pending=1, target=%{2}, account_id=%{3}"
 "源账户 %{1} 不支持 DNS 管理","源账户 %{1} 不支持 DNS 管理"
 "[DnsSwitchService] syncRecordsFromSource %{1} 失败（非致命）：%{2}","[DnsSwitchService] syncRecordsFromSource %{1} 失败（非致命）：%{2}"
+"HTTPS 可访问（%{1} 重定向）","HTTPS 可访问（%{1} 重定向）"
+"HTTPS 可访问（%{1}）","HTTPS 可访问（%{1}）"
+"HTTPS 不可用，HTTP 可访问（%{1}）","HTTPS 不可用，HTTP 可访问（%{1}）"
+无法连接,无法连接
+"curl 初始化失败","curl 初始化失败"
+"HTTP %{1}","HTTP %{1}"
 域名和账号不能为空,域名和账号不能为空
 生命周期订单创建成功，但无法读取订单,生命周期订单创建成功，但无法读取订单
 配置订单不存在,配置订单不存在
@@ -940,6 +967,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "空 %{n} 条","空 %{n} 条"
 "无效结构 %{n} 条","无效结构 %{n} 条"
 %{message}（提交时已忽略：%{detail}）,%{message}（提交时已忽略：%{detail}）
+"域名购买后拉取落库失败: %{domain}, 错误: %{error}","域名购买后拉取落库失败: %{domain}, 错误: %{error}"
 "域名入池失败: %{domain}, 错误: %{error}","Failed to add domain to pool: %{domain}, error: %{error}"
 "购买后同步域名 DNS 元数据失败：%{1}","购买后同步域名 DNS 元数据失败：%{1}"
 "域名绑站失败: %{domain}, 错误: %{error}","Failed to bind domain to site: %{domain}, error: %{error}"
@@ -959,7 +987,9 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "目标账户不支持 DNS 记录管理","目标账户不支持 DNS 记录管理"
 参数无效,参数无效
 "无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。","无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。"
-"域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。","域名「%{1}」当前公网 NS 归属「%{2}」（%{3}），并非「%{4}」托管。可先在某处添加解析再改 NS；若 NS 仍指向别处，此处写入的 TXT 不会对公网生效，证书验证必败。请先在注册商将 NS 改为 %{4} 后再申请证书。"
+"请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。","请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。"
+"[常见误解] 您在后台把 DNS 选成了 Cloudflare，仅代表「用 Cloudflare API 管理解析」。公网 NS 仍显示注册商 DNS，说明注册商处的 NS 尚未改成 Cloudflare 的两条（或未完成「切换 DNS/CDN」整流程、或改后仍在全球生效中）。请用 dig/nslookup 查 NS，并在注册商控制台确认已为 *.ns.cloudflare.com。","[常见误解] 您在后台把 DNS 选成了 Cloudflare，仅代表「用 Cloudflare API 管理解析」。公网 NS 仍显示注册商 DNS，说明注册商处的 NS 尚未改成 Cloudflare 的两条（或未完成「切换 DNS/CDN」整流程、或改后仍在全球生效中）。请用 dig/nslookup 查 NS，并在注册商控制台确认已为 *.ns.cloudflare.com。"
+"域名「%{1}」当前公网 NS 为「%{2}」（%{3}），权威解析不在「%{4}」。向 %{4} API 写入的 TXT 不会出现在公网，DNS-01 证书必败。%{5}","域名「%{1}」当前公网 NS 为「%{2}」（%{3}），权威解析不在「%{4}」。向 %{4} API 写入的 TXT 不会出现在公网，DNS-01 证书必败。%{5}"
 "域名池 FQDN 或根域无效","域名池 FQDN 或根域无效"
 "域名池 FQDN 与根域不匹配","域名池 FQDN 与根域不匹配"
 "无效的服务器 IP（需为合法 IPv4 或 IPv6）","无效的服务器 IP（需为合法 IPv4 或 IPv6）"
@@ -1005,7 +1035,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 导入失败：%{1},导入失败：%{1}
 访问正常,"Access OK"
 "HTTPS 证书无效，已自动回退 HTTP","HTTPS certificate invalid, automatically rolled back to HTTP"
-"HTTP %{1}","HTTP %{1}"
 "Websites 配置查询不支持的操作：%{1}","Websites 配置查询不支持的操作：%{1}"
 启动配置流程：购买域名,启动配置流程：购买域名
 "域名商账号 ID","域名商账号 ID"
@@ -1150,6 +1179,7 @@ HTTPS状态,HTTPS状态
 服务商,服务商
 解析IP,解析IP
 HTTPS,HTTPS
+连通性,连通性
 操作,Actions
 从域名商导入域名,从域名商导入域名
 选择域名商账户,选择域名商账户
@@ -1250,6 +1280,7 @@ DNS服务商,DNS服务商
 错误,错误
 无,无
 本机,本机
+检测于,检测于
 注册,注册
 转存域名池,转存域名池
 DNS管理,DNS管理
@@ -1373,7 +1404,7 @@ Windows,Windows
 安装完成后刷新本页面，将不再显示此提示。,安装完成后刷新本页面，将不再显示此提示。
 "第 %{p} / %{t} 页，每页 %{n} 条，合计 %{total} 条","Page %{p} of %{t}, %{n} per page, %{total} total"
 暂无数据,暂无数据
-根域,根域
+左右滑动可查看更多列,左右滑动可查看更多列
 流转,流转
 域名池暂无数据,域名池暂无数据
 "请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池","请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池"

@@ -5,7 +5,8 @@ declare(strict_types=1);
 /**
  * 根域「注册状态」与运营事实不一致时的自我纠正。
  *
- * 子域已在域名池可建站时，说明域名已注册且解析/证书链已通，根域仍停留在 pending/正在注册 等多为同步滞后，定时任务据此将根域标为 active。
+ * 1) 子域已在域名池可建站时，说明域名已注册且解析/证书链已通，根域仍停留在 pending 等多为同步滞后，将根域标为 active（correctBatch / correctRootIfOperationallyReady）。
+ * 2) 定时扫描「未建站就绪」的根域，若该根域下所有子域都可建站，则用子域数据回填根域各字段（解析/HTTPS/可建站等），避免根域长期滞后。
  */
 
 namespace Weline\Websites\Service;
@@ -168,6 +169,145 @@ class DomainRootRegistrationSelfCorrectService
             }
         }
 
+        return $done;
+    }
+
+    /**
+     * 获取该根域下所有子域（池记录），按 parent_domain_id 或 root_domain 关联
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getSubdomainsForRoot(Domain $root): array
+    {
+        $id = $root->getDomainId();
+        $rd = \strtolower(\trim($root->getDomain()));
+        if ($rd === '') {
+            return [];
+        }
+        $query = (clone $this->poolModel)->clearQuery()
+            ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE);
+        if ($id > 0) {
+            $query->where(DomainPool::schema_fields_PARENT_DOMAIN_ID, $id);
+        } else {
+            $query->where(DomainPool::schema_fields_ROOT_DOMAIN, $rd);
+        }
+        return $query->select()->fetchArray();
+    }
+
+    /**
+     * 该根域下是否至少有一个子域，且全部子域都可建站（site_ready=1）
+     */
+    public function hasAllSubdomainsSiteReady(Domain $root): bool
+    {
+        $subdomains = $this->getSubdomainsForRoot($root);
+        if ($subdomains === []) {
+            return false;
+        }
+        foreach ($subdomains as $row) {
+            if ((int) ($row[DomainPool::schema_fields_SITE_READY] ?? 0) !== 1) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 当该根域下所有子域都可建站时，用子域数据回填根域各字段（解析、HTTPS、可建站等）并保存
+     *
+     * @return bool 是否执行了更新
+     */
+    public function syncRootFieldsFromPoolWhenAllReady(Domain $root): bool
+    {
+        if (!$this->hasAllSubdomainsSiteReady($root)) {
+            return false;
+        }
+        $subdomains = $this->getSubdomainsForRoot($root);
+        if ($subdomains === []) {
+            return false;
+        }
+        // 选一条代表子域（优先根域同名即 apex，或 www，否则第一条）
+        $rep = null;
+        foreach ($subdomains as $row) {
+            $d = \strtolower(\trim((string) ($row[DomainPool::schema_fields_DOMAIN] ?? '')));
+            $r = \strtolower(\trim((string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '')));
+            if ($d === $r || $d === 'www.' . $r) {
+                $rep = $row;
+                break;
+            }
+        }
+        if ($rep === null) {
+            $rep = $subdomains[0];
+        }
+        $now = \date('Y-m-d H:i:s');
+        $root->setStatus(Domain::STATUS_ACTIVE);
+        if ($this->registrarStatusLooksLikeRegistering($root->getRegistrarStatus())) {
+            $root->setRegistrarStatus('');
+        }
+        $root->setResolveStatus(Domain::RESOLVE_STATUS_RESOLVED);
+        $root->setResolvedIp((string) ($rep[DomainPool::schema_fields_RESOLVED_IP] ?? ''));
+        $root->setResolvedIpv6((string) ($rep[DomainPool::schema_fields_RESOLVED_IPV6] ?? ''));
+        $root->setIsLocalServer(true);
+        $root->setResolveCheckedAt((string) ($rep[DomainPool::schema_fields_RESOLVE_CHECKED_AT] ?? $now));
+        $root->setResolveError('');
+        $root->setHttpsStatus(Domain::HTTPS_STATUS_VALID);
+        $root->setHttpsExpiresAt($this->earliestHttpsExpiresAt($subdomains));
+        $root->setHttpsError('');
+        $root->setHttpsRequestedAt($now);
+        $root->setSiteReady(true);
+        $root->save();
+        w_log_info(
+            __('根域字段已从子域回填：%{1}（子域均可建站）', [$root->getDomain()]),
+            [],
+            'domain_root_status_self_correct'
+        );
+        return true;
+    }
+
+    /**
+     * 从多条池记录中取最早的有效 https_expires_at（非空）
+     */
+    private function earliestHttpsExpiresAt(array $poolRows): ?string
+    {
+        $min = null;
+        foreach ($poolRows as $row) {
+            $v = \trim((string) ($row[DomainPool::schema_fields_HTTPS_EXPIRES_AT] ?? ''));
+            if ($v === '') {
+                continue;
+            }
+            if ($min === null || \strcmp($v, $min) < 0) {
+                $min = $v;
+            }
+        }
+        return $min;
+    }
+
+    /**
+     * 定时扫描「未建站就绪」的根域，若某根域下所有子域都可建站则回填根域各字段
+     *
+     * @param int $limit 最多处理根域数量
+     * @return int 实际更新的根域条数
+     */
+    public function syncRootFieldsFromPoolBatch(int $limit = 200): int
+    {
+        $done = 0;
+        $rows = (clone $this->domainModel)->clearQuery()
+            ->where(Domain::schema_fields_SITE_READY, 0)
+            ->where(Domain::schema_fields_STATUS, Domain::STATUS_SUSPENDED, '!=')
+            ->where(Domain::schema_fields_STATUS, Domain::STATUS_EXPIRED, '!=')
+            ->order(Domain::schema_fields_DOMAIN, 'ASC')
+            ->limit($limit)
+            ->select()
+            ->fetchArray();
+        foreach ($rows as $row) {
+            if ($done >= $limit) {
+                break;
+            }
+            $d = ObjectManager::getInstance(Domain::class, [], false);
+            $d->setData($row);
+            if ($this->syncRootFieldsFromPoolWhenAllReady($d)) {
+                $done++;
+            }
+        }
         return $done;
     }
 

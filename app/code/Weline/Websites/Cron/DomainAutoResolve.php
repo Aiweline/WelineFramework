@@ -29,16 +29,18 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 逻辑由 {@see WebsitesDomainResolvePipeline} 统一调度（每 10 分钟），本类仅保留可执行体。
+ * 由 {@see WebsitesDomainResolvePipeline} 第一步调用。
  */
 #[CronTestHelp(
-    description: '仅跑购买自动解析任务、DNS 迁移、全局自动解析（不跑域名池/根域解析）。',
+    description: '自动解析三步：① 执行购买时创建的解析任务（为指定根域添加 @/www A 记录）② DNS 迁移待推送 ③ 全局自动解析未解析根域。不包含「子域解析检测」与「根域解析+入池」。',
     examples: [
         'php bin/w cron:test --task=domain_auto_resolve --domain=example.com -v',
     ],
     manual_help: [
-        '控制台 --domain= 聚焦该根域相关自动解析任务。',
-        '后台「后缀」未解析时与管道内定时行为一致。',
+        '① 购买自动解析：处理 domain_auto_resolve_task 表中待执行任务，调用 DNS 接口为根域添加 @、www 的 A 记录指向本机。',
+        '② DNS 迁移：将 dns_migration_pending=1 的根域在「新 DNS 账户」上推送 A/AAAA 等记录。',
+        '③ 全局自动解析：若开启全局自动解析，对尚未解析的根域批量添加 @、www 指向本机。',
+        '--domain= 仅处理该根域相关任务。',
     ],
 )]
 class DomainAutoResolve
