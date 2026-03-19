@@ -12,12 +12,13 @@
 
 - `style/_shared/partials/head-common.phtml` — 统一注入统计与 Visitor `<pixel>`（内部引用 `templates/base/tracking.phtml`）。
 - `style/_shared/partials/footer-common.phtml` — 统一下载链接委托 + 条件 `WelinePixel.send`（预览不发）。
-- `style/_shared/default-legal.phtml` — 法律页默认占位 HTML；`include` 前可设 `$legalType`、`$legalTitle`，内部委托 `DefaultLegalPlaceholder::toHtml()`（与 `Page.php` 批量建站逻辑一致，避免缺失文件 Warning）。
+- `style/_shared/components/legal-content.phtml` — 法律页正文组件；默认段落由布局 JSON 的 `content.body` / `toc.items` 提供（`page.content` 可为空）。主题无 `layouts/default/{privacy_policy|terms_of_service|…}.json` 时，`ComponentService` 会回退到 `style/_shared/layouts/default/` 下同名的共享布局。
 
 ### 1.2 接入方式
 
 - **有 `layout.phtml` 的主题**：在 `</head>` 前、`</body>` 前各 `echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml');`（及 `footer-common`）。
 - **`default` 主题**（无 layout）：在 **`default/header.phtml`** 的 `</head>` 前注入 `head-common`（并保证 `assign('is_preview', …)`、`style`/`page` 与预览一致）；在 **`default/footer.phtml`** 的 `</body>` 前注入 `footer-common`。
+- **`default` / `_ai_frameworks`**：已提供 `components/component.json` 中的 **`legal-content`**（文件回退 `_shared`），以及 `layouts/default/` 下与 `_shared` 一致的法律页 JSON。`default` 的 `component.json` 含 **`"content_phtml_scan": "always"`**，避免仅补充 `legal-content` 时跳过对根目录 **`content.phtml`** 的组件拆分注册。
 
 ### 1.3 禁止
 
