@@ -13,6 +13,11 @@ use Weline\Websites\Model\DomainRegistrarAccount;
 /**
  * DNS/CDN 切换统一服务
  *
+ * **权威 NS 委派（注册局登记的 Nameserver）**：只能、且必须由**域名注册商**修改（本服务 Step3：
+ * `sourceAdapter->updateNameservers`，凭证必须来自 **`Domain.account_id`**（注册商账户；勿用 `dns_account_id`）。
+ * **目标 DNS 账户**（`targetAccount`＝`dns_account_id`，如 Cloudflare）**绝不**调用 `updateNameservers`：仅用于 Step2
+ * `getProviderNameservers` / addZone、Step4 推送解析记录等；域名不在 CF 注册时，CF 只是托管方，无权改注册局委派。
+ *
  * 封装 DNS/CDN 切换的完整编排逻辑。
  *
  * **入口约定（由新到旧）：**
@@ -104,9 +109,11 @@ class DnsSwitchService
         if ($targetAdapter === null || !$targetAdapter->supportsDnsManagement()) {
             return $this->fail(__('目标账户 %{1} 不支持 DNS 管理', [$targetCode]));
         }
+        // 目标适配器永不用于 updateNameservers；委派仅 sourceAdapter（注册商）.
 
         // ── Step 1: 从源（注册商）同步 DNS 记录到本地 ──
         $notify('sync_records', ['domain' => $domainName, 'message' => __('从注册商同步 DNS 记录到本地')]);
+        // 源侧凭证：Domain.account_id（注册商）；与 dns_account_id（托管目标）严格区分。
         $registrarAccountId = (int) $domain->getAccountId();
         if ($registrarAccountId <= 0) {
             return $this->fail(__('域名 %{1} 未关联注册商账户，无法切换', [$domainName]));
@@ -171,8 +178,8 @@ class DnsSwitchService
                 w_log_info(__('[DnsSwitchService] %{1} Step3: 注册商 NS 已与目标一致，跳过改 NS 接口', [$domainName]), [], $logCh);
             }
         } else {
-            // ── Step 3: 在注册商处修改 NS ──
-            $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS', [$sourceAccount->getRegistrarCode()])]);
+            // ── Step 3: 仅在注册商侧修改注册局委派的 NS（在 Cloudflare 建 Zone 不能替代此步） ──
+            $notify('switch_ns', ['domain' => $domainName, 'message' => __('在注册商 %{1} 切换 NS（注册局委派，仅此路径生效）', [$sourceAccount->getRegistrarCode()])]);
             $updateResult = $sourceAdapter->updateNameservers($domainName, $targetNs, $sourceAccount->getCredentials());
             $updateSuccess = (bool) ($updateResult['success'] ?? false);
             $updateMsg = (string) ($updateResult['message'] ?? __('NS 切换失败'));
@@ -286,6 +293,24 @@ class DnsSwitchService
         $authValidation = $this->resolveService->validateAuthoritativeDnsMatchesProvider($domainName, $targetCode);
         $requireLiveAuthorityForCutover = $this->targetRequiresPublicAuthoritativeNsForCutover($targetCode);
         $liveAuthorityOk = (bool) ($authValidation['ok'] ?? false);
+        // 委派已由 Step3 注册商接口写入；此处 DoH 仅与 waitForNameservers 一致，用于观测全球解析是否已跟上（本机 libc 可能仍旧）
+        if ($requireLiveAuthorityForCutover && !$liveAuthorityOk && $probeDoh) {
+            $dohLive = $this->normalizeNameservers($this->resolveService->getLiveNameserversViaCloudflareDoH($domainName));
+            $targetNormForCutover = $this->normalizeNameservers($targetNs);
+            if ($dohLive !== [] && $dohLive === $targetNormForCutover) {
+                $liveAuthorityOk = true;
+                $notify('cutover_authority_ok_via_doh', [
+                    'domain' => $domainName,
+                    'message' => (string) __(
+                        'Cutover：本机 NS 仍为「%{1}」，DoH 已指向目标「%{2}」。委派仅经注册商 Step3 生效；DoH 与等待步骤同为传播观测，准予 dns_cutover_complete。',
+                        [
+                            ($authValidation['live_ns'] ?? []) !== [] ? \implode(', ', $authValidation['live_ns']) : (string) __('(空)'),
+                            \implode(', ', $targetNs),
+                        ]
+                    ),
+                ]);
+            }
+        }
         $deferCutoverForPropagation = $requireLiveAuthorityForCutover && !$liveAuthorityOk;
 
         // ── Step 6: 更新 Domain 标记（含 CDN） ──
@@ -322,6 +347,29 @@ class DnsSwitchService
         }
         $domain->forceCheck(false)->save();
         w_log_info(__('[DnsSwitchService] %{1} Step6: 域名标记已更新', [$domainName]), [], $logCh);
+        $notify('domain_switch_persisted', [
+            'domain' => $domainName,
+            'dns_switch_pending' => (int) $domain->getDnsSwitchPending(),
+            'dns_cutover_complete' => (int) $domain->getDnsCutoverComplete(),
+            'dns_migration_pending' => (int) $domain->getDnsMigrationPending(),
+            'dns_account_id' => (int) $domain->getDnsAccountId(),
+            'dns_provider' => (string) $domain->getDnsProvider(),
+            'defer_cutover_public_ns' => $deferCutoverForPropagation,
+            'message' => $deferCutoverForPropagation
+                ? (string) __('落库摘要：待传播完成后再将 dns_cutover_complete 置 1；证书队列仍关闭。定时任务 DnsCdnAutoSwitch 会重试检测公网权威 NS。')
+                : (string) __('落库摘要：切换流程已闭环（dns_switch_pending=0，dns_cutover_complete=1），可进行证书申请与建站相关流程。'),
+        ]);
+        w_log_info(__(
+            '[DnsSwitchService] %{1} Step6 落库: dns_switch_pending=%{2}, dns_cutover_complete=%{3}, dns_migration_pending=%{4}, dns_account_id=%{5}, defer_public_ns=%{6}',
+            [
+                $domainName,
+                (string) $domain->getDnsSwitchPending(),
+                (string) $domain->getDnsCutoverComplete(),
+                (string) $domain->getDnsMigrationPending(),
+                (string) $domain->getDnsAccountId(),
+                $deferCutoverForPropagation ? '1' : '0',
+            ]
+        ), [], $logCh);
 
         // ── Step 7: 更新 DomainPool 状态 ──
         $cdnProvider = $cdnAccount !== null ? (string) $cdnAccount->getRegistrarCode() : ($this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '');
@@ -383,6 +431,9 @@ class DnsSwitchService
             'domain' => $domainName,
             'message' => __('DNS/CDN 切换流程已结束'),
             'public_ns_propagation_pending' => $publicNsPropagationPending || $deferCutoverForPropagation,
+            'dns_switch_pending' => (int) $domain->getDnsSwitchPending(),
+            'dns_cutover_complete' => (int) $domain->getDnsCutoverComplete(),
+            'defer_cutover_public_ns' => $deferCutoverForPropagation,
         ]);
         w_log_info(__('[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成', [$domainName]), [], $logCh);
 
