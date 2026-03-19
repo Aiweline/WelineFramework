@@ -324,11 +324,89 @@ class DomainResolveService
             ];
         }
 
+        if ($autoSave && (int) $domain->getDnsAccountId() <= 0) {
+            $domain->setDnsAccountId((int) $account->getAccountId());
+            $domain->forceCheck(false)->save();
+        }
+
         return [
             'account' => $account,
             'adapter' => $adapter,
             'error' => '',
         ];
+    }
+
+    /**
+     * 将 dns_account_id 从 0 解析为可管理 DNS 的账户并落库（购买/注册商拉取/DNS 切换前调用）。
+     *
+     * 优先级：已写入的 dns_provider 对应账户 → NS 识别服务商账户 → 注册商账户（同源且适配器支持 DNS API）。
+     */
+    public function ensureDnsAccountIdPersisted(Domain $domain): bool
+    {
+        if ((int) $domain->getDnsAccountId() > 0) {
+            return true;
+        }
+        if (!(int) $domain->getDomainId()) {
+            return false;
+        }
+
+        $dnsProvider = \strtolower(\trim((string) $domain->getDnsProvider()));
+
+        if ($dnsProvider !== '') {
+            $acc = $this->findAccountByProviderCode($dnsProvider);
+            if ($acc !== null) {
+                $adapter = $this->registrarResolver->getAdapter($acc->getRegistrarCode());
+                if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                    $domain->setDnsAccountId((int) $acc->getAccountId());
+                    $domain->forceCheck(false)->save();
+
+                    return true;
+                }
+            }
+        }
+
+        $ns = $domain->getNameservers();
+        if (\is_array($ns) && $ns !== []) {
+            $detected = \strtolower(\trim((string) $this->dnsDetector->detectProvider($ns)));
+            if ($detected !== '' && $detected !== 'unknown') {
+                if ($dnsProvider === '') {
+                    $domain->setDnsProvider($detected);
+                    $dnsProvider = $detected;
+                }
+                $acc = $this->findAccountByProviderCode($detected);
+                if ($acc !== null) {
+                    $adapter = $this->registrarResolver->getAdapter($acc->getRegistrarCode());
+                    if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                        $domain->setDnsAccountId((int) $acc->getAccountId());
+                        $domain->forceCheck(false)->save();
+
+                        return true;
+                    }
+                }
+            }
+        }
+
+        $regAcc = $this->loadAccount((int) $domain->getAccountId());
+        if ($regAcc !== null) {
+            $adapter = $this->registrarResolver->getAdapter($regAcc->getRegistrarCode());
+            if ($adapter !== null && $adapter->supportsDnsManagement()) {
+                $domain->setDnsAccountId((int) $regAcc->getAccountId());
+                if (\strtolower(\trim((string) $domain->getDnsProvider())) === '') {
+                    $domain->setDnsProvider(\strtolower((string) $regAcc->getRegistrarCode()));
+                }
+                $domain->forceCheck(false)->save();
+
+                return true;
+            }
+        }
+
+        w_log_warning(
+            __('[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}', [(string) $domain->getDomainId(), $domain->getDomain()]),
+            [],
+            'domain_resolve'
+        );
+
+        return false;
     }
 
     /**

@@ -37,6 +37,7 @@ class DomainPurchaseService
     private DomainRegistrarResolverService $resolverService;
     private DomainPool $domainPool;
     private EventsManager $eventsManager;
+    private DomainResolveService $domainResolveService;
 
     public function __construct(
         DomainPurchaseOrder $orderModel,
@@ -45,7 +46,8 @@ class DomainPurchaseService
         DomainRegistrarAccount $accountModel,
         DomainRegistrarResolverService $resolverService,
         DomainPool $domainPool,
-        EventsManager $eventsManager
+        EventsManager $eventsManager,
+        DomainResolveService $domainResolveService
     ) {
         $this->orderModel = $orderModel;
         $this->itemModel = $itemModel;
@@ -54,6 +56,7 @@ class DomainPurchaseService
         $this->resolverService = $resolverService;
         $this->domainPool = $domainPool;
         $this->eventsManager = $eventsManager;
+        $this->domainResolveService = $domainResolveService;
     }
 
     /**
@@ -691,6 +694,7 @@ class DomainPurchaseService
             if ($needSwitch) {
                 $rootDomain->setDnsSwitchDeferred(1);
             }
+            $this->domainResolveService->ensureDnsAccountIdPersisted($rootDomain);
             $rootDomain->save();
             return $needSwitch;
         } catch (\Throwable $e) {
