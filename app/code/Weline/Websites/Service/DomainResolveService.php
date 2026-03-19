@@ -9,8 +9,8 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Api\DomainRegistrarInterface;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainConfig;
 use Weline\Websites\Model\DomainPool;
@@ -800,12 +800,145 @@ class DomainResolveService
     }
 
     /**
+     * ACME DNS-01：仅用「注册商适配器（account_id）+ 当前 DNS 托管适配器」API 判断是否具备写入验证 TXT 的前提。
+     * 不使用本机 {@see dns_get_record}、公共 DNS/DoH 或轮询等待公网传播。
+     *
+     * @return array{
+     *   ok: bool,
+     *   message: string,
+     *   matched_via?: string,
+     *   registrar_ns?: array<string>,
+     *   registrar_detected?: string,
+     *   zone_status?: string
+     * }
+     */
+    public function validateAcmeDns01HostingViaAdapters(
+        Domain $domain,
+        string $rootDomain,
+        string $providerCode,
+        DomainRegistrarInterface $dnsAdapter,
+        array $dnsCredentials
+    ): array {
+        $rootDomain = \strtolower(\trim($rootDomain));
+        $providerCode = \strtolower(\trim($providerCode));
+        if ($rootDomain === '' || $providerCode === '') {
+            return ['ok' => false, 'message' => (string) __('参数无效')];
+        }
+
+        $regNs = [];
+        $regDetected = 'unknown';
+        if ((int) $domain->getAccountId() > 0) {
+            $regNs = $this->fetchRegistrarDelegatedNameservers($domain);
+            if ($regNs !== []) {
+                $regDetected = $this->dnsDetector->detectProvider($regNs);
+                if ($regDetected !== $providerCode) {
+                    $regStr = \implode(', ', $regNs);
+
+                    return [
+                        'ok' => false,
+                        'message' => (string) __(
+                            '注册商 API 显示的委派 NS 为「%{1}」（%{2}），未指向当前 DNS 托管「%{3}」。请先在注册商处将 NS 改为该托管商要求的地址后再申请证书。',
+                            [$regStr, $this->dnsDetector->getProviderDisplayName($regDetected), $this->dnsDetector->getProviderDisplayName($providerCode)]
+                        ),
+                        'registrar_ns' => $regNs,
+                        'registrar_detected' => $regDetected,
+                    ];
+                }
+            }
+        }
+
+        $zoneProbe = $this->verifyDnsManagedZoneWritableForAcme($dnsAdapter, $rootDomain, $dnsCredentials);
+        if (!$zoneProbe['ok']) {
+            return [
+                'ok' => false,
+                'message' => (string) ($zoneProbe['message'] ?? __('DNS 托管 API 未能确认该域名在本账户下可写')),
+                'registrar_ns' => $regNs,
+                'registrar_detected' => $regDetected,
+            ];
+        }
+
+        $zoneStatus = (string) ($zoneProbe['zone_status'] ?? '');
+        $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
+        $matchedVia = $regNs !== [] && $regDetected === $providerCode ? 'registrar+dns' : 'dns_adapter';
+        $zoneLabel = $zoneStatus !== '' ? $zoneStatus : (string) __('已就绪');
+        $info = '';
+        if ($regNs !== []) {
+            $regStr = \implode(', ', $regNs);
+            $info = (string) __(
+                '[注册商 API] 委派 NS：%{1}（已识别为「%{2}」）。[DNS 托管 API] Zone 状态：%{3}。将直接写入验证 TXT。',
+                [$regStr, $expName, $zoneLabel]
+            );
+        } else {
+            $info = (string) __(
+                '[DNS 托管 API] 已在本账户下确认域名可管理（Zone：%{1}）。未能通过注册商 API 读取委派 NS；若 CA 验证失败请核对注册局 NS 是否已指向「%{2}」。',
+                [$zoneLabel, $expName]
+            );
+        }
+        $info .= ' ' . (string) __(
+            '证书机构仍从全球递归查询 TXT；若委派尚未在全球生效，DNS-01 可能失败，可稍后重试或改用 HTTP-01。'
+        );
+
+        return [
+            'ok' => true,
+            'message' => $info,
+            'matched_via' => $matchedVia,
+            'registrar_ns' => $regNs,
+            'registrar_detected' => $regDetected,
+            'zone_status' => $zoneStatus,
+        ];
+    }
+
+    /**
+     * 通过 DNS 托管适配器 {@see DomainRegistrarInterface::getDomainDetail}（及必要时 {@see getDnsRecords}）确认根域可写。
+     *
+     * @return array{ok: bool, message?: string, zone_status?: string}
+     */
+    private function verifyDnsManagedZoneWritableForAcme(
+        DomainRegistrarInterface $adapter,
+        string $rootDomain,
+        array $credentials
+    ): array {
+        try {
+            $detail = $adapter->getDomainDetail($rootDomain, $credentials);
+        } catch (\Throwable $e) {
+            return ['ok' => false, 'message' => $e->getMessage()];
+        }
+        if (!\is_array($detail)) {
+            return ['ok' => false, 'message' => (string) __('DNS 托管 API 返回异常')];
+        }
+        $st = \strtolower(\trim((string) ($detail['status'] ?? '')));
+        if ($st === 'not_found') {
+            $msg = \trim((string) ($detail['message'] ?? ''));
+
+            return [
+                'ok' => false,
+                'message' => $msg !== '' ? $msg : (string) __('DNS 托管账户下未找到该域名，请检查账户、Token 权限与区域资源'),
+            ];
+        }
+        if (\in_array($st, ['deleted', 'error'], true)) {
+            $msg = \trim((string) ($detail['message'] ?? ''));
+
+            return [
+                'ok' => false,
+                'message' => $msg !== '' ? $msg : (string) __('DNS 托管侧域名状态异常，无法写入验证记录'),
+            ];
+        }
+        if ($st === 'unknown' || $st === '') {
+            try {
+                $adapter->getDnsRecords($rootDomain, $credentials);
+            } catch (\Throwable $e) {
+                return ['ok' => false, 'message' => $e->getMessage()];
+            }
+        }
+
+        return ['ok' => true, 'zone_status' => $st !== '' ? $st : 'ready'];
+    }
+
+    /**
      * 校验向互联网宣告的权威 NS（与 dig/nslookup NS 一致）是否由指定 DNS 供应商托管。
      * 注意：注册局登记的委派 NS **只应在注册商处修改**；默认以公网可见结果为准（与 CA DNS-01 一致）。
      *
-     * **ACME 专用**：`$trustRegistrarWhenPublicMismatch=true` 且传入 `$domain` 时，若公网判定与目标不符，会再调
-     * **注册商** `getDomainDetail`（`account_id`）核对登记 NS；若登记已指向目标供应商（如 Cloudflare），则放行写入 TXT，
-     * 并提示 CA 仍以全球递归为准（传播/缓存滞后时验证可能仍失败）。
+     * **ACME 专用**：`addAcmeTxtRecord` 已改为 {@see validateAcmeDns01HostingViaAdapters}（仅适配器 API），不再使用本方法与公网/本机探测做门闸。
      *
      * **Cutover / 门闸**：`DnsSwitchService` 等须保持 `trustRegistrarWhenPublicMismatch=false`，避免未传播即误判已完成切换。
      *
@@ -916,7 +1049,9 @@ class DomainResolveService
     }
 
     /**
-     * ACME DNS-01：轮询直到公网权威 NS 判定为指定供应商（与 {@see getLiveNameservers} 一致），可选 DoH 交叉判定。
+     * 轮询直到本机/DoH 观测的公网 NS 与目标供应商一致（依赖 {@see getLiveNameservers} 与可选 Cloudflare DoH）。
+     *
+     * @deprecated 证书 DNS-01 已改为 {@see validateAcmeDns01HostingViaAdapters}（仅注册商 + DNS 托管适配器 API），不再调用本方法。
      *
      * @param callable|null $onProgress fn(string $message, array $data): void
      * @return array{ok: bool, message: string, waited_seconds: int, live_ns: array<string>, detected: string, via?: string}
@@ -927,7 +1062,8 @@ class DomainResolveService
         int $maxWaitSeconds,
         int $intervalSeconds,
         bool $probeCloudflareDoh,
-        ?callable $onProgress = null
+        ?callable $onProgress = null,
+        bool $allowDohToSatisfyWait = true
     ): array {
         $rootDomain = \strtolower(\trim($rootDomain));
         $providerCode = \strtolower(\trim($providerCode));
@@ -957,10 +1093,13 @@ class DomainResolveService
                     'via' => 'resolver',
                 ];
             }
+
+            $dohNs = [];
+            $dohDet = 'unknown';
             if ($probeCloudflareDoh) {
                 $dohNs = $this->getLiveNameserversViaCloudflareDoH($rootDomain);
                 $dohDet = $dohNs !== [] ? $this->dnsDetector->detectProvider($dohNs) : 'unknown';
-                if ($dohDet === $providerCode) {
+                if ($allowDohToSatisfyWait && $dohDet === $providerCode) {
                     return [
                         'ok' => true,
                         'message' => '',
@@ -979,14 +1118,24 @@ class DomainResolveService
             if ($onProgress !== null) {
                 $detName = $this->dnsDetector->getProviderDisplayName($detected);
                 $nsStr = $live !== [] ? \implode(', ', $live) : (string) __('(暂无)');
-                $onProgress((string) __(
+                $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
+                $tickMsg = (string) __(
                     '[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…',
-                    [(string) $elapsed, $detName, $nsStr, $this->dnsDetector->getProviderDisplayName($providerCode)]
-                ), [
+                    [(string) $elapsed, $detName, $nsStr, $expName]
+                );
+                if (!$allowDohToSatisfyWait && $probeCloudflareDoh && $dohDet === $providerCode && $detected !== $providerCode) {
+                    $tickMsg .= ' ' . (string) __(
+                        '（DoH 已观测到「%{1}」，本机解析器仍为「%{2}」；须本机也解析到目标后再写 TXT，与 CA 可见性更一致。）',
+                        [$expName, $detName]
+                    );
+                }
+                $onProgress($tickMsg, [
                     'step' => 'acme_wait_ns_tick',
                     'elapsed' => $elapsed,
                     'live_ns' => $live,
                     'detected' => $detected,
+                    'doh_detected' => $dohDet,
+                    'doh_ns' => $dohNs,
                 ]);
             }
 
@@ -1003,11 +1152,22 @@ class DomainResolveService
         $detName = $this->dnsDetector->getProviderDisplayName($detected);
         $nsStr = $live !== [] ? \implode(', ', $live) : (string) __('(暂无)');
 
+        $dohTimeoutSuffix = '';
+        if (!$allowDohToSatisfyWait && $probeCloudflareDoh) {
+            $dohNsT = $this->getLiveNameserversViaCloudflareDoH($rootDomain);
+            $dohDetT = $dohNsT !== [] ? $this->dnsDetector->detectProvider($dohNsT) : 'unknown';
+            if ($dohDetT === $providerCode && $detected !== $providerCode) {
+                $dohTimeoutSuffix = ' ' . (string) __(
+                    '（Cloudflare DoH 已观测到目标 NS，本机权威查询仍不一致；可检查服务器解析器或延长 env websites.acme_dns.wait_public_ns_max_seconds。）'
+                );
+            }
+        }
+
         return [
             'ok' => false,
             'message' => (string) __(
-                '[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。',
-                [(string) $elapsed, $detName, $nsStr, $this->dnsDetector->getProviderDisplayName($providerCode)]
+                '[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。%{5}',
+                [(string) $elapsed, $detName, $nsStr, $this->dnsDetector->getProviderDisplayName($providerCode), $dohTimeoutSuffix]
             ),
             'waited_seconds' => $elapsed,
             'live_ns' => $live,

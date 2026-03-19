@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Extends\Module\Weline_Framework\Query;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Websites\Model\Domain;
@@ -1098,89 +1097,36 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
         $rootDomain = \strtolower((string) $rootDomainModel->getDomain());
         $providerCode = (string) ($dnsResult['adapter']->getRegistrarCode());
-        $nsGate = $resolveService->validateAuthoritativeDnsMatchesProvider(
+        $nsGate = $resolveService->validateAcmeDns01HostingViaAdapters(
+            $rootDomainModel,
             $rootDomain,
             $providerCode,
-            $rootDomainModel,
-            true
+            $dnsResult['adapter'],
+            $dnsResult['account']->getCredentials()
         );
         if (!$nsGate['ok']) {
             if ($onProgress) {
-                $onProgress($nsGate['message'], ['step' => 'ns_not_authoritative', 'live_ns' => $nsGate['live_ns'], 'detected' => $nsGate['detected']]);
+                $onProgress((string) ($nsGate['message'] ?? ''), [
+                    'step' => 'acme_adapter_gate_fail',
+                    'registrar_ns' => $nsGate['registrar_ns'] ?? [],
+                    'registrar_detected' => $nsGate['registrar_detected'] ?? '',
+                ]);
             }
             return [
                 'success' => false,
-                'message' => $nsGate['message'],
+                'message' => (string) ($nsGate['message'] ?? ''),
                 'record_id' => '',
                 'dns_provider' => $providerCode,
             ];
         }
         if ($onProgress && \trim((string) ($nsGate['message'] ?? '')) !== '') {
             $onProgress((string) $nsGate['message'], [
-                'step' => 'ns_registrar_ok_public_lag',
-                'live_ns' => $nsGate['live_ns'] ?? [],
-                'detected' => $nsGate['detected'] ?? '',
+                'step' => 'acme_adapter_gate_ok',
                 'matched_via' => $nsGate['matched_via'] ?? '',
                 'registrar_ns' => $nsGate['registrar_ns'] ?? [],
+                'registrar_detected' => $nsGate['registrar_detected'] ?? '',
+                'zone_status' => $nsGate['zone_status'] ?? '',
             ]);
-        }
-
-        if (($nsGate['matched_via'] ?? '') === 'registrar') {
-            $acmeCfg = Env::module_env('Weline_Websites', 'acme_dns') ?? [];
-            $dsCfg = Env::module_env('Weline_Websites', 'dns_switch') ?? [];
-            $maxWait = (int) ($acmeCfg['wait_public_ns_max_seconds'] ?? 3600);
-            $interval = (int) ($acmeCfg['wait_public_ns_interval_seconds'] ?? 15);
-            $dohOpt = $acmeCfg['ns_probe_use_cloudflare_doh'] ?? null;
-            $probeDoh = $dohOpt !== null ? (bool) $dohOpt : (bool) ($dsCfg['ns_probe_use_cloudflare_doh'] ?? true);
-            $maxWait = \max(0, $maxWait);
-            $interval = \max(1, $interval);
-            if ($maxWait > 0) {
-                if ($onProgress) {
-                    $onProgress((string) __(
-                        '证书 DNS-01：注册商登记 NS 已指向目标，正在等待公网权威 NS 与之一致后再写入验证 TXT（最长约 %{1} 分钟）…',
-                        [(string) \max(1, (int) \ceil($maxWait / 60))]
-                    ), ['step' => 'acme_wait_ns_start', 'max_seconds' => $maxWait, 'interval_seconds' => $interval]);
-                }
-                $waitNs = $resolveService->waitForPublicAuthoritativeNsMatchesProvider(
-                    $rootDomain,
-                    $providerCode,
-                    $maxWait,
-                    $interval,
-                    $probeDoh,
-                    $onProgress
-                );
-                if (!$waitNs['ok']) {
-                    if ($onProgress) {
-                        $onProgress((string) ($waitNs['message'] ?? ''), [
-                            'step' => 'acme_wait_ns_timeout',
-                            'waited_seconds' => (int) ($waitNs['waited_seconds'] ?? 0),
-                            'live_ns' => $waitNs['live_ns'] ?? [],
-                            'detected' => $waitNs['detected'] ?? '',
-                        ]);
-                    }
-                    return [
-                        'success' => false,
-                        'message' => (string) ($waitNs['message'] ?? __('公网 NS 传播等待超时')),
-                        'record_id' => '',
-                        'dns_provider' => $providerCode,
-                    ];
-                }
-                if ($onProgress && (int) ($waitNs['waited_seconds'] ?? 0) > 0) {
-                    $via = (string) ($waitNs['via'] ?? '');
-                    $onProgress((string) __(
-                        '公网权威 NS 已与目标一致（已等待 %{1} 秒%{2}），开始添加验证 TXT。',
-                        [
-                            (string) ($waitNs['waited_seconds'] ?? 0),
-                            $via === 'doh' ? (string) __('，DoH 观测') : '',
-                        ]
-                    ), [
-                        'step' => 'acme_wait_ns_done',
-                        'waited_seconds' => (int) ($waitNs['waited_seconds'] ?? 0),
-                        'via' => $via,
-                        'live_ns' => $waitNs['live_ns'] ?? [],
-                    ]);
-                }
-            }
         }
 
         $providerName = $dnsResult['adapter']->getRegistrarName() ?? (string)__('DNS 供应商');

@@ -45,16 +45,22 @@ return [
     ],
 
     /**
-     * ACME 证书 DNS-01（addAcmeTxtRecord）：当注册商 API 登记 NS 已指向目标 DNS（如 Cloudflare）但本机/递归查询仍滞后时，
-     * 在写入验证 TXT 前轮询公网 NS，与 {@see dns_switch.ns_probe_use_cloudflare_doh} 同源思路（系统 NS + 可选 DoH）。
-     * - wait_public_ns_max_seconds：最长等待（默认 3600）；超时则仍拒绝写 TXT，避免 CA 查不到记录。
-     * - wait_public_ns_interval_seconds：轮询间隔，默认 15。
-     * - ns_probe_use_cloudflare_doh：未配置时回退为 dns_switch.ns_probe_use_cloudflare_doh。
+     * ACME DNS-01：
+     * - **写 TXT 前门闸**：{@see \Weline\Websites\Service\DomainResolveService::validateAcmeDns01HostingViaAdapters}（仅注册商 + DNS 托管适配器 API）。
+     * - **写 TXT 后等待**：由 {@see \Weline\Server\Service\SslCertificateService::performDns01Challenge} 按下列键轮询，直到 {@see dns_get_record}(TXT) 命中挑战值（默认可选再查公共 DoH）。
      */
     'acme_dns' => [
-        'wait_public_ns_max_seconds' => 3600,
+        'wait_public_ns_max_seconds' => 0,
         'wait_public_ns_interval_seconds' => 15,
         'ns_probe_use_cloudflare_doh' => null,
+        /** 写入验证 TXT 后，最长轮询秒数（本机解析链上是否已能查到 TXT） */
+        'txt_poll_max_seconds' => 900,
+        'txt_poll_interval_seconds' => 10,
+        /** gname / cloudflare 可单独加长（未设置则回退 txt_poll_max_seconds） */
+        'txt_poll_max_seconds_gname' => 1200,
+        'txt_poll_max_seconds_cloudflare' => 1200,
+        /** true：dns_get_record 未命中时再用 Google/Cloudflare DoH 辅助；false：仅 dns_get_record 循环等传播 */
+        'txt_visible_use_public_doh' => false,
     ],
 
     /**
