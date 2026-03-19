@@ -57,6 +57,20 @@ final class Connector extends Query implements ConnectorInterface
         return $this->getWrappedConnection();
     }
 
+    /**
+     * SqlTrait 依赖 $this->connection；本类为真实连接器，未设置该属性。
+     * 若不覆盖，调用 getConnector()/getConnection() 会误报「连接未设置」。
+     */
+    public function getConnector(): ConnectorInterface
+    {
+        return $this;
+    }
+
+    public function getConnection(): ConnectorInterface
+    {
+        return $this;
+    }
+
     protected ?PDO $link = null;
     protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
