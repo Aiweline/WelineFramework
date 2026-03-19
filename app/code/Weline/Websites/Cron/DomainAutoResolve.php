@@ -94,6 +94,7 @@ class DomainAutoResolve
                 return '无法获取服务器公网IP，跳过自动解析任务';
             }
             $originMatch = ObjectManager::getInstance(DomainOriginMatchService::class);
+            $domainResolveService = ObjectManager::getInstance(DomainResolveService::class);
 
             $staleBefore = \date('Y-m-d H:i:s', \time() - self::STALE_PROCESSING_MINUTES * 60);
             $stuck = $taskModel->clearQuery()
@@ -198,7 +199,11 @@ class DomainAutoResolve
                         continue;
                     }
 
-                    $credentials = $account->getCredentials();
+                    $credentials = $domainResolveService->mergeDnsAdapterCredentials(
+                        $domainRow,
+                        $account,
+                        $account->getCredentials()
+                    );
 
                     $records = [];
                     if ($serverIp !== '' && \filter_var($serverIp, \FILTER_VALIDATE_IP, \FILTER_FLAG_IPV4)) {
@@ -219,6 +224,7 @@ class DomainAutoResolve
 
                     $allSuccess = true;
                     $errors = [];
+                    $persistCfZoneId = '';
 
                     foreach ($records as $record) {
                         try {
@@ -229,6 +235,11 @@ class DomainAutoResolve
                                 $allSuccess = false;
                                 $label = ($record['type'] ?? '') . ' ' . ($record['name'] ?? '@');
                                 $errors[] = $label . ': ' . ($result['message'] ?? '未知错误');
+                            } else {
+                                $z = \trim((string) ($result['zone_id'] ?? ''));
+                                if ($z !== '') {
+                                    $persistCfZoneId = $z;
+                                }
                             }
                         } catch (\Throwable $e) {
                             $allSuccess = false;
@@ -238,6 +249,9 @@ class DomainAutoResolve
                     }
 
                     if ($allSuccess) {
+                        if ($persistCfZoneId !== '' && $domainRow->getDomainId() > 0) {
+                            $domainResolveService->persistCloudflareDnsZoneExternalId($domainRow, $persistCfZoneId);
+                        }
                         $task->setStatus(DomainAutoResolveTask::STATUS_SUCCESS);
                         $task->save();
                         $success++;
