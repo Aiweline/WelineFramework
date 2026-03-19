@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual\Api;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
@@ -26,6 +27,28 @@ class Layout extends BackendController
         $this->layoutService = ObjectManager::getInstance(LayoutService::class);
         $this->layoutOwnerResolver = ObjectManager::getInstance(LayoutOwnerResolver::class);
         $this->pageModel = ObjectManager::getInstance(Page::class);
+    }
+
+    /**
+     * 可视化保存后按页面清理 URL 重写、router 统一 dispatch/FPC 键，并通知 WLS 各 Worker。
+     */
+    private function invalidatePageBuilderUrlCaches(int $pageId): bool
+    {
+        if ($pageId <= 0) {
+            return false;
+        }
+        $r = PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
+
+        return (bool)($r['ok'] ?? false);
+    }
+
+    private function messageWithRouterCache(string $baseMessage, bool $cacheOk): string
+    {
+        if ($cacheOk) {
+            return $baseMessage . ' ' . __('路由与访问缓存已清除。');
+        }
+
+        return $baseMessage;
     }
     
     /**
@@ -117,11 +140,13 @@ class Layout extends BackendController
             
             // 使用 LayoutOwnerResolver 保存配置（处理 layout_page_id 和 header/footer 继承）
             $layout = $this->layoutOwnerResolver->saveLayoutConfig($page, $config);
-            
+            $cacheOk = $this->invalidatePageBuilderUrlCaches($pageId);
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => '布局保存成功',
+                'message' => $this->messageWithRouterCache(__('布局保存成功'), $cacheOk),
                 'layout_id' => $layout->getId(),
+                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -167,13 +192,15 @@ class Layout extends BackendController
                 $position,
                 $sortOrder !== null ? (int)$sortOrder : null
             );
-            
+            $cacheOk = $this->invalidatePageBuilderUrlCaches($pageId);
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => '组件添加成功',
+                'message' => $this->messageWithRouterCache(__('组件添加成功'), $cacheOk),
                 'instance_id' => $result['instance_id'],
                 'layout_config' => $result['layout_config'],
                 'target_page_id' => $targetPageId,
+                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -204,7 +231,8 @@ class Layout extends BackendController
             $targetPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageIdByPageId($pageId);
             
             $result = $this->layoutService->removeComponent($targetPageId, $instanceId);
-            
+            $this->invalidatePageBuilderUrlCaches($pageId);
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => '组件移除成功',
@@ -241,11 +269,13 @@ class Layout extends BackendController
             
             $configArray = json_decode($config, true) ?: [];
             $result = $this->layoutService->updateComponent($targetPageId, $instanceId, $configArray);
-            
+            $cacheOk = $this->invalidatePageBuilderUrlCaches($pageId);
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => '组件配置更新成功',
+                'message' => $this->messageWithRouterCache(__('组件配置更新成功'), $cacheOk),
                 'layout_config' => $result['layout_config'],
+                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([
@@ -281,7 +311,8 @@ class Layout extends BackendController
             $targetPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageIdByPageId($pageId);
             
             $result = $this->layoutService->reorderComponents($targetPageId, $orderArray);
-            
+            $this->invalidatePageBuilderUrlCaches($pageId);
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => '组件排序更新成功',
@@ -316,12 +347,15 @@ class Layout extends BackendController
             $targetPageId = $this->layoutOwnerResolver->resolveLayoutOwnerPageIdByPageId($pageId);
             
             $result = $this->layoutService->toggleOriginalTemplate($targetPageId, $useOriginal);
-            
+            $cacheOk = $this->invalidatePageBuilderUrlCaches($pageId);
+            $toggleMsg = $useOriginal ? __('已切换到原始模板') : __('已切换到自定义布局');
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => $useOriginal ? '已切换到原始模板' : '已切换到自定义布局',
+                'message' => $this->messageWithRouterCache($toggleMsg, $cacheOk),
                 'use_original_template' => $result['use_original_template'],
                 'layout_config' => $result['layout_config'],
+                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([

@@ -1,0 +1,24 @@
+<?php
+declare(strict_types=1);
+/**
+ * PageBuilder 全 style 公用头部区：统一统计与 Weline Visitor 像素
+ *
+ * 在主题 layout.phtml 的 </head> 前引入一次：
+ *   <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
+ *
+ * 包含：GTM / GA4 / Meta Pixel / Visitor <pixel> / trackEvent 与 data-track-event 委托
+ * 请勿在各主题 header.phtml 中重复输出 <pixel> 或重复设置网站 Cookie。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+if (!is_array($styleSettings)) {
+    $styleSettings = [];
+}
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+$this->assign('page', $this->getData('page'));
+if ($this->getData('is_preview') === null) {
+    $this->assign('is_preview', false);
+}
+echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/base/tracking.phtml');

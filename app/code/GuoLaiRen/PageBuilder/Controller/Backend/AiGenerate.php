@@ -1510,6 +1510,22 @@ class AiGenerate extends BackendController
             $prompt .= "\n【重要-列表类配置】必须按组件 meta 的格式与默认条数生成多行字符串（每行竖线|分隔各列）；若用户补充提示词中指定了条数则按用户要求。不要返回 JSON 数组。\n";
         }
 
+        // 若组件含下载/CTA 相关配置项，补充说明：URL 由 resolveAppDownloadUrl 解析，模板用 GlrDownloadRegistry + data-glr-ref
+        $downloadRelatedKeys = ['download.', 'primary_url', 'secondary_url', 'cta_url', 'download_url', 'button_url'];
+        $hasDownloadRelated = false;
+        foreach ($textConfigs as $c) {
+            $k = $c['key'] ?? '';
+            foreach ($downloadRelatedKeys as $dk) {
+                if (stripos($k, $dk) !== false) {
+                    $hasDownloadRelated = true;
+                    break 2;
+                }
+            }
+        }
+        if ($hasDownloadRelated) {
+            $prompt .= "\n【下载/CTA 配置说明】本组件包含下载或 CTA 链接类配置。这些 URL 会由 PageHelper::resolveAppDownloadUrl 解析后通过 GlrDownloadRegistry::register 登记，模板中只输出 data-glr-ref（DOM 不写真实 URL）。生成配置时请填写有意义的下载链接或 #download 等锚点，勿写 javascript:void(0)。\n";
+        }
+
         $prompt .= "\n请生成所有配置项的值，返回JSON格式：\n";
         $prompt .= "{\n";
         foreach ($textConfigs as $config) {

@@ -1,4 +1,4 @@
-阿里云域名,阿里云域名
+﻿阿里云域名,阿里云域名
 "阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","Aliyun domain registration service, supporting domain registration, renewal, DNS resolution, and domain trading."
 区域,Region
 华东1（杭州）,"East China 1 (Hangzhou)"
@@ -217,9 +217,10 @@
 "DNS 记录更新失败：%{1}（错误码：%{2}）","DNS 记录更新失败：%{1}（错误码：%{2}）"
 "DNS 记录删除失败：%{1}（错误码：%{2}）","DNS 记录删除失败：%{1}（错误码：%{2}）"
 "[GName] updateNameservers：domain=%{1}, ns=%{2}","[GName] updateNameservers：domain=%{1}, ns=%{2}"
-"GName 默认 DNS 服务器（来自 api/dns/list）","GName 默认 DNS 服务器（来自 api/dns/list）"
-"GName 默认 DNS 服务器（回退）","GName 默认 DNS 服务器（回退）"
+"GName 默认 DNS 服务器（来自 api/dns/list 或 api/dns/info）","GName 默认 DNS 服务器（来自 api/dns/list 或 api/dns/info）"
+"GName 本站高防 DNS（回退，与官方控制台一致）","GName 本站高防 DNS（回退，与官方控制台一致）"
 "[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}","[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}"
+"[GName] fetchDnsInfoById(id=%{1}) 失败：%{2}","[GName] fetchDnsInfoById(id=%{1}) 失败：%{2}"
 "GoDaddy 域名注册商，全球最大的域名注册商之一，支持域名注册、续费、转入、DNS 管理和域名交易。","GoDaddy domain registrar, one of the world's largest domain registrars, supporting domain registration, renewal, transfer, DNS management and domain trading."
 "API Key","API Key"
 "GoDaddy 平台分配的 API Key","API Key assigned by GoDaddy platform"
@@ -497,15 +498,8 @@
 配置失败,配置失败
 "配置订单已创建，订单号: #%{1}","配置订单已创建，订单号: #%{1}"
 "域名购买成功，订单号: #%{1}","域名购买成功，订单号: #%{1}"
-"开始配置 DNS...","开始配置 DNS..."
-"DNS 配置完成","DNS 配置完成"
-"DNS 配置需要手动处理","DNS 配置需要手动处理"
-"开始绑定 CDN...","开始绑定 CDN..."
-"CDN 绑定成功","CDN 绑定成功"
-"正在切换 NS 服务器...","正在切换 NS 服务器..."
-"NS 服务器切换成功","NS 服务器切换成功"
-"NS 切换失败: %{1}","NS 切换失败: %{1}"
-"CDN 绑定失败","CDN 绑定失败"
+"若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。","If DNS/CDN differs from registrar, it will be switched by an automatic task within about 5–10 minutes."
+"DNS/CDN 切换由定时任务在约 5–10 分钟内自动完成，无需等待。","DNS/CDN switch will be done by a scheduled task within about 5–10 minutes; no need to wait."
 验证域名解析...,验证域名解析...
 "服务器 IP: %{1}","服务器 IP: %{1}"
 "域名解析成功: %{1} -> %{2}","域名解析成功: %{1} -> %{2}"
@@ -580,12 +574,13 @@ SSL,SSL
 "[DnsMigration] %{1} 推送失败：%{2}","[DnsMigration] %{1} 推送失败：%{2}"
 "[DnsMigration] %{1}","[DnsMigration] %{1}"
 未就绪域名较多时将分多轮处理,未就绪域名较多时将分多轮处理
-域名连通性检测,域名连通性检测
-"检测根域与子域 HTTP(S) 可访问性，更新连通性状态与详情（hover 展示）","检测根域与子域 HTTP(S) 可访问性，更新连通性状态与详情（hover 展示）"
+域名可访问性检测,域名可访问性检测
+"HTTP(S) 探测根域与子域，更新可访问状态与详情（列表 hover）","HTTP(S) 探测根域与子域，更新可访问状态与详情（列表 hover）"
 "连通性检测：根域 %d 成功 / %d 失败，子域 %d 成功 / %d 失败","连通性检测：根域 %d 成功 / %d 失败，子域 %d 成功 / %d 失败"
-域名生命周期编排,域名生命周期编排
-"轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程","轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程"
+域名订单生命周期处理,域名订单生命周期处理
+"轮询购买/生命周期订单，推进 DNS、解析、证书等状态","轮询购买/生命周期订单，推进 DNS、解析、证书等状态"
 "域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条","域名生命周期轮询完成：处理 %{processed} 条，完成 %{completed} 条，失败 %{failed} 条"
+"[DNS/CDN 切换] %{1}","[DNS/CDN 切换] %{1}"
 "（脏数据修复：同步根域 %{1} 条，补标完成 %{2} 条）","（脏数据修复：同步根域 %{1} 条，补标完成 %{2} 条）"
 域名生命周期轮询失败：%{error},域名生命周期轮询失败：%{error}
 "子域名入池失败: %{1}, %{2}","子域名入池失败: %{1}, %{2}"
@@ -658,23 +653,24 @@ SSL,SSL
 "域名池检测有 %{1} 个域名失败","域名池检测有 %{1} 个域名失败"
 "域名池解析检测任务异常: %{1}","域名池解析检测任务异常: %{1}"
 未就绪根域较多时将分多轮检测,未就绪根域较多时将分多轮检测
+根域从子域回填,根域从子域回填
 "健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个","Health check complete: %{1} domains total, %{2} healthy, %{3} unhealthy, %{4} HTTPS status updated"
 健康检查失败：%{1},"Health check failed: %{1}"
 "HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个","HTTPS sync complete: %{1} domains total, %{2} enabled, %{3} disabled, %{4} unchanged"
 "HTTPS 状态同步失败：%{1}","HTTPS status sync failed: %{1}"
-域名解析链路,域名解析链路
-合并：自动解析任务、域名池解析检测、根域解析状态与子域入池,合并：自动解析任务、域名池解析检测、根域解析状态与子域入池
-自动解析,自动解析
-域名池解析,域名池解析
-根域解析,根域解析
-站点运维（合并）,站点运维（合并）
-"DNS/CDN 切换、健康检查；整点执行 NS 归属检测与 HTTPS 状态同步","DNS/CDN 切换、健康检查；整点执行 NS 归属检测与 HTTPS 状态同步"
+"DNS 解析与子域入池","DNS 解析与子域入池"
+"三步：① 自动解析 ② 子域解析检测 ③ 根域解析与默认子域入池","三步：① 自动解析 ② 子域解析检测 ③ 根域解析与默认子域入池"
+"① 自动解析","① 自动解析"
+"② 子域解析检测","② 子域解析检测"
+"③ 根域解析与入池","③ 根域解析与入池"
+"站点运维（DNS 切换 + 健康检查 + NS/HTTPS）","站点运维（DNS 切换 + 健康检查 + NS/HTTPS）"
+"① DNS/CDN 切换 ② 站点健康检查 ③ 整点 NS 检测 ④ 整点 HTTPS 同步","① DNS/CDN 切换 ② 站点健康检查 ③ 整点 NS 检测 ④ 整点 HTTPS 同步"
 健康检查,健康检查
-域名池证书维护,域名池证书维护
-"合并：校验池内有效证书的 PEM/文件；为 origin_ready 等状态申请证书","合并：校验池内有效证书的 PEM/文件；为 origin_ready 等状态申请证书"
-证书校验,证书校验
+"子域 HTTPS 证书维护","子域 HTTPS 证书维护"
+"① 整点/半点校验已签发证书 ② 每节拍处理待申请队列","① 整点/半点校验已签发证书 ② 每节拍处理待申请队列"
+"① 证书校验","① 证书校验"
 本节拍跳过（整点/半点执行）,本节拍跳过（整点/半点执行）
-证书申请,证书申请
+"② 证书申请","② 证书申请"
 网站保存后,网站保存后
 网站保存后触发，可用于更新缓存、通知等相关操作。,网站保存后触发，可用于更新缓存、通知等相关操作。
 域名购买成功,"Domain Purchase Success"
@@ -859,6 +855,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "[DnsSwitchService] %{1} 获取目标 NS 失败：%{2}","[DnsSwitchService] %{1} 获取目标 NS 失败：%{2}"
 "目标 NS：%{1}","目标 NS：%{1}"
 "[DnsSwitchService] %{1} Step2: 目标 NS=%{2}","[DnsSwitchService] %{1} Step2: 目标 NS=%{2}"
+"当前已是同注册商 DNS（%{1}），无需调用修改 NS 接口；直接同步/推送记录。","当前已是同注册商 DNS（%{1}），无需调用修改 NS 接口；直接同步/推送记录。"
+"[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）","[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）"
 "在注册商 %{1} 切换 NS","在注册商 %{1} 切换 NS"
 "NS 切换失败","NS 切换失败"
 "[DnsSwitchService] %{1} NS 切换失败：%{2}","[DnsSwitchService] %{1} NS 切换失败：%{2}"
@@ -954,6 +952,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "CDN 账户不存在。请先在「CDN 管理」中添加 %{vendor} 账户并设为默认，或指定正确的 cdn_account_id（CDN 模块的账户 ID）","CDN 账户不存在。请先在「CDN 管理」中添加 %{vendor} 账户并设为默认，或指定正确的 cdn_account_id（CDN 模块的账户 ID）"
 "ensureZone 失败","ensureZone 失败"
 "ensureZone 未返回 zone_id","ensureZone 未返回 zone_id"
+"CDN 绑定成功","CDN 绑定成功"
 "已跳过 SSL，流程完成","已跳过 SSL，流程完成"
 证书申请成功,证书申请成功
 域名商账号未配置,域名商账号未配置
@@ -1000,6 +999,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "添加 AAAA 记录失败","添加 AAAA 记录失败"
 "添加 A 记录失败","添加 A 记录失败"
 "根域状态自我纠正：%{1} 已标为正常（存在可建站子域）","根域状态自我纠正：%{1} 已标为正常（存在可建站子域）"
+根域字段已从子域回填：%{1}（子域均可建站）,根域字段已从子域回填：%{1}（子域均可建站）
 账户未启用,账户未启用
 账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）,账户「%{1}」关联的域名商不存在或未配置（registrar_id=%{2}）
 账户「%{1}」的域名商适配器「%{2}」未注册,账户「%{1}」的域名商适配器「%{2}」未注册
@@ -1502,7 +1502,6 @@ Windows,Windows
 正在提交购买请求...,"Submitting purchase request..."
 购买请求已提交,"Purchase request submitted"
 请前往域名状态页搜索当前根域名查看进度。,请前往域名状态页搜索当前根域名查看进度。
-"DNS/CDN 将在域名注册完成后自动处理。","DNS/CDN 将在域名注册完成后自动处理。"
 "%{count} 个域名购买成功，但未成功创建生命周期跟踪订单，请确认 Weline_Websites 已启用且一站式配置可用，或前往域名状态页使用「补建生命周期订单」补救。","%{count} 个域名购买成功，但未成功创建生命周期跟踪订单，请确认 Weline_Websites 已启用且一站式配置可用，或前往域名状态页使用「补建生命周期订单」补救。"
 订单号,"Order No."
 数量,Count
@@ -1613,5 +1612,3 @@ SEO账户管理请前往：,SEO账户管理请前往：
 建站进度,建站进度
 例如：茶叶电商网站,例如：茶叶电商网站
 请填写要购买的域名,"Please enter domain(s) to purchase"
-"若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。","If DNS/CDN differs from registrar, it will be switched by an automatic task within about 5–10 minutes."
-"DNS/CDN 切换由定时任务在约 5–10 分钟内自动完成，无需等待。","DNS/CDN switch will be done by a scheduled task within about 5–10 minutes; no need to wait."

@@ -415,5 +415,125 @@ class Post extends BackendController
 
         $this->redirect('blog/backend/post/index');
     }
+
+    /**
+     * 批量审批发布（仅当前站点、仅草稿）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_publish', '审批发布', '', '批量发布草稿文章', 'GuoLaiRen_Blog::blog')]
+    public function postBatchPublish(): void
+    {
+        $ids = $this->normalizeBatchIds($this->request->getPost('ids', []));
+        if ($ids === []) {
+            MessageManager::warning(__('请先选择要操作的文章。'));
+            $this->redirectPostIndexAfterBatch();
+            return;
+        }
+        $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+        $ok = 0;
+        $skip = 0;
+        foreach ($ids as $id) {
+            $post = clone $this->postModel;
+            $post->clear()->load($id);
+            if (!$post->getId()) {
+                $skip++;
+                continue;
+            }
+            if ($websiteId > 0 && (int)$post->getData(PostModel::schema_fields_SITE_ID) !== $websiteId) {
+                $skip++;
+                continue;
+            }
+            if ((int)$post->getData(PostModel::schema_fields_STATUS) === PostModel::STATUS_PUBLISHED) {
+                $skip++;
+                continue;
+            }
+            $post->setData(PostModel::schema_fields_STATUS, PostModel::STATUS_PUBLISHED)
+                ->setData(PostModel::schema_fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
+                ->save();
+            $ok++;
+        }
+        if ($ok > 0) {
+            MessageManager::success(__('已批量发布 %{count} 篇文章', ['count' => (string)$ok]));
+        }
+        if ($skip > 0 && $ok === 0) {
+            MessageManager::warning(__('没有可发布的草稿（可能已发布、不存在或不属于当前站点）。'));
+        } elseif ($skip > 0) {
+            MessageManager::warning(__('另有 %{count} 条未发布（已发布、不存在或无权操作）。', ['count' => (string)$skip]));
+        }
+        $this->redirectPostIndexAfterBatch();
+    }
+
+    /**
+     * 批量删除（仅当前站点）
+     */
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_Blog::blog_delete', '删除博客', '', '批量删除博客文章', 'GuoLaiRen_Blog::blog')]
+    public function postBatchRemove(): void
+    {
+        $ids = $this->normalizeBatchIds($this->request->getPost('ids', []));
+        if ($ids === []) {
+            MessageManager::warning(__('请先选择要操作的文章。'));
+            $this->redirectPostIndexAfterBatch();
+            return;
+        }
+        $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
+        $ok = 0;
+        $skip = 0;
+        foreach ($ids as $id) {
+            $post = clone $this->postModel;
+            $post->clear()->load($id);
+            if (!$post->getId()) {
+                $skip++;
+                continue;
+            }
+            if ($websiteId > 0 && (int)$post->getData(PostModel::schema_fields_SITE_ID) !== $websiteId) {
+                $skip++;
+                continue;
+            }
+            $post->delete()->fetch();
+            $ok++;
+        }
+        if ($ok > 0) {
+            MessageManager::success(__('已批量删除 %{count} 篇文章', ['count' => (string)$ok]));
+        }
+        if ($skip > 0 && $ok === 0) {
+            MessageManager::warning(__('没有可删除的文章（不存在或不属于当前站点）。'));
+        } elseif ($skip > 0) {
+            MessageManager::warning(__('另有 %{count} 条未删除（不存在或无权操作）。', ['count' => (string)$skip]));
+        }
+        $this->redirectPostIndexAfterBatch();
+    }
+
+    /**
+     * @param mixed $idsRaw
+     * @return list<int>
+     */
+    private function normalizeBatchIds(mixed $idsRaw): array
+    {
+        if (!is_array($idsRaw)) {
+            return [];
+        }
+        $out = [];
+        foreach ($idsRaw as $v) {
+            $id = (int)$v;
+            if ($id > 0) {
+                $out[$id] = $id;
+            }
+        }
+        return array_values($out);
+    }
+
+    /** 批量操作完成后回到列表并保留搜索/分页参数 */
+    private function redirectPostIndexAfterBatch(): void
+    {
+        $params = [];
+        $search = trim((string)$this->request->getPost('redirect_search', ''));
+        if ($search !== '') {
+            $params['search'] = $search;
+        }
+        $page = (int)$this->request->getPost('redirect_page', 0);
+        if ($page > 0) {
+            $params['page'] = $page;
+        }
+        $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', $params, true));
+    }
 }
 

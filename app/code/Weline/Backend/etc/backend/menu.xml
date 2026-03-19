@@ -43,7 +43,7 @@
             <menu source="Weline_Backend::notification_settings" name="notification_settings" title="消息通知" icon="mdi mdi-bell-outline" order="50">
                 <menu source="Weline_Backend::notification" name="notification" title="通知中心" action="*/backend/notification" icon="mdi mdi-bell-badge-outline" order="5"/>
                 <menu source="Weline_Backend::notification_subscription" name="notification_subscription" title="我的订阅" action="*/backend/notificationsubscription" icon="mdi mdi-bell-cog-outline" order="10"/>
-                <menu source="Weline_Backend::user_contact" name="user_contact" title="我的联系人" action="*/backend/usercontact" icon="mdi mdi-account-box-outline" order="20"/>
+                <menu source="Weline_Backend::contact" name="contact" title="联系人" action="*/backend/contact" icon="mdi mdi-account-box-outline" order="20"/>
                 <menu source="Weline_Backend::notification_channel" name="notification_channel" title="渠道配置" action="*/backend/notificationchannel" icon="mdi mdi-tune-variant" order="30"/>
             </menu>
         </menu>

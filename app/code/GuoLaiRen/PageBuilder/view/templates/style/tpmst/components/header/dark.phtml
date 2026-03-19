@@ -145,6 +145,8 @@ $buttonDisplayValue = $getConfig('button.display', 'yes');
 $showButton = !in_array($buttonDisplayValue, ['no', '0', 0], true);
 $buttonText = $getConfig('button.text', 'Download Now');
 $buttonUrl = $getConfig('button.url', '#download');
+$buttonHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl);
+$buttonRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($buttonHref, 'url');
 
 // 样式配置
 $bgColor = $getConfig('style.background', '#1a1a2e');
@@ -176,7 +178,7 @@ $headerHeight = $getConfig('style.height', '70px');
         
         <?php if ($showButton): ?>
         <div class="tpmst-header-action">
-            <a href="javascript:void(0)" role="button" class="btn-download tpmst-dark-download-trigger">
+            <a role="button" tabindex="0" class="btn-download" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($buttonRef)) ?>" data-glr-ref="<?= htmlspecialchars($buttonRef) ?>">
                 <span class="btn-icon">⬇</span>
                 <span class="btn-text"><?= htmlspecialchars($buttonText) ?></span>
             </a>
@@ -401,13 +403,6 @@ body {
             component.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.3)';
         }
         lastScroll = currentScroll;
-    });
-})();
-
-(function(){
-    var buttonUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl), JSON_UNESCAPED_SLASHES) ?>;
-    document.querySelectorAll('#<?= $componentId ?> .tpmst-dark-download-trigger').forEach(function(el){
-        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = buttonUrl; });
     });
 })();
 </script>

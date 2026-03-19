@@ -185,6 +185,8 @@ if (empty($navItems)) {
 $downloadBtnDisplay = $getConfig('download_button.display', 'yes') !== 'no';
 $downloadBtnText = $getConfig('download_button.text', 'DOWNLOAD APP');
 $downloadBtnUrl = $getConfig('download_button.url', '#download');
+$downloadBtnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
+$downloadBtnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadBtnHref, 'url');
 $downloadBtnBgColor = $getConfig('download_button.bg_color', '#ff6b35');
 $downloadBtnBgHoverColor = $getConfig('download_button.bg_hover_color', '#e55a2b');
 $downloadBtnTextColor = $getConfig('download_button.text_color', '#ffffff');
@@ -408,7 +410,7 @@ body {
                 
                 <?php if ($downloadBtnDisplay): ?>
                 <div class="tpmst-nav-download-wrapper">
-                    <a href="javascript:void(0)" role="button" class="tpmst-nav-download-btn tpmst-download-trigger-nav"><?= htmlspecialchars($downloadBtnText) ?></a>
+                    <a role="button" tabindex="0" class="tpmst-nav-download-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"><?= htmlspecialchars($downloadBtnText) ?></a>
                 </div>
                 <?php endif; ?>
             </div>
@@ -460,13 +462,6 @@ body {
     });
     
     handleScroll();
-})();
-
-(function(){
-    var downloadUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-    document.querySelectorAll('#<?= $componentId ?>-nav .tpmst-download-trigger-nav').forEach(function(el){
-        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = downloadUrl; });
-    });
 })();
 </script>
 <!-- TPMST Header Nav Component End: <?= $componentId ?> -->

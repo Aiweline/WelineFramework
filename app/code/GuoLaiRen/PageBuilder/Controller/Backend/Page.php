@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
@@ -692,8 +693,12 @@ class Page extends BackendController
 
             // 创建时实时更新页面的重写路由（含首页空重写）
             $this->createOrUpdateUrlRewrite($page);
+            $cacheOk = $this->clearRouterAndPageBuilderCache((int)$page->getId());
 
             MessageManager::success(__('页面创建成功！'));
+            if ($cacheOk) {
+                MessageManager::success(__('路由与访问缓存已清除。'));
+            }
             $this->redirect('*/backend/page/edit', ['id' => $page->getId()]);
         } catch (\Exception $exception) {
             try {
@@ -1058,6 +1063,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit_post', '编辑页面请求', '', '编辑页面请求')]
     public function postEdit()
     {
+        $routerCacheCleared = false;
         try {
             $pageId = $this->request->getGet('id');
             $data = $this->request->getPost();
@@ -1323,10 +1329,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 }
             }
 
-            // 5. 清除路由与重写缓存
-            if ($oldHandle !== $newHandle || $oldWebsiteId !== $newWebsiteId || $oldStyleCode !== $styleToSave) {
-                $this->clearRouterAndPageBuilderCache();
-            }
+            // 5. 按页面清除路由 / 统一 dispatch 缓存并通知 WLS Worker
+            $routerCacheCleared = $this->clearRouterAndPageBuilderCache($pageIdInt);
 
             // 6. 主页主题变更时同步子页面（逐条 save，避免 PostgreSQL IN+update 导致事务中止）
             if ((int)$newParentId === 0 && $page->getId() && (string)$oldStyleCode !== (string)$styleToSave) {
@@ -1396,14 +1400,22 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             }
             
             MessageManager::success(__('页面更新成功！'));
-            
+            if ($routerCacheCleared) {
+                MessageManager::success(__('路由与访问缓存已清除。'));
+            }
+
             // 检查是否为AJAX请求
             if ($this->request->isAjax() || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest') {
+                $ajaxMsg = __('页面更新成功！');
+                if ($routerCacheCleared) {
+                    $ajaxMsg .= ' ' . __('路由与访问缓存已清除。');
+                }
                 return $this->fetchJson([
                     'success' => true,
-                    'message' => __('页面更新成功！'),
+                    'message' => $ajaxMsg,
                     'page_id' => $pageId,
-                    'style' => $data['style'] ?? ''
+                    'style' => $data['style'] ?? '',
+                    'router_cache_cleared' => $routerCacheCleared,
                 ]);
             }
             
@@ -1633,11 +1645,16 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             }
             
             // 清除路由缓存（仅使用框架 CacheManager，不使用不存在的 UrlRewriteCache）
-            $this->clearRouterAndPageBuilderCache();
-            
+            $cacheOk = $this->clearRouterAndPageBuilderCache();
+            $delMsg = __('站点删除成功，共删除 %{1} 个页面', [$deletedCount]);
+            if ($cacheOk) {
+                $delMsg .= ' ' . __('路由与访问缓存已清除。');
+            }
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('站点删除成功，共删除 %{1} 个页面', [$deletedCount])
+                'message' => $delMsg,
+                'router_cache_cleared' => $cacheOk,
             ]);
             
         } catch (\Exception $e) {
@@ -1665,25 +1682,24 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     
     /**
      * 清除路由与 PageBuilder 静态缓存（避免依赖不存在的 UrlRewriteCache）
+     *
+     * @param int|null $pageId 有值时仅失效该页相关缓存；批量/删站等传 null 全量清理
+     * @return bool 是否视为清理成功（用于后台消息提示）
      */
-    private function clearRouterAndPageBuilderCache(): void
+    private function clearRouterAndPageBuilderCache(?int $pageId = null): bool
     {
         try {
-            if (class_exists(\Weline\Framework\Cache\CacheManager::class)) {
-                $cacheManager = ObjectManager::getInstance(\Weline\Framework\Cache\CacheManager::class);
-                $routerPool = $cacheManager->pool('router');
-                if (method_exists($routerPool, 'clear')) {
-                    $routerPool->clear();
-                }
-                $rewritePool = $cacheManager->pool('url_rewrite');
-                if (method_exists($rewritePool, 'clear')) {
-                    $rewritePool->clear();
-                }
+            if ($pageId !== null && $pageId > 0) {
+                $r = PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
+
+                return (bool)($r['ok'] ?? false);
             }
-        } catch (\Throwable $e) {
-            // 忽略
+            PageBuilderUrlCacheInvalidator::invalidateRouterAndRewrite();
+
+            return true;
+        } catch (\Throwable) {
+            return false;
         }
-        \GuoLaiRen\PageBuilder\Controller\Router::clearCache();
     }
 
     /**
@@ -2147,7 +2163,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 ];
             }
             
-            $this->clearRouterAndPageBuilderCache();
+            $cacheOk = $this->clearRouterAndPageBuilderCache();
             
             // 绑定 SEO 账户（如果提供了 seo_account_id）
             $seoAccountId = (int) $seoAccountId;
@@ -2169,11 +2185,17 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 }
             }
             
+            $createMsg = __('站点创建成功，共创建 %{count} 个页面', ['count' => count($createdPages)]);
+            if ($cacheOk) {
+                $createMsg .= ' ' . __('路由与访问缓存已清除。');
+            }
+
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('站点创建成功，共创建 %{count} 个页面', ['count' => count($createdPages)]),
+                'message' => $createMsg,
                 'pages' => $createdPages,
                 'home_page_id' => $homePageId,
+                'router_cache_cleared' => $cacheOk,
             ]);
         } catch (\Exception $e) {
             return $this->fetchJson([

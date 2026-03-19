@@ -181,6 +181,13 @@ You are an expert front-end/full-stack engineer. Your task is to generate a Page
 - 一行一条：group:组名 => 组标题，或 key => 标签:类型:默认值|选项；类型为 text、textarea、number、color、select、image。不需要时填 ""。
 - 每行仅一个星号开头（* key => ...），禁止 "* * key" 双星号开头。
 
+### 下载按钮与 CTA（应用下载）
+- **凡组件含「下载」/「应用下载」/ CTA 跳转下载**：推荐 **GlrDownloadRegistry::register(解析后的href, slot)** + **data-glr-ref**，由 footer-common 输出 JSON 并统一委托（先发像素再跳转）。禁止在 DOM 写真实下载 URL、禁止 javascript:void(0)、禁止为下载写 addEventListener/onclick。
+- **slot 取值**：主按钮 primary，次要 secondary，单一链接 url，商店区 android/ios。
+- **解析**：PageHelper::resolveAppDownloadUrl(配置 URL) 后再 register。
+- **新窗口**：register 第三参 \'_blank\' 或 <a> 上 data-glr-target=\"_blank\"。
+- **配置字段**：download.primary_url、cta_url 等 text；组件内 resolve 后 register，HTML 仅 data-glr-ref。
+
 ## 五、一次性生成流程（第一轮就按此执行，勿探讨）
 
 1. **第一步（必做）**：调用 get_component_framework(category) 获取当前区域的框架说明与**框架已注入变量**列表。
