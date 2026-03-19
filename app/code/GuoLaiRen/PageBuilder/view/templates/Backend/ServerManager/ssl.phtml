@@ -211,24 +211,57 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
         }).join('&');
     }
 
+    /**
+     * 避免 response.json() 在非 JSON（如未登录 HTML）时抛错，导致 .catch 误报「请求失败」。
+     */
+    function parseJsonResponseBody(text) {
+        var trimmed = (text || '').replace(/^\uFEFF/, '').trim();
+        if (!trimmed) {
+            return {success: false, message: '<?= __('服务器返回空内容') ?>'};
+        }
+        var first = trimmed.charAt(0);
+        if (first !== '{' && first !== '[') {
+            return {success: false, message: '<?= __('接口未返回JSON可能未登录') ?>'};
+        }
+        try {
+            var data = JSON.parse(trimmed);
+            if (data !== null && typeof data === 'object') {
+                return data;
+            }
+            return {success: false, message: '<?= __('接口返回内容不是合法JSON') ?>'};
+        } catch (e) {
+            return {success: false, message: '<?= __('接口返回内容不是合法JSON') ?>'};
+        }
+    }
+
     function post(url, payload) {
         return fetch(url, {
             method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             body: encodeBody(payload),
             credentials: 'same-origin'
         }).then(function (response) {
-            return response.json();
+            return response.text();
+        }).then(parseJsonResponseBody).catch(function () {
+            return {success: false, message: '<?= __('网络请求失败') ?>'};
         });
     }
 
     function getJson(url) {
         return fetch(url, {
             method: 'GET',
-            headers: {'Accept': 'application/json'},
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
             credentials: 'same-origin'
         }).then(function (response) {
-            return response.json();
+            return response.text();
+        }).then(parseJsonResponseBody).catch(function () {
+            return {success: false, message: '<?= __('网络请求失败') ?>'};
         });
     }
 
@@ -266,7 +299,8 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
         var map = {
             letsencrypt: 'Let\'s Encrypt',
             litessl: 'LiteSSL',
-            manual: '<?= __('手动导入') ?>'
+            manual: '<?= __('手动导入') ?>',
+            self_signed: '<?= __('自签证书') ?>'
         };
         return map[normalized] || normalizeValue(provider, '-');
     }
@@ -307,6 +341,23 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
         element.value = String(value || '').trim() || emptyMessage;
     }
 
+    function cellDisplayText(value) {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+        if (typeof value === 'object') {
+            try {
+                return JSON.stringify(value);
+            } catch (e) {
+                return String(value);
+            }
+        }
+        return String(value);
+    }
+
     function renderDetailTable(target, rows) {
         if (!target) {
             return;
@@ -315,7 +366,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
             return '' +
                 '<tr>' +
                 '<th class="text-muted" style="width: 32%;">' + escapeHtml(row.label) + '</th>' +
-                '<td>' + escapeHtml(row.value) + '</td>' +
+                '<td>' + escapeHtml(cellDisplayText(row.value)) + '</td>' +
                 '</tr>';
         }).join('');
     }
@@ -345,7 +396,8 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
                 options.push('<option value="' + escapeHtml(domain) + '">' + escapeHtml(label) + '</option>');
             });
             domainEl.innerHTML = options.join('');
-        }).catch(function () {
+        }).catch(function (err) {
+            console.error('[pb-ssl] domain pool', err);
             BackendToast.error('<?= __('域名池请求失败') ?>');
         });
     }
@@ -405,22 +457,30 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
                 return;
             }
             renderRows(result.data || []);
-        }).catch(function () {
+        }).catch(function (err) {
+            console.error('[pb-ssl] list', err);
             BackendToast.error('<?= __('证书列表请求失败') ?>');
         });
     }
 
     function showDetailModal() {
-        var bsModal = getDetailModal();
-        if (bsModal) {
-            bsModal.show();
-        } else if (detailModalEl) {
-            detailModalEl.classList.add('show');
-            detailModalEl.style.display = 'block';
-            document.body.classList.add('modal-open');
-            var backdrop = document.createElement('div');
-            backdrop.className = 'modal-backdrop fade show';
-            document.body.appendChild(backdrop);
+        try {
+            var bsModal = getDetailModal();
+            if (bsModal) {
+                bsModal.show();
+                return;
+            }
+            if (detailModalEl) {
+                detailModalEl.classList.add('show');
+                detailModalEl.style.display = 'block';
+                document.body.classList.add('modal-open');
+                var backdrop = document.createElement('div');
+                backdrop.className = 'modal-backdrop fade show';
+                document.body.appendChild(backdrop);
+            }
+        } catch (e) {
+            console.error('[pb-ssl] showDetailModal', e);
+            throw e;
         }
     }
 
@@ -431,47 +491,59 @@ $deleteUrl = $this->getBackendUrl('*/backend/server-manager/ssl-delete');
 
         BackendToast.info('<?= __('正在加载证书详情...') ?>');
         getJson(detailUrl + '?domain=' + encodeURIComponent(domain)).then(function (result) {
-            if (!result.success) {
-                BackendToast.warning(result.message || '<?= __('证书详情加载失败') ?>');
-                return;
+            try {
+                if (!result || typeof result !== 'object') {
+                    BackendToast.warning('<?= __('证书详情加载失败') ?>');
+                    return;
+                }
+                if (!result.success) {
+                    BackendToast.warning(result.message || '<?= __('证书详情加载失败') ?>');
+                    return;
+                }
+
+                var data = result.data || {};
+                var certInfo = data.cert_info || {};
+                var pemSummary = data.pem_summary || {};
+                if (detailDomainEl) {
+                    detailDomainEl.textContent = normalizeValue(data.domain || domain, '');
+                }
+
+                renderDetailTable(detailSummaryEl, [
+                    {label: '<?= __('状态') ?>', value: statusLabel(data.status)},
+                    {label: '<?= __('证书类型') ?>', value: normalizeValue(data.cert_type, '-')},
+                    {label: '<?= __('颁发机构') ?>', value: normalizeValue(certInfo.issuer || data.issuer, '-')},
+                    {label: '<?= __('服务商') ?>', value: providerLabel(data.provider)},
+                    {label: '<?= __('颁发时间') ?>', value: normalizeValue(certInfo.issued_at || data.issued_at, '-')},
+                    {label: '<?= __('到期时间') ?>', value: normalizeValue(certInfo.expires_at || data.expires_at, '-')},
+                    {label: '<?= __('主题域名') ?>', value: normalizeValue(certInfo.subject || data.domain, '-')},
+                    {label: '<?= __('网站ID') ?>', value: normalizeValue(data.website_id, '0')}
+                ]);
+
+                renderDetailTable(detailPathsEl, [
+                    {label: '<?= __('HTTPS 已启用') ?>', value: data.https_enabled ? '<?= __('是') ?>' : '<?= __('否') ?>'},
+                    {label: '<?= __('自动续签') ?>', value: data.auto_renew ? '<?= __('是') ?>' : '<?= __('否') ?>'},
+                    {label: '<?= __('最后续签时间') ?>', value: normalizeValue(data.last_renew_at, '-')},
+                    {label: '<?= __('证书路径') ?>', value: normalizeValue(data.cert_path, '-')},
+                    {label: '<?= __('私钥路径') ?>', value: normalizeValue(data.key_path, '-')},
+                    {label: '<?= __('证书链路径') ?>', value: normalizeValue(data.chain_path, '-')},
+                    {label: '<?= __('PEM 可用性') ?>', value: [
+                        pemSummary.has_cert_pem ? '<?= __('证书') ?>' : '',
+                        pemSummary.has_chain_pem ? '<?= __('证书链') ?>' : '',
+                        pemSummary.has_key_pem ? '<?= __('私钥') ?>' : ''
+                    ].filter(Boolean).join(' / ') || '<?= __('无') ?>'},
+                    {label: '<?= __('续签错误') ?>', value: normalizeValue(data.renew_error, '-')}
+                ]);
+
+                setPemValue(detailCertPemEl, data.cert_pem, '<?= __('暂无证书内容') ?>');
+                setPemValue(detailChainPemEl, data.chain_pem, '<?= __('暂无证书链内容') ?>');
+                setPemValue(detailKeyPemEl, data.key_pem, '<?= __('暂无私钥内容') ?>');
+                showDetailModal();
+            } catch (e) {
+                console.error('[pb-ssl] detail render', e);
+                BackendToast.error('<?= __('证书详情展示失败') ?>' + (e && e.message ? '：' + e.message : ''));
             }
-
-            var data = result.data || {};
-            var certInfo = data.cert_info || {};
-            var pemSummary = data.pem_summary || {};
-            detailDomainEl.textContent = normalizeValue(data.domain || domain, '');
-
-            renderDetailTable(detailSummaryEl, [
-                {label: '<?= __('状态') ?>', value: statusLabel(data.status)},
-                {label: '<?= __('证书类型') ?>', value: normalizeValue(data.cert_type, '-')},
-                {label: '<?= __('颁发机构') ?>', value: normalizeValue(certInfo.issuer || data.issuer, '-')},
-                {label: '<?= __('服务商') ?>', value: providerLabel(data.provider)},
-                {label: '<?= __('颁发时间') ?>', value: normalizeValue(certInfo.issued_at || data.issued_at, '-')},
-                {label: '<?= __('到期时间') ?>', value: normalizeValue(certInfo.expires_at || data.expires_at, '-')},
-                {label: '<?= __('主题域名') ?>', value: normalizeValue(certInfo.subject || data.domain, '-')},
-                {label: '<?= __('网站ID') ?>', value: normalizeValue(data.website_id, '0')}
-            ]);
-
-            renderDetailTable(detailPathsEl, [
-                {label: '<?= __('HTTPS 已启用') ?>', value: data.https_enabled ? '<?= __('是') ?>' : '<?= __('否') ?>'},
-                {label: '<?= __('自动续签') ?>', value: data.auto_renew ? '<?= __('是') ?>' : '<?= __('否') ?>'},
-                {label: '<?= __('最后续签时间') ?>', value: normalizeValue(data.last_renew_at, '-')},
-                {label: '<?= __('证书路径') ?>', value: normalizeValue(data.cert_path, '-')},
-                {label: '<?= __('私钥路径') ?>', value: normalizeValue(data.key_path, '-')},
-                {label: '<?= __('证书链路径') ?>', value: normalizeValue(data.chain_path, '-')},
-                {label: '<?= __('PEM 可用性') ?>', value: [
-                    pemSummary.has_cert_pem ? '<?= __('证书') ?>' : '',
-                    pemSummary.has_chain_pem ? '<?= __('证书链') ?>' : '',
-                    pemSummary.has_key_pem ? '<?= __('私钥') ?>' : ''
-                ].filter(Boolean).join(' / ') || '<?= __('无') ?>'},
-                {label: '<?= __('续签错误') ?>', value: normalizeValue(data.renew_error, '-')}
-            ]);
-
-            setPemValue(detailCertPemEl, data.cert_pem, '<?= __('暂无证书内容') ?>');
-            setPemValue(detailChainPemEl, data.chain_pem, '<?= __('暂无证书链内容') ?>');
-            setPemValue(detailKeyPemEl, data.key_pem, '<?= __('暂无私钥内容') ?>');
-            showDetailModal();
-        }).catch(function () {
+        }).catch(function (err) {
+            console.error('[pb-ssl] detail fetch', err);
             BackendToast.error('<?= __('证书详情请求失败') ?>');
         });
     }
