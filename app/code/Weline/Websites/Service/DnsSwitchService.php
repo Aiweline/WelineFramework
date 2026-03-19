@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
@@ -49,6 +50,7 @@ class DnsSwitchService
      * @param DomainRegistrarAccount $targetAccount 目标 DNS 服务商账户
      * @param callable|null $onStep 进度回调 fn(string $event, array $data): void，用于 SSE 等
      * @param array $options 可选：wait_for_ns (bool), wait_max_seconds (int), wait_interval_seconds (int),
+     *                       ns_probe_cloudflare_doh (bool|null 默认读 env websites.dns_switch),
      *                       is_alive (callable), cdn_account_id (int), cdn_account (DomainRegistrarAccount|null),
      *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int).
      *                       Step8（verify_cdn）：适配器 verifyCdnConfiguration；不支持则跳过。
@@ -73,6 +75,13 @@ class DnsSwitchService
         $cdnAccount = $options['cdn_account'] ?? null;
         $verifyCdn = (bool) ($options['verify_cdn'] ?? false);
         $afterSyncRecords = $options['after_sync_records'] ?? null;
+        $probeDoh = $options['ns_probe_cloudflare_doh'] ?? null;
+        if ($probeDoh === null) {
+            $ds = Env::module_env('Weline_Websites', 'dns_switch') ?? [];
+            $probeDoh = (bool) ($ds['ns_probe_use_cloudflare_doh'] ?? true);
+        } else {
+            $probeDoh = (bool) $probeDoh;
+        }
 
         $notify = static function (string $event, array $data) use ($onStep): void {
             if ($onStep !== null) {
@@ -196,7 +205,8 @@ class DnsSwitchService
                 $waitMaxSeconds,
                 $waitIntervalSeconds,
                 $isAlive,
-                $notify
+                $notify,
+                $probeDoh
             );
             if ($waitResult['aborted'] ?? false) {
                 return \array_merge($this->fail(__('已由用户断开')), ['client_aborted' => true]);
@@ -350,17 +360,22 @@ class DnsSwitchService
         int $maxWaitSeconds,
         int $intervalSeconds,
         ?callable $isAlive,
-        callable $notify
+        callable $notify,
+        bool $probeCloudflareDoh = true
     ): array {
         $elapsed = 0;
         while ($elapsed < $maxWaitSeconds) {
-            \sleep($intervalSeconds);
             if ($isAlive !== null && !$isAlive()) {
                 return ['verified' => false, 'aborted' => true, 'verified_by' => ''];
             }
-            $elapsed += $intervalSeconds;
             $liveNs = $this->resolveService->getLiveNameservers($domainName);
             $liveNormalized = $this->normalizeNameservers($liveNs);
+            $dohNormalized = [];
+            if ($probeCloudflareDoh) {
+                $dohNormalized = $this->normalizeNameservers(
+                    $this->resolveService->getLiveNameserversViaCloudflareDoH($domainName)
+                );
+            }
             $registrarCheckNow = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $sourceCredentials);
             $regNormNow = $registrarCheckNow['normalized'] ?? [];
             if ($registrarCheckNow['supported'] && $registrarCheckNow['error'] === '') {
@@ -372,25 +387,42 @@ class DnsSwitchService
             $notify('wait_ns_progress', [
                 'elapsed' => $elapsed,
                 'live' => $liveNormalized,
+                'live_doh' => $dohNormalized,
                 'target' => $targetNsNormalized,
             ]);
-            if ($liveNormalized === $targetNsNormalized) {
-                $notify('wait_ns_verified', ['by' => 'public']);
+            $publicSystemMatch = ($liveNormalized === $targetNsNormalized);
+            $publicDohMatch = ($dohNormalized !== [] && $dohNormalized === $targetNsNormalized);
+            if ($publicSystemMatch || $publicDohMatch) {
+                $notify('wait_ns_verified', [
+                    'by' => 'public',
+                    'detail' => $publicDohMatch && !$publicSystemMatch
+                        ? __('公网判定：系统解析器仍为旧 NS，但 Cloudflare DoH 已返回目标 NS（可能本机 DNS 缓存滞后）。')
+                        : '',
+                ]);
                 return ['verified' => true, 'aborted' => false, 'verified_by' => 'public'];
             }
             if ($registrarCheckNow['supported'] && $registrarCheckNow['error'] === '' && $regNormNow === $targetNsNormalized) {
-                if ($liveNormalized !== $targetNsNormalized) {
-                    $pub = $liveNormalized === [] ? __('(暂无或仍为旧 NS)') : \implode(', ', $liveNormalized);
-                    $notify('wait_ns_public_stale', [
-                        'message' => __(
-                            '【公网尚未跟上】递归 DNS 仍显示「%{1}」，注册商处已是 Cloudflare NS。后续搬迁/同步会照常进行；外网访问与证书需等公网 NS 变为 *.ns.cloudflare.com（常见数分钟～48 小时）。',
-                            [$pub]
-                        ),
-                    ]);
-                }
+                $pub = $liveNormalized === [] ? __('(暂无或仍为旧 NS)') : \implode(', ', $liveNormalized);
+                $dohStr = $dohNormalized === [] ? '' : \implode(', ', $dohNormalized);
+                $notify('wait_ns_public_stale', [
+                    'message' => __(
+                        '【注册商已改 NS，递归尚未全网一致】系统解析仍见「%{1}」%{2}；属注册局/缓存传播，非「被旧值永久覆盖」。证书与 DNS-01 需等权威 NS 在全球可见（常见数分钟～48 小时）。DoH 探测：%{3}。',
+                        [
+                            $pub,
+                            $dohStr !== '' ? '；DoH「' . $dohStr . '」' : '',
+                            $dohStr !== '' ? $dohStr : __('(未取到)'),
+                        ]
+                    ),
+                ]);
                 $notify('wait_ns_verified', ['by' => 'registrar']);
                 return ['verified' => true, 'aborted' => false, 'verified_by' => 'registrar'];
             }
+            $sleep = \min($intervalSeconds, $maxWaitSeconds - $elapsed);
+            if ($sleep <= 0) {
+                break;
+            }
+            \sleep($sleep);
+            $elapsed += $sleep;
         }
         return ['verified' => false, 'aborted' => false, 'verified_by' => ''];
     }
