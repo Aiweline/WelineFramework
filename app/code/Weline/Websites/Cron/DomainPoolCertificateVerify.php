@@ -15,6 +15,7 @@ use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\Model\SslCertificate;
+use Weline\Server\Service\SslCertificateService;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPoolFlowLog;
@@ -248,7 +249,7 @@ class DomainPoolCertificateVerify
                 'cert_strategy' => 'single',
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => 'auto',
+                'challenge_strategy' => SslCertificateService::CHALLENGE_DNS01,
                 '_on_progress' => $onProgress,
             ]);
 
