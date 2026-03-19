@@ -22,7 +22,7 @@ class DnsProviderDetector
         'gname-dns.com' => 'gname',
         'dns.gname.com' => 'gname',
 
-        // 部分注册商默认 NS（未改 NS 前常见；与 Cloudflare 等外部 DNS 并存时需先改 NS）
+        // Gname 等注册商常用高防/托管 NS（a.share-dns.com / b.share-dns.net）；权威仍在注册商侧，非 Cloudflare
         'share-dns.com' => 'share_dns',
         'share-dns.net' => 'share_dns',
 
@@ -97,7 +97,7 @@ class DnsProviderDetector
     private const PROVIDER_NAMES = [
         'cloudflare' => 'Cloudflare',
         'gname' => 'GName',
-        'share_dns' => '注册商 DNS（share-dns）',
+        'share_dns' => 'Gname 高防/托管 DNS（share-dns）',
         'aliyun' => '阿里云',
         'dnspod' => 'DNSPod/腾讯云',
         'aws' => 'AWS Route53',
@@ -179,6 +179,11 @@ class DnsProviderDetector
         // 检查注册商的默认 DNS 服务商
         $defaultDns = self::REGISTRAR_TO_DNS[$registrarCode] ?? null;
         if ($defaultDns !== null && $defaultDns === $dnsProvider) {
+            return true;
+        }
+
+        // Gname 注册常见：权威 NS 为 share-dns 高防集群，与 gname-dns 同属注册商侧托管
+        if ($registrarCode === 'gname' && $dnsProvider === 'share_dns') {
             return true;
         }
 
@@ -293,11 +298,11 @@ class DnsProviderDetector
         $p = \strtolower(\trim($detectedProvider));
         if ($p === 'share_dns') {
             return __(
-                '当前公网 NS 为注册商默认 DNS（如 share-dns），通常表示域名已成功注册，只是解析仍由注册商托管。若已提交改 NS 至 Cloudflare 等，全球生效常需数十分钟至数小时，请在注册商后台核对 NS 是否已变更。'
+                '当前权威 NS 为 Gname 高防/托管 DNS（如 a/b.share-dns），表示解析仍由注册商侧权威托管（非误判）。若目标为 Cloudflare DNS-01，须将注册局 NS 改为 *.ns.cloudflare.com 并等待全球传播。'
             );
         }
         if ($p === 'cloudflare') {
-            return __('当前公网 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。');
+            return __('当前权威 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。');
         }
         if ($dnsFollowsRegistrar && $p !== '') {
             return __(
@@ -321,10 +326,10 @@ class DnsProviderDetector
     }
 
     /**
-     * 列表展示用：本地配置的目标 DNS 与公网 NS 不一致时的文案
+     * 列表展示用：本地配置的目标 DNS 与权威 NS（dig NS）不一致时的文案
      *
-     * - 根域列表：Cloudflare（注册商 DNS（share-dns）广播中…）
-     * - 子域（池子）行：公网仍为旧 NS 时只显示公网侧名称，避免与根域长文案重复
+     * - 根域列表：Cloudflare（Gname 高防 share-dns 等广播中…）
+     * - 子域（池子）行：权威仍为旧 NS 时只显示检测侧名称，避免与根域长文案重复
      *
      * @param string $configuredDnsCode Domain.dns_provider（空则视为跟随注册商）
      * @param string $registrarCode     注册商代码
