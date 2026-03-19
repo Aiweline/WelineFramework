@@ -47,7 +47,7 @@ return [
     /**
      * ACME DNS-01：
      * - **写 TXT 前门闸**：{@see \Weline\Websites\Service\DomainResolveService::validateAcmeDns01HostingViaAdapters}（仅注册商 + DNS 托管适配器 API）。
-     * - **写 TXT 后等待**：{@see \Weline\Server\Service\SslCertificateService::performDns01Challenge} 通过 w_query `getAcmeChallengeTxtFqdn` 与写入同名轮询 {@see dns_get_record}(TXT)；本机递归长期不更新时可设 `txt_visible_use_public_doh` => true。
+     * - **写 TXT 后等待**：先 {@see dns_get_record}(TXT)，未命中再请求公共 DoH（与 CA 查询路径更接近）。Windows/内网 DNS 常滞后，务必保持 `txt_visible_use_public_doh` => true；仅在内网完全禁止出站 DoH 时置 false。
      */
     'acme_dns' => [
         'wait_public_ns_max_seconds' => 0,
@@ -59,8 +59,8 @@ return [
         /** gname / cloudflare 可单独加长（未设置则回退 txt_poll_max_seconds） */
         'txt_poll_max_seconds_gname' => 1200,
         'txt_poll_max_seconds_cloudflare' => 1200,
-        /** true：dns_get_record 未命中时再用 Google/Cloudflare DoH 辅助；false：仅 dns_get_record 循环等传播 */
-        'txt_visible_use_public_doh' => false,
+        /** true：本机 dns_get_record 未命中时用 Google/Cloudflare/1.1.1.1 DoH（推荐，与 LE 等 CA 可见性一致）；false：仅本机解析（易在 Windows 上永远等不到） */
+        'txt_visible_use_public_doh' => true,
     ],
 
     /**

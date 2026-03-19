@@ -3158,10 +3158,13 @@ CNF;
         if (!\is_array($cfg)) {
             $cfg = [];
         }
+        // 未配置时默认走 DoH 回退：本机 dns_get_record 在 Windows/企业递归上常滞后于权威，与「CF 已写入但进程查不到」现象一致
         $out = [
             'max_seconds' => (int) ($cfg['txt_poll_max_seconds'] ?? 900),
             'interval_seconds' => (int) ($cfg['txt_poll_interval_seconds'] ?? 10),
-            'visible_use_public_doh' => !empty($cfg['txt_visible_use_public_doh']),
+            'visible_use_public_doh' => !\array_key_exists('txt_visible_use_public_doh', $cfg)
+                ? true
+                : !empty($cfg['txt_visible_use_public_doh']),
         ];
         if (\array_key_exists('txt_poll_max_seconds_gname', $cfg)) {
             $out['max_seconds_gname'] = (int) $cfg['txt_poll_max_seconds_gname'];
@@ -3174,7 +3177,7 @@ CNF;
     }
 
     /**
-     * 检查 ACME TXT 是否可见：默认仅 {@see dns_get_record}；$allowPublicDoh 为 true 时再试 Google/Cloudflare DoH。
+     * 检查 ACME TXT 是否可见：先 {@see dns_get_record}；$allowPublicDoh 为 true 时再试公共 DoH（更接近 CA 全球递归）。
      */
     protected function isAcmeTxtVisible(string $txtFqdn, string $expectedValue, bool $allowPublicDoh = false): bool
     {
@@ -3225,6 +3228,8 @@ CNF;
     }
 
     /**
+     * 公共 DoH（JSON）：与全球递归更接近；多节点任一命中即可。
+     *
      * @see https://developers.google.com/speed/public-dns/docs/doh-json
      */
     private function isAcmeTxtVisibleViaPublicDoh(string $txtFqdn, string $expectedValue): bool
@@ -3235,8 +3240,9 @@ CNF;
         $qname = \rtrim(\strtolower($txtFqdn), '.') . '.';
         $enc = \rawurlencode($qname);
         $endpoints = [
-            ['url' => 'https://dns.google/resolve?name=' . $enc . '&type=TXT', 'accept' => ''],
+            ['url' => 'https://dns.google/resolve?name=' . $enc . '&type=TXT', 'accept' => 'application/dns-json'],
             ['url' => 'https://cloudflare-dns.com/dns-query?name=' . $enc . '&type=TXT', 'accept' => 'application/dns-json'],
+            ['url' => 'https://1.1.1.1/dns-query?name=' . $enc . '&type=TXT', 'accept' => 'application/dns-json'],
         ];
         foreach ($endpoints as $ep) {
             $ch = \curl_init($ep['url']);
@@ -3249,8 +3255,8 @@ CNF;
             }
             \curl_setopt_array($ch, [
                 \CURLOPT_RETURNTRANSFER => true,
-                \CURLOPT_TIMEOUT => 6,
-                \CURLOPT_CONNECTTIMEOUT => 3,
+                \CURLOPT_TIMEOUT => 8,
+                \CURLOPT_CONNECTTIMEOUT => 4,
                 \CURLOPT_HTTPHEADER => $headers,
                 \CURLOPT_SSL_VERIFYPEER => true,
             ]);
@@ -3260,11 +3266,23 @@ CNF;
                 continue;
             }
             $json = \json_decode($raw, true);
-            if (!\is_array($json) || (int) ($json['Status'] ?? -1) !== 0) {
+            if (!\is_array($json)) {
                 continue;
             }
-            foreach ($json['Answer'] ?? [] as $a) {
-                if ((int) ($a['type'] ?? 0) !== 16) {
+            // Google/CF DoH JSON：Status 0 = NOERROR；部分响应带 Comment 无 Answer（仍传播中）
+            if ((int) ($json['Status'] ?? -1) !== 0) {
+                continue;
+            }
+            $answers = $json['Answer'] ?? [];
+            if (!\is_array($answers)) {
+                continue;
+            }
+            foreach ($answers as $a) {
+                if (!\is_array($a)) {
+                    continue;
+                }
+                $rtype = $a['type'] ?? null;
+                if ((int) $rtype !== 16 && (string) $rtype !== '16') {
                     continue;
                 }
                 $data = (string) ($a['data'] ?? '');
@@ -3273,6 +3291,7 @@ CNF;
                 }
             }
         }
+
         return false;
     }
 
