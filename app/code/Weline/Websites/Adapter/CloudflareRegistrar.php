@@ -258,8 +258,11 @@ class CloudflareRegistrar implements DomainRegistrarInterface
                 'type' => 'password',
                 'required' => true,
                 'required_on_create' => true,
-                'placeholder' => __('Cloudflare API Token'),
+                'placeholder' => __('Cloudflare API Token（区域资源须 All zones）'),
                 'mapping' => 'api_secret',
+                'help_text' => __(
+                    '创建 Token 时「区域资源 / Zone resources」请选择「All zones（所有区域）」。若选「指定区域」且未包含全部站点，本系统可能无法列出 Zone，证书 DNS-01 与解析同步会失败。'
+                ),
             ],
             [
                 'name' => 'account_id',
@@ -279,7 +282,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             'help_title' => __('Cloudflare API 配置获取指南'),
             'purchase_help_steps' => [
                 __('【查可注册性 / 同步 CF 注册域名】必选：Account → Registrar → Read。无此项则批量购买前无法调用 Registrar API 判断域名是否可新注。'),
-                __('【购买后自动 DNS / 入池 / 切换解析】仍需：Account Settings Read、Zone Read、Zone Edit、DNS Edit；区域资源建议 All zones。'),
+                __('【DNS / 证书 / 自动解析】区域资源请固定选「All zones（所有区域）」，勿用「指定区域」仅勾选部分域名——否则 API 可能返回空 Zone 列表，与控制台能看到站点无关。权限仍需：Account Settings Read、Zone Read、Zone Edit、DNS Edit。'),
                 __('【新注扣款】Cloudflare 当前公开 API 无稳定下单接口；本系统「购买」可能失败，需在控制台 Registrar → Register domains 完成注册；若未来开放 API，一般还需 Registrar → Edit。'),
                 __('【账号要求】控制台须已验证邮箱；不支持 IDN（国际化域名）新注。'),
             ],
@@ -290,7 +293,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
                 __('3. 左侧菜单选择 API Tokens（API 令牌）'),
                 __('4. 点击 Create Token → Create Custom Token'),
                 __('5. 权限（DNS/建站）：Account Settings Read、Zone Read、Zone Edit、DNS Edit；若要用本系统查购买可用性并同步注册域名：再加 Registrar Read（见上方蓝色框）。'),
-                __('6. 若要自动「添加新站点」，区域资源须选 All zones。'),
+                __('6. 【必看】区域资源（Zone resources）请选择「All zones」——本系统依赖 API 枚举/操作 Zone；选「指定区域」且漏选站点会导致 GET /zones 无结果、证书 DNS-01 添加 TXT 失败。'),
                 __('7. Create Token 后复制填入「API Token」。'),
                 __('【Account ID】可选；不填时凭 Account Settings Read 自动解析。'),
             ],
@@ -758,6 +761,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
                 return [
                     'success' => true,
                     'record_id' => $existing,
+                    'zone_id' => $zoneId,
                     'message' => $existing !== '' ? __('DNS 记录已存在，复用现有记录') : __('DNS 记录已存在（与现有记录相同）'),
                     'dns_response' => $dnsResponse,
                 ];
@@ -772,6 +776,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         return [
             'success' => true,
             'record_id' => $response['result']['id'] ?? '',
+            'zone_id' => $zoneId,
             'message' => __('DNS 记录添加成功'),
             'dns_response' => $dnsResponse,
         ];
@@ -1041,30 +1046,49 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     private function zoneMissingViaApiMessage(string $domain): string
     {
         return (string) __(
-            '在当前 Cloudflare API Token 下未列出域名「%{1}」的 Zone（GET /zones 无结果）。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。',
+            '在当前 Cloudflare API Token 下经多次 GET /zones?name= 重试后仍未解析到域名「%{1}」的 Zone。API 非强一致，刚改 NS / 新站 pending→active 时常见；可稍后重试。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。',
             [$domain]
         );
     }
 
     /**
-     * 获取 Zone ID（每次请求 Cloudflare API，不做本地缓存，避免状态不一致与跨请求脏读）。
+     * 与 {@see DomainResolveService::CF_DNS_ZONE_EXTERNAL_CREDENTIAL_KEY} 一致：由业务层注入已落库的 zone_id，本适配器优先直用。
+     */
+    private const INJECTED_ZONE_ID_CREDENTIAL_KEY = '_weline_dns_zone_external_id';
+
+    /** SaaS：GET /zones?name= 重试次数（含首次，共 8 次） */
+    private const ZONE_NAME_QUERY_ATTEMPTS = 8;
+
+    /** 重试间隔（秒），第 2 次起 sleep */
+    private const ZONE_NAME_QUERY_RETRY_SLEEP_SECONDS = 2;
+
+    /**
+     * 获取 Zone ID：优先凭据中注入的落库 ID；否则 GET /zones?name= 并带重试（CF API 非强一致）。
      */
     private function getZoneId(string $domain, array $credentials): string
     {
         $domain = \strtolower(\trim($domain));
 
-        $response = $this->makeRequest('/zones', 'GET', ['name' => $domain], $credentials);
-
-        if (!($response['success'] ?? false)) {
-            return '';
+        $pinned = \trim((string) ($credentials[self::INJECTED_ZONE_ID_CREDENTIAL_KEY] ?? ''));
+        if ($pinned !== '' && \preg_match('/^[a-f0-9]{32}$/i', $pinned)) {
+            return $pinned;
         }
 
-        $zones = $response['result'] ?? [];
-        if (empty($zones)) {
-            return '';
+        for ($attempt = 0; $attempt < self::ZONE_NAME_QUERY_ATTEMPTS; $attempt++) {
+            if ($attempt > 0) {
+                \sleep(self::ZONE_NAME_QUERY_RETRY_SLEEP_SECONDS);
+            }
+            $response = $this->makeRequest('/zones', 'GET', ['name' => $domain], $credentials);
+            if (!($response['success'] ?? false)) {
+                continue;
+            }
+            $zones = $response['result'] ?? [];
+            if (!empty($zones[0]['id'])) {
+                return (string) $zones[0]['id'];
+            }
         }
 
-        return (string) ($zones[0]['id'] ?? '');
+        return '';
     }
 
     /**
