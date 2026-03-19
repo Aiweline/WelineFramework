@@ -1,0 +1,44 @@
+{
+    "template": "default",
+    "name": "Default",
+    "description": "极简默认主题（根目录 header/footer/content）；补充 legal-content 供法律页与构建器使用",
+    "version": "1.0.0",
+    "author": "GuoLaiRen",
+    "content_phtml_scan": "always",
+    "regions": {
+        "header": {
+            "name": "头部区域",
+            "name_en": "Header",
+            "accepts": ["header"],
+            "default_component": "header-system"
+        },
+        "content": {
+            "name": "内容区域",
+            "name_en": "Content",
+            "accepts": ["content", "widget"]
+        },
+        "footer": {
+            "name": "底部区域",
+            "name_en": "Footer",
+            "accepts": ["footer"],
+            "default_component": "footer-system"
+        }
+    },
+    "components": {
+        "legal-content": {
+            "name": "法律文档",
+            "name_en": "Legal Content",
+            "description": "隐私政策、服务条款等；物理文件使用 style/_shared/components/legal-content.phtml",
+            "region": "content",
+            "category": "content",
+            "type": "section",
+            "icon": "bi-file-earmark-text",
+            "sort_order": 90,
+            "is_default": false,
+            "compatible_styles": ["*"],
+            "config_groups": ["content", "style"],
+            "file": "legal-content.phtml",
+            "default_config": []
+        }
+    }
+}
