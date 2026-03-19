@@ -86,6 +86,7 @@ class YourRegistrar implements DomainRegistrarInterface
 | **Cron `DnsCdnAutoSwitch` + `DnsSwitchService`** | 否 | **`executeDnsSwitchWithStandardOptions` → `executeDnsSwitch`** | 与 Admin `postSwitchDnsAccount`/SSE 同默认 options；PageBuilder SSE 在 `buildStandardSwitchOptions` 上 merge。 |
 | **DnsSwitchService 记录搬迁** | — | **Step1** 优先从 **`dns_account_id`≠目标** 的托管账户 `getDnsRecords`，否则注册商；**Step4** `pushRecordsToProvider` 以 Step1 后本地库为准（`records_to_push` 仅兜底）。 |
 | **`dns_account_id` 补全** | **`DomainPurchaseService` 落库前** | **`DomainResolveService::ensureDnsAccountIdPersisted`** | 另：**注册商 `syncAccount` 拉域后**逐条补全；**`executeDnsSwitch` Step1 前**再补；**`getDnsManagementAccount`** 成功且仍为 0 时写入当前所用账户。 |
+| **ACME `addAcmeTxtRecord` NS 门闸** | — | **`validateAuthoritativeDnsMatchesProvider` + `waitForPublicAuthoritativeNsMatchesProvider`** | 登记 NS 已指向目标但公网滞后（`matched_via=registrar`）时，按 **`websites.acme_dns`** 轮询直至公网判定一致或超时，再写 TXT。**`DnsSwitchService` cutover** 仍仅用公网（`trustRegistrar=false`）。 |
 | **铁律：委派 NS** | — | **`Domain.account_id`** 对应注册商 → `sourceAdapter->updateNameservers` | 改注册局 NS 只用注册商账户；**`dns_account_id`** 仅为托管目标（Zone/记录），`CloudflareRegistrar::updateNameservers` 固定失败并提示去注册商。 |
 | **Cron `DomainLifecycleOrchestration` 等** | 否 | 经 **`DomainResolveService` / Pool** | 不直接 purchase；依赖已入池域名。 |
 | **Admin `Domain` 控制器** | **`DomainPurchaseService`** | **`DomainRegistrarResolverService` / `w_query`** | 与抽象一致。 |
