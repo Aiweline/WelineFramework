@@ -26,6 +26,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     examples: ['php bin/w cron:test --task=health_check --domain=www.example.com -v'],
     manual_help: [
         '逻辑：取已绑定网站的域名列表，逐个请求 HTTP 或 HTTPS；2xx/3xx 视为健康。若期望 HTTPS 但证书失败则尝试 HTTP，成功则更新为「已回退 HTTP」并同步数据库 HTTPS 开关。',
+        '每条记录探测后同步更新关联的 DomainPool（pool_id）与根域 Domain：connectivity_*、https_status、cert_id（池），根域在「主机名=根域」时还同步 https_status。',
         '--domain= 仅检查包含该域名的站点记录。',
     ],
 )]
@@ -44,11 +45,12 @@ class HealthCheck
             $results = $healthService->checkAllDomains();
             
             // 构建结果消息
-            $message = __('健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个', [
+            $message = __('健康检查完成：共 %{1} 个域名，健康 %{2} 个，不健康 %{3} 个，HTTPS 状态更新 %{4} 个，根域/池同步 %{5} 条', [
                 $results['total'],
                 $results['healthy'],
                 $results['unhealthy'],
-                $results['https_updated']
+                $results['https_updated'],
+                $results['infra_synced'] ?? 0,
             ]);
             
             // 记录日志
