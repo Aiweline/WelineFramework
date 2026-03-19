@@ -2140,13 +2140,16 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     PageModel::TYPE_SHIPPING_POLICY,
                 ];
                 if (in_array($pageType, $legalTypes, true)) {
-                    $__legalType = $pageType;
-                    $__legalTitle = $config['title'];
-                    ob_start();
-                    include BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/default-legal.phtml';
-                    $defaultContent = ob_get_clean();
-                    if ($defaultContent !== '' && $defaultContent !== false) {
-                        $page->setData(PageModel::schema_fields_CONTENT, $defaultContent);
+                    $defaultLegalTpl = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/default-legal.phtml';
+                    if (is_file($defaultLegalTpl) && is_readable($defaultLegalTpl)) {
+                        $__legalType = $pageType;
+                        $__legalTitle = $config['title'];
+                        ob_start();
+                        include $defaultLegalTpl;
+                        $defaultContent = ob_get_clean();
+                        if ($defaultContent !== '' && $defaultContent !== false) {
+                            $page->setData(PageModel::schema_fields_CONTENT, $defaultContent);
+                        }
                     }
                 }
                 $page->save(true);
