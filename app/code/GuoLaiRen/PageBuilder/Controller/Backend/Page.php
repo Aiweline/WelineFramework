@@ -16,6 +16,7 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Model\WebsiteUser;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
+use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -2126,27 +2127,11 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     $homePageId = $savedPageId;
                 }
                 
-                // 应用该页面类型的默认布局与法律页默认内容，避免关于我们/联系我们/条款等页面空白
+                // 应用该页面类型的默认布局（含法律页 legal-content 等组件配置；正文以布局组件为准，不写入 page.content）
                 $componentService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\ComponentService::class);
                 $defaultLayout = $componentService->getDefaultLayoutConfigForPageType($styleCode, $pageType);
-                if ($defaultLayout && !empty($defaultLayout['layout_config']['content'])) {
+                if ($defaultLayout && !empty($defaultLayout['layout_config'])) {
                     $page->setData(PageModel::schema_fields_LAYOUT_CONFIG, json_encode($defaultLayout['layout_config'], \JSON_UNESCAPED_UNICODE));
-                }
-                $legalTypes = [
-                    PageModel::TYPE_TERMS_OF_SERVICE,
-                    PageModel::TYPE_PRIVACY_POLICY,
-                    PageModel::TYPE_REFUND_POLICY,
-                    PageModel::TYPE_COOKIE_POLICY,
-                    PageModel::TYPE_SHIPPING_POLICY,
-                ];
-                if (in_array($pageType, $legalTypes, true)) {
-                    $defaultContent = \GuoLaiRen\PageBuilder\Service\DefaultLegalPlaceholder::toHtml(
-                        $pageType,
-                        (string) ($config['title'] ?? '')
-                    );
-                    if ($defaultContent !== '') {
-                        $page->setData(PageModel::schema_fields_CONTENT, $defaultContent);
-                    }
                 }
                 $page->save(true);
                 
@@ -3293,9 +3278,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             return;
         }
         
-        // 读取组件文件获取字段定义
-        $componentPath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/components/{$componentFile}";
-        
+        // 读取组件文件获取字段定义（legal-content 等可回退 _shared）
+        $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
+        $componentPath = $pathResolver->resolveComponentFilesystemPath($styleCode, $componentFile);
+
         if (!file_exists($componentPath)) {
             return;
         }

@@ -21,6 +21,7 @@ use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
 use GuoLaiRen\PageBuilder\Service\Component\SlotValidator;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
+use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\PageLayout;
 
@@ -1481,6 +1482,17 @@ class Component extends BackendController
                         if (file_exists($path)) {
                             $templateCode = file_get_contents($path);
                             break;
+                        }
+                    }
+                    // legal-content：主题无本地文件时回退 _shared（与 TemplatePathResolver 一致）
+                    if ($templateCode === '' && ($componentCode === 'legal-content' || str_ends_with((string) $componentCode, 'legal-content'))) {
+                        $resolver = ObjectManager::getInstance(TemplatePathResolver::class);
+                        foreach (['content/legal-content.phtml', 'legal-content.phtml'] as $rel) {
+                            $resolved = $resolver->resolveComponentFilesystemPath($componentStyleCode, $rel);
+                            if (is_file($resolved)) {
+                                $templateCode = (string) file_get_contents($resolved);
+                                break;
+                            }
                         }
                     }
                 }
