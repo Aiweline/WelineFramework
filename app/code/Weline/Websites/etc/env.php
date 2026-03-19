@@ -45,6 +45,19 @@ return [
     ],
 
     /**
+     * ACME 证书 DNS-01（addAcmeTxtRecord）：当注册商 API 登记 NS 已指向目标 DNS（如 Cloudflare）但本机/递归查询仍滞后时，
+     * 在写入验证 TXT 前轮询公网 NS，与 {@see dns_switch.ns_probe_use_cloudflare_doh} 同源思路（系统 NS + 可选 DoH）。
+     * - wait_public_ns_max_seconds：最长等待（默认 3600）；超时则仍拒绝写 TXT，避免 CA 查不到记录。
+     * - wait_public_ns_interval_seconds：轮询间隔，默认 15。
+     * - ns_probe_use_cloudflare_doh：未配置时回退为 dns_switch.ns_probe_use_cloudflare_doh。
+     */
+    'acme_dns' => [
+        'wait_public_ns_max_seconds' => 3600,
+        'wait_public_ns_interval_seconds' => 15,
+        'ns_probe_use_cloudflare_doh' => null,
+    ],
+
+    /**
      * 购买落库默认 CDN（非 Cloudflare DNS 时）：未显式选 CDN 账户则绑定此处 registrar 账户 ID。
      * Cloudflare DNS 不写入（由 CF 适配器与 DnsSwitchService verify_cdn 处理）。
      * 未配置或账户不存在时仅打日志，不静默绑定。
