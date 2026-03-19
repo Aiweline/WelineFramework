@@ -6,6 +6,7 @@ namespace Weline\Framework\Database\Query;
 
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Exception\Core;
 
@@ -64,7 +65,7 @@ final class QueryDelegator
                 $model->bindModelFields(array_keys($fieldsArray));
             } else {
                 $fieldsString = is_array($args[0] ?? '') ? '' : ($args[0] ?? '');
-                $fields = !empty($fieldsString) ? explode(',', $fieldsString) : [];
+                $fields = !empty($fieldsString) ? SelectFieldListSplitter::split($fieldsString) : [];
                 foreach ($fields as &$field) {
                     if (is_string($field) && str_contains($field, '.')) {
                         $parts = explode('.', $field);

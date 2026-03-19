@@ -25,6 +25,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Database\Schema\Attribute\Col;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 
 /**
  * Class AbstractModel
@@ -1670,7 +1671,7 @@ PAGINATION;
                 }
             }
             $model_fields = rtrim($model_fields, ',');
-            $this->bindModelFields(explode(',', $model_fields), $alias);
+            $this->bindModelFields(SelectFieldListSplitter::split($model_fields), $alias);
 
             if ($this->_bind_model_fields) {
                 $model_fields .= ',' . (implode(',', $this->_bind_model_fields));
@@ -1678,7 +1679,7 @@ PAGINATION;
 
             $query->fields($query->fields . ',' . $model_fields);
         } else {
-            $this->bindModelFields(explode(',', $fields), $alias);
+            $this->bindModelFields(SelectFieldListSplitter::split($fields), $alias);
             $query->fields($query->fields . ',' . $fields);
         }
         $query->join($model_table . ($alias ? " `{$alias}`" : ''), $condition, $type);
