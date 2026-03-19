@@ -11,6 +11,22 @@ return [
         'local_bind_address' => '127.0.0.1',
     ],
 
+    /**
+     * 根域 NS 探测（DomainNsCheck）：与「配置的 DNS 管理账户」比对。
+     * - mismatch_alert_enabled：不一致时写 w_log_warning（channel domain_ns_check），默认 true。
+     * - mismatch_alert_cooldown_seconds：同一域名告警冷却，默认 3600。
+     * - self_heal_enabled：是否允许写入 dns_switch_pending 触发 DnsCdnAutoSwitch，默认 true。
+     * - self_heal_domain_whitelist：根域小写列表；留空表示不限制（全部根域可自愈）；非空则仅列出的根域自愈。
+     * - self_heal_cooldown_seconds：同一域名自愈冷却，默认 86400。
+     */
+    'ns_check' => [
+        'mismatch_alert_enabled' => true,
+        'mismatch_alert_cooldown_seconds' => 3600,
+        'self_heal_enabled' => true,
+        'self_heal_cooldown_seconds' => 86400,
+        'self_heal_domain_whitelist' => [],
+    ],
+
     // 是否禁止未匹配的域名访问（默认不禁止）
     // true: 如果查不到匹配的站点，返回404错误
     // false: 查不到站点也没关系，继续处理（默认）

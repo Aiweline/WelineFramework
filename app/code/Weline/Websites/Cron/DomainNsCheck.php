@@ -15,6 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Service\DnsProviderDetector;
+use Weline\Websites\Service\DomainNsMismatchNotifier;
 use Weline\Websites\Service\DomainRootRegistrationSelfCorrectService;
 use Weline\Websites\Service\SubdomainGeneratorService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
@@ -24,10 +25,11 @@ use Weline\Websites\Service\WebsitesCronTestContext;
  * 由 {@see WebsitesOperationsMaintenance} 整点调用。
  */
 #[CronTestHelp(
-    description: '根域 Nameserver 检测：查询根域 NS 记录，识别当前 DNS 服务商（如 Cloudflare、原注册商），用于后台展示与策略判断。',
+    description: '根域 Nameserver 检测：查询根域 NS 记录，识别当前 DNS 服务商（如 Cloudflare、原注册商），用于后台展示与策略判断；可选比对「配置的 DNS 账户」并告警/白名单自愈。',
     examples: ['php bin/w cron:test --task=domain_ns_check --domain=example.com -v'],
     manual_help: [
         '逻辑：先纠正「子域已可建站但根域仍非 active」的脏数据；再对活跃根域做 NS 查询，根据 NS 主机名识别 dns_provider 并更新。',
+        '若域名已绑定 dns_account_id 且非切换中：公网识别服务商与账户 registrar 不一致时，按 env websites.ns_check 冷却写告警日志（默认开）；自愈默认开，白名单空=全部根域，非空则仅列表内；自愈受 self_heal_cooldown_seconds 限制。',
         '--domain= 仅检测该根域；不指定则处理全部活跃根域。',
     ],
 )]
@@ -53,8 +55,11 @@ class DomainNsCheck
             $original = 0;
             $errors = 0;
             $poolAdded = 0;
+            $mismatchAlerts = 0;
+            $selfHealQueued = 0;
 
             $subdomainGenerator = ObjectManager::getInstance(SubdomainGeneratorService::class);
+            $nsMismatchNotifier = ObjectManager::getInstance(DomainNsMismatchNotifier::class);
 
             foreach ($domains as $row) {
                 $domain = ObjectManager::getInstance(Domain::class, [], false);
@@ -137,7 +142,15 @@ class DomainNsCheck
                         $pool->calculateSiteReady();
                         $pool->save();
                     }
-                    
+
+                    $probeResult = $nsMismatchNotifier->handleAfterLiveProbe($domain, $liveNameservers, $dnsProvider);
+                    if ($probeResult['alerted'] ?? false) {
+                        $mismatchAlerts++;
+                    }
+                    if ($probeResult['self_heal_queued'] ?? false) {
+                        $selfHealQueued++;
+                    }
+
                     if (\stripos($dnsProvider, 'cloudflare') !== false) {
                         $cloudflare++;
                     } elseif ($dnsProvider === '' || \stripos($dnsProvider, 'original') !== false) {
@@ -162,6 +175,12 @@ class DomainNsCheck
             }
             if ($poolAdded > 0) {
                 $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
+            }
+            if ($mismatchAlerts > 0) {
+                $message .= \sprintf(', NS与DNS账户不一致告警(冷却内首次) %d 次', $mismatchAlerts);
+            }
+            if ($selfHealQueued > 0) {
+                $message .= \sprintf(', NS自愈写入pending %d 个', $selfHealQueued);
             }
 
             w_log_info($message, [], 'domain_ns_check');
