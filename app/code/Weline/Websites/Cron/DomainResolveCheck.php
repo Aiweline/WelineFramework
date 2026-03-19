@@ -19,15 +19,16 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 由 {@see WebsitesDomainResolvePipeline} 统一调度。
+ * 由 {@see WebsitesDomainResolvePipeline} 第三步调用。
  */
 #[CronTestHelp(
-    description: '根域解析检测（site_ready=0 批次）与子域入池。',
+    description: '根域解析检测 + 默认子域入池：先扫描未建站就绪的根域，若其下所有子域都可建站则从子域回填根域各字段；再对仍未就绪的根域做 A/AAAA 检测与入池，并纠正根域状态。',
     examples: ['php bin/w cron:test --task=domain_resolve_check --domain=example.com -v'],
     manual_help: [
-        '控制台 --domain= 针对该根域及子域入池逻辑。',
-        '后台「后缀」未解析时按批次扫 site_ready=0 根域。',
-        '含：子域已可建站时根域仍 pending/注册中 → 自我纠正为 active。',
+        '① 根域字段回填：取 site_ready=0 的根域，若该根下所有子域均为 site_ready=1，则用子域数据更新根域（status、resolve_status、resolved_ip、https_status、site_ready 等），不再重复解析。',
+        '② 注册状态纠正：存在至少一个可建站子域但根域仍非 active 的，将根域标为 active。',
+        '③ 解析与入池：对仍未就绪的根域确保默认子域入池并做 DNS 解析检测。',
+        '--domain= 仅处理该根域；不指定则按批次处理。',
     ],
 )]
 class DomainResolveCheck
@@ -42,6 +43,9 @@ class DomainResolveCheck
             $domainModel = ObjectManager::getInstance(Domain::class);
             $resolveService = ObjectManager::getInstance(DomainResolveService::class);
             $selfCorrect = ObjectManager::getInstance(DomainRootRegistrationSelfCorrectService::class);
+            // 先：未就绪根域中，若所有子域都可建站则从子域回填根域各字段
+            $syncedFromPool = $selfCorrect->syncRootFieldsFromPoolBatch(200);
+            // 再：存在可建站子域但根域仍非 active 的，纠正为 active
             $batchPromoted = $selfCorrect->correctBatch(200);
 
             // 未建站就绪根域，每轮限量避免单次超时；多轮 cron 扫完。
@@ -118,6 +122,9 @@ class DomainResolveCheck
             }
             if ($poolAdded > 0) {
                 $message .= \sprintf(', 子域名入池 %d 个', $poolAdded);
+            }
+            if ($syncedFromPool > 0) {
+                $message .= \sprintf(', %s %d', (string) __('根域从子域回填'), $syncedFromPool);
             }
             if ($batchPromoted > 0 || $loopPromoted > 0) {
                 $message .= \sprintf(
