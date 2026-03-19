@@ -1273,8 +1273,9 @@ class GnameRegistrar implements DomainRegistrarInterface
     /**
      * @inheritDoc
      *
-     * 优先从 api/dns/list 取账户默认 NS（官方示例为 ns1.gname-dns.com,ns2.gname-dns.com），
-     * 与网页「设置为本站高防DNS」一致，否则修改 NS 可能提交成功但未真正生效。
+     * 优先从 api/dns/list 取账户默认 NS（ismr=1 或首条），缺项时用 api/dns/info 按 id 拉取详情；
+     * 与网页「设置为本站高防DNS」一致。回退使用 Gname 官方本站高防 NS：a.share-dns.com, b.share-dns.net。
+     * 修改域名 NS 使用 api/domain/dns（参数 dns 为逗号分隔的 NS 主机名），非 api/dns/add。
      */
     public function getProviderNameservers(array $credentials, string $domain = ''): array
     {
@@ -1283,22 +1284,24 @@ class GnameRegistrar implements DomainRegistrarInterface
             return [
                 'success' => true,
                 'nameservers' => $defaultNs,
-                'message' => __('GName 默认 DNS 服务器（来自 api/dns/list）'),
+                'message' => __('GName 默认 DNS 服务器（来自 api/dns/list 或 api/dns/info）'),
             ];
         }
         return [
             'success' => true,
             'nameservers' => [
-                'ns1.gname.com',
-                'ns2.gname.com',
+                'a.share-dns.com',
+                'b.share-dns.net',
             ],
-            'message' => __('GName 默认 DNS 服务器（回退）'),
+            'message' => __('GName 本站高防 DNS（回退，与官方控制台一致）'),
         ];
     }
 
     /**
-     * 从 api/dns/list 获取账户默认 NS（ismr=1 或首条），与网页设置一致
+     * 从 api/dns/list 获取账户默认 NS（ismr=1 或首条）；若某条有 id 但 dns 为空则用 api/dns/info 拉取详情
      *
+     * @see https://www.gname.com/domain/api/dns/list
+     * @see https://www.gname.com/domain/api/dns/info
      * @return array<string>
      */
     private function fetchDefaultNameserversFromDnsList(array $credentials): array
@@ -1312,17 +1315,20 @@ class GnameRegistrar implements DomainRegistrarInterface
             if ($code !== 1) {
                 return [];
             }
-            $list = $response['data'] ?? [];
-            if (!\is_array($list)) {
-                return [];
-            }
+            $raw = $response['data'] ?? [];
+            $list = \is_array($raw) ? $raw : (isset($raw['list']) && \is_array($raw['list']) ? $raw['list'] : []);
             $default = null;
             $first = null;
             foreach ($list as $item) {
                 if (!\is_array($item)) {
                     continue;
                 }
+                $id = isset($item['id']) ? (int) $item['id'] : 0;
                 $dnsStr = \trim((string) ($item['dns'] ?? ''));
+                if ($dnsStr === '' && $id > 0) {
+                    $detail = $this->fetchDnsInfoById($id, $credentials);
+                    $dnsStr = \trim((string) ($detail['dns'] ?? ''));
+                }
                 if ($dnsStr === '') {
                     continue;
                 }
@@ -1341,6 +1347,29 @@ class GnameRegistrar implements DomainRegistrarInterface
             return $default ?? $first ?? [];
         } catch (\Throwable $e) {
             w_log_warning(__('[GName] fetchDefaultNameserversFromDnsList 失败（使用回退 NS）：%{1}', [$e->getMessage()]), [], 'dns_cdn_switch');
+            return [];
+        }
+    }
+
+    /**
+     * 按 DNS 记录 id 拉取详情（api/dns/info），用于 list 中 dns 为空时补全
+     *
+     * @see https://www.gname.com/domain/api/dns/info
+     * @return array<string, mixed> data 对象或空数组
+     */
+    private function fetchDnsInfoById(int $id, array $credentials): array
+    {
+        try {
+            $response = $this->makeRequest('api/dns/info', [
+                'id' => $id,
+            ], $credentials);
+            if ((int) ($response['code'] ?? 0) !== 1) {
+                return [];
+            }
+            $data = $response['data'] ?? [];
+            return \is_array($data) ? $data : [];
+        } catch (\Throwable $e) {
+            w_log_warning(__('[GName] fetchDnsInfoById(id=%{1}) 失败：%{2}', [(string) $id, $e->getMessage()]), [], 'dns_cdn_switch');
             return [];
         }
     }

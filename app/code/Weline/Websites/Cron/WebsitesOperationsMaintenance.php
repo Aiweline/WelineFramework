@@ -2,7 +2,11 @@
 declare(strict_types=1);
 
 /**
- * 合并调度：DNS/CDN 自动切换、站点健康检查；每小时整点附带 NS 检测与根域 HTTPS 同步
+ * 合并调度：站点运维四块
+ * ① DNS/CDN 自动切换（购买后待切换队列）
+ * ② 已绑定站点的域名健康检查（可访问性 + HTTPS 状态）
+ * ③ 整点：根域 NS 归属检测与 DNS 服务商识别
+ * ④ 整点：按证书有效性同步站点 HTTPS 开关
  */
 
 namespace Weline\Websites\Cron;
@@ -13,13 +17,15 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: 'DNS/CDN 切换、健康检查；加 hourly=true（--hourly）时强制执行 NS 检测与 HTTPS 同步（不等整点）。',
+    description: '站点运维四块：① DNS/CDN 切换 ② 站点域名健康检查 ③ 整点 NS 检测 ④ 整点 HTTPS 同步。--hourly 可立即执行 ③④。',
     examples: [
         'php bin/w cron:test --task=websites_operations_maintenance --domain=example.com -v --hourly',
     ],
     manual_help: [
-        '整点附带 NS 检测与 HTTPS 同步；--hourly 可在控制台立即跑这两段。',
-        '控制台：--domain=、-v、--hourly；后台后缀未解析时等同定时。',
+        '① 每 5 分钟：处理购买后待切换 DNS/CDN 的根域，将 NS 切到目标服务商。',
+        '② 每 5 分钟：对已绑定网站的域名（website_domain）做 HTTP(S) 探测，更新健康状态与 HTTPS 开关。',
+        '③ 仅整点：检测根域 Nameserver 归属，识别 DNS 服务商（如 Cloudflare）。',
+        '④ 仅整点：根据证书有效性同步各站点域名的 HTTPS 启用状态（证书无效则回退 HTTP）。',
     ],
 )]
 class WebsitesOperationsMaintenance implements CronTaskInterface
@@ -28,7 +34,7 @@ class WebsitesOperationsMaintenance implements CronTaskInterface
 
     public function name(): string
     {
-        return __('站点运维（合并）');
+        return __('站点运维（DNS 切换 + 健康检查 + NS/HTTPS）');
     }
 
     public function execute_name(): string
@@ -38,7 +44,7 @@ class WebsitesOperationsMaintenance implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('DNS/CDN 切换、健康检查；整点执行 NS 归属检测与 HTTPS 状态同步');
+        return __('① DNS/CDN 切换 ② 站点健康检查 ③ 整点 NS 检测 ④ 整点 HTTPS 同步');
     }
 
     public function cron_time(): string
