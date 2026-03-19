@@ -92,6 +92,12 @@ class DomainPool extends Model
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col('datetime', nullable: true, comment: '更新时间')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: '连通性状态：pending/ok/error')]
+    public const schema_fields_CONNECTIVITY_STATUS = 'connectivity_status';
+    #[Col('datetime', nullable: true, comment: '连通性检测时间')]
+    public const schema_fields_CONNECTIVITY_CHECKED_AT = 'connectivity_checked_at';
+    #[Col('text', nullable: true, comment: '连通性详情（hover 展示）')]
+    public const schema_fields_CONNECTIVITY_DETAIL = 'connectivity_detail';
     
     // 状态常量
     public const STATUS_ACTIVE = 'active';
@@ -123,6 +129,11 @@ class DomainPool extends Model
     public const LIFECYCLE_CERT_VALID = 'cert_valid';
     public const LIFECYCLE_SITE_LIVE = 'site_live';
     public const LIFECYCLE_BLOCKED = 'blocked';
+
+    // 连通性状态常量
+    public const CONNECTIVITY_PENDING = 'pending';
+    public const CONNECTIVITY_OK = 'ok';
+    public const CONNECTIVITY_ERROR = 'error';
     
     /**
      * 保存前自动更新时间戳并解析根域名
@@ -322,6 +333,40 @@ class DomainPool extends Model
     public function getResolveError(): string
     {
         return (string) $this->getData(self::schema_fields_RESOLVE_ERROR);
+    }
+
+    public function getConnectivityStatus(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CONNECTIVITY_STATUS) ?: self::CONNECTIVITY_PENDING);
+    }
+
+    public function setConnectivityStatus(string $status): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_STATUS, $status);
+        return $this;
+    }
+
+    public function getConnectivityCheckedAt(): ?string
+    {
+        $v = $this->getData(self::schema_fields_CONNECTIVITY_CHECKED_AT);
+        return $v === '' || $v === null ? null : (string) $v;
+    }
+
+    public function setConnectivityCheckedAt(?string $datetime): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_CHECKED_AT, $datetime);
+        return $this;
+    }
+
+    public function getConnectivityDetail(): string
+    {
+        return (string) $this->getData(self::schema_fields_CONNECTIVITY_DETAIL);
+    }
+
+    public function setConnectivityDetail(string $detail): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_DETAIL, $detail);
+        return $this;
     }
     
     // =============== HTTPS 相关 Getter/Setter ===============

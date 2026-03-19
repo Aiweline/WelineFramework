@@ -24,14 +24,14 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 由 {@see WebsitesPoolCertificateMaintenance} 统一调度。
+ * 由 {@see WebsitesPoolCertificateMaintenance} 第一步调用（仅整点/半点执行）。
  */
 #[CronTestHelp(
-    description: '池内 https_status=valid 的 PEM/文件校验。',
+    description: '子域证书校验：检查池内已标 https_status=valid 的证书在服务器上是否仍有有效 PEM/文件；丢失或无效则回退为 none、site_ready=0，已建站则触发重新申请。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_verify --domain=www.example.com -v'],
     manual_help: [
-        '控制台 --domain= 限定校验该 FQDN 池记录。',
-        '后台「后缀」未解析时扫全部待校验记录。',
+        '逻辑：遍历池内 https_status=valid 的记录，查证书表与磁盘 PEM；无有效证书则回退该条为 none 并设 site_ready=0；若该子域已建站(site_created=1)则加入重新申请队列。',
+        '--domain= 仅校验该子域；不指定则处理全部。',
     ],
 )]
 class DomainPoolCertificateVerify
