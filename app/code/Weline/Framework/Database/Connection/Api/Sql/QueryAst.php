@@ -18,6 +18,7 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\DefaultTableNameStrateg
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\IdentifierFormatterInterface;
 use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterface;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Database\Helper\Tool;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
@@ -524,12 +525,12 @@ abstract class QueryAst implements QueryInterface
             $this->fields = $fields;
         } else {
             $this->fields = $fields . ',' . $this->fields;
-            $fields = explode(',', $this->fields);
-            $fields = array_unique($fields);
-            foreach ($fields as &$field) {
+            $mergedParts = SelectFieldListSplitter::split($this->fields);
+            $mergedParts = array_unique($mergedParts);
+            foreach ($mergedParts as &$field) {
                 $field = self::parserFiled($field);
             }
-            $this->fields = implode(',', $fields);
+            $this->fields = implode(',', $mergedParts);
         }
         // 更新 AST
         $this->updateAstFields($this->fields);
