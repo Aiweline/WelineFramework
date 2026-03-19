@@ -32,6 +32,8 @@ return [
      * - 不能加快注册局/全球递归缓存过期；可减少「本机解析器仍旧 NS」误判，并尽早发现已传播。
      * - wait_public_ns_max_seconds 不宜过大，避免 WLS cron 单任务长时间阻塞（默认 3 分钟）。
      * - ns_probe_use_cloudflare_doh：用 1.1.1.1 DoH 与系统 dns_get_record 交叉比对（任一与目标 NS 集合一致即视为公网已跟上）。
+     * - cutover_requires_public_authoritative_ns：对 wait_public_ns_provider_codes 内目标（如 cloudflare），仅当公网权威 NS
+     *   与 DnsProviderDetector 判定一致时才置 dns_cutover_complete=1；避免「注册商 API 已是 CF NS 但全球仍指向 share-dns」时误放行证书。
      */
     'dns_switch' => [
         'wait_public_ns_enabled' => true,
@@ -39,6 +41,7 @@ return [
         'wait_public_ns_max_seconds' => 180,
         'wait_public_ns_interval_seconds' => 15,
         'ns_probe_use_cloudflare_doh' => true,
+        'cutover_requires_public_authoritative_ns' => true,
     ],
 
     /**

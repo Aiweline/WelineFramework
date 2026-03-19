@@ -7,7 +7,8 @@ declare(strict_types=1);
  * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
  * 带域名池 id 时仅按每条记录的域名申请单域证书，不做泛域（*.xxx）解析与申请。
  * 【证书阶段】仅处理 pool_lifecycle_stage = origin_ready | cert_pending；不在解析阶段写 https pending。
- * ACME 挑战策略为 auto：本机可 HTTP-01 时用 HTTP-01（公网 NS 未切到 Cloudflare 时仍可能成功）；否则用 DNS-01。
+ * ACME 与后台 SSL 申请一致：challenge_strategy=auto、物理 webroot（PUB/pub），不传 use_wls_virtual_http01
+ * （与 {@see \Weline\Server\Controller\Backend\SslCertificate::postRequest} 及域名池后台 SSE 申请路径对齐）。
  * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
@@ -113,7 +114,7 @@ class DomainPoolCertificateRequest
                     'pool_id' => (int) ($row[DomainPool::schema_fields_ID] ?? 0),
                     'stage' => $row[DomainPool::schema_fields_POOL_LIFECYCLE_STAGE] ?? '',
                 ]);
-                $singleResult = $this->requestByRow($row, $webroot, $email, 'single', false, $processLogs);
+                $singleResult = $this->requestByRow($row, $webroot, $email, false, $processLogs);
                 $results['requested'] += $singleResult['requested'];
                 $results['success'] += $singleResult['success'];
                 $results['failed'] += $singleResult['failed'];
@@ -144,7 +145,7 @@ class DomainPoolCertificateRequest
     /**
      * @param array<string> $processLogs 过程日志，会追加本域名的每条进度与结果
      */
-    private function requestByRow(array $row, string $webroot, string $email, string $strategy, bool $isWildcard, array &$processLogs = []): array
+    private function requestByRow(array $row, string $webroot, string $email, bool $isWildcard, array &$processLogs = []): array
     {
         $counter = [
             'requested' => 0,
@@ -209,15 +210,14 @@ class DomainPoolCertificateRequest
             $processLogs[] = $line;
             $this->echoLine($line);
             $certRequestService = ObjectManager::getInstance(CertificateRequestService::class);
+            // 与 SslCertificate::postRequest、DomainManagement::getRequestHttpsStream 一致：物理 webroot，不启用 WLS 虚拟 HTTP-01
             $result = $certRequestService->requestCertificate([
                 'domain' => $requestDomain,
                 'webroot' => $webroot,
-                'use_wls_virtual_http01' => true,
                 'email' => $reqEmail,
                 'website_id' => 0,
                 'provider' => 'letsencrypt',
                 'cert_type' => $isWildcard ? 'wildcard' : 'exact',
-                'cert_strategy' => $strategy,
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
                 'challenge_strategy' => 'auto',

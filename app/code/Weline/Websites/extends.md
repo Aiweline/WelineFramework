@@ -83,7 +83,7 @@ class YourRegistrar implements DomainRegistrarInterface
 | 入口 | 购买 | DNS/NS 操作 | 说明 |
 |------|------|-------------|------|
 | **Cron `DomainAutoResolve`** | 否 | **`getAdapter` → `addDnsRecord`** | 仅解析任务，走统一适配器。 |
-| **Cron `DnsCdnAutoSwitch` + `DnsSwitchService`** | 否 | **Resolver + 适配器**（Zone/NS/记录同步） | 注释写明与 SSE 手动切换同入口。 |
+| **Cron `DnsCdnAutoSwitch` + `DnsSwitchService`** | 否 | **`executeDnsSwitchWithStandardOptions` → `executeDnsSwitch`** | 与 Admin `postSwitchDnsAccount`/SSE 同默认 options；PageBuilder SSE 在 `buildStandardSwitchOptions` 上 merge。 |
 | **Cron `DomainLifecycleOrchestration` 等** | 否 | 经 **`DomainResolveService` / Pool** | 不直接 purchase；依赖已入池域名。 |
 | **Admin `Domain` 控制器** | **`DomainPurchaseService`** | **`DomainRegistrarResolverService` / `w_query`** | 与抽象一致。 |
 | **SSE `SiteBuilderAgent::getTriggerSse`** | **`WebsiteAgentService` → `createAndProcessOrder`** | 后续解析/证书同全局链路 | 已透传 **`user_client_ip`**；联系人仍靠 **env 默认** 或账号（如 Gname）。 |
