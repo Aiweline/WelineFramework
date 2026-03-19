@@ -22,7 +22,7 @@ class NotificationRouter
     private NotificationTopic $topicModel;
     private SystemNotification $notificationModel;
     private BackendUser $userModel;
-    private UserContactService $contactService;
+    private ContactService $contactService;
     private ChannelAdapterCollector $adapterCollector;
 
     public function __construct(
@@ -32,7 +32,7 @@ class NotificationRouter
         NotificationTopic $topicModel,
         SystemNotification $notificationModel,
         BackendUser $userModel,
-        UserContactService $contactService,
+        ContactService $contactService,
         ChannelAdapterCollector $adapterCollector
     ) {
         $this->subscriptionModel = $subscriptionModel;
@@ -137,8 +137,6 @@ class NotificationRouter
                 continue;
             }
 
-            $channelConfig = json_decode($channel['channel_config'] ?? '[]', true) ?: [];
-
             $users = $this->getTargetUsers($specifiedUsers);
             foreach ($users as $user) {
                 $userId = (int) ($user['user_id'] ?? 0);
@@ -150,22 +148,27 @@ class NotificationRouter
                     continue;
                 }
 
-                $contact = $this->contactService->getContactForNotification($userId, $channelCode);
-                if (!$contact) {
+                $contacts = $this->contactService->getContactsForNotification($userId, $channelCode);
+                if (empty($contacts)) {
                     continue;
                 }
 
-                $notificationWithContact = $notification;
-                $notificationWithContact['contact'] = $contact;
-                $notificationWithContact['recipient_user_id'] = $userId;
-                $notificationWithContact['recipient_name'] = $user['username'] ?? '';
+                foreach ($contacts as $contactItem) {
+                    $notificationWithContact = $notification;
+                    $notificationWithContact['contact'] = [
+                        'contact_id' => $contactItem['contact_id'],
+                        'contact_name' => $contactItem['contact_name'],
+                    ];
+                    $notificationWithContact['recipient_user_id'] = $userId;
+                    $notificationWithContact['recipient_name'] = $user['username'] ?? '';
 
-                try {
-                    $success = $adapter->send($notificationWithContact, $channelConfig);
-                    if ($success && !in_array($channelCode, $notifiedChannels, true)) {
-                        $notifiedChannels[] = $channelCode;
+                    try {
+                        $success = $adapter->send($notificationWithContact, $contactItem['channel_config']);
+                        if ($success && !in_array($channelCode, $notifiedChannels, true)) {
+                            $notifiedChannels[] = $channelCode;
+                        }
+                    } catch (\Exception $e) {
                     }
-                } catch (\Exception $e) {
                 }
             }
         }

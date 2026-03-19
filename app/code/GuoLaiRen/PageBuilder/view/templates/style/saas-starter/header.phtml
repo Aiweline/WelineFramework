@@ -78,7 +78,9 @@ $navLinkHoverColor = ss_getConfig($styleSettings, 'navigation.link_hover_color',
 $navLinksRaw = ss_getConfig($styleSettings, 'navigation.links', "Features=>#features\nPricing=>#pricing\nTestimonials=>#testimonials\nFAQ=>#faq");
 $showCta = ss_getConfig($styleSettings, 'navigation.show_cta', 'yes');
 $ctaText = ss_getConfig($styleSettings, 'navigation.cta_text', 'Start Free Trial');
-$ctaUrl = ss_getConfig($styleSettings, 'navigation.cta_url', '#pricing');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl(ss_getConfig($styleSettings, 'navigation.cta_url', '#pricing'));
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 $accentPrimary = ss_color($colors, 'accent_primary', '#10b981');
 $buttonPrimaryBg = ss_color($colors, 'button_primary_bg', 'linear-gradient(135deg, #10b981 0%, #06b6d4 100%)');
@@ -141,7 +143,7 @@ foreach ($lines as $line) {
             </ul>
             
             <?php if ($showCta === 'yes'): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="ss-header-cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="ss-header-cta">
                 <span><?= htmlspecialchars($ctaText) ?></span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </a>
@@ -149,44 +151,4 @@ foreach ($lines as $line) {
         </nav>
     </div>
 </header>
-<?php endif; ?>
-
-<?php
-$isPreviewMode = (bool)($this->getData('is_preview') ?? false);
-if (!$isPreviewMode && isset($_GET['preview']) && $_GET['preview'] === '1') {
-    $isPreviewMode = true;
-}
-$pixelEnabled = ss_getConfig($styleSettings, 'pixel.enabled', 'yes');
-$pixelEnabled = (string)($pixelEnabled ?? 'yes');
-$pixelName = ss_getConfig($styleSettings, 'pixel.name', '');
-if (empty($pixelName) && $page) {
-    $pixelName = $page->getData('handle') ?? '';
-}
-$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
-
-if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
-    \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
-    $websiteUrl = '';
-    $websiteCode = '';
-    try {
-        if (class_exists('\Weline\Websites\Model\Website')) {
-            $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-            $website = clone $websiteModel;
-            $website->clear()->load($websiteId);
-            if ($website->getId()) {
-                $websiteUrl = $website->getData('url') ?? '';
-                $websiteCode = $website->getData('code') ?? '';
-            }
-        }
-    } catch (\Exception $e) {}
-    if (!empty($websiteUrl)) {
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
-    }
-    if (!empty($websiteCode)) {
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
-    }
-    $this->assign('pixel_name', htmlspecialchars($pixelName));
-    $this->assign('pixel_enabled', htmlspecialchars($pixelEnabled));
-?>
-    <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
 <?php endif; ?>

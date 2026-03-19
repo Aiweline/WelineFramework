@@ -88,7 +88,9 @@ if (empty($navItems)) {
 // CTA配置
 $showCta = $getConfig('cta.show', 'yes') !== 'no';
 $ctaText = $getConfig('cta.text', 'Get Started');
-$ctaUrl = $getConfig('cta.url', '#contact');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl((string)$getConfig('cta.url', '#contact'));
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 // 样式配置
 $bgColor = $getConfig('style.bg_color', '#0f0f1a');
@@ -312,7 +314,7 @@ try {
             </ul>
             
             <?php if ($showCta): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="<?= $cls ?>-cta"><?= htmlspecialchars($ctaText) ?></a>
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="<?= $cls ?>-cta"><?= htmlspecialchars($ctaText) ?></a>
             <?php endif; ?>
         </nav>
         <?php endif; ?>

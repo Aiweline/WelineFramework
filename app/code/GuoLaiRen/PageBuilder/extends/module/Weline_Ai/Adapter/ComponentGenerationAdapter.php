@@ -99,9 +99,10 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
             $refineRequirement .= "4. 必须保持 @fields_start / @fields_end 字段定义块不变（除非明确要求修改）\n";
             $refineRequirement .= "5. 只返回修改后的完整组件代码，不要包含其他说明\n";
             $refineRequirement .= "6. 确保代码可以直接使用，符合PageBuilder组件规约\n";
+            $refineRequirement .= "7. 若组件含下载/CTA 按钮：须使用 GlrDownloadRegistry::register + data-glr-ref（或兼容旧 data-glr-href），禁止为下载写 addEventListener 或 href=\"javascript:void(0)\"\n";
             
             // 如果是header组件，添加nav固定代码块约束
-            if ($this->isHeaderComponent($params['existing_code'])) {
+            if ($this->isHeaderComponent($params['existing_code'] ?? '')) {
                 $refineRequirement .= "\n【重要-Header Nav 固定结构约束】\n";
                 $refineRequirement .= "导航(nav)部分的核心结构必须保持不变，只能调整样式（颜色、字体、间距等）\n";
             }
@@ -141,6 +142,11 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
         // 如果是header组件，添加nav固定代码块约束
         if ($isHeaderComponent) {
             $componentRequirement .= $this->getHeaderNavConstraint();
+        }
+
+        // 若描述涉及下载/CTA，添加下载按钮规约
+        if ($this->isDownloadRelatedRequest($prompt)) {
+            $componentRequirement .= $this->getDownloadButtonConstraint();
         }
 
         return $prompt . $componentRequirement;
@@ -215,8 +221,44 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
         $rules .= "17. ❌ 禁止在 js_content 中使用任何 PHP 标签（<?php, <?=, ?>）\n";
         $rules .= "18. ❌ js_content 必须是纯 JavaScript 代码，不能混合 PHP\n";
         $rules .= "19. ❌ 如果需要在 JS 中使用配置值，应该通过 data-* 属性或全局变量传递，不要用 PHP\n";
+        $rules .= "20. ❌ 禁止为「下载」按钮写 addEventListener 或 href=\"javascript:void(0)\"；下载须用 GlrDownloadRegistry::register + data-glr-ref（或兼容旧写法 data-glr-download+data-glr-href），由 footer-common 统一委托\n";
         
         return $rules;
+    }
+    
+    /**
+     * 是否与下载/CTA 相关的组件请求（用于追加下载按钮规约）
+     */
+    private function isDownloadRelatedRequest(string $prompt): bool
+    {
+        $keywords = [
+            '下载', 'download', '应用下载', 'app download', 'cta', 'primary_url',
+            'secondary_url', 'download_url', 'button href', '下载按钮'
+        ];
+        $promptLower = strtolower($prompt);
+        foreach ($keywords as $kw) {
+            if (stripos($promptLower, strtolower($kw)) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 下载按钮与相关配置规约（供 AI 生成组件使用）
+     */
+    private function getDownloadButtonConstraint(): string
+    {
+        $c = "\n\n【重要-下载按钮与 CTA 规约】\n";
+        $c .= "若组件包含「应用下载」或「下载」类按钮/链接，必须遵守：\n";
+        $c .= "1. **链接写法（推荐）**：PHP 用 GlrDownloadRegistry::register(解析后的href, slot) 登记，HTML 只写 data-glr-ref；不要用 href 暴露真实下载 URL、不要用 javascript:void(0)。\n";
+        $c .= "   - slot：主按钮 primary，次要 secondary，Android/ios/url 等同理。\n";
+        $c .= "   - footer-common 输出整页 JSON 并由统一委托处理（先发像素再跳转）。\n";
+        $c .= "2. **URL 解析**：PageHelper::resolveAppDownloadUrl(配置 URL) 得到最终 href 后再 register。\n";
+        $c .= "3. **新窗口**：需要 target=\"_blank\" 时在 <a> 上增加 data-glr-target=\"_blank\"。\n";
+        $c .= "4. **禁止**：不要为下载按钮写 querySelector + addEventListener 或内联 onclick；不要使用 data-download-trigger、weline-pixel::download-click 等已废弃方式。\n";
+        $c .= "5. **配置字段建议**：下载类配置如 download.primary_url、cta_url 等用 text，组件内 resolveAppDownloadUrl 后 register，模板 data-glr-ref。\n";
+        return $c;
     }
     
     /**
@@ -405,7 +447,7 @@ class ComponentGenerationAdapter implements ScenarioAdapterInterface
         $constraint .= "            <?php endforeach; ?>\n";
         $constraint .= "        </ul>\n";
         $constraint .= "        \n";
-        $constraint .= "        <!-- CTA按钮区域（可选） -->\n";
+        $constraint .= "        <!-- CTA按钮区域（可选）：若为下载链接，须 GlrDownloadRegistry::register + data-glr-ref，URL 用 PageHelper::resolveAppDownloadUrl 解析 -->\n";
         $constraint .= "    </div>\n";
         $constraint .= "</nav>\n";
         $constraint .= "```\n\n";
