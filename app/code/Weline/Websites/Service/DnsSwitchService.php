@@ -13,8 +13,15 @@ use Weline\Websites\Model\DomainRegistrarAccount;
 /**
  * DNS/CDN 切换统一服务
  *
- * 封装 DNS/CDN 切换的完整编排逻辑，所有入口（SSE 手动切换、定时任务、购买后自动）
- * 统一调用本服务，保证行为与标记一致。
+ * 封装 DNS/CDN 切换的完整编排逻辑。
+ *
+ * **入口约定（由新到旧）：**
+ * - 业务侧（Cron / 后台批量切换）优先 {@see executeDnsSwitchWithStandardOptions}：等同 executeDnsSwitch +
+ *   {@see buildStandardSwitchOptions}（env 公网 NS 等待 + 根域已绑 CDN 时 verify_cdn）。
+ * - 底层唯一完整流水线 {@see executeDnsSwitch}（同步→改 NS→等待→推送→校验→写 Domain/Pool/cutover）。
+ * - PageBuilder SSE 等在 {@see buildStandardSwitchOptions} 上 {@see array_merge} 自定义项（更长等待、records_to_push 等）。
+ * - **非完整切换**：部分旧接口仅调注册商 {@see DomainRegistrarInterface::updateNameservers} 并 save Domain，不推送记录、
+ *   不写 dns_cutover_complete；需全量迁移请走上述入口（如 Admin {@see \Weline\Websites\Controller\Admin\Domain::postSwitchDnsAccount}）。
  *
  * 职责：
  *  1. 从源（注册商）同步 DNS 记录到本地
@@ -23,9 +30,13 @@ use Weline\Websites\Model\DomainRegistrarAccount;
  *  4. 可选：等待 NS 生效（公网或注册商侧校验）
  *  5. 将本地记录推送到目标 DNS 服务商
  *  6. 同步/校验 DNS 记录，更新 Domain 与 DomainPool
-     *  7. 可选：通过目标 DNS 适配器 {@see DomainRegistrarInterface::verifyCdnConfiguration} 校验 CDN/边缘
+ *  7. 可选：通过目标 DNS 适配器 {@see DomainRegistrarInterface::verifyCdnConfiguration} 校验 CDN/边缘
  *
  * @see executeDnsSwitch 主入口，通过 options 控制是否等待 NS、进度回调、CDN 等
+ *
+ * 公网权威 NS：waitForNameservers 在「注册商 API 已为目标 NS」时可能提前通过（verified_by=registrar），
+ * 但全球递归仍可能指向旧 NS（如 share-dns）。对 Cloudflare 等目标，Step6 以 validateAuthoritativeDnsMatchesProvider
+ * 为准决定是否置 dns_cutover_complete=1，避免证书 DNS-01 与门闸误判「已切换完成」。
  */
 class DnsSwitchService
 {
@@ -272,12 +283,35 @@ class DnsSwitchService
             $afterSyncRecords($domain, $dnsRecords);
         }
 
+        $authValidation = $this->resolveService->validateAuthoritativeDnsMatchesProvider($domainName, $targetCode);
+        $requireLiveAuthorityForCutover = $this->targetRequiresPublicAuthoritativeNsForCutover($targetCode);
+        $liveAuthorityOk = (bool) ($authValidation['ok'] ?? false);
+        $deferCutoverForPropagation = $requireLiveAuthorityForCutover && !$liveAuthorityOk;
+
         // ── Step 6: 更新 Domain 标记（含 CDN） ──
         $domain->setNameservers($targetNs);
         $domain->setDnsProvider($targetCode);
         $domain->setDnsAccountId($targetAccountId);
-        $domain->setDnsSwitchPending(0);
-        $domain->setDnsCutoverComplete(1);
+        if ($deferCutoverForPropagation) {
+            $domain->setDnsSwitchPending(1);
+            $domain->setDnsCutoverComplete(0);
+            $detailMsg = (string) __(
+                '注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。',
+                [$targetCode]
+            );
+            $notify('dns_cutover_waiting_public_ns', [
+                'domain' => $domainName,
+                'message' => (string) ($authValidation['message'] ?? ''),
+                'detail' => $detailMsg,
+            ]);
+            $liveStr = ($authValidation['live_ns'] ?? []) !== [] ? \implode(', ', $authValidation['live_ns']) : '';
+            w_log_warning(__('[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}', [
+                $domainName, $targetCode, $liveStr,
+            ]), [], $logCh);
+        } else {
+            $domain->setDnsSwitchPending(0);
+            $domain->setDnsCutoverComplete(1);
+        }
         $domain->setDnsMigrationPending($pushSuccess ? 0 : 1);
         if ($cdnAccount !== null && $cdnAccount->getAccountId()) {
             $domain->setCdnProvider((string) $cdnAccount->getRegistrarCode());
@@ -291,10 +325,10 @@ class DnsSwitchService
 
         // ── Step 7: 更新 DomainPool 状态 ──
         $cdnProvider = $cdnAccount !== null ? (string) $cdnAccount->getRegistrarCode() : ($this->dnsDetector->isCdnProvider($targetCode) ? $targetCode : '');
-        $this->updateDomainPoolStatus($domainName, $targetCode, $cdnProvider);
+        $this->updateDomainPoolStatus($domainName, $targetCode, $cdnProvider, !$deferCutoverForPropagation);
 
         // ── Step 8: 可选 CDN/边缘校验（由目标 DNS 适配器 API 实现，如 Cloudflare 代理状态） ──
-        if ($verifyCdn) {
+        if ($verifyCdn && !$deferCutoverForPropagation) {
             $notify('verify_cdn', ['domain' => $domainName, 'message' => __('步骤 5/5：校验 CDN/边缘配置…')]);
             $cdnWaitMax = (int) ($options['verify_cdn_wait_max_seconds'] ?? 5 * 60);
             $cdnWaitInterval = (int) ($options['verify_cdn_wait_interval_seconds'] ?? 15);
@@ -348,18 +382,110 @@ class DnsSwitchService
         $notify('complete', [
             'domain' => $domainName,
             'message' => __('DNS/CDN 切换流程已结束'),
-            'public_ns_propagation_pending' => $publicNsPropagationPending,
+            'public_ns_propagation_pending' => $publicNsPropagationPending || $deferCutoverForPropagation,
         ]);
         w_log_info(__('[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成', [$domainName]), [], $logCh);
 
+        $successMessage = $deferCutoverForPropagation
+            ? (string) __(
+                'DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。',
+                [$targetCode]
+            )
+            : (string) __('DNS 切换成功：%{1} → %{2}', [$domainName, $targetCode]);
+
         return [
             'success' => true,
-            'message' => __('DNS 切换成功：%{1} → %{2}', [$domainName, $targetCode]),
+            'message' => $successMessage,
             'nameservers' => $targetNs,
             'push_success' => $pushSuccess,
             'push_added' => $pushAdded,
             'push_failed' => $pushFailed,
+            'public_ns_pending' => $deferCutoverForPropagation,
         ];
+    }
+
+    /**
+     * Cron / SSE 共用：是否等待公网 NS（读 websites.env dns_switch）
+     *
+     * @return array<string, mixed>
+     */
+    public function getEnvWaitOptionsForTarget(DomainRegistrarAccount $targetAccount): array
+    {
+        $ds = Env::module_env('Weline_Websites', 'dns_switch') ?? [];
+        if (empty($ds['wait_public_ns_enabled'])) {
+            return [];
+        }
+        $codes = $ds['wait_public_ns_provider_codes'] ?? ['cloudflare'];
+        $codes = \is_array($codes) ? $codes : [];
+        $codes = \array_map(static fn ($c) => \strtolower(\trim((string) $c)), $codes);
+        $targetCode = \strtolower(\trim((string) $targetAccount->getRegistrarCode()));
+        if ($targetCode === '' || !\in_array($targetCode, $codes, true)) {
+            return [];
+        }
+
+        return [
+            'wait_for_ns' => true,
+            'wait_max_seconds' => (int) ($ds['wait_public_ns_max_seconds'] ?? 180),
+            'wait_interval_seconds' => (int) ($ds['wait_public_ns_interval_seconds'] ?? 15),
+            'ns_probe_cloudflare_doh' => (bool) ($ds['ns_probe_use_cloudflare_doh'] ?? true),
+        ];
+    }
+
+    /**
+     * 与 {@see DnsCdnAutoSwitch} 一致的默认 options：{@see getEnvWaitOptionsForTarget} + 根域已绑 CDN 账户时自动 verify_cdn。
+     * 自定义 SSE 等在返回值上 {@see array_merge} 覆盖（勿用 null 覆盖已有 cdn_account，除非有意清空）。
+     *
+     * @return array<string, mixed>
+     */
+    public function buildStandardSwitchOptions(Domain $domain, DomainRegistrarAccount $targetAccount): array
+    {
+        $options = $this->getEnvWaitOptionsForTarget($targetAccount);
+        $cdnId = (int) $domain->getCdnAccountId();
+        if ($cdnId > 0) {
+            $cdnAcc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
+            $cdnAcc->load($cdnId);
+            if ((int) $cdnAcc->getAccountId() > 0) {
+                $options['cdn_account'] = $cdnAcc;
+                $options['verify_cdn'] = true;
+            }
+        }
+
+        return $options;
+    }
+
+    /**
+     * 推荐业务入口：{@see executeDnsSwitch} + {@see buildStandardSwitchOptions}；$optionOverrides 与之合并（后者覆盖同名键）。
+     *
+     * @param array<string, mixed> $optionOverrides
+     * @return array{success: bool, message: string, nameservers: array, push_success: bool, push_added: int, push_failed: int, client_aborted?: bool, public_ns_pending?: bool}
+     */
+    public function executeDnsSwitchWithStandardOptions(
+        Domain $domain,
+        DomainRegistrarAccount $targetAccount,
+        ?callable $onStep = null,
+        array $optionOverrides = []
+    ): array {
+        $options = \array_merge($this->buildStandardSwitchOptions($domain, $targetAccount), $optionOverrides);
+
+        return $this->executeDnsSwitch($domain, $targetAccount, $onStep, $options);
+    }
+
+    /**
+     * 对列表内目标 DNS（默认 cloudflare），仅当公网权威 NS 与 detectProvider 一致时才允许 dns_cutover_complete=1。
+     * 可由 env dns_switch.cutover_requires_public_authoritative_ns=false 关闭。
+     */
+    private function targetRequiresPublicAuthoritativeNsForCutover(string $targetCode): bool
+    {
+        $ds = Env::module_env('Weline_Websites', 'dns_switch') ?? [];
+        if (\array_key_exists('cutover_requires_public_authoritative_ns', $ds) && !(bool) $ds['cutover_requires_public_authoritative_ns']) {
+            return false;
+        }
+        $codes = $ds['wait_public_ns_provider_codes'] ?? ['cloudflare'];
+        $codes = \is_array($codes) ? $codes : [];
+        $codes = \array_map(static fn ($c) => \strtolower(\trim((string) $c)), $codes);
+        $targetCode = \strtolower(\trim($targetCode));
+
+        return $targetCode !== '' && \in_array($targetCode, $codes, true);
     }
 
     /**
@@ -629,7 +755,10 @@ class DnsSwitchService
         return $result;
     }
 
-    private function updateDomainPoolStatus(string $rootDomain, string $dnsProvider, string $cdnProvider): void
+    /**
+     * @param bool $markInfraReady false：公网权威 NS 尚未切完，保持 switching，避免后台误以为 DNS 已可签发证书
+     */
+    private function updateDomainPoolStatus(string $rootDomain, string $dnsProvider, string $cdnProvider, bool $markInfraReady = true): void
     {
         $poolModel = ObjectManager::getInstance(DomainPool::class);
         $pools = $poolModel->clearQuery()
@@ -640,9 +769,16 @@ class DnsSwitchService
 
         foreach ($pools as $pool) {
             $pool->setDnsProvider($dnsProvider);
-            $pool->setDnsStatus(DomainPool::INFRA_STATUS_READY);
-            if ($cdnProvider !== '') {
-                $pool->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+            if ($markInfraReady) {
+                $pool->setDnsStatus(DomainPool::INFRA_STATUS_READY);
+                if ($cdnProvider !== '') {
+                    $pool->setCdnStatus(DomainPool::INFRA_STATUS_READY);
+                }
+            } else {
+                $pool->setDnsStatus(DomainPool::INFRA_STATUS_SWITCHING);
+                if ($cdnProvider !== '') {
+                    $pool->setCdnStatus(DomainPool::INFRA_STATUS_SWITCHING);
+                }
             }
             $pool->save();
         }
