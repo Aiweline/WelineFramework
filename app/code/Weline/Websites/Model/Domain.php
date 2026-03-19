@@ -21,7 +21,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
  * 域名模型（根域名）
  *
  * 从域名商 API 同步的根域名主数据，用于本地管理
- * 
+ *
+ * **账户字段**：`account_id`＝域名**注册商**账户（谁在注册局持有域名，谁改委派 NS；业务上可称「域名侧账户」）。
+ * `dns_account_id`＝**DNS 托管目标**账户（仅 Zone/解析记录），**不能**替代 `account_id` 做注册局 NS 委派。
+ *
  * 注意：此模型只存储根域名（如 example.com），解析状态/HTTPS状态/建站就绪
  * 应该使用 DomainPool 模型（存储具体子域名如 www.example.com）
  * 
@@ -46,7 +49,7 @@ class Domain extends Model
     #[Col('int', 11, nullable: false, primaryKey: true, autoIncrement: true, comment: '域名ID')]
     public const schema_fields_ID = 'domain_id';
 
-    #[Col('int', 11, nullable: false, comment: '域名商账户ID')]
+    #[Col('int', 11, nullable: false, comment: '注册商账户ID(改注册局委派NS须用此ID；非dns_account_id)')]
     public const schema_fields_ACCOUNT_ID = 'account_id';
 
     #[Col('varchar', 255, nullable: false, comment: '域名')]
@@ -85,7 +88,7 @@ class Domain extends Model
     #[Col('varchar', 50, nullable: true, default: '', comment: 'DNS服务商代码')]
     public const schema_fields_DNS_PROVIDER = 'dns_provider';
 
-    #[Col('int', 11, nullable: true, default: 0, comment: 'DNS管理账户ID（第三方DNS服务商）')]
+    #[Col('int', 11, nullable: true, default: 0, comment: 'DNS托管目标账户ID（如CF）；仅解析/Zone/推送，不改注册局委派。委派NS仅由注册商账户改')]
     public const schema_fields_DNS_ACCOUNT_ID = 'dns_account_id';
 
     #[Col('smallint', 1, nullable: true, default: 0, comment: 'DNS切换后待推送记录：1=定时任务将把本地记录推送到新账户')]
