@@ -1,20 +1,24 @@
 <?php
 /**
- * Smtp邮件服务配置 - 内容模板
+ * SMTP 发件人配置（多发件人 + 默认联系人）
  * @var \Weline\Framework\View\Template $this
+ * @var array $senders 发件人列表 [{ code, name, smtp_host, ... }]
+ * @var array $sender_contacts 发件人 code => 默认收件邮箱
+ * @var array $legacy 旧版单配置（兼容）
  */
+$senders = $senders ?? [];
+$sender_contacts = $sender_contacts ?? [];
+$legacy = $legacy ?? [];
 ?>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><?= __('Smtp邮件服务配置') ?></h4>
-            <div class="page-title-right">
-                <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('系统') ?></a></li>
-                    <li class="breadcrumb-item active"><?= __('Smtp邮件服务配置') ?></li>
-                </ol>
+            <h4 class="mb-sm-0"><?= __('SMTP 发件人配置') ?></h4>
+            <div>
+                <button type="button" class="btn btn-primary" id="btnAddSender">
+                    <i class="mdi mdi-plus me-1"></i><?= __('添加发件人') ?>
+                </button>
             </div>
         </div>
     </div>
@@ -28,119 +32,222 @@
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('Smtp邮件服务配置') ?></h4>
-                <div class='alert alert-danger alert-dismissible fade show mb-0' role='alert'>
-                    <button type='button' class='btn-close' data-bs-dismiss='alert' aria-label='Close'></button>
-                    <strong>
-                        <lang>提示！</lang>
-                    </strong>
-                    <lang>为了安全，默认支持auth验证和开启secure安全模式！仅https和验证模式下正常运行。</lang>
-                </div>
-                <form class='needs-validation' novalidate method='post' action="<?= $this->getBackendUrl('smtp/backend/config/post') ?>">
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationHost'>
-                                    <lang>主机</lang>
-                                </label>
-                                <input type='text' name='smtp_host' class='form-control' id='validationHost'
-                                       placeholder='@lang(请输入主机名)' value='{{smtp_host}}' required>
-                                <div class='valid-feedback'>
-                                    <lang>Smtp主机录入成功</lang>
-                                </div>
-                                <div class='invalid-feedback'>
-                                    <lang>请输入Smtp主机</lang>
-                                </div>
-                            </div>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationPort'>
-                                    <lang>端口</lang>
-                                </label>
-                                <input type='number' name='smtp_port' step='1' class='form-control' id='validationPort'
-                                       placeholder='@lang{请个输入端口}'
-                                       value='{{smtp_port ?: 465}}'
-                                       required>
-                                <div class='valid-feedback'>
-                                    <lang>Smtp端口录入成功</lang>
-                                </div>
-                                <div class='invalid-feedback'>
-                                    <lang>请输入Smtp端口</lang>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationUsername'>
-                                    <lang>用户名</lang>
-                                </label>
-                                <input type='text' name='smtp_username' class='form-control' id='validationUsername'
-                                       placeholder='@lang(请输入Smtp用户名)' value='{{smtp_username}}' required>
-                                <div class='valid-feedback'>
-                                    <lang>Smtp用户名录入成功</lang>
-                                </div>
-                                <div class='invalid-feedback'>
-                                    <lang>请输入Smtp用户名</lang>
-                                </div>
-                            </div>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationPassword'>
-                                    <lang>密码</lang>
-                                </label>
-                                <input type='password' name='smtp_password' class='form-control' id='validationPassword'
-                                       placeholder='@lang{请个Smtp用户密码}'
-                                       value='{{smtp_password}}'
-                                       required>
-                                <div class='valid-feedback'>
-                                    <lang>Smtp用户密码录入成功</lang>
-                                </div>
-                                <div class='invalid-feedback'>
-                                    <lang>请输入Smtp用户密码</lang>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class='btn btn-primary' type='submit'>
-                        <lang>保存配置</lang>
-                    </button>
-                </form>
-            </div>
+        <div class="alert alert-info border-0 mb-3">
+            <strong><?= __('说明') ?></strong>
+            <ul class="mb-0 mt-1">
+                <li><?= __('每个发件人用 <strong>code</strong> 标识，便于消息通知等模块通过 w_query 指定发件人并设置默认联系人。') ?></li>
+                <li><?= __('<strong>默认联系人</strong>：该发件人作为邮件渠道时的默认收件邮箱，可由系统管理员或 w_query 设置。') ?></li>
+            </ul>
         </div>
     </div>
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title"><?= __('Smtp邮件服务配置测试') ?></h4>
-                <form class='needs-validation' novalidate method='post' action="<?= $this->getBackendUrl('smtp/backend/config/posttest') ?>">
-                    <div class='row'>
-                        <div class='col-md-6'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationTestEmail'>
-                                    <lang>测试邮箱</lang>
-                                </label>
-                                <input type='email' name='smtp_test_address' class='form-control' id='validationTestEmail'
-                                       placeholder='@lang(请输入邮箱地址)' value='{{smtp_test_address}}' required>
-                                <div class='valid-feedback'>
-                                    <lang>Smtp测试邮件地址录入成功！</lang>
-                                </div>
-                                <div class='invalid-feedback'>
-                                    <lang>Smtp测试邮件地址未录入！</lang>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class='btn btn-primary' type='submit'>
-                        <lang>发送</lang>
+</div>
+
+<form id="smtpSendersForm">
+    <div id="sendersList">
+        <?php foreach ($senders as $index => $s): ?>
+        <div class="card mb-3 smtp-sender-card" data-index="<?= (int)$index ?>">
+            <div class="card-header d-flex align-items-center justify-content-between py-2">
+                <h6 class="mb-0"><?= htmlspecialchars($s['name'] ?? $s['code'] ?? __('发件人'), ENT_QUOTES, 'UTF-8') ?> <code class="small"><?= htmlspecialchars($s['code'] ?? '', ENT_QUOTES, 'UTF-8') ?></code></h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-info btn-test-sender" data-code="<?= htmlspecialchars($s['code'] ?? '', ENT_QUOTES, 'UTF-8') ?>" title="<?= __('发送测试邮件') ?>">
+                        <i class="mdi mdi-send"></i> <?= __('测试') ?>
                     </button>
-                </form>
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-remove-sender" title="<?= __('删除') ?>"><i class="mdi mdi-delete-outline"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <label class="form-label small"><?= __('标识 code') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm smtp-code" name="code" value="<?= htmlspecialchars($s['code'] ?? '', ENT_QUOTES, 'UTF-8') ?>" placeholder="default / notification" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small"><?= __('显示名称') ?></label>
+                        <input type="text" class="form-control form-control-sm smtp-name" name="name" value="<?= htmlspecialchars($s['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('如：默认发件人') ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small"><?= __('SMTP 主机') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm smtp-host" name="smtp_host" value="<?= htmlspecialchars($s['smtp_host'] ?? '', ENT_QUOTES, 'UTF-8') ?>" placeholder="smtp.example.com">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small"><?= __('端口') ?></label>
+                        <input type="number" class="form-control form-control-sm smtp-port" name="smtp_port" value="<?= htmlspecialchars($s['smtp_port'] ?? '465', ENT_QUOTES, 'UTF-8') ?>" placeholder="465">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small"><?= __('发件邮箱 / 用户名') ?> <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control form-control-sm smtp-username" name="smtp_username" value="<?= htmlspecialchars($s['smtp_username'] ?? '', ENT_QUOTES, 'UTF-8') ?>" placeholder="noreply@example.com">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small"><?= __('密码') ?></label>
+                        <input type="password" class="form-control form-control-sm smtp-password" name="smtp_password" value="" placeholder="<?= __('留空则不修改') ?>">
+                        <?php if (!empty($s['smtp_password'])): ?>
+                        <small class="text-muted"><?= __('已保存，输入新密码可覆盖') ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small"><?= __('默认联系人（收件邮箱）') ?></label>
+                        <input type="email" class="form-control form-control-sm smtp-contact" name="default_to_email" value="<?= htmlspecialchars($sender_contacts[$s['code'] ?? ''] ?? '', ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('该发件人默认收件人，可被 w_query 设置') ?>">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <div class="mb-3">
+        <button type="submit" class="btn btn-primary"><i class="mdi mdi-content-save me-1"></i><?= __('保存全部') ?></button>
+    </div>
+</form>
+
+<!-- 测试邮件弹窗 -->
+<div class="modal fade" id="testEmailModal" tabindex="-1">
+    <div class="modal-dialog modal-sm">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><?= __('发送测试邮件') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="testSenderCode" value="">
+                <div class="mb-3">
+                    <label class="form-label"><?= __('收件邮箱') ?></label>
+                    <input type="email" class="form-control" id="testEmailTo" placeholder="admin@example.com">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                <button type="button" class="btn btn-primary" id="btnDoTest"><?= __('发送') ?></button>
             </div>
         </div>
     </div>
 </div>
 
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script src='@static(Weline_Admin::assets/libs/parsleyjs/parsley.min.js)'></script>
-<script src='@static(Weline_Admin::assets/js/pages/form-validation.init.js)'></script>
+<script>
+(function() {
+    'use strict';
+    var senderIndex = <?= count($senders) ?>;
+
+    function collectSenders() {
+        var list = [];
+        document.querySelectorAll('.smtp-sender-card').forEach(function(card) {
+            var code = (card.querySelector('.smtp-code') && card.querySelector('.smtp-code').value) || '';
+            if (!code) return;
+            var pwd = card.querySelector('.smtp-password');
+            list.push({
+                code: code,
+                name: (card.querySelector('.smtp-name') && card.querySelector('.smtp-name').value) || code,
+                smtp_host: (card.querySelector('.smtp-host') && card.querySelector('.smtp-host').value) || '',
+                smtp_port: (card.querySelector('.smtp-port') && card.querySelector('.smtp-port').value) || '465',
+                smtp_username: (card.querySelector('.smtp-username') && card.querySelector('.smtp-username').value) || '',
+                smtp_password: (pwd && pwd.value) ? pwd.value : (card.getAttribute('data-pwd') || ''),
+                smtp_secure: '1',
+                smtp_auth: '1',
+                smtp_test_address: ''
+            });
+        });
+        return list;
+    }
+
+    function collectContacts() {
+        var obj = {};
+        document.querySelectorAll('.smtp-sender-card').forEach(function(card) {
+            var code = (card.querySelector('.smtp-code') && card.querySelector('.smtp-code').value) || '';
+            var contact = (card.querySelector('.smtp-contact') && card.querySelector('.smtp-contact').value) || '';
+            if (code) obj[code] = contact;
+        });
+        return obj;
+    }
+
+    function addSenderCard() {
+        var tpl = '<div class="card mb-3 smtp-sender-card" data-index="' + senderIndex + '">' +
+            '<div class="card-header d-flex align-items-center justify-content-between py-2">' +
+            '<h6 class="mb-0">' + '<?= __("新发件人") ?>' + ' <code class="small new-code"></code></h6>' +
+            '<div><button type="button" class="btn btn-sm btn-outline-info btn-test-sender" data-code="" title="<?= __("测试") ?>"><i class="mdi mdi-send"></i> <?= __("测试") ?></button> ' +
+            '<button type="button" class="btn btn-sm btn-outline-danger btn-remove-sender"><i class="mdi mdi-delete-outline"></i></button></div></div>' +
+            '<div class="card-body"><div class="row g-2">' +
+            '<div class="col-md-3"><label class="form-label small"><?= __("标识 code") ?> *</label><input type="text" class="form-control form-control-sm smtp-code" name="code" placeholder="notification" required></div>' +
+            '<div class="col-md-3"><label class="form-label small"><?= __("显示名称") ?></label><input type="text" class="form-control form-control-sm smtp-name" name="name" placeholder="<?= __("默认发件人") ?>"></div>' +
+            '<div class="col-md-3"><label class="form-label small"><?= __("SMTP 主机") ?> *</label><input type="text" class="form-control form-control-sm smtp-host" name="smtp_host" placeholder="smtp.example.com"></div>' +
+            '<div class="col-md-2"><label class="form-label small"><?= __("端口") ?></label><input type="number" class="form-control form-control-sm smtp-port" name="smtp_port" value="465"></div>' +
+            '<div class="col-md-4"><label class="form-label small"><?= __("发件邮箱 / 用户名") ?> *</label><input type="text" class="form-control form-control-sm smtp-username" name="smtp_username" placeholder="noreply@example.com"></div>' +
+            '<div class="col-md-4"><label class="form-label small"><?= __("密码") ?></label><input type="password" class="form-control form-control-sm smtp-password" name="smtp_password" placeholder="<?= __("留空则不修改") ?>"></div>' +
+            '<div class="col-md-4"><label class="form-label small"><?= __("默认联系人（收件邮箱）") ?></label><input type="email" class="form-control form-control-sm smtp-contact" name="default_to_email" placeholder="<?= __("该发件人默认收件人") ?>"></div>' +
+            '</div></div></div>';
+        document.getElementById('sendersList').insertAdjacentHTML('beforeend', tpl);
+        senderIndex++;
+    }
+
+    document.getElementById('btnAddSender').addEventListener('click', addSenderCard);
+
+    document.getElementById('sendersList').addEventListener('click', function(e) {
+        var rm = e.target.closest('.btn-remove-sender');
+        if (rm) {
+            var card = rm.closest('.smtp-sender-card');
+            if (card && (document.querySelectorAll('.smtp-sender-card').length > 1 || confirm('<?= __("确定删除？至少保留一个发件人时可再添加。") ?>'))) {
+                card.remove();
+            }
+        }
+    });
+
+    var testModal = null;
+    document.getElementById('sendersList').addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-test-sender');
+        if (!btn) return;
+        var code = btn.getAttribute('data-code') || (btn.closest('.smtp-sender-card') && btn.closest('.smtp-sender-card').querySelector('.smtp-code') && btn.closest('.smtp-sender-card').querySelector('.smtp-code').value);
+        document.getElementById('testSenderCode').value = code || '';
+        document.getElementById('testEmailTo').value = '';
+        if (typeof bootstrap !== 'undefined') {
+            if (!testModal) testModal = new bootstrap.Modal(document.getElementById('testEmailModal'));
+            testModal.show();
+        }
+    });
+
+    document.getElementById('btnDoTest').addEventListener('click', function() {
+        var code = document.getElementById('testSenderCode').value;
+        var to = document.getElementById('testEmailTo').value.trim();
+        if (!to) {
+            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("请输入收件邮箱") ?>');
+            return;
+        }
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '<?= $this->getBackendUrl('smtp/backend/config/posttest') ?>';
+        var c = document.createElement('input'); c.type = 'hidden'; c.name = 'smtp_test_address'; c.value = to;
+        form.appendChild(c);
+        if (code) {
+            var sc = document.createElement('input'); sc.type = 'hidden'; sc.name = 'sender_code'; sc.value = code;
+            form.appendChild(sc);
+        }
+        document.body.appendChild(form);
+        form.submit();
+    });
+
+    document.getElementById('smtpSendersForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var senders = collectSenders();
+        var contacts = collectContacts();
+        if (senders.length === 0) {
+            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("请至少添加一个发件人") ?>');
+            return;
+        }
+        var url = '<?= $this->getBackendUrl('smtp/backend/config/saveSenders') ?>';
+        var body = 'senders=' + encodeURIComponent(JSON.stringify(senders)) + '&sender_contacts=' + encodeURIComponent(JSON.stringify(contacts));
+        window.Weline.Api.request(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body })
+            .then(function(res) {
+                var d = (res && res.data) !== undefined ? res.data : res;
+                if (d.success && typeof BackendToast !== 'undefined') {
+                    BackendToast.success(d.message);
+                    setTimeout(function() { window.location.reload(); }, 800);
+                } else if (!d.success && typeof BackendToast !== 'undefined') {
+                    BackendToast.error(d.message || '<?= __("保存失败") ?>');
+                }
+            })
+            .catch(function() {
+                if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("保存失败") ?>');
+            });
+    });
+
+    if (document.querySelectorAll('.smtp-sender-card').length === 0) {
+        addSenderCard();
+    }
+})();
+</script>

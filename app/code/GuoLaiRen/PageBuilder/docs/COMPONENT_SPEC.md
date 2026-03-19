@@ -311,6 +311,16 @@ AI 生成的组件在 component.json 中会标记：
 }
 ```
 
+### 下载按钮与配置约定
+
+AI 生成的组件若包含「应用下载」或 CTA 下载按钮，须与全站规约一致（参见 `style/readme.md` §2）：
+
+- **推荐（注册表）**：解析 URL 后调用 `\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($resolvedHref, 'primary'|'secondary'|'android'|'ios'|'url', '_self'|'_blank')`，HTML 上只写 **`data-glr-ref`**（不写真实下载 URL）；禁止 `href="javascript:void(0)"` 或为下载写 `addEventListener`。
+- **URL 解析**：在 PHP 中用 `PageHelper::resolveAppDownloadUrl(配置的 URL)` 得到最终地址再 `register`。
+- **兼容**：`data-glr-download` + `data-glr-href` 仍受 footer-common 支持，**新组件勿新增**。
+- **配置字段**：`download.primary_url`、`download.secondary_url`、`cta_url` 等定义为 text；生成配置时填写有意义的链接或 `#download`，勿写 `javascript:void(0)`。
+- **前置条件**：页面必须在 `</body>` 前加载 `footer-common`（输出注册 JSON + 委托脚本），否则点击无效。
+
 ## 数据库存储
 
 ### Component 表结构

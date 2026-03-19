@@ -143,6 +143,7 @@ class AiPublish implements CronTaskInterface
                     ->select()
                     ->fetch()
                     ->getItems();
+                shuffle($allLogs);
                 $logs = [];
                 $seenKw = [];
                 foreach ($allLogs as $log) {
@@ -162,6 +163,7 @@ class AiPublish implements CronTaskInterface
                 if ($need > 0 && $total === 0) {
                     $this->recordSkip($onProgress, $skipReasons, 'trend_no_unused', ['site_id' => $siteId, 'profile_id' => $profileId, 'need' => $need]);
                 }
+                shuffle($logs);
                 foreach ($logs as $log) {
                     $keyword = (string)$log->getData(TrendingKeywordLog::schema_fields_KEYWORD);
                     $logId = (int)$log->getData(TrendingKeywordLog::schema_fields_ID);
@@ -169,7 +171,8 @@ class AiPublish implements CronTaskInterface
                         $onProgress('article_start', ['keyword' => $keyword, 'index' => $idx + 1, 'total' => $total]);
                     }
                     try {
-                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
+                        $poolForArticle = $this->buildVariationKeywordPool($profileId, [$keyword]);
+                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft, $poolForArticle)) {
                             $log->setData(TrendingKeywordLog::schema_fields_USED_AT, date('Y-m-d H:i:s'))->save();
                             $published++;
                             if ($onProgress) {
@@ -219,7 +222,7 @@ class AiPublish implements CronTaskInterface
                 $usedKeywords = $this->getUsedKeywordsForQuota($siteId, $profileId);
                 $unused = array_values(array_diff($rawKeywords, array_keys($usedKeywords)));
                 if ($unused === []) {
-                    // 兜底模式：关键词都曾发过文时仍按每日配额发文，复用关键词池（slug/时间不同，避免「有配额却 0 篇」）
+                    // 兜底模式：关键词都曾发过文时仍按每日配额发文，从画像词池随机有放回抽取主词
                     if ($onProgress) {
                         $onProgress('fallback_reuse_keywords', [
                             'message' => __('该画像关键词均已用于发文，本次按配额复用关键词继续生成。'),
@@ -227,13 +230,10 @@ class AiPublish implements CronTaskInterface
                             'need' => $need,
                         ]);
                     }
-                    $keywords = [];
-                    $n = count($rawKeywords);
-                    for ($i = 0; $i < $need; $i++) {
-                        $keywords[] = $rawKeywords[$i % $n];
-                    }
+                    $keywords = $this->pickRandomKeywordsWithReplacement($rawKeywords, $need);
                 } else {
-                    $keywords = array_slice($unused, 0, $need);
+                    // 从未使用过的词中无放回随机抽取，充分利用画像里逗号/顿号分隔的多词
+                    $keywords = $this->pickRandomUniqueFromPool($unused, $need);
                 }
                 $total = count($keywords);
                 if ($onProgress && $total > 0) {
@@ -245,7 +245,8 @@ class AiPublish implements CronTaskInterface
                         $onProgress('article_start', ['keyword' => $keyword, 'index' => $idx + 1, 'total' => $total]);
                     }
                     try {
-                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft)) {
+                        $poolForArticle = $this->buildVariationKeywordPool($profileId, $rawKeywords);
+                        if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft, $poolForArticle)) {
                             $published++;
                             if ($onProgress) {
                                 $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
@@ -330,6 +331,54 @@ class AiPublish implements CronTaskInterface
             }
         }
         return $used;
+    }
+
+    /**
+     * 从词池中无放回随机抽取至多 $need 个（画像里逗号/顿号等分隔的每个词平等参与随机）
+     *
+     * @param list<string> $pool
+     * @return list<string>
+     */
+    private function pickRandomUniqueFromPool(array $pool, int $need): array
+    {
+        $clean = [];
+        foreach ($pool as $k) {
+            $t = trim((string)$k);
+            if ($t !== '') {
+                $clean[] = $t;
+            }
+        }
+        $clean = array_values($clean);
+        if ($clean === [] || $need <= 0) {
+            return [];
+        }
+        shuffle($clean);
+        return array_slice($clean, 0, min($need, count($clean)));
+    }
+
+    /**
+     * 从词池中有放回随机抽取 $need 个主关键词（复用配额场景）
+     *
+     * @param list<string> $pool
+     * @return list<string>
+     */
+    private function pickRandomKeywordsWithReplacement(array $pool, int $need): array
+    {
+        $clean = [];
+        foreach ($pool as $k) {
+            $t = trim((string)$k);
+            if ($t !== '') {
+                $clean[] = $t;
+            }
+        }
+        if ($clean === [] || $need <= 0) {
+            return [];
+        }
+        $out = [];
+        for ($i = 0; $i < $need; $i++) {
+            $out[] = $clean[array_rand($clean)];
+        }
+        return $out;
     }
 
     /**
@@ -515,9 +564,10 @@ class AiPublish implements CronTaskInterface
         int $categoryId,
         int $profileId,
         string $locale,
-        bool $asDraft
+        bool $asDraft,
+        array $keywordPoolForVariation = []
     ): bool {
-        $article = $this->generateArticle($keyword, $locale);
+        $article = $this->generateArticle($keyword, $locale, $this->buildAiVariationParams($keyword, $keywordPoolForVariation));
 
         // 检测生成错误，抛出异常让调用方捕获并记录
         if (!empty($article['_error'])) {
@@ -550,18 +600,119 @@ class AiPublish implements CronTaskInterface
         return true;
     }
 
-    private function generateArticle(string $keyword, string $locale): array
+    /**
+     * 合并画像关键词与当前词，去重去空，供随机选「相关关键词」与差异化写作
+     *
+     * @param list<string> $extraKeywords
+     * @return list<string>
+     */
+    private function buildVariationKeywordPool(int $profileId, array $extraKeywords): array
+    {
+        /** @var TrendProfile $profile */
+        $profile = ObjectManager::getInstance(TrendProfile::class);
+        $profile->clear()->load($profileId);
+        $fromProfile = $profile->getId() ? $profile->getKeywordsArray() : [];
+        $merged = array_merge($fromProfile, $extraKeywords);
+        $out = [];
+        $seen = [];
+        foreach ($merged as $k) {
+            $t = trim((string)$k);
+            if ($t === '') {
+                continue;
+            }
+            $lk = mb_strtolower($t);
+            if (isset($seen[$lk])) {
+                continue;
+            }
+            $seen[$lk] = true;
+            $out[] = $t;
+        }
+        return $out;
+    }
+
+    /**
+     * 随机写作角度、风格、篇幅，并从词池中抽若干相关词，降低同主词重复标题/套话
+     *
+     * @param list<string> $keywordPool
+     * @return array<string, mixed>
+     */
+    private function buildAiVariationParams(string $primaryKeyword, array $keywordPool): array
+    {
+        $primaryLower = mb_strtolower(trim($primaryKeyword));
+        $others = [];
+        foreach ($keywordPool as $k) {
+            $t = trim((string)$k);
+            if ($t === '' || mb_strtolower($t) === $primaryLower) {
+                continue;
+            }
+            $others[] = $t;
+        }
+        shuffle($others);
+        $maxPick = count($others);
+        $additional = [];
+        if ($maxPick >= 2) {
+            $n = random_int(2, min(4, $maxPick));
+            $additional = array_slice($others, 0, $n);
+        } elseif ($maxPick === 1) {
+            $additional = $others;
+        }
+
+        $angles = [
+            __('侧重「下载安装与安全注意事项」，面向新用户'),
+            __('侧重「玩法规则、技巧与常见误区」'),
+            __('侧重「版本更新、活动奖励与限时福利」'),
+            __('侧重「设备兼容、流畅度与网络环境优化」'),
+            __('侧重「实名认证、合规与资金安全说明」'),
+            __('侧重「与同类应用对比：特色与选择建议」'),
+            __('侧重「FAQ：账号、充值、客服与故障排查」'),
+            __('侧重「真实场景：从注册到首局体验的完整路径」'),
+        ];
+        $angle = $angles[array_rand($angles)];
+
+        $styles = [
+            ArticleGenerationAdapter::STYLE_PROFESSIONAL,
+            ArticleGenerationAdapter::STYLE_MARKETING,
+            ArticleGenerationAdapter::STYLE_EDUCATIONAL,
+            ArticleGenerationAdapter::STYLE_CASUAL,
+        ];
+        $lengths = [
+            ArticleGenerationAdapter::LENGTH_SHORT,
+            ArticleGenerationAdapter::LENGTH_MEDIUM,
+            ArticleGenerationAdapter::LENGTH_LONG,
+        ];
+
+        $custom = __('本次写作角度：%{angle}。标题与正文须与同主关键词的其他稿件明显区分，避免套用同质化 SEO 标题；相关关键词请自然融入，勿堆砌。', [
+            'angle' => $angle,
+        ]);
+
+        $params = [
+            'style' => $styles[array_rand($styles)],
+            'length' => $lengths[array_rand($lengths)],
+            'custom_instructions' => $custom,
+        ];
+        if ($additional !== []) {
+            $params['additional_keywords'] = $additional;
+        }
+        return $params;
+    }
+
+    /**
+     * @param array<string, mixed> $variationParams 由 buildAiVariationParams 生成，覆盖默认风格/长度等
+     */
+    private function generateArticle(string $keyword, string $locale, array $variationParams = []): array
     {
         /** @var ArticleGenerationService $articleService */
         $articleService = ObjectManager::getInstance(ArticleGenerationService::class);
-        
-        return $articleService->generateBlogArticle($keyword, $locale, [
+
+        $base = [
             'article_type' => ArticleGenerationAdapter::ARTICLE_TYPE_BLOG,
             'style' => ArticleGenerationAdapter::STYLE_PROFESSIONAL,
             'length' => ArticleGenerationAdapter::LENGTH_MEDIUM,
             'include_seo' => true,
             'is_backend' => true,
-        ]);
+        ];
+
+        return $articleService->generateBlogArticle($keyword, $locale, array_merge($base, $variationParams));
     }
 
     private function uniqueSlug(string $title, int $siteId): string

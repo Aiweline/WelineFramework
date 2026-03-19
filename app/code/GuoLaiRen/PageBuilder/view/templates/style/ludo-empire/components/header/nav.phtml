@@ -50,6 +50,8 @@ $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nGames=>#games\nDownl
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Play Now';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#games');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 $navItems = [];
 $page = $this->getData('page');
@@ -328,7 +330,7 @@ $instanceId = 'le-nav-' . uniqid();
         </div>
         
         <?php if ($showCta): ?>
-        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="le-nav-cta">
+        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="le-nav-cta">
             <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             <?= htmlspecialchars($ctaText) ?>
         </a>

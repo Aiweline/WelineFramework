@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_Backend',
     __DIR__,
-    '1.2.0',
+    '1.3.0',
     '<a href="https://bbs.aiweline.com">Admin模块</a>',
     ['Weline_Framework','Weline_Acl','Weline_SystemConfig']
 );
