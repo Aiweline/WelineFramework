@@ -20,7 +20,7 @@ interface DomainRegistrarInterface
 
     public function getVersion(): string;
 
-    /** @return array<array{name: string, label: string, type: string, required: bool, placeholder?: string, options?: array}> */
+    /** @return array<array{name: string, label: string, type: string, required: bool, placeholder?: string, help_text?: string, options?: array}> */
     public function getConfigFields(): array;
 
     /**

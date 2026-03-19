@@ -217,6 +217,10 @@ window.onRegistrarChange = function(code) {
         var isEditMode = parseInt(document.getElementById('form-account-id').value) > 0;
         
         var html = '';
+        var escapeCfgFieldHelp = function(t) {
+            if (!t) return '';
+            return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        };
         fields.forEach(function(field) {
             var fieldId = 'form-field-' + field.name;
             var mapping = field.mapping || field.name;
@@ -250,6 +254,9 @@ window.onRegistrarChange = function(code) {
                 html += '<input type="' + inputType + '" id="' + fieldId + '" class="form-control config-input" data-field="' + field.name + '" data-mapping="' + mapping + '" data-required="' + isRequired + '"';
                 if (placeholder) html += ' placeholder="' + placeholder + '"';
                 html += '>';
+            }
+            if (field.help_text) {
+                html += '<div class="form-text text-warning small mt-1">' + escapeCfgFieldHelp(field.help_text) + '</div>';
             }
             html += '</div>';
         });
