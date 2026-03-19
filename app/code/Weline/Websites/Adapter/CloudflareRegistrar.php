@@ -641,7 +641,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             'nameservers' => $zone['name_servers'] ?? [],
             'original_nameservers' => $zone['original_name_servers'] ?? [],
             'plan' => $zone['plan']['name'] ?? 'Free',
-            'zone_id' => $zone['id'] ?? '',
+            'zone_id' => (string) ($zone['id'] ?? ''),
             'paused' => $zone['paused'] ?? false,
             'type' => $zone['type'] ?? 'full',
         ];
@@ -1047,16 +1047,11 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     }
 
     /**
-     * 获取 Zone ID
+     * 获取 Zone ID（每次请求 Cloudflare API，不做本地缓存，避免状态不一致与跨请求脏读）。
      */
     private function getZoneId(string $domain, array $credentials): string
     {
-        static $cache = [];
-
-        $cacheKey = $domain . '_' . \md5(\json_encode($credentials));
-        if (isset($cache[$cacheKey])) {
-            return $cache[$cacheKey];
-        }
+        $domain = \strtolower(\trim($domain));
 
         $response = $this->makeRequest('/zones', 'GET', ['name' => $domain], $credentials);
 
@@ -1069,8 +1064,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             return '';
         }
 
-        $cache[$cacheKey] = $zones[0]['id'] ?? '';
-        return $cache[$cacheKey];
+        return (string) ($zones[0]['id'] ?? '');
     }
 
     /**
