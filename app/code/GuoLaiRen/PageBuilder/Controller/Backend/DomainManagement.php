@@ -1658,7 +1658,8 @@ class DomainManagement extends BaseController
             $sse->sendEvent('progress', ['message' => __('使用验证方式：%{1}', [$challengeStrategy]), 'progress' => 31]);
 
             $domainId = (int) $pool->getParentDomainId();
-            $result = w_query('server', 'requestCertificate', [
+            $certRequestService = ObjectManager::getInstance(\Weline\Websites\Service\CertificateRequestService::class);
+            $result = $certRequestService->requestCertificate([
                 'domain' => $domain,
                 'webroot' => $webroot,
                 'email' => $email,
