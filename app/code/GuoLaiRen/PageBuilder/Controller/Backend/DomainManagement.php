@@ -1727,7 +1727,7 @@ class DomainManagement extends BaseController
     /**
      * SSE 流式输出根域名 DNS/CDN 切换过程
      * GET: domain_id, dns_account_id, cdn_account_id (可选), verify_cdn=1 (可选，默认不校验：建站前域名常无 HTTP 响应)
-     * 委托 {@see \Weline\Websites\Service\DnsSwitchService::executeDnsSwitch}（options 在 {@see \Weline\Websites\Service\DnsSwitchService::buildStandardSwitchOptions} 上合并更长等待与 records_to_push 等）。
+     * 委托 {@see \Weline\Websites\Service\DnsSwitchService::executeDnsSwitch}（options 在 {@see \Weline\Websites\Service\DnsSwitchService::buildStandardSwitchOptions} 上合并更长等待等；records_to_push 仅 Step1 后本地仍空时兜底）。
      */
     public function getDnsSwitchStream(): void
     {
@@ -1964,6 +1964,7 @@ class DomainManagement extends BaseController
                 'verify_cdn' => $verifyCdn || !empty($baseOpts['verify_cdn']),
                 'verify_cdn_wait_max_seconds' => 5 * 60,
                 'verify_cdn_wait_interval_seconds' => 15,
+                // 兜底：executeDnsSwitch Step1 后优先用本地库 getRecordsForPush；仅当仍为空时用此处快照
                 'records_to_push' => $resolveService->getRecordsForPush($domain),
                 'after_sync_records' => function (Domain $d, array $dnsRecords): void {
                     $this->syncDnsProviderToPool($d->getDomain(), (string) $d->getDnsProvider(), (string) ($d->getCdnProvider() ?? ''));

@@ -7,8 +7,8 @@ declare(strict_types=1);
  * 统一负责域名池 HTTPS 证书申请：同步阻塞直至每个域名申请完成，并立即更新池子状态。
  * 带域名池 id 时仅按每条记录的域名申请单域证书，不做泛域（*.xxx）解析与申请。
  * 【证书阶段】仅处理 pool_lifecycle_stage = origin_ready | cert_pending；不在解析阶段写 https pending。
- * ACME 与后台 SSL 申请一致：challenge_strategy=auto、物理 webroot（PUB/pub），不传 use_wls_virtual_http01
- * （与 {@see \Weline\Server\Controller\Backend\SslCertificate::postRequest} 及域名池后台 SSE 申请路径对齐）。
+ * 定时任务默认 DNS-01：避免经 CDN/代理时 HTTP-01 公网访问返回 502 等导致验签失败；物理 webroot 仍传入，不传 use_wls_virtual_http01。
+ * 后台手工申请仍为 auto，见 {@see \Weline\Server\Controller\Backend\SslCertificate::postRequest}。
  * 过程会写入 domain_pool_cert 日志（开始/进度/结束），便于排查“申请中但未实际申请”等问题。
  *
  * @author Aiweline
@@ -23,6 +23,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Server\Service\SslCertificateService;
 use Weline\Websites\Service\CertificateRequestService;
 use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainPoolFlowLogService;
@@ -33,7 +34,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
  * 由 {@see WebsitesPoolCertificateMaintenance} 第二步调用。
  */
 #[CronTestHelp(
-    description: '子域 HTTPS 证书申请：从池内取生命周期 origin_ready 或 cert_pending 的子域，按队列逐个发起 ACME 申请（HTTP-01 或 DNS-01），成功后更新为可建站。',
+    description: '子域 HTTPS 证书申请：从池内取生命周期 origin_ready 或 cert_pending 的子域，按队列逐个发起 ACME 申请（默认 DNS-01，需父域 DNS/CDN 账户），成功后更新为可建站。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_request --domain=www.example.com -v'],
     manual_help: [
         '逻辑：取待申请证书的子域（单域或泛域策略），同步阻塞直至当前域名申请完成；CA 成功后按证书管理数据更新 https_status、site_ready（不以 HTTPS 连通性探测判定证书状态）。日志写 domain_pool_cert。',
@@ -96,7 +97,7 @@ class DomainPoolCertificateRequest
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
             $processLogs[] = __('域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请');
             $this->echoLine($processLogs[\count($processLogs) - 1]);
-            $hint = __('挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需权威 NS 与所选 DNS 账户一致，dig/nslookup 可查）。');
+            $hint = __('挑战策略 DNS-01：自动写入 _acme-challenge TXT（需父域已配置 DNS/CDN 账户且权威 NS 与服务商一致）。');
             $processLogs[] = $hint;
             $this->echoLine($hint);
             w_log_info('[DomainPoolCertificateRequest] ' . $hint, [], 'domain_pool_cert');
@@ -210,7 +211,7 @@ class DomainPoolCertificateRequest
             $processLogs[] = $line;
             $this->echoLine($line);
             $certRequestService = ObjectManager::getInstance(CertificateRequestService::class);
-            // 与 SslCertificate::postRequest、DomainManagement::getRequestHttpsStream 一致：物理 webroot，不启用 WLS 虚拟 HTTP-01
+            // 定时任务固定 DNS-01（不经公网 HTTP 路径，避免 CDN 502）；物理 webroot 仍传，不启用 WLS 虚拟 HTTP-01
             $result = $certRequestService->requestCertificate([
                 'domain' => $requestDomain,
                 'webroot' => $webroot,
@@ -220,7 +221,7 @@ class DomainPoolCertificateRequest
                 'cert_type' => $isWildcard ? 'wildcard' : 'exact',
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => 'auto',
+                'challenge_strategy' => SslCertificateService::CHALLENGE_DNS01,
                 '_on_progress' => $onProgress,
             ]);
 
