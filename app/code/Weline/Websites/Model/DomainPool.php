@@ -899,14 +899,14 @@ class DomainPool extends Model
                 'inner'
             )
             ->where('pd.' . Domain::schema_fields_DNS_CUTOVER_COMPLETE, 1)
-            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->where(self::schema_fields_SITE_READY, 0)
-            ->where(self::schema_fields_SITE_CREATED, 0)
-            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_ORIGIN_READY, self::LIFECYCLE_CERT_PENDING], 'IN')
-            ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
-            ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where(self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
-            ->order(self::schema_fields_HTTPS_STATUS, 'ASC')
+            ->where('main_table.' . self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where('main_table.' . self::schema_fields_SITE_READY, 0)
+            ->where('main_table.' . self::schema_fields_SITE_CREATED, 0)
+            ->where('main_table.' . self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_ORIGIN_READY, self::LIFECYCLE_CERT_PENDING], 'IN')
+            ->where('main_table.' . self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
+            ->where('main_table.' . self::schema_fields_IS_LOCAL_SERVER, 1)
+            ->where('main_table.' . self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
+            ->order('main_table.' . self::schema_fields_HTTPS_STATUS, 'ASC')
             ->limit($limit)
             ->select()
             ->fetchArray();
@@ -928,18 +928,18 @@ class DomainPool extends Model
                 'inner'
             )
             ->where('pd.' . Domain::schema_fields_DNS_CUTOVER_COMPLETE, 1)
-            ->where(self::schema_fields_STATUS, self::STATUS_ACTIVE)
-            ->where(self::schema_fields_SITE_READY, 0)
-            ->where(self::schema_fields_SITE_CREATED, 0)
-            ->where(self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_REGISTERED, self::LIFECYCLE_AWAITING_ORIGIN], 'IN')
-            ->where(self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
-            ->where(self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where(self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
-            ->order(self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
+            ->where('main_table.' . self::schema_fields_STATUS, self::STATUS_ACTIVE)
+            ->where('main_table.' . self::schema_fields_SITE_READY, 0)
+            ->where('main_table.' . self::schema_fields_SITE_CREATED, 0)
+            ->where('main_table.' . self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_REGISTERED, self::LIFECYCLE_AWAITING_ORIGIN], 'IN')
+            ->where('main_table.' . self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
+            ->where('main_table.' . self::schema_fields_IS_LOCAL_SERVER, 1)
+            ->where('main_table.' . self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
+            ->order('main_table.' . self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
             ->limit($limit + 20)
             ->select();
         if ($ids !== []) {
-            $b->where(self::schema_fields_ID, $ids, 'NOT IN');
+            $b->where('main_table.' . self::schema_fields_ID, $ids, 'NOT IN');
         }
         foreach ($b->fetchArray() as $r) {
             if (\count($primary) >= $limit) {
