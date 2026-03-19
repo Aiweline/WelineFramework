@@ -4,8 +4,7 @@ declare(strict_types=1);
 /**
  * Weline Server - 证书自动续签定时任务
  *
- * 到期前 7 天：审查并发送消息通知
- * 到期前 3 天：自动尝试续签
+ * 到期前 3 天内：发送消息通知（同日同证节流）并尝试自动续签
  *
  * @author Aiweline
  * @email aiweline@qq.com
@@ -23,16 +22,16 @@ use Weline\Server\Service\SslCertificateService;
  * 证书自动续签定时任务
  *
  * 功能：
- * - 每天检查即将到期的证书（7 天内）
- * - 到期前 7 天：发送后台消息通知
- * - 到期前 3 天：自动续签
+ * - 每天检查即将到期的证书（NOTICE_BEFORE_DAYS 天内）
+ * - 到期前 NOTICE_BEFORE_DAYS 天：发送后台消息通知（每证每日最多一次）
+ * - 剩余天数 ≤ RENEW_BEFORE_DAYS 且开启自动续签：尝试续签
  * - 只处理启用了自动续签的证书
  */
 class CertificateAutoRenew implements CronTaskInterface
 {
-    /** 提前多少天内纳入审查（并发送 7 天提醒） */
-    protected const NOTICE_BEFORE_DAYS = 7;
-    /** 提前多少天内自动续签 */
+    /** 提前多少天内纳入审查并发送临期通知 */
+    protected const NOTICE_BEFORE_DAYS = 3;
+    /** 提前多少天内尝试自动续签 */
     protected const RENEW_BEFORE_DAYS = 3;
     
     /**
@@ -90,7 +89,7 @@ class CertificateAutoRenew implements CronTaskInterface
             /** @var SslCertificateService $sslService */
             $sslService = ObjectManager::getInstance(SslCertificateService::class);
 
-            // 获取即将到期的证书（7 天内）
+            // 获取即将到期的证书（NOTICE_BEFORE_DAYS 天内）
             $expiringCerts = $this->getExpiringCertificates($certModel);
             $results['checked'] = \count($expiringCerts);
 
@@ -113,18 +112,20 @@ class CertificateAutoRenew implements CronTaskInterface
                     continue;
                 }
 
-                // 到期前 7 天内：发送消息通知（仅提醒，不续签）
+                $certIdForNotice = (int) ($certData[SslCertificate::schema_fields_ID] ?? 0);
+                // 到期前 NOTICE_BEFORE_DAYS 天内：发送消息通知（每证每日最多一次）
                 if ($daysLeft >= 0 && $daysLeft <= self::NOTICE_BEFORE_DAYS) {
-                    $results['reminded']++;
-                    w_log_info(\sprintf(
-                        '[CertificateAutoRenew] %s - %s',
-                        $domain,
-                        __('证书将在 %{1} 天后过期', [$daysLeft])
-                    ), [], 'server_ssl');
-                    $this->sendExpiryNotice($domain, $daysLeft, $expiresAt);
+                    if ($this->sendExpiryNoticeThrottled($certIdForNotice, $domain, $daysLeft, $expiresAt)) {
+                        $results['reminded']++;
+                        w_log_info(\sprintf(
+                            '[CertificateAutoRenew] %s - %s',
+                            $domain,
+                            __('证书将在 %{1} 天后过期', [$daysLeft])
+                        ), [], 'server_ssl');
+                    }
                 }
 
-                // 仅当剩余天数 > 3 时跳过续签（剩余 1～3 天或已过期则尝试续签）
+                // 剩余天数 > RENEW_BEFORE_DAYS 时跳过续签
                 if ($daysLeft > self::RENEW_BEFORE_DAYS) {
                     $results['skipped']++;
                     continue;
@@ -183,6 +184,36 @@ class CertificateAutoRenew implements CronTaskInterface
         }
     }
     
+    /**
+     * 发送临期通知；同一 cert_id 同一自然日只发一次。
+     *
+     * @return bool 是否实际发送（用于统计 reminded）
+     */
+    protected function sendExpiryNoticeThrottled(int $certId, string $domain, int $daysLeft, string $expiresAt): bool
+    {
+        if ($certId <= 0) {
+            $this->sendExpiryNotice($domain, $daysLeft, $expiresAt);
+
+            return true;
+        }
+        try {
+            $cache = w_cache('default');
+            $key = 'ssl_cert_expiry_notice_' . $certId . '_' . \date('Y-m-d');
+            $hit = $cache->get($key);
+            if ($hit !== null && $hit !== false && $hit !== '') {
+                return false;
+            }
+            $this->sendExpiryNotice($domain, $daysLeft, $expiresAt);
+            $cache->set($key, '1', 86400);
+
+            return true;
+        } catch (\Throwable) {
+            $this->sendExpiryNotice($domain, $daysLeft, $expiresAt);
+
+            return true;
+        }
+    }
+
     /**
      * 获取即将到期的证书（NOTICE_BEFORE_DAYS 天内）
      */
