@@ -1524,6 +1524,8 @@ class ServiceOrchestrator
                 $done += \count($batch);
             }
 
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
+
             if ($this->rollingRestartClientId !== null) {
                 $elapsedMs = (\microtime(true) - $startTime) * 1000;
                 $this->controlServer?->sendTo(
@@ -3312,6 +3314,39 @@ class ServiceOrchestrator
         }
     }
 
+    /**
+     * 用 Registry 中当前所有 READY Worker 端口重写 Dispatcher 负载池并广播路由策略。
+     *
+     * 多 Worker 滚动/热重载（se:rel、server:maintenance rolling）在 maintenanceMode=false 时
+     * 仅靠 REMOVE_WORKER + ADD_WORKER 逐条更新；若 IPC 偶发丢包或顺序与 Dispatcher 内部状态漂移，
+     * 会出现「Master 侧 Worker 已 READY 但入口仍难访问」。结束后以 SET_WORKER_POOL 全量对齐可恢复。
+     */
+    private function syncDispatcherFullWorkerPoolFromRegistry(): void
+    {
+        if ($this->registry->getInstancesByRole('dispatcher') === [] || $this->controlServer === null) {
+            return;
+        }
+
+        $ports = [];
+        foreach ($this->registry->getInstancesByRole('worker') as $w) {
+            if ($w->state === ServiceInstance::STATE_READY && $w->port !== null && $w->port > 0) {
+                $ports[] = (int) $w->port;
+            }
+        }
+
+        if ($ports === []) {
+            WlsLogger::warning_('[Orchestrator] syncDispatcherFullWorkerPoolFromRegistry: 无 READY Worker，跳过 SET_WORKER_POOL');
+
+            return;
+        }
+
+        \sort($ports, SORT_NUMERIC);
+        $this->notifyDispatcherSetWorkerPool($ports);
+        $this->controlServer->poll(0, 150000);
+        $this->broadcastRoutingPolicyToWorkers();
+        WlsLogger::info_('[Orchestrator] Dispatcher 全量 Worker 池已对齐 Registry: ' . \implode(',', $ports));
+    }
+
     private function notifyDispatcherRemoveWorker(?int $port): void
     {
         if ($port === null || $port <= 0) {
@@ -4496,6 +4531,10 @@ class ServiceOrchestrator
         $disableResult = $this->disableMaintenanceMode();
         if (!($disableResult['success'] ?? false)) {
             WlsLogger::warning_("[Orchestrator] 滚动重启后禁用维护模式失败: " . ($disableResult['message'] ?? 'unknown'));
+        }
+
+        if ($success) {
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
         }
 
         if ($clientId !== null) {
