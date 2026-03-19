@@ -759,16 +759,72 @@ class DomainResolveService
     }
 
     /**
-     * 校验向互联网宣告的权威 NS（与 dig/nslookup NS 一致）是否由指定 DNS 供应商托管。
-     * 注意：注册局登记的委派 NS **只应在注册商处修改**；本方法仅检测公网可见结果，不替代注册商改委派。
+     * 通过 {@see Domain::getAccountId} 注册商 API 读取注册局登记的委派 NS（如 Gname `getDomainDetail` 的 ymdns）。
      *
-     * Gname 等注册商可能在控制台写解析，但权威 NS 仍为 share-dns 高防等注册商侧 NS 时，
-     * 写入 Cloudflare 的 TXT 不会出现在当前权威区，ACME DNS-01 仍失败。
-     *
-     * @return array{ok: bool, message: string, live_ns: array<string>, detected: string}
+     * @return list<string> 小写、无尾点，已排序去重
      */
-    public function validateAuthoritativeDnsMatchesProvider(string $rootDomain, string $providerCode): array
+    private function fetchRegistrarDelegatedNameservers(Domain $domain): array
     {
+        $accountId = (int) $domain->getAccountId();
+        if ($accountId <= 0) {
+            return [];
+        }
+        $acc = $this->loadAccount($accountId);
+        if ($acc === null) {
+            return [];
+        }
+        $adapter = $this->registrarResolver->getAdapter($acc->getRegistrarCode());
+        if ($adapter === null || !$adapter->isDomainRegistrar()) {
+            return [];
+        }
+        try {
+            $detail = $adapter->getDomainDetail($domain->getDomain(), $acc->getCredentials());
+        } catch (\Throwable) {
+            return [];
+        }
+        $ns = $detail['nameservers'] ?? [];
+        if (!\is_array($ns)) {
+            return [];
+        }
+        $out = [];
+        foreach ($ns as $h) {
+            $t = \rtrim(\strtolower(\trim((string) $h)), '.');
+            if ($t !== '') {
+                $out[] = $t;
+            }
+        }
+        $out = \array_values(\array_unique($out));
+        \sort($out);
+
+        return $out;
+    }
+
+    /**
+     * 校验向互联网宣告的权威 NS（与 dig/nslookup NS 一致）是否由指定 DNS 供应商托管。
+     * 注意：注册局登记的委派 NS **只应在注册商处修改**；默认以公网可见结果为准（与 CA DNS-01 一致）。
+     *
+     * **ACME 专用**：`$trustRegistrarWhenPublicMismatch=true` 且传入 `$domain` 时，若公网判定与目标不符，会再调
+     * **注册商** `getDomainDetail`（`account_id`）核对登记 NS；若登记已指向目标供应商（如 Cloudflare），则放行写入 TXT，
+     * 并提示 CA 仍以全球递归为准（传播/缓存滞后时验证可能仍失败）。
+     *
+     * **Cutover / 门闸**：`DnsSwitchService` 等须保持 `trustRegistrarWhenPublicMismatch=false`，避免未传播即误判已完成切换。
+     *
+     * @return array{
+     *   ok: bool,
+     *   message: string,
+     *   live_ns: array<string>,
+     *   detected: string,
+     *   matched_via?: string,
+     *   registrar_ns?: array<string>,
+     *   registrar_detected?: string
+     * }
+     */
+    public function validateAuthoritativeDnsMatchesProvider(
+        string $rootDomain,
+        string $providerCode,
+        ?Domain $domain = null,
+        bool $trustRegistrarWhenPublicMismatch = false
+    ): array {
         $rootDomain = \strtolower(\trim($rootDomain));
         $providerCode = \strtolower(\trim($providerCode));
         if ($rootDomain === '' || $providerCode === '') {
@@ -787,42 +843,176 @@ class DomainResolveService
                 'detected' => 'unknown',
             ];
         }
-        if ($detected !== $providerCode) {
-            $nsStr = \implode(', ', $live);
-            $detName = $this->dnsDetector->getProviderDisplayName($detected);
-            $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
-            $suffix = '';
-            if ($providerCode === 'cloudflare' && \in_array($detected, ['share_dns', 'gname', 'godaddy', 'unknown'], true)) {
-                $suffix = ' ' . (string) __(
-                    '请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。'
-                );
-            }
-            $boundCf = false;
-            try {
-                $dm = ObjectManager::getInstance(Domain::class, [], false);
-                $dm->clearQuery()->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
-                if ($dm->getDomainId() > 0 && \strtolower(\trim((string) $dm->getDnsProvider())) === 'cloudflare') {
-                    $boundCf = true;
-                }
-            } catch (\Throwable) {
-            }
-            if ($boundCf && $providerCode === 'cloudflare' && $detected !== 'cloudflare') {
-                $suffix .= ' ' . (string) __(
-                    '[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。'
-                );
-            }
+        if ($detected === $providerCode) {
             return [
-                'ok' => false,
-                'message' => (string) __(
-                    '域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}',
-                    [$rootDomain, $detName, $nsStr, $expName, $suffix]
-                ),
+                'ok' => true,
+                'message' => '',
                 'live_ns' => $live,
                 'detected' => $detected,
+                'matched_via' => 'public',
             ];
         }
 
-        return ['ok' => true, 'message' => '', 'live_ns' => $live, 'detected' => $detected];
+        $nsStr = \implode(', ', $live);
+        $detName = $this->dnsDetector->getProviderDisplayName($detected);
+        $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
+
+        if ($trustRegistrarWhenPublicMismatch && $domain !== null && (int) $domain->getDomainId() > 0) {
+            $regNs = $this->fetchRegistrarDelegatedNameservers($domain);
+            $regDetected = $regNs !== [] ? $this->dnsDetector->detectProvider($regNs) : 'unknown';
+            if ($regNs !== [] && $regDetected === $providerCode) {
+                $regStr = \implode(', ', $regNs);
+
+                return [
+                    'ok' => true,
+                    'message' => (string) __(
+                        '[注册商 API] 登记 NS 已为「%{1}」（%{2}），与当前 DNS 账户一致；本机/递归查询仍为「%{3}」（%{4}）。证书流程将先等待公网权威 NS 与目标一致后再写入验证 TXT（超时见 env websites.acme_dns）。CA 仍从全球递归查 TXT，若最终验证失败可再试或换 HTTP-01。',
+                        [$expName, $regStr, $detName, $nsStr]
+                    ),
+                    'live_ns' => $live,
+                    'detected' => $detected,
+                    'matched_via' => 'registrar',
+                    'registrar_ns' => $regNs,
+                    'registrar_detected' => $regDetected,
+                ];
+            }
+        }
+
+        $suffix = '';
+        if ($providerCode === 'cloudflare' && \in_array($detected, ['share_dns', 'gname', 'godaddy', 'unknown'], true)) {
+            $suffix = ' ' . (string) __(
+                '请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。'
+            );
+        }
+        $boundCf = false;
+        try {
+            $dm = ObjectManager::getInstance(Domain::class, [], false);
+            $dm->clearQuery()->where(Domain::schema_fields_DOMAIN, $rootDomain)->find()->fetch();
+            if ($dm->getDomainId() > 0 && \strtolower(\trim((string) $dm->getDnsProvider())) === 'cloudflare') {
+                $boundCf = true;
+            }
+        } catch (\Throwable) {
+        }
+        if ($boundCf && $providerCode === 'cloudflare' && $detected !== 'cloudflare') {
+            $suffix .= ' ' . (string) __(
+                '[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。'
+            );
+        }
+        if ($trustRegistrarWhenPublicMismatch && $domain !== null && (int) $domain->getAccountId() > 0) {
+            $suffix .= ' ' . (string) __(
+                '[提示] 已尝试通过注册商账户（account_id）API 读取登记 NS，与目标仍不一致或接口不可用；请以注册商控制台为准核对委派 NS。'
+            );
+        }
+
+        return [
+            'ok' => false,
+            'message' => (string) __(
+                '域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}',
+                [$rootDomain, $detName, $nsStr, $expName, $suffix]
+            ),
+            'live_ns' => $live,
+            'detected' => $detected,
+        ];
+    }
+
+    /**
+     * ACME DNS-01：轮询直到公网权威 NS 判定为指定供应商（与 {@see getLiveNameservers} 一致），可选 DoH 交叉判定。
+     *
+     * @param callable|null $onProgress fn(string $message, array $data): void
+     * @return array{ok: bool, message: string, waited_seconds: int, live_ns: array<string>, detected: string, via?: string}
+     */
+    public function waitForPublicAuthoritativeNsMatchesProvider(
+        string $rootDomain,
+        string $providerCode,
+        int $maxWaitSeconds,
+        int $intervalSeconds,
+        bool $probeCloudflareDoh,
+        ?callable $onProgress = null
+    ): array {
+        $rootDomain = \strtolower(\trim($rootDomain));
+        $providerCode = \strtolower(\trim($providerCode));
+        if ($rootDomain === '' || $providerCode === '') {
+            return [
+                'ok' => false,
+                'message' => (string) __('参数无效'),
+                'waited_seconds' => 0,
+                'live_ns' => [],
+                'detected' => 'unknown',
+            ];
+        }
+        $maxWaitSeconds = \max(0, $maxWaitSeconds);
+        $intervalSeconds = \max(1, $intervalSeconds);
+        $elapsed = 0;
+
+        while ($elapsed <= $maxWaitSeconds) {
+            $live = $this->getLiveNameservers($rootDomain);
+            $detected = $this->dnsDetector->detectProvider($live);
+            if ($detected === $providerCode) {
+                return [
+                    'ok' => true,
+                    'message' => '',
+                    'waited_seconds' => $elapsed,
+                    'live_ns' => $live,
+                    'detected' => $detected,
+                    'via' => 'resolver',
+                ];
+            }
+            if ($probeCloudflareDoh) {
+                $dohNs = $this->getLiveNameserversViaCloudflareDoH($rootDomain);
+                $dohDet = $dohNs !== [] ? $this->dnsDetector->detectProvider($dohNs) : 'unknown';
+                if ($dohDet === $providerCode) {
+                    return [
+                        'ok' => true,
+                        'message' => '',
+                        'waited_seconds' => $elapsed,
+                        'live_ns' => $dohNs,
+                        'detected' => $dohDet,
+                        'via' => 'doh',
+                    ];
+                }
+            }
+
+            if ($elapsed >= $maxWaitSeconds) {
+                break;
+            }
+
+            if ($onProgress !== null) {
+                $detName = $this->dnsDetector->getProviderDisplayName($detected);
+                $nsStr = $live !== [] ? \implode(', ', $live) : (string) __('(暂无)');
+                $onProgress((string) __(
+                    '[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…',
+                    [(string) $elapsed, $detName, $nsStr, $this->dnsDetector->getProviderDisplayName($providerCode)]
+                ), [
+                    'step' => 'acme_wait_ns_tick',
+                    'elapsed' => $elapsed,
+                    'live_ns' => $live,
+                    'detected' => $detected,
+                ]);
+            }
+
+            $sleep = \min($intervalSeconds, $maxWaitSeconds - $elapsed);
+            if ($sleep <= 0) {
+                break;
+            }
+            \sleep($sleep);
+            $elapsed += $sleep;
+        }
+
+        $live = $this->getLiveNameservers($rootDomain);
+        $detected = $this->dnsDetector->detectProvider($live);
+        $detName = $this->dnsDetector->getProviderDisplayName($detected);
+        $nsStr = $live !== [] ? \implode(', ', $live) : (string) __('(暂无)');
+
+        return [
+            'ok' => false,
+            'message' => (string) __(
+                '[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。',
+                [(string) $elapsed, $detName, $nsStr, $this->dnsDetector->getProviderDisplayName($providerCode)]
+            ),
+            'waited_seconds' => $elapsed,
+            'live_ns' => $live,
+            'detected' => $detected,
+        ];
     }
 
     /**
