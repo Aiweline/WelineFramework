@@ -326,15 +326,13 @@ class DnsProviderDetector
     }
 
     /**
-     * 列表展示用：本地配置的目标 DNS 与权威 NS（dig NS）不一致时的文案
-     *
-     * - 根域列表：Cloudflare（Gname 高防 share-dns 等广播中…）
-     * - 子域（池子）行：权威仍为旧 NS 时只显示检测侧名称，避免与根域长文案重复
+     * 列表展示用：仅展示本地配置的 DNS 托管目标名称（与 {@see Domain::getDnsProvider} / 账户一致）。
+     * 不再根据公网权威 NS 探测结果附加括号文案（如「share-dns 广播中」），避免与注册商 API 已登记 CF NS 等场景互相矛盾、误导运维。
      *
      * @param string $configuredDnsCode Domain.dns_provider（空则视为跟随注册商）
      * @param string $registrarCode     注册商代码
-     * @param array<string> $liveNameservers 公网 NS 列表（如 dns_get_record）
-     * @param bool $subdomainRow       true=池子子域行，不匹配时仅显示公网检测名
+     * @param array<string> $liveNameservers 保留参数：调用方仍可传入公网 NS，本方法不再用于展示拼接（与 shouldProbeLiveNsForConfiguredDns 等逻辑解耦）
+     * @param bool $subdomainRow       保留参数以兼容调用方，已忽略
      */
     public function resolveDnsListDisplayName(
         string $configuredDnsCode,
@@ -347,38 +345,8 @@ class DnsProviderDetector
         if ($configuredDnsCode === '') {
             $configuredDnsCode = $registrarCode;
         }
-        $cfgName = $this->getProviderDisplayName($configuredDnsCode);
 
-        if ($liveNameservers === []) {
-            return $cfgName;
-        }
-        $liveCode = $this->detectProvider($liveNameservers);
-        $liveName = $this->getProviderDisplayName($liveCode);
-
-        if ($liveCode === $configuredDnsCode) {
-            return $cfgName;
-        }
-
-        $wantsExternalDns = $this->isCdnProvider($configuredDnsCode)
-            || (
-                $configuredDnsCode !== ''
-                && $configuredDnsCode !== $registrarCode
-                && !$this->isOriginalProvider($configuredDnsCode, $registrarCode)
-            );
-
-        if (!$wantsExternalDns) {
-            return $cfgName;
-        }
-
-        if ($liveCode === 'unknown') {
-            return $cfgName;
-        }
-
-        if ($subdomainRow) {
-            return $liveName;
-        }
-
-        return $cfgName . '（' . $liveName . __('广播中…') . '）';
+        return $this->getProviderDisplayName($configuredDnsCode);
     }
 
     /**

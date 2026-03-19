@@ -873,22 +873,16 @@ class DomainPool extends Model
     }
     
     /**
-     * 获取需要申请证书的域名列表（仅未建站就绪的域名）
+     * 获取「具备申请证书业务前置条件」的域名池行（**不**按域名池 https_status 过滤）。
      *
-     * 条件：解析正常 + 指向本服务器 + 没有有效证书 + 未建站就绪。
-     * 不再强制 dns/cdn infra READY：手动 DNS、仅公网解析到源站也应能进入申请队列。
+     * 是否已有可用证书由 {@see \Weline\Server\Service\SslCertificateService::isManagedCertificateHealthyForHostname} 在定时任务中判断；
+     * 避免池子字段与 SSL 证书管理器不一致时漏申请或误跳过。
      *
-     * @param int $limit
+     * @param int $limit SQL 拉取条数（调用方宜略放大再在 PHP 侧按管理器健康过滤后截断）
      * @return array
      */
     public function getDomainsNeedCertificate(int $limit = 50): array
     {
-        $httpsNeed = [
-            self::HTTPS_STATUS_NONE,
-            self::HTTPS_STATUS_EXPIRED,
-            self::HTTPS_STATUS_ERROR,
-            self::HTTPS_STATUS_PENDING,
-        ];
         /** @var self $q1 */
         $q1 = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
         $primary = $q1->clearQuery()
@@ -905,8 +899,7 @@ class DomainPool extends Model
             ->where('main_table.' . self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_ORIGIN_READY, self::LIFECYCLE_CERT_PENDING], 'IN')
             ->where('main_table.' . self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where('main_table.' . self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where('main_table.' . self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
-            ->order('main_table.' . self::schema_fields_HTTPS_STATUS, 'ASC')
+            ->order('main_table.' . self::schema_fields_POOL_LIFECYCLE_STAGE, 'DESC')
             ->limit($limit)
             ->select()
             ->fetchArray();
@@ -934,7 +927,6 @@ class DomainPool extends Model
             ->where('main_table.' . self::schema_fields_POOL_LIFECYCLE_STAGE, [self::LIFECYCLE_REGISTERED, self::LIFECYCLE_AWAITING_ORIGIN], 'IN')
             ->where('main_table.' . self::schema_fields_RESOLVE_STATUS, self::RESOLVE_STATUS_RESOLVED)
             ->where('main_table.' . self::schema_fields_IS_LOCAL_SERVER, 1)
-            ->where('main_table.' . self::schema_fields_HTTPS_STATUS, $httpsNeed, 'IN')
             ->order('main_table.' . self::schema_fields_RESOLVE_CHECKED_AT, 'ASC')
             ->limit($limit + 20)
             ->select();

@@ -604,7 +604,70 @@ class SslCertificateService
         $expiresAt = $cert['validTo_time_t'] ?? 0;
         return $expiresAt > (\time() + 7 * 24 * 3600);
     }
-    
+
+    /**
+     * 证书管理器视角：该主机名是否已有 **ACTIVE** 且覆盖该名的证书，且 PEM 或磁盘文件存在、未进入续期窗口（与 {@see isCertificateValid} 同为提前 7 天）。
+     * 供域名池维护入队 / 健康扫描使用，**不**依赖域名池上的 https_status 字段。
+     */
+    public function isManagedCertificateHealthyForHostname(string $hostname): bool
+    {
+        $hostname = \strtolower(\trim($hostname));
+        if ($hostname === '') {
+            return false;
+        }
+        $certProbe = ObjectManager::getInstance(SslCertificate::class, [], false);
+        $cert = $certProbe->findCertificateForDomain($hostname);
+        if ($cert === null || (int) $cert->getCertId() <= 0) {
+            return false;
+        }
+        if ($cert->getStatus() !== SslCertificate::STATUS_ACTIVE) {
+            return false;
+        }
+        if (!$cert->coversHostname($hostname)) {
+            return false;
+        }
+        $certPem = $cert->getCertPem();
+        $keyPem = $cert->getKeyPem();
+        if ($certPem !== '' && $keyPem !== '') {
+            return $this->isPemCertificateValidWithRenewalMargin($certPem);
+        }
+        $certPath = $cert->getCertPath();
+        $keyPath = $cert->getKeyPath();
+        if ($certPath === '' || $keyPath === '' || !\is_file($certPath) || !\is_file($keyPath)) {
+            return false;
+        }
+        if (!$this->certificateMatchesHost($certPath, $hostname)) {
+            return false;
+        }
+
+        return $this->isCertificateValid($certPath);
+    }
+
+    /** @param non-empty-string $certPem PEM 证书链（取第一张叶子即可） */
+    private function isPemCertificateValidWithRenewalMargin(string $certPem): bool
+    {
+        $certPem = \trim($certPem);
+        if ($certPem === '') {
+            return false;
+        }
+        $margin = 7 * 24 * 3600;
+        $first = $certPem;
+        if (\preg_match('/-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----/s', $certPem, $m)) {
+            $first = $m[0];
+        }
+        $res = @\openssl_x509_read($first);
+        if ($res === false) {
+            return false;
+        }
+        $parsed = @\openssl_x509_parse($res, false);
+        if (!\is_array($parsed)) {
+            return false;
+        }
+        $to = (int) ($parsed['validTo_time_t'] ?? 0);
+
+        return $to > (\time() + $margin);
+    }
+
     /**
      * 获取 OpenSSL 配置
      * 
