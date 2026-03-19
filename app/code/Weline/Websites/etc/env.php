@@ -28,7 +28,7 @@ return [
     ],
 
     /**
-     * DNS 切换（DnsCdnAutoSwitch → DnsSwitchService）在注册商 NS API 成功后的可选等待。
+     * DNS 切换（DnsCdnAutoSwitch → DnsSwitchService）。权威 NS 委派仅由注册商 updateNameservers 写入；以下为传播观测。
      * - 不能加快注册局/全球递归缓存过期；可减少「本机解析器仍旧 NS」误判，并尽早发现已传播。
      * - wait_public_ns_max_seconds 不宜过大，避免 WLS cron 单任务长时间阻塞（默认 3 分钟）。
      * - ns_probe_use_cloudflare_doh：用 1.1.1.1 DoH 与系统 dns_get_record 交叉比对（任一与目标 NS 集合一致即视为公网已跟上）。
