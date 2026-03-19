@@ -602,6 +602,60 @@ class DomainResolveService
         return $this->queryLiveNsRecords($domain);
     }
 
+    /**
+     * 通过 Cloudflare 1.1.1.1 DoH（application/dns-json）查询 NS，与 {@see getLiveNameservers} 系统解析器结果交叉比对，
+     * 减轻「本机 libc 仍缓存旧 NS」导致的误判；失败时返回空数组（不阻断主流程）。
+     *
+     * @return list<string>
+     */
+    public function getLiveNameserversViaCloudflareDoH(string $domain): array
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return [];
+        }
+        $url = 'https://cloudflare-dns.com/dns-query?name=' . \rawurlencode($domain) . '&type=NS';
+        $ctx = \stream_context_create([
+            'http' => [
+                'timeout' => 4,
+                'header' => "Accept: application/dns-json\r\n",
+            ],
+            'ssl' => [
+                'verify_peer' => true,
+                'verify_peer_name' => true,
+            ],
+        ]);
+        $raw = @\file_get_contents($url, false, $ctx);
+        if ($raw === false || $raw === '') {
+            return [];
+        }
+        try {
+            $data = \json_decode($raw, true, 512, \JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+        if (!\is_array($data) || empty($data['Answer']) || !\is_array($data['Answer'])) {
+            return [];
+        }
+        $nameservers = [];
+        foreach ($data['Answer'] as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ((int) ($row['type'] ?? 0) !== 2) {
+                continue;
+            }
+            $t = \strtolower(\trim((string) ($row['data'] ?? '')));
+            if ($t !== '') {
+                $nameservers[] = \rtrim($t, '.');
+            }
+        }
+        $nameservers = \array_values(\array_unique($nameservers));
+        \sort($nameservers);
+
+        return $nameservers;
+    }
+
     private function queryLiveNsRecords(string $domain): array
     {
         try {
@@ -627,10 +681,10 @@ class DomainResolveService
     }
 
     /**
-     * 校验公网权威 NS 是否由指定 DNS 供应商托管。
+     * 校验向互联网宣告的权威 NS（与 dig/nslookup NS 一致）是否由指定 DNS 供应商托管。
      *
-     * Gname 等注册商允许在 NS 仍指向 Cloudflare 等外部时通过 API 添加解析，
-     * 控制台显示「等待生效」，公网权威区并不含该 TXT，ACME DNS-01 必然失败。
+     * Gname 等注册商可能在控制台写解析，但权威 NS 仍为 share-dns 高防等注册商侧 NS 时，
+     * 写入 Cloudflare 的 TXT 不会出现在当前权威区，ACME DNS-01 仍失败。
      *
      * @return array{ok: bool, message: string, live_ns: array<string>, detected: string}
      */
@@ -647,7 +701,7 @@ class DomainResolveService
             return [
                 'ok' => false,
                 'message' => (string) __(
-                    '无法查询域名「%{1}」的公网 NS。请确认根域正确；在 NS 指回当前 DNS 托管商之前，勿用其 API 做证书 DNS 验证。',
+                    '无法查询域名「%{1}」的权威 NS（与 dig/nslookup 结果一致）。请确认根域正确；在权威 NS 尚未指向当前 DNS 托管商前，勿用其 API 做证书 DNS 验证。',
                     [$rootDomain]
                 ),
                 'live_ns' => [],
@@ -675,13 +729,13 @@ class DomainResolveService
             }
             if ($boundCf && $providerCode === 'cloudflare' && $detected !== 'cloudflare') {
                 $suffix .= ' ' . (string) __(
-                    '[常见误解] 您在后台把 DNS 选成了 Cloudflare，仅代表「用 Cloudflare API 管理解析」。公网 NS 仍显示注册商 DNS，说明注册商处的 NS 尚未改成 Cloudflare 的两条（或未完成「切换 DNS/CDN」整流程、或改后仍在全球生效中）。请用 dig/nslookup 查 NS，并在注册商控制台确认已为 *.ns.cloudflare.com。'
+                    '[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。'
                 );
             }
             return [
                 'ok' => false,
                 'message' => (string) __(
-                    '域名「%{1}」当前公网 NS 为「%{2}」（%{3}），权威解析不在「%{4}」。向 %{4} API 写入的 TXT 不会出现在公网，DNS-01 证书必败。%{5}',
+                    '域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}',
                     [$rootDomain, $detName, $nsStr, $expName, $suffix]
                 ),
                 'live_ns' => $live,
