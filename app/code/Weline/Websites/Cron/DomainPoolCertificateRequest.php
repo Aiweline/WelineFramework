@@ -22,6 +22,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPoolFlowLog;
+use Weline\Websites\Service\CertificateRequestService;
 use Weline\Websites\Service\DomainPoolFlowLogService;
 use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
@@ -196,12 +197,14 @@ class DomainPoolCertificateRequest
             w_log_info('[DomainPoolCertificateRequest] ' . $requestDomain . ' - ' . $message, $extra, 'domain_pool_cert');
         };
         try {
-            $line = "[{$requestDomain}] " . __('调用 requestCertificate，等待 CA 响应…');
+            $line = "[{$requestDomain}] " . __('调用统一证书申请入口，等待 CA 响应…');
             $processLogs[] = $line;
             $this->echoLine($line);
-            $result = w_query('server', 'requestCertificate', [
+            $certRequestService = ObjectManager::getInstance(CertificateRequestService::class);
+            $result = $certRequestService->requestCertificate([
                 'domain' => $requestDomain,
                 'webroot' => $webroot,
+                'use_wls_virtual_http01' => true,
                 'email' => $reqEmail,
                 'website_id' => 0,
                 'provider' => 'letsencrypt',
