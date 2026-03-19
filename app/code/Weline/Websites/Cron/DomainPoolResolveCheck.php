@@ -15,6 +15,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainPoolLifecycleService;
 use Weline\Websites\Service\DomainPoolResolveService;
 use Weline\Websites\Service\DomainResolveService;
@@ -56,6 +57,7 @@ class DomainPoolResolveCheck
             $serverIpService = ObjectManager::getInstance(ServerIpService::class);
             $eventsManager = ObjectManager::getInstance(EventsManager::class);
             $lifecycle = ObjectManager::getInstance(DomainPoolLifecycleService::class);
+            $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
 
             $domains = $domainPoolModel->getDomainsNeedResolveCheck(100);
             $total = \count($domains);
@@ -67,6 +69,9 @@ class DomainPoolResolveCheck
             $serverIp = $serverIpService->getPublicIpv4() ?: $serverIpService->getPublicIpv6() ?? '';
 
             foreach ($domains as $row) {
+                if ($cronLock->shouldSkipNonCertificateWorkForPoolRow($row)) {
+                    continue;
+                }
                 $poolDomain = ObjectManager::getInstance(DomainPool::class, [], false);
                 $poolDomain->setData($row);
                 $domainName = $row[DomainPool::schema_fields_DOMAIN] ?? '';

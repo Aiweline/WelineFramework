@@ -19,13 +19,12 @@ use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
  * 健康检查服务
- * 
+ *
  * 功能：
- * - 检查域名是否可访问
- * - 验证 HTTPS 证书有效性
+ * - 检查域名是否可访问（HTTP/HTTPS 请求仅表示连通性，不用于判断证书是否在「证书管理」中有效）
  * - 更新健康状态
- * - 同步 HTTPS 状态（证书失效自动回退 HTTP）
- * - 将结果同步到根域 {@see Domain}、域名池 {@see DomainPool}（连通性 / HTTPS / cert_id）
+ * - 按 {@see WebsiteSslCertificateStatusService} 同步站点 HTTPS 开关与 cert_id（与请求探测解耦）
+ * - 将结果同步到根域 {@see Domain}、域名池 {@see DomainPool}（连通性来自探测；https_status 来自证书表）
  */
 class HealthCheckService
 {
@@ -131,20 +130,31 @@ class HealthCheckService
             'unhealthy' => 0,
             'https_updated' => 0,
             'infra_synced' => 0,
+            'skipped_cron_lock' => 0,
             'details' => [],
         ];
 
         $infraSync = ObjectManager::getInstance(HealthCheckInfrastructureSyncService::class);
-        
+        $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
+
         foreach ($domains as $domainData) {
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
+            $rootFqdn = \strtolower(\trim((string) ($domainData[WebsiteDomain::schema_fields_ROOT_DOMAIN] ?? '')));
+            if ($rootFqdn === '') {
+                $rootFqdn = \strtolower(\trim((string) $domain));
+            }
+            if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($rootFqdn)) {
+                $results['skipped_cron_lock']++;
+                continue;
+            }
             $domainId = (int) $domainData[WebsiteDomain::schema_fields_ID];
             $hasHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
-            $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
+            $certRaw = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
+            $certId = ($certRaw !== null && $certRaw !== '') ? (int) $certRaw : null;
             WebsitesCronTestContext::detail('HealthCheck.checkDomain', ['domain' => $domain, 'https' => $hasHttps]);
 
             // 执行健康检查
-            $checkResult = $this->checkDomain($domain, $hasHttps);
+            $checkResult = $this->checkDomain($domain, $hasHttps, $certId);
             WebsitesCronTestContext::detail('HealthCheck.result', ['domain' => $domain, 'checkResult' => $checkResult]);
             
             // 更新数据库
@@ -165,7 +175,9 @@ class HealthCheckService
             // 检查是否需要更新 HTTPS 状态
             if ($checkResult['https_changed']) {
                 $results['https_updated']++;
-                $this->syncHttpsStatus($domain, $certId, $checkResult['https_available']);
+                $sslSvc = ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
+                $effectiveCertId = $sslSvc->effectiveCertIdForWebsiteBinding($domain, $certId);
+                $this->syncHttpsStatus($domain, $effectiveCertId, $checkResult['https_available']);
             }
 
             // 同步根域 Domain / 域名池 DomainPool 的连通性与 HTTPS 状态（与 WebsiteDomain 探测结果对齐）
@@ -183,10 +195,11 @@ class HealthCheckService
      * 检查单个域名的健康状态
      * 
      * @param string $domain 域名
-     * @param bool $expectHttps 期望是否 HTTPS
+     * @param bool $expectHttps 当前站点是否启用 HTTPS（数据库）
+     * @param int|null $certId 站点绑定的 cert_id（可为空，仍可从证书表按域名解析）
      * @return array 检查结果
      */
-    public function checkDomain(string $domain, bool $expectHttps = false): array
+    public function checkDomain(string $domain, bool $expectHttps = false, ?int $certId = null): array
     {
         $result = [
             'domain' => $domain,
@@ -197,65 +210,42 @@ class HealthCheckService
             'https_changed' => false,
             'response_time_ms' => 0,
         ];
-        
-        // 确定要检查的 URL
+
+        // 确定要检查的 URL（仅用于连通性，不用于推断证书是否在证书管理中有效）
         $protocol = $expectHttps ? 'https' : 'http';
         $url = $protocol . '://' . $domain . '/';
-        
-        // 执行请求
+
         $startTime = \microtime(true);
         $response = $this->httpRequest($url);
         $result['response_time_ms'] = \round((\microtime(true) - $startTime) * 1000, 2);
-        
+
         $result['code'] = $response['code'];
-        
+
         if ($response['success']) {
             $result['status'] = WebsiteDomain::HEALTH_HEALTHY;
             $result['message'] = __('访问正常');
-            
-            // 如果期望 HTTPS 且成功，确认 HTTPS 可用
-            if ($expectHttps) {
-                $result['https_available'] = true;
-            }
         } else {
             $result['status'] = WebsiteDomain::HEALTH_UNHEALTHY;
             $result['message'] = $response['error'];
-            
-            // 如果 HTTPS 失败，检查是否是证书问题
+
             if ($expectHttps && $this->isSslError($response['error'])) {
-                // 尝试 HTTP
                 $httpResponse = $this->httpRequest('http://' . $domain . '/');
                 if ($httpResponse['success']) {
-                    $result['message'] = __('HTTPS 证书无效，已自动回退 HTTP');
-                    $result['https_available'] = false;
-                    $result['https_changed'] = true;
                     $result['status'] = WebsiteDomain::HEALTH_HEALTHY;
                     $result['code'] = $httpResponse['code'];
+                    $result['message'] = __(
+                        'HTTPS/TLS 探测失败，HTTP 可访问（站点 HTTPS 是否启用以 SSL 证书管理为准）'
+                    );
                 }
             }
         }
-        
-        // 检查 HTTPS 是否可用（如果当前是 HTTP）
-        if (!$expectHttps && $result['status'] === WebsiteDomain::HEALTH_HEALTHY) {
-            $httpsCheck = $this->checkHttpsAvailable($domain);
-            if ($httpsCheck['available']) {
-                $result['https_available'] = true;
-            }
-        }
-        
+
+        $sslSvc = ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
+        $sslValid = $sslSvc->hasValidManagedCertificate($domain, $certId);
+        $result['https_available'] = $sslValid;
+        $result['https_changed'] = ($sslValid !== $expectHttps);
+
         return $result;
-    }
-    
-    /**
-     * 检查 HTTPS 是否可用
-     */
-    protected function checkHttpsAvailable(string $domain): array
-    {
-        $response = $this->httpRequest('https://' . $domain . '/');
-        return [
-            'available' => $response['success'],
-            'code' => $response['code'],
-        ];
     }
     
     /**
@@ -331,19 +321,19 @@ class HealthCheckService
     }
     
     /**
-     * 同步 HTTPS 状态
-     * 
+     * 同步 HTTPS 状态（httpsAvailable 须与证书管理一致；启用时必须带有效 cert_id）
+     *
      * @param string $domain 域名
-     * @param int|null $certId 证书 ID
-     * @param bool $httpsAvailable HTTPS 是否可用
+     * @param int|null $certId 证书管理中的有效 cert_id
+     * @param bool $httpsAvailable 是否应启用 HTTPS
      */
     protected function syncHttpsStatus(string $domain, ?int $certId, bool $httpsAvailable): void
     {
-        if ($httpsAvailable && $certId) {
-            // HTTPS 可用且有证书
-            $this->domainModel->syncDomainCertificate($domain, $certId, true);
+        if ($httpsAvailable) {
+            if ($certId !== null && $certId > 0) {
+                $this->domainModel->syncDomainCertificate($domain, $certId, true);
+            }
         } else {
-            // HTTPS 不可用，回退到 HTTP
             $this->domainModel->rollbackHttps($domain);
         }
     }
@@ -359,8 +349,10 @@ class HealthCheckService
         foreach ($domains as $domainData) {
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
             $hasHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
-            
-            $results[$domain] = $this->checkDomain($domain, $hasHttps);
+            $certRaw = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
+            $certId = ($certRaw !== null && $certRaw !== '') ? (int) $certRaw : null;
+
+            $results[$domain] = $this->checkDomain($domain, $hasHttps, $certId);
         }
         
         return $results;
@@ -391,23 +383,33 @@ class HealthCheckService
             'https_enabled' => 0,
             'https_disabled' => 0,
             'unchanged' => 0,
+            'skipped_cron_lock' => 0,
         ];
-        
+
+        $sslSvc = ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
+        $cronLock = ObjectManager::getInstance(DomainCronLockService::class);
+
         foreach ($domains as $domainData) {
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
+            $rootFqdn = \strtolower(\trim((string) ($domainData[WebsiteDomain::schema_fields_ROOT_DOMAIN] ?? '')));
+            if ($rootFqdn === '') {
+                $rootFqdn = \strtolower(\trim((string) $domain));
+            }
+            if ($cronLock->shouldSkipNonCertificateWorkForRootFqdn($rootFqdn)) {
+                $results['skipped_cron_lock']++;
+                continue;
+            }
             $currentHttps = (bool) $domainData[WebsiteDomain::schema_fields_HTTPS_ENABLED];
-            $certId = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
+            $certRaw = $domainData[WebsiteDomain::schema_fields_CERT_ID] ?? null;
+            $prefCertId = ($certRaw !== null && $certRaw !== '') ? (int) $certRaw : null;
             WebsitesCronTestContext::detail('HttpsSync.row', ['domain' => $domain, 'https_enabled' => $currentHttps]);
 
-            // 创建一个临时模型实例来检查证书有效性
-            $domainModel = ObjectManager::getInstance(WebsiteDomain::class);
-            $domainModel->setData($domainData);
-            
-            $hasValidCert = $domainModel->hasValidCertificate();
-            
+            $effectiveCertId = $sslSvc->effectiveCertIdForWebsiteBinding($domain, $prefCertId);
+            $hasValidCert = $effectiveCertId !== null && $effectiveCertId > 0;
+
             if ($hasValidCert !== $currentHttps) {
-                if ($hasValidCert) {
-                    $this->domainModel->syncDomainCertificate($domain, $certId, true);
+                if ($hasValidCert && $effectiveCertId !== null) {
+                    $this->domainModel->syncDomainCertificate($domain, $effectiveCertId, true);
                     $results['https_enabled']++;
                 } else {
                     $this->domainModel->rollbackHttps($domain);

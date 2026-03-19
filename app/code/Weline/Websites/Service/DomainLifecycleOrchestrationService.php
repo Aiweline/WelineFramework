@@ -20,7 +20,7 @@ use Weline\Websites\Service\HealthCheckService;
  * 统一管理：
  * - 已购买域名的后续状态跟踪
  * - 根域与 @/www 子域解析校验
- * - 访问验证与 HTTPS 申请
+ * - 访问验证（HTTP 连通性）与 SSL 证书申请（证书是否有效以证书管理表为准，不用 HTTPS 请求校验证书）
  * - 与现有 ProvisioningOrder / ProvisioningStep 的协作
  */
 class DomainLifecycleOrchestrationService
@@ -152,6 +152,14 @@ class DomainLifecycleOrchestrationService
             $order->save();
             $this->recordProgress($orderId, ProvisioningOrder::STEP_PURCHASE, ProvisioningStep::STATUS_RUNNING, 'lifecycle', 0, [], __('等待根域名同步到本地'));
             return ['success' => true, 'completed' => false, 'message' => __('等待根域名同步到本地')];
+        }
+
+        if ($rootDomain->isCronResolved()) {
+            return [
+                'success' => true,
+                'completed' => false,
+                'message' => __('根域建站已锁定，跳过生命周期订单推进'),
+            ];
         }
 
         $subdomains = $this->normalizeSubdomains($options['subdomains'] ?? ['@', 'www']);
