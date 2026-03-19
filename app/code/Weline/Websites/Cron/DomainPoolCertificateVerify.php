@@ -4,8 +4,8 @@ declare(strict_types=1);
 /**
  * Weline Websites - 域名池证书有效性校验定时任务
  *
- * 检测 https_status=valid 的域名池记录，验证证书管理表中是否存在有效的 PEM 及文件。
- * - 证书丢失/无 PEM → https_status 回退为 none，site_ready=0
+ * 按生命周期（已过证书阶段）扫描域名池，用 **SSL 证书管理器** 判断该 FQDN 是否仍有健康证书（与池子 https_status 字段解耦）。
+ * - 管理器不健康 → https_status 回退为 none，site_ready=0，阶段回 origin_ready
  * - 该域名已建站(site_created=1) → 立即重新申请证书
  */
 
@@ -14,7 +14,6 @@ namespace Weline\Websites\Cron;
 use Weline\Cron\Attribute\CronTestHelp;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\Model\SslCertificate;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Domain;
@@ -28,10 +27,10 @@ use Weline\Websites\Service\WebsitesCronTestContext;
  * 由 {@see WebsitesPoolCertificateMaintenance} 第一步调用（仅整点/半点执行）。
  */
 #[CronTestHelp(
-    description: '子域证书校验：检查池内已标 https_status=valid 的证书在服务器上是否仍有有效 PEM/文件；丢失或无效则回退为 none、site_ready=0，已建站则触发重新申请。',
+    description: '子域证书校验：扫描阶段为 cert_valid/site_live 且解析指向本机的池子，用 SSL 证书管理器判断 PEM/文件与临期；不健康则回退池状态，已建站则立即重申请。',
     examples: ['php bin/w cron:test --task=domain_pool_certificate_verify --domain=www.example.com -v'],
     manual_help: [
-        '逻辑：遍历池内 https_status=valid 的记录，查证书表与磁盘 PEM；无有效证书则回退该条为 none 并设 site_ready=0；若该子域已建站(site_created=1)则加入重新申请队列。',
+        '逻辑：遍历池内 pool_lifecycle_stage 为 cert_valid 或 site_live 的记录，用 SslCertificateService::isManagedCertificateHealthyForHostname 判定；不健康则回退该条并可选立即重申请（已建站时）。',
         '--domain= 仅校验该子域；不指定则处理全部。',
     ],
 )]
@@ -61,7 +60,8 @@ class DomainPoolCertificateVerify
 
         try {
             $poolModel = ObjectManager::getInstance(DomainPool::class);
-            $domains = $this->getPoolDomainsWithValidHttps($poolModel);
+            $sslSvc = ObjectManager::getInstance(SslCertificateService::class);
+            $domains = $this->getPoolDomainsForManagedCertificateHealthScan($poolModel);
             $results['checked'] = \count($domains);
 
             if ($domains === []) {
@@ -76,16 +76,15 @@ class DomainPoolCertificateVerify
                 $domain = (string) ($row[DomainPool::schema_fields_DOMAIN] ?? '');
                 $poolRoot = (string) ($row[DomainPool::schema_fields_ROOT_DOMAIN] ?? '');
                 $poolId = (int) ($row[DomainPool::schema_fields_ID] ?? 0);
-                $certId = $row[DomainPool::schema_fields_CERT_ID] ?? null;
                 $siteCreated = (int) ($row[DomainPool::schema_fields_SITE_CREATED] ?? 0) === 1;
 
                 if ($domain === '' || $poolId <= 0) {
                     continue;
                 }
-                WebsitesCronTestContext::detail('DomainPoolCertificateVerify.row', ['domain' => $domain, 'pool_id' => $poolId, 'cert_id' => $certId]);
+                WebsitesCronTestContext::detail('DomainPoolCertificateVerify.row', ['domain' => $domain, 'pool_id' => $poolId]);
 
-                $certValid = $this->isCertificateAvailable($domain, $certId);
-                WebsitesCronTestContext::detail('isCertificateAvailable', ['domain' => $domain, 'valid' => $certValid]);
+                $certValid = $sslSvc->isManagedCertificateHealthyForHostname($domain);
+                WebsitesCronTestContext::detail('isManagedCertificateHealthyForHostname', ['domain' => $domain, 'valid' => $certValid]);
 
                 if ($certValid) {
                     $results['ok']++;
@@ -151,52 +150,23 @@ class DomainPoolCertificateVerify
     }
 
     /**
-     * 查询 https_status=valid 的活跃域名池记录
+     * 已过证书阶段的活跃池子（应能在 SSL 管理器中找到健康证书），不依赖池 https_status。
+     *
+     * @return list<array<string, mixed>>
      */
-    private function getPoolDomainsWithValidHttps(DomainPool $model): array
+    private function getPoolDomainsForManagedCertificateHealthScan(DomainPool $model): array
     {
         return $model->clearQuery()
             ->where(DomainPool::schema_fields_STATUS, DomainPool::STATUS_ACTIVE)
-            ->where(DomainPool::schema_fields_HTTPS_STATUS, DomainPool::HTTPS_STATUS_VALID)
+            ->where(DomainPool::schema_fields_RESOLVE_STATUS, DomainPool::RESOLVE_STATUS_RESOLVED)
+            ->where(DomainPool::schema_fields_IS_LOCAL_SERVER, 1)
+            ->where(
+                DomainPool::schema_fields_POOL_LIFECYCLE_STAGE,
+                [DomainPool::LIFECYCLE_CERT_VALID, DomainPool::LIFECYCLE_SITE_LIVE],
+                'IN'
+            )
             ->select()
             ->fetchArray();
-    }
-
-    /**
-     * 检查证书是否可用：证书管理表存在且 PEM 不为空，或本地文件存在
-     */
-    private function isCertificateAvailable(string $domain, mixed $certId): bool
-    {
-        $certModel = ObjectManager::getInstance(SslCertificate::class, [], false);
-
-        if ($certId !== null && (int) $certId > 0) {
-            $certModel->load((int) $certId);
-            if ($certModel->getCertId()) {
-                if ($certModel->getCertPem() !== '' && $certModel->getKeyPem() !== '') {
-                    return true;
-                }
-                $certPath = $certModel->getCertPath();
-                $keyPath = $certModel->getKeyPath();
-                if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
-                    return true;
-                }
-                return false;
-            }
-        }
-
-        $found = $certModel->findCertificateForDomain($domain);
-        if ($found !== null) {
-            if ($found->getCertPem() !== '' && $found->getKeyPem() !== '') {
-                return true;
-            }
-            $certPath = $found->getCertPath();
-            $keyPath = $found->getKeyPath();
-            if ($certPath !== '' && $keyPath !== '' && \is_file($certPath) && \is_file($keyPath)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /**
