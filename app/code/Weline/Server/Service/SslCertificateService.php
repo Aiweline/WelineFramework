@@ -2950,8 +2950,20 @@ CNF;
                 }
             }
         }
-        // 先轮询 TXT 是否在解析链上可见（默认仅 dns_get_record，与 websites.acme_dns 一致）
-        $txtFqdn = '_acme-challenge.' . $domain;
+        // 轮询 FQDN 须与 Websites addAcmeTxtRecord 写入一致（通配符 *.example.com 为 _acme-challenge.example.com，而非 _acme-challenge.*.example.com）
+        $txtFqdn = '_acme-challenge.' . \strtolower(\trim($domain));
+        try {
+            $fqProbe = w_query('websites', 'getAcmeChallengeTxtFqdn', [
+                'domain' => $domain,
+                'pool_id' => $poolId,
+                'domain_id' => $domainId,
+            ]);
+            if (\is_array($fqProbe) && !empty($fqProbe['success']) && \trim((string) ($fqProbe['txt_fqdn'] ?? '')) !== '') {
+                $txtFqdn = \strtolower(\trim((string) $fqProbe['txt_fqdn']));
+            }
+        } catch (\Throwable) {
+            // 未升级 Websites 或无该 operation 时回退简单拼接
+        }
         $txtPoll = $this->getAcmeDnsTxtPollConfig();
         $pollMaxSeconds = (int) ($txtPoll['max_seconds'] ?? 900);
         $pollIntervalSeconds = (int) ($txtPoll['interval_seconds'] ?? 10);
@@ -3178,23 +3190,37 @@ CNF;
 
     private function acmeTxtMatchesDnsGetRecord(string $txtFqdn, string $expectedValue): bool
     {
+        if ($this->acmeTxtDnsGetRecordProbe($txtFqdn, $expectedValue)) {
+            return true;
+        }
+        // 部分解析栈对 FQDN 带点/不敏感；再试末尾根点
+        if ($txtFqdn !== '' && !\str_ends_with($txtFqdn, '.')) {
+            return $this->acmeTxtDnsGetRecordProbe($txtFqdn . '.', $expectedValue);
+        }
+
+        return false;
+    }
+
+    private function acmeTxtDnsGetRecordProbe(string $txtFqdn, string $expectedValue): bool
+    {
         $records = @\dns_get_record($txtFqdn, \DNS_TXT);
         if (!\is_array($records)) {
             return false;
         }
         foreach ($records as $r) {
             $txt = $r['txt'] ?? null;
-            if ($txt === $expectedValue) {
-                return true;
-            }
-            if (\is_array($txt)) {
-                foreach ($txt as $t) {
-                    if ($t === $expectedValue) {
-                        return true;
-                    }
+            $parts = \is_array($txt) ? $txt : [$txt];
+            foreach ($parts as $t) {
+                if ($t === null || $t === '') {
+                    continue;
+                }
+                // 与 DoH 路径一致：兼容带引号、分段 TXT
+                if ($this->acmeTxtDataMatchesExpected((string) $t, $expectedValue)) {
+                    return true;
                 }
             }
         }
+
         return false;
     }
 
