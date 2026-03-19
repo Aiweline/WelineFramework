@@ -41,7 +41,8 @@ use Weline\Websites\Model\DomainRegistrarAccount;
  *
  * 公网权威 NS：waitForNameservers 在「注册商 API 已为目标 NS」时可能提前通过（verified_by=registrar），
  * 但全球递归仍可能指向旧 NS（如 share-dns）。对 Cloudflare 等目标，Step6 以 validateAuthoritativeDnsMatchesProvider
- * 为准决定是否置 dns_cutover_complete=1，避免证书 DNS-01 与门闸误判「已切换完成」。
+ * 为准决定是否置 dns_cutover_complete=1，避免误判「已切换完成」。证书 DNS-01 的写入门闸另见
+ * {@see DomainResolveService::validateAcmeDns01HostingViaAdapters}（仅用注册商 + DNS 托管适配器 API）。
  */
 class DnsSwitchService
 {
