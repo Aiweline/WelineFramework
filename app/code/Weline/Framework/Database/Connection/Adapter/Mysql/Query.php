@@ -19,6 +19,7 @@ use Weline\Framework\Database\Compiler\MysqlCompiler;
 use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Api\Sql\SqlTrait;
 use Weline\Framework\Database\Exception\DbException;
+use Weline\Framework\Database\Util\SelectFieldListSplitter;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -165,9 +166,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $this->fields = $fields;
         } else {
             $this->fields = $fields . ',' . $this->fields;
-            $fields = explode(',', $this->fields);
-            $fields = array_unique($fields);
-            $this->fields = implode(',', $fields);
+            $mergedParts = SelectFieldListSplitter::split($this->fields);
+            $mergedParts = array_unique($mergedParts);
+            $this->fields = implode(',', $mergedParts);
         }
         return $this;
     }
@@ -387,8 +388,8 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return '*';
         }
         
-        // 分割字段列表
-        $fieldList = array_map('trim', explode(',', $fields));
+        // 分割字段列表（不可简单 explode：函数实参中含逗号）
+        $fieldList = SelectFieldListSplitter::split($fields);
         $formattedFields = [];
         
         foreach ($fieldList as $field) {
