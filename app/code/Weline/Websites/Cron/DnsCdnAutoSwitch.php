@@ -13,16 +13,14 @@ use Weline\Websites\Service\DnsSwitchService;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 定时任务：域名购买后自动切换 DNS/CDN 服务商
- *
- * 由 {@see WebsitesOperationsMaintenance} 统一调度。
+ * 由 {@see WebsitesOperationsMaintenance} 调用。
  */
 #[CronTestHelp(
-    description: '购买后 DNS/CDN 自动切换（含延迟队列转 pending）。',
+    description: '购买后 DNS/CDN 自动切换：将「延迟切换」中已注册完成的根域转为待执行，再对「待执行」根域调用 DNS 接口把 Nameserver 切到目标服务商。',
     examples: ['php bin/w cron:test --task=dns_cdn_auto_switch --domain=example.com -v'],
     manual_help: [
-        '控制台 --domain= 只处理该根域的切换队列。',
-        '后台「后缀」未解析时处理全部待切换域名。',
+        '逻辑：① dns_switch_deferred=1 且生命周期已完成的根域 → 置为 dns_switch_pending ② dns_switch_pending=1 的根域 → 调用域名商/DNS 接口切换 NS，成功后清标记。',
+        '--domain= 仅处理该根域；不指定则处理全部待切换。',
     ],
 )]
 class DnsCdnAutoSwitch

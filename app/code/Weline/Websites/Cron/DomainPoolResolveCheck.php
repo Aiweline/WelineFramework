@@ -23,14 +23,14 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 由 {@see WebsitesDomainResolvePipeline} 统一调度。
+ * 由 {@see WebsitesDomainResolvePipeline} 第二步调用。
  */
 #[CronTestHelp(
-    description: '域名池解析阶段（registered/awaiting_origin）。',
+    description: '子域解析检测：对池内生命周期 registered/awaiting_origin 的子域做 A/AAAA 检测，指向本机则推进到 origin_ready，为后续证书申请做准备。',
     examples: ['php bin/w cron:test --task=domain_pool_resolve_check --domain=www.example.com -v'],
     manual_help: [
-        '控制台 --domain= 限定单条池域名解析检测。',
-        '后台「后缀」未解析时按定时批量处理。',
+        '逻辑：取一批「距上次检测约 10 分钟以上」的 registered/awaiting_origin 子域。对每条：解析 A/AAAA，若指向本机则更新 resolve_status、is_local_server，并将生命周期推进到 origin_ready；必要时补写 DNS 记录。cert_valid 但未 site_ready 时仅刷新可建站标记。',
+        '--domain= 仅处理该子域（FQDN）；不指定则批量处理。',
     ],
 )]
 class DomainPoolResolveCheck

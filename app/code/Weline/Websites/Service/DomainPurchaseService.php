@@ -553,6 +553,10 @@ class DomainPurchaseService
         }
     }
 
+    /**
+     * 购买后仅持久化 DNS 元数据，不调用注册商修改 NS 接口。
+     * 注册商在购买时会自动配置 NS；仅当用户选择了「其他 DNS 服务商」时才标记延迟切换，由定时任务在注册完成后执行（同服务商时 DnsSwitchService 会跳过修改 NS）。
+     */
     private function persistPurchasedDomainDnsMetadata(
         string $domain,
         int $accountId,

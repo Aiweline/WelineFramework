@@ -21,15 +21,14 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 /**
- * 由 {@see WebsitesOperationsMaintenance} 在每小时整点附带执行。
+ * 由 {@see WebsitesOperationsMaintenance} 整点调用。
  */
 #[CronTestHelp(
-    description: '根域 NS 检测与 DNS 服务商识别。',
+    description: '根域 Nameserver 检测：查询根域 NS 记录，识别当前 DNS 服务商（如 Cloudflare、原注册商），用于后台展示与策略判断。',
     examples: ['php bin/w cron:test --task=domain_ns_check --domain=example.com -v'],
     manual_help: [
-        '控制台 --domain= 只检测该根域 NS。',
-        '后台「后缀」未解析时检测全部活跃根域。',
-        '执行前：子域已可建站而根域仍非 active 时先纠正根域状态。',
+        '逻辑：先纠正「子域已可建站但根域仍非 active」的脏数据；再对活跃根域做 NS 查询，根据 NS 主机名识别 dns_provider 并更新。',
+        '--domain= 仅检测该根域；不指定则处理全部活跃根域。',
     ],
 )]
 class DomainNsCheck
