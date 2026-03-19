@@ -51,14 +51,13 @@ class HttpsSync
             // 同步 HTTPS 状态
             $results = $healthService->syncAllHttpsStatus();
             
-            // 构建结果消息
-            $message = \sprintf(
-                __('HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个'),
+            // 构建结果消息（占位符由 __() 替换，禁止再包一层 sprintf，否则 %{n} 会触发 sprintf 的 Unknown format specifier）
+            $message = __('HTTPS 状态同步完成：共 %{1} 个域名，启用 %{2} 个，禁用 %{3} 个，未变化 %{4} 个', [
                 $results['total'],
                 $results['https_enabled'],
                 $results['https_disabled'],
-                $results['unchanged']
-            );
+                $results['unchanged'],
+            ]);
             if (($results['skipped_cron_lock'] ?? 0) > 0) {
                 $message .= ' ' . (string) __('（建站锁定跳过 %{1} 个）', [(string) (int) $results['skipped_cron_lock']]);
             }

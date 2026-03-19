@@ -29,7 +29,8 @@ class AddModuleTablePolicyAndAudit20250318V102 extends AbstractMigration
 
     public function install(): bool
     {
-        $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnection();
+        // getConnector() 懒加载；勿对 Pgsql Connector 再调 getConnector()（SqlTrait 的 connection 未赋值会抛 DbException）
+        $connection = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
         $mt = ObjectManager::getInstance(ModuleTable::class)->getTable();
         $hasField = $this->columnExistsFn($connection);
 
@@ -76,9 +77,8 @@ class AddModuleTablePolicyAndAudit20250318V102 extends AbstractMigration
         }
         $alter->alter();
 
-        $connector = $connection->getConnector();
         $audit = ObjectManager::getInstance(ModuleUninstallAudit::class)->getTable();
-        if (!$connector->tableExist($audit)) {
+        if (!$connection->tableExist($audit)) {
             $dbType = ObjectManager::getInstance(DbManager::class)->getConfig()->getDbType();
             if (str_contains(strtolower((string) $dbType), 'pgsql')) {
                 $sql = "CREATE TABLE IF NOT EXISTS {$audit} (
