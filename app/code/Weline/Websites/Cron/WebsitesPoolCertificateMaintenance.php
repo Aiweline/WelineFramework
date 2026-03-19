@@ -14,13 +14,14 @@ use Weline\Cron\CronTaskInterface;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: '子域 HTTPS 证书维护：整点/半点校验已签发证书的 PEM；每节拍处理待申请队列。--cert_full 或 --hourly 可强制执行校验段。',
+    description: '子域 HTTPS 证书申请队列：每 10 分钟处理 origin_ready/cert_pending。PEM/文件校验已迁至每日任务 websites_certificate_health_daily；--cert_full 仅兼容旧参数。',
     examples: [
-        'php bin/w cron:test --task=websites_pool_certificate_maintenance --domain=example.com -v --cert_full=1',
+        'php bin/w cron:test --task=websites_pool_certificate_maintenance --domain=example.com -v',
+        'php bin/w cron:test --task=websites_certificate_health_daily --domain=example.com -v',
     ],
     manual_help: [
-        '① 证书校验：仅整点/半点执行。检查池内 https_status=valid 的证书在服务器上是否仍有有效 PEM/文件；丢失或无效则回退为 none 并标记需重新申请。',
-        '② 证书申请：每 10 分钟执行。对生命周期 origin_ready 或 cert_pending 的子域发起 ACME 申请（HTTP-01 或 DNS-01），成功后更新为可建站。',
+        '① 证书校验：见 websites_certificate_health_daily（每日，与 SSL 续期策略一致）。',
+        '② 证书申请：每 10 分钟。根域 cron_resolved=1 时不再申请；父域 dns_cutover_complete=0 时队列不取该池（DnsSwitchService 成功后置 1）。',
     ],
 )]
 class WebsitesPoolCertificateMaintenance implements CronTaskInterface
@@ -37,7 +38,7 @@ class WebsitesPoolCertificateMaintenance implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('① 整点/半点校验已签发证书 ② 每节拍处理待申请队列');
+        return __('每日校验已迁出；本任务每节拍处理待申请队列');
     }
 
     public function cron_time(): string
@@ -76,18 +77,8 @@ class WebsitesPoolCertificateMaintenance implements CronTaskInterface
     public function execute(): string
     {
         $parts = [];
-        $minute = (int) \date('i');
-        // 原 Verify 为 */30，在整点与半点附近执行校验，其余节拍仅跑申请
-        if ($minute === 0 || $minute === 30 || WebsitesCronTestContext::forcePoolCertVerify()) {
-            try {
-                $parts[] = '[1/2 ' . __('① 证书校验') . '] ' . (new DomainPoolCertificateVerify())->execute();
-            } catch (\Throwable $e) {
-                $parts[] = '[1/2] ' . $e->getMessage();
-                w_log_error('[websites_pool_certificate_maintenance] verify: ' . $e->getMessage(), [], 'domain_pool_cert');
-            }
-        } else {
-            $parts[] = '[1/2 ' . __('① 证书校验') . '] ' . (string) __('本节拍跳过（整点/半点执行）');
-        }
+        // PEM/文件校验已拆至每日任务 {@see WebsitesCertificateHealthDaily}，本任务仅保留高频证书申请队列
+        $parts[] = '[1/2 ' . __('① 证书校验') . '] ' . (string) __('已迁至每日任务 websites_certificate_health_daily（与 SSL 续期策略一致）');
         try {
             $parts[] = '[2/2 ' . __('② 证书申请') . '] ' . (new DomainPoolCertificateRequest())->execute();
         } catch (\Throwable $e) {

@@ -532,4 +532,101 @@ class SslCertificate extends Model
         
         return $this->getCertId() ? $this : null;
     }
+
+    /**
+     * 当前证书记录是否覆盖指定主机名（精确或泛域名 *.example.com）
+     */
+    public function coversHostname(string $hostname): bool
+    {
+        $hostname = \strtolower(\trim($hostname));
+        $domain = \strtolower(\trim($this->getDomain()));
+        if ($hostname === '' || $domain === '') {
+            return false;
+        }
+        if ($domain === $hostname) {
+            return true;
+        }
+        if ($this->getCertType() === self::CERT_TYPE_WILDCARD && \str_starts_with($domain, '*.')) {
+            $base = \substr($domain, 2);
+            if ($hostname === $base) {
+                return false;
+            }
+
+            return \str_ends_with($hostname, '.' . $base);
+        }
+
+        return false;
+    }
+
+    /**
+     * 为站点/域名池同步解析证书记录：仅以 SSL 证书管理表为准，不发起 HTTP(S) 探测。
+     * 优先 WebsiteDomain 绑定的 cert_id（且须覆盖主机名）；否则 active 精确/泛域；再否则同主机名任意状态的最新一条。
+     */
+    public static function resolveForWebsiteInfrastructure(?int $preferredCertId, string $hostname): ?self
+    {
+        $hostname = \strtolower(\trim($hostname));
+        if ($hostname === '') {
+            return null;
+        }
+
+        if ($preferredCertId !== null && $preferredCertId > 0) {
+            $bound = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+            $bound->load($preferredCertId);
+            if ($bound->getCertId() > 0 && $bound->coversHostname($hostname)) {
+                return $bound;
+            }
+        }
+
+        $activeFinder = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+        $active = $activeFinder->findCertificateForDomain($hostname);
+        if ($active !== null) {
+            return $active;
+        }
+
+        $exactProbe = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+        $exactRows = $exactProbe->clearQuery()
+            ->where(self::schema_fields_DOMAIN, $hostname)
+            ->order(self::schema_fields_ID, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+        if ($exactRows !== []) {
+            $row = $exactRows[0];
+            $id = (int) ($row[self::schema_fields_ID] ?? $row['cert_id'] ?? 0);
+            if ($id > 0) {
+                $c = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+                $c->load($id);
+                if ($c->getCertId() > 0) {
+                    return $c;
+                }
+            }
+        }
+
+        $parts = \explode('.', $hostname);
+        if (\count($parts) >= 2) {
+            \array_shift($parts);
+            $wildcardDomain = '*.' . \implode('.', $parts);
+            $wildProbe = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+            $wildRows = $wildProbe->clearQuery()
+                ->where(self::schema_fields_DOMAIN, $wildcardDomain)
+                ->where(self::schema_fields_CERT_TYPE, self::CERT_TYPE_WILDCARD)
+                ->order(self::schema_fields_ID, 'DESC')
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            if ($wildRows !== []) {
+                $row = $wildRows[0];
+                $id = (int) ($row[self::schema_fields_ID] ?? $row['cert_id'] ?? 0);
+                if ($id > 0) {
+                    $c = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+                    $c->load($id);
+                    if ($c->getCertId() > 0 && $c->coversHostname($hostname)) {
+                        return $c;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 }
