@@ -54,6 +54,8 @@ $navItemsRaw = $config['navigation.items'] ?? "Home=>#hero\nDownload App=>#downl
 $showCta = ($config['navigation.show_cta'] ?? 'yes') !== 'no';
 $ctaText = $config['navigation.cta_text'] ?? 'Download App';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#download');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 // 导航项：默认按网站页面类型自动生成；开启「使用自定义导航链接」时用 navigation.items
 $navItems = [];
@@ -351,7 +353,7 @@ $instanceId = 'sk-nav-' . uniqid();
             <?php endforeach; ?>
         </div>
         <?php if ($showCta): ?>
-        <a href="<?= htmlspecialchars($ctaUrl) ?>" class="sk-nav-cta">
+        <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="sk-nav-cta">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             <?= htmlspecialchars($ctaText) ?>
         </a>

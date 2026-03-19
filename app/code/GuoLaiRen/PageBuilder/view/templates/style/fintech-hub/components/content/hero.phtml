@@ -97,6 +97,11 @@ $paddingBottom = $config['style.padding_bottom'] ?? '80';
 $titleSize = $config['style.title_size'] ?? '3.5';
 $descSize = $config['style.desc_size'] ?? '1.25';
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'fh-hero-' . uniqid();
 ?>
 
@@ -424,12 +429,12 @@ $instanceId = 'fh-hero-' . uniqid();
                 <p class="fh-hero-description"><?= htmlspecialchars($description) ?></p>
                 
                 <div class="fh-hero-cta">
-                    <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="fh-hero-btn-primary">
+                    <a role="button" tabindex="0" class="fh-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                         <svg viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
                         <?= htmlspecialchars($primaryBtnText) ?>
                     </a>
                     
-                    <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="fh-hero-btn-secondary">
+                    <a role="button" tabindex="0" class="fh-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                         <?= htmlspecialchars($secondaryBtnText) ?>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7"/>

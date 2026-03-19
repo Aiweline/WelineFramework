@@ -54,6 +54,8 @@ $navLinksRaw = $config['navigation.links'] ?? "Home=>/\nGames=>#games\nDownload=
 $showCta = $config['navigation.show_cta'] ?? 'yes';
 $ctaText = $config['navigation.cta_text'] ?? 'Play Now';
 $ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($config['navigation.cta_url'] ?? '#hero');
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'url');
 
 // 导航项：默认按页面类型自动生成；开启「使用自定义导航链接」时用 navigation.links
 $navLinks = [];
@@ -296,7 +298,7 @@ $instanceId = 'rr-nav-' . uniqid();
             </div>
             
             <?php if ($showCta === 'yes'): ?>
-            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="rr-nav-cta">
+            <a role="button" tabindex="0" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>" class="rr-nav-cta">
                 <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                 <span><?= htmlspecialchars($ctaText) ?></span>
             </a>

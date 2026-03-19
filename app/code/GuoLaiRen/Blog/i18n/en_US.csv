@@ -1,4 +1,4 @@
-﻿分类管理,分类管理
+分类管理,分类管理
 博客管理,"Blog Management"
 新建分类,"Create Category"
 名称和URL别名不能为空,"Name and URL slug cannot be empty"
@@ -90,6 +90,52 @@ URL别名已存在，请更换一个,"URL slug already exists"
 "AI 模型配置检查失败：%{1}","AI 模型配置检查失败：%{1}"
 文章生成失败,文章生成失败
 "AI 返回的标题或正文为空，请检查模型、提示词或关键词是否过短。","AI returned empty title or body; check model, prompt, or keyword length."
+"AI 自动生成博客 · 原理说明（点击展开）","How AI auto-generates blog posts (click to expand)"
+"系统通过定时任务「Blog AI 自动发文」周期性执行（默认约每 5 分钟），按「趋势站点配额」中的站点、画像、每日篇数与默认分类补量生成文章。","The cron job ""Blog AI auto-publish"" runs periodically (default about every 5 minutes) and fills daily quotas from ""Trend site quotas"" (site, profile, posts per day, default category)."
+关键词来源,"Keyword source"
+"若已配置 SerpAPI / 官方 Trends 等数据源，则优先从未使用的「增长词日志」中取词；否则进入「画像关键词兜底模式」，将画像中的关键词按英文逗号、中文逗号、顿号或分号拆成词表，再从未用于发文的词中随机抽取；若均已用过则从整表随机有放回抽取以满足篇数。","If SerpAPI / official Trends is configured, unused growth-keyword log rows are used first; otherwise ""profile keyword fallback"" splits profile keywords by ASCII/Chinese comma, enumeration comma, or semicolon into a list, randomly samples unused terms for new posts, and if all were used, randomly samples with replacement from the full list to meet the daily count."
+去重与复用,"Dedup and reuse"
+"同一站点+画像下，已写入文章的「来源关键词」会记入排重；兜底模式下若关键词均已用过，会随机从画像词池复用以满足每日篇数，此时系统会强制多样化写作指令。","Per site+profile, source keywords already used are skipped; in fallback mode, if all were used, keywords are picked at random from the profile pool to meet the daily quota, with stronger variation instructions."
+生成与入库,"Generation and save"
+"调用文章生成场景适配器，按语言与 SEO 要求输出标题、摘要、HTML 正文等；保存为草稿或正式发布由 Trends 配置决定。URL 别名会带时间后缀避免冲突。","The article-generation scenario adapter produces title, summary, HTML body, etc.; draft vs publish follows Trends settings. URL slugs include a time suffix to avoid collisions."
+多样化策略（近期优化）,"Diversity strategy (recent)"
+"每次生成会随机组合：写作角度说明、文章风格、篇幅档位，并从画像词池中随机抽取若干「相关关键词」融入正文；同一主关键词多次生成时也会尽量区分标题与结构，减少同质化。","Each run randomly combines writing angle, tone, length tier, and several related keywords from the profile pool; repeated runs on the same primary keyword are steered toward different titles and structure."
+"当前列表页角标即为本次手动触发「生成 SEO 文章」时所采用的模式（与自动任务一致）。","The badge on this page shows the mode used when you click ""Generate SEO articles"" (same as the automatic task)."
+"侧重「下载安装与安全注意事项」，面向新用户","Focus: install/download safety tips for new users"
+侧重「玩法规则、技巧与常见误区」,"Focus: rules, tips, and common mistakes"
+侧重「版本更新、活动奖励与限时福利」,"Focus: updates, promos, and limited-time rewards"
+侧重「设备兼容、流畅度与网络环境优化」,"Focus: device compatibility, performance, and network tips"
+侧重「实名认证、合规与资金安全说明」,"Focus: KYC, compliance, and fund safety"
+侧重「与同类应用对比：特色与选择建议」,"Focus: comparison with similar apps and how to choose"
+侧重「FAQ：账号、充值、客服与故障排查」,"Focus: FAQ on account, top-up, support, and troubleshooting"
+侧重「真实场景：从注册到首局体验的完整路径」,"Focus: end-to-end journey from signup to first session"
+"本次写作角度：%{angle}。标题与正文须与同主关键词的其他稿件明显区分，避免套用同质化 SEO 标题；相关关键词请自然融入，勿堆砌。","Writing angle: %{angle}. Title and body must differ clearly from other posts on the same primary keyword; avoid generic SEO templates; weave related keywords naturally without stuffing."
+"管理站点文章、审批草稿与批量维护；右侧可一键 AI 补量。","Manage posts, approve drafts, and bulk actions; use AI on the right to auto-fill."
+"共 %{total} 篇","%{total} posts total"
+"本页 %{count} 条","%{count} on this page"
+"按标题或 URL 别名搜索…","Search by title or URL slug…"
+清除筛选,Clear filters
+这里还没有文章,No posts yet
+"点击「新建博客」撰写第一篇，或使用「生成 SEO 文章」由系统自动补量。","Create your first post or use AI auto-generation to fill content."
+批量操作,Bulk actions
+批量发布草稿,"Bulk publish drafts"
+批量删除,"Bulk delete"
+清除选择,"Clear selection"
+全选本页,"Select all on this page"
+"选择文章 #%{id}","Select post #%{id}"
+已选,Selected
+篇,posts
+确定将选中的,"Approve and publish "
+篇草稿审批并发布吗？," selected drafts?"
+确定删除选中的,"Delete "
+"篇文章？此操作不可恢复。"," selected posts? This cannot be undone."
+请先选择要操作的文章。,Please select at least one post.
+"已批量发布 %{count} 篇文章","Published %{count} post(s) in bulk."
+没有可发布的草稿（可能已发布、不存在或不属于当前站点）。,No drafts could be published (already published missing or wrong site).
+"另有 %{count} 条未发布（已发布、不存在或无权操作）。","%{count} item(s) skipped (already published missing or not allowed)."
+"已批量删除 %{count} 篇文章","Deleted %{count} post(s) in bulk."
+没有可删除的文章（不存在或不属于当前站点）。,No posts could be deleted (missing or wrong site).
+"另有 %{count} 条未删除（不存在或无权操作）。","%{count} item(s) skipped (missing or not allowed)."
 "Blog 趋势同步","Blog Trend Sync"
 每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表,每日拉取各画像关键词趋势，计算日/周环比，将满足阈值的增长词写入记录表
 未配置趋势数据源，已跳过,未配置趋势数据源，已跳过

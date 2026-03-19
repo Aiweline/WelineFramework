@@ -216,6 +216,7 @@ $navBgColor = ss_color($colors, 'nav_bg', 'rgba(11, 15, 25, 0.95)');
         ::-webkit-scrollbar-thumb { background: <?= ss_color($colors, 'accent_primary', '#10b981') ?>; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: <?= ss_color($colors, 'accent_primary_light', '#34d399') ?>; }
     </style>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
 </head>
 <body>
     <header class="ss-region ss-region-header" data-region="header" data-multiple="false">
@@ -269,5 +270,6 @@ $navBgColor = ss_color($colors, 'nav_bg', 'rgba(11, 15, 25, 0.95)');
             header.style.boxShadow = window.pageYOffset > 50 ? '0 4px 20px rgba(0,0,0,0.3)' : 'none';
         });
     </script>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
 </body>
 </html>
