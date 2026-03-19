@@ -93,7 +93,7 @@ class DomainPoolCertificateRequest
             $email = Env::getInstance()->getConfig('ssl.contact_email') ?? '';
             $processLogs[] = __('域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请');
             $this->echoLine($processLogs[\count($processLogs) - 1]);
-            $hint = __('挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需公网 NS 与 DNS 账户一致）。');
+            $hint = __('挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需权威 NS 与所选 DNS 账户一致，dig/nslookup 可查）。');
             $processLogs[] = $hint;
             $this->echoLine($hint);
             w_log_info('[DomainPoolCertificateRequest] ' . $hint, [], 'domain_pool_cert');
