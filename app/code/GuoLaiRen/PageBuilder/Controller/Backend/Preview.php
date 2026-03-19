@@ -8,6 +8,7 @@ use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
+use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\ResponseTerminateException;
@@ -1219,8 +1220,9 @@ JS;
                 continue;
             }
             
-            // 构建组件模板路径（使用 templates/style/ 与其他模板路径保持一致）
-            $componentPath = "GuoLaiRen_PageBuilder::templates/style/{$useTemplateCode}/components/{$componentFile}";
+            // 构建组件模板路径（legal-content 等可回退 _shared）
+            $pathResolver = ObjectManager::getInstance(TemplatePathResolver::class);
+            $componentPath = $pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
             
             // 传递数据到组件
             $this->assign('page', $page);
@@ -1290,7 +1292,13 @@ JS;
         foreach ($jsonConfig['components'] as $code => $config) {
             $map[$code] = $config['file'] ?? ($code . '.phtml');
         }
-        
+        if ($styleCode !== '_shared' && !isset($map['legal-content'])) {
+            $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/components/legal-content.phtml';
+            if (is_file($sharedLegal)) {
+                $map['legal-content'] = 'legal-content.phtml';
+            }
+        }
+
         $cache[$styleCode] = $map;
         return $map;
     }
