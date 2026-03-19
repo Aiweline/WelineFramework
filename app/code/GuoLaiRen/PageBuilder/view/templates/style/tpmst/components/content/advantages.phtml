@@ -98,6 +98,8 @@ $cardGap = $getConfig('style.card_gap', '30');
 // 按钮配置
 $btnText = $getConfig('button.text', 'Download');
 $btnUrl = $getConfig('button.url', '#download');
+$btnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$btnUrl);
+$btnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($btnHref, 'url');
 $btnGradientStart = $getConfig('button.bg_gradient_start', '#ffd700');
 $btnGradientEnd = $getConfig('button.bg_gradient_end', '#ffa500');
 $btnTextColor = $getConfig('button.text_color', '#8b4513');
@@ -227,7 +229,7 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc1) ?></p>
                 <?php endif; ?>
                 <?php if ($showButton): ?>
-                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <a role="button" tabindex="0" class="tpmst-adv-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($btnRef)) ?>" data-glr-ref="<?= htmlspecialchars($btnRef) ?>"><?= htmlspecialchars($btnText) ?></a>
                 <?php endif; ?>
             </div>
             <div class="tpmst-adv-card">
@@ -237,7 +239,7 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc2) ?></p>
                 <?php endif; ?>
                 <?php if ($showButton): ?>
-                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <a role="button" tabindex="0" class="tpmst-adv-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($btnRef)) ?>" data-glr-ref="<?= htmlspecialchars($btnRef) ?>"><?= htmlspecialchars($btnText) ?></a>
                 <?php endif; ?>
             </div>
             <div class="tpmst-adv-card">
@@ -247,7 +249,7 @@ $desc3 = $getConfig('texts.advantage_3_desc', 'A dazzling array of themed slots 
                 <p class="tpmst-adv-card-desc"><?= htmlspecialchars($desc3) ?></p>
                 <?php endif; ?>
                 <?php if ($showButton): ?>
-                <a href="<?= htmlspecialchars($btnUrl) ?>" class="tpmst-adv-btn"><?= htmlspecialchars($btnText) ?></a>
+                <a role="button" tabindex="0" class="tpmst-adv-btn" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($btnRef)) ?>" data-glr-ref="<?= htmlspecialchars($btnRef) ?>"><?= htmlspecialchars($btnText) ?></a>
                 <?php endif; ?>
             </div>
         </div>

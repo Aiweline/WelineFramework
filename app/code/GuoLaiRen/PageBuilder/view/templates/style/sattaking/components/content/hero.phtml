@@ -104,6 +104,11 @@ $paddingBottom = $config['style.padding_bottom'] ?? '80';
 $titleSize = $config['style.title_size'] ?? '3.5';
 $descSize = $config['style.desc_size'] ?? '1.25';
 
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'sk-hero-' . uniqid();
 ?>
 
@@ -406,18 +411,6 @@ $instanceId = 'sk-hero-' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var primaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var secondaryUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="primary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = primaryUrl; });
-        });
-        document.querySelectorAll('#<?= $instanceId ?> [data-download-trigger="secondary"]').forEach(function(el){
-            el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = secondaryUrl; });
-        });
-    })();
-    </script>
     <div class="sk-hero-container">
         <!-- 主区域：左侧内容 + 右侧图片 -->
         <div class="sk-hero-main">
@@ -436,7 +429,7 @@ $instanceId = 'sk-hero-' . uniqid();
                 <p class="sk-hero-description"><?= htmlspecialchars($description) ?></p>
                 
                 <div class="sk-hero-cta">
-                    <a href="javascript:void(0)" role="button" class="sk-hero-btn-primary" data-download-trigger="primary">
+                    <a role="button" tabindex="0" class="sk-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                         <?php if ($primaryBtnIcon === 'download'): ?>
                         <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
                         <?php elseif ($primaryBtnIcon === 'android'): ?>
@@ -447,7 +440,7 @@ $instanceId = 'sk-hero-' . uniqid();
                         <?= htmlspecialchars($primaryBtnText) ?>
                     </a>
                     
-                    <a href="javascript:void(0)" role="button" class="sk-hero-btn-secondary" data-download-trigger="secondary">
+                    <a role="button" tabindex="0" class="sk-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                         <?= htmlspecialchars($secondaryBtnText) ?>
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M5 12h14M12 5l7 7-7 7"/>

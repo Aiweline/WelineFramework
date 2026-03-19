@@ -60,6 +60,12 @@ foreach (preg_split('/[\r\n]+/', $statsRaw) as $line) {
 
 $paddingTop = $config['style.padding_top'] ?? '120';
 $paddingBottom = $config['style.padding_bottom'] ?? '80';
+
+$primaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$primaryBtnUrl);
+$secondaryHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$secondaryBtnUrl);
+$primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($primaryHref, 'primary');
+$secondaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($secondaryHref, 'secondary');
+
 $instanceId = 'fp-hero-' . uniqid();
 ?>
 
@@ -121,11 +127,11 @@ $instanceId = 'fp-hero-' . uniqid();
             <p class="fp-hero-desc"><?= htmlspecialchars($description) ?></p>
             
             <div class="fp-hero-cta">
-                <a href="<?= htmlspecialchars($primaryBtnUrl) ?>" class="fp-hero-btn-primary">
+                <a role="button" tabindex="0" class="fp-hero-btn-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($primaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($primaryRef) ?>">
                     <?= htmlspecialchars($primaryBtnText) ?>
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </a>
-                <a href="<?= htmlspecialchars($secondaryBtnUrl) ?>" class="fp-hero-btn-secondary">
+                <a role="button" tabindex="0" class="fp-hero-btn-secondary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($secondaryRef)) ?>" data-glr-ref="<?= htmlspecialchars($secondaryRef) ?>">
                     <?= htmlspecialchars($secondaryBtnText) ?>
                 </a>
             </div>

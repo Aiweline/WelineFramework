@@ -96,8 +96,24 @@ class PixelStatisticsService
     }
     
     /**
+     * 按 IP 过滤的 UV（独立访客数）与 PV（页面浏览量）
+     * UV = 时间范围内去重 IP 数；PV = 同一范围内像素记录条数（即 UV 访问产生的路径浏览次数）
+     *
+     * @param int $websiteId 站点ID
+     * @param string|null $startDate 开始时间 Y-m-d H:i:s
+     * @param string|null $endDate 结束时间 Y-m-d H:i:s
+     * @return array{uv: int, pv: int}
+     */
+    public static function getUvPvByDateRange(int $websiteId, ?string $startDate = null, ?string $endDate = null): array
+    {
+        $uv = Pixel::getUvCountByDateRange($websiteId, $startDate, $endDate);
+        $pv = Pixel::getPvCountByDateRange($websiteId, $startDate, $endDate);
+        return ['uv' => $uv, 'pv' => $pv];
+    }
+    
+    /**
      * 获取事件统计（带缓存）
-     * 
+     *
      * @param int $websiteId 站点ID
      * @param string|null $event 事件名，null表示所有事件
      * @param string|null $startDate 开始日期
