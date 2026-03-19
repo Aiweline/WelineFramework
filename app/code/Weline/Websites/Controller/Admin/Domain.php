@@ -1570,13 +1570,19 @@ class Domain extends BackendController
                 'priority' => $priority,
             ];
 
-            $result = $adapter->addDnsRecord($domain->getDomain(), $record, $account->getCredentials());
+            $creds = $this->resolveService->mergeDnsAdapterCredentials($domain, $account, $account->getCredentials());
+            $result = $adapter->addDnsRecord($domain->getDomain(), $record, $creds);
 
             if (!$result['success']) {
                 return $this->fetchJson([
                     'code' => 400,
                     'msg' => $result['message'] ?? __('添加 DNS 记录失败'),
                 ]);
+            }
+
+            $z = \trim((string) ($result['zone_id'] ?? ''));
+            if ($z !== '' && \strtolower((string) $adapter->getRegistrarCode()) === 'cloudflare') {
+                $this->resolveService->persistCloudflareDnsZoneExternalId($domain, $z);
             }
 
             // 同步到本地
@@ -1645,8 +1651,9 @@ class Domain extends BackendController
 
             $account = $dnsResult['account'];
             $adapter = $dnsResult['adapter'];
+            $creds = $this->resolveService->mergeDnsAdapterCredentials($domain, $account, $account->getCredentials());
 
-            $result = $adapter->deleteDnsRecord($domain->getDomain(), $remoteRecordId, $account->getCredentials());
+            $result = $adapter->deleteDnsRecord($domain->getDomain(), $remoteRecordId, $creds);
 
             // 无论远程是否成功，都删除本地记录
             $dnsRecord->delete()->fetch();
@@ -1749,6 +1756,7 @@ class Domain extends BackendController
 
                 $account = $dnsResult['account'];
                 $adapter = $dnsResult['adapter'];
+                $creds = $this->resolveService->mergeDnsAdapterCredentials($domain, $account, $account->getCredentials());
 
                 $domainAddFailed = false;
 
@@ -1763,10 +1771,14 @@ class Domain extends BackendController
                     ];
 
                     try {
-                        $result = $adapter->addDnsRecord($domain->getDomain(), $record, $account->getCredentials());
+                        $result = $adapter->addDnsRecord($domain->getDomain(), $record, $creds);
                         if ($result['success']) {
                             $successCount++;
                             $addedRecords[] = $domain->getDomain() . ' [' . $host . ']';
+                            $z = \trim((string) ($result['zone_id'] ?? ''));
+                            if ($z !== '' && \strtolower((string) $adapter->getRegistrarCode()) === 'cloudflare') {
+                                $this->resolveService->persistCloudflareDnsZoneExternalId($domain, $z);
+                            }
                         } else {
                             $failedCount++;
                             $domainAddFailed = true;
