@@ -1,4 +1,4 @@
-﻿阿里云域名,阿里云域名
+阿里云域名,阿里云域名
 "阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。"
 区域,区域
 华东1（杭州）,华东1（杭州）
@@ -883,6 +883,10 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 同步/校验记录失败：%{1},同步/校验记录失败：%{1}
 "已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。","已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。"
 "[DnsSwitchService] %{1} Step6: 域名标记已更新","[DnsSwitchService] %{1} Step6: 域名标记已更新"
+"[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}","[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}"
+"注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。","注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。"
+"DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。","DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。"
+"已是该账户且切换已完成，跳过","已是该账户且切换已完成，跳过"
 "步骤 5/5：校验 CDN/边缘配置…","步骤 5/5：校验 CDN/边缘配置…"
 "当前 DNS 供应商未提供 CDN 接口校验，已跳过","当前 DNS 供应商未提供 CDN 接口校验，已跳过"
 "第 %{1} 次校验 CDN 配置…","第 %{1} 次校验 CDN 配置…"
