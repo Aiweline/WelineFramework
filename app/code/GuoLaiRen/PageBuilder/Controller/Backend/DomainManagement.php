@@ -1857,9 +1857,13 @@ class DomainManagement extends BaseController
                 }
                 if ($event === 'wait_ns_verified') {
                     $by = (string) ($data['by'] ?? '');
-                    $sse->sendEvent('progress', ['message' => $by === 'registrar'
-                        ? __('注册商处已是目标 NS；公网 dig 仍可能为旧 NS，属正常。将继续把记录写入 Cloudflare（与「外网已切过去」不是同一回事）。')
-                        : __('公网检测：NS 已解析到目标，可与注册商侧一致。将继续搬迁记录。'), 'step' => 2]);
+                    $detail = \trim((string) ($data['detail'] ?? ''));
+                    if ($by === 'registrar') {
+                        $sse->sendEvent('progress', ['message' => __('注册商处已是目标 NS；公网 dig 仍可能为旧 NS，属正常。将继续把记录写入 Cloudflare（与「外网已切过去」不是同一回事）。'), 'step' => 2]);
+                    } else {
+                        $line = $detail !== '' ? $detail : __('公网检测：NS 已解析到目标，可与注册商侧一致。将继续搬迁记录。');
+                        $sse->sendEvent('progress', ['message' => $line, 'step' => 2]);
+                    }
                     return;
                 }
                 if ($event === 'push_records') {
@@ -1888,6 +1892,30 @@ class DomainManagement extends BaseController
                     ]);
                     return;
                 }
+                if ($event === 'dns_cutover_waiting_public_ns') {
+                    $sse->sendEvent('info', [
+                        'message' => \trim((string) ($data['detail'] ?? '') . ' ' . (string) ($data['message'] ?? '')),
+                        'type' => 'warn',
+                    ]);
+                    return;
+                }
+                if ($event === 'cutover_authority_ok_via_doh') {
+                    $sse->sendEvent('info', ['message' => (string) ($data['message'] ?? '')]);
+                    return;
+                }
+                if ($event === 'domain_switch_persisted') {
+                    $persistMsg = (string) ($data['message'] ?? '');
+                    $flagsLine = __('步骤 4/5（落库标记）：dns_switch_pending=%{1}，dns_cutover_complete=%{2}，dns_migration_pending=%{3}，dns_account_id=%{4}，dns_provider=%{5}，defer_public_ns=%{6}', [
+                        (string) ($data['dns_switch_pending'] ?? ''),
+                        (string) ($data['dns_cutover_complete'] ?? ''),
+                        (string) ($data['dns_migration_pending'] ?? ''),
+                        (string) ($data['dns_account_id'] ?? ''),
+                        (string) ($data['dns_provider'] ?? ''),
+                        !empty($data['defer_cutover_public_ns']) ? __('是') : __('否'),
+                    ]);
+                    $sse->sendEvent('progress', ['message' => $flagsLine . ($persistMsg !== '' ? "\n" . $persistMsg : ''), 'step' => 4]);
+                    return;
+                }
                 if ($event === 'verify_cdn') {
                     $sse->sendEvent('progress', ['message' => __('步骤 5/5：校验 CDN 响应…'), 'step' => 5]);
                     return;
@@ -1911,7 +1939,15 @@ class DomainManagement extends BaseController
                             '【说明】公网 NS 可能仍显示旧值（传播中，可达数小时）。注册商与 Cloudflare 控制台已就绪；请 dig/nslookup 待 NS 为 *.ns.cloudflare.com 后再验站点访问与证书。'
                         );
                     }
-                    $sse->sendEvent('success', ['message' => $done]);
+                    $dcf = (int) ($data['dns_cutover_complete'] ?? -1);
+                    $dsp = (int) ($data['dns_switch_pending'] ?? -1);
+                    $done .= ' ' . __('【最终状态】dns_cutover_complete=%{1}，dns_switch_pending=%{2}', [(string) $dcf, (string) $dsp]);
+                    $sse->sendEvent('success', [
+                        'message' => $done,
+                        'dns_cutover_complete' => $dcf,
+                        'dns_switch_pending' => $dsp,
+                        'defer_cutover_public_ns' => (bool) ($data['defer_cutover_public_ns'] ?? false),
+                    ]);
                 }
             };
 

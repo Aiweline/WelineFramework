@@ -682,6 +682,7 @@ class DomainResolveService
 
     /**
      * 校验向互联网宣告的权威 NS（与 dig/nslookup NS 一致）是否由指定 DNS 供应商托管。
+     * 注意：注册局登记的委派 NS **只应在注册商处修改**；本方法仅检测公网可见结果，不替代注册商改委派。
      *
      * Gname 等注册商可能在控制台写解析，但权威 NS 仍为 share-dns 高防等注册商侧 NS 时，
      * 写入 Cloudflare 的 TXT 不会出现在当前权威区，ACME DNS-01 仍失败。
