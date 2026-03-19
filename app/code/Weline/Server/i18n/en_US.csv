@@ -986,6 +986,7 @@ HTTPS,HTTPS
 挂起超过此秒数释放，0=不自动释放,挂起超过此秒数释放，0=不自动释放
 "最大挂起 Fiber 数，0=不限制","最大挂起 Fiber 数，0=不限制"
 "通知各 Worker 立即释放闲置 Fiber","通知各 Worker 立即释放闲置 Fiber"
+"广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）","广播 PageBuilder 单页失效到各 Worker（handle 静态缓存 + ObjectManager）"
 域名不能为空,域名不能为空
 "PFX 文件内容无效（Base64 解码失败）","PFX 文件内容无效（Base64 解码失败）"
 "PFX/P12 解析失败，请确认文件与密码正确","PFX/P12 解析失败，请确认文件与密码正确"

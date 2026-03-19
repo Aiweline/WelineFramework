@@ -10,7 +10,8 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\WebsiteDomain;
 
 /**
- * 将站点域名（WebsiteDomain）健康检查结果同步到域名池与根域（Domain / DomainPool），与 DomainConnectivityCheck 字段对齐。
+ * 将站点域名（WebsiteDomain）健康检查结果同步到域名池与根域（Domain / DomainPool）。
+ * 连通性字段来自 HTTP 探测；HTTPS 证书状态统一由 {@see WebsiteSslCertificateStatusService} 解析证书表。
  *
  * @see HealthCheckService::checkAllDomains
  */
@@ -59,8 +60,8 @@ final class HealthCheckInfrastructureSyncService
                     $pool->setConnectivityStatus($connStatus);
                     $pool->setConnectivityCheckedAt($checkedAt);
                     $pool->setConnectivityDetail($detail);
-                    $pool->setHttpsStatus($this->mapWebsiteDomainToHttpsStatus($wd));
-                    $this->syncPoolCertIdFromWebsiteDomain($pool, $wd);
+                    $pool->setHttpsStatus($this->resolvePoolHttpsStatusFromSslManagement($wd));
+                    $this->syncPoolCertIdFromSslManagement($pool, $wd);
                     $pool->calculateSiteReady();
                     $pool->save();
                     $didWrite = true;
@@ -73,7 +74,7 @@ final class HealthCheckInfrastructureSyncService
                 $rootDomain->setConnectivityCheckedAt($checkedAt);
                 $rootDomain->setConnectivityDetail($detail);
                 if ($host === $rootName) {
-                    $rootDomain->setHttpsStatus($this->mapWebsiteDomainToDomainHttpsStatus($wd));
+                    $rootDomain->setHttpsStatus($this->resolveRootHttpsStatusFromSslManagement($wd));
                 }
                 $rootDomain->save();
                 $didWrite = true;
@@ -112,34 +113,48 @@ final class HealthCheckInfrastructureSyncService
         return $line;
     }
 
-    private function mapWebsiteDomainToHttpsStatus(WebsiteDomain $wd): string
+    private function sslStatusService(): WebsiteSslCertificateStatusService
     {
-        if (!$wd->isHttpsEnabled()) {
-            return DomainPool::HTTPS_STATUS_NONE;
-        }
-
-        return $wd->hasValidCertificate() ? DomainPool::HTTPS_STATUS_VALID : DomainPool::HTTPS_STATUS_ERROR;
+        return ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
     }
 
-    private function mapWebsiteDomainToDomainHttpsStatus(WebsiteDomain $wd): string
+    private function resolvePoolHttpsStatusFromSslManagement(WebsiteDomain $wd): string
     {
-        if (!$wd->isHttpsEnabled()) {
-            return Domain::HTTPS_STATUS_NONE;
-        }
+        $cid = $wd->getCertId();
+        $pref = ($cid !== null && $cid > 0) ? $cid : null;
+        $cert = $this->sslStatusService()->resolveManagedCertificate($pref, $wd->getDomain());
 
-        return $wd->hasValidCertificate() ? Domain::HTTPS_STATUS_VALID : Domain::HTTPS_STATUS_ERROR;
+        return $this->sslStatusService()->mapToPoolHttpsStatus($cert);
     }
 
-    private function syncPoolCertIdFromWebsiteDomain(DomainPool $pool, WebsiteDomain $wd): void
+    private function resolveRootHttpsStatusFromSslManagement(WebsiteDomain $wd): string
     {
-        if ($wd->isHttpsEnabled()) {
-            $cid = $wd->getCertId();
-            if ($cid !== null && $cid > 0) {
-                $pool->setCertId($cid);
-            }
-        } else {
-            $pool->setCertId(null);
+        $cid = $wd->getCertId();
+        $pref = ($cid !== null && $cid > 0) ? $cid : null;
+        $cert = $this->sslStatusService()->resolveManagedCertificate($pref, $wd->getDomain());
+
+        return $this->sslStatusService()->mapToDomainHttpsStatus($cert);
+    }
+
+    /**
+     * 将池子 cert_id 与证书管理表对齐（存在覆盖该主机的证书记录则写入其 cert_id）。
+     */
+    private function syncPoolCertIdFromSslManagement(DomainPool $pool, WebsiteDomain $wd): void
+    {
+        $cid = $wd->getCertId();
+        $pref = ($cid !== null && $cid > 0) ? $cid : null;
+        $cert = $this->sslStatusService()->resolveManagedCertificate($pref, $wd->getDomain());
+        if ($cert !== null && $cert->getCertId() > 0) {
+            $pool->setCertId($cert->getCertId());
+
+            return;
         }
+        if ($cid !== null && $cid > 0) {
+            $pool->setCertId($cid);
+
+            return;
+        }
+        $pool->setCertId(null);
     }
 
     private function resolveRootDomain(WebsiteDomain $wd, ?DomainPool $pool): ?Domain
