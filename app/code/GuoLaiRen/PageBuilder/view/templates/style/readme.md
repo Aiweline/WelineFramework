@@ -12,6 +12,7 @@
 
 - `style/_shared/partials/head-common.phtml` — 统一注入统计与 Visitor `<pixel>`（内部引用 `templates/base/tracking.phtml`）。
 - `style/_shared/partials/footer-common.phtml` — 统一下载链接委托 + 条件 `WelinePixel.send`（预览不发）。
+- `style/_shared/default-legal.phtml` — 法律页默认占位 HTML；`include` 前可设 `$legalType`、`$legalTitle`，内部委托 `DefaultLegalPlaceholder::toHtml()`（与 `Page.php` 批量建站逻辑一致，避免缺失文件 Warning）。
 
 ### 1.2 接入方式
 
