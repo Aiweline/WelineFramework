@@ -128,6 +128,13 @@ class Domain extends Model
     #[Col('smallint', 1, nullable: true, default: 0, comment: '是否可建站')]
     public const schema_fields_SITE_READY = 'site_ready';
 
+    #[Col('varchar', 20, nullable: true, default: 'pending', comment: '连通性状态：pending/ok/error')]
+    public const schema_fields_CONNECTIVITY_STATUS = 'connectivity_status';
+    #[Col('datetime', nullable: true, comment: '连通性检测时间')]
+    public const schema_fields_CONNECTIVITY_CHECKED_AT = 'connectivity_checked_at';
+    #[Col('text', nullable: true, comment: '连通性详情（hover 展示）')]
+    public const schema_fields_CONNECTIVITY_DETAIL = 'connectivity_detail';
+
     // 状态常量
     public const STATUS_ACTIVE = 'active';
     public const STATUS_PENDING = 'pending';
@@ -145,6 +152,11 @@ class Domain extends Model
     public const HTTPS_STATUS_VALID = 'valid';
     public const HTTPS_STATUS_EXPIRED = 'expired';
     public const HTTPS_STATUS_ERROR = 'error';
+
+    // 连通性状态常量
+    public const CONNECTIVITY_PENDING = 'pending';
+    public const CONNECTIVITY_OK = 'ok';
+    public const CONNECTIVITY_ERROR = 'error';
 
     /**
      * 保存前自动更新时间戳和建站状态
@@ -486,6 +498,40 @@ class Domain extends Model
     public function setSiteReady(bool $ready): self
     {
         $this->setData(self::schema_fields_SITE_READY, $ready ? 1 : 0);
+        return $this;
+    }
+
+    public function getConnectivityStatus(): string
+    {
+        return (string) ($this->getData(self::schema_fields_CONNECTIVITY_STATUS) ?: self::CONNECTIVITY_PENDING);
+    }
+
+    public function setConnectivityStatus(string $status): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_STATUS, $status);
+        return $this;
+    }
+
+    public function getConnectivityCheckedAt(): ?string
+    {
+        $v = $this->getData(self::schema_fields_CONNECTIVITY_CHECKED_AT);
+        return $v === '' || $v === null ? null : (string) $v;
+    }
+
+    public function setConnectivityCheckedAt(?string $datetime): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_CHECKED_AT, $datetime);
+        return $this;
+    }
+
+    public function getConnectivityDetail(): string
+    {
+        return (string) $this->getData(self::schema_fields_CONNECTIVITY_DETAIL);
+    }
+
+    public function setConnectivityDetail(string $detail): self
+    {
+        $this->setData(self::schema_fields_CONNECTIVITY_DETAIL, $detail);
         return $this;
     }
 

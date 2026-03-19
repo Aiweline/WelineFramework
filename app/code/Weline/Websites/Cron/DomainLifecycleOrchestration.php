@@ -11,13 +11,13 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: 'Websites 域名生命周期订单轮询。domain 过滤仅处理该根域订单。',
+    description: '轮询域名购买/生命周期订单，推进「待 DNS → 待解析 → 待证书 → 完成」等状态。--domain= 仅处理该根域订单。',
     examples: [
         'php bin/w cron:test --task=domain_lifecycle_orchestration --domain=example.com -v',
     ],
     manual_help: [
-        '控制台 --domain= 仅处理该根域生命周期订单。',
-        '后台「后缀」未解析时与定时全量一致。',
+        '逻辑：读取待处理的域名生命周期订单，按状态推进（如同步根域、创建子域入池、修正脏数据、标记完成）。',
+        '不直接做 DNS 解析或证书申请，只更新订单与根域/池状态，实际解析与证书由「DNS 解析与子域入池」「子域 HTTPS 证书维护」执行。',
     ],
 )]
 class DomainLifecycleOrchestration implements CronTaskInterface
@@ -26,7 +26,7 @@ class DomainLifecycleOrchestration implements CronTaskInterface
 
     public function name(): string
     {
-        return __('域名生命周期编排');
+        return __('域名订单生命周期处理');
     }
 
     public function execute_name(): string
@@ -36,7 +36,7 @@ class DomainLifecycleOrchestration implements CronTaskInterface
 
     public function tip(): string
     {
-        return __('轮询域名生命周期订单，推进 DNS、解析、验证与 HTTPS 流程');
+        return __('轮询购买/生命周期订单，推进 DNS、解析、证书等状态');
     }
 
     public function cron_time(): string
