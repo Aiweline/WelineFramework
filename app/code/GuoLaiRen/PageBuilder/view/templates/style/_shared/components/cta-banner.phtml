@@ -65,6 +65,10 @@ $buttonColor = $config['style.button_color'] ?? '#3498db';
 $padding = $config['style.padding'] ?? 'medium';
 $textAlign = $config['style.text_align'] ?? 'center';
 
+$buttonHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl);
+$buttonOpen = (($buttonTarget ?? '_self') === '_blank') ? '_blank' : '_self';
+$buttonRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($buttonHref, 'url', $buttonOpen);
+
 // 计算背景样式
 $bgStyle = match($bgType) {
     'gradient' => "background: linear-gradient(135deg, {$bgGradientStart}, {$bgGradientEnd});",
@@ -146,22 +150,6 @@ $componentId = 'cta_' . uniqid();
             }
         }
     </style>
-    <script>
-    (function(){
-        var buttonUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl), JSON_UNESCAPED_SLASHES) ?>;
-        var target = <?= json_encode($buttonTarget ?? '_self', JSON_UNESCAPED_SLASHES) ?>;
-        document.querySelectorAll('#<?= $componentId ?> .shared-cta-download-trigger').forEach(function(el){
-            el.addEventListener('click', function(e){
-                e.preventDefault();
-                if (target === '_blank') {
-                    window.open(buttonUrl, '_blank', 'noopener,noreferrer');
-                } else {
-                    window.location.href = buttonUrl;
-                }
-            });
-        });
-    })();
-    </script>
     <div class="container">
         <?php if ($subtitle): ?>
         <p class="cta-subtitle"><?= htmlspecialchars($subtitle) ?></p>
@@ -174,10 +162,11 @@ $componentId = 'cta_' . uniqid();
         <?php endif; ?>
         
         <?php if ($buttonText): ?>
-        <a href="javascript:void(0)" 
-           role="button"
-           class="cta-button shared-cta-download-trigger" 
-           target="<?= htmlspecialchars($buttonTarget) ?>">
+        <a role="button"
+           tabindex="0"
+           class="cta-button"
+           href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($buttonRef)) ?>"
+           data-glr-ref="<?= htmlspecialchars($buttonRef) ?>">
             <?= htmlspecialchars($buttonText) ?>
         </a>
         <?php endif; ?>

@@ -366,6 +366,8 @@ $downloadBtnSize = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig(
 $downloadBtnPadding = tpmst_genResponsiveCSS(tpmst_parseResponsive(tpmst_getConfig($styleSettings, 'header.download_button.padding', '12/16') . 'px'));
 $downloadBtnRadius = tpmst_getConfig($styleSettings, 'header.download_button.border_radius', '8');
 $downloadBtnUrl = (string)(tpmst_getConfig($styleSettings, 'header.download_button.url', '/#download') ?? '/#download');
+$downloadBtnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
+$downloadBtnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadBtnHref, 'url');
 
 // SEO信息
 $metaTitle = ($page ? ($page->getData('meta_title') ?: $page->getData('title')) : null) ?: 'Teen Patti Master';
@@ -437,8 +439,8 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
     </script>
     <?php endif; ?>
     
-    <!-- 统计代码 -->
-    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+    <!-- 统计与像素：公用 head-common（与 layout 中引入一致） -->
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
     
     <!-- 本地CSS资源 -->
     <?php 
@@ -637,6 +639,13 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             margin: 0;
         }
         
+        .slider-inner .download-btn > a {
+            display: inline-block;
+            line-height: 0;
+            text-decoration: none;
+            color: inherit;
+        }
+        
         .slider-inner .download-btn img {
             animation: zoomBtn 2s infinite;
         }
@@ -705,68 +714,6 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             }
         }
     </style>
-    
-    <!-- 像素统计配置 -->
-    <?php
-    // 读取像素配置（默认启用）
-    // 确保 $pixelEnabled 始终有值，避免未定义变量错误
-    $pixelEnabled = tpmst_getConfig($styleSettings, 'pixel.enabled', 'yes');
-    $pixelEnabled = (string)($pixelEnabled ?? 'yes'); // 确保始终是字符串类型
-    $pixelName = tpmst_getConfig($styleSettings, 'pixel.name', '');
-    
-    // 如果像素名称为空，使用页面的 handle
-    if (empty($pixelName) && $page) {
-        $pixelName = (string)($page->getData('handle') ?? '');
-    }
-    // 确保 $pixelName 始终是字符串，不会是 null
-    $pixelName = (string)($pixelName ?? '');
-    
-    // 直接从页面对象获取 website_id（页面已有此字段，无需配置）
-    $websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
-    
-    // 检测是否为预览模式
-    $pathInfo = $this->getRequest()->getPathInfo();
-    $isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
-    
-    // 如果页面绑定了网站且有像素名称，输出像素标签（通过 enabled 属性控制是否统计）
-    if ($websiteId > 0 && !empty($pixelName) && !$isPreviewMode):
-        // 设置 website_id Cookie，供像素代码读取
-        \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_ID', (string)$websiteId, 3600 * 24 * 365);
-        
-        // 获取网站信息（用于像素统计）
-        $websiteUrl = '';
-        $websiteCode = '';
-        try {
-            if (class_exists('\Weline\Websites\Model\Website')) {
-                $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
-                $website = clone $websiteModel;
-                $website->clear()->load($websiteId);
-                if ($website->getId()) {
-                    $websiteUrl = $website->getData('url') ?? '';
-                    $websiteCode = $website->getData('code') ?? '';
-                }
-            }
-        } catch (\Exception $e) {
-            // 如果获取网站信息失败，不影响像素功能
-        }
-        
-        // 设置 website_url Cookie
-        if (!empty($websiteUrl)) {
-            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_URL', $websiteUrl, 3600 * 24 * 365);
-        }
-        
-        // 设置 website_code Cookie，用于区分不同站点
-        if (!empty($websiteCode)) {
-            \Weline\Framework\Http\Cookie::set('WELINE_WEBSITE_CODE', $websiteCode, 3600 * 24 * 365);
-        }
-        
-        // 使用变量传递方式，避免在标签属性中使用 PHP 标签
-        $this->assign('pixel_name', htmlspecialchars((string)($pixelName ?? '')));
-        $this->assign('pixel_enabled', htmlspecialchars((string)($pixelEnabled ?? 'yes')));
-    ?>
-        <!-- Weline Visitor Pixel - 通过 enabled 属性控制是否统计，遵循模板配置中的 pixel.enabled 设置 -->
-        <pixel name="{{pixel_name}}" enabled="{{pixel_enabled}}" />
-    <?php endif; ?>
 </head>
 <body>
     
@@ -792,7 +739,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
             </ul>
             
             <?php if ($downloadBtnDisplay === 'yes'): ?>
-            <a href="javascript:void(0)" role="button" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?> tpmst-download-trigger"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
+            <a role="button" tabindex="0" class="tpmst-nav-download-btn <?= htmlspecialchars(trim((string)($downloadBtnExtraClasses ?? ''))) ?>" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"><?= htmlspecialchars((string)($downloadBtnText ?? '')) ?></a>
             <?php endif; ?>
         </div>
     </nav>
@@ -825,6 +772,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
                         </div>
                         <?php if ($finalDownloadBtn): ?>
                         <p class="download-btn">
+                            <a role="button" tabindex="0" class="tpmst-banner-download-link" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>">
                             <img class="download-icon animation-scale lazy-loading" 
                                  src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
                                  data-src="<?= htmlspecialchars($finalDownloadBtn) ?>" 
@@ -833,6 +781,7 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
                                  width="210" 
                                  height="54" 
                                  alt="<?= htmlspecialchars($bannerDownloadBtnAlt) ?>">
+                            </a>
                         </p>
                         <?php endif; ?>
                     </div>
@@ -874,16 +823,5 @@ $metaKeywords = ($page ? $page->getData('meta_keywords') : null) ?: 'teen patti,
     
     // 初始检查
     handleScroll();
-})();
-
-(function(){
-    var tpmstNavDownloadUrl = <?= json_encode(\GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl), JSON_UNESCAPED_SLASHES) ?>;
-    document.querySelectorAll('.tpmst-nav-download-btn.tpmst-download-trigger').forEach(function(el){
-        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = tpmstNavDownloadUrl; });
-    });
-    document.querySelectorAll('.slider-inner p.download-btn').forEach(function(el){
-        el.style.cursor = 'pointer';
-        el.addEventListener('click', function(e){ e.preventDefault(); window.location.href = tpmstNavDownloadUrl; });
-    });
 })();
 </script>

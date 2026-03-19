@@ -3500,6 +3500,18 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Cache clear broadcast sent'));
                 break;
 
+            case ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE:
+                $this->broadcastPageBuilderPageInvalidate(
+                    (int)($msg['website_id'] ?? 0),
+                    (string)($msg['handle'] ?? ''),
+                    (bool)($msg['is_home_page'] ?? false)
+                );
+                $this->controlServer?->sendTo(
+                    $clientId,
+                    ControlMessage::commandResult(true, [], 'PageBuilder page invalidate broadcast sent')
+                );
+                break;
+
             case ControlMessage::ACTION_SSL_CERT_RELOAD:
                 $this->broadcastSslCertReload();
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'SSL cert reload broadcast sent'));
@@ -4639,6 +4651,38 @@ class ServiceOrchestrator
             $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::cacheClear());
         }
         WlsLogger::info_('[IPC] CACHE_CLEAR -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)'));
+    }
+
+    /**
+     * 广播 PageBuilder 单页失效：各 Worker 清理 Router handle 静态缓存并重置 ObjectManager（无 opcache 重置）
+     */
+    private function broadcastPageBuilderPageInvalidate(int $websiteId, string $handle, bool $isHomePage): void
+    {
+        if ($this->controlServer === null) {
+            return;
+        }
+        $configuredRoles = $this->context?->getConfig('wls.orchestrator.cache_clear_roles', ['worker']);
+        $targetRoles = \is_array($configuredRoles) ? $configuredRoles : ['worker'];
+        $targetRoles = \array_values(\array_filter(\array_map('strval', $targetRoles)));
+        if (empty($targetRoles)) {
+            $targetRoles = ['worker'];
+        }
+
+        $msg = ControlMessage::pageBuilderPageInvalidate($websiteId, $handle, $isHomePage);
+        $targets = [];
+        foreach ($this->registry->getAllInstances() as $instance) {
+            if ($instance->ipcClientId === null) {
+                continue;
+            }
+            if (!\in_array($instance->role, $targetRoles, true)) {
+                continue;
+            }
+            $targets[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
+            $this->controlServer->sendTo($instance->ipcClientId, $msg);
+        }
+        WlsLogger::info_(
+            '[IPC] PAGEBUILDER_PAGE_INVALIDATE -> ' . (!empty($targets) ? \implode(', ', $targets) : '(无匹配目标)')
+        );
     }
 
     /**
