@@ -170,36 +170,45 @@ class SslCertificate extends BaseController
     }
     
     /**
-     * 申请证书
+     * 申请证书（走统一入口 w_query，与定时任务、域名池申请逻辑一致）
      */
     public function postRequest(): string
     {
-        $domain = $this->request->getPost('domain');
-        $email = $this->request->getPost('email');
-        $provider = $this->request->getPost('provider', SslCertificateService::PROVIDER_LETS_ENCRYPT);
+        $domain = \trim((string) $this->request->getPost('domain', ''));
+        $email = \trim((string) $this->request->getPost('email', ''));
+        $provider = \trim((string) $this->request->getPost('provider', SslCertificateService::PROVIDER_LETS_ENCRYPT)) ?: SslCertificateService::PROVIDER_LETS_ENCRYPT;
         $websiteId = (int) $this->request->getPost('website_id', 0);
-        
-        if (empty($domain)) {
+
+        if ($domain === '') {
             return $this->fetchJson(['success' => false, 'message' => __('请指定域名')]);
         }
-        
-        if (empty($email)) {
+
+        if ($email === '') {
             return $this->fetchJson(['success' => false, 'message' => __('请指定联系邮箱')]);
         }
-        
-        // no-SSL 环境下申请证书前提示：Windows 需先安装 event 扩展才能启动 HTTPS
+
         $readinessWarning = $this->sslService->getHttpsReadinessWarning();
         if ($readinessWarning !== null) {
             return $this->fetchJson(['success' => false, 'message' => $readinessWarning]);
         }
-        
-        $webroot = BP . 'pub';
-        $result = $this->sslService->requestCertificate($domain, $webroot, $email, $websiteId, (string) $provider);
-        
-        if ($result['cert']) {
+
+        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+        $result = w_query('server', 'requestCertificate', [
+            'domain' => $domain,
+            'webroot' => $webroot,
+            'email' => $email,
+            'website_id' => $websiteId,
+            'provider' => $provider,
+            'cert_type' => 'exact',
+            'pool_id' => 0,
+            'domain_id' => 0,
+            'challenge_strategy' => 'auto',
+        ]);
+
+        if (!empty($result['cert']) && \is_object($result['cert']) && \method_exists($result['cert'], 'toSafeArray')) {
             $result['cert'] = $result['cert']->toSafeArray();
         }
-        
+
         return $this->fetchJson($result);
     }
     
@@ -404,23 +413,27 @@ class SslCertificate extends BaseController
             'failed' => [],
         ];
         
-        $webroot = BP . 'pub';
-        
+        $webroot = \defined('PUB') ? PUB : (BP . 'pub');
+
         foreach ($domains as $domain) {
-            $domain = \trim($domain);
-            if (empty($domain)) {
+            $domain = \trim((string) $domain);
+            if ($domain === '') {
                 continue;
             }
-            
-            $result = $this->sslService->requestCertificate(
-                $domain,
-                $webroot,
-                $email ?: 'admin@' . $domain,
-                0,
-                (string) $provider
-            );
-            
-            if ($result['success']) {
+
+            $result = w_query('server', 'requestCertificate', [
+                'domain' => $domain,
+                'webroot' => $webroot,
+                'email' => $email !== '' ? $email : 'admin@' . $domain,
+                'website_id' => 0,
+                'provider' => \trim((string) $provider) ?: SslCertificateService::PROVIDER_LETS_ENCRYPT,
+                'cert_type' => 'exact',
+                'pool_id' => 0,
+                'domain_id' => 0,
+                'challenge_strategy' => 'auto',
+            ]);
+
+            if ($result['success'] ?? false) {
                 $results['success'][] = [
                     'domain' => $domain,
                     'message' => $result['message'] ?? __('证书签发成功'),

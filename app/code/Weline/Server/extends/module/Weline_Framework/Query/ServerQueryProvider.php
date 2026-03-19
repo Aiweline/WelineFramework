@@ -160,7 +160,9 @@ class ServerQueryProvider implements QueryProviderInterface
         }
 
         $webroot = (string) ($params['webroot'] ?? '');
-        if ($webroot === '') {
+        if (!empty($params['use_wls_virtual_http01'])) {
+            $webroot = SslCertificateService::WEBROOT_WLS_VIRTUAL;
+        } elseif ($webroot === '') {
             $webroot = \defined('PUB') ? PUB : (BP . 'pub');
         }
 
