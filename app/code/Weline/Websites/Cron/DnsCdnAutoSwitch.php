@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Websites\Cron;
 
 use Weline\Cron\Attribute\CronTestHelp;
-use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainRegistrarAccount;
@@ -201,17 +200,7 @@ class DnsCdnAutoSwitch
         // ── 委托 DnsSwitchService 执行全流程 ──
         // dns_switch_pending 由 DnsSwitchService 在切换成功时置 0
         // 失败时不触碰标记，下次 cron 继续重试
-        $switchOptions = $this->buildDnsSwitchWaitOptions($targetAccount);
-        $cdnId = (int) $domain->getCdnAccountId();
-        if ($cdnId > 0) {
-            $cdnAcc = ObjectManager::getInstance(DomainRegistrarAccount::class, [], false);
-            $cdnAcc->load($cdnId);
-            if ((int) $cdnAcc->getAccountId() > 0) {
-                $switchOptions['cdn_account'] = $cdnAcc;
-                $switchOptions['verify_cdn'] = true;
-            }
-        }
-        $result = $switchService->executeDnsSwitch($domain, $targetAccount, null, $switchOptions);
+        $result = $switchService->executeDnsSwitchWithStandardOptions($domain, $targetAccount);
         WebsitesCronTestContext::detail('executeDnsSwitch', ['domain' => $domainName, 'result' => $result]);
 
         if ($result['success']) {
@@ -221,30 +210,4 @@ class DnsCdnAutoSwitch
         return $result['message'];
     }
 
-    /**
-     * 按 websites.env dns_switch 为 cron 开启「改 NS 后短等公网/DoH」，避免仅依赖本机解析器误判。
-     *
-     * @return array<string, mixed>
-     */
-    private function buildDnsSwitchWaitOptions(DomainRegistrarAccount $targetAccount): array
-    {
-        $ds = Env::module_env('Weline_Websites', 'dns_switch') ?? [];
-        if (empty($ds['wait_public_ns_enabled'])) {
-            return [];
-        }
-        $codes = $ds['wait_public_ns_provider_codes'] ?? ['cloudflare'];
-        $codes = \is_array($codes) ? $codes : [];
-        $codes = \array_map(static fn ($c) => \strtolower(\trim((string) $c)), $codes);
-        $targetCode = \strtolower(\trim((string) $targetAccount->getRegistrarCode()));
-        if ($targetCode === '' || !\in_array($targetCode, $codes, true)) {
-            return [];
-        }
-
-        return [
-            'wait_for_ns' => true,
-            'wait_max_seconds' => (int) ($ds['wait_public_ns_max_seconds'] ?? 180),
-            'wait_interval_seconds' => (int) ($ds['wait_public_ns_interval_seconds'] ?? 15),
-            'ns_probe_cloudflare_doh' => (bool) ($ds['ns_probe_use_cloudflare_doh'] ?? true),
-        ];
-    }
 }

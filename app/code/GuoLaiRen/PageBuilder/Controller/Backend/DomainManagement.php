@@ -1727,7 +1727,7 @@ class DomainManagement extends BaseController
     /**
      * SSE 流式输出根域名 DNS/CDN 切换过程
      * GET: domain_id, dns_account_id, cdn_account_id (可选), verify_cdn=1 (可选，默认不校验：建站前域名常无 HTTP 响应)
-     * 委托 DnsSwitchService 统一执行，通过进度回调推送 SSE 事件。
+     * 委托 {@see \Weline\Websites\Service\DnsSwitchService::executeDnsSwitch}（options 在 {@see \Weline\Websites\Service\DnsSwitchService::buildStandardSwitchOptions} 上合并更长等待与 records_to_push 等）。
      */
     public function getDnsSwitchStream(): void
     {
@@ -1915,15 +1915,17 @@ class DomainManagement extends BaseController
                 }
             };
 
-            $options = [
+            $baseOpts = $dnsSwitchService->buildStandardSwitchOptions($domain, $targetAccount);
+            $options = \array_merge($baseOpts, [
                 'wait_for_ns' => true,
-                'wait_max_seconds' => 30 * 60,
-                'wait_interval_seconds' => 5,
+                'wait_max_seconds' => \max((int) ($baseOpts['wait_max_seconds'] ?? 0), 30 * 60),
+                'wait_interval_seconds' => (int) ($baseOpts['wait_interval_seconds'] ?? 5) > 0
+                    ? (int) $baseOpts['wait_interval_seconds']
+                    : 5,
                 'is_alive' => static function () use ($sse): bool {
                     return $sse->isAlive() && !\connection_aborted();
                 },
-                'cdn_account' => $cdnAccount,
-                'verify_cdn' => $verifyCdn,
+                'verify_cdn' => $verifyCdn || !empty($baseOpts['verify_cdn']),
                 'verify_cdn_wait_max_seconds' => 5 * 60,
                 'verify_cdn_wait_interval_seconds' => 15,
                 'records_to_push' => $resolveService->getRecordsForPush($domain),
@@ -1933,7 +1935,10 @@ class DomainManagement extends BaseController
                         $this->syncDnsRecordsToDomainPool($d, $dnsRecords, false);
                     }
                 },
-            ];
+            ]);
+            if ($cdnAccount !== null && (int) $cdnAccount->getAccountId() > 0) {
+                $options['cdn_account'] = $cdnAccount;
+            }
 
             $result = $dnsSwitchService->executeDnsSwitch($domain, $targetAccount, $onStep, $options);
 
