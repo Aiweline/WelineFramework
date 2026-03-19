@@ -904,7 +904,9 @@ class CloudflareRegistrar implements DomainRegistrarInterface
     {
         return [
             'success' => false,
-            'message' => __('Cloudflare 不支持通过 API 修改 Nameserver。请在域名注册商处将 Nameserver 切换到 Cloudflare 分配的服务器。'),
+            'message' => __(
+                'Cloudflare 账户在此仅为 DNS 托管：域名若未在 Cloudflare 注册，则注册局委派 NS 只能在域名注册商处修改。请把注册商处的 NS 改为 Cloudflare 为该域名分配的地址；不得用 DNS 托管 API 替代注册商改委派。'
+            ),
         ];
     }
 
