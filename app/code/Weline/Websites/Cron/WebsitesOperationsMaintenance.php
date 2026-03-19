@@ -23,7 +23,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     ],
     manual_help: [
         '① 每 5 分钟：处理购买后待切换 DNS/CDN 的根域，将 NS 切到目标服务商。',
-        '② 每 5 分钟：对已绑定网站的域名（website_domain）做 HTTP(S) 探测，更新健康状态与 HTTPS 开关。',
+        '② 每 5 分钟：对已绑定网站的域名（website_domain）做 HTTP(S) 探测，更新健康状态与 HTTPS 开关，并同步根域 Domain / 域名池 DomainPool 连通性与 HTTPS 状态。',
         '③ 仅整点：检测根域 Nameserver 归属，识别 DNS 服务商（如 Cloudflare）。',
         '④ 仅整点：根据证书有效性同步各站点域名的 HTTPS 启用状态（证书无效则回退 HTTP）。',
     ],

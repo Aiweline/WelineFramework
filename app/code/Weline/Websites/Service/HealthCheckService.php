@@ -25,6 +25,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
  * - 验证 HTTPS 证书有效性
  * - 更新健康状态
  * - 同步 HTTPS 状态（证书失效自动回退 HTTP）
+ * - 将结果同步到根域 {@see Domain}、域名池 {@see DomainPool}（连通性 / HTTPS / cert_id）
  */
 class HealthCheckService
 {
@@ -129,8 +130,11 @@ class HealthCheckService
             'healthy' => 0,
             'unhealthy' => 0,
             'https_updated' => 0,
+            'infra_synced' => 0,
             'details' => [],
         ];
+
+        $infraSync = ObjectManager::getInstance(HealthCheckInfrastructureSyncService::class);
         
         foreach ($domains as $domainData) {
             $domain = $domainData[WebsiteDomain::schema_fields_DOMAIN];
@@ -163,7 +167,12 @@ class HealthCheckService
                 $results['https_updated']++;
                 $this->syncHttpsStatus($domain, $certId, $checkResult['https_available']);
             }
-            
+
+            // 同步根域 Domain / 域名池 DomainPool 的连通性与 HTTPS 状态（与 WebsiteDomain 探测结果对齐）
+            if ($infraSync->syncFromHealthProbe($domainId, $checkResult)) {
+                $results['infra_synced']++;
+            }
+
             $results['details'][$domain] = $checkResult;
         }
         
