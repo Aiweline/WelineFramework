@@ -81,6 +81,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
             'getDnsRecords'          => $this->getDnsRecords($params),
             'addAcmeTxtRecord'         => $this->addAcmeTxtRecord($params),
             'getAcmeDnsProviderCode'   => $this->getAcmeDnsProviderCode($params),
+            'getAcmeChallengeTxtFqdn'  => $this->getAcmeChallengeTxtFqdn($params),
             'removeAcmeTxtRecord'      => $this->removeAcmeTxtRecord($params),
             'getDnsCdnAccounts'      => $this->getDnsCdnAccounts($params),
             default => throw new \InvalidArgumentException(
@@ -301,6 +302,15 @@ class WebsitesQueryProvider implements QueryProviderInterface
                 [
                     'name'        => 'getAcmeDnsProviderCode',
                     'description' => __('解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）'),
+                    'params'      => [
+                        ['name' => 'domain', 'type' => 'string', 'required' => true],
+                        ['name' => 'pool_id', 'type' => 'int', 'required' => false],
+                        ['name' => 'domain_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name'        => 'getAcmeChallengeTxtFqdn',
+                    'description' => __('与 addAcmeTxtRecord 写入的 TXT 完全一致的全名 FQDN（证书模块 dns_get_record 轮询须查此名，避免通配符/多级子域与 _acme-challenge.{domain} 简单拼接不一致）'),
                     'params'      => [
                         ['name' => 'domain', 'type' => 'string', 'required' => true],
                         ['name' => 'pool_id', 'type' => 'int', 'required' => false],
@@ -1039,6 +1049,69 @@ class WebsitesQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * ACME DNS-01：根据授权域名 + 系统解析到的 DNS 根域，计算与 RFC8555 一致的 TXT 主机名及全名。
+     *
+     * @return array{host: string, txt_fqdn: string}
+     */
+    private function resolveAcmeDns01TxtHostAndFqdn(string $authDomain, string $rootDomain): array
+    {
+        $authDomain = \strtolower(\trim($authDomain));
+        $rootDomain = \strtolower(\trim($rootDomain));
+        if ($rootDomain === '') {
+            return ['host' => '_acme-challenge', 'txt_fqdn' => '_acme-challenge.' . $authDomain];
+        }
+        // 通配符 *.example.com → 仍写在 _acme-challenge.example.com
+        if ($authDomain === $rootDomain || \str_starts_with($authDomain, '*.')) {
+            return [
+                'host' => '_acme-challenge',
+                'txt_fqdn' => '_acme-challenge.' . $rootDomain,
+            ];
+        }
+        $suffix = '.' . $rootDomain;
+        if (\str_ends_with($authDomain, $suffix)) {
+            $rel = \substr($authDomain, 0, -\strlen($suffix));
+            if ($rel === '') {
+                return [
+                    'host' => '_acme-challenge',
+                    'txt_fqdn' => '_acme-challenge.' . $rootDomain,
+                ];
+            }
+            $host = '_acme-challenge.' . $rel;
+
+            return ['host' => $host, 'txt_fqdn' => $host . '.' . $rootDomain];
+        }
+        // 授权标识与本地根域不一致时的回退（与 CA identifier 一致）
+        return ['host' => '_acme-challenge', 'txt_fqdn' => '_acme-challenge.' . $authDomain];
+    }
+
+    /**
+     * 返回与 {@see addAcmeTxtRecord} 将要写入的 TXT 相同的查询用 FQDN（供证书服务 dns_get_record 轮询）。
+     *
+     * @return array{success: bool, txt_fqdn?: string, host?: string, message?: string}
+     */
+    private function getAcmeChallengeTxtFqdn(array $params): array
+    {
+        $domain = \strtolower(\trim((string) ($params['domain'] ?? '')));
+        $poolId = (int) ($params['pool_id'] ?? 0);
+        $domainId = (int) ($params['domain_id'] ?? 0);
+        if ($domain === '') {
+            return ['success' => false, 'message' => 'empty_domain'];
+        }
+        $rootDomainModel = $this->resolveRootDomainForAcme($domain, $poolId, $domainId);
+        if ($rootDomainModel === null) {
+            return ['success' => false, 'message' => 'resolve_root_failed'];
+        }
+        $rootDomain = \strtolower((string) $rootDomainModel->getDomain());
+        $resolved = $this->resolveAcmeDns01TxtHostAndFqdn($domain, $rootDomain);
+
+        return [
+            'success' => true,
+            'txt_fqdn' => $resolved['txt_fqdn'],
+            'host' => $resolved['host'],
+        ];
+    }
+
+    /**
      * 与 addAcmeTxtRecord 相同的根域与 DNS 账户解析，仅返回供应商代码（不写入 DNS）。
      * 证书服务在公网 TXT 轮询前调用，避免依赖 addAcmeTxtRecord 返回值是否含 dns_provider。
      *
@@ -1140,12 +1213,8 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
 
         $domain = \strtolower($domain);
-        if ($domain === $rootDomain || \str_starts_with($domain, '*.')) {
-            $host = '_acme-challenge';
-        } else {
-            $prefix = \explode('.', $domain)[0];
-            $host = '_acme-challenge.' . $prefix;
-        }
+        $acmeNames = $this->resolveAcmeDns01TxtHostAndFqdn($domain, $rootDomain);
+        $host = $acmeNames['host'];
 
         $record = [
             'type' => 'TXT',
