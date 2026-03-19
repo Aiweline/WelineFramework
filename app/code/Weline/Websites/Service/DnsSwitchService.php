@@ -24,12 +24,12 @@ use Weline\Websites\Model\DomainRegistrarAccount;
  * - 业务侧（Cron / 后台批量切换）优先 {@see executeDnsSwitchWithStandardOptions}：等同 executeDnsSwitch +
  *   {@see buildStandardSwitchOptions}（env 公网 NS 等待 + 根域已绑 CDN 时 verify_cdn）。
  * - 底层唯一完整流水线 {@see executeDnsSwitch}（同步→改 NS→等待→推送→校验→写 Domain/Pool/cutover）。
- * - PageBuilder SSE 等在 {@see buildStandardSwitchOptions} 上 {@see array_merge} 自定义项（更长等待、records_to_push 等）。
+ * - PageBuilder SSE 等在 {@see buildStandardSwitchOptions} 上 {@see array_merge} 自定义项（更长等待等）；`records_to_push` 仅作 Step1 后本地仍空时的兜底。
  * - **非完整切换**：部分旧接口仅调注册商 {@see DomainRegistrarInterface::updateNameservers} 并 save Domain，不推送记录、
  *   不写 dns_cutover_complete；需全量迁移请走上述入口（如 Admin {@see \Weline\Websites\Controller\Admin\Domain::postSwitchDnsAccount}）。
  *
  * 职责：
- *  1. 从源（注册商）同步 DNS 记录到本地
+ *  1. 将**当前托管侧**记录同步到本地：优先 {@see Domain::getDnsAccountId}（≠目标时）再 {@see Domain::getAccountId}（注册商）
  *  2. 在目标 DNS 服务商添加域名（Zone）并获取 NS
  *  3. 在注册商处修改 NS 指向目标
  *  4. 可选：等待 NS 生效（公网或注册商侧校验）
@@ -71,6 +71,7 @@ class DnsSwitchService
      *                       verify_cdn (bool), verify_cdn_wait_max_seconds (int), verify_cdn_wait_interval_seconds (int).
      *                       Step8（verify_cdn）：适配器 verifyCdnConfiguration；不支持则跳过。
      *                       after_sync_records (callable(Domain, array $dnsRecords): void)
+     *                       records_to_push（可选）：仅当 Step1 后 {@see DomainResolveService::getRecordsForPush} 仍为空时作兜底，避免页面前置快照覆盖流水线内刷新后的本地库。
      * @return array{success: bool, message: string, nameservers: string[], push_success: bool, push_added: int, push_failed: int, client_aborted?: bool}
      */
     public function executeDnsSwitch(
@@ -111,9 +112,8 @@ class DnsSwitchService
         }
         // 目标适配器永不用于 updateNameservers；委派仅 sourceAdapter（注册商）.
 
-        // ── Step 1: 从源（注册商）同步 DNS 记录到本地 ──
-        $notify('sync_records', ['domain' => $domainName, 'message' => __('从注册商同步 DNS 记录到本地')]);
-        // 源侧凭证：Domain.account_id（注册商）；与 dns_account_id（托管目标）严格区分。
+        // ── Step 1: 当前托管侧 → 本地库（优先 dns_account_id≠目标，再注册商），供后续推送到目标账户 ──
+        // 注册商账户：改 NS 与兜底拉取；与 dns_account_id（旧/新托管）区分。
         $registrarAccountId = (int) $domain->getAccountId();
         if ($registrarAccountId <= 0) {
             return $this->fail(__('域名 %{1} 未关联注册商账户，无法切换', [$domainName]));
@@ -129,7 +129,47 @@ class DnsSwitchService
             return $this->fail(__('注册商适配器 %{1} 不存在', [$sourceAccount->getRegistrarCode()]));
         }
 
-        $syncResult = $this->syncRecordsFromSource($domain, $sourceAccount);
+        $this->resolveService->ensureDnsAccountIdPersisted($domain);
+
+        $syncResult = null;
+        $syncSourceLabel = '';
+        $priorDnsAccountId = (int) $domain->getDnsAccountId();
+        if ($priorDnsAccountId > 0 && $priorDnsAccountId !== $targetAccountId) {
+            $priorAccount = $this->loadAccount($priorDnsAccountId);
+            if ($priorAccount !== null) {
+                $notify('sync_records', [
+                    'domain' => $domainName,
+                    'message' => (string) __(
+                        '从原 DNS 托管账户拉取记录到本地（将推送到目标账户 %{1}，源账户 ID %{2}）',
+                        [(string) $targetCode, (string) $priorDnsAccountId]
+                    ),
+                ]);
+                $tryPrior = $this->syncRecordsFromSource($domain, $priorAccount, true);
+                $priorErr = (string) ($tryPrior['error'] ?? '');
+                $priorSkipped = (bool) ($tryPrior['skipped_empty'] ?? false);
+                if ($priorErr === '' && !$priorSkipped) {
+                    $syncResult = $tryPrior;
+                    $syncSourceLabel = (string) $priorAccount->getRegistrarCode();
+                } elseif ($priorErr !== '') {
+                    $notify('sync_records_result', [
+                        'error' => $priorErr,
+                        'message' => (string) __('[步骤1] 原 DNS 托管账户拉取失败，将改从注册商同步：%{1}', [$priorErr]),
+                    ]);
+                } elseif ($priorSkipped) {
+                    $notify('sync_records', [
+                        'domain' => $domainName,
+                        'message' => (string) __('原 DNS 托管账户未返回可写入记录，改为从注册商同步'),
+                    ]);
+                }
+            }
+        }
+
+        if ($syncResult === null) {
+            $notify('sync_records', ['domain' => $domainName, 'message' => (string) __('从注册商同步 DNS 记录到本地')]);
+            $syncResult = $this->syncRecordsFromSource($domain, $sourceAccount, false);
+            $syncSourceLabel = (string) $sourceAccount->getRegistrarCode();
+        }
+
         $syncErr = (string) ($syncResult['error'] ?? '');
         $syncAdded = (int) ($syncResult['added'] ?? 0);
         $syncUpdated = (int) ($syncResult['updated'] ?? 0);
@@ -138,7 +178,7 @@ class DnsSwitchService
         } else {
             $notify('sync_records_done', ['domain' => $domainName, 'added' => $syncAdded, 'updated' => $syncUpdated, 'message' => __('DNS 记录同步完成，新增 %{1} 条，更新 %{2} 条', [(string) $syncAdded, (string) $syncUpdated])]);
         }
-        w_log_info(__('[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成，added=%{3}，updated=%{4}', [$domainName, $sourceAccount->getRegistrarCode(), (string) $syncAdded, (string) $syncUpdated]), [], $logCh);
+        w_log_info(__('[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成，added=%{3}，updated=%{4}', [$domainName, $syncSourceLabel, (string) $syncAdded, (string) $syncUpdated]), [], $logCh);
 
         // ── Step 2: 在目标获取 NS（会自动 addZone） ──
         $notify('add_zone', ['domain' => $domainName, 'message' => __('获取目标 Nameserver（%{1}）', [$targetCode])]);
@@ -249,9 +289,12 @@ class DnsSwitchService
             $publicNsPropagationPending = (($waitResult['verified_by'] ?? '') === 'registrar');
         }
 
-        // ── Step 4: 推送 DNS 记录到目标 ──
-        $notify('push_records', ['domain' => $domainName, 'message' => __('推送 DNS 记录到 %{1}', [$targetCode])]);
-        $recordsToPush = $options['records_to_push'] ?? null;
+        // ── Step 4: 推送 DNS 记录到目标账户（以 Step1 后本地库为准，避免调用方前置 records_to_push 快照过期） ──
+        $notify('push_records', ['domain' => $domainName, 'message' => __('推送 DNS 记录到目标账户 %{1}', [$targetCode])]);
+        $recordsToPush = $this->resolveService->getRecordsForPush($domain);
+        if ($recordsToPush === [] && isset($options['records_to_push']) && \is_array($options['records_to_push']) && $options['records_to_push'] !== []) {
+            $recordsToPush = $options['records_to_push'];
+        }
         $pushResult = $this->resolveService->pushRecordsToProvider($domain, $targetAccount, $recordsToPush);
         $pushSuccess = $pushResult['success'] ?? false;
         $pushAdded = $pushResult['added'] ?? 0;
@@ -769,23 +812,41 @@ class DnsSwitchService
     }
 
     /**
-     * 从源（注册商）同步 DNS 记录到本地 DB
+     * 从指定账户拉取 DNS 记录并写入本地 DB
      *
      * 与 DomainResolveService::syncDnsRecords 不同：本方法显式指定账户，
      * 避免在 dns_account_id 已指向目标（尚未 addZone）时使用错误账户。
+     *
+     * @param bool $skipReplaceIfRemoteEmpty 为 true 且远端记录为空时：不调用 {@see \Weline\Websites\Model\DomainDnsRecord::syncRecords}，
+     *                                       避免误删本地库（用于「先试原托管账户，再回退注册商」）。
+     * @return array{synced: int, added: int, updated: int, deleted: int, error: string, skipped_empty?: bool}
      */
-    public function syncRecordsFromSource(Domain $domain, DomainRegistrarAccount $sourceAccount): array
+    public function syncRecordsFromSource(Domain $domain, DomainRegistrarAccount $sourceAccount, bool $skipReplaceIfRemoteEmpty = false): array
     {
         $adapter = $this->registrarResolver->getAdapter($sourceAccount->getRegistrarCode());
         if ($adapter === null || !$adapter->supportsDnsManagement()) {
-            return ['synced' => 0, 'added' => 0, 'updated' => 0, 'deleted' => 0, 'error' => __('源账户 %{1} 不支持 DNS 管理', [$sourceAccount->getRegistrarCode()])];
+            return [
+                'synced' => 0,
+                'added' => 0,
+                'updated' => 0,
+                'deleted' => 0,
+                'error' => (string) __('源账户 %{1} 不支持 DNS 管理', [$sourceAccount->getRegistrarCode()]),
+                'skipped_empty' => false,
+            ];
         }
 
         try {
             $remoteRecords = $adapter->getDnsRecords($domain->getDomain(), $sourceAccount->getCredentials());
         } catch (\Throwable $e) {
             w_log_warning(__('[DnsSwitchService] syncRecordsFromSource %{1} 失败（非致命）：%{2}', [$domain->getDomain(), $e->getMessage()]), [], 'dns_cdn_switch');
-            return ['synced' => 0, 'added' => 0, 'updated' => 0, 'deleted' => 0, 'error' => $e->getMessage()];
+            return [
+                'synced' => 0,
+                'added' => 0,
+                'updated' => 0,
+                'deleted' => 0,
+                'error' => $e->getMessage(),
+                'skipped_empty' => false,
+            ];
         }
 
         $records = [];
@@ -800,9 +861,22 @@ class DnsSwitchService
             ];
         }
 
+        if ($skipReplaceIfRemoteEmpty && $records === []) {
+            return [
+                'synced' => 0,
+                'added' => 0,
+                'updated' => 0,
+                'deleted' => 0,
+                'error' => '',
+                'skipped_empty' => true,
+            ];
+        }
+
         $dnsRecordModel = ObjectManager::getInstance(\Weline\Websites\Model\DomainDnsRecord::class);
         $result = $dnsRecordModel->syncRecords($domain->getDomainId(), $records);
         $result['error'] = '';
+        $result['skipped_empty'] = false;
+
         return $result;
     }
 
