@@ -3,6 +3,13 @@
  * PageBuilder 网站管理 - 添加/编辑表单
  * 内容模板 - 由布局系统自动包裹
  *
+ * 新建/编辑站点入口（均走 WebsiteManagement::add / ::edit，共用本模板；域名多选 bind-root-www 一处生效即可）：
+ * - 网站列表工具栏「新建站点」：w:websites:website:build → */backend/websiteManagement/add
+ * - 页面列表侧栏「快速新建站点」：同上
+ * - 页面表单（Page/form）侧栏 iframe：加载 */backend/websiteManagement/add
+ *
+ * 另：菜单「快速建站向导」QuickBuild/wizard 使用独立域名列表，非 w:websites:domain:select。
+ *
  * @var \Weline\Framework\View\Template $this
  */
 
@@ -18,6 +25,8 @@ $selected_languages = $selected_languages ?? [];
 $selected_pool_ids = $selected_pool_ids ?? [];
 $domain_options = $domain_options ?? [];
 $sub_path = $sub_path ?? '';
+/** 域名多选：根域与 www 成对（由控制器 assign，默认 true） */
+$domain_select_bind_root_www = ($domain_select_bind_root_www ?? true);
 $isEdit = isset($website['website_id']) && !empty($website['website_id']);
 ?>
 
@@ -170,6 +179,7 @@ $isEdit = isset($website['website_id']) && !empty($website['website_id']);
                             multiple="true"
                             value-type="pool_id"
                             site-ready-only="true"
+                            bind-root-www="<?= $domain_select_bind_root_www ? 'true' : 'false' ?>"
                             website-id="<?= $domainSelectWebsiteId ?>"
                             auto-fill-code="code"
                             auto-fill-name="name"
