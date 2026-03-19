@@ -95,7 +95,15 @@ interface DomainRegistrarInterface
 
     // --- Nameserver ---
 
-    /** @return array{success: bool, message?: string} */
+    /**
+     * 修改注册局为域名登记的委派 Nameserver（权威 NS 指向谁）。
+     *
+     * **仅允许由「该域名注册商」账户对应的适配器执行有效变更**（数据上即 {@see \Weline\Websites\Model\Domain} 的 **`account_id`**，勿与 **`dns_account_id`** 混淆）。
+     * DNS 托管商（如 Cloudflare 仅托管解析、域名注册在 Gname 等）**不得**用本方法承担委派：应返回失败并提示用户在**注册商**改 NS；
+     * 此类账户在迁移流程中只作为 {@see getProviderNameservers} / Zone / 记录 API 的**目标**。
+     *
+     * @return array{success: bool, message?: string}
+     */
     public function updateNameservers(string $domain, array $nameservers, array $credentials): array;
 
     /** @return array{success: bool, nameservers: array<string>, message?: string} */
