@@ -11,13 +11,14 @@ use Weline\Websites\Cron\Concern\WebsitesCronTestRunnerTrait;
 use Weline\Websites\Service\WebsitesCronTestContext;
 
 #[CronTestHelp(
-    description: '轮询域名购买/生命周期订单，推进「待 DNS → 待解析 → 待证书 → 完成」等状态。--domain= 仅处理该根域订单。',
+    description: '先执行 DNS/CDN 自动切换，再轮询域名购买/生命周期订单，推进「待 DNS → 待解析 → 待证书 → 完成」等状态。--domain= 仅处理该根域订单。',
     examples: [
         'php bin/w cron:test --task=domain_lifecycle_orchestration --domain=example.com -v',
     ],
     manual_help: [
-        '逻辑：读取待处理的域名生命周期订单，按状态推进（如同步根域、创建子域入池、修正脏数据、标记完成）。',
-        '不直接做 DNS 解析或证书申请，只更新订单与根域/池状态，实际解析与证书由「DNS 解析与子域入池」「子域 HTTPS 证书维护」执行。',
+        '① 先执行 DnsCdnAutoSwitch：识别需设置 DNS 的根域（dns_switch_deferred/ dns_switch_pending），调用统一切换逻辑并标记根域与子域 DNS/CDN 完成。',
+        '② 脏数据修复与订单推进：读取待处理的域名生命周期订单，按状态推进（如同步根域、创建子域入池、修正脏数据、标记完成）。',
+        '实际解析与证书由「DNS 解析与子域入池」「子域 HTTPS 证书维护」执行。',
     ],
 )]
 class DomainLifecycleOrchestration implements CronTaskInterface
@@ -47,10 +48,13 @@ class DomainLifecycleOrchestration implements CronTaskInterface
     public function execute(): string
     {
         try {
-            /** @var DomainLifecycleOrchestrationService $service */
-            $service = ObjectManager::getInstance(DomainLifecycleOrchestrationService::class);
             $df = WebsitesCronTestContext::getDomainFilter();
 
+            $dnsSwitchMsg = (new DnsCdnAutoSwitch())->execute();
+            WebsitesCronTestContext::detail('DnsCdnAutoSwitch', ['domain_filter' => $df, 'result' => $dnsSwitchMsg]);
+
+            /** @var DomainLifecycleOrchestrationService $service */
+            $service = ObjectManager::getInstance(DomainLifecycleOrchestrationService::class);
             $repair = $service->repairLifecycleDirtyData($df, 100);
             WebsitesCronTestContext::detail('repairLifecycleDirtyData', ['domain_filter' => $df, 'repair' => $repair]);
 
@@ -62,6 +66,9 @@ class DomainLifecycleOrchestration implements CronTaskInterface
                 'completed' => (int) ($result['completed'] ?? 0),
                 'failed' => (int) ($result['failed'] ?? 0),
             ]);
+            if ($dnsSwitchMsg !== '') {
+                $msg = __('[DNS/CDN 切换] %{1}', [$dnsSwitchMsg]) . "\n" . $msg;
+            }
             if (($repair['synced_domain_count'] ?? 0) > 0 || ($repair['marked_completed_count'] ?? 0) > 0) {
                 $msg .= ' ' . __('（脏数据修复：同步根域 %{1} 条，补标完成 %{2} 条）', [
                     (string) ($repair['synced_domain_count'] ?? 0),
