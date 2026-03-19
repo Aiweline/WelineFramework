@@ -27,6 +27,7 @@ class DomainSyncService
         private DomainRegistrarAccount $accountModel,
         private DomainRegistrarResolverService $registrarResolver,
         private DomainDnsCdnBindingService $dnsCdnBindingService,
+        private DomainResolveService $domainResolveService,
     ) {
     }
 
@@ -152,6 +153,18 @@ class DomainSyncService
             $syncResult = $domainModelInstance->syncDomains($accountId, $domainsToSync);
 
             $deleted = $domainModelInstance->removeStale($accountId, $domainNames);
+
+            foreach ($domainNames as $syncedName) {
+                $dn = \strtolower(\trim((string) $syncedName));
+                if ($dn === '') {
+                    continue;
+                }
+                $row = ObjectManager::getInstance(Domain::class, [], false);
+                $row->loadByDomainAndAccount($dn, $accountId);
+                if ((int) $row->getDomainId() > 0) {
+                    $this->domainResolveService->ensureDnsAccountIdPersisted($row);
+                }
+            }
 
             return [
                 'success' => true,
