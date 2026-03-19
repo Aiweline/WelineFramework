@@ -2950,21 +2950,37 @@ CNF;
                 }
             }
         }
-        // 先轮询公网 TXT 是否可见，避免 Gname 等未真正生效时白等 3+7 分钟
+        // 先轮询 TXT 是否在解析链上可见（默认仅 dns_get_record，与 websites.acme_dns 一致）
         $txtFqdn = '_acme-challenge.' . $domain;
-        // GName / Cloudflare 等 API 返回成功到公网 TXT 可解析常需更久，90s 易误判失败
-        $pollMaxSeconds = \in_array($dnsProviderCode, ['gname', 'cloudflare'], true) ? 180 : 90;
-        $pollIntervalSeconds = 10;
+        $txtPoll = $this->getAcmeDnsTxtPollConfig();
+        $pollMaxSeconds = (int) ($txtPoll['max_seconds'] ?? 900);
+        $pollIntervalSeconds = (int) ($txtPoll['interval_seconds'] ?? 10);
+        if ($dnsProviderCode === 'gname' && isset($txtPoll['max_seconds_gname'])) {
+            $pollMaxSeconds = (int) $txtPoll['max_seconds_gname'];
+        } elseif ($dnsProviderCode === 'cloudflare' && isset($txtPoll['max_seconds_cloudflare'])) {
+            $pollMaxSeconds = (int) $txtPoll['max_seconds_cloudflare'];
+        }
+        $pollMaxSeconds = \max(30, $pollMaxSeconds);
+        $pollIntervalSeconds = \max(3, $pollIntervalSeconds);
+        $allowPublicDoh = (bool) ($txtPoll['visible_use_public_doh'] ?? false);
         $txtVisible = false;
         if ($onProgress) {
             $onProgress(
-                (string)__('检查 TXT 是否在公网生效（本机+公共 DNS，最多 %{1} 秒；GName、Cloudflare 等写入后公网可见常需 1～3 分钟）', [$pollMaxSeconds]),
-                ['step' => 'dns_visibility']
+                $allowPublicDoh
+                    ? (string) __(
+                        '检查 TXT 是否已传播（先本机 dns_get_record，必要时公共 DNS；最多 %{1} 秒，间隔 %{2} 秒）',
+                        [(string) $pollMaxSeconds, (string) $pollIntervalSeconds]
+                    )
+                    : (string) __(
+                        '检查 TXT 是否已传播（循环 dns_get_record，最多 %{1} 秒，间隔 %{2} 秒；与证书机构查询路径可能不同，宜留足时间）',
+                        [(string) $pollMaxSeconds, (string) $pollIntervalSeconds]
+                    ),
+                ['step' => 'dns_visibility', 'poll_max' => $pollMaxSeconds, 'dns_get_record_only' => !$allowPublicDoh]
             );
         }
         $elapsed = 0;
         while ($elapsed <= $pollMaxSeconds) {
-            $txtVisible = $this->isAcmeTxtVisible($txtFqdn, $challengeValue);
+            $txtVisible = $this->isAcmeTxtVisible($txtFqdn, $challengeValue, $allowPublicDoh);
             if ($txtVisible) {
                 break;
             }
@@ -2987,15 +3003,26 @@ CNF;
                     'domain_id' => $domainId,
                 ]);
             }
-            $err = (string)__('TXT 记录在公网未生效，可能未添加成功或 DNS 传播较慢（如 Gname、Cloudflare）。请确认域名 NS 已指向当前 DNS 服务商后重试。');
+            $err = (string)__(
+                '在最长 %{1} 秒内 dns_get_record%{2}仍未查到验证 TXT。可能未写入成功、传播未结束或本机解析器缓存滞后；可加大 env websites.acme_dns.txt_poll_max_seconds 后重试。',
+                [
+                    (string) $pollMaxSeconds,
+                    $allowPublicDoh ? (string) __('（及公共 DNS 探测）') : '',
+                ]
+            );
             if ($onProgress) {
                 $onProgress($err, ['step' => 'dns_visibility_fail']);
             }
             return ['validated' => false, 'error' => $err];
         }
-        // 公网已能解析 TXT 即可通知 CA；本系统检测路径与 LE 全球多点查询权威 NS 的路径不同，后者偶发超时不代表 TXT 未写入
+        // 本机已能 dns_get_record 到 TXT（及可选 DoH）后再通知 CA；CA 全球路径仍可能不同，后续另有 CA 轮询
         if ($onProgress) {
-            $onProgress((string)__('TXT 已在公网生效，正在通知 CA 验证...'), ['step' => 'notify_ca']);
+            $onProgress(
+                $allowPublicDoh
+                    ? (string) __('TXT 已可解析（本机或公共 DNS 探测），正在通知 CA 验证...')
+                    : (string) __('本机 dns_get_record 已能查到验证 TXT，正在通知 CA 验证...'),
+                ['step' => 'notify_ca']
+            );
             $onProgress(
                 (string)__(
                     '说明：本系统与证书机构使用不同 DNS 路径。证书机构从全球多点直连您域名的权威 DNS；若 GName 等对 CA 查询响应慢，仍可能报「查询超时」，与「记录已生效」不矛盾，可稍后重试或换更快 DNS 托管。'
@@ -3105,13 +3132,47 @@ CNF;
     }
 
     /**
-     * 检查 ACME TXT 是否在公网可见：先本机解析，再 Google/Cloudflare DoH（绕过本机缓存，常比单用 dns_get_record 早看到 GName 等）
+     * @return array{
+     *   max_seconds: int,
+     *   interval_seconds: int,
+     *   visible_use_public_doh: bool,
+     *   max_seconds_gname?: int,
+     *   max_seconds_cloudflare?: int
+     * }
      */
-    protected function isAcmeTxtVisible(string $txtFqdn, string $expectedValue): bool
+    private function getAcmeDnsTxtPollConfig(): array
+    {
+        $cfg = Env::module_env('Weline_Websites', 'acme_dns') ?? [];
+        if (!\is_array($cfg)) {
+            $cfg = [];
+        }
+        $out = [
+            'max_seconds' => (int) ($cfg['txt_poll_max_seconds'] ?? 900),
+            'interval_seconds' => (int) ($cfg['txt_poll_interval_seconds'] ?? 10),
+            'visible_use_public_doh' => !empty($cfg['txt_visible_use_public_doh']),
+        ];
+        if (\array_key_exists('txt_poll_max_seconds_gname', $cfg)) {
+            $out['max_seconds_gname'] = (int) $cfg['txt_poll_max_seconds_gname'];
+        }
+        if (\array_key_exists('txt_poll_max_seconds_cloudflare', $cfg)) {
+            $out['max_seconds_cloudflare'] = (int) $cfg['txt_poll_max_seconds_cloudflare'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * 检查 ACME TXT 是否可见：默认仅 {@see dns_get_record}；$allowPublicDoh 为 true 时再试 Google/Cloudflare DoH。
+     */
+    protected function isAcmeTxtVisible(string $txtFqdn, string $expectedValue, bool $allowPublicDoh = false): bool
     {
         if ($this->acmeTxtMatchesDnsGetRecord($txtFqdn, $expectedValue)) {
             return true;
         }
+        if (!$allowPublicDoh) {
+            return false;
+        }
+
         return $this->isAcmeTxtVisibleViaPublicDoh($txtFqdn, $expectedValue);
     }
 
