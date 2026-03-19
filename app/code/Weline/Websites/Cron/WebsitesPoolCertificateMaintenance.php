@@ -21,7 +21,7 @@ use Weline\Websites\Service\WebsitesCronTestContext;
     ],
     manual_help: [
         '① 证书校验：见 websites_certificate_health_daily（每日，与 SSL 续期策略一致）。',
-        '② 证书申请：每 10 分钟。根域 cron_resolved=1 时不再申请；父域 dns_cutover_complete=0 时队列不取该池（DnsSwitchService 成功后置 1）。',
+        '② 证书申请：每 10 分钟；入队以 SSL 证书管理器是否健康为准，不依赖池 https_status。根域 cron_resolved=1 时不再申请；父域 dns_cutover_complete=0 时队列不取该池。',
     ],
 )]
 class WebsitesPoolCertificateMaintenance implements CronTaskInterface
