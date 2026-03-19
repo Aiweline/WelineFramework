@@ -27,6 +27,20 @@ return [
         'self_heal_domain_whitelist' => [],
     ],
 
+    /**
+     * DNS 切换（DnsCdnAutoSwitch → DnsSwitchService）在注册商 NS API 成功后的可选等待。
+     * - 不能加快注册局/全球递归缓存过期；可减少「本机解析器仍旧 NS」误判，并尽早发现已传播。
+     * - wait_public_ns_max_seconds 不宜过大，避免 WLS cron 单任务长时间阻塞（默认 3 分钟）。
+     * - ns_probe_use_cloudflare_doh：用 1.1.1.1 DoH 与系统 dns_get_record 交叉比对（任一与目标 NS 集合一致即视为公网已跟上）。
+     */
+    'dns_switch' => [
+        'wait_public_ns_enabled' => true,
+        'wait_public_ns_provider_codes' => ['cloudflare'],
+        'wait_public_ns_max_seconds' => 180,
+        'wait_public_ns_interval_seconds' => 15,
+        'ns_probe_use_cloudflare_doh' => true,
+    ],
+
     // 是否禁止未匹配的域名访问（默认不禁止）
     // true: 如果查不到匹配的站点，返回404错误
     // false: 查不到站点也没关系，继续处理（默认）
