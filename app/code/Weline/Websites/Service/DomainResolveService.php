@@ -21,6 +21,11 @@ class DomainResolveService
 {
     private const DNS_RESOLVE_TIMEOUT = 5;
 
+    /**
+     * 注入 Cloudflare 凭据：已落库的 Zone ID（须与 CloudflareRegistrar 内 `_weline_dns_zone_external_id` 一致）。
+     */
+    public const CF_DNS_ZONE_EXTERNAL_CREDENTIAL_KEY = '_weline_dns_zone_external_id';
+
     private Domain $domainModel;
     private DomainConfig $domainConfig;
     private DomainDnsRecord $dnsRecordModel;
@@ -186,7 +191,7 @@ class DomainResolveService
             ];
         }
 
-        $credentials = $account->getCredentials();
+        $credentials = $this->mergeDnsAdapterCredentials($domain, $account, $account->getCredentials());
         $domainName = $domain->getDomain();
         $recordType = $this->domainConfig->getAutoResolveRecordType();
 
@@ -431,9 +436,10 @@ class DomainResolveService
 
         $account = $result['account'];
         $adapter = $result['adapter'];
+        $credentials = $this->mergeDnsAdapterCredentials($domain, $account, $account->getCredentials());
 
         try {
-            $remoteRecords = $adapter->getDnsRecords($domain->getDomain(), $account->getCredentials());
+            $remoteRecords = $adapter->getDnsRecords($domain->getDomain(), $credentials);
         } catch (\Throwable $e) {
             return [
                 'synced' => 0,
@@ -525,7 +531,7 @@ class DomainResolveService
             ];
         }
 
-        $credentials = $targetAccount->getCredentials();
+        $credentials = $this->mergeDnsAdapterCredentials($domain, $targetAccount, $targetAccount->getCredentials());
         $result = $adapter->batchAddDnsRecords($domain->getDomain(), $records, $credentials);
 
         return [
@@ -572,7 +578,8 @@ class DomainResolveService
         }
 
         try {
-            $remoteRecords = $dnsResult['adapter']->getDnsRecords($domain->getDomain(), $dnsResult['account']->getCredentials());
+            $creds = $this->mergeDnsAdapterCredentials($domain, $dnsResult['account'], $dnsResult['account']->getCredentials());
+            $remoteRecords = $dnsResult['adapter']->getDnsRecords($domain->getDomain(), $creds);
         } catch (\Throwable $e) {
             return [];
         }
@@ -857,6 +864,11 @@ class DomainResolveService
             ];
         }
 
+        $extZone = \trim((string) ($zoneProbe['dns_zone_external_id'] ?? ''));
+        if ($extZone !== '') {
+            $this->persistCloudflareDnsZoneExternalId($domain, $extZone);
+        }
+
         $zoneStatus = (string) ($zoneProbe['zone_status'] ?? '');
         $expName = $this->dnsDetector->getProviderDisplayName($providerCode);
         $matchedVia = $regNs !== [] && $regDetected === $providerCode ? 'registrar+dns' : 'dns_adapter';
@@ -891,7 +903,7 @@ class DomainResolveService
     /**
      * 通过 DNS 托管适配器 {@see DomainRegistrarInterface::getDomainDetail}（及必要时 {@see getDnsRecords}）确认根域可写。
      *
-     * @return array{ok: bool, message?: string, zone_status?: string}
+     * @return array{ok: bool, message?: string, zone_status?: string, dns_zone_external_id?: string}
      */
     private function verifyDnsManagedZoneWritableForAcme(
         DomainRegistrarInterface $adapter,
@@ -931,7 +943,74 @@ class DomainResolveService
             }
         }
 
-        return ['ok' => true, 'zone_status' => $st !== '' ? $st : 'ready'];
+        $zoneExt = $this->extractDnsZoneExternalIdFromAdapterDetail($detail);
+
+        return [
+            'ok' => true,
+            'zone_status' => $st !== '' ? $st : 'ready',
+            'dns_zone_external_id' => $zoneExt,
+        ];
+    }
+
+    /**
+     * 合并 DNS 调用凭据：Cloudflare 已落库的 zone_id 注入后优先直用，减少 GET /zones?name=。
+     */
+    public function mergeDnsAdapterCredentials(Domain $domain, DomainRegistrarAccount $account, array $credentials): array
+    {
+        $zoneId = \trim((string) $domain->getDnsZoneExternalId());
+        if ($zoneId === '' || !$this->shouldInjectPersistedCfZoneId($domain, $account)) {
+            return $credentials;
+        }
+        $out = $credentials;
+        $out[self::CF_DNS_ZONE_EXTERNAL_CREDENTIAL_KEY] = $zoneId;
+
+        return $out;
+    }
+
+    /**
+     * 将 Cloudflare Zone ID 写入根域 Domain（32 位 hex）。
+     */
+    public function persistCloudflareDnsZoneExternalId(Domain $domain, string $zoneId): void
+    {
+        $zoneId = \trim($zoneId);
+        if ((int) $domain->getDomainId() <= 0 || $zoneId === '' || !\preg_match('/^[a-f0-9]{32}$/i', $zoneId)) {
+            return;
+        }
+        if ($zoneId === \trim((string) $domain->getDnsZoneExternalId())) {
+            return;
+        }
+        $domain->setDnsZoneExternalId($zoneId)->forceCheck(false)->save();
+    }
+
+    private function shouldInjectPersistedCfZoneId(Domain $domain, DomainRegistrarAccount $account): bool
+    {
+        if (\strtolower(\trim($account->getRegistrarCode())) !== 'cloudflare') {
+            return false;
+        }
+        $accId = (int) $account->getAccountId();
+        $dnsAcc = (int) $domain->getDnsAccountId();
+        $dnsProv = \strtolower(\trim((string) $domain->getDnsProvider()));
+        if ($dnsAcc > 0) {
+            return $dnsAcc === $accId;
+        }
+        if ($dnsProv === 'cloudflare') {
+            return true;
+        }
+
+        return (int) $domain->getAccountId() === $accId;
+    }
+
+    /**
+     * @param array<string, mixed> $detail
+     */
+    private function extractDnsZoneExternalIdFromAdapterDetail(array $detail): string
+    {
+        if (!isset($detail['zone_id'])) {
+            return '';
+        }
+        $z = \trim((string) $detail['zone_id']);
+
+        return \preg_match('/^[a-f0-9]{32}$/i', $z) ? $z : '';
     }
 
     /**
@@ -1344,9 +1423,14 @@ class DomainResolveService
             'ttl' => 600,
         ];
 
+        $creds = $this->mergeDnsAdapterCredentials($rootDomainModel, $dnsResult['account'], $dnsResult['account']->getCredentials());
         try {
-            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
+            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $creds);
             if ($result['success'] ?? false) {
+                $z = \trim((string) ($result['zone_id'] ?? ''));
+                if ($z !== '') {
+                    $this->persistCloudflareDnsZoneExternalId($rootDomainModel, $z);
+                }
                 $msg = $rrType === 'AAAA'
                     ? (string) __('AAAA 记录添加成功，请等待 DNS 生效后重试')
                     : (string) __('A 记录添加成功，请等待 DNS 生效后重试');

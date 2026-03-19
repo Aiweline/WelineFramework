@@ -149,6 +149,9 @@ class Domain extends Model
     #[Col('smallint', 1, nullable: true, default: 1, comment: '1=DNS 切换流程已完成或未要求切换，允许进入证书申请；0=待切换/切换中')]
     public const schema_fields_DNS_CUTOVER_COMPLETE = 'dns_cutover_complete';
 
+    #[Col('varchar', 64, nullable: true, default: '', comment: 'DNS 托管侧 Zone 外部 ID（如 Cloudflare zone_id），落库后优先直用，减少 GET /zones?name=')]
+    public const schema_fields_DNS_ZONE_EXTERNAL_ID = 'dns_zone_external_id';
+
     // 状态常量
     public const STATUS_ACTIVE = 'active';
     public const STATUS_PENDING = 'pending';
@@ -430,6 +433,17 @@ class Domain extends Model
     public function setDnsCutoverComplete(int $value): self
     {
         $this->setData(self::schema_fields_DNS_CUTOVER_COMPLETE, $value);
+        return $this;
+    }
+
+    public function getDnsZoneExternalId(): string
+    {
+        return \trim((string) $this->getData(self::schema_fields_DNS_ZONE_EXTERNAL_ID));
+    }
+
+    public function setDnsZoneExternalId(string $zoneExternalId): self
+    {
+        $this->setData(self::schema_fields_DNS_ZONE_EXTERNAL_ID, \trim($zoneExternalId));
         return $this;
     }
 

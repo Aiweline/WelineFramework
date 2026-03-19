@@ -1097,12 +1097,17 @@ class WebsitesQueryProvider implements QueryProviderInterface
         }
         $rootDomain = \strtolower((string) $rootDomainModel->getDomain());
         $providerCode = (string) ($dnsResult['adapter']->getRegistrarCode());
+        $dnsCreds = $resolveService->mergeDnsAdapterCredentials(
+            $rootDomainModel,
+            $dnsResult['account'],
+            $dnsResult['account']->getCredentials()
+        );
         $nsGate = $resolveService->validateAcmeDns01HostingViaAdapters(
             $rootDomainModel,
             $rootDomain,
             $providerCode,
             $dnsResult['adapter'],
-            $dnsResult['account']->getCredentials()
+            $dnsCreds
         );
         if (!$nsGate['ok']) {
             if ($onProgress) {
@@ -1150,9 +1155,13 @@ class WebsitesQueryProvider implements QueryProviderInterface
         ];
 
         try {
-            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsResult['account']->getCredentials());
+            $result = $dnsResult['adapter']->addDnsRecord($rootDomain, $record, $dnsCreds);
             $dnsResponse = $result['dns_response'] ?? null;
             if ($result['success'] ?? false) {
+                $z = \trim((string) ($result['zone_id'] ?? ''));
+                if ($z !== '' && \strtolower($providerCode) === 'cloudflare') {
+                    $resolveService->persistCloudflareDnsZoneExternalId($rootDomainModel, $z);
+                }
                 if ($onProgress) {
                     $onProgress((string)__('TXT 记录已在 %{1} 添加成功', [$providerName]), \array_merge(
                         ['step' => 'add_done'],
@@ -1201,11 +1210,16 @@ class WebsitesQueryProvider implements QueryProviderInterface
             return ['success' => false, 'message' => $dnsResult['error']];
         }
 
+        $dnsCreds = $resolveService->mergeDnsAdapterCredentials(
+            $rootDomainModel,
+            $dnsResult['account'],
+            $dnsResult['account']->getCredentials()
+        );
         try {
             $result = $dnsResult['adapter']->deleteDnsRecord(
                 $rootDomainModel->getDomain(),
                 $recordId,
-                $dnsResult['account']->getCredentials()
+                $dnsCreds
             );
             return [
                 'success' => (bool)($result['success'] ?? false),
