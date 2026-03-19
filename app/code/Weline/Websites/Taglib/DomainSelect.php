@@ -4,9 +4,14 @@ declare(strict_types=1);
 
 /**
  * Weline Websites - 域名选择器标签
- * 
+ *
  * 提供可搜索的域名池选择器组件
  * 支持主题变量，兼容暗色/亮色模式
+ *
+ * 【硬性】本标签为自定义（非 HTML）标签：属性上禁止 PHP，须用静态标签（@lang/@var/{{}} 等）或字面量；
+ * 勿写 <?php、<?=。编译期 taglib 会抽取/还原占位符，属性内嵌 PHP 易 ParseError（如 unexpected identifier "true"）。
+ * 动态值：在标签前的 <?php ?> 块赋给普通变量，属性只写变量名（Weline_Taglib_resolve，如 value="domainSelectValueEscaped"）；
+ * 常量可用字面量或 var|默认值 语法。详见 dev/ai/skills/theme-development/SKILL.md。
  */
 
 namespace Weline\Websites\Taglib;
@@ -17,7 +22,7 @@ use Weline\Framework\Http\Url;
 /**
  * 域名选择标签
  *
- * 使用示例：
+ * 使用示例（属性中勿嵌套 <?= ... ?>）：
  * <w:websites:domain:select
  *     id="domain_select"
  *     name="domain"
