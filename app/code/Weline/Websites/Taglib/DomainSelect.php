@@ -69,6 +69,7 @@ class DomainSelect implements TaglibInterface
             'site-ready-only' => true,    // v1.6.0: 是否只显示可建站且未已建站（site_ready=1 且 site_created=0），默认 true
             'value-type' => false,         // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
             'website-id' => false,        // 编辑站点时传入当前 website_id，列表中包含本站已绑定域名便于取消绑定
+            'bind-root-www' => false,     // 多选时：点选 apex 与 www.{apex} 其一则自动勾选另一（列表中存在时）；移除标签时成对移除
         ];
     }
 
@@ -102,6 +103,9 @@ class DomainSelect implements TaglibInterface
             $valueType = strtolower(trim($attributes['value-type'] ?? 'domain'));
             $websiteIdAttr = trim((string) ($attributes['website-id'] ?? ''));
             $websiteId = str_contains($websiteIdAttr, '<?=') ? 0 : (int) $websiteIdAttr;
+
+            $bindRootWwwRaw = $attributes['bind-root-www'] ?? 'false';
+            $bindRootWww = $isMultiple && \in_array(\strtolower(\trim((string) $bindRootWwwRaw)), ['true', '1', 'yes'], true);
             
             /** @var Url $url */
             $url = w_obj(Url::class);
@@ -320,7 +324,9 @@ class DomainSelect implements TaglibInterface
             $html[] = '    </div>';
             $html[] = '  </div>';
             if ($isMultiple) {
-                $html[] = '  <small class="weline-domain-select-hint">' . __('点击选择多个域名，选中后点击确定') . '</small>';
+                $html[] = '  <small class="weline-domain-select-hint">' . ($bindRootWww
+                    ? __('点击选择多个域名，选中后点击确定。根域与 www 子域成对绑定：选其一将自动勾选另一（若列表中存在）。')
+                    : __('点击选择多个域名，选中后点击确定')) . '</small>';
             } else {
                 $html[] = '  <small class="weline-domain-select-hint">' . __('点击选择域名，选择后将自动填充相关字段') . '</small>';
             }
@@ -395,6 +401,7 @@ class DomainSelect implements TaglibInterface
             $html[] = 'var id = <?= json_encode($Taglib__id) ?>;';
             $html[] = 'var limit = ' . $limit . ';';
             $html[] = 'var isMultiple = ' . ($isMultiple ? 'true' : 'false') . ';';
+            $html[] = 'var bindRootWww = ' . ($bindRootWww ? 'true' : 'false') . ';';
             $html[] = 'var siteReadyOnly = ' . ($siteReadyOnly ? 'true' : 'false') . ';';
             $html[] = 'var valueType = ' . json_encode($valueType) . ';';
             $html[] = 'var websiteId = ' . (str_contains($websiteIdAttr, '<?=')
@@ -494,6 +501,77 @@ class DomainSelect implements TaglibInterface
             $html[] = '  return domain;';
             $html[] = '}';
             $html[] = '';
+            $html[] = 'function getPairedRootWwwFqdn(domain) {';
+            $html[] = '  var d = (domain || "").toLowerCase().trim();';
+            $html[] = '  if (!d) return "";';
+            $html[] = '  if (d.indexOf("www.") === 0) return d.substring(4);';
+            $html[] = '  return "www." + d;';
+            $html[] = '}';
+            $html[] = '';
+            $html[] = 'function findDomainInCacheFqdn(domain) {';
+            $html[] = '  var want = (domain || "").toLowerCase();';
+            $html[] = '  if (!want) return null;';
+            $html[] = '  var found = null;';
+            $html[] = '  (cache || []).forEach(function(group) {';
+            $html[] = '    (group.options || []).forEach(function(opt) {';
+            $html[] = '      if (opt.domain && String(opt.domain).toLowerCase() === want) found = opt.domain;';
+            $html[] = '    });';
+            $html[] = '  });';
+            $html[] = '  return found;';
+            $html[] = '}';
+            $html[] = '';
+            $html[] = 'function syncPairedRootWww(anchorDomain, added) {';
+            $html[] = '  if (!bindRootWww || !isMultiple) return;';
+            $html[] = '  var pairKey = getPairedRootWwwFqdn(anchorDomain);';
+            $html[] = '  if (!pairKey) return;';
+            $html[] = '  var pairCanon = findDomainInCacheFqdn(pairKey);';
+            $html[] = '  if (!pairCanon) return;';
+            $html[] = '  if (String(pairCanon).toLowerCase() === String(anchorDomain || "").toLowerCase()) return;';
+            $html[] = '  var idx = -1;';
+            $html[] = '  for (var si = 0; si < selectedDomains.length; si++) {';
+            $html[] = '    if (String(selectedDomains[si]).toLowerCase() === String(pairCanon).toLowerCase()) { idx = si; break; }';
+            $html[] = '  }';
+            $html[] = '  if (added) {';
+            $html[] = '    if (idx === -1) selectedDomains.push(pairCanon);';
+            $html[] = '  } else if (idx > -1) {';
+            $html[] = '    selectedDomains.splice(idx, 1);';
+            $html[] = '  }';
+            $html[] = '}';
+            $html[] = '';
+            $html[] = 'function expandRootWwwPairsInSelection() {';
+            $html[] = '  if (!bindRootWww || !isMultiple || !cache) return;';
+            $html[] = '  var rounds = 0;';
+            $html[] = '  while (rounds < 3) {';
+            $html[] = '    rounds++;';
+            $html[] = '    var before = selectedDomains.length;';
+            $html[] = '    selectedDomains.slice().forEach(function(d) {';
+            $html[] = '      syncPairedRootWww(d, true);';
+            $html[] = '    });';
+            $html[] = '    if (selectedDomains.length === before) break;';
+            $html[] = '  }';
+            $html[] = '}';
+            $html[] = '';
+            $html[] = 'function isDomainInSelection(d) {';
+            $html[] = '  var dl = String(d || "").toLowerCase();';
+            $html[] = '  if (!dl) return false;';
+            $html[] = '  for (var i = 0; i < selectedDomains.length; i++) {';
+            $html[] = '    if (String(selectedDomains[i]).toLowerCase() === dl) return true;';
+            $html[] = '  }';
+            $html[] = '  return false;';
+            $html[] = '}';
+            $html[] = '';
+            $html[] = 'function syncListSelectionFromState() {';
+            $html[] = '  if (!isMultiple || !list) return;';
+            $html[] = '  list.querySelectorAll(".weline-domain-select-item").forEach(function(el) {';
+            $html[] = '    var d = el.dataset.domain;';
+            $html[] = '    if (!d) return;';
+            $html[] = '    var sel = isDomainInSelection(d);';
+            $html[] = '    if (sel) el.classList.add("selected"); else el.classList.remove("selected");';
+            $html[] = '    var cb = el.querySelector(".weline-domain-select-checkbox");';
+            $html[] = '    if (cb) cb.checked = sel;';
+            $html[] = '  });';
+            $html[] = '}';
+            $html[] = '';
             
             // 更新显示（多选模式下更新标签）
             $html[] = 'function updateDisplay() {';
@@ -518,10 +596,17 @@ class DomainSelect implements TaglibInterface
             $html[] = '      e.stopPropagation();';
             $html[] = '      var domain = this.dataset.domain;';
             $html[] = '      var idx = selectedDomains.indexOf(domain);';
-            $html[] = '      if (idx > -1) { selectedDomains.splice(idx, 1); }';
+            $html[] = '      if (idx === -1) {';
+            $html[] = '        for (var ti = 0; ti < selectedDomains.length; ti++) {';
+            $html[] = '          if (String(selectedDomains[ti]).toLowerCase() === String(domain).toLowerCase()) { idx = ti; break; }';
+            $html[] = '        }';
+            $html[] = '      }';
+            $html[] = '      if (idx > -1) selectedDomains.splice(idx, 1);';
+            $html[] = '      syncPairedRootWww(domain, false);';
             $html[] = '      updateHiddenValue();';
             $html[] = '      updateDisplay();';
             $html[] = '      doAutoFill();';
+            $html[] = '      syncListSelectionFromState();';
             $html[] = '    });';
             $html[] = '  });';
             $html[] = '}';
@@ -607,7 +692,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '        if (opt.site_ready) { descParts.push(\'<span style="color:var(--backend-color-success)">' . addslashes(__('可建站')) . '</span>\'); }';
             $html[] = '        if (opt.https_expires_at) { descParts.push(\'' . addslashes(__('证书到期')) . ': \' + opt.https_expires_at); }';
             $html[] = '        var desc = descParts.length > 0 ? \'<div class="weline-domain-select-item-desc">\' + descParts.join(" | ") + \'</div>\' : "";';
-            $html[] = '        var isSelected = selectedDomains.indexOf(opt.domain) > -1;';
+            $html[] = '        var isSelected = isDomainInSelection(opt.domain);';
             $html[] = '        var selectedClass = isSelected ? " selected" : "";';
             $html[] = '        var poolId = opt.pool_id || "";';
             $html[] = '        html += \'<div class="weline-domain-select-item\' + selectedClass + \'" data-domain="\' + opt.domain + \'" data-poolid="\' + poolId + \'">\';';
@@ -635,15 +720,12 @@ class DomainSelect implements TaglibInterface
             $html[] = '        var idx = selectedDomains.indexOf(domain);';
             $html[] = '        if (idx > -1) {';
             $html[] = '          selectedDomains.splice(idx, 1);';
-            $html[] = '          this.classList.remove("selected");';
-            $html[] = '          var cb = this.querySelector(".weline-domain-select-checkbox");';
-            $html[] = '          if (cb) cb.checked = false;';
+            $html[] = '          syncPairedRootWww(domain, false);';
             $html[] = '        } else {';
             $html[] = '          selectedDomains.push(domain);';
-            $html[] = '          this.classList.add("selected");';
-            $html[] = '          var cb = this.querySelector(".weline-domain-select-checkbox");';
-            $html[] = '          if (cb) cb.checked = true;';
+            $html[] = '          syncPairedRootWww(domain, true);';
             $html[] = '        }';
+            $html[] = '        syncListSelectionFromState();';
             $html[] = '      } else {';
             $html[] = '        hidden.value = itemValue;';
             $html[] = '        hidden.dataset.domain = domain;';
@@ -665,6 +747,7 @@ class DomainSelect implements TaglibInterface
             // 多选确认按钮
             $html[] = 'if (isMultiple && confirmBtn) {';
             $html[] = '  confirmBtn.addEventListener("click", function() {';
+            $html[] = '    if (bindRootWww) expandRootWwwPairsInSelection();';
             $html[] = '    updateHiddenValue();';
             $html[] = '    updateDisplay();';
             $html[] = '    doAutoFill();';
@@ -710,6 +793,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '            }';
             $html[] = '          });';
             $html[] = '        });';
+            $html[] = '        expandRootWwwPairsInSelection();';
             $html[] = '        updateHiddenValue();';
             $html[] = '        updateDisplay();';
             $html[] = '      }';
@@ -842,6 +926,8 @@ class DomainSelect implements TaglibInterface
             $html[] = '          if (!grp.options.some(function(o) { return o.domain === newDomain; })) {';
             $html[] = '            grp.options.push({ domain: newDomain, pool_id: newPoolId, site_ready: 0, root_domain: rootDomain });';
             $html[] = '          }';
+            $html[] = '          if (bindRootWww) expandRootWwwPairsInSelection();';
+            $html[] = '          if (valueType === "pool_id") updateHiddenValue();';
             $html[] = '          updateDisplay();';
             $html[] = '          doAutoFill();';
             $html[] = '        }';
@@ -903,6 +989,7 @@ class DomainSelect implements TaglibInterface
   <li><code>auto-fill-address</code>：自动填充地址的 textarea ID（多选时填充多行）</li>
   <li><code>site-ready-only</code>：<strong>[v1.6.0]</strong> 是否只显示 site_ready=1 的域名（默认 true）</li>
   <li><code>value-type</code>：<strong>[v1.6.0]</strong> 值类型 "domain"（默认）或 "pool_id"</li>
+  <li><code>bind-root-www</code>：多选时若为 true，apex 与 <code>www.</code>apex 在列表中同时存在则成对勾选/取消（移除标签亦成对）</li>
 </ul>
 
 <h4>使用示例</h4>
