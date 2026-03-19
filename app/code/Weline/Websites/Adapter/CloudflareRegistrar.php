@@ -88,9 +88,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         if ($zoneId === '') {
             return [
                 'success' => false,
-                'message' => __(
-                    '在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。'
-                ),
+                'message' => $this->zoneMissingViaApiMessage($domain),
             ];
         }
 
@@ -621,7 +619,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             return [
                 'domain' => $domain,
                 'status' => 'not_found',
-                'message' => __('域名未在 Cloudflare 中找到'),
+                'message' => $this->zoneMissingViaApiMessage($domain),
             ];
         }
 
@@ -660,7 +658,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
         $zoneId = $this->getZoneId($domain, $credentials);
         if ($zoneId === '') {
-            throw new \RuntimeException(__('域名 %{1} 未在 Cloudflare 中找到', [$domain]));
+            throw new \RuntimeException($this->zoneMissingViaApiMessage($domain));
         }
 
         $records = [];
@@ -721,7 +719,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         if ($zoneId === '') {
             return [
                 'success' => false,
-                'message' => __('域名 %{1} 未在 Cloudflare 中找到', [$domain]),
+                'message' => $this->zoneMissingViaApiMessage($domain),
             ];
         }
 
@@ -801,7 +799,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         if ($zoneId === '') {
             return [
                 'success' => false,
-                'message' => __('域名 %{1} 未在 Cloudflare 中找到', [$domain]),
+                'message' => $this->zoneMissingViaApiMessage($domain),
             ];
         }
 
@@ -847,7 +845,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
         if ($zoneId === '') {
             return [
                 'success' => false,
-                'message' => __('域名 %{1} 未在 Cloudflare 中找到', [$domain]),
+                'message' => $this->zoneMissingViaApiMessage($domain),
             ];
         }
 
@@ -1035,6 +1033,17 @@ class CloudflareRegistrar implements DomainRegistrarInterface
             'nameservers' => $ns,
             'message' => __('域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}', [\implode(', ', $ns)]),
         ];
+    }
+
+    /**
+     * GET /zones?name= 无结果时的用户说明（控制台可见 ≠ Token 能列出 Zone）。
+     */
+    private function zoneMissingViaApiMessage(string $domain): string
+    {
+        return (string) __(
+            '在当前 Cloudflare API Token 下未列出域名「%{1}」的 Zone（GET /zones 无结果）。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。',
+            [$domain]
+        );
     }
 
     /**
