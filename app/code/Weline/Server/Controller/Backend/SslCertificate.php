@@ -125,6 +125,11 @@ class SslCertificate extends BaseController
         if (empty($domain)) {
             return $this->fetchJson(['success' => false, 'message' => __('请指定域名')]);
         }
+
+        $block = $this->sslService->getSslIssuanceConflictMessage((string) $domain);
+        if ($block !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $block]);
+        }
         
         $result = $this->sslService->toggleHttps($domain, $enabled);
         
@@ -153,6 +158,11 @@ class SslCertificate extends BaseController
             $cert = $this->certModel->clearQuery()->load($certId);
             if (!$cert->getCertId()) {
                 return $this->fetchJson(['success' => false, 'message' => __('证书不存在')]);
+            }
+
+            $block = $this->sslService->getSslIssuanceConflictMessage($cert->getDomain());
+            if ($block !== '') {
+                return $this->fetchJson(['success' => false, 'message' => $block]);
             }
 
             $cert->setData($field, $value ? 1 : 0)->save();
@@ -228,6 +238,11 @@ class SslCertificate extends BaseController
         if (!$cert->getCertId()) {
             return $this->fetchJson(['success' => false, 'message' => __('未找到证书记录')]);
         }
+
+        $block = $this->sslService->getSslIssuanceConflictMessage($domain);
+        if ($block !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $block]);
+        }
         
         $webroot = BP . 'pub';
         $result = $this->sslService->renewCertificate($cert, $webroot, $email ?: 'admin@' . $domain);
@@ -257,6 +272,11 @@ class SslCertificate extends BaseController
 
         if (\in_array($domain, self::PROTECTED_DOMAINS, true)) {
             return $this->fetchJson(['success' => false, 'message' => __('本地域名证书（localhost/127.0.0.1）不允许删除，用于后台 HTTPS 访问')]);
+        }
+
+        $block = $this->sslService->getSslIssuanceConflictMessage($domain);
+        if ($block !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $block]);
         }
         
         $cert = $this->certModel->clearQuery()->loadByDomain($domain);
@@ -331,33 +351,25 @@ class SslCertificate extends BaseController
         $domains = $this->sslService->requestDomainList([
             'has_certificate' => false, // 只获取没有证书的域名
         ]);
-        
-        $synced = 0;
-        
+
+        // 不在此预写「待申请」证书记录：仅在证书成功下载并写入后入库，避免管理器在颁发前被占位/污染
+        $pendingSiteCount = 0;
         foreach ($domains as $domainData) {
-            $domain = $domainData['domain'] ?? '';
-            if (empty($domain)) {
+            $d = \trim((string) ($domainData['domain'] ?? ''));
+            if ($d === '') {
                 continue;
             }
-            
-            // 检查是否已有证书
-            $existingCert = $this->certModel->clearQuery()->loadByDomain($domain);
+            $existingCert = $this->certModel->clearQuery()->loadByDomain($d);
             if (!$existingCert->getCertId()) {
-                // 创建证书记录（待申请状态）
-                $newCert = clone $this->certModel;
-                $newCert->setDomain($domain)
-                    ->setWebsiteId((int) ($domainData['website_id'] ?? 0))
-                    ->setStatus(CertModel::STATUS_PENDING)
-                    ->setAutoRenew(true)
-                    ->save();
-                $synced++;
+                $pendingSiteCount++;
             }
         }
-        
+
         return $this->fetchJson([
             'success' => true,
-            'message' => __('同步完成，新增 %{1} 个域名', [$synced]),
-            'synced' => $synced,
+            'message' => __('同步完成：未自动写入证书记录（仅在证书颁发成功并下载后入库）。当前有 %{1} 个站点域名尚无证书行，请使用「申请证书」。', [$pendingSiteCount]),
+            'synced' => 0,
+            'pending_domain_count' => $pendingSiteCount,
         ]);
     }
     
@@ -467,14 +479,19 @@ class SslCertificate extends BaseController
         }
 
         $deleted = 0;
-        $skipped = [];
+        $skippedProtected = [];
+        $skippedIssuing = [];
         foreach ($domains as $domain) {
             $domain = \strtolower(\trim((string) $domain));
             if ($domain === '') {
                 continue;
             }
             if (\in_array($domain, self::PROTECTED_DOMAINS, true)) {
-                $skipped[] = $domain;
+                $skippedProtected[] = $domain;
+                continue;
+            }
+            if ($this->sslService->getSslIssuanceConflictMessage($domain) !== '') {
+                $skippedIssuing[] = $domain;
                 continue;
             }
             $cert = $this->certModel->clearQuery()->loadByDomain($domain);
@@ -506,10 +523,20 @@ class SslCertificate extends BaseController
         }
 
         $msg = __('已删除 %{1} 个证书', [$deleted]);
-        if ($skipped !== []) {
-            $msg .= '，' . __('跳过 %{1} 个本地域名（%{2}）', [\count($skipped), \implode(', ', $skipped)]);
+        if ($skippedProtected !== []) {
+            $msg .= '，' . __('跳过 %{1} 个本地域名（%{2}）', [\count($skippedProtected), \implode(', ', $skippedProtected)]);
         }
-        return $this->fetchJson(['success' => true, 'message' => $msg, 'deleted' => $deleted, 'skipped' => $skipped]);
+        if ($skippedIssuing !== []) {
+            $msg .= '，' . __('跳过 %{1} 个正在申请证书的域名（%{2}）', [\count($skippedIssuing), \implode(', ', $skippedIssuing)]);
+        }
+        return $this->fetchJson([
+            'success' => true,
+            'message' => $msg,
+            'deleted' => $deleted,
+            'skipped' => \array_merge($skippedProtected, $skippedIssuing),
+            'skipped_protected' => $skippedProtected,
+            'skipped_issuing' => $skippedIssuing,
+        ]);
     }
 
     /**
