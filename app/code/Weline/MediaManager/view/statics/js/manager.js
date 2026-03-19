@@ -1019,6 +1019,58 @@
         document.body.removeChild(a);
     }
 
+    /** 浏览器可打开的媒体文件直链（不含 download=1） */
+    function getFileResourceUrl(hash) {
+        if (!CONNECTOR || !hash) return '';
+        var rel = CONNECTOR + (CONNECTOR.indexOf('?') >= 0 ? '&' : '?') + 'cmd=file&target=' + encodeURIComponent(hash);
+        try {
+            return new URL(rel, document.baseURI).href;
+        } catch (e) {
+            return rel;
+        }
+    }
+
+    function copyTextToClipboard(text, onOk, onErr) {
+        if (!text) {
+            (onErr || showError)(t('copyUrlFailed'));
+            return;
+        }
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function () { onOk && onOk(); }).catch(function () {
+                fallbackCopyText(text, onOk, onErr);
+            });
+        } else {
+            fallbackCopyText(text, onOk, onErr);
+        }
+    }
+
+    function fallbackCopyText(text, onOk, onErr) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            if (document.execCommand('copy')) {
+                onOk && onOk();
+            } else {
+                (onErr || showError)(t('copyUrlFailed'));
+            }
+        } catch (e) {
+            (onErr || showError)(t('copyUrlFailed'));
+        }
+        document.body.removeChild(ta);
+    }
+
+    function copyFileUrl(hash) {
+        var f = FILES[hash];
+        if (!f || f.mime === 'directory') return;
+        var url = getFileResourceUrl(hash);
+        copyTextToClipboard(url, function () { showSuccess(t('urlCopied')); }, function () {});
+    }
+
     /* ─── context menu ───────────────────────────────────────────────── */
 
     function bindContextMenu() {
@@ -1063,6 +1115,7 @@
         }
         if (f && !isDir) {
             html += '<div class="mmf-context-item" data-action="download">\uD83D\uDCE5 ' + t('download') + '</div>';
+            html += '<div class="mmf-context-item" data-action="copy-url">\uD83D\uDD17 ' + t('copyUrl') + '</div>';
         }
         if (f && isDir) {
             html += '<div class="mmf-context-item" data-action="open">\uD83D\uDCC2 ' + t('open') + '</div>';
@@ -1090,6 +1143,7 @@
                 else if (action === 'confirm-selection') confirmSelection();
                 else if (action === 'preview' && SELECTED.length === 1) openLightbox(SELECTED[0]);
                 else if (action === 'download' && SELECTED.length === 1) downloadFile(SELECTED[0]);
+                else if (action === 'copy-url' && SELECTED.length === 1) copyFileUrl(SELECTED[0]);
                 else if (action === 'open' && SELECTED.length === 1) openDir(SELECTED[0]);
                 else if (action === 'rename') renameSelected();
                 else if (action === 'delete') deleteSelected();
