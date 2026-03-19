@@ -17,6 +17,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Layout;
+use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use Weline\Framework\Manager\ObjectManager;
 
 class ComponentService
@@ -267,7 +268,24 @@ class ComponentService
         
         // 直接使用页面类型代码作为配置文件名
         $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/{$pageType}.json";
-        
+
+        if (!file_exists($configFilePath)) {
+            // 法律类页面：主题无专用布局时使用 _shared 默认（legal-content 组件 + 预设文案）
+            $legalTypes = [
+                PageModel::TYPE_PRIVACY_POLICY,
+                PageModel::TYPE_TERMS_OF_SERVICE,
+                PageModel::TYPE_REFUND_POLICY,
+                PageModel::TYPE_COOKIE_POLICY,
+                PageModel::TYPE_SHIPPING_POLICY,
+            ];
+            if (\in_array($pageType, $legalTypes, true)) {
+                $sharedLegal = BP . 'app/code/GuoLaiRen/PageBuilder/view/templates/style/_shared/layouts/default/' . $pageType . '.json';
+                if (\is_file($sharedLegal)) {
+                    $configFilePath = $sharedLegal;
+                }
+            }
+        }
+
         if (!file_exists($configFilePath)) {
             // fallback 到 custom_page
             $configFilePath = BP . "app/code/GuoLaiRen/PageBuilder/view/templates/style/{$styleCode}/layouts/default/custom_page.json";

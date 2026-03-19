@@ -702,12 +702,17 @@ class Component extends Model
         // 2. 扫描 components 目录（优先使用 component.json 配置）
         $componentsDir = $basePath . 'components/';
         $componentJsonFile = $componentsDir . 'component.json';
-        
+        $jsonConfig = null;
+        $contentPhtmlScanAlways = false;
+
         if (file_exists($componentJsonFile)) {
             // 从 component.json 读取组件配置
             $jsonContent = file_get_contents($componentJsonFile);
             $jsonConfig = json_decode($jsonContent, true);
-            
+            if (\is_array($jsonConfig)) {
+                $contentPhtmlScanAlways = ($jsonConfig['content_phtml_scan'] ?? '') === 'always';
+            }
+
             if ($jsonConfig && isset($jsonConfig['components'])) {
                 foreach ($jsonConfig['components'] as $code => $config) {
                     $result['scanned']++;
@@ -715,10 +720,18 @@ class Component extends Model
                     // 组件文件路径
                     $componentFile = $config['file'] ?? ($code . '.phtml');
                     $filePath = $componentsDir . $componentFile;
-                    
-                    if (!file_exists($filePath)) {
-                        $result['errors'][] = "Component file not found: {$componentFile}";
-                        continue;
+
+                    if (!\file_exists($filePath)) {
+                        $pathResolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+                            \GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver::class
+                        );
+                        $resolved = $pathResolver->resolveComponentFilesystemPath($styleCode, $componentFile);
+                        if (\is_file($resolved)) {
+                            $filePath = $resolved;
+                        } else {
+                            $result['errors'][] = "Component file not found: {$componentFile}";
+                            continue;
+                        }
                     }
                     
                     try {
@@ -793,12 +806,15 @@ class Component extends Model
         // 注意：如果 component.json 存在且已定义组件，则跳过 content.phtml 解析
         // 因为 content.phtml 的锚点格式路径 (content.phtml#section) 与文件系统不兼容
         $contentFile = $basePath . 'content.phtml';
-        $hasComponentJsonComponents = file_exists($componentJsonFile) && 
-            isset($jsonConfig) && is_array($jsonConfig) &&
-            isset($jsonConfig['components']) && 
-            !empty($jsonConfig['components']);
-        
-        if (file_exists($contentFile) && !$hasComponentJsonComponents) {
+        // 存在 component.json 且声明了组件时，默认跳过 content.phtml 自动拆分；
+        // 若需同时保留（如 default 仅补充 legal-content），在 JSON 中设 content_phtml_scan: always
+        $hasComponentJsonComponents = \file_exists($componentJsonFile) &&
+            isset($jsonConfig) && \is_array($jsonConfig) &&
+            isset($jsonConfig['components']) &&
+            !empty($jsonConfig['components']) &&
+            !$contentPhtmlScanAlways;
+
+        if (\file_exists($contentFile) && !$hasComponentJsonComponents) {
             $result['scanned']++;
             $contentSections = self::parseContentSections($contentFile);
             

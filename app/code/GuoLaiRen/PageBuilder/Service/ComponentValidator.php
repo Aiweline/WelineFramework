@@ -176,8 +176,8 @@ class ComponentValidator
         
         // 验证组件文件存在
         $filePath = $componentConfig['file'] ?? '';
-        $fullPath = $this->pathResolver->getComponentFilePath($styleCode, $filePath);
-        
+        $fullPath = $this->pathResolver->resolveComponentFilesystemPath($styleCode, $filePath);
+
         if (!file_exists($fullPath)) {
             return null;
         }
