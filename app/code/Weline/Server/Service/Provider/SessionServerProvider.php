@@ -101,6 +101,14 @@ class SessionServerProvider extends AbstractServiceProvider
 
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
-        return (int) ($context->envConfig['session']['server_port'] ?? 19970);
+        $wlsSession = ($context->envConfig['wls'] ?? [])['session'] ?? [];
+        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+
+        return (int) (
+            $wlsSession['port']
+            ?? $wlsServer['port']
+            ?? $context->envConfig['session']['server_port']
+            ?? 19970
+        );
     }
 }
