@@ -21,6 +21,7 @@ alwaysApply: false
 ## 2) WLS
 
 - 代码变更后 `php bin/w server:reload` 即可；仅 Master/Dispatcher/启动参数变更时 `server:restart -r`
+- 全量停止 `stopAll` 阶段 2「等待排水」默认 **10s**（原 2s 易误判超时）；可在配置中设置 `wls.orchestrator.stop_all_drain_wait_sec`（1～300）
 
 ## 最小示例
 
