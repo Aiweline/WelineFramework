@@ -59,10 +59,10 @@ class Config extends BackendController
     #[Acl('Weline_Smtp::smtp_config_save', '保存配置', 'mdi-content-save', '保存 SMTP 配置', 'Weline_Smtp::system_smtp_config')]
     public function post(): string
     {
-        $smtp_configs                = array_intersect_key($this->request->getPost(), array_flip(Data::keys));
-        $smtp_configs['smtp_secure'] = '1';
-        $smtp_configs['smtp_auth']   = '1';
-        $has_error                   = '';
+        $smtp_configs = array_intersect_key($this->request->getPost(), array_flip(Data::keys));
+        $smtp_configs['smtp_secure'] = (string) ($smtp_configs['smtp_secure'] ?? $this->data->get(Data::smtp_secure) ?: '1');
+        $smtp_configs['smtp_auth'] = (string) ($smtp_configs['smtp_auth'] ?? $this->data->get(Data::smtp_auth) ?: '1');
+        $has_error = '';
         foreach ($smtp_configs as $key => $config) {
             try {
                 $this->data->set($key, $config);

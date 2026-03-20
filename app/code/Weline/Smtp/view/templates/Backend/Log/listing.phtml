@@ -68,7 +68,7 @@
                                     </if>
                                     <if condition="log.bcc  !== '[]'">
                                         <lang>密送：</lang>
-                                        {{log.cc}}
+                                        {{log.bcc}}
                                     </if>
                                 </td>
                                 <td>{{log.subject}}</td>
@@ -79,7 +79,7 @@
                                         <span class=" badge bg-danger">text</span>
                                     </if>
                                     {{log.content}}
-                                    <if condition="log.alt=='1'">
+                                    <if condition="log.alt!=''">
                                         <br>
                                         <span class="badge bg-info">{{log.alt}}</span>
                                     </if>
