@@ -53,6 +53,11 @@ class Processer
      * 框架进程名前缀（用于安全校验，防止误杀非框架进程）
      */
     public const WELINE_PROCESS_PREFIX = 'weline-';
+    /**
+     * WLS 框架内置进程名前缀（如 weline-wls-worker-1）
+     */
+    public const WLS_PROCESS_PREFIX = 'weline-wls-';
+    private const PROCESS_RECORD_VERSION = 2;
     
     /**
      * 进程名最大长度
@@ -193,10 +198,29 @@ class Processer
         
         // 组合并规范化
         $name = self::WELINE_PROCESS_PREFIX . self::normalizeName(\implode('-', $parts));
-        
+
         return $name;
     }
-    
+
+    /**
+     * 为模块自定义进程构建规范化进程名。
+     *
+     * 格式：weline-{moduleCode}-{name}
+     * 示例：buildModuleProcessName('Weline_Payment', 'worker-1') → 'weline-weline-payment-worker-1'
+     *
+     * 用途：模块在 ServiceCommand 中使用此方法生成进程名，Master 通过进程名前缀区分框架/模块进程。
+     *
+     * @param string $moduleCode 模块代码（如 'Weline_Payment'），不含 'weline-' 前缀
+     * @param string $name       自定义名称（如 'worker' / 'queue-1'）
+     * @return string 完整的规范化进程名
+     */
+    public static function buildModuleProcessName(string $moduleCode, string $name): string
+    {
+        $normalizedCode = self::normalizeName($moduleCode);
+        $normalizedName = self::normalizeName($name);
+        return self::WELINE_PROCESS_PREFIX . $normalizedCode . '-' . $normalizedName;
+    }
+
     /**
      * 确保命令包含 --name 参数
      * 
@@ -375,7 +399,7 @@ class Processer
         // 使用 getData + isRunningByPid 快速路径，避免慢的系统搜索
         if ($block && !$foreground) {
             $existingPid = (int) self::getData($pname, 'pid');
-            if ($existingPid > 0 && self::isRunningByPid($existingPid)) {
+            if ($existingPid > 0 && self::isManagedProcessRunning($existingPid, null, '', $pname)) {
                 return $existingPid;
             }
         }
@@ -699,14 +723,15 @@ class Processer
     {
         $pid_file  = self::getPidFile($pname, $pid);
         $task_name = self::getTaskName($pname);
-        
-        $payload = \json_encode([
+
+        $payloadData = \array_merge([
             'pid' => $pid,
             'time' => time(),
             'date' => date('Y-m-d H:i:s'),
             'pname' => $pname,
             'task_name' => $task_name,
-        ]);
+        ], self::buildProcessIdentityRecord($pname, $pid, $task_name));
+        $payload = \json_encode($payloadData, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
         $dir = \dirname($pid_file);
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
@@ -769,10 +794,6 @@ class Processer
         $data = \json_decode($raw, true) ?: [];
         
         // 从 PID 文件读取的 PID 自动标记为受信任（跳过后续命令行校验）
-        if (!empty($data['pid']) && (int)$data['pid'] > 0) {
-            self::markPidAsTrusted((int)$data['pid']);
-        }
-        
         if ($key && isset($data[$key])) {
             return $data[$key];
         }
@@ -793,11 +814,134 @@ class Processer
      */
     public static function setData(string $pname, string $key, string $value): array
     {
-        $pid_file   = self::getPidFile($pname);
-        $data       = json_decode(file_get_contents($pid_file) ?: '', true) ?: [];
-        $data[$key] = $value;
-        file_put_contents($pid_file, json_encode($data));
+        return self::setProcessMetadata($pname, [$key => $value]);
+    }
+
+    /**
+     * 合并写入进程元数据。
+     */
+    public static function setProcessMetadata(string $pname, array $metadata): array
+    {
+        if (empty($metadata)) {
+            $data = self::getData($pname);
+            return \is_array($data) ? $data : [];
+        }
+
+        $pid_file = self::getPidFile($pname);
+        $dir = \dirname($pid_file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0777, true);
+        }
+
+        $data = self::getData($pname);
+        if (!\is_array($data)) {
+            $data = [];
+        }
+
+        foreach ($metadata as $metaKey => $metaValue) {
+            $data[$metaKey] = $metaValue;
+        }
+
+        self::atomicWrite($pid_file, \json_encode($data, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_UNICODE));
+
         return $data;
+    }
+
+    /**
+     * 通过 PID 读取进程记录。
+     */
+    public static function getProcessRecordByPid(int $pid): array
+    {
+        if ($pid <= 0) {
+            return [];
+        }
+
+        $pidIndex = self::readPidIndex();
+        $entry = $pidIndex[$pid] ?? null;
+        if (!\is_array($entry)) {
+            return [];
+        }
+
+        $jsonPath = (string) ($entry['jsonPath'] ?? '');
+        if ($jsonPath !== '' && \is_file($jsonPath)) {
+            $raw = @\file_get_contents($jsonPath);
+            $data = \json_decode($raw ?: '', true);
+            if (\is_array($data)) {
+                return $data;
+            }
+        }
+
+        $pname = (string) ($entry['pname'] ?? '');
+        if ($pname === '') {
+            return [];
+        }
+
+        $data = self::getData($pname);
+        return \is_array($data) ? $data : [];
+    }
+
+    /**
+     * 安全检查：PID 当前是否仍然匹配受管进程身份。
+     */
+    public static function isManagedProcessRunning(
+        int $pid,
+        ?string $expectedProcessName = null,
+        string $expectedLaunchId = '',
+        ?string $expectedPname = null
+    ): bool {
+        if ($pid <= 0 || !self::isRunningByPid($pid)) {
+            return false;
+        }
+
+        $record = self::getProcessRecordByPid($pid);
+        if ($expectedPname !== null && $expectedPname !== '') {
+            $record['pname'] = $expectedPname;
+            $record['pname_key'] = self::buildPnameKey($expectedPname);
+        }
+        if ($expectedProcessName !== null && $expectedProcessName !== '') {
+            $record['process_name'] = self::normalizeName($expectedProcessName);
+        }
+        if ($expectedLaunchId !== '') {
+            $record['launch_id'] = $expectedLaunchId;
+        }
+
+        if (empty($record)) {
+            return self::processExists($pid);
+        }
+
+        return self::doesPidMatchRecordedIdentity($pid, $record);
+    }
+
+    /**
+     * 安全结束一个受管进程。
+     */
+    public static function killManagedProcess(
+        int $pid,
+        ?string $expectedProcessName = null,
+        string $expectedLaunchId = '',
+        ?string $expectedPname = null
+    ): bool {
+        if (!self::isManagedProcessRunning($pid, $expectedProcessName, $expectedLaunchId, $expectedPname)) {
+            return false;
+        }
+
+        return self::killByPid($pid, true);
+    }
+
+    /**
+     * 安全结束一个受管进程树。
+     */
+    public static function killManagedProcessTree(
+        int $pid,
+        ?string $expectedProcessName = null,
+        string $expectedLaunchId = '',
+        ?string $expectedPname = null
+    ): bool {
+        if (!self::isManagedProcessRunning($pid, $expectedProcessName, $expectedLaunchId, $expectedPname)) {
+            return false;
+        }
+
+        return self::killProcessTreeByPid($pid, true);
     }
 
     /**
@@ -815,7 +959,7 @@ class Processer
         $pid = self::getData($pname, 'pid') ?: 0;
         if ($pid) {
             // 验证 PID 是否仍在运行
-            if (self::isRunningByPid($pid)) {
+            if (self::isManagedProcessRunning((int) $pid, null, '', $pname)) {
                 return $pid;
             }
         }
@@ -1111,7 +1255,12 @@ class Processer
             }
             $data = \json_decode($raw, true);
             $pid = isset($data['pid']) ? (int) $data['pid'] : 0;
-            if ($pid > 0 && !self::isRunningByPid($pid)) {
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $matchesIdentity = \is_array($data) && self::doesPidMatchRecordedIdentity($pid, $data);
+            if (!$matchesIdentity) {
                 @\unlink($path);
                 $stalePids[] = $pid;
                 $removed++;
@@ -1127,6 +1276,7 @@ class Processer
                     unset($pidIndex[$stalePid]);
                     $pidIndexChanged = true;
                 }
+                self::untrustPid($stalePid);
             }
             if ($pidIndexChanged) {
                 self::writePidIndex($pidIndex);
@@ -1150,16 +1300,30 @@ class Processer
     {
         // 快速路径：先从文件获取 PID（< 1ms）
         // 不调用 getPidByName()，它会触发慢的系统进程搜索
-        $pid = (int) self::getData($pname, 'pid');
+        $record = self::getData($pname);
+        $pid = (int) ($record['pid'] ?? 0);
         if ($pid <= 0) {
             // 没有 PID 文件记录，清理残留文件
             self::removePidFile($pname);
+            self::removeLogFile($pname);
             return false;
         }
-        $result = self::killByPid($pid);
+        if (!self::isRunningByPid($pid)) {
+            self::removePidFile($pname);
+            self::removeLogFile($pname);
+            return false;
+        }
+
+        if (!\is_array($record) || !self::doesPidMatchRecordedIdentity($pid, $record)) {
+            return false;
+        }
         // 清理 PID 文件（避免累积）
-        self::removePidFile($pname);
-        return $result;
+        return self::killManagedProcess(
+            $pid,
+            (string) ($record['process_name'] ?? ''),
+            (string) ($record['launch_id'] ?? ''),
+            $pname
+        );
     }
 
 
@@ -1176,8 +1340,14 @@ class Processer
     public static function running(string $pname): bool
     {
         // 快速路径：先从文件获取 PID（< 1ms）
-        $pid = (int) self::getData($pname, 'pid');
-        if ($pid > 0 && self::isRunningByPid($pid)) {
+        $record = self::getData($pname);
+        $pid = (int) ($record['pid'] ?? 0);
+        if ($pid > 0 && self::isManagedProcessRunning(
+            $pid,
+            !empty($record['process_name']) ? (string) $record['process_name'] : null,
+            (string) ($record['launch_id'] ?? ''),
+            $pname
+        )) {
             return true;
         }
         
@@ -1187,7 +1357,12 @@ class Processer
         if (empty($pid)) {
             return false;
         }
-        return self::isRunningByPid($pid);
+        return self::isManagedProcessRunning(
+            $pid,
+            !empty($record['process_name']) ? (string) $record['process_name'] : null,
+            (string) ($record['launch_id'] ?? ''),
+            $pname
+        );
     }
 
     /**
@@ -1202,6 +1377,8 @@ class Processer
      */
     public static function destroy(string $pname): bool
     {
+        return self::kill($pname);
+
         // 快速路径：先从文件获取 PID（< 1ms）
         $pid = (int) self::getData($pname, 'pid');
         
@@ -1214,11 +1391,22 @@ class Processer
             return false;
         }
         
-        $result = self::killByPid($pid);
-        // 无论杀死是否成功，都要清理 PID 文件（避免累积）
-        self::removePidFile($pname);
-        self::removeLogFile($pname);
-        return $result;
+        if (!self::isRunningByPid($pid)) {
+            self::removePidFile($pname);
+            self::removeLogFile($pname);
+            return false;
+        }
+
+        if (!\is_array($record) || !self::doesPidMatchRecordedIdentity($pid, $record)) {
+            return false;
+        }
+
+        return self::killManagedProcess(
+            $pid,
+            (string) ($record['process_name'] ?? ''),
+            (string) ($record['launch_id'] ?? ''),
+            $pname
+        );
     }
 
 
@@ -1415,11 +1603,12 @@ class Processer
         
         // 使用驱动执行 kill 操作
         $result = self::getDriver()->killProcess($pid);
+        $stillRunning = self::isRunningByPid($pid);
         
         // 从受信任缓存移除（防止 PID 复用时误信任）
         self::untrustPid($pid);
 
-        if ($pname && $pname !== 'unknown') {
+        if ($pname && $pname !== 'unknown' && !$stillRunning) {
             // 记录杀进程日志
             self::logLifecycleEvent('kill', $pname, $pid);
             # 卸载pid文件
@@ -1427,7 +1616,7 @@ class Processer
             # 卸载日志文件
             self::removeLogFile($pname);
         }
-        return $result;
+        return $result || !$stillRunning;
     }
     
     /**
@@ -1464,11 +1653,12 @@ class Processer
             // 回退：使用 killProcess（单进程杀死）
             $result = self::getDriver()->killProcess($pid);
         }
+        $stillRunning = self::isRunningByPid($pid);
         
         // 从受信任缓存移除（防止 PID 复用时误信任）
         self::untrustPid($pid);
 
-        if ($pname && $pname !== 'unknown') {
+        if ($pname && $pname !== 'unknown' && !$stillRunning) {
             // 记录杀进程日志
             self::logLifecycleEvent('kill', $pname, $pid, 'killed process tree');
             # 卸载pid文件
@@ -1476,7 +1666,7 @@ class Processer
             # 卸载日志文件
             self::removeLogFile($pname);
         }
-        return $result;
+        return $result || !$stillRunning;
     }
     
     /**
@@ -1945,8 +2135,8 @@ class Processer
                 return $port;
             }
         }
-        # 如果所有端口都被占用，返回原始端口
-        return $startPort;
+        # 显式返回 0，表示端口池已耗尽
+        return 0;
     }
     
     /**
@@ -1976,11 +2166,8 @@ class Processer
             $pname = '--name=' . $processName;
             $pid = (int) self::getData($pname, 'pid');
             
-            if ($pid > 0 && self::isRunningByPid($pid)) {
-                // 再次校验命令行（防止同名非框架进程）
-                if (self::isProcessManagerCreated($pid)) {
-                    self::killByPid($pid, true); // skipCheck=true 因为已校验
-                    self::removePidFile($pname);
+            if ($pid > 0 && self::isManagedProcessRunning($pid, $processName, '', $pname)) {
+                if (self::killManagedProcess($pid, $processName, '', $pname)) {
                     \usleep(200000);
                     
                     if (!self::isRunningByPid($pid)) {
@@ -2000,7 +2187,7 @@ class Processer
             foreach ($pids as $p) {
                 // 校验每个 pid 是否为己方进程
                 if (self::isProcessManagerCreated($p)) {
-                    self::killByPid($p, true);
+                    self::killManagedProcess($p, $processName);
                 }
             }
             
@@ -2409,6 +2596,148 @@ class Processer
         }
         return $killed;
     }
+
+    private static function buildProcessIdentityRecord(string $pname, int $pid, string $taskName): array
+    {
+        $record = [
+            'record_version' => self::PROCESS_RECORD_VERSION,
+            'pname_key' => self::buildPnameKey($pname),
+            'process_name' => $taskName,
+        ];
+
+        if ($pid <= 0) {
+            return $record;
+        }
+
+        $cmdLine = self::getProcessCommandLine($pid);
+        if ($cmdLine === '') {
+            return $record;
+        }
+
+        $record['command_line_hash'] = \sha1($cmdLine);
+
+        $processName = self::extractCommandLineArg($cmdLine, 'name');
+        if ($processName !== '') {
+            $record['process_name'] = self::normalizeName($processName);
+        }
+
+        $launchId = self::extractCommandLineArg($cmdLine, 'launch-id');
+        if ($launchId !== '') {
+            $record['launch_id'] = $launchId;
+        }
+
+        $epoch = self::extractCommandLineArg($cmdLine, 'epoch');
+        if ($epoch !== '' && \is_numeric($epoch)) {
+            $record['epoch'] = (int) $epoch;
+        }
+
+        return $record;
+    }
+
+    private static function buildPnameKey(string $pname): string
+    {
+        if ($pname === '') {
+            return '';
+        }
+
+        return '--name=' . self::getTaskName($pname);
+    }
+
+    private static function getRecordedProcessName(array $record): string
+    {
+        $processName = (string) ($record['process_name'] ?? '');
+        if ($processName !== '') {
+            return self::normalizeName($processName);
+        }
+
+        $taskName = (string) ($record['task_name'] ?? '');
+        if ($taskName !== '') {
+            return self::normalizeName($taskName);
+        }
+
+        $pname = (string) ($record['pname'] ?? '');
+        if ($pname !== '') {
+            return self::getTaskName($pname);
+        }
+
+        return '';
+    }
+
+    private static function doesPidMatchRecordedIdentity(int $pid, array $record): bool
+    {
+        if ($pid <= 0 || !self::isRunningByPid($pid)) {
+            return false;
+        }
+
+        $expectedPnameKey = (string) ($record['pname_key'] ?? '');
+        if ($expectedPnameKey === '' && !empty($record['pname'])) {
+            $expectedPnameKey = self::buildPnameKey((string) $record['pname']);
+        }
+
+        $expectedProcessName = self::getRecordedProcessName($record);
+        $expectedLaunchId = (string) ($record['launch_id'] ?? '');
+
+        $pidIndex = self::readPidIndex();
+        $indexedPname = (string) ($pidIndex[$pid]['pname'] ?? '');
+        if ($expectedPnameKey !== '' && $indexedPname !== ''
+            && self::buildPnameKey($indexedPname) !== $expectedPnameKey) {
+            return false;
+        }
+
+        $cmdLine = self::getProcessCommandLine($pid);
+        if ($cmdLine !== '') {
+            if ($expectedProcessName !== '') {
+                $actualProcessName = self::extractCommandLineArg($cmdLine, 'name');
+                if ($actualProcessName !== '') {
+                    if (self::normalizeName($actualProcessName) !== $expectedProcessName) {
+                        return false;
+                    }
+                } elseif (\strpos($cmdLine, '--name=' . $expectedProcessName) === false
+                    && \strpos($cmdLine, '--name ' . $expectedProcessName) === false) {
+                    return false;
+                }
+            }
+
+            if ($expectedLaunchId !== '') {
+                $actualLaunchId = self::extractCommandLineArg($cmdLine, 'launch-id');
+                if ($actualLaunchId === '' || $actualLaunchId !== $expectedLaunchId) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if ($expectedPnameKey !== '' && $indexedPname !== '') {
+            return self::buildPnameKey($indexedPname) === $expectedPnameKey;
+        }
+
+        if ($expectedProcessName !== '' && $indexedPname !== '') {
+            return self::getTaskName($indexedPname) === $expectedProcessName;
+        }
+
+        return $indexedPname !== '';
+    }
+
+    private static function extractCommandLineArg(string $commandLine, string $name): string
+    {
+        if ($commandLine === '' || $name === '') {
+            return '';
+        }
+
+        $pattern = "/--" . \preg_quote($name, '/') . "(?:=|\\s+)(?:\"([^\"]+)\"|'([^']+)'|([^\\s]+))/i";
+        if (!\preg_match($pattern, $commandLine, $matches)) {
+            return '';
+        }
+
+        foreach ([1, 2, 3] as $index) {
+            if (!empty($matches[$index])) {
+                return (string) $matches[$index];
+            }
+        }
+
+        return '';
+    }
     
     /*----------------------------------------索引更新区域------------------------------------------*/
     
@@ -2458,6 +2787,7 @@ class Processer
         foreach ($deadPids as $deadPid) {
             if ($deadPid > 0 && isset($pidIndex[$deadPid])) {
                 unset($pidIndex[$deadPid]);
+                self::untrustPid($deadPid);
             }
         }
         $pidIndex[$pid] = ['pname' => $pname, 'jsonPath' => $jsonPath];
@@ -2500,6 +2830,7 @@ class Processer
                 unset($pidIndex[$pid]);
                 self::writePidIndex($pidIndex);
             }
+            self::untrustPid($pid);
         }
         
         // 移除 port_index 中的相关项
@@ -2654,6 +2985,7 @@ class Processer
                 foreach ($deadPids as $deadPid) {
                     if (isset($pidIndex[$deadPid])) {
                         unset($pidIndex[$deadPid]);
+                        self::untrustPid($deadPid);
                         $pidChanged = true;
                     }
                 }
@@ -3139,7 +3471,7 @@ class Processer
         // 快速路径：先从文件检查（避免昂贵的系统搜索）
         $pname = '--name=' . $processName;
         $pid = (int) self::getData($pname, 'pid');
-        if ($pid > 0 && self::isRunningByPid($pid)) {
+        if ($pid > 0 && self::isManagedProcessRunning($pid, $processName, '', $pname)) {
             return true;
         }
         
@@ -3259,7 +3591,17 @@ class Processer
             if ($pid === $currentPid || !self::isProcessManagerCreated($pid)) {
                 continue;
             }
-            $result = self::getDriver()->killProcess($pid);
+            $taskName = '';
+            try {
+                $taskName = self::getTaskName($pname);
+            } catch (\Throwable) {
+            }
+            $result = self::killManagedProcess(
+                $pid,
+                $taskName !== '' ? $taskName : null,
+                '',
+                $pname
+            );
             if ($result) {
                 $killed++;
                 $killedPids[$pid] = true;
@@ -3269,21 +3611,19 @@ class Processer
         
         // 4. 系统级兜底：通过 pgrep/ps 搜索命令行中含 --name={prefix} 的进程
         //    解决 osascript/nohup 等启动方式导致 name_index 缺失 PID 的问题
-        if (!IS_WIN) {
-            $sysPids = self::getDriver()->findProcessesByName($prefix);
-            foreach ($sysPids as $pid) {
-                if ($pid <= 0 || $pid === $currentPid || isset($killedPids[$pid])) {
-                    continue;
-                }
-                if (!self::isWelineServerProcess($pid)) {
-                    continue;
-                }
-                $result = self::getDriver()->killProcess($pid);
-                if ($result) {
-                    $killed++;
-                    $killedPids[$pid] = true;
-                    self::logLifecycleEvent('kill', '--name=' . $prefix . '(sys)', $pid, 'killed by system search, prefix: ' . $prefix);
-                }
+        $sysPids = self::getDriver()->findProcessesByName($prefix);
+        foreach ($sysPids as $pid) {
+            if ($pid <= 0 || $pid === $currentPid || isset($killedPids[$pid])) {
+                continue;
+            }
+            if (!self::isWelineServerProcess($pid)) {
+                continue;
+            }
+            $result = self::killByPid($pid);
+            if ($result) {
+                $killed++;
+                $killedPids[$pid] = true;
+                self::logLifecycleEvent('kill', '--name=' . $prefix . '(sys)', $pid, 'killed by system search, prefix: ' . $prefix);
             }
         }
         

@@ -54,7 +54,9 @@ final class SubprocessControlKernel
             $this->identity->port,
             $this->identity->workerId,
             $this->identity->epoch,
-            $this->identity->launchId
+            $this->identity->launchId,
+            $this->identity->processKind,
+            $this->identity->moduleCode
         );
         $client->sendReady(
             $this->identity->role,
