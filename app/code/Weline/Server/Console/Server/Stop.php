@@ -33,6 +33,10 @@ class Stop extends CommandAbstract
 {
     /** IPC 等待超时（秒）- 与 Windows 一致，不长时间等待，超时后强制杀进程 */
     private const IPC_TIMEOUT = 15;
+
+    /** IPC 硬超时（秒）- 避免进度持续刷新时无限等待 */
+    private const IPC_HARD_TIMEOUT_WIN = 45;
+    private const IPC_HARD_TIMEOUT_LINUX = 30;
     
     /** 子进程全部退出后等待 Master 退出的最大时间（秒）- Linux 上 Master 清理索引/退出主循环较慢，需更长超时 */
     private const MASTER_EXIT_TIMEOUT_WIN = 5;
@@ -301,8 +305,11 @@ class Stop extends CommandAbstract
     private function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
     {
         $this->printer->note(__('清理残留进程...'));
-        $k = $this->cleanupResidualProcessesByInfo($name, $info, true);
-        $k += $this->cleanupResidualProcesses($name, ['count' => $info->workerCount], true);
+        $pids = \array_merge(
+            $this->collectResidualPidsByInfo($info),
+            $this->collectIndexedResidualPids($name)
+        );
+        $k = $this->terminateResidualProcesses($pids, true);
         if ($k > 0) {
             $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$k]));
         } else {
@@ -323,45 +330,11 @@ class Stop extends CommandAbstract
         if (!$quiet) {
             $this->printer->note(__('清理残留进程...'));
         }
-
-        $totalKilled = 0;
-        $pidsToKill = [];
-        
-        // 收集所有已知 PID（Master + 所有服务）
-        if ($info->masterPid > 0) {
-            $pidsToKill[] = $info->masterPid;
-        }
-        foreach ($info->services as $service) {
-            if ($service->pid > 0) {
-                $pidsToKill[] = $service->pid;
-            }
-        }
-        
-        // 批量杀死所有已知 PID（直接使用 taskkill，速度快）
-        if (!empty($pidsToKill)) {
-            $pidsToKill = \array_unique($pidsToKill);
-            $aliveCount = 0;
-            
-            foreach ($pidsToKill as $pid) {
-                if (Processer::processExists($pid)) {
-                    $aliveCount++;
-                    Processer::killByPid($pid, true);
-                    $totalKilled++;
-                }
-            }
-            
-            if ($aliveCount > 0) {
-                $this->printer->note(__('  已向 %{1} 个进程发送终止信号', [$aliveCount]));
-            }
-        }
-        
-        // 仅在需要时才按进程名前缀兜底（比如有逃逸进程未记录 PID）
-        // 跳过此步骤以加速，因为已知 PID 已处理完毕
-        // 如果用户发现有残留进程，可以手动运行 server:stop --all 进行彻底清理
+        $totalKilled = $this->terminateResidualProcesses($this->collectResidualPidsByInfo($info), true);
         
         if (!$quiet) {
             if ($totalKilled > 0) {
-                $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+                $this->printer->note(__('  已处理 %{1} 个进程', [$totalKilled]));
             } else {
                 $this->printer->note(__('  无残留进程'));
             }
@@ -471,13 +444,15 @@ class Stop extends CommandAbstract
         // force 模式用于“更快进入停止流程”，不应把 IPC 等待缩短到低于 Orchestrator 的正常停机时长，
         // 否则会频繁误判超时并走强杀 Master，造成状态抖动。
         $timeout = $force ? max(self::IPC_TIMEOUT, 20) : self::IPC_TIMEOUT;
-        $deadline = \microtime(true) + $timeout;
+        $startedAt = \microtime(true);
+        $deadline = $startedAt + $timeout;
+        $hardDeadline = $startedAt + $this->getIpcHardTimeout();
         $lastProgress = '';
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
         $exitedPids = []; // 用 PID 去重，防止同一进程的 "已断开" 和 "已退出" 重复计数
         $totalInstances = 0; // 总实例数
         
-        while (\microtime(true) < $deadline) {
+        while (\microtime(true) < $deadline && \microtime(true) < $hardDeadline) {
             // 优先检查 Master 是否已退出（每次循环都检查）
             if (!Processer::processExists($masterPid)) {
                 $this->ipcMsg("Master 进程已退出 ✓", 'success');
@@ -505,6 +480,8 @@ class Stop extends CommandAbstract
                     // 快速等待 Master 进程完全退出
                     return $this->waitForMasterExit($masterPid);
                 }
+
+                $deadline = \min($hardDeadline, \microtime(true) + $timeout);
                 
                 // 解析消息
                 $lines = \explode("\n", \trim($data));
@@ -560,8 +537,18 @@ class Stop extends CommandAbstract
             return true;
         }
         
-        $this->ipcMsg("等待超时（{$timeout}s）", 'error');
+        $timeoutLabel = \microtime(true) >= $hardDeadline
+            ? "等待超时（硬超时 {$this->getIpcHardTimeout()}s）"
+            : "等待超时（空闲 {$timeout}s）";
+        $this->ipcMsg($timeoutLabel, 'error');
         return false;
+    }
+
+    private function getIpcHardTimeout(): int
+    {
+        return (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN')
+            ? self::IPC_HARD_TIMEOUT_WIN
+            : self::IPC_HARD_TIMEOUT_LINUX;
     }
     
     /**
@@ -620,45 +607,157 @@ class Stop extends CommandAbstract
         if (!$quiet) {
             $this->printer->note(__('清理残留进程...'));
         }
-        
-        // 新前缀（当前版本使用）
-        $prefixes = [
-            'weline-wls-master-' . $name,
-            'weline-wls-worker-' . $name,
-            'weline-wls-dispatcher-' . $name,
-            'weline-wls-session-' . $name,
-            'weline-wls-redirect-' . $name,
-        ];
-        
-        // 旧前缀兼容（历史版本可能遗留）
-        $legacyPrefixes = [
-            'weline-master-' . $name . '-worker-',
-        ];
-        
-        $totalKilled = 0;
-        foreach ($prefixes as $prefix) {
-            $killed = Processer::killByProcessNamePrefix($prefix);
-            $totalKilled += $killed;
-        }
-        
-        // 清理旧前缀残留（每个 Worker ID）
-        $count = (int)($instanceData['count'] ?? 4);
-        foreach ($legacyPrefixes as $legacyPrefix) {
-            for ($i = 1; $i <= $count; $i++) {
-                $killed = Processer::killByProcessNamePrefix($legacyPrefix . $i);
-                $totalKilled += $killed;
-            }
-        }
+        $totalKilled = $this->terminateResidualProcesses($this->collectIndexedResidualPids($name), true);
         
         if (!$quiet) {
             if ($totalKilled > 0) {
-                $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
+                $this->printer->note(__('  已处理 %{1} 个进程', [$totalKilled]));
             } else {
                 $this->printer->note(__('  无残留进程'));
             }
         }
 
         return $totalKilled;
+    }
+
+    /**
+     * 收集实例文件中记录的残留 PID。
+     *
+     * @return array<int>
+     */
+    private function collectResidualPidsByInfo(ServerInstanceInfo $info): array
+    {
+        $pids = [];
+
+        if ($info->masterPid > 0) {
+            $pids[$info->masterPid] = true;
+        }
+
+        foreach ($info->services as $service) {
+            $pid = (int) ($service->pid ?? 0);
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * 从 name_index 中一次性收集指定实例的 WLS PID，避免逐前缀触发系统搜索。
+     *
+     * @return array<int>
+     */
+    private function collectIndexedResidualPids(string $instanceName): array
+    {
+        $nameIndex = Processer::readNameIndex();
+        if (empty($nameIndex)) {
+            return [];
+        }
+
+        $currentPid = \getmypid();
+        $instanceSuffix = '-' . $instanceName;
+        $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
+        $pids = [];
+
+        foreach ($nameIndex as $pname => $entries) {
+            $taskName = \str_starts_with($pname, '--name=')
+                ? \substr($pname, 7)
+                : $pname;
+
+            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \strpos($taskName, $instanceSuffix) !== false)
+                || \str_starts_with($taskName, $legacyWorkerPrefix);
+            if (!$isCurrentInstance) {
+                continue;
+            }
+
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0 && $pid !== $currentPid) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * 直接终止给定 PID 列表，避免额外的 processExists 探测开销。
+     *
+     * @param array<int> $pids
+     */
+    private function terminateResidualProcesses(array $pids, bool $skipCheck = true): int
+    {
+        $uniquePids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+
+        if (empty($uniquePids)) {
+            return 0;
+        }
+
+        if ($skipCheck && $this->isWindowsPlatform()) {
+            return $this->terminateResidualProcessesWindows($uniquePids);
+        }
+
+        $processed = 0;
+        foreach ($uniquePids as $pid) {
+            if (Processer::killByPid($pid, $skipCheck)) {
+                $processed++;
+            }
+        }
+
+        return $processed;
+    }
+
+    /**
+     * Windows 下使用批量 taskkill，避免逐个 PID 串行等待导致 stop 长时间卡住。
+     *
+     * @param array<int> $pids
+     */
+    private function terminateResidualProcessesWindows(array $pids): int
+    {
+        $processed = 0;
+
+        foreach (\array_chunk($pids, 32) as $chunk) {
+            $pidArgs = \implode(' ', \array_map(
+                static fn (int $pid): string => '/PID ' . $pid,
+                $chunk
+            ));
+
+            $output = [];
+            $returnCode = 0;
+            Processer::execute('taskkill /F ' . $pidArgs, $output, $returnCode);
+
+            SchedulerSystem::usleep(200000);
+
+            $processInfo = Processer::batchGetProcessInfo($chunk);
+            $remaining = [];
+
+            foreach ($chunk as $pid) {
+                $exists = (bool) ($processInfo[$pid]['exists'] ?? false);
+                if ($exists) {
+                    $remaining[] = $pid;
+                } else {
+                    $processed++;
+                }
+            }
+
+            foreach ($remaining as $pid) {
+                if (Processer::killByPid($pid, true)) {
+                    $processed++;
+                }
+            }
+        }
+
+        return $processed;
+    }
+
+    private function isWindowsPlatform(): bool
+    {
+        return \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
     }
 
     /**
@@ -714,44 +813,7 @@ class Stop extends CommandAbstract
      */
     protected function cleanupAllWlsProcesses(string $instanceName): void
     {
-        // 从 name_index 快速读取并杀死残留进程
-        $nameIndex = Processer::readNameIndex();
-        $currentPid = \getmypid();
-        $totalKilled = 0;
-        
-        // 匹配 weline-wls-*-{instanceName} 的进程
-        $targetPrefix = 'weline-wls-';
-        $instanceSuffix = '-' . $instanceName;
-        
-        foreach ($nameIndex as $pname => $entries) {
-            // 检查是否是 weline-wls 进程且属于当前实例
-            $taskName = $pname;
-            if (\str_starts_with($taskName, '--name=')) {
-                $taskName = \substr($taskName, 7);
-            }
-            
-            if (!\str_starts_with($taskName, $targetPrefix)) {
-                continue;
-            }
-            
-            // 检查是否属于当前实例
-            if (\strpos($taskName, $instanceSuffix) === false) {
-                continue;
-            }
-            
-            // 遍历该 pname 下的所有 PID
-            foreach ($entries as $entry) {
-                $pid = (int) ($entry['pid'] ?? 0);
-                if ($pid <= 0 || $pid === $currentPid) {
-                    continue;
-                }
-                
-                if (Processer::processExists($pid)) {
-                    Processer::killByPid($pid, true);
-                    $totalKilled++;
-                }
-            }
-        }
+        $totalKilled = $this->terminateResidualProcesses($this->collectIndexedResidualPids($instanceName), true);
         
         if ($totalKilled > 0) {
             $this->printer->note(__('清理了 %{1} 个残留 WLS 进程', [$totalKilled]));
