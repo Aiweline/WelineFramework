@@ -1,154 +1,148 @@
 /**
- * Backend Theme - 默认主题颜色
- * 
- * 后端管理界面默认主题的颜色覆盖文件
- * 字段
- * @meta.name {default="Backend默认主题颜色",name="Backend默认主题颜色",description="Backend默认主题颜色，用于描述色系的名称"}
- * @meta.description {default="后端管理界面默认主题的颜色覆盖，提供专业的管理界面配色方案",name="后端管理界面默认主题的颜色覆盖",description="后端管理界面默认主题的颜色覆盖，提供专业的管理界面配色方案，用于描述色系的用途"}
- * @meta.theme {default="default",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * Backend Theme - default palette
  */
 
 :root,
 [data-theme="default"] {
-    /* ========================================
-       品牌色（Bootstrap兼容的蓝色系）
-       ======================================== */
-    --backend-color-primary: #556ee6;
-    --backend-color-primary-rgb: 85, 110, 230;
-    --backend-color-primary-light: #6c7ce8;
-    --backend-color-primary-dark: #4757d4;
-    --backend-color-primary-hover: #4857d4;
-    --backend-color-primary-active: #3d4bc0;
-    --backend-color-primary-border: #4857d4;
-    --backend-color-primary-bg-subtle: rgba(85, 110, 230, 0.1);
-    --backend-color-primary-bg-light: rgba(85, 110, 230, 0.15);
+    /* Brand */
+    --backend-color-primary: #2563eb;
+    --backend-color-primary-rgb: 37, 99, 235;
+    --backend-color-primary-light: #60a5fa;
+    --backend-color-primary-dark: #1d4ed8;
+    --backend-color-primary-hover: #1d4ed8;
+    --backend-color-primary-active: #1e40af;
+    --backend-color-primary-border: #1d4ed8;
+    --backend-color-primary-bg-subtle: rgba(37, 99, 235, 0.12);
+    --backend-color-primary-bg-light: rgba(37, 99, 235, 0.18);
 
-    /* ========================================
-       文本色
-       ======================================== */
-    --backend-color-text-primary: #212529;
-    --backend-color-text-secondary: #6c757d;
-    --backend-color-text-tertiary: #adb5bd;
-    --backend-color-text-disabled: #ced4da;
-    --backend-color-text-muted: #6c757d;
-    --backend-color-text-light: #f8f9fa;
-    --backend-color-text-light-secondary: #dee2e6;
-    --backend-color-text-dark: #212529;
-    --backend-color-text-placeholder: #adb5bd;
+    /* Typography */
+    --backend-color-text-primary: #172033;
+    --backend-color-text-secondary: #526077;
+    --backend-color-text-tertiary: #8b97ab;
+    --backend-color-text-disabled: #c6cfdb;
+    --backend-color-text-muted: #66758e;
+    --backend-color-text-light: #f8fbff;
+    --backend-color-text-light-secondary: #d7dfeb;
+    --backend-color-text-dark: #172033;
+    --backend-color-text-placeholder: #97a3b8;
     --backend-color-text-inverse: #ffffff;
 
-    /* ========================================
-       背景色
-       ======================================== */
+    /* Surfaces */
     --backend-color-bg-primary: #ffffff;
-    --backend-color-bg-secondary: #f8f9fa;
-    --backend-color-bg-tertiary: #e9ecef;
-    --backend-color-bg-dark: #212529;
-    --backend-color-bg-dark-secondary: #343a40;
-    --backend-color-bg-dark-tertiary: #495057;
-    --backend-color-bg-body: #f8f9fa;
+    --backend-color-bg-secondary: #f7f9fc;
+    --backend-color-bg-tertiary: #eef3f9;
+    --backend-color-bg-dark: #0f172a;
+    --backend-color-bg-dark-secondary: #172033;
+    --backend-color-bg-dark-tertiary: #243247;
+    --backend-color-bg-body: #f3f6fb;
     --backend-color-bg-surface: #ffffff;
-    --backend-color-bg-overlay: rgba(0, 0, 0, 0.5);
+    --backend-color-bg-overlay: rgba(15, 23, 42, 0.54);
 
-    /* ========================================
-       边框色
-       ======================================== */
-    --backend-color-border-default: #dee2e6;
-    --backend-color-border-emphasis: #adb5bd;
+    /* Borders */
+    --backend-color-border-default: #d9e2ef;
+    --backend-color-border-emphasis: #b7c3d6;
     --backend-color-border-focus: var(--backend-color-primary);
-    --backend-color-border-light: #e9ecef;
-    --backend-color-border-dark: #6c757d;
+    --backend-color-border-light: #e7edf5;
+    --backend-color-border-dark: #7d8aa0;
 
-    /* ========================================
-       功能色（Bootstrap兼容）
-       ======================================== */
-    /* 成功色 */
-    --backend-color-success: #34c38f;
-    --backend-color-success-rgb: 52, 195, 143;
-    --backend-color-success-light: #56d0a5;
-    --backend-color-success-dark: #2ab57d;
-    --backend-color-success-hover: #2ab57d;
-    --backend-color-success-bg-subtle: rgba(52, 195, 143, 0.1);
-    --backend-color-success-border: #2ab57d;
-    
-    /* 危险色 */
-    --backend-color-danger: #f46a6a;
-    --backend-color-danger-rgb: 244, 106, 106;
-    --backend-color-danger-light: #f68a8a;
-    --backend-color-danger-dark: #f24a4a;
-    --backend-color-danger-hover: #f24a4a;
-    --backend-color-danger-bg-subtle: rgba(244, 106, 106, 0.1);
-    --backend-color-danger-border: #f24a4a;
-    
-    /* 警告色 */
-    --backend-color-warning: #f1b44c;
-    --backend-color-warning-rgb: 241, 180, 76;
-    --backend-color-warning-light: #f4c470;
-    --backend-color-warning-dark: #eea428;
-    --backend-color-warning-hover: #eea428;
-    --backend-color-warning-bg-subtle: rgba(241, 180, 76, 0.1);
-    --backend-color-warning-border: #eea428;
-    
-    /* 信息色 */
-    --backend-color-info: #50a5f1;
-    --backend-color-info-rgb: 80, 165, 241;
-    --backend-color-info-light: #6fb5f3;
-    --backend-color-info-dark: #3a95ef;
-    --backend-color-info-hover: #3a95ef;
-    --backend-color-info-bg-subtle: rgba(80, 165, 241, 0.1);
-    --backend-color-info-border: #3a95ef;
+    /* Status */
+    --backend-color-success: #0f9f6e;
+    --backend-color-success-rgb: 15, 159, 110;
+    --backend-color-success-light: #34c992;
+    --backend-color-success-dark: #0b7f58;
+    --backend-color-success-hover: #0b7f58;
+    --backend-color-success-bg-subtle: rgba(15, 159, 110, 0.12);
+    --backend-color-success-border: #0b7f58;
 
-    /* ========================================
-       链接色
-       ======================================== */
+    --backend-color-danger: #e25555;
+    --backend-color-danger-rgb: 226, 85, 85;
+    --backend-color-danger-light: #f07a7a;
+    --backend-color-danger-dark: #c63f3f;
+    --backend-color-danger-hover: #c63f3f;
+    --backend-color-danger-bg-subtle: rgba(226, 85, 85, 0.12);
+    --backend-color-danger-border: #c63f3f;
+
+    --backend-color-warning: #d99a1c;
+    --backend-color-warning-rgb: 217, 154, 28;
+    --backend-color-warning-light: #edb84e;
+    --backend-color-warning-dark: #b98111;
+    --backend-color-warning-hover: #b98111;
+    --backend-color-warning-bg-subtle: rgba(217, 154, 28, 0.14);
+    --backend-color-warning-border: #b98111;
+
+    --backend-color-info: #0ea5e9;
+    --backend-color-info-rgb: 14, 165, 233;
+    --backend-color-info-light: #38bdf8;
+    --backend-color-info-dark: #0284c7;
+    --backend-color-info-hover: #0284c7;
+    --backend-color-info-bg-subtle: rgba(14, 165, 233, 0.12);
+    --backend-color-info-border: #0284c7;
+
+    /* Links */
     --backend-color-link: var(--backend-color-primary);
     --backend-color-link-hover: var(--backend-color-primary-dark);
-    --backend-color-link-visited: #6f42c1;
+    --backend-color-link-visited: #5b5bd6;
     --backend-color-link-active: var(--backend-color-primary-active);
 
-    /* ========================================
-       组件特定颜色
-       ======================================== */
-    /* 侧边栏 */
+    /* Components */
     --backend-color-sidebar-bg: #ffffff;
     --backend-color-sidebar-text: var(--backend-color-text-primary);
-    --backend-color-sidebar-hover: var(--backend-color-bg-secondary);
+    --backend-color-sidebar-hover: rgba(37, 99, 235, 0.06);
     --backend-color-sidebar-active: var(--backend-color-primary-bg-subtle);
-    --backend-color-sidebar-border: var(--backend-color-border-light);
-    
-    /* 头部 */
-    --backend-color-header-bg: #ffffff;
+    --backend-color-sidebar-border: #e7edf5;
+
+    --backend-color-header-bg: rgba(255, 255, 255, 0.82);
     --backend-color-header-text: var(--backend-color-text-primary);
-    --backend-color-header-border: var(--backend-color-border-light);
-    
-    /* 表格 */
+    --backend-color-header-border: rgba(148, 163, 184, 0.18);
+
     --backend-color-table-bg: #ffffff;
-    --backend-color-table-bg-striped: var(--backend-color-bg-secondary);
-    --backend-color-table-bg-hover: var(--backend-color-bg-tertiary);
-    --backend-color-table-border: var(--backend-color-border-light);
-    
-    /* 卡片 */
+    --backend-color-table-bg-striped: #f8fbff;
+    --backend-color-table-bg-hover: #f2f7ff;
+    --backend-color-table-border: #e5ebf4;
+
     --backend-color-card-bg: #ffffff;
-    --backend-color-card-border: var(--backend-color-border-default);
-    --backend-color-card-header-bg: var(--backend-color-bg-secondary);
-    
-    /* 输入框 */
+    --backend-color-card-border: #dbe4f0;
+    --backend-color-card-header-bg: #f8fbff;
+
     --backend-color-input-bg: #ffffff;
-    --backend-color-input-border: var(--backend-color-border-default);
+    --backend-color-input-border: #d2dbe8;
     --backend-color-input-focus-border: var(--backend-color-primary);
-    --backend-color-input-disabled-bg: var(--backend-color-bg-tertiary);
-    
-    /* 按钮 */
+    --backend-color-input-disabled-bg: #edf2f7;
+
     --backend-color-btn-primary: var(--backend-color-primary);
     --backend-color-btn-primary-hover: var(--backend-color-primary-hover);
-    --backend-color-btn-secondary: var(--backend-color-text-secondary);
-    --backend-color-btn-secondary-hover: var(--backend-color-text-tertiary);
+    --backend-color-btn-secondary: #475569;
+    --backend-color-btn-secondary-hover: #334155;
 
-    /* ========================================
-       滚动条
-       ======================================== */
+    /* Scrollbar */
     --backend-scrollbar-width: 4px;
-    --backend-scrollbar-thumb: #c1c1c1;
-    --backend-scrollbar-thumb-hover: #a8a8a8;
-    --backend-scrollbar-track: transparent;
+    --backend-scrollbar-thumb: #c3cedd;
+    --backend-scrollbar-thumb-hover: #9eabc0;
+    --backend-scrollbar-track: rgba(226, 232, 240, 0.4);
+
+    /* Alerts */
+    --backend-color-alert-warning-bg: #fff6db;
+    --backend-color-alert-warning-text: #8a5a00;
+    --backend-color-alert-warning-border: #f5d694;
+    --backend-color-alert-success-bg: #dcf8ee;
+    --backend-color-alert-success-text: #0b6b4f;
+    --backend-color-alert-success-border: #aae5d0;
+    --backend-color-alert-danger-bg: #ffe5e5;
+    --backend-color-alert-danger-text: #a92a2a;
+    --backend-color-alert-danger-border: #f4b6b6;
+    --backend-color-alert-info-bg: #e0f4ff;
+    --backend-color-alert-info-text: #045f8f;
+    --backend-color-alert-info-border: #aadfff;
+
+    /* Elevation */
+    --backend-card-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    --backend-dropdown-shadow: 0 24px 48px rgba(15, 23, 42, 0.12);
+    --backend-modal-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+    --backend-header-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
+    --backend-sidebar-shadow: 16px 0 32px rgba(15, 23, 42, 0.04);
+    --backend-focus-ring: 0 0 0 0.2rem rgba(37, 99, 235, 0.16);
+
+    /* Accent gradient */
+    --backend-color-gradient-start: #2563eb;
+    --backend-color-gradient-end: #0ea5e9;
 }
