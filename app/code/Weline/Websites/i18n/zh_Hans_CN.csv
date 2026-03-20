@@ -1,4 +1,4 @@
-阿里云域名,阿里云域名
+﻿阿里云域名,阿里云域名
 "阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。","阿里云域名注册服务，支持域名注册、续费、DNS 解析和域名交易。"
 区域,区域
 华东1（杭州）,华东1（杭州）
@@ -59,7 +59,6 @@
 "Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。","Azure DNS Nameserver 修改功能尚未完成 API 对接，请稍后再试。"
 "Azure DNS Nameserver 获取功能尚未完成 API 对接","Azure DNS Nameserver 获取功能尚未完成 API 对接"
 域名为空,域名为空
-"在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。","在当前 Cloudflare Token 下未找到该域名的 Zone。请确认 DNS 已切换到本账户且站点已添加；CDN 与 DNS 须为同一 Token。"
 "Cloudflare：请至少填写 DNS（域名商）或 CDN 侧有效的 Cloudflare 账户 ID。","Cloudflare：请至少填写 DNS（域名商）或 CDN 侧有效的 Cloudflare 账户 ID。"
 "Cloudflare：账户 ID 无效，请检查 DNS 或 CDN 配置。","Cloudflare：账户 ID 无效，请检查 DNS 或 CDN 配置。"
 "Cloudflare DNS（域名商）账户无效或非 Cloudflare 渠道。","Cloudflare DNS（域名商）账户无效或非 Cloudflare 渠道。"
@@ -69,7 +68,6 @@
 "Cloudflare：请在「CDN 管理」添加与当前 DNS 账户相同 API Token 的 Cloudflare 账户。","Cloudflare：请在「CDN 管理」添加与当前 DNS 账户相同 API Token 的 Cloudflare 账户。"
 "Cloudflare：请在「域名管理」添加与当前 CDN 账户相同 API Token 的 Cloudflare DNS 账户。","Cloudflare：请在「域名管理」添加与当前 CDN 账户相同 API Token 的 Cloudflare DNS 账户。"
 "API Token","API Token"
-"Cloudflare API Token","Cloudflare API Token"
 "Cloudflare API Token（区域资源须 All zones）","Cloudflare API Token（区域资源须 All zones）"
 "创建 Token 时「区域资源 / Zone resources」请选择「All zones（所有区域）」。若选「指定区域」且未包含全部站点，本系统可能无法列出 Zone，证书 DNS-01 与解析同步会失败。","创建 Token 时「区域资源 / Zone resources」请选择「All zones（所有区域）」。若选「指定区域」且未包含全部站点，本系统可能无法列出 Zone，证书 DNS-01 与解析同步会失败。"
 "Account ID","Account ID"
@@ -107,9 +105,7 @@
 "Cloudflare Registrar API 错误：%{1}","Cloudflare Registrar API 错误：%{1}"
 获取域名列表失败,获取域名列表失败
 "Cloudflare Zones API 错误：%{1}","Cloudflare Zones API 错误：%{1}"
-"域名未在 Cloudflare 中找到","域名未在 Cloudflare 中找到"
 获取域名详情失败,获取域名详情失败
-"域名 %{1} 未在 Cloudflare 中找到","域名 %{1} 未在 Cloudflare 中找到"
 "获取 DNS 记录失败","获取 DNS 记录失败"
 "Cloudflare API 错误：%{1}","Cloudflare API 错误：%{1}"
 添加记录失败,添加记录失败
@@ -151,6 +147,7 @@
 "3. 「区域资源」必须选 All zones（所有区域）；只选「指定区域」时无法创建新站点，会报此错误","3. 「区域资源」必须选 All zones（所有区域）；只选「指定区域」时无法创建新站点，会报此错误"
 "[CF] addZone 成功：zone_id=%{1}, ns=%{2}","[CF] addZone 成功：zone_id=%{1}, ns=%{2}"
 "域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}","域名已添加到 Cloudflare，请将 Nameserver 切换到：%{1}"
+"在当前 Cloudflare API Token 下经多次 GET /zones?name= 重试后仍未解析到域名「%{1}」的 Zone。API 非强一致，刚改 NS / 新站 pending→active 时常见；可稍后重试。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。","在当前 Cloudflare API Token 下经多次 GET /zones?name= 重试后仍未解析到域名「%{1}」的 Zone。API 非强一致，刚改 NS / 新站 pending→active 时常见；可稍后重试。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。"
 "获取 Cloudflare Account ID 失败：%{1}","获取 Cloudflare Account ID 失败：%{1}"
 "Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限","Cloudflare API 返回空账户列表，Token 可能没有 Account:Read 权限"
 "已检测到 %{1} 记录（%{2}）开启 Cloudflare 代理","已检测到 %{1} 记录（%{2}）开启 Cloudflare 代理"
@@ -430,7 +427,7 @@
 "开始 DNS/CDN 切换，共 %{1} 个域名","开始 DNS/CDN 切换，共 %{1} 个域名"
 "[DnsSwitchSSE] 开始切换，domain_ids=%{1}, target=%{2}","[DnsSwitchSSE] 开始切换，domain_ids=%{1}, target=%{2}"
 目标账户验证通过：%{1}(%{2}),目标账户验证通过：%{1}(%{2})
-已是该账户，跳过,已是该账户，跳过
+已是该账户且切换已完成，跳过,已是该账户且切换已完成，跳过
 "[DnsSwitchSSE] 开始处理 %{1}（%{2}/%{3}）","[DnsSwitchSSE] 开始处理 %{1}（%{2}/%{3}）"
 "域名 %{1} 切换完成","域名 %{1} 切换完成"
 "[DnsSwitchSSE] %{1} 切换完成","[DnsSwitchSSE] %{1} 切换完成"
@@ -591,7 +588,7 @@ SSL,SSL
 没有需要申请证书的域名池域名,没有需要申请证书的域名池域名
 "本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程","本次待申请证书域名数：%{1}，将逐个调用 CA 申请并输出过程"
 域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请,域名池任务：仅按每条记录的域名申请单域证书，不做泛域（*.*）申请
-"挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需权威 NS 与所选 DNS 账户一致，dig/nslookup 可查）。","挑战策略 auto：本机监听 80（或 443 且 80 重定向）时优先 HTTP-01；否则使用 DNS-01（需权威 NS 与所选 DNS 账户一致，dig/nslookup 可查）。"
+"挑战策略 DNS-01：自动写入 _acme-challenge TXT（需父域已配置 DNS/CDN 账户且权威 NS 与服务商一致）。","挑战策略 DNS-01：自动写入 _acme-challenge TXT（需父域已配置 DNS/CDN 账户且权威 NS 与服务商一致）。"
 "域名池证书申请完成：检查 %{1} 个，跳过 %{2} 个，申请 %{3} 个，成功 %{4} 个，失败 %{5} 个","域名池证书申请完成：检查 %{1} 个，跳过 %{2} 个，申请 %{3} 个，成功 %{4} 个，失败 %{5} 个"
 域名池证书申请任务异常：%{1},域名池证书申请任务异常：%{1}
 "跳过: domain 或 pool_id 为空","跳过: domain 或 pool_id 为空"
@@ -610,6 +607,7 @@ SSL,SSL
 "证书申请异常: %{1}","证书申请异常: %{1}"
 "[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}","[DomainPoolCertificateRequest] 证书申请结束：%{1}，异常: %{2}"
 域名池证书申请异常：%{1},域名池证书申请异常：%{1}
+"已与 SSL 证书管理器同步（池状态此前与有效证书记录不一致）","已与 SSL 证书管理器同步（池状态此前与有效证书记录不一致）"
 泛域证书覆盖,泛域证书覆盖
 "泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效","泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效"
 没有需要校验的域名池证书,没有需要校验的域名池证书
@@ -740,6 +738,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "获取域名 DNS 记录（查询层自动同步域名池）","获取域名 DNS 记录（查询层自动同步域名池）"
 "添加 ACME DNS-01 验证 TXT 记录","添加 ACME DNS-01 验证 TXT 记录"
 "解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）","解析 ACME 挑战将使用的 DNS 供应商代码（与 addAcmeTxtRecord 同源，供证书模块轮询时长等）"
+"与 addAcmeTxtRecord 写入的 TXT 完全一致的全名 FQDN（证书模块 dns_get_record 轮询须查此名，避免通配符/多级子域与 _acme-challenge.{domain} 简单拼接不一致）","与 addAcmeTxtRecord 写入的 TXT 完全一致的全名 FQDN（证书模块 dns_get_record 轮询须查此名，避免通配符/多级子域与 _acme-challenge.{domain} 简单拼接不一致）"
 "删除 ACME DNS-01 验证 TXT 记录","删除 ACME DNS-01 验证 TXT 记录"
 注册商代码和账号名称不能为空,注册商代码和账号名称不能为空
 未找到注册商适配器：%{1},未找到注册商适配器：%{1}
@@ -844,12 +843,14 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "暂无法从当前数据判断公网 DNS 归属。未拉取的域名请以注册商后台或 dig NS 为准；拉取后仍会随同步更新。","暂无法从当前数据判断公网 DNS 归属。未拉取的域名请以注册商后台或 dig NS 为准；拉取后仍会随同步更新。"
 "当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。","当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。"
 "当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。","当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。"
-广播中…,广播中…
 "目标账户 %{1} 不支持 DNS 管理","目标账户 %{1} 不支持 DNS 管理"
-"从注册商同步 DNS 记录到本地","从注册商同步 DNS 记录到本地"
 "域名 %{1} 未关联注册商账户，无法切换","域名 %{1} 未关联注册商账户，无法切换"
 "注册商账户 ID %{1} 不存在","注册商账户 ID %{1} 不存在"
 "注册商适配器 %{1} 不存在","注册商适配器 %{1} 不存在"
+"从原 DNS 托管账户拉取记录到本地（将推送到目标账户 %{1}，源账户 ID %{2}）","从原 DNS 托管账户拉取记录到本地（将推送到目标账户 %{1}，源账户 ID %{2}）"
+"[步骤1] 原 DNS 托管账户拉取失败，将改从注册商同步：%{1}","[步骤1] 原 DNS 托管账户拉取失败，将改从注册商同步：%{1}"
+"原 DNS 托管账户未返回可写入记录，改为从注册商同步","原 DNS 托管账户未返回可写入记录，改为从注册商同步"
+"从注册商同步 DNS 记录到本地","从注册商同步 DNS 记录到本地"
 "[步骤1] 同步记录（非致命）：%{1}","[步骤1] 同步记录（非致命）：%{1}"
 "DNS 记录同步完成，新增 %{1} 条，更新 %{2} 条","DNS 记录同步完成，新增 %{1} 条，更新 %{2} 条"
 "[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成，added=%{3}，updated=%{4}","[DnsSwitchService] %{1} Step1: 从 %{2} 同步记录完成，added=%{3}，updated=%{4}"
@@ -861,7 +862,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "注册商登记的 NS 已与目标 DNS 一致，跳过修改 NS 接口；直接同步/推送记录。","注册商登记的 NS 已与目标 DNS 一致，跳过修改 NS 接口；直接同步/推送记录。"
 "[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）","[DnsSwitchService] %{1} Step3: 同服务商跳过 NS 修改（注册商=%{2}）"
 "[DnsSwitchService] %{1} Step3: 注册商 NS 已与目标一致，跳过改 NS 接口","[DnsSwitchService] %{1} Step3: 注册商 NS 已与目标一致，跳过改 NS 接口"
-"在注册商 %{1} 切换 NS","在注册商 %{1} 切换 NS"
+"在注册商 %{1} 切换 NS（注册局委派，仅此路径生效）","在注册商 %{1} 切换 NS（注册局委派，仅此路径生效）"
 "NS 切换失败","NS 切换失败"
 "[DnsSwitchService] %{1} NS 切换失败：%{2}","[DnsSwitchService] %{1} NS 切换失败：%{2}"
 "NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…","NS 切换接口返回成功（%{1}），正在校验注册商侧是否已生效…"
@@ -877,35 +878,27 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟","[步骤2] 开始等待 NS 生效，每 %{1} 秒检测，最多 %{2} 分钟"
 已由用户断开,已由用户断开
 "等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录","等待 NS 生效超时（%{1} 分钟），请稍后在「管理 DNS」中检查并手动搬迁记录"
-"推送 DNS 记录到 %{1}","推送 DNS 记录到 %{1}"
 "推送 DNS 记录到目标账户 %{1}","推送 DNS 记录到目标账户 %{1}"
-"从原 DNS 托管账户拉取记录到本地（将推送到目标账户 %{1}，源账户 ID %{2}）","从原 DNS 托管账户拉取记录到本地（将推送到目标账户 %{1}，源账户 ID %{2}）"
-"[步骤1] 原 DNS 托管账户拉取失败，将改从注册商同步：%{1}","[步骤1] 原 DNS 托管账户拉取失败，将改从注册商同步：%{1}"
-"原 DNS 托管账户未返回可写入记录，改为从注册商同步","原 DNS 托管账户未返回可写入记录，改为从注册商同步"
 "推送完成：成功 %{1}，失败 %{2}","推送完成：成功 %{1}，失败 %{2}"
 "[DnsSwitchService] %{1} Step4: push success=%{2}, added=%{3}, failed=%{4}","[DnsSwitchService] %{1} Step4: push success=%{2}, added=%{3}, failed=%{4}"
 "同步并校验 DNS 记录","同步并校验 DNS 记录"
 "[DnsSwitchService] %{1} 同步/校验记录失败：%{2}","[DnsSwitchService] %{1} 同步/校验记录失败：%{2}"
 同步/校验记录失败：%{1},同步/校验记录失败：%{1}
 "已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。","已从目标 DNS 控制台同步记录，共 %{1} 条（核对的是 Cloudflare 等面板里的记录，不是「公网解析是否已走新 NS」）。"
-"[DnsSwitchService] %{1} Step6: 域名标记已更新","[DnsSwitchService] %{1} Step6: 域名标记已更新"
-"[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}","[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}"
-"注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。","注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。"
-"DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。","DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。"
-"已是该账户且切换已完成，跳过","已是该账户且切换已完成，跳过"
-"在注册商 %{1} 切换 NS（注册局委派，仅此路径生效）","在注册商 %{1} 切换 NS（注册局委派，仅此路径生效）"
 "Cutover：本机 NS 仍为「%{1}」，DoH 已指向目标「%{2}」。委派仅经注册商 Step3 生效；DoH 与等待步骤同为传播观测，准予 dns_cutover_complete。","Cutover：本机 NS 仍为「%{1}」，DoH 已指向目标「%{2}」。委派仅经注册商 Step3 生效；DoH 与等待步骤同为传播观测，准予 dns_cutover_complete。"
+"注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。","注册商或目标面板可能已显示新 NS，但公网权威 NS（与 dig/nslookup 一致）尚未指向 %{1}。已保持 dns_switch_pending=1、dns_cutover_complete=0，DnsCdnAutoSwitch 将重试；证书申请在 cutover 完成前不会进入队列。"
+"[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}","[DnsSwitchService] %{1} Step6: 推迟 cutover（公网权威 NS 未指向 %{2}）。live_ns=%{3}"
+"[DnsSwitchService] %{1} Step6: 域名标记已更新","[DnsSwitchService] %{1} Step6: 域名标记已更新"
 "落库摘要：待传播完成后再将 dns_cutover_complete 置 1；证书队列仍关闭。定时任务 DnsCdnAutoSwitch 会重试检测公网权威 NS。","落库摘要：待传播完成后再将 dns_cutover_complete 置 1；证书队列仍关闭。定时任务 DnsCdnAutoSwitch 会重试检测公网权威 NS。"
-"落库摘要：切换流程已闭环（dns_switch_pending=0，dns_cutover_complete=1），可进行证书申请与建站相关流程。","落库摘要：切换流程已闭环（dns_switch_pending=0，dns_cutover_complete=1），可进行证书申请与建站相关流程。"
+落库摘要：切换流程已闭环（dns_switch_pending=0，dns_cutover_complete=1），可进行证书申请与建站相关流程。,落库摘要：切换流程已闭环（dns_switch_pending=0，dns_cutover_complete=1），可进行证书申请与建站相关流程。
 "[DnsSwitchService] %{1} Step6 落库: dns_switch_pending=%{2}, dns_cutover_complete=%{3}, dns_migration_pending=%{4}, dns_account_id=%{5}, defer_public_ns=%{6}","[DnsSwitchService] %{1} Step6 落库: dns_switch_pending=%{2}, dns_cutover_complete=%{3}, dns_migration_pending=%{4}, dns_account_id=%{5}, defer_public_ns=%{6}"
-"步骤 4/5（落库标记）：dns_switch_pending=%{1}，dns_cutover_complete=%{2}，dns_migration_pending=%{3}，dns_account_id=%{4}，dns_provider=%{5}，defer_public_ns=%{6}","步骤 4/5（落库标记）：dns_switch_pending=%{1}，dns_cutover_complete=%{2}，dns_migration_pending=%{3}，dns_account_id=%{4}，dns_provider=%{5}，defer_public_ns=%{6}"
-"【最终状态】dns_cutover_complete=%{1}，dns_switch_pending=%{2}","【最终状态】dns_cutover_complete=%{1}，dns_switch_pending=%{2}"
 "步骤 5/5：校验 CDN/边缘配置…","步骤 5/5：校验 CDN/边缘配置…"
 "当前 DNS 供应商未提供 CDN 接口校验，已跳过","当前 DNS 供应商未提供 CDN 接口校验，已跳过"
 "第 %{1} 次校验 CDN 配置…","第 %{1} 次校验 CDN 配置…"
 "%{1} 秒后重试（已等待 %{2} 秒）","%{1} 秒后重试（已等待 %{2} 秒）"
 "DNS/CDN 切换流程已结束","DNS/CDN 切换流程已结束"
 "[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成","[DnsSwitchService] %{1} Step7: DomainPool 已更新，流程完成"
+"DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。","DNS 已配置并推送至 %{1}，但公网权威 NS 尚未与该服务商一致（与证书 DNS-01 校验一致）。已保持待切换队列，传播完成后定时任务将自动完成 cutover。"
 "DNS 切换成功：%{1} → %{2}","DNS 切换成功：%{1} → %{2}"
 "注册商侧 NS：%{1}","注册商侧 NS：%{1}"
 注册商侧查询异常：%{1},注册商侧查询异常：%{1}
@@ -918,7 +911,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "[DnsSwitchService] 域名 %{1} 已标记 dns_switch_pending=1, target=%{2}, account_id=%{3}","[DnsSwitchService] 域名 %{1} 已标记 dns_switch_pending=1, target=%{2}, account_id=%{3}"
 "源账户 %{1} 不支持 DNS 管理","源账户 %{1} 不支持 DNS 管理"
 "[DnsSwitchService] syncRecordsFromSource %{1} 失败（非致命）：%{2}","[DnsSwitchService] syncRecordsFromSource %{1} 失败（非致命）：%{2}"
-"[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}","[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}"
 "HTTP 可访问（%{1} 重定向）","HTTP 可访问（%{1} 重定向）"
 "HTTP 可访问（%{1}）","HTTP 可访问（%{1}）"
 "HTTPS 可连通（未校验证书，%{1} 重定向）","HTTPS 可连通（未校验证书，%{1} 重定向）"
@@ -1011,31 +1003,29 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "域名商不支持 DNS 管理","域名商不支持 DNS 管理"
 没有可添加的解析记录,没有可添加的解析记录
 "域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。","域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。"
+"[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}","[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}"
 "目标账户不支持 DNS 记录管理","目标账户不支持 DNS 记录管理"
 参数无效,参数无效
-"无法查询域名「%{1}」的权威 NS（与 dig/nslookup 结果一致）。请确认根域正确；在权威 NS 尚未指向当前 DNS 托管商前，勿用其 API 做证书 DNS 验证。","无法查询域名「%{1}」的权威 NS（与 dig/nslookup 结果一致）。请确认根域正确；在权威 NS 尚未指向当前 DNS 托管商前，勿用其 API 做证书 DNS 验证。"
-"请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。","请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。"
-"[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。","[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。"
-"域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}","域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}"
-"[注册商 API] 登记 NS 已为「%{1}」（%{2}），与当前 DNS 账户一致；本机/递归查询仍为「%{3}」（%{4}）。证书流程将先等待公网权威 NS 与目标一致后再写入验证 TXT（超时见 env websites.acme_dns）。CA 仍从全球递归查 TXT，若最终验证失败可再试或换 HTTP-01。","[注册商 API] 登记 NS 已为「%{1}」（%{2}），与当前 DNS 账户一致；本机/递归查询仍为「%{3}」（%{4}）。证书流程将先等待公网权威 NS 与目标一致后再写入验证 TXT（超时见 env websites.acme_dns）。CA 仍从全球递归查 TXT，若最终验证失败可再试或换 HTTP-01。"
-"证书 DNS-01：注册商登记 NS 已指向目标，正在等待公网权威 NS 与之一致后再写入验证 TXT（最长约 %{1} 分钟）…","证书 DNS-01：注册商登记 NS 已指向目标，正在等待公网权威 NS 与之一致后再写入验证 TXT（最长约 %{1} 分钟）…"
-"[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…","[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…"
-"（DoH 已观测到「%{1}」，本机解析器仍为「%{2}」；须本机也解析到目标后再写 TXT，与 CA 可见性更一致。）","（DoH 已观测到「%{1}」，本机解析器仍为「%{2}」；须本机也解析到目标后再写 TXT，与 CA 可见性更一致。）"
-"[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。%{5}","[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。%{5}"
-"（Cloudflare DoH 已观测到目标 NS，本机权威查询仍不一致；可检查服务器解析器或延长 env websites.acme_dns.wait_public_ns_max_seconds。）","（Cloudflare DoH 已观测到目标 NS，本机权威查询仍不一致；可检查服务器解析器或延长 env websites.acme_dns.wait_public_ns_max_seconds。）"
-"在当前 Cloudflare API Token 下未列出域名「%{1}」的 Zone（GET /zones 无结果）。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。","在当前 Cloudflare API Token 下未列出域名「%{1}」的 Zone（GET /zones 无结果）。若在控制台能看到该站点，多为 Token 与登录账户不一致、权限未含 Zone → Read、或「区域资源」未包含该域名；DNS 与 CDN 若均用 Cloudflare 须使用同一 Token。"
 "注册商 API 显示的委派 NS 为「%{1}」（%{2}），未指向当前 DNS 托管「%{3}」。请先在注册商处将 NS 改为该托管商要求的地址后再申请证书。","注册商 API 显示的委派 NS 为「%{1}」（%{2}），未指向当前 DNS 托管「%{3}」。请先在注册商处将 NS 改为该托管商要求的地址后再申请证书。"
+"DNS 托管 API 未能确认该域名在本账户下可写","DNS 托管 API 未能确认该域名在本账户下可写"
+已就绪,已就绪
 "[注册商 API] 委派 NS：%{1}（已识别为「%{2}」）。[DNS 托管 API] Zone 状态：%{3}。将直接写入验证 TXT。","[注册商 API] 委派 NS：%{1}（已识别为「%{2}」）。[DNS 托管 API] Zone 状态：%{3}。将直接写入验证 TXT。"
 "[DNS 托管 API] 已在本账户下确认域名可管理（Zone：%{1}）。未能通过注册商 API 读取委派 NS；若 CA 验证失败请核对注册局 NS 是否已指向「%{2}」。","[DNS 托管 API] 已在本账户下确认域名可管理（Zone：%{1}）。未能通过注册商 API 读取委派 NS；若 CA 验证失败请核对注册局 NS 是否已指向「%{2}」。"
 "证书机构仍从全球递归查询 TXT；若委派尚未在全球生效，DNS-01 可能失败，可稍后重试或改用 HTTP-01。","证书机构仍从全球递归查询 TXT；若委派尚未在全球生效，DNS-01 可能失败，可稍后重试或改用 HTTP-01。"
-已就绪,已就绪
-"DNS 托管 API 未能确认该域名在本账户下可写","DNS 托管 API 未能确认该域名在本账户下可写"
+"DNS 托管 API 返回异常","DNS 托管 API 返回异常"
 "DNS 托管账户下未找到该域名，请检查账户、Token 权限与区域资源","DNS 托管账户下未找到该域名，请检查账户、Token 权限与区域资源"
 "DNS 托管侧域名状态异常，无法写入验证记录","DNS 托管侧域名状态异常，无法写入验证记录"
-"公网权威 NS 已与目标一致（已等待 %{1} 秒%{2}），开始添加验证 TXT。","公网权威 NS 已与目标一致（已等待 %{1} 秒%{2}），开始添加验证 TXT。"
-"，DoH 观测","，DoH 观测"
-公网 NS 传播等待超时,公网 NS 传播等待超时
+"无法查询域名「%{1}」的权威 NS（与 dig/nslookup 结果一致）。请确认根域正确；在权威 NS 尚未指向当前 DNS 托管商前，勿用其 API 做证书 DNS 验证。","无法查询域名「%{1}」的权威 NS（与 dig/nslookup 结果一致）。请确认根域正确；在权威 NS 尚未指向当前 DNS 托管商前，勿用其 API 做证书 DNS 验证。"
+"[注册商 API] 登记 NS 已为「%{1}」（%{2}），与当前 DNS 账户一致；本机/递归查询仍为「%{3}」（%{4}）。证书流程将先等待公网权威 NS 与目标一致后再写入验证 TXT（超时见 env websites.acme_dns）。CA 仍从全球递归查 TXT，若最终验证失败可再试或换 HTTP-01。","[注册商 API] 登记 NS 已为「%{1}」（%{2}），与当前 DNS 账户一致；本机/递归查询仍为「%{3}」（%{4}）。证书流程将先等待公网权威 NS 与目标一致后再写入验证 TXT（超时见 env websites.acme_dns）。CA 仍从全球递归查 TXT，若最终验证失败可再试或换 HTTP-01。"
+"请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。","请在域名注册商处把 NS 改为 Cloudflare 控制台该域名页提供的两条 NS，等待全球生效（常需数小时）后再用 DNS-01 申请证书；或若 80 端口已指向本机可改用 HTTP-01。"
+"[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。","[常见误解] 后台将「DNS 托管」选为 Cloudflare 仅表示通过 Cloudflare API 写记录；若权威 NS 仍为 Gname 高防（*.share-dns.com / *.share-dns.net）等而非 Cloudflare 的 *.ns.cloudflare.com，则 CA 从全球递归查询看到的是注册商侧权威区，查不到写在 Cloudflare 上的 TXT，DNS-01 仍会失败。请在注册商处将 NS 整站改为 Cloudflare 给出的两条 NS，并等待传播；或 80 已指向本机时改用 HTTP-01。"
 "[提示] 已尝试通过注册商账户（account_id）API 读取登记 NS，与目标仍不一致或接口不可用；请以注册商控制台为准核对委派 NS。","[提示] 已尝试通过注册商账户（account_id）API 读取登记 NS，与目标仍不一致或接口不可用；请以注册商控制台为准核对委派 NS。"
+"域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}","域名「%{1}」当前权威 NS 为「%{2}」（%{3}），未托管在「%{4}」。向 %{4} API 写入的验证 TXT 不会出现在当前权威 DNS 区，全球解析也查不到，DNS-01 证书必败。%{5}"
+(暂无),(暂无)
+"[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…","[证书 DNS-01] 等待公网 NS 传播：已等待 %{1} 秒，当前为「%{2}」（%{3}），目标「%{4}」…"
+"（DoH 已观测到「%{1}」，本机解析器仍为「%{2}」；须本机也解析到目标后再写 TXT，与 CA 可见性更一致。）","（DoH 已观测到「%{1}」，本机解析器仍为「%{2}」；须本机也解析到目标后再写 TXT，与 CA 可见性更一致。）"
+"（Cloudflare DoH 已观测到目标 NS，本机权威查询仍不一致；可检查服务器解析器或延长 env websites.acme_dns.wait_public_ns_max_seconds。）","（Cloudflare DoH 已观测到目标 NS，本机权威查询仍不一致；可检查服务器解析器或延长 env websites.acme_dns.wait_public_ns_max_seconds。）"
+"[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。%{5}","[证书 DNS-01] 已等待 %{1} 秒，公网权威 NS 仍为「%{2}」（%{3}），与目标「%{4}」不一致。请稍后再试或改用 HTTP-01。%{5}"
 "域名池 FQDN 或根域无效","域名池 FQDN 或根域无效"
 "域名池 FQDN 与根域不匹配","域名池 FQDN 与根域不匹配"
 "无效的服务器 IP（需为合法 IPv4 或 IPv6）","无效的服务器 IP（需为合法 IPv4 或 IPv6）"
@@ -1163,6 +1153,7 @@ id属性不能为空,id属性不能为空
 加载中...,加载中...
 清空,清空
 确定,确定
+"点击选择多个域名，选中后点击确定。根域与 www 子域成对绑定：选其一将自动勾选另一（若列表中存在）。","点击选择多个域名，选中后点击确定。根域与 www 子域成对绑定：选其一将自动勾选另一（若列表中存在）。"
 点击选择多个域名，选中后点击确定,点击选择多个域名，选中后点击确定
 点击选择域名，选择后将自动填充相关字段,点击选择域名，选择后将自动填充相关字段
 如：www.example.com,如：www.example.com
