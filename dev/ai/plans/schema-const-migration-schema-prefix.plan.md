@@ -2,7 +2,7 @@
 
 **状态**：🟡 进行中（50 子智能体 Model 迁移已跑完；Setup 迁出待实施）  
 **性质**：重构，不做兼容；旧写法全部删除  
-**最后更新**：2025-03-04
+**最后更新**：2026-03-20
 
 ## 约束与兼容说明
 
@@ -57,7 +57,7 @@
 | 17 | app/code/Weline/Frontend/Model/System/FrontendNotification.php | setup, upgrade, install（空） |
 | 18 | app/code/Weline/I18n/Model/Locale/Name.php | setup, upgrade, install（有逻辑） |
 | 19 | app/code/Weline/Index/Model/Backend/Setting.php | setup, upgrade, install（install 有逻辑） |
-| 20 | app/code/Weline/Theme/Model/ThemeLayout.php | setup（空） |
+| 20 | app/code/Weline/Theme/Model/ThemeLayout.php | ~~setup（空）~~ ✅ 已完成（ThemeLayout 已无 setup 方法；Setup/Install.php 和 Upgrade.php 已清理为空 stub，旧式建表/裸 SQL ALTER 均已移除） |
 | 21 | app/code/WeShop/Product/Model/Product/OptionId.php | setup, upgrade, install（空） |
 | 22 | app/code/WeShop/Cms/Model/Page.php | install, upgrade, setup（有逻辑） |
 | 23 | app/code/WeShop/Store/Model/Store/Currency.php | setup, upgrade, install（空） |
