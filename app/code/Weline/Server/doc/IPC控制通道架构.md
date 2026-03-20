@@ -64,8 +64,10 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 ### 消息格式详情
 
 ```json
-// register
+// register（框架进程，省略 process_kind，默认 framework）
 {"type":"register","role":"worker|dispatcher|redirect|maintenance","pid":123,"port":19981,"worker_id":2}
+// register（模块自定义进程，携带 process_kind=module 和 module_code）
+{"type":"register","role":"my_queue","pid":456,"port":0,"worker_id":1,"process_kind":"module","module_code":"Weline_Payment"}
 
 // ack
 {"type":"ack","resurrection_priority":0}
@@ -84,7 +86,10 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 {"type":"cache_clear"}
 
 // ssl_cert_reload（热重载 SSL 证书映射，Worker 重新读取 ssl_certificate_map.json）
+// 全量重载（清除所有域名的内存缓存，重新读取 map 文件）
 {"type":"ssl_cert_reload"}
+// 针对特定域名（清除指定域名的负缓存 + 内存正缓存，重新读取 map 文件）
+{"type":"ssl_cert_reload","domains":["example.com","www.example.com"]}
 
 // drain / undrain
 {"type":"drain","ports":[19981]}
@@ -148,10 +153,16 @@ WLS（Weline Server）使用 TCP 控制通道实现 Master、Dispatcher、Worker
 
 零停机，不重启，动态生效新证书：
 1. 后台添加域名/导入证书 → `SslCertificateService::clearServerCache()` 重新生成 `ssl_certificate_map.json`
-2. 通过 IPC 发送 `ssl_cert_reload` 命令给 Master
-3. Master 广播 `ssl_cert_reload` 给所有 Worker
-4. SSL Worker 重新读取 `ssl_certificate_map.json`，更新进程内 `$sniServerCerts` 映射
+2. 通过 IPC 发送 `ssl_cert_reload` 命令给 Master（可携带 `domains` 字段指定域名）
+3. Master 广播 `ssl_cert_reload` 给所有 SSL Worker（含 `domains` 字段）
+4. Worker 处理逻辑：
+   - 若携带 `domains`：清除这些域名的 DB 回退负缓存（`$_wlsRestoreAttempted`）+ 清除内存正缓存（`$sniServerCerts`）
+   - 无论是否携带 `domains`：重新读取 `ssl_certificate_map.json`，完整替换 `$sniServerCerts`
 5. 后续 TLS 握手使用新证书（通过 ClientHello SNI 匹配）
+
+**负缓存清除**：当某域名首次访问时磁盘+DB 均无证书，Worker 会记录负缓存避免重复查库。
+证书申请成功后，通过 `IpcControlGateway::reloadSslCert($instance, [$domain])` 携带域名清除该负缓存，
+WLS 下次访问该域名时将重新读取已写入的证书，无需重启。
 
 ### 代码重载（code）—— 滚动重启
 

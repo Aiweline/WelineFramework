@@ -69,6 +69,7 @@ class MasterProcess
     protected int $mainPort = 0;
     protected array $config = [];
     protected bool $running = true;
+    protected bool $stopRequested = false;
     protected bool $frontend = false;
     protected int $controlPort = 0;
     protected string $sslCert = '';
@@ -226,6 +227,9 @@ class MasterProcess
 
             // 初始化控制端口
             $this->controlPort = Processer::findAvailablePort(19980);
+            if ($this->controlPort <= 0) {
+                throw new \RuntimeException('No available control port found in range 19980-20029');
+            }
             $this->log(__('  控制端口: %{1}', [$this->controlPort]));
 
             // 构建 ServiceContext
@@ -324,19 +328,33 @@ class MasterProcess
         if (\function_exists('pcntl_signal')) {
             \pcntl_async_signals(true);
 
+            if (\defined('SIGCHLD') && \function_exists('pcntl_waitpid')) {
+                \pcntl_signal(SIGCHLD, function () {
+                    $this->reapExitedChildren();
+                });
+            }
+
             // SIGTERM / SIGINT: 优雅停止（统一走 IPC 停机通道）
             \pcntl_signal(SIGTERM, function () {
-                $this->log(__('收到 SIGTERM 信号，开始优雅停止...'));
-                $this->stopWithProgress('SIGTERM');
+                $this->handleTerminationSignal('SIGTERM', __('收到 SIGTERM 信号，开始统一停机流程...'));
             });
 
             \pcntl_signal(SIGINT, function () {
-                $this->log(__('收到 SIGINT 信号，开始优雅停止...'));
-                $this->stopWithProgress('SIGINT (Ctrl+C)');
+                $this->handleTerminationSignal('SIGINT (Ctrl+C)', __('收到 SIGINT 信号，开始统一停机流程...'));
             });
+
+            if (\defined('SIGQUIT')) {
+                \pcntl_signal(SIGQUIT, function () {
+                    $this->handleTerminationSignal('SIGQUIT', __('收到 SIGQUIT 信号，开始统一停机流程...'));
+                });
+            }
 
             // SIGHUP: 重载
             \pcntl_signal(SIGHUP, function () {
+                if ($this->stopRequested || $this->orchestrator?->isShuttingDown()) {
+                    $this->log(__('停机流程进行中，忽略 SIGHUP 重载信号'), 'warning');
+                    return;
+                }
                 $this->log(__('收到 SIGHUP 信号，开始重载...'));
                 $this->reload();
             });
@@ -347,7 +365,18 @@ class MasterProcess
                 $this->log(__('状态报告: %{1}', [\json_encode($status, JSON_PRETTY_PRINT)]));
             });
 
-            $this->log(__('已注册 pcntl 信号: SIGTERM, SIGINT, SIGHUP, SIGUSR1'));
+            $registeredSignals = [];
+            if (\defined('SIGCHLD') && \function_exists('pcntl_waitpid')) {
+                $registeredSignals[] = 'SIGCHLD';
+            }
+            $registeredSignals[] = 'SIGTERM';
+            $registeredSignals[] = 'SIGINT';
+            if (\defined('SIGQUIT')) {
+                $registeredSignals[] = 'SIGQUIT';
+            }
+            $registeredSignals[] = 'SIGHUP';
+            $registeredSignals[] = 'SIGUSR1';
+            $this->log(__('已注册 pcntl 信号: %{1}', [\implode(', ', $registeredSignals)]));
             return;
         }
 
@@ -355,8 +384,11 @@ class MasterProcess
         if (\function_exists('sapi_windows_set_ctrl_handler')) {
             \sapi_windows_set_ctrl_handler(function (int $event): bool {
                 if ($event === \PHP_WINDOWS_EVENT_CTRL_C || $event === \PHP_WINDOWS_EVENT_CTRL_BREAK) {
-                    $this->log(__('Windows 模式：收到 Ctrl+C 信号，执行清理...'));
-                    $this->stopWithProgress('Ctrl+C (Windows)');
+                    $signal = $event === \PHP_WINDOWS_EVENT_CTRL_BREAK ? 'Ctrl+Break (Windows)' : 'Ctrl+C (Windows)';
+                    $message = $event === \PHP_WINDOWS_EVENT_CTRL_BREAK
+                        ? __('Windows 模式：收到 Ctrl+Break 信号，开始统一停机流程...')
+                        : __('Windows 模式：收到 Ctrl+C 信号，开始统一停机流程...');
+                    $this->handleTerminationSignal($signal, $message);
                     return true;
                 }
                 return false;
@@ -375,20 +407,45 @@ class MasterProcess
         $this->log(__('已注册 shutdown 清理函数（Ctrl+C 可能不会触发优雅停止）'), 'warning');
     }
 
+    private function handleTerminationSignal(string $signal, string $message): void
+    {
+        if ($this->stopRequested || $this->orchestrator?->isShuttingDown()) {
+            $this->log(__('停机流程进行中，忽略重复终止信号（signal=%{1}）', [$signal]), 'warning');
+            return;
+        }
+
+        $this->log($message);
+        $this->stopWithProgress($signal);
+    }
+
     /**
      * 停止 Master（用于信号处理，统一走 IPC 停机通道）
      */
     public function stopWithProgress(string $signal): void
     {
+        if ($this->stopRequested || $this->orchestrator?->isShuttingDown()) {
+            $this->log(__('停机流程进行中，忽略重复终止信号（signal=%{1}）', [$signal]), 'warning');
+            return;
+        }
+
+        $this->stopRequested = true;
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
 
-        if ($this->stopWithProgressViaIpc($signal)) {
+        if ($this->frontend) {
+            self::ipcMsg("收到 {$signal}，已切换到统一停机流程", 'stop');
+        }
+
+        if ($this->orchestrator?->requestStop($signal)) {
+            return;
+        }
+
+        if ($this->orchestrator?->isShuttingDown()) {
             return;
         }
 
         if ($this->frontend) {
-            self::ipcMsg("本地 IPC 停机通道不可用，回退为直接停止流程（signal={$signal}）", 'error');
+            self::ipcMsg("统一停机请求未入队，回退为本地停机流程（signal={$signal}）", 'error');
         }
 
         $this->orchestrator?->stopAll($signal);
@@ -399,10 +456,39 @@ class MasterProcess
      */
     public function stop(): void
     {
+        if ($this->stopRequested) {
+            return;
+        }
+
+        $this->stopRequested = true;
         $this->orchestrator?->setMasterShutdownIntent(true);
         $this->running = false;
         $this->orchestrator?->stopAll('manual');
         $this->orchestrator?->stop();
+    }
+
+    /**
+     * 回收已退出的子进程，避免在前台模式下残留僵尸进程。
+     */
+    private function reapExitedChildren(): void
+    {
+        if (!\function_exists('pcntl_waitpid') || !\defined('WNOHANG')) {
+            return;
+        }
+
+        do {
+            $status = 0;
+            $pid = \pcntl_waitpid(-1, $status, WNOHANG);
+            if ($pid > 0) {
+                $detail = 'unknown';
+                if (\function_exists('pcntl_wifexited') && \pcntl_wifexited($status) && \function_exists('pcntl_wexitstatus')) {
+                    $detail = 'exit=' . \pcntl_wexitstatus($status);
+                } elseif (\function_exists('pcntl_wifsignaled') && \pcntl_wifsignaled($status) && \function_exists('pcntl_wtermsig')) {
+                    $detail = 'signal=' . \pcntl_wtermsig($status);
+                }
+                $this->log(__('已回收子进程 PID %{1} (%{2})', [$pid, $detail]));
+            }
+        } while ($pid > 0);
     }
 
     /**
@@ -509,7 +595,14 @@ class MasterProcess
         if (!$info || empty($info['master_pid'])) {
             return false;
         }
-        return Processer::processExists((int) $info['master_pid']);
+        $processName = self::getMasterProcessName($instanceName);
+
+        return Processer::isManagedProcessRunning(
+            (int) $info['master_pid'],
+            $processName,
+            '',
+            '--name=' . $processName
+        );
     }
 
     /**
@@ -800,8 +893,11 @@ class MasterProcess
     /**
      * 通知 Master 广播 SSL 证书热重载命令给所有 Worker。
      * Worker 会重新读取 ssl_certificate_map.json 并更新 SNI 证书映射，无需重启。
+     *
+     * @param string   $instanceName WLS 实例名
+     * @param string[] $domains      需要清除负缓存并刷新的域名列表；空 = 全量重载
      */
-    public static function sendSslCertReloadCommand(string $instanceName = 'default'): bool
+    public static function sendSslCertReloadCommand(string $instanceName = 'default', array $domains = []): bool
     {
         $info = self::getMasterInfo($instanceName);
         if (!$info || empty($info['control_port'])) {
@@ -818,7 +914,8 @@ class MasterProcess
             return false;
         }
 
-        $msg = ControlMessage::command(ControlMessage::ACTION_SSL_CERT_RELOAD);
+        $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
+        $msg = ControlMessage::command(ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload);
         @\fwrite($conn, $msg);
 
         \stream_set_timeout($conn, 3);
