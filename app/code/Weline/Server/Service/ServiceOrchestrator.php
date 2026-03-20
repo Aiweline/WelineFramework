@@ -772,10 +772,17 @@ class ServiceOrchestrator
         $this->sendStopProgress('阶段1/6: 广播 DRAIN - 通知子进程停止接受新请求');
         $this->broadcastDrainToAll();
 
-        // ========== 阶段 2：等待排水完成（短超时，与 Windows 一致，不长时间等待）==========
+        // ========== 阶段 2：等待排水完成（默认 10s，可配 wls.orchestrator.stop_all_drain_wait_sec）==========
         WlsLogger::info_('[Orchestrator] 阶段2: 等待排水完成');
         $this->sendStopProgress('阶段2/6: 等待排水完成 - 子进程处理完当前请求');
-        $this->waitForAllDrained(2.0, true);
+        $stopDrainWait = (float) ($this->context?->getConfig('wls.orchestrator.stop_all_drain_wait_sec', 10.0) ?? 10.0);
+        if ($stopDrainWait < 1.0) {
+            $stopDrainWait = 1.0;
+        }
+        if ($stopDrainWait > 300.0) {
+            $stopDrainWait = 300.0;
+        }
+        $this->waitForAllDrained($stopDrainWait, true);
 
         // ========== 阶段 3：广播 SHUTDOWN ==========
         WlsLogger::info_('[Orchestrator] 阶段3: 广播 SHUTDOWN');
