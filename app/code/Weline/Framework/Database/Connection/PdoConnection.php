@@ -48,16 +48,25 @@ final class PdoConnection implements ConnectionInterface
 
     public function beginTransaction(): bool
     {
+        if ($this->pdo->inTransaction()) {
+            return true;
+        }
         return $this->pdo->beginTransaction();
     }
 
     public function commit(): bool
     {
+        if (!$this->pdo->inTransaction()) {
+            return true;
+        }
         return $this->pdo->commit();
     }
 
     public function rollBack(): bool
     {
+        if (!$this->pdo->inTransaction()) {
+            return true;
+        }
         return $this->pdo->rollBack();
     }
 
