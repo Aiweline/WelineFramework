@@ -366,7 +366,7 @@ class Index extends BackendController
                 return $this->fetchJson($this->error(__('预览图生成失败')));
             }
         } catch (\Exception $e) {
-            Env::log_error(__('生成预览图失败：%{1}', [$e->getMessage()]));
+            Env::log_error('theme_preview', __('生成预览图失败：%{1}', [$e->getMessage()]));
             return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
         }
     }
@@ -438,7 +438,7 @@ class Index extends BackendController
 
             return $this->fetchJson($this->success(__('所有预览图生成成功'), $result));
         } catch (\Exception $e) {
-            Env::log_error(__('批量生成预览图失败：%{1}', [$e->getMessage()]));
+            Env::log_error('theme_preview', __('批量生成预览图失败：%{1}', [$e->getMessage()]));
             return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
         }
     }
