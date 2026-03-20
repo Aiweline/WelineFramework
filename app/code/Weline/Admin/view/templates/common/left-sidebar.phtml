@@ -167,6 +167,305 @@ if ($dataLayout !== 'horizontal'):
     </div>
 
     <style>
+        /* ==================== Left Sidebar Theme ==================== */
+        .vertical-menu {
+            background: var(--backend-color-sidebar-bg);
+            border-right: 1px solid var(--backend-color-sidebar-border);
+            box-shadow: var(--backend-sidebar-shadow);
+            contain: layout style;
+        }
+
+        .vertical-menu [data-simplebar] {
+            background: transparent;
+        }
+
+        #sidebar-menu {
+            padding: 1rem 0.75rem 1.5rem;
+        }
+
+        #sidebar-menu > ul,
+        #sidebar-menu .metismenu {
+            padding-bottom: 1.25rem;
+        }
+
+        #sidebar-menu ul li {
+            position: relative;
+        }
+
+        #sidebar-menu ul li.menu-title {
+            padding: 0.8rem 0.95rem 0.35rem;
+            color: var(--backend-color-text-tertiary);
+            font-size: 0.72rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        #sidebar-menu ul li:not(.menu-title) > a {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            min-height: 44px;
+            margin-bottom: 0.2rem;
+            padding: 0.72rem 0.95rem;
+            color: var(--backend-color-sidebar-text);
+            border-radius: var(--backend-border-radius-lg);
+            transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.22s ease, transform 0.22s ease;
+            will-change: transform, background-color;
+        }
+
+        #sidebar-menu ul li:not(.menu-title) > a i {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 1.1rem;
+            color: var(--backend-color-text-tertiary);
+            transition: color 0.2s ease, transform 0.2s ease;
+        }
+
+        #sidebar-menu ul li:not(.menu-title) > a:hover {
+            background: var(--backend-color-sidebar-hover);
+            color: var(--backend-color-text-primary);
+            transform: translateX(3px);
+            box-shadow: inset 0 0 0 1px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.05);
+        }
+
+        #sidebar-menu ul li:not(.menu-title) > a:hover i {
+            color: var(--backend-color-primary);
+            transform: scale(1.02);
+        }
+
+        #sidebar-menu ul li.mm-active > a,
+        #sidebar-menu ul li.active > a {
+            color: var(--backend-color-primary-dark);
+            background: linear-gradient(135deg, var(--backend-color-primary-bg-light) 0%, var(--backend-color-primary-bg-subtle) 100%);
+            box-shadow: inset 0 0 0 1px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.08);
+        }
+
+        #sidebar-menu ul li > a.has-arrow {
+            padding-right: 2.6rem;
+        }
+
+        #sidebar-menu ul li > a.has-arrow::after {
+            right: 1rem;
+            width: 0.6rem;
+            height: 0.6rem;
+            margin-top: -0.34rem;
+            border-width: 0 1.5px 1.5px 0;
+            transition: transform 0.22s ease, border-color 0.2s ease;
+        }
+
+        #sidebar-menu ul li.mm-active > a.has-arrow::after,
+        #sidebar-menu ul li.active > a.has-arrow::after,
+        #sidebar-menu ul li > a.has-arrow:hover::after {
+            border-color: var(--backend-color-primary);
+        }
+
+        #sidebar-menu ul li.mm-active > a i,
+        #sidebar-menu ul li.active > a i {
+            color: var(--backend-color-primary);
+        }
+
+        #sidebar-menu ul li ul.sub-menu {
+            margin-top: 0.15rem;
+            padding-left: 0.45rem;
+            display: none;
+            visibility: hidden;
+            overflow: hidden;
+            max-height: 0;
+            opacity: 0;
+            transform: translateY(-6px);
+            transform-origin: top;
+            transition: opacity 0.22s ease, transform 0.24s ease;
+            pointer-events: none;
+        }
+
+        #sidebar-menu ul li ul.sub-menu.mm-show,
+        #sidebar-menu ul li.mm-active > ul.sub-menu,
+        #sidebar-menu ul li.active > ul.sub-menu {
+            display: block;
+            visibility: visible;
+            max-height: none;
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        #sidebar-menu ul li ul.sub-menu li a {
+            position: relative;
+            min-height: 38px;
+            padding: 0.58rem 0.85rem 0.58rem 2.35rem;
+            color: var(--backend-color-text-secondary);
+            border-radius: var(--backend-border-radius-md);
+        }
+
+        #sidebar-menu ul li ul.sub-menu li a::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 1.2rem;
+            width: 0.38rem;
+            height: 0.38rem;
+            border-radius: 50%;
+            background: var(--backend-color-border-emphasis);
+            transform: translateY(-50%);
+        }
+
+        #sidebar-menu ul li ul.sub-menu li a:hover::before,
+        #sidebar-menu ul li ul.sub-menu li.mm-active > a::before,
+        #sidebar-menu ul li ul.sub-menu li.active > a::before {
+            background: var(--backend-color-primary);
+        }
+
+        .sticky-menu-section {
+            margin: 0 0.25rem 0.85rem;
+            background: color-mix(in srgb, var(--backend-color-sidebar-bg) 92%, var(--backend-color-bg-primary) 8%) !important;
+            border: 1px solid var(--backend-color-sidebar-border);
+            border-radius: calc(var(--backend-border-radius-xl) + 2px);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+            overflow: hidden;
+            backdrop-filter: blur(14px);
+        }
+
+        .sticky-menu-section.sticky-active {
+            box-shadow: 0 18px 34px rgba(15, 23, 42, 0.1);
+        }
+
+        .menu-tab-btn {
+            border: 1px solid transparent;
+            border-radius: var(--backend-border-radius-md);
+            background: var(--backend-color-bg-secondary);
+            color: var(--backend-color-text-secondary);
+            transition: all 0.2s ease;
+        }
+
+        .menu-tab-btn:hover,
+        .menu-tab-btn.active {
+            color: var(--backend-color-primary);
+            background: var(--backend-color-primary-bg-subtle);
+            border-color: rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.12);
+            transform: translateY(-1px);
+        }
+
+        .search-tab-input,
+        .search-tab-input-wrapper .form-control,
+        .search-menu-input-wrapper .form-control {
+            background: var(--backend-color-bg-secondary);
+            border-color: var(--backend-color-input-border);
+            color: var(--backend-color-text-primary);
+            border-radius: var(--backend-border-radius-md);
+        }
+
+        .search-tab-input::placeholder,
+        .search-menu-input-wrapper .form-control::placeholder {
+            color: var(--backend-color-text-placeholder);
+        }
+
+        .menu-tabs-content,
+        .search-results-container,
+        .search-results-container-menu {
+            transition: opacity 0.2s ease, transform 0.22s ease;
+        }
+
+        .search-result-item a,
+        .search-results-list-menu .search-result-item a,
+        .search-results-list .search-result-item a {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            padding: 0.72rem 0.95rem;
+            color: var(--backend-color-text-secondary);
+            border-radius: var(--backend-border-radius-md);
+            transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+        }
+
+        .search-result-item a:hover,
+        .search-results-list-menu .search-result-item a:hover,
+        .search-results-list .search-result-item a:hover {
+            color: var(--backend-color-text-primary);
+            background: var(--backend-color-bg-secondary);
+            transform: translateX(2px);
+        }
+
+        body.vertical-collpsed .vertical-menu {
+            overflow: visible;
+        }
+
+        body.vertical-collpsed #sidebar-menu {
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > a {
+            justify-content: center;
+            padding-left: 0.8rem;
+            padding-right: 0.8rem;
+            border-radius: var(--backend-border-radius-lg);
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > a.has-arrow::after {
+            display: none;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > a:hover {
+            transform: translateX(0) scale(1.02);
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu,
+        body.vertical-collpsed .menu-search-submenu,
+        body.vertical-collpsed .menu-frequent-submenu {
+            display: block;
+            top: 0;
+            left: calc(100% + 0.75rem) !important;
+            right: auto !important;
+            width: min(280px, calc(100vw - 96px)) !important;
+            min-width: 240px !important;
+            max-width: 280px !important;
+            padding: 0.55rem;
+            border: 1px solid var(--backend-color-card-border);
+            border-radius: var(--backend-border-radius-xl);
+            background: var(--backend-color-card-bg) !important;
+            box-shadow: var(--backend-dropdown-shadow);
+            opacity: 0;
+            visibility: hidden;
+            transform: translate3d(-10px, 0, 0) scale(0.98);
+            transform-origin: left center;
+            pointer-events: none;
+            transition: opacity 0.18s ease, transform 0.2s ease, visibility 0s linear 0.2s;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li:hover > ul.sub-menu,
+        body.vertical-collpsed #sidebar-menu > ul > li.mm-active > ul.sub-menu,
+        body.vertical-collpsed .menu-search-item:hover .menu-search-submenu,
+        body.vertical-collpsed .menu-frequent-item:hover .menu-frequent-submenu,
+        body.vertical-collpsed .menu-search-submenu:hover,
+        body.vertical-collpsed .menu-frequent-submenu:hover {
+            display: block;
+            opacity: 1;
+            visibility: visible;
+            transform: translate3d(0, 0, 0) scale(1);
+            pointer-events: auto;
+            transition-delay: 0s;
+        }
+
+        body.vertical-collpsed #sidebar-menu > ul > li > ul.sub-menu > li > a,
+        body.vertical-collpsed .menu-search-submenu li > a,
+        body.vertical-collpsed .menu-frequent-submenu li > a {
+            white-space: normal;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #sidebar-menu ul li > a,
+            #sidebar-menu ul li > a i,
+            #sidebar-menu ul li ul.sub-menu,
+            .menu-tab-btn,
+            .menu-tabs-content,
+            .search-results-container,
+            .search-results-container-menu {
+                transition: none !important;
+            }
+        }
+
         /* 悬浮搜索和常用菜单容器 */
         .sticky-menu-section {
             position: sticky;
@@ -1134,17 +1433,53 @@ if ($dataLayout !== 'horizontal'):
         }
 
         function showPanel(top) {
-            $el.tabsContent.addClass('expanded-right').show().css({
-                display: 'block', position: 'fixed', left: '70px',
+            clearTimer('panelHideTimer');
+            state.panelVisible = true;
+            if (isCollapsed()) {
+                $el.stickySection.css({
+                    display: 'block',
+                    visibility: 'visible',
+                    height: '0',
+                    overflow: 'visible',
+                    opacity: '1',
+                    position: 'static',
+                    width: '0'
+                });
+            }
+            $el.tabsContent.stop(true, true).show().addClass('expanded-right').css({
+                display: 'block',
+                position: 'fixed',
+                left: '70px',
                 top: top || calculateTop(),
-                'min-width': '280px', 'max-width': '320px', 'z-index': '1050',
-                'background-color': panelBg(), opacity: '1', visibility: 'visible'
+                'min-width': '280px',
+                'max-width': '320px',
+                'z-index': '1050',
+                'background-color': panelBg()
+            });
+            requestAnimationFrame(function() {
+                $el.tabsContent.css({ opacity: '1', visibility: 'visible' });
             });
         }
 
-        function hidePanel() {
-            $el.tabsContent.css({ opacity: '0', visibility: 'hidden' });
-            setTimeout(function() { $el.tabsContent.removeClass('expanded-right').hide(); }, 200);
+        function hidePanel(immediate) {
+            clearTimer('panelHideTimer');
+            state.panelVisible = false;
+            if (immediate) {
+                if (isCollapsed()) {
+                    $el.stickySection.attr('style', '');
+                }
+                $el.tabsContent.removeClass('expanded-right').hide().css({ opacity: '0', visibility: 'hidden' });
+                return;
+            }
+            $el.tabsContent.stop(true, true).css({ opacity: '0', visibility: 'hidden' });
+            state.panelHideTimer = setTimeout(function() {
+                if (!state.panelVisible) {
+                    if (isCollapsed()) {
+                        $el.stickySection.attr('style', '');
+                    }
+                    $el.tabsContent.removeClass('expanded-right').hide();
+                }
+            }, 180);
         }
 
         function activateTab(type) {
@@ -1171,11 +1506,226 @@ if ($dataLayout !== 'horizontal'):
         var state = {
             isSticky: false, lastScrollTop: 0,
             matchedItems: [], selectedIndex: -1,
-            hoverTimer: null, scrollTimer: null, isHovering: false
+            hoverTimer: null, scrollTimer: null, isHovering: false,
+            panelVisible: false, panelHideTimer: null,
+            searchTimer: null, bodyObserver: null
         };
 
         function clearTimer(key) {
             if (state[key]) { clearTimeout(state[key]); state[key] = null; }
+        }
+
+        function cancelQueuedSearch() {
+            clearTimer('searchTimer');
+        }
+
+        function focusSearchInput($input, delay) {
+            if (!$input || !$input.length) return;
+            setTimeout(function() {
+                $input.trigger('focus');
+                if ($input[0] && typeof $input[0].select === 'function') {
+                    $input[0].select();
+                }
+            }, delay || 0);
+        }
+
+        function clearScrollAnimations() {
+            var scrollEl = getScrollElement();
+            if (scrollEl) $(scrollEl).stop(true, false);
+            $('html, body').stop(true, false);
+        }
+
+        function collapseMenuItem($li) {
+            if (!$li || !$li.length) return;
+            var $sub = $li.children('ul.sub-menu');
+            if ($sub.length) {
+                $sub.removeClass('mm-show mm-collapsing').addClass('mm-collapse')
+                    .css({ height: '', display: '', visibility: '' })
+                    .attr('aria-expanded', 'false');
+                $sub.children('li').each(function() {
+                    collapseMenuItem($(this));
+                });
+            }
+            $li.removeClass('mm-active');
+            $li.children('a.has-arrow').attr('aria-expanded', 'false');
+        }
+
+        function calculatePathMatchScore(currentPath, menuPath) {
+            function getPathname(url) {
+                try {
+                    var a = document.createElement('a');
+                    a.href = url;
+                    return a.pathname.replace(/\/+$/, '');
+                } catch (e) {
+                    return url.replace(/\/+$/, '');
+                }
+            }
+
+            var currentPathname = getPathname(currentPath);
+            var menuPathname = getPathname(menuPath);
+
+            if (currentPathname === menuPathname) return Number.MAX_SAFE_INTEGER;
+
+            var currentSegments = currentPathname.split('/').filter(function(s) { return s.length > 0; });
+            var menuSegments = menuPathname.split('/').filter(function(s) { return s.length > 0; });
+
+            if (menuSegments.length > currentSegments.length) return -1;
+
+            var matchCount = 0;
+            var minLength = Math.min(currentSegments.length, menuSegments.length);
+
+            for (var i = 0; i < minLength; i++) {
+                if (menuSegments[i] !== currentSegments[i]) break;
+                matchCount++;
+            }
+
+            if (matchCount === menuSegments.length) return matchCount;
+            if (menuSegments.length === currentSegments.length && matchCount === menuSegments.length - 1) return matchCount;
+            return -1;
+        }
+
+        function initActiveMenu() {
+            if (!$el.sideMenu.length) return;
+
+            var pageUrl = window.location.href.split(/[?#]/)[0];
+            var bestMatch = null;
+            var bestScore = -1;
+            var $mainMenuLinks = $el.sideMenu.find('a').not(function() {
+                return $(this).closest('.menu-search-item, .menu-frequent-item').length > 0;
+            });
+            var $mainMenu = $el.sideMenu.children('li').not('.menu-search-item, .menu-frequent-item');
+
+            $mainMenu.add($mainMenu.find('li')).removeClass('mm-active');
+            $mainMenu.find('a').removeClass('active mm-active');
+            $mainMenu.find('ul.sub-menu').removeClass('mm-show').attr('aria-expanded', 'false');
+
+            $mainMenuLinks.each(function() {
+                var menuUrl = this.href;
+                if (!menuUrl || menuUrl === '#' || menuUrl.indexOf('javascript:') === 0) return;
+
+                var score = calculatePathMatchScore(pageUrl, menuUrl);
+                if (score === Number.MAX_SAFE_INTEGER) {
+                    bestMatch = $(this);
+                    bestScore = score;
+                    return false;
+                }
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = $(this);
+                }
+            });
+
+            if (!bestMatch || bestScore <= 0) return;
+
+            bestMatch.addClass('active');
+            var $current = bestMatch.closest('li');
+            while ($current.length && $current.closest('#side-menu').length) {
+                $current.addClass('mm-active');
+                var $sub = $current.children('ul.sub-menu');
+                if ($sub.length) {
+                    $sub.addClass('mm-show').attr('aria-expanded', 'true');
+                }
+                var $parentSub = $current.parent('ul.sub-menu');
+                if ($parentSub.length) {
+                    $parentSub.addClass('mm-show').attr('aria-expanded', 'true');
+                }
+                $current = $parentSub.parent('li');
+            }
+        }
+
+        function destroyMetisMenu() {
+            if (!$el.sideMenu.length) return;
+            var instance = $el.sideMenu.data('metisMenu');
+            if (instance && typeof instance.dispose === 'function') {
+                instance.dispose();
+            }
+            $el.sideMenu.off('show.metisMenu');
+            $el.sideMenu.off('shown.metisMenu');
+            $el.sideMenu.off('hide.metisMenu');
+            $el.sideMenu.off('hidden.metisMenu');
+            $el.sideMenu.off('.leftSidebarMenu');
+            $el.sideMenu.removeData('metisMenu');
+        }
+
+        function initSidebarAccordion() {
+            if (!$el.sideMenu.length) return;
+            $el.sideMenu.off('.leftSidebarMenu');
+            $el.sideMenu.on('show.metisMenu.leftSidebarMenu', function(e) {
+                var $targetMenu = $(e.target);
+                var $topLevelLi = $targetMenu.parent('li').closest('#side-menu > li');
+                if (!$topLevelLi.length) return;
+
+                $('#sidebar-menu a.active').removeClass('active');
+
+                $el.sideMenu.children('li').each(function() {
+                    var $top = $(this);
+                    if ($top[0] === $topLevelLi[0]) return;
+                    if ($top.hasClass('menu-search-item') || $top.hasClass('menu-frequent-item') || $top.hasClass('menu-title')) return;
+                    if ($top.hasClass('mm-active')) collapseMenuItem($top);
+                });
+            });
+        }
+
+        function initMetisMenu() {
+            if (!$el.sideMenu.length) return;
+
+            destroyMetisMenu();
+            if (isCollapsed()) {
+                $el.sideMenu.find('ul.sub-menu').removeClass('mm-show mm-collapsing')
+                    .addClass('mm-collapse')
+                    .css({ height: '', display: '', visibility: '' });
+                $el.sideMenu.find('li').removeClass('mm-active');
+                $el.sideMenu.find('a.has-arrow').attr('aria-expanded', 'false');
+                return;
+            }
+
+            initActiveMenu();
+            $el.sideMenu.metisMenu({ toggle: true });
+            initSidebarAccordion();
+        }
+
+        function handleCollapseStateChange() {
+            cancelQueuedSearch();
+            clearTimer('hoverTimer');
+            clearTimer('panelHideTimer');
+            clearScrollAnimations();
+
+            if (isCollapsed()) {
+                $el.searchTabContainer.removeClass('expanded');
+                $el.searchInput.val('').blur();
+                $el.searchInputMenu.val('');
+                resetMenuDisplay();
+                $el.searchResults.hide();
+                $el.searchResultsMenu.hide();
+                hidePanel(true);
+            } else {
+                initMetisMenu();
+                $el.tabsContent.show();
+                if ($el.searchTab.hasClass('active')) {
+                    expandSearch();
+                }
+            }
+        }
+
+        function initLeftMenuCollapse() {
+            $(document).off('click.leftSidebarToggle', '#vertical-menu-btn').on('click.leftSidebarToggle', '#vertical-menu-btn', function() {
+                setTimeout(function() {
+                    cacheDOM();
+                    handleCollapseStateChange();
+                }, 140);
+            });
+
+            if ($el.body.length && !state.bodyObserver) {
+                state.bodyObserver = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.attributeName === 'class') {
+                            cacheDOM();
+                            handleCollapseStateChange();
+                        }
+                    });
+                });
+                state.bodyObserver.observe($el.body[0], { attributes: true, attributeFilter: ['class'] });
+            }
         }
 
         // ==================== Search Core ====================
@@ -1185,24 +1735,30 @@ if ($dataLayout !== 'horizontal'):
                 showPanel();
                 activateTab('search');
                 $el.searchTabContainer.addClass('expanded');
-                setTimeout(function() { $el.searchInput.focus(); }, 250);
+                focusSearchInput($el.searchInputMenu, 80);
             } else {
+                $el.searchTab.addClass('active');
+                $el.frequentTab.removeClass('active');
                 if (!$el.searchTabContainer.hasClass('expanded')) {
                     $el.searchTabContainer.addClass('expanded');
                     $el.frequentPane.hide();
                     $el.frequentTab.removeClass('active');
-                    setTimeout(function() { $el.searchInput.focus(); }, 250);
-                } else {
-                    $el.searchInput.focus();
                 }
+                focusSearchInput($el.searchInput, 70);
             }
         }
 
-        function collapseSearch() {
+        function collapseSearch(keepValue) {
             if ($el.searchTabContainer.hasClass('expanded')) {
                 $el.searchTabContainer.removeClass('expanded');
-                $el.searchInput.val('').blur();
+                if (!keepValue) {
+                    $el.searchInput.val('');
+                    $el.searchInputMenu.val('');
+                }
+                $el.searchInput.blur();
+                $el.searchInputMenu.blur();
                 $el.searchResults.hide();
+                $el.searchResultsMenu.hide();
                 resetMenuDisplay();
             }
         }
@@ -1235,6 +1791,13 @@ if ($dataLayout !== 'horizontal'):
             if (isCollapsed()) { showPanel(); activateTab('search'); }
 
             performSearch(text);
+        }
+
+        function queueSearch($input) {
+            cancelQueuedSearch();
+            state.searchTimer = setTimeout(function() {
+                handleSearch($input);
+            }, 70);
         }
 
         function performSearch(text) {
@@ -1412,9 +1975,14 @@ if ($dataLayout !== 'horizontal'):
             if (state.selectedIndex >= 0 && state.selectedIndex < state.matchedItems.length) {
                 var $sel = state.matchedItems[state.selectedIndex].$item;
                 $sel.addClass('menu-item-keyboard-selected');
-                var top = $sel.offset().top, sTop = $el.sidebarMenu.offset().top, sH = $el.sidebarMenu.height();
-                if (top < sTop || top > sTop + sH) {
-                    $('html, body').animate({ scrollTop: $sel.offset().top - 200 }, 200);
+                var scrollEl = getScrollElement();
+                if (scrollEl && $sel.length) {
+                    var rect = $sel[0].getBoundingClientRect();
+                    var containerRect = scrollEl.getBoundingClientRect();
+                    if (rect.top < containerRect.top || rect.bottom > containerRect.bottom) {
+                        var target = scrollEl.scrollTop + (rect.top - containerRect.top) - (scrollEl.clientHeight / 2) + (($sel.outerHeight() || 40) / 2);
+                        $(scrollEl).stop(true, false).animate({ scrollTop: Math.max(0, target) }, 140);
+                    }
                 }
             }
         }
@@ -1445,40 +2013,52 @@ if ($dataLayout !== 'horizontal'):
 
         // ==================== Init: Search ====================
         function initSearch() {
+            $el.searchInput.off('.leftSidebarSearch');
+            $el.searchInputMenu.off('.leftSidebarSearch');
+            $el.searchTab.off('.leftSidebarSearch');
+            $('#search-tab-close-icon').off('.leftSidebarSearch');
+            $('#menu-search-link').off('.leftSidebarSearch');
+            $('#menu-search-content').off('.leftSidebarSearch');
+            $el.searchMenuItem.off('.leftSidebarSearch');
+            $el.searchSubmenu.off('.leftSidebarSearch');
+            $(document).off('.leftSidebarSearch');
+
             // Sticky 区域搜索输入框
-            $el.searchInput.on('input', function() { handleSearch($(this)); });
-            $el.searchInput.on('keydown', handleSearchKeydown);
+            $el.searchInput.on('input.leftSidebarSearch', function() { queueSearch($(this)); });
+            $el.searchInput.on('keydown.leftSidebarSearch', handleSearchKeydown);
 
             // 折叠模式下的菜单形式搜索输入框
-            $el.searchInputMenu.on('input', function(e) { e.stopPropagation(); handleSearch($(this)); });
-            $el.searchInputMenu.on('keydown', handleSearchKeydown);
-            $el.searchInputMenu.on('click mousedown', function(e) { e.stopPropagation(); });
+            $el.searchInputMenu.on('input.leftSidebarSearch', function(e) { e.stopPropagation(); queueSearch($(this)); });
+            $el.searchInputMenu.on('keydown.leftSidebarSearch', handleSearchKeydown);
+            $el.searchInputMenu.on('click.leftSidebarSearch mousedown.leftSidebarSearch', function(e) { e.stopPropagation(); });
 
             // 搜索Tab按钮点击
-            $el.searchTab.on('click.menuSearch', function(e) { e.stopPropagation(); expandSearch(); });
+            $el.searchTab.on('click.leftSidebarSearch', function(e) { e.stopPropagation(); expandSearch(); });
 
             // 关闭图标
-            $('#search-tab-close-icon').on('click.menuSearch', function(e) { e.stopPropagation(); collapseSearch(); });
+            $('#search-tab-close-icon').on('click.leftSidebarSearch', function(e) { e.stopPropagation(); collapseSearch(); });
 
             // 折叠模式下搜索链接
-            $('#menu-search-link').on('click', function(e) {
+            $('#menu-search-link').on('click.leftSidebarSearch', function(e) {
                 e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
-                setTimeout(function() { $el.searchInputMenu.focus(); }, 50);
+                showPanel();
+                activateTab('search');
+                focusSearchInput($el.searchInputMenu, 60);
                 return false;
             });
 
             // 阻止搜索内容区域事件冒泡
-            $('#menu-search-content').on('click mousedown', function(e) { e.stopPropagation(); });
+            $('#menu-search-content').on('click.leftSidebarSearch mousedown.leftSidebarSearch', function(e) { e.stopPropagation(); });
 
             // 折叠模式下搜索菜单项hover
-            $el.searchMenuItem.on('mouseenter', function() {
+            $el.searchMenuItem.on('mouseenter.leftSidebarSearch', function() {
                 if (isCollapsed()) {
                     $el.searchMenuItem.addClass('mm-active');
                     $el.searchSubmenu.attr('aria-expanded', 'true');
                 }
             });
 
-            $el.searchMenuItem.add($el.searchSubmenu).on('mouseleave', function(e) {
+            $el.searchMenuItem.add($el.searchSubmenu).on('mouseleave.leftSidebarSearch', function(e) {
                 if (!isCollapsed()) return;
                 if (isInArea(e.relatedTarget, '.menu-search-item, .menu-search-submenu, .menu-search-content')) return;
                 if ($el.searchInputMenu.is(':focus')) return;
@@ -1491,12 +2071,12 @@ if ($dataLayout !== 'horizontal'):
             });
 
             // 折叠模式下搜索输入框焦点管理
-            $el.searchInputMenu.on('focus', function() {
+            $el.searchInputMenu.on('focus.leftSidebarSearch', function() {
                 if (isCollapsed()) {
                     $el.searchMenuItem.addClass('mm-active');
                     $el.searchSubmenu.attr('aria-expanded', 'true');
                 }
-            }).on('blur', function() {
+            }).on('blur.leftSidebarSearch', function() {
                 if (isCollapsed()) {
                     setTimeout(function() {
                         if (!$(document.activeElement).closest('.menu-search-item').length) {
@@ -1508,14 +2088,15 @@ if ($dataLayout !== 'horizontal'):
             });
 
             // 全局快捷键: Ctrl+K 或 /
-            $(document).on('keydown.menuSearch', function(e) {
+            $(document).on('keydown.leftSidebarSearch', function(e) {
                 var $t = $(e.target);
                 if ($t.is('input, textarea, [contenteditable="true"]')) return;
                 if ((e.ctrlKey && e.key === 'k') || e.key === '/') {
                     e.preventDefault();
                     if (isCollapsed()) {
-                        $el.searchMenuItem.find('> a').trigger('click');
-                        setTimeout(function() { $el.searchInputMenu.focus(); }, 100);
+                        showPanel();
+                        activateTab('search');
+                        focusSearchInput($el.searchInputMenu, 60);
                     } else {
                         expandSearch();
                     }
@@ -1523,7 +2104,7 @@ if ($dataLayout !== 'horizontal'):
             });
 
             // 点击外部收起搜索
-            $(document).on('click.menuSearch', function(e) {
+            $(document).on('click.leftSidebarSearch', function(e) {
                 if (!$el.searchTabContainer.is(e.target) && !$el.searchTabContainer.has(e.target).length) {
                     if ($el.searchInput.val().trim() === '' && $el.searchTabContainer.hasClass('expanded')) {
                         collapseSearch();
@@ -1536,11 +2117,16 @@ if ($dataLayout !== 'horizontal'):
         function initTabs() {
             var searchHoverTimer = null;
 
+            $el.searchTab.off('.leftSidebarTabs');
+            $el.searchTabContainer.off('.leftSidebarTabs');
+            $el.frequentTab.off('.leftSidebarTabs');
+            $(document).off('.leftSidebarTabs');
+
             // 默认展开搜索（正常模式下）
             setTimeout(function() { if (!isCollapsed()) expandSearch(); }, 300);
 
             // 搜索Tab hover
-            $el.searchTab.on('mouseenter', function(e) {
+            $el.searchTab.on('mouseenter.leftSidebarTabs', function(e) {
                 if (isCollapsed()) {
                     expandSearch();
                 } else {
@@ -1563,25 +2149,25 @@ if ($dataLayout !== 'horizontal'):
                     }
                 }, HOVER_DELAY);
             }
-            $el.searchTab.on('mouseleave', handleSearchLeave);
-            $el.searchTabContainer.on('mouseleave', handleSearchLeave)
-                .on('mouseenter', function() { clearTimeout(searchHoverTimer); });
+            $el.searchTab.on('mouseleave.leftSidebarTabs', handleSearchLeave);
+            $el.searchTabContainer.on('mouseleave.leftSidebarTabs', handleSearchLeave)
+                .on('mouseenter.leftSidebarTabs', function() { clearTimeout(searchHoverTimer); });
 
             // 保持内容展开
-            $(document).on('mouseenter', '#menu-search-input, #search-tab-container, #frequent-tab-pane', function() {
+            $(document).on('mouseenter.leftSidebarTabs', '#menu-search-input, #search-tab-container, #frequent-tab-pane', function() {
                 if (!isCollapsed()) clearTimeout(searchHoverTimer);
             });
 
             // 常用菜单Tab hover
-            $el.frequentTab.on('mouseenter', function() {
+            $el.frequentTab.on('mouseenter.leftSidebarTabs', function() {
                 if (isCollapsed()) { showPanel(); activateTab('frequent'); }
                 else { $el.frequentTab.addClass('active'); $el.searchTab.removeClass('active'); }
             });
 
             // 常用菜单Tab点击
-            $el.frequentTab.on('click', function() {
+            $el.frequentTab.on('click.leftSidebarTabs', function() {
                 activateTab('frequent');
-                collapseSearch();
+                collapseSearch(true);
                 $el.searchResults.hide();
                 if (isCollapsed()) showPanel();
             });
@@ -1589,8 +2175,12 @@ if ($dataLayout !== 'horizontal'):
 
         // ==================== Init: Sticky ====================
         function initSticky() {
+            $el.stickySection.off('.leftSidebarSticky');
+            $('.menu-tab-btn').off('.leftSidebarSticky');
+            $(document).off('.leftSidebarSticky');
+
             // Sticky区域hover
-            $el.stickySection.on('mouseenter', function() {
+            $el.stickySection.on('mouseenter.leftSidebarSticky', function() {
                 state.isHovering = true;
                 clearTimer('hoverTimer');
                 if (isCollapsed()) {
@@ -1600,7 +2190,7 @@ if ($dataLayout !== 'horizontal'):
                     if ($el.searchTab.hasClass('active')) {
                         if (!$el.searchTabContainer.hasClass('expanded')) {
                             $el.searchTabContainer.addClass('expanded');
-                            setTimeout(function() { $el.searchInput.focus(); }, 100);
+                            focusSearchInput($el.searchInput, 60);
                         }
                     } else if ($el.frequentTab.hasClass('active')) {
                         $el.frequentPane.show();
@@ -1610,7 +2200,7 @@ if ($dataLayout !== 'horizontal'):
             });
 
             // 展开面板hover
-            $(document).on('mouseenter', '.menu-tabs-content.expanded-right', function() {
+            $(document).on('mouseenter.leftSidebarSticky', '.menu-tabs-content.expanded-right', function() {
                 state.isHovering = true;
                 clearTimer('hoverTimer');
             });
@@ -1627,9 +2217,9 @@ if ($dataLayout !== 'horizontal'):
                 }, isCollapsed() ? 100 : HOVER_DELAY);
             }
 
-            $el.stickySection.on('mouseleave', handleLeave);
-            $(document).on('mouseleave', '.menu-tabs-content.expanded-right', handleLeave);
-            $(document).on('mouseleave', '.menu-search-item, .menu-search-submenu, .menu-search-content', function(e) {
+            $el.stickySection.on('mouseleave.leftSidebarSticky', handleLeave);
+            $(document).on('mouseleave.leftSidebarSticky', '.menu-tabs-content.expanded-right', handleLeave);
+            $(document).on('mouseleave.leftSidebarSticky', '.menu-search-item, .menu-search-submenu, .menu-search-content', function(e) {
                 if (isCollapsed()) handleLeave(e);
             });
 
@@ -1647,7 +2237,7 @@ if ($dataLayout !== 'horizontal'):
             }
 
             // Tab按钮点击
-            $('.menu-tab-btn').on('click.menuSticky', function() {
+            $('.menu-tab-btn').on('click.leftSidebarSticky', function() {
                 state.isHovering = true;
                 if (isCollapsed()) showPanel();
                 else $el.tabsContent.removeClass('collapsed');
@@ -1657,8 +2247,8 @@ if ($dataLayout !== 'horizontal'):
 
             // 滚动监听
             var scrollEl = getScrollElement();
-            if (scrollEl) $(scrollEl).on('scroll.menuSticky', checkSticky);
-            else $(window).on('scroll.menuSticky', checkSticky);
+            if (scrollEl) $(scrollEl).off('scroll.leftSidebarSticky').on('scroll.leftSidebarSticky', checkSticky);
+            else $(window).off('scroll.leftSidebarSticky').on('scroll.leftSidebarSticky', checkSticky);
             setTimeout(checkSticky, 100);
         }
 
@@ -1686,26 +2276,8 @@ if ($dataLayout !== 'horizontal'):
 
         // ==================== Init: Sidebar Collapse ====================
         function initSidebarCollapse() {
-            function handleCollapse() {
-                if (isCollapsed()) {
-                    $el.searchTabContainer.removeClass('expanded');
-                    $el.searchInput.val('').blur();
-                    resetMenuDisplay();
-                    $el.searchResults.hide();
-                    $el.tabsContent.hide();
-                } else {
-                    $el.tabsContent.show();
-                }
-            }
-
-            if ($el.body.length) {
-                new MutationObserver(function(muts) {
-                    muts.forEach(function(m) { if (m.attributeName === 'class') handleCollapse(); });
-                }).observe($el.body[0], { attributes: true, attributeFilter: ['class'] });
-            }
-
-            handleCollapse();
-            $(document).on('click', '#vertical-menu-btn', function() { setTimeout(handleCollapse, 100); });
+            initLeftMenuCollapse();
+            handleCollapseStateChange();
         }
 
         // ==================== Active Menu: Expansion & Scroll ====================
@@ -1766,6 +2338,7 @@ if ($dataLayout !== 'horizontal'):
         // ==================== Bootstrap ====================
         $(document).ready(function() {
             cacheDOM();
+            initMetisMenu();
             initTabs();
             initSearch();
             initSticky();
