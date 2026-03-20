@@ -135,4 +135,21 @@ interface ServiceProviderInterface
      * 服务停止后回调（可选）
      */
     public function onStopped(ServiceInstance $instance): void;
+
+    /**
+     * 获取进程归属类型：'framework' | 'module'。
+     *
+     * 框架内置 Provider 返回 'framework'（由 AbstractServiceProvider 默认实现）。
+     * 第三方模块 Provider 须返回 'module' 并实现 getModuleCode()，
+     * 以便 Master 在监控、日志、进程控制中区分进程来源。
+     */
+    public function getProcessKind(): string;
+
+    /**
+     * 获取模块代码（仅 module 类进程有效）。
+     *
+     * 格式建议：'VendorName_ModuleName'（与 register.php 中的模块名一致）。
+     * 框架内置 Provider 返回空字符串（由 AbstractServiceProvider 默认实现）。
+     */
+    public function getModuleCode(): string;
 }

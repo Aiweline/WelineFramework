@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Contract;
 
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServiceOrchestrator;
 
 /**
@@ -85,7 +86,18 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
             return HealthCheckResult::unhealthy('No PID');
         }
 
-        if (!\Weline\Framework\System\Process\Processer::isRunningByPid($instance->pid)) {
+        $processName = (string) ($instance->getMeta('process_name') ?? '');
+        $launchId = $instance->launchId !== '' ? $instance->launchId : (string) ($instance->getMeta('launch_id') ?? '');
+        $isRunning = ($processName !== '' || $launchId !== '')
+            ? Processer::isManagedProcessRunning(
+                $instance->pid,
+                $processName !== '' ? $processName : null,
+                $launchId,
+                $processName !== '' ? '--name=' . $processName : null
+            )
+            : Processer::isRunningByPid($instance->pid);
+
+        if (!$isRunning) {
             return HealthCheckResult::unhealthy('Process not running');
         }
 
@@ -145,5 +157,27 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
 
         $cores = (int) \trim((string) @\shell_exec('nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null'));
         return $cores > 0 ? $cores : 4;
+    }
+
+    /**
+     * 获取进程归属类型。
+     *
+     * 框架内置 Provider 无需重写（默认 'framework'）。
+     * 模块自定义 Provider 须重写并返回 'module'，同时重写 getModuleCode()。
+     */
+    public function getProcessKind(): string
+    {
+        return \Weline\Server\IPC\ControlMessage::PROCESS_KIND_FRAMEWORK;
+    }
+
+    /**
+     * 获取模块代码（仅 module 类进程需要）。
+     *
+     * 格式建议：'VendorName_ModuleName'（与 register.php 中的模块名一致）。
+     * 例如：'Weline_Payment'、'MyCompany_Chat'。
+     */
+    public function getModuleCode(): string
+    {
+        return '';
     }
 }
