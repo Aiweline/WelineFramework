@@ -33,20 +33,9 @@
 
 ## 技能一览（skills/）
 
-按场景参见 **skill-trigger-reminders**；常用技能包括：
+先看 **skill-trigger-reminders**，再按场景只读取命中的技能正文，不要批量读取全部 `skills/*/SKILL.md`。
 
-- **code-generation-standards** — 模块结构、框架边界
-- **module-development** — register、Schema、Setup、路由、event.xml
-- **theme-development** — 主题变量、CSS 命名空间、JS 闭包、禁止硬编码颜色
-- **database-model-standards** — #[Col]/#[Table]、链式 fetch、setup:upgrade
-- **friendly-notifications** — 禁止 alert/confirm/prompt，BackendToast/BackendConfirm
-- **unified-query-provider** — 模块间查询 w_query()、FrameworkQueryService
-- **extension-points** — 事件、Hook、Extends 定义与实现（合并原 create-event/hook/extends/implement-extends）
-- **testing** — PHPUnit、http:req、前端 E2E、QA（合并原 php-unit-testing、http-request-testing、frontend-automation-testing、quality-assurance）
-- **planning** — 计划前分析、创建计划、完成后校验、审计（合并原 create-plan、pre-plan-analysis、post-plan-completion-check、plan-code-auditor）
-- **frontend-components** — Block、Taglib、Widget、DataTable（合并原 block/taglib/generate-component/datatable-component）
-- **config-and-env** — 配置与 PHP 扩展（合并原 config-management、php-extension-dependency）
-- **runtime-and-process** — 进程与 WLS（合并原 process-management、weline-server）
-- **context-compression** — 上下文压缩省 Token（必加载 alwaysApply）
-- **cursor-as-reference** — 规则与技能编辑位置（dev/ai）
-- 其余见 `skills/` 下各目录的 SKILL.md
+- 映射入口：`skills/skill-trigger-reminders/SKILL.md`
+- 完整开发技能映射：`skills/skill-trigger-reminders/references/development-skill-map.md`
+- 常驻压缩：`skills/context-compression/SKILL.md`
+- 规则/技能/计划仓定位：`skills/cursor-as-reference/SKILL.md`
