@@ -22,6 +22,7 @@ use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemePreviewGenerator;
+use Weline\Framework\Http\Sse\SseWriter;
 
 /**
  * 主题管理控制器
@@ -65,6 +66,16 @@ class Index extends BackendController
                 $theme['parent_id'] = null;
                 $theme['parent_theme_name'] = null;
             }
+
+            $themePath = '';
+            if (is_array($themeData)) {
+                $themePath = (string)($themeData['path'] ?? '');
+            } elseif (is_object($themeData) && method_exists($themeData, 'getData')) {
+                $themePath = (string)$themeData->getData('path');
+            }
+
+            $theme['has_frontend'] = $this->themeHasArea($themePath, 'frontend');
+            $theme['has_backend'] = $this->themeHasArea($themePath, 'backend');
         }
         unset($theme); // 解除引用
 
@@ -180,6 +191,10 @@ class Index extends BackendController
             return $this->error(__('主题不存在'));
         }
 
+        if (in_array($area, ['frontend', 'backend'], true) && !$this->themeSupportsArea($theme, $area)) {
+            return $this->error(__('主题不支持 %{1} 区域', [$area]));
+        }
+
         // 将预览主题ID存储到session中，供TemplateFetchFile观察者使用
         $this->session->setData('preview_theme_id', $themeId);
         $this->session->setData('preview_theme_area', $area);
@@ -242,6 +257,10 @@ class Index extends BackendController
         
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
+        }
+
+        if ($area && !$this->themeSupportsArea($theme, $area)) {
+            return $this->fetchJson($this->error(__('主题不支持 %{1} 区域', [$area])));
         }
 
         try {
@@ -355,7 +374,7 @@ class Index extends BackendController
 
             if ($imagePath) {
                 // 更新数据库中的 preview_image 字段
-                $relativePath = str_replace(Env::path_VAR_DIR . DS, '', $imagePath);
+                $relativePath = str_replace(Env::VAR_DIR, '', $imagePath);
                 $theme->setPreviewImage($relativePath)->save();
 
                 return $this->fetchJson($this->success(__('预览图生成成功'), [
@@ -394,34 +413,41 @@ class Index extends BackendController
                     continue;
                 }
 
-                try {
-                    // 生成 frontend 预览图
-                    $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
-                    // 生成 backend 预览图
-                    $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
+                $themeOk = false;
+                $themeErrors = [];
 
-                    if ($result1 || $result2) {
-                        $success++;
-                        // 更新数据库中的 preview_image 字段
-                        if ($result1) {
-                            $relativePath1 = str_replace(Env::path_VAR_DIR . DS, '', $result1);
-                            $themeObj1 = clone $themeModel;
-                            $themeObj1->load($themeId);
-                            $themeObj1->setPreviewImage($relativePath1)->save();
-                        }
-                        if ($result2) {
-                            $relativePath2 = str_replace(Env::path_VAR_DIR . DS, '', $result2);
-                            $themeObj2 = clone $themeModel;
-                            $themeObj2->load($themeId);
-                            $themeObj2->setPreviewImage($relativePath2)->save();
-                        }
-                    } else {
-                        $failed++;
-                        $messages[] = __('%{1}: 生成失败', [$themeName]);
-                    }
+                // 生成 frontend 预览图
+                try {
+                    $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
+                    $relativePath1 = str_replace(Env::VAR_DIR, '', $result1);
+                    $themeObj1 = clone $themeModel;
+                    $themeObj1->load($themeId);
+                    $themeObj1->setPreviewImage($relativePath1)->save();
+
+                    $themeOk = true;
                 } catch (\Exception $e) {
+                    $themeErrors[] = __('frontend 生成失败：%{1}', [$e->getMessage()]);
+                }
+
+                // 生成 backend 预览图
+                try {
+                    $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
+                    $relativePath2 = str_replace(Env::VAR_DIR, '', $result2);
+                    $themeObj2 = clone $themeModel;
+                    $themeObj2->load($themeId);
+                    $themeObj2->setPreviewImage($relativePath2)->save();
+
+                    $themeOk = true;
+                } catch (\Exception $e) {
+                    $themeErrors[] = __('backend 生成失败：%{1}', [$e->getMessage()]);
+                }
+
+                if ($themeOk) {
+                    $success++;
+                } else {
                     $failed++;
-                    $messages[] = __('%{1}: %{2}', [$themeName, $e->getMessage()]);
+                    $detail = !empty($themeErrors) ? implode('；', $themeErrors) : __('原因未知');
+                    $messages[] = __('%{1}: 生成失败：%{2}', [$themeName, $detail]);
                 }
             }
 
@@ -440,6 +466,144 @@ class Index extends BackendController
         } catch (\Exception $e) {
             Env::log_error('theme_preview', __('批量生成预览图失败：%{1}', [$e->getMessage()]));
             return $this->fetchJson($this->error(__('生成失败：%{1}', [$e->getMessage()])));
+        }
+    }
+
+    /**
+     * 批量生成所有主题预览图（SSE：实时输出进度）
+     *
+     * POST /theme/backend/index/postGenerateAllPreviewsSse
+     */
+    public function postGenerateAllPreviewsSse(): void
+    {
+        $sse = new SseWriter();
+
+        try {
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $themes = $themeModel->select()->fetch()->getItems();
+
+            $total = count($themes);
+            $sse->start();
+            $sse->sendEvent('start', [
+                'message' => __('开始批量生成预览图...'),
+                'total' => $total,
+            ]);
+
+            $success = 0;
+            $failed = 0;
+            $messages = [];
+
+            $index = 0;
+            foreach ($themes as $theme) {
+                $index++;
+
+                if (!$sse->isAlive()) {
+                    // 客户端断开：停止继续生成
+                    break;
+                }
+
+                $themeId = is_object($theme) ? $theme->getId() : ($theme['id'] ?? 0);
+                $themeName = is_object($theme) ? $theme->getName() : ($theme['name'] ?? 'Unknown');
+
+                if (!$themeId) {
+                    continue;
+                }
+
+                $progress = $total > 0 ? (($index / $total) * 100) : 0;
+                $sse->sendEvent('progress', [
+                    'progress' => $progress,
+                    'current' => $index,
+                    'total' => $total,
+                    'message' => __('正在处理主题：%{1}', [$themeName]),
+                ]);
+
+                $themeOk = false;
+
+                // frontend
+                try {
+                    $sse->sendEvent('chunk', [
+                        'content' => __(" - %{1} [frontend] 开始生成\n", [$themeName]),
+                    ]);
+                    $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
+                    if ($result1) {
+                        $relativePath1 = str_replace(Env::VAR_DIR, '', $result1);
+                        $themeObj1 = clone $themeModel;
+                        $themeObj1->load($themeId);
+                        $themeObj1->setPreviewImage($relativePath1)->save();
+
+                        $sse->sendEvent('chunk', [
+                            'content' => __("   - frontend OK: %{1}\n", [$relativePath1]),
+                        ]);
+                        $themeOk = true;
+                    }
+                } catch (\Exception $e) {
+                    $failedMsg = __('%{1} [frontend] 生成失败：%{2}', [$themeName, $e->getMessage()]);
+                    $messages[] = $failedMsg;
+                    $sse->sendEvent('warning', ['message' => $failedMsg]);
+                    $sse->sendEvent('chunk', ['content' => __("   - frontend ERROR\n", [])]);
+                }
+
+                // backend
+                try {
+                    $sse->sendEvent('chunk', [
+                        'content' => __(" - %{1} [backend] 开始生成\n", [$themeName]),
+                    ]);
+                    $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
+                    if ($result2) {
+                        $relativePath2 = str_replace(Env::VAR_DIR, '', $result2);
+                        $themeObj2 = clone $themeModel;
+                        $themeObj2->load($themeId);
+                        $themeObj2->setPreviewImage($relativePath2)->save();
+
+                        $sse->sendEvent('chunk', [
+                            'content' => __("   - backend OK: %{1}\n", [$relativePath2]),
+                        ]);
+                        $themeOk = true;
+                    }
+                } catch (\Exception $e) {
+                    $failedMsg = __('%{1} [backend] 生成失败：%{2}', [$themeName, $e->getMessage()]);
+                    $messages[] = $failedMsg;
+                    $sse->sendEvent('warning', ['message' => $failedMsg]);
+                    $sse->sendEvent('chunk', ['content' => __("   - backend ERROR\n", [])]);
+                }
+
+                if ($themeOk) {
+                    $success++;
+                } else {
+                    $failed++;
+                }
+            }
+
+            $result = [
+                'total' => $total,
+                'success' => $success,
+                'failed' => $failed,
+                'messages' => $messages,
+            ];
+
+            if ($failed > 0) {
+                $sse->complete([
+                    'message' => __('部分预览图生成失败'),
+                    'data' => $result,
+                ]);
+                return;
+            }
+
+            $sse->complete([
+                'message' => __('所有预览图生成成功'),
+                'data' => $result,
+            ]);
+        } catch (\Throwable $e) {
+            // SSE 已可能部分输出：尽量用 error 事件结尾
+            try {
+                if (!$sse->isStarted()) {
+                    $sse->start();
+                }
+                $sse->sendError($e->getMessage(), 500);
+                $sse->close();
+            } catch (\Throwable) {
+                // ignore: 避免 SSE 发送二次异常打断
+            }
         }
     }
 
@@ -689,6 +853,25 @@ class Index extends BackendController
             ];
         }
         return $result;
+    }
+
+    private function themeSupportsArea(WelineTheme $theme, string $area): bool
+    {
+        $originPath = trim((string)$theme->getOriginPath(), '/\\');
+        return $this->themeHasArea($originPath, $area);
+    }
+
+    private function themeHasArea(string $themePath, string $area): bool
+    {
+        $themePath = trim($themePath, '/\\');
+        if ($themePath === '') {
+            return false;
+        }
+
+        $basePath = rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . str_replace(['/', '\\'], DS, $themePath);
+
+        return is_dir($basePath . DS . $area)
+            || is_dir($basePath . DS . 'view' . DS . 'theme' . DS . $area);
     }
 }
 

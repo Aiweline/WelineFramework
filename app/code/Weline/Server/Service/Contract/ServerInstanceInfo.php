@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Contract;
 
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\MasterProcess;
 
 /**
  * 服务器实例信息值对象
@@ -41,7 +42,18 @@ class ServerInstanceInfo
      */
     public function isMasterRunning(): bool
     {
-        return $this->masterPid > 0 && Processer::processExists($this->masterPid);
+        if ($this->masterPid <= 0) {
+            return false;
+        }
+
+        $processName = MasterProcess::getMasterProcessName($this->name);
+
+        return Processer::isManagedProcessRunning(
+            $this->masterPid,
+            $processName,
+            '',
+            '--name=' . $processName
+        );
     }
 
     /**
