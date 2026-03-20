@@ -72,7 +72,7 @@ class ServerInstanceManager
      */
     public function hasInstance(string $name): bool
     {
-        return \is_file($this->getInstanceFile($name));
+        return $this->getInstanceInfo($name) !== null;
     }
 
     /**
@@ -86,7 +86,14 @@ class ServerInstanceManager
         if ($rawData === null) {
             return null;
         }
-        return $this->buildInstanceInfo($name, $rawData);
+
+        $info = $this->buildInstanceInfo($name, $rawData);
+        if ($this->isStaleInstanceRecord($name, $rawData, $info)) {
+            $this->cleanupStaleInstanceArtifacts($name, $rawData);
+            return null;
+        }
+
+        return $info;
     }
 
     /**
@@ -97,7 +104,7 @@ class ServerInstanceManager
     public function getAllInstanceInfo(): array
     {
         $instances = [];
-        foreach ($this->listInstanceNames() as $name) {
+        foreach ($this->listRawInstanceNames() as $name) {
             $info = $this->getInstanceInfo($name);
             if ($info !== null) {
                 $instances[$name] = $info;
@@ -113,15 +120,54 @@ class ServerInstanceManager
      */
     public function listInstanceNames(): array
     {
-        $dir = $this->getInstanceDir();
-        if (!\is_dir($dir)) {
-            return [];
+        return \array_keys($this->getAllInstanceInfo());
+    }
+
+    /**
+     * 清理所有陈旧的实例记录
+     */
+    public function cleanupStaleInstances(): int
+    {
+        $cleaned = 0;
+
+        foreach ($this->listRawInstanceNames() as $name) {
+            $rawData = $this->getRawInstanceData($name);
+            if ($rawData === null) {
+                continue;
+            }
+
+            $info = $this->buildInstanceInfo($name, $rawData);
+            if ($this->isStaleInstanceRecord($name, $rawData, $info)) {
+                $this->cleanupStaleInstanceArtifacts($name, $rawData);
+                $cleaned++;
+            }
         }
-        $files = \glob($dir . '*.json');
-        if ($files === false) {
-            return [];
+
+        return $cleaned;
+    }
+
+    /**
+     * 根据端口查找正在运行的实例
+     */
+    public function findRunningInstanceNameByPort(int $port): ?string
+    {
+        foreach ($this->getAllInstanceInfo() as $name => $info) {
+            if ($info->port === $port) {
+                return $name;
+            }
+
+            if ($info->httpRedirectPort > 0 && $info->httpRedirectPort === $port) {
+                return $name;
+            }
+
+            foreach ($info->services as $service) {
+                if ($service->port !== null && (int)$service->port === $port && $service->isRunning()) {
+                    return $name;
+                }
+            }
         }
-        return \array_map(fn($path) => \basename($path, '.json'), $files);
+
+        return null;
     }
 
     /**
@@ -270,6 +316,222 @@ class ServerInstanceManager
     public function getRolePriority(string $role): int
     {
         return self::ROLE_PRIORITIES[$role] ?? 99;
+    }
+
+    /**
+     * 获取所有原始实例名称（不过滤陈旧记录）
+     *
+     * @return string[]
+     */
+    private function listRawInstanceNames(): array
+    {
+        $dir = $this->getInstanceDir();
+        if (!\is_dir($dir)) {
+            return [];
+        }
+
+        $files = \glob($dir . '*.json');
+        if ($files === false) {
+            return [];
+        }
+
+        return \array_map(static fn(string $path): string => \basename($path, '.json'), $files);
+    }
+
+    /**
+     * 判断实例记录是否已陈旧
+     */
+    private function isStaleInstanceRecord(string $name, array $rawData, ?ServerInstanceInfo $info = null): bool
+    {
+        if ($this->isStartLockHeld($name)) {
+            return false;
+        }
+
+        return !$this->hasTrackedRunningProcess($name, $rawData, $info);
+    }
+
+    /**
+     * 检查实例是否仍有可确认的受管进程存活
+     */
+    private function hasTrackedRunningProcess(string $name, array $rawData, ?ServerInstanceInfo $info = null): bool
+    {
+        if ($info !== null && $info->isMasterRunning()) {
+            return true;
+        }
+
+        foreach ($this->collectTrackedPids($name, $rawData) as $pid) {
+            if ($pid > 0 && Processer::processExists($pid)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 收集实例关联的受管 PID
+     *
+     * @return int[]
+     */
+    private function collectTrackedPids(string $name, array $rawData): array
+    {
+        $pids = [];
+
+        foreach (['pid', 'master_pid', 'dispatcher_pid', 'redirect_pid', 'session_server_pid'] as $field) {
+            $pid = (int) ($rawData[$field] ?? 0);
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        foreach (($rawData['worker_pids'] ?? []) as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        foreach (($rawData['services'] ?? []) as $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+
+            foreach (($roleData['instances'] ?? []) as $instanceData) {
+                if (!\is_array($instanceData)) {
+                    continue;
+                }
+
+                $pid = (int) ($instanceData['pid'] ?? 0);
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        foreach ($this->collectIndexedPidsByInstance($name, $rawData) as $pid) {
+            if ($pid > 0) {
+                $pids[$pid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * 基于进程索引收集实例关联 PID
+     *
+     * @return int[]
+     */
+    private function collectIndexedPidsByInstance(string $name, array $rawData): array
+    {
+        $nameIndex = Processer::readNameIndex();
+        if (empty($nameIndex)) {
+            return [];
+        }
+
+        $pids = [];
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
+            foreach (($nameIndex[$processName] ?? []) as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * 收集实例关联的受管进程名
+     *
+     * @return string[]
+     */
+    private function collectManagedProcessNames(string $name, array $rawData): array
+    {
+        $names = [
+            '--name=' . MasterProcess::getMasterProcessName($name),
+            '--name=weline-wls-dispatcher-' . $name,
+            '--name=weline-wls-session-' . $name,
+            '--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+        ];
+
+        foreach (($rawData['services'] ?? []) as $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+
+            foreach (($roleData['instances'] ?? []) as $instanceData) {
+                if (!\is_array($instanceData)) {
+                    continue;
+                }
+
+                $processName = (string) ($instanceData['metadata']['process_name'] ?? '');
+                if ($processName !== '') {
+                    $names[] = '--name=' . $processName;
+                }
+            }
+        }
+
+        $count = (int) ($rawData['count'] ?? 0);
+        for ($i = 1; $i <= $count; $i++) {
+            $names[] = '--name=weline-wls-worker-' . $name . '-' . $i;
+            $names[] = '--name=weline-master-' . $name . '-worker-' . $i;
+        }
+
+        return \array_values(\array_unique(\array_filter($names)));
+    }
+
+    /**
+     * 清理陈旧实例留下的文件痕迹
+     */
+    private function cleanupStaleInstanceArtifacts(string $name, array $rawData): void
+    {
+        foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
+            Processer::removePidFile($processName);
+        }
+
+        $pidFile = $this->getPidFile($name);
+        if (\is_file($pidFile)) {
+            @\unlink($pidFile);
+        }
+
+        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        if (\is_file($lockFile)) {
+            @\unlink($lockFile);
+        }
+
+        $exceptionFile = MasterProcess::getServiceExceptionFile($name);
+        if (\is_file($exceptionFile)) {
+            @\unlink($exceptionFile);
+        }
+
+        $this->deleteInstance($name);
+        Processer::cleanupStalePidFiles();
+    }
+
+    /**
+     * 判断实例启动锁是否仍被持有
+     */
+    private function isStartLockHeld(string $name): bool
+    {
+        $lockFile = Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'start_' . $name . '.lock';
+        if (!\is_file($lockFile)) {
+            return false;
+        }
+
+        $fp = @\fopen($lockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+
+        $locked = @\flock($fp, \LOCK_EX | \LOCK_NB);
+        if ($locked) {
+            @\flock($fp, \LOCK_UN);
+        }
+
+        @\fclose($fp);
+        return !$locked;
     }
 
     /**
