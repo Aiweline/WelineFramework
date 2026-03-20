@@ -802,11 +802,7 @@ File: Main Js File
 
     function init() {
         initSettings();
-        initMetisMenu();
-        initLeftMenuCollapse();
-        initActiveMenu();
         initMenuItem();
-        initMenuItemScroll();
         initFullScreen();
         initRightSidebar();
         initDropdownMenu();
