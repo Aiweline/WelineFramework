@@ -1186,7 +1186,9 @@ abstract class QueryAst implements QueryInterface
 
     public function beginTransaction(): void
     {
-        $this->getConnectionInterface()->beginTransaction();
+        if (!$this->getConnectionInterface()->inTransaction()) {
+            $this->getConnectionInterface()->beginTransaction();
+        }
     }
 
     public function rollBack(): void
@@ -1198,7 +1200,9 @@ abstract class QueryAst implements QueryInterface
 
     public function commit(): void
     {
-        $this->getConnectionInterface()->commit();
+        if ($this->getConnectionInterface()->inTransaction()) {
+            $this->getConnectionInterface()->commit();
+        }
     }
 
     /**
