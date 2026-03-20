@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Contract;
 
+use Weline\Server\IPC\ControlMessage;
+
 /**
  * 服务启动命令
  */
@@ -14,6 +16,16 @@ class ServiceCommand
         public readonly array $environment = [],
         public readonly ?string $workingDir = null,
         public readonly ?string $processName = null,
+        /**
+         * 进程归属类型：'framework' | 'module'。
+         * 模块自定义进程须设置为 'module' 并提供 moduleCode。
+         */
+        public readonly string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
+        /**
+         * 模块代码（仅 module 类进程有效，格式如 'Weline_Payment'）。
+         * 子进程在 register 时会携带此信息，便于 Master 区分进程来源。
+         */
+        public readonly string $moduleCode = '',
     ) {}
 
     /**
@@ -66,5 +78,10 @@ class ServiceCommand
     public function getProcessName(): ?string
     {
         return $this->processName;
+    }
+
+    public function isModuleProcess(): bool
+    {
+        return $this->processKind === ControlMessage::PROCESS_KIND_MODULE;
     }
 }
