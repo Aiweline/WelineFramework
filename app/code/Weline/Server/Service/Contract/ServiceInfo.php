@@ -17,7 +17,7 @@ class ServiceInfo
      * CLI 场景下同一次状态输出会多次查询同一 PID/端口，做进程级短缓存避免重复系统调用。
      * 这是进程级缓存，不携带请求态数据，无需注册 StateManager 重置。
      *
-     * @var array<int,bool>
+     * @var array<string,bool>
      */
     private static array $pidRunningCache = [];
 
@@ -99,10 +99,22 @@ class ServiceInfo
 
     private function isPidRunning(int $pid): bool
     {
-        if (!isset(self::$pidRunningCache[$pid])) {
-            self::$pidRunningCache[$pid] = Processer::processExists($pid);
+        $processName = (string) ($this->metadata['process_name'] ?? '');
+        $launchId = $this->launchId !== '' ? $this->launchId : (string) ($this->metadata['launch_id'] ?? '');
+        $cacheKey = $pid . '|' . $processName . '|' . $launchId;
+
+        if (!isset(self::$pidRunningCache[$cacheKey])) {
+            self::$pidRunningCache[$cacheKey] = ($processName !== '' || $launchId !== '')
+                ? Processer::isManagedProcessRunning(
+                    $pid,
+                    $processName !== '' ? $processName : null,
+                    $launchId,
+                    $processName !== '' ? '--name=' . $processName : null
+                )
+                : Processer::processExists($pid);
         }
-        return self::$pidRunningCache[$pid];
+
+        return self::$pidRunningCache[$cacheKey];
     }
 
     private function isPortRunning(int $port): bool

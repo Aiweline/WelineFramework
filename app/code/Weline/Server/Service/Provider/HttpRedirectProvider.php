@@ -20,7 +20,7 @@ use Weline\Server\Service\Contract\ServiceContext;
  */
 class HttpRedirectProvider extends AbstractServiceProvider
 {
-    public const PROCESS_NAME = 'weline-wls-redirect';
+    public const PROCESS_NAME_PREFIX = 'weline-wls-redirect';
 
     public function getRole(): string
     {
@@ -88,10 +88,12 @@ class HttpRedirectProvider extends AbstractServiceProvider
             $arguments[] = '--frontend';
         }
 
+        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+
         return new ServiceCommand(
             script: $script,
             arguments: $arguments,
-            processName: self::PROCESS_NAME,
+            processName: $processName,
         );
     }
 

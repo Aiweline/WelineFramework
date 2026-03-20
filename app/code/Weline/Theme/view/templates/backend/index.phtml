@@ -11,6 +11,16 @@ $url = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Ht
 $active_frontend_id = (int)($active_frontend_id ?? 0) ?: null;
 $active_backend_id = (int)($active_backend_id ?? 0) ?: null;
 $template = $this;
+$frontendThemeCount = 0;
+$backendThemeCount = 0;
+foreach ($themes as $themeItem) {
+    if (!empty($themeItem['has_frontend'])) {
+        $frontendThemeCount++;
+    }
+    if (!empty($themeItem['has_backend'])) {
+        $backendThemeCount++;
+    }
+}
 ?>
 <!-- 页面标题 -->
 <div class="row">
@@ -75,7 +85,7 @@ $template = $this;
         </ul>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="text-muted small"><?= __('共 %{1} 个主题', [count($themes)]) ?></span>
+            <span class="text-muted small"><?= __('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $backendThemeCount]) ?></span>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="batchGeneratePreviews">
                 <i class="mdi mdi-camera-plus"></i> <?= __('批量生成预览图') ?>
             </button>
@@ -84,7 +94,23 @@ $template = $this;
         <div class="tab-content">
             <?php
             $renderThemeCards = function ($area, $activeId) use ($themes, $url, $template) {
-                foreach ($themes as $theme):
+                $supportField = $area === 'backend' ? 'has_backend' : 'has_frontend';
+                $filteredThemes = array_values(array_filter($themes, static function ($theme) use ($supportField) {
+                    return !empty($theme[$supportField]);
+                }));
+
+                if (empty($filteredThemes)): ?>
+                    <div class="col-12">
+                        <div class="alert alert-light border mb-0">
+                            <i class="mdi mdi-information-outline me-1"></i>
+                            <?= __('当前没有可用于该区域的主题') ?>
+                        </div>
+                    </div>
+                <?php
+                    return;
+                endif;
+
+                foreach ($filteredThemes as $theme):
                     $themeId = (int)($theme['id'] ?? 0);
                     $themeName = $theme['name'] ?? '';
                     $moduleName = $theme['module_name'] ?? '';
@@ -176,6 +202,18 @@ $template = $this;
                     <div class="mt-2 small text-muted" id="batchCount"></div>
                 </div>
                 <div id="batchResult" class="mt-3" style="display: none;"></div>
+                <div class="mt-3">
+                    <w:theme:sse-terminal
+                        id="theme-batch-preview-terminal"
+                        title="@lang{批量生成预览图进度}"
+                        height="260px"
+                        events="start,progress,chunk,warning,done,error"
+                        show-toolbar="false"
+                        show-start-toggle="false"
+                        show-timestamp="false"
+                        auto-scroll="true"
+                    />
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>
@@ -232,15 +270,39 @@ $template = $this;
         document.getElementById('batchCount').innerText = '0 / ' + batchTotal;
         document.getElementById('batchResult').style.display = 'none';
         
-        // 发送批量生成请求
-        fetchBatchPreviews();
+        startBatchPreviewsSse(modal);
     });
+
+    function startBatchPreviewsSse(modal) {
+        const streamUrl = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviewsSse') ?>';
+        const term = window.WelineSseTerminal && window.WelineSseTerminal['theme-batch-preview-terminal'];
+        if (!term) return;
+
+        // 清理旧输出
+        if (typeof term.clear === 'function') term.clear();
+
+        // 事件结束后关闭弹窗并刷新页面
+        term.on('done', function() {
+            modal.hide();
+            location.reload();
+        });
+        term.on('error', function() {
+            modal.hide();
+            // SSE 已在终端中输出错误原因
+        });
+
+        const fd = new FormData();
+        fd.append('form_key', CSRF_TOKEN);
+
+        term.start(streamUrl, { method: 'POST', body: fd });
+    }
 
     // 批量生成预览图
     async function fetchBatchPreviews() {
         try {
             const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>', {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
@@ -251,7 +313,7 @@ $template = $this;
 
             const result = await response.json();
             
-            if (result.status === 'success' || result.status === 'warning') {
+            if (result.success === true || result.status === 'success' || result.status === 'warning') {
                 document.getElementById('batchStatus').innerHTML = 
                     '<span class="text-success"><i class="mdi mdi-check-circle"></i> 生成完成！</span>';
                 document.getElementById('batchCount').innerHTML = 
@@ -296,6 +358,7 @@ $template = $this;
             const areaLabel = area === 'frontend' ? '<?= __('前台') ?>' : '<?= __('后台') ?>';
             fetch('<?= $url->getBackendUrl('theme/backend/index/postActivate') ?>', {
                 method: 'POST',
+                credentials: 'include',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ form_key: CSRF_TOKEN, theme_id: themeId, area: area })
             }).then(r => r.json()).then(function(result) {
@@ -352,6 +415,7 @@ $template = $this;
         try {
             const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>', {
                 method: 'POST',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },

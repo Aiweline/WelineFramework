@@ -130,6 +130,26 @@ class Core implements Data\DataInterface
     }
 
     /**
+     * 返回带警告的成功响应（HTTP 仍视为成功，业务上存在部分失败等需前端区分提示的场景）
+     *
+     * @param string $msg 提示消息
+     * @param mixed $data 响应数据（如含 failed、messages）
+     * @param int $code HTTP 状态码
+     * @return array|string
+     */
+    protected function warning(string $msg = '请注意！', mixed $data = '', int $code = 200): array|string
+    {
+        $base = $this->success($msg, $data, $code);
+        if (!\is_array($base)) {
+            return $base;
+        }
+        $base['status'] = 'warning';
+        $base['warning'] = true;
+
+        return $base;
+    }
+
+    /**
      * 返回错误响应（支持多语言和前端友好提示）
      * 
      * @param string $msg 错误消息
