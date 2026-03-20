@@ -239,13 +239,22 @@ body {
 }
 
 .app-search .form-control {
-    min-height: 44px;
-    padding-left: 2.75rem;
+    min-height: 36px;
+    height: 36px;
+    padding: 0.45rem 1rem 0.45rem 2.35rem;
     color: var(--backend-color-text-primary);
     background: var(--backend-color-bg-secondary);
     border: 1px solid var(--backend-color-input-border);
     border-radius: var(--backend-border-radius-pill);
     box-shadow: none;
+}
+
+.app-search {
+    margin-left: 0.35rem;
+}
+
+.app-search .position-relative {
+    min-width: 220px;
 }
 
 .app-search .form-control::placeholder {
@@ -259,10 +268,13 @@ body {
 }
 
 .app-search span {
-    left: 1rem;
+    left: 0.85rem;
     right: auto;
     color: var(--backend-color-text-tertiary);
     transform: translateY(-50%);
+    font-size: 1rem;
+    line-height: 1;
+    pointer-events: none;
 }
 
 .card {
