@@ -15,8 +15,8 @@ namespace Weline\Acl\Observer;
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Service\CollectedAclSourceIdsRegistry;
 use Weline\Framework\Event\Event;
+use Weline\Framework\Log\LoggerFactory;
 use Weline\Framework\Manager\ObjectManager;
-use function PHPUnit\Framework\throwException;
 
 class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
 {
@@ -563,8 +563,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         }
         unset($this->pending_class_level_acls[$module]);
         
-        // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
-        // 限制输出规模，避免 setup:upgrade 时单模块重复过多导致内存溢出
+        // 开发环境：如果发现重复，写入 acl 日志频道，不输出到控制台
         if (DEV && !empty($duplicateInfo)) {
             $maxSourceIds = 30;
             $lines = [__('【ACL 重复检测】模块: %{1}', [$module]), __('发现以下重复的 source_id：')];
@@ -596,8 +595,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 }
                 $n++;
             }
-            $lines[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
-            pp(implode("\n", $lines));
+            $lines[] = "\n" . __('路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。');
+            LoggerFactory::create('acl')->warning(implode("\n", $lines));
         }
 
         // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
@@ -737,8 +736,7 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         // 去重已完成，立即释放原始大数组，减轻内存峰值（后续仅用 $deduplicatedAcls）
         unset($this->pending_method_level_acls[$module]);
         
-        // 🔧 开发环境：如果发现重复，只做详细提示，不中断执行（落库仍然使用去重后的数据）
-        // 限制输出规模，避免 setup:upgrade 时单模块重复过多导致内存溢出
+        // 开发环境：如果发现重复，写入 acl 日志频道，不输出到控制台
         if (DEV && !empty($duplicateInfo)) {
             $maxSourceIds = 30;
             $lines = [__('【ACL 重复检测】模块: %{1} (方法级别权限)', [$module]), __('发现以下重复的 source_id：')];
@@ -770,8 +768,8 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
                 }
                 $n++;
             }
-            $lines[] = "\n" . __('请检查代码，确保每个 source_id 只定义一次！');
-            pp(implode("\n", $lines));
+            $lines[] = "\n" . __('路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。');
+            LoggerFactory::create('acl')->warning(implode("\n", $lines));
         }
 
         // 防止控制器 ACL 覆盖 menu.xml 同源的菜单记录
