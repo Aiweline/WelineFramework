@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Contract;
 
+use Weline\Server\IPC\ControlMessage;
+
 /**
  * 运行中的服务实例
  */
@@ -30,6 +32,10 @@ class ServiceInstance
         public float $lastHealthCheck = 0,
         public ?int $ipcClientId = null,
         public array $metadata = [],
+        /** 进程归属类型：'framework' | 'module' */
+        public string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
+        /** 模块代码（仅 module 类进程有效，如 'Weline_Payment'） */
+        public string $moduleCode = '',
     ) {}
 
     /**
@@ -38,6 +44,16 @@ class ServiceInstance
     public function getKey(): string
     {
         return "{$this->role}:{$this->instanceId}";
+    }
+
+    public function isFrameworkProcess(): bool
+    {
+        return $this->processKind === ControlMessage::PROCESS_KIND_FRAMEWORK;
+    }
+
+    public function isModuleProcess(): bool
+    {
+        return $this->processKind === ControlMessage::PROCESS_KIND_MODULE;
     }
 
     /**
@@ -101,20 +117,25 @@ class ServiceInstance
      */
     public function toArray(): array
     {
-        return [
-            'role' => $this->role,
-            'instance_id' => $this->instanceId,
-            'epoch' => $this->epoch,
-            'launch_id' => $this->launchId,
-            'pid' => $this->pid,
-            'port' => $this->port,
-            'state' => $this->state,
-            'restarts' => $this->restarts,
-            'started_at' => $this->startedAt,
-            'uptime' => $this->getUptime(),
+        $arr = [
+            'role'              => $this->role,
+            'instance_id'       => $this->instanceId,
+            'epoch'             => $this->epoch,
+            'launch_id'         => $this->launchId,
+            'pid'               => $this->pid,
+            'port'              => $this->port,
+            'state'             => $this->state,
+            'restarts'          => $this->restarts,
+            'started_at'        => $this->startedAt,
+            'uptime'            => $this->getUptime(),
             'last_health_check' => $this->lastHealthCheck,
-            'ipc_client_id' => $this->ipcClientId,
-            'metadata' => $this->metadata,
+            'ipc_client_id'     => $this->ipcClientId,
+            'metadata'          => $this->metadata,
+            'process_kind'      => $this->processKind,
         ];
+        if ($this->moduleCode !== '') {
+            $arr['module_code'] = $this->moduleCode;
+        }
+        return $arr;
     }
 }
