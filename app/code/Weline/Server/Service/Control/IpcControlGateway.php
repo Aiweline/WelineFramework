@@ -102,6 +102,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
         return $this->command($instanceName, ControlMessage::ACTION_STATUS, '', [], $timeout);
     }
 
+    public function reloadSslCert(string $instanceName = 'default', array $domains = []): array
+    {
+        $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
+        return $this->command($instanceName, ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload);
+    }
+
     /**
      * Master 未运行时，按进程管理器启动 WLS（仅用于后台 start 兜底）
      */
