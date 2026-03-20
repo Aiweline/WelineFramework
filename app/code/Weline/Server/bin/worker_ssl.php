@@ -262,17 +262,39 @@ function _resolveSniCert(string $domain, array &$cache): ?array
 }
 
 /**
+ * 清除指定域名的 DB 回退负缓存（negative cache）。
+ *
+ * 当 SSL 证书申请成功后，通过 IPC 通知 Worker 清除该域名的负缓存，
+ * 下次请求到来时 _restoreCertFromDb 会重新尝试从数据库恢复证书。
+ *
+ * @param string[] $domains 要清除的域名列表；空数组 = 清除全部负缓存。
+ */
+function _clearRestoreCertNegativeCache(array $domains): void
+{
+    static $attempted = [];  // 与 _restoreCertFromDb 共享同一 static 变量（同文件作用域中不存在，需通过引用传递）
+    // PHP static 变量在同一进程内按函数隔离，此处须通过注入方式清除。
+    // 实现方案：用一个全局的引用数组代替函数内 static，见下方 $_wlsRestoreAttempted。
+    global $_wlsRestoreAttempted;
+    if (empty($domains)) {
+        $_wlsRestoreAttempted = [];
+    } else {
+        foreach ($domains as $d) {
+            unset($_wlsRestoreAttempted[$d]);
+        }
+    }
+}
+
+/**
  * 从证书管理表恢复域名证书文件到磁盘（全部 6 个文件）。
  * 仅在 _resolveSniCert 磁盘未命中时调用，避免每次请求都查库。
  */
 function _restoreCertFromDb(string $domain): bool
 {
-    global $_domainPolicies;
-    static $attempted = [];
-    if (isset($attempted[$domain])) {
+    global $_domainPolicies, $_wlsRestoreAttempted;
+    if (isset($_wlsRestoreAttempted[$domain])) {
         return false;
     }
-    $attempted[$domain] = true;
+    $_wlsRestoreAttempted[$domain] = true;
 
     try {
         /** @var \Weline\Server\Service\SslCertificateService $sslService */
@@ -370,6 +392,10 @@ function _parseSniHostFromClientHello(string $data): ?string
 
 // 域名策略缓存（force_https / force_root_to_www），由 _loadSniCertsFromMap() 填充
 $_domainPolicies = [];
+
+// DB 回退负缓存：记录已尝试从 DB 恢复但未找到证书的域名，避免每次请求都查库。
+// 通过 _clearRestoreCertNegativeCache() 可在 ssl_cert_reload IPC 中清除指定域名的记录。
+$_wlsRestoreAttempted = [];
 
 // 读取 SNI 证书映射（var/server/ssl_certificate_map.json）
 // 使用 _loadSniCertsFromMap() 函数加载，后续收到 ssl_cert_reload IPC 命令时可热更新
@@ -1090,11 +1116,25 @@ if ($controlPort > 0) {
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_SSL_CERT_RELOAD:
                     \clearstatcache(true);
+                    $reloadDomains = isset($msg['domains']) && \is_array($msg['domains'])
+                        ? \array_filter($msg['domains'], static fn($d) => \is_string($d) && $d !== '')
+                        : [];
+                    // 清除负缓存：让被清除的域名在下次访问时重新尝试 DB 恢复
+                    _clearRestoreCertNegativeCache(\array_values($reloadDomains));
+                    // 清除指定域名的内存正缓存（若无指定则全量替换）
+                    if (!empty($reloadDomains)) {
+                        foreach ($reloadDomains as $reloadDomain) {
+                            unset($sniServerCerts[$reloadDomain]);
+                        }
+                    }
                     $oldCount = \count($sniServerCerts);
-                    $sniServerCerts = _loadSniCertsFromMap();
+                    $newSniCerts = _loadSniCertsFromMap();
+                    // 合并：新 map 为主，手动清除的域名若已在磁盘则会被 map 重新加入
+                    $sniServerCerts = $newSniCerts;
                     $newCount = \count($sniServerCerts);
-                    $domains = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
-                    WlsLogger::info_("收到 ssl_cert_reload 命令，已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domains}");
+                    $domainsStr = $newCount > 0 ? \implode(', ', \array_keys($sniServerCerts)) : '(空)';
+                    $targetStr = empty($reloadDomains) ? '全量重载' : ('域名：' . \implode(', ', $reloadDomains));
+                    WlsLogger::info_("收到 ssl_cert_reload（{$targetStr}），已热更新 SNI 证书映射（{$oldCount} → {$newCount}）：{$domainsStr}");
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_ROUTING_POLICY:
