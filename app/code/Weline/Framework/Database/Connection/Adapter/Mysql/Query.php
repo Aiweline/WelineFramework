@@ -1068,17 +1068,26 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function beginTransaction(): void
     {
-        $this->getLink()->beginTransaction();
+        $link = $this->getLink();
+        if (!$link->inTransaction()) {
+            $link->beginTransaction();
+        }
     }
 
     public function rollBack(): void
     {
-        $this->getLink()->rollBack();
+        $link = $this->getLink();
+        if ($link->inTransaction()) {
+            $link->rollBack();
+        }
     }
 
     public function commit(): void
     {
-        $this->getLink()->commit();
+        $link = $this->getLink();
+        if ($link->inTransaction()) {
+            $link->commit();
+        }
     }
 
     public function getPrepareSql(bool $format = true): string
