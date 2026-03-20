@@ -364,20 +364,24 @@ class MasterControlServer
      */
     private function handleRegister(int $clientId, array $msg): void
     {
-        $role     = $msg['role'] ?? '';
-        $pid      = (int) ($msg['pid'] ?? 0);
-        $port     = (int) ($msg['port'] ?? 0);
-        $workerId = (int) ($msg['worker_id'] ?? 0);
-        $epoch    = (int) ($msg['epoch'] ?? 0);
-        $launchId = (string) ($msg['launch_id'] ?? '');
+        $role        = $msg['role'] ?? '';
+        $pid         = (int) ($msg['pid'] ?? 0);
+        $port        = (int) ($msg['port'] ?? 0);
+        $workerId    = (int) ($msg['worker_id'] ?? 0);
+        $epoch       = (int) ($msg['epoch'] ?? 0);
+        $launchId    = (string) ($msg['launch_id'] ?? '');
+        $processKind = (string) ($msg['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK);
+        $moduleCode  = (string) ($msg['module_code'] ?? '');
 
-        $this->clients[$clientId]['role']      = $role;
-        $this->clients[$clientId]['pid']       = $pid;
-        $this->clients[$clientId]['port']      = $port;
-        $this->clients[$clientId]['worker_id'] = $workerId;
-        $this->clients[$clientId]['epoch']     = $epoch;
-        $this->clients[$clientId]['launch_id'] = $launchId;
-        $this->clients[$clientId]['state']     = self::STATE_REGISTERED;
+        $this->clients[$clientId]['role']         = $role;
+        $this->clients[$clientId]['pid']          = $pid;
+        $this->clients[$clientId]['port']         = $port;
+        $this->clients[$clientId]['worker_id']    = $workerId;
+        $this->clients[$clientId]['epoch']        = $epoch;
+        $this->clients[$clientId]['launch_id']    = $launchId;
+        $this->clients[$clientId]['process_kind'] = $processKind;
+        $this->clients[$clientId]['module_code']  = $moduleCode;
+        $this->clients[$clientId]['state']        = self::STATE_REGISTERED;
 
         // 计算复活优先级
         $priority = ControlMessage::RESURRECTION_NONE;
