@@ -104,6 +104,8 @@ namespace Weline\MyModule\Service\Provider;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\IPC\ControlMessage;
+use Weline\Framework\System\Process\Processer;
 
 class MyServiceProvider extends AbstractServiceProvider
 {
@@ -112,13 +114,20 @@ class MyServiceProvider extends AbstractServiceProvider
     public function isEnabled(ServiceContext $context): bool { return true; }
     public function getInstanceCount(ServiceContext $context): int { return 1; }
     public function getPriority(): int { return 50; }
-    
+
+    // 声明为模块进程（模块自定义进程必须重写这两个方法）
+    public function getProcessKind(): string { return ControlMessage::PROCESS_KIND_MODULE; }
+    public function getModuleCode(): string { return 'Weline_MyModule'; }
+
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
+        $processName = Processer::buildModuleProcessName('Weline_MyModule', 'my-service-' . $instanceId);
         return new ServiceCommand(
             script: 'app/code/Weline/MyModule/bin/my_service.php',
             arguments: ['--port=' . $this->getPort($instanceId, $context)],
-            processName: 'weline-my-service-' . $instanceId,
+            processName: $processName,
+            processKind: ControlMessage::PROCESS_KIND_MODULE,
+            moduleCode: 'Weline_MyModule',
         );
     }
 }
@@ -153,6 +162,8 @@ return [
 | `handleMessage(msg, instance, orchestrator)` | 处理 IPC 消息 |
 | `onStarted(instance)` | 启动后回调 |
 | `onStopped(instance)` | 停止后回调 |
+| `getProcessKind()` | 进程归属类型：'framework' \| 'module'（AbstractServiceProvider 默认返回 'framework'） |
+| `getModuleCode()` | 模块代码（仅 module 类进程需要，如 'Weline_Payment'） |
 
 ### ServiceOrchestrator 主要方法
 

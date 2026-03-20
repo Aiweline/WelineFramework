@@ -250,10 +250,20 @@ class ControlMessage
         return $messages;
     }
 
+    // ========== 进程归属类型常量 ==========
+
+    /** 框架内置进程（Worker、Dispatcher、Session Server 等） */
+    public const PROCESS_KIND_FRAMEWORK = 'framework';
+    /** 第三方模块注册的自定义子进程 */
+    public const PROCESS_KIND_MODULE    = 'module';
+
     // ========== 消息构建快捷方法 ==========
 
     /**
      * 构建 register 消息
+     *
+     * @param string $processKind 进程归属类型：'framework' | 'module'
+     * @param string $moduleCode  模块代码（仅 module 类进程需要，格式如 'Weline_Payment'）
      */
     public static function register(
         string $role,
@@ -261,7 +271,9 @@ class ControlMessage
         int $port = 0,
         int $workerId = 0,
         int $epoch = 0,
-        string $launchId = ''
+        string $launchId = '',
+        string $processKind = self::PROCESS_KIND_FRAMEWORK,
+        string $moduleCode = ''
     ): string
     {
         $data = [
@@ -276,6 +288,12 @@ class ControlMessage
         }
         if ($launchId !== '') {
             $data['launch_id'] = $launchId;
+        }
+        if ($processKind !== self::PROCESS_KIND_FRAMEWORK) {
+            $data['process_kind'] = $processKind;
+        }
+        if ($moduleCode !== '') {
+            $data['module_code'] = $moduleCode;
         }
         return self::encode($data);
     }
@@ -393,12 +411,18 @@ class ControlMessage
 
     /**
      * 构建 ssl_cert_reload 消息（热重载 SSL 证书映射，不重启 Worker）
+     *
+     * @param string[]|null $domains 需要清除负缓存并重新加载的域名列表；
+     *                               null 或空数组 = 全量重载（仅刷新 map 文件，不清除负缓存）；
+     *                               非空 = 只为指定域清除负缓存并刷新内存证书映射。
      */
-    public static function sslCertReload(): string
+    public static function sslCertReload(?array $domains = null): string
     {
-        return self::encode([
-            'type' => self::TYPE_SSL_CERT_RELOAD,
-        ]);
+        $payload = ['type' => self::TYPE_SSL_CERT_RELOAD];
+        if (!empty($domains)) {
+            $payload['domains'] = \array_values(\array_unique($domains));
+        }
+        return self::encode($payload);
     }
 
     /**

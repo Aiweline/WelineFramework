@@ -220,6 +220,9 @@ class ControlClient
 
     /**
      * 发送 register 消息
+     *
+     * @param string $processKind 进程归属类型：'framework' | 'module'（默认 framework）
+     * @param string $moduleCode  模块代码（仅 module 类进程需要，如 'Weline_Payment'）
      */
     public function register(
         string $role,
@@ -227,20 +230,24 @@ class ControlClient
         int $port = 0,
         int $workerId = 0,
         int $epoch = 0,
-        string $launchId = ''
+        string $launchId = '',
+        string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
+        string $moduleCode = ''
     ): bool
     {
         // 保存注册信息，用于重连后自动重新注册
         $this->registerInfo = [
-            'role'      => $role,
-            'pid'       => $pid,
-            'port'      => $port,
-            'worker_id' => $workerId,
-            'epoch'     => $epoch,
-            'launch_id' => $launchId,
+            'role'         => $role,
+            'pid'          => $pid,
+            'port'         => $port,
+            'worker_id'    => $workerId,
+            'epoch'        => $epoch,
+            'launch_id'    => $launchId,
+            'process_kind' => $processKind,
+            'module_code'  => $moduleCode,
         ];
 
-        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId));
+        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode));
     }
 
     /**
@@ -470,7 +477,9 @@ class ControlClient
                 $this->registerInfo['port'],
                 $this->registerInfo['worker_id'],
                 (int)($this->registerInfo['epoch'] ?? 0),
-                (string)($this->registerInfo['launch_id'] ?? '')
+                (string)($this->registerInfo['launch_id'] ?? ''),
+                (string)($this->registerInfo['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK),
+                (string)($this->registerInfo['module_code'] ?? '')
             );
 
             // 如果之前已就绪，重新发送 ready
