@@ -630,7 +630,7 @@ realpath_cache_ttl = 600
 
 ## 相关文档
 
-- [WelineFramework 部署文档](../../部署文档.md)
+- [WelineFramework 部署文档](../部署文档.md)
 - [服务器启动指南](../开发/服务器启动规范.md)
 - [常见问题修复指南](../常见问题修复指南.md)
 
