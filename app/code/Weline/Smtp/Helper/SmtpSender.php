@@ -26,20 +26,12 @@ class SmtpSender extends \Weline\Framework\App\Helper
      * @var \Weline\Smtp\Helper\Data
      */
     private Data $data;
-    private PHPMailer $mail;
 
     public function __construct(
         Data $data
     )
     {
         $this->data = $data;
-        //创建实例；传递“true”将启用异常
-        $this->mail = new PHPMailer(true);
-        $this->mail->addCustomHeader('charset', 'UTF-8');
-        $this->mail->addCustomHeader('Content-Transfer-Encoding', '8Bit');
-        $this->mail->SMTPDebug = SMTP::DEBUG_SERVER;                   //Enable verbose debug output
-        $this->mail->isSMTP();                                         //使用SMTP发送
-        $this->mail->CharSet = 'UTF-8';
     }
 
 
@@ -91,111 +83,19 @@ class SmtpSender extends \Weline\Framework\App\Helper
         string       $module = 'Weline_Smtp'
     ): bool
     {
-        //服务器设置
-        $this->mail->Host = $this->data->get($this->data::smtp_host, $module);
-
-        //设置要发送的SMTP服务器
-        $this->mail->SMTPAuth = true;                                                                                                                                                                                                                                                                                                                                                                     //Enable SMTP authentication
-        $this->mail->Username = $this->data->get($this->data::smtp_username, $module);
-        //SMTP 用户名
-        $this->mail->Password = $this->data->get($this->data::smtp_password, $module);
-        //SMTP 密码
-        $this->mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;                                                                                                                                                                                                                                                                                                                                            //启用隐式TLS加密
-        $this->mail->Port = $this->data->get($this->data::smtp_port, $module);
-        //要连接的TCP端口；如果已设置`SMTPSecure=PHPMailer::ENCRYPTION_STARTTLS，请使用587`
-
-        // 发送者
-        if (is_string($from)) {
-            $this->mail->setFrom($from);
-        } else {
-            $this->mail->setFrom($from['email'], $from['name'] ?? '');
-        }
-        // 接受者
-        if (is_string($to)) {
-            $this->mail->addAddress($to);               // 名字可选
-        } else {
-            if (isset($to['email'])) {
-                $this->mail->addAddress($to['email'], $to['name'] ?? '');               //Name is optional
-            } else {
-                foreach ($to as $to_email) {
-                    if (isset($to_email['email'])) {
-                        $this->mail->addAddress($to_email['email'], $to_email['name'] ?? '');               //Name is optional
-                    } elseif (is_string($to_email)) {
-                        $this->mail->addAddress($to_email);               //Name is optional
-                    }
-                }
-            }
-        }
-        if (!$this->mail->getToAddresses()) {
-            throw new Exception(__('接受者邮箱为空：请正确设置接收邮箱！'));
-        }
-
-        // 回复地址
-        if ($reply_to) {
-            if (is_string($reply_to)) {
-                $this->mail->addReplyTo($reply_to);               //Name is optional
-            } else {
-                if (isset($reply_to['email'])) {
-                    $this->mail->addReplyTo($reply_to['email'], $reply_to['name'] ?? '');               //Name is optional
-                } else {
-                    foreach ($reply_to as $reply_to_email) {
-                        if (isset($reply_to_email['email'])) {
-                            $this->mail->addReplyTo($reply_to_email['email'], $reply_to_email['name'] ?? '');               //Name is optional
-                        }
-                    }
-                }
-            }
-        }
-        // 抄送
-        if ($cc) {
-            if (is_string($cc)) {
-                $this->mail->addCC($cc);               //Name is optional
-            } else {
-                if (isset($cc['email'])) {
-                    $this->mail->addCC($cc['email'], $cc['name'] ?? '');               //Name is optional
-                } else {
-                    foreach ($cc as $cc_email) {
-                        if (isset($cc_email['email'])) {
-                            $this->mail->addCC($cc_email['email'], $cc_email['name'] ?? '');               //Name is optional
-                        }
-                    }
-                }
-            }
-        }
-        // 密送
-        if ($bcc) {
-            if (is_string($bcc)) {
-                $this->mail->addBCC($bcc);               //Name is optional
-            } else {
-                if (isset($bcc['email'])) {
-                    $this->mail->addBCC($bcc['email'], $bcc['name'] ?? '');               //Name is optional
-                } else {
-                    foreach ($bcc as $bcc_email) {
-                        if (isset($bcc_email['email'])) {
-                            $this->mail->addBCC($bcc_email['email'], $bcc_email['name'] ?? '');               //Name is optional
-                        }
-                    }
-                }
-            }
-        }
-
-        // 附件
-        if ($attachment) {
-            if (is_string($attachment)) {
-                $this->mail->addAttachment($attachment);
-            } else {
-                foreach ($attachment as $attach) {
-                    $this->mail->addAttachment($attach['path'], $attach['name'] ?? '');
-                }
-            }
-        }
-        // 内容
-        $this->mail->Subject = $subject;
-        $this->mail->Body = $content;
-        $this->mail->AltBody = $alt;
-        $this->mail->isHTML(true);  // Html格式发送邮件
-        $this->mail->send();
-        $this->writeSendLog($module);
+        $mail = $this->createMailer();
+        $this->configureTransport(
+            $mail,
+            (string) $this->data->get($this->data::smtp_host, $module),
+            (string) $this->data->get($this->data::smtp_username, $module),
+            (string) $this->data->get($this->data::smtp_password, $module),
+            (int) $this->data->get($this->data::smtp_port, $module),
+            $this->data->get($this->data::smtp_auth, $module),
+            $this->data->get($this->data::smtp_secure, $module)
+        );
+        $this->prepareMessage($mail, $from, $to, $subject, $content, $alt, $attachment, $reply_to, $cc, $bcc);
+        $mail->send();
+        $this->writeSendLog($mail, $module);
         return true;
     }
 
@@ -222,91 +122,177 @@ class SmtpSender extends \Weline\Framework\App\Helper
         if ($host === '' || $username === '') {
             throw new Exception(__('发件人配置不完整：缺少 host 或 username'));
         }
-        $this->mail->Host = $host;
-        $this->mail->SMTPAuth = true;
-        $this->mail->Username = $username;
-        $this->mail->Password = (string)($config['smtp_password'] ?? '');
-        $this->mail->Port = (int)($config['smtp_port'] ?? 465);
-        $secure = (string)($config['smtp_secure'] ?? '1');
-        $this->mail->SMTPSecure = $secure === '0' ? PHPMailer::ENCRYPTION_STARTTLS : PHPMailer::ENCRYPTION_SMTPS;
-
-        if (is_string($from)) {
-            $this->mail->setFrom($from);
-        } else {
-            $this->mail->setFrom($from['email'], $from['name'] ?? '');
-        }
-        if (is_string($to)) {
-            $this->mail->addAddress($to);
-        } else {
-            if (isset($to['email'])) {
-                $this->mail->addAddress($to['email'], $to['name'] ?? '');
-            } else {
-                foreach ($to as $to_email) {
-                    if (is_array($to_email) && isset($to_email['email'])) {
-                        $this->mail->addAddress($to_email['email'], $to_email['name'] ?? '');
-                    } elseif (is_string($to_email)) {
-                        $this->mail->addAddress($to_email);
-                    }
-                }
-            }
-        }
-        if (!$this->mail->getToAddresses()) {
-            throw new Exception(__('接受者邮箱为空：请正确设置接收邮箱！'));
-        }
-        if ($reply_to) {
-            if (is_string($reply_to)) {
-                $this->mail->addReplyTo($reply_to);
-            } elseif (isset($reply_to['email'])) {
-                $this->mail->addReplyTo($reply_to['email'], $reply_to['name'] ?? '');
-            }
-        }
-        if ($cc) {
-            if (is_string($cc)) {
-                $this->mail->addCC($cc);
-            } elseif (isset($cc['email'])) {
-                $this->mail->addCC($cc['email'], $cc['name'] ?? '');
-            }
-        }
-        if ($bcc) {
-            if (is_string($bcc)) {
-                $this->mail->addBCC($bcc);
-            } elseif (isset($bcc['email'])) {
-                $this->mail->addBCC($bcc['email'], $bcc['name'] ?? '');
-            }
-        }
-        if ($attachment) {
-            if (is_string($attachment)) {
-                $this->mail->addAttachment($attachment);
-            } else {
-                foreach (is_array($attachment) && isset($attachment['path']) ? [$attachment] : (array)$attachment as $a) {
-                    $this->mail->addAttachment($a['path'] ?? '', $a['name'] ?? '');
-                }
-            }
-        }
-        $this->mail->Subject = $subject;
-        $this->mail->Body = $content;
-        $this->mail->AltBody = $alt;
-        $this->mail->isHTML(true);
-        $this->mail->send();
-        $this->writeSendLog($module, $config);
+        $mail = $this->createMailer();
+        $this->configureTransport(
+            $mail,
+            $host,
+            $username,
+            (string) ($config['smtp_password'] ?? ''),
+            (int) ($config['smtp_port'] ?? 465),
+            $config['smtp_auth'] ?? '1',
+            $config['smtp_secure'] ?? '1'
+        );
+        $this->prepareMessage($mail, $from, $to, $subject, $content, $alt, $attachment, $reply_to, $cc, $bcc);
+        $mail->send();
+        $this->writeSendLog($mail, $module, $config);
         return true;
     }
 
-    private function writeSendLog(string $module, ?array $config = null): void
+    private function createMailer(): PHPMailer
+    {
+        $mail = new PHPMailer(true);
+        $mail->addCustomHeader('charset', 'UTF-8');
+        $mail->addCustomHeader('Content-Transfer-Encoding', '8Bit');
+        $mail->SMTPDebug = SMTP::DEBUG_OFF;
+        $mail->isSMTP();
+        $mail->CharSet = 'UTF-8';
+        return $mail;
+    }
+
+    private function configureTransport(
+        PHPMailer $mail,
+        string $host,
+        string $username,
+        string $password,
+        int $port,
+        mixed $smtpAuth,
+        mixed $smtpSecure
+    ): void {
+        if ($host === '') {
+            throw new Exception(__('SMTP Host 未配置'));
+        }
+        if ($username === '') {
+            throw new Exception(__('SMTP 用户名未配置'));
+        }
+        $mail->Host = $host;
+        $mail->SMTPAuth = $this->normalizeSmtpAuth($smtpAuth);
+        $mail->Username = $username;
+        $mail->Password = $password;
+        $mail->Port = $port > 0 ? $port : 465;
+        $mail->SMTPSecure = $this->resolveSmtpSecure($smtpSecure, $mail->Port);
+    }
+
+    private function normalizeSmtpAuth(mixed $smtpAuth): bool
+    {
+        $value = strtolower(trim((string) $smtpAuth));
+        return !in_array($value, ['', '0', 'false', 'off', 'no'], true);
+    }
+
+    private function resolveSmtpSecure(mixed $smtpSecure, int $port): string
+    {
+        $value = strtolower(trim((string) $smtpSecure));
+        return match (true) {
+            in_array($value, ['ssl', 'smtps', '1', 'true', 'on', 'yes', '465'], true) => PHPMailer::ENCRYPTION_SMTPS,
+            in_array($value, ['tls', 'starttls', '2', '587'], true) => PHPMailer::ENCRYPTION_STARTTLS,
+            in_array($value, ['none', 'off', 'false', '0', ''], true) => $port === 587 && $value === '0'
+                ? PHPMailer::ENCRYPTION_STARTTLS
+                : '',
+            $port === 465 => PHPMailer::ENCRYPTION_SMTPS,
+            $port === 587 => PHPMailer::ENCRYPTION_STARTTLS,
+            default => '',
+        };
+    }
+
+    private function prepareMessage(
+        PHPMailer $mail,
+        string|array $from,
+        string|array $to,
+        string $subject,
+        string $content,
+        string $alt = '',
+        string|array $attachment = '',
+        string|array $replyTo = '',
+        string|array $cc = '',
+        string|array $bcc = ''
+    ): void {
+        $this->applyFrom($mail, $from);
+        $this->addEmailEntries($mail, $to, static fn(string $email, string $name = '') => $mail->addAddress($email, $name));
+        if (!$mail->getToAddresses()) {
+            throw new Exception(__('接受者邮箱为空：请正确设置接收邮箱！'));
+        }
+        $this->addEmailEntries($mail, $replyTo, static fn(string $email, string $name = '') => $mail->addReplyTo($email, $name));
+        $this->addEmailEntries($mail, $cc, static fn(string $email, string $name = '') => $mail->addCC($email, $name));
+        $this->addEmailEntries($mail, $bcc, static fn(string $email, string $name = '') => $mail->addBCC($email, $name));
+        $this->addAttachments($mail, $attachment);
+        $mail->Subject = $subject;
+        $mail->Body = $content;
+        $mail->AltBody = $alt;
+        $mail->isHTML(true);
+    }
+
+    private function applyFrom(PHPMailer $mail, string|array $from): void
+    {
+        if (is_string($from)) {
+            if (trim($from) === '') {
+                throw new Exception(__('发送者邮箱为空：请正确设置发件邮箱！'));
+            }
+            $mail->setFrom($from);
+            return;
+        }
+
+        $fromEmail = trim((string) ($from['email'] ?? ''));
+        if ($fromEmail === '') {
+            throw new Exception(__('发送者邮箱为空：请正确设置发件邮箱！'));
+        }
+        $mail->setFrom($fromEmail, (string) ($from['name'] ?? ''));
+    }
+
+    private function addEmailEntries(PHPMailer $mail, string|array $emails, callable $adder): void
+    {
+        if ($emails === '' || $emails === []) {
+            return;
+        }
+        if (is_string($emails)) {
+            $adder($emails);
+            return;
+        }
+        if (isset($emails['email'])) {
+            $adder((string) $emails['email'], (string) ($emails['name'] ?? ''));
+            return;
+        }
+        foreach ($emails as $email) {
+            if (is_array($email) && isset($email['email'])) {
+                $adder((string) $email['email'], (string) ($email['name'] ?? ''));
+            } elseif (is_string($email)) {
+                $adder($email);
+            }
+        }
+    }
+
+    private function addAttachments(PHPMailer $mail, string|array $attachment): void
+    {
+        if ($attachment === '' || $attachment === []) {
+            return;
+        }
+        if (is_string($attachment)) {
+            $mail->addAttachment($attachment);
+            return;
+        }
+        $attachments = isset($attachment['path']) ? [$attachment] : $attachment;
+        foreach ($attachments as $attach) {
+            if (!is_array($attach) || empty($attach['path'])) {
+                continue;
+            }
+            $mail->addAttachment((string) $attach['path'], (string) ($attach['name'] ?? ''));
+        }
+    }
+
+    private function writeSendLog(PHPMailer $mail, string $module, ?array $config = null): void
     {
         /** @var \Weline\Smtp\Model\SmtpSendLog $sendLog */
         $sendLog = ObjectManager::getInstance(SmtpSendLog::class);
         try {
-            $sendLog->setData($sendLog::schema_fields_FROM_EMAIL, $this->mail->From)
-                ->setData($sendLog::schema_fields_SENDER_NAME, $this->mail->FromName)
-                ->setData($sendLog::schema_fields_TO_EMAIL, json_encode($this->mail->getToAddresses()))
-                ->setData($sendLog::schema_fields_REPLY_TO, json_encode($this->mail->getReplyToAddresses()))
-                ->setData($sendLog::schema_fields_SUBJECT, $this->mail->Subject)
-                ->setData($sendLog::schema_fields_CONTENT, $this->mail->Body)
-                ->setData($sendLog::schema_fields_ALT, $this->mail->AltBody)
-                ->setData($sendLog::schema_fields_ATTACHMENT, json_encode($this->mail->getAttachments()))
-                ->setData($sendLog::schema_fields_CC, json_encode($this->mail->getCcAddresses()))
-                ->setData($sendLog::schema_fields_BCC, json_encode($this->mail->getBccAddresses()))
+            $sendLog->setData($sendLog::schema_fields_FROM_EMAIL, $mail->From)
+                ->setData($sendLog::schema_fields_SENDER_NAME, $mail->FromName)
+                ->setData($sendLog::schema_fields_TO_EMAIL, json_encode($mail->getToAddresses(), JSON_UNESCAPED_UNICODE))
+                ->setData($sendLog::schema_fields_REPLY_TO, json_encode($mail->getReplyToAddresses(), JSON_UNESCAPED_UNICODE))
+                ->setData($sendLog::schema_fields_SUBJECT, $mail->Subject)
+                ->setData($sendLog::schema_fields_CONTENT, $mail->Body)
+                ->setData($sendLog::schema_fields_ALT, $mail->AltBody)
+                ->setData($sendLog::schema_fields_ATTACHMENT, json_encode($mail->getAttachments(), JSON_UNESCAPED_UNICODE))
+                ->setData($sendLog::schema_fields_CC, json_encode($mail->getCcAddresses(), JSON_UNESCAPED_UNICODE))
+                ->setData($sendLog::schema_fields_BCC, json_encode($mail->getBccAddresses(), JSON_UNESCAPED_UNICODE))
+                ->setData($sendLog::schema_fields_IS_HTML, 1)
                 ->setData($sendLog::schema_fields_PROXY, $config !== null ? ($config['smtp_username'] ?? '') : $this->data->get($this->data::smtp_username, $module))
                 ->setData($sendLog::schema_fields_MODULE, $module)
                 ->save();
