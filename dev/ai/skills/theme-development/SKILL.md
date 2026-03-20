@@ -63,6 +63,7 @@ alwaysApply: false
 
 ## 禁止
 
+- **`.phtml` / PHP 注释**：`//` 行内**不要**写 `?>`（会结束 PHP 模式）；`/** … */` 块注释内**不要**写出含 **`*/`** 的路径片段（会提前结束注释）。说明路径用 `backend/foo`、或多行 `//`，避免注释里出现「星号 + 斜杠」与路径连在一起
 - 硬编码 #fff、rgb()、rgba()
 - 全局 var/function 污染；通用类名 .card、.header 无前缀
 - 禁止 alert/confirm/prompt，用 BackendToast/BackendConfirm
