@@ -1,70 +1,57 @@
-# Backend Theme - 后端主题
+# Backend Theme
 
-## 目录概述
+`backend/` 是后台管理主题 area 的默认实现，负责后台布局、片段、表单/列表部件、
+颜色变量和主题入口资源。
 
-`backend/` 目录包含后端管理界面的主题文件，包括布局、组件、样式等。
+## 目录职责
 
-## 目录结构
+- `assets/css/theme.css`
+  - 后台 area 的公共基础样式。
+- `assets/js/theme.js`
+  - 后台统一入口脚本，处理模块加载、主题配置和全局交互。
+- `layouts/`
+  - 页面级布局模板，遵循 `layouts/<layoutType>/<option>.phtml`。
+- `partials/`
+  - 可配置后台片段，遵循 `partials/<type>/<option>.phtml`。
+- `widgets/`
+  - 后台部件模板，当前主要是 `data/form`、`data/list`。
+- `components/`
+  - 后台通用 UI 组件模板。
+- `variables/`
+  - 后台 token 文件，当前包含 `colors`、`spacing`、`typography`、`shadows`、`borders`。
+- `colors/`
+  - 后台色盘，当前包含 `default`、`light`、`dark`。
+- `config/modules.json`
+  - 后台主题私有模块配置；仅用于 `weline.modules.js` 编译。
 
-```
-backend/
-├── layouts/              # 布局文件
-│   ├── default.phtml    # 默认布局
-│   ├── dashboard.phtml  # 仪表盘布局
-│   └── minimal.phtml    # 极简布局
-├── config/              # 配置文件
-│   ├── theme.json       # 主题配置
-│   └── modules.json     # 模块配置
-├── assets/              # 静态资源
-│   ├── css/
-│   │   └── theme.css    # 主题样式
-│   └── js/
-│       └── theme.js     # 主题脚本
-└── README.md            # 本文档
-```
+## 当前清单
 
-## 布局说明
+- 布局类型
+  - `dashboard`
+  - `default`
+  - `fullscreen`
+  - `login`
+  - `minimal`
+  - `print`
 
-### 1. `default.phtml` - 默认布局
+- partial 类型
+  - `breadcrumb`
+  - `footer`
+  - `head`
+  - `header`
+  - `loading`
+  - `right-sidebar`
+  - `scripts`
+  - `sidebar`
+  - `topbar`
+  - `topnav`
 
-后端默认布局，包含header、sidebar、main、footer。
+- widget 类型
+  - `data`
 
-**参数**：
-- `title`: 页面标题
-- `content`: 主要内容（HTML字符串）
-- `sidebar`: 侧边栏内容（可选）
-- `showHeader`: 是否显示header（默认：true）
-- `showFooter`: 是否显示footer（默认：true）
-- `class`: 额外CSS类
+## 规范提醒
 
-### 2. `dashboard.phtml` - 仪表盘布局
-
-后端仪表盘布局，包含侧边栏导航和主内容区。
-
-**参数**：
-- `title`: 页面标题
-- `content`: 主要内容（HTML字符串）
-- `sidebar`: 侧边栏内容（导航菜单）
-- `sidebarCollapsed`: 侧边栏是否折叠（默认：false）
-- `class`: 额外CSS类
-
-### 3. `minimal.phtml` - 极简布局
-
-后端极简布局，无header和footer，适合弹窗、打印等场景。
-
-**参数**：
-- `title`: 页面标题
-- `content`: 内容（HTML字符串）
-- `class`: 额外CSS类
-
-## 使用示例
-
-```php
-// 在控制器中使用后端布局
-return $this->fetch('Weline_Theme::theme/backend/layouts/default.phtml', [
-    'title' => __('管理后台'),
-    'content' => $this->fetch('your-template.phtml'),
-    'sidebar' => $this->fetch('sidebar.phtml')
-]);
-```
+- 布局和片段参数统一写在模板顶部的 `@param.*` 注释里，由主题元数据系统自动读取。
+- 后台主题资源入口集中在 `partials/head/default.phtml`，不要在普通布局中重复做全局初始化。
+- 主题配置来源是数据库配置与 `ThemeData`，不是 `theme.json` 文件。
 

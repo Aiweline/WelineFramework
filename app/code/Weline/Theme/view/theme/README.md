@@ -1,74 +1,73 @@
-# Theme - 主题目录
+# Theme 目录规范
 
-## 目录概述
+`view/theme/` 是 `Weline_Theme` 的默认主题源目录。主题文件按 `frontend` / `backend`
+分区组织，布局、片段、变量、色盘、部件和通用资源都从这里被扫描、解析和回退。
 
-`theme/` 目录包含前后端主题文件，按区域（frontend/backend）分类组织。
+## 当前结构
 
-## 目录结构
-
-```
+```text
 theme/
-├── frontend/            # 前端主题
-│   ├── layouts/        # 布局文件
-│   ├── components/     # 组件
-│   ├── partials/       # 片段
-│   ├── assets/         # 静态资源
-│   ├── colors/         # 配色方案
-│   ├── variables/      # CSS变量
-│   └── config/         # 配置文件
-│
-├── backend/            # 后端主题
-│   ├── layouts/       # 布局文件
-│   ├── assets/        # 静态资源
-│   └── config/        # 配置文件
-│
-└── README.md          # 本文档
+├── frontend/
+│   ├── assets/css/theme.css
+│   ├── assets/js/theme.js
+│   ├── colors/_*.css
+│   ├── components/*.phtml
+│   ├── config/modules.json
+│   ├── layouts/<layoutType>/<option>.phtml
+│   ├── partials/<type>/<option>.phtml
+│   ├── variables/_*.css
+│   └── widgets/<type>/<code>/default.phtml
+├── backend/
+│   ├── assets/css/theme.css
+│   ├── assets/js/theme.js
+│   ├── colors/_*.css
+│   ├── components/*.phtml
+│   ├── config/modules.json
+│   ├── layouts/<layoutType>/<option>.phtml
+│   ├── partials/<type>/<option>.phtml
+│   ├── variables/_*.css
+│   └── widgets/<type>/<code>/default.phtml
+└── README.md
 ```
 
-## 主题使用
+## 核心约定
 
-### 前端主题
+- `layouts/`
+  - 路径规则是 `theme/{area}/layouts/{layoutType}/{option}.phtml`。
+  - 控制器设置 `layoutType` 后，`ControllerFetchFileBefore` 会结合主题配置和预览 scope
+    解析最终模板；`account.auth` 这类写法会把 `account` 识别为类型、`auth` 识别为选项。
+  - 布局顶部的 `@meta.*`、`@param.*` 注释会被扫描到 `ThemeData`，运行时注入 `meta`。
 
-前端主题位于 `frontend/` 目录，包含：
-- 首页、产品、分类、个人中心、购物车、结账等页面布局
-- 通用组件和片段
-- 主题样式和配色方案
+- `partials/`
+  - 路径规则是 `theme/{area}/partials/{type}/{option}.phtml`。
+  - 应通过 `Weline\Theme\Block\Partials` 加载，由主题配置、预览 scope、父主题回退共同决定最终文件。
+  - partial 模板可直接使用 `meta`、`layout`、`theme`、`colors` 等数据。
 
-**使用示例**：
-```php
-return $this->fetch('Weline_Theme::theme/frontend/layouts/homepage/default.phtml', [
-    'title' => __('首页'),
-    'content' => $content
-]);
-```
+- `widgets/`
+  - 路径规则是 `theme/{area}/widgets/{type}/{code}/default.phtml`。
+  - 部件使用 `@widget.*` 描述元数据，使用 `@param.*` 声明可配置参数。
+  - widget 列表由 `extends/module/Weline_Widget/Weline_Theme/widget.php` 和部件扫描流程共同消费。
 
-### 后端主题
+- `variables/` 与 `colors/`
+  - `variables/_*.css` 定义主题 token，例如颜色、间距、字体、边框、阴影。
+  - `colors/_*.css` 定义成套色盘覆盖。
+  - 这两类文件都要求有 `@meta.name` / `@meta.description` 注释，扫描后进入 `ThemeData` / `Meta`。
 
-后端主题位于 `backend/` 目录，包含：
-- 管理后台布局
-- 仪表盘布局
-- 后端专用样式和脚本
+- `assets/`
+  - `assets/css/theme.css`、`assets/js/theme.js` 放 area 级公共资源。
+  - `head` partial 会加载这些基础资源，并在运行时拼接生成的布局 CSS。
 
-**使用示例**：
-```php
-return $this->fetch('Weline_Theme::theme/backend/layouts/dashboard.phtml', [
-    'title' => __('管理后台'),
-    'content' => $content,
-    'sidebar' => $sidebar
-]);
-```
+- `config/modules.json`
+  - 这里只存放主题区域自己的 JS 模块路径和别名配置，供 `weline.modules.js` 编译使用。
+  - 主题本身的布局、色盘、partials、variables 等配置不再依赖 `theme.json`，而是由
+    `ThemeConfigManager` / `ConfigLoader` / `ThemeData` 从数据库和 Meta 系统加载。
 
-## 主题配置
+## 文档入口
 
-每个主题区域都有自己的配置文件：
-- `frontend/config/theme.json` - 前端主题配置
-- `backend/config/theme.json` - 后端主题配置
-
-## 模块配置
-
-每个主题区域都有自己的模块配置文件：
-- `frontend/config/modules.json` - 前端模块配置
-- `backend/config/modules.json` - 后端模块配置
-
-这些配置文件会被编译到对应的 `base/weline.modules.js` 文件中。
+- `frontend/README.md`：前端 area 总览
+- `frontend/layouts/README.md`：前端布局命名与清单
+- `frontend/partials/README.md`：前端片段命名与加载方式
+- `backend/README.md`：后端 area 总览
+- `backend/layouts/README.md`：后端布局命名与清单
+- `backend/partials/README.md`：后端片段命名与加载方式
 
