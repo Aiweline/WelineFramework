@@ -176,3 +176,395 @@
     overflow: hidden;
 }
 
+/* =============================================
+   Global backend polish
+   ============================================= */
+
+body {
+    background:
+        radial-gradient(circle at top left, var(--backend-color-primary-bg-light) 0, transparent 28%),
+        linear-gradient(180deg, rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.02) 0%, transparent 22%),
+        var(--backend-color-bg-body);
+    color: var(--backend-color-text-primary);
+}
+
+#layout-wrapper,
+.main-content,
+.page-content,
+.backend-main-content {
+    background: transparent;
+}
+
+.page-content {
+    padding-top: 1.35rem;
+    padding-bottom: 1.5rem;
+}
+
+#page-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 1002;
+}
+
+#page-topbar .navbar-header {
+    min-height: 72px;
+    padding: 0 1rem;
+    background: var(--backend-color-header-bg);
+    border-bottom: 1px solid var(--backend-color-header-border);
+    box-shadow: var(--backend-header-shadow);
+    backdrop-filter: blur(16px);
+}
+
+#page-topbar .navbar-brand-box {
+    background: transparent;
+    border-right: 1px solid var(--backend-color-sidebar-border);
+}
+
+#page-topbar .header-item {
+    border-radius: var(--backend-border-radius-lg);
+    color: var(--backend-color-text-secondary);
+    transition: all 0.2s ease;
+}
+
+#page-topbar .header-item:hover,
+#page-topbar .header-item:focus {
+    color: var(--backend-color-primary);
+    background: var(--backend-color-primary-bg-subtle);
+}
+
+#page-topbar .header-profile-user {
+    box-shadow:
+        0 0 0 2px var(--backend-color-card-bg),
+        0 0 0 5px var(--backend-color-primary-bg-subtle);
+}
+
+.app-search .form-control {
+    min-height: 44px;
+    padding-left: 2.75rem;
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-secondary);
+    border: 1px solid var(--backend-color-input-border);
+    border-radius: var(--backend-border-radius-pill);
+    box-shadow: none;
+}
+
+.app-search .form-control::placeholder {
+    color: var(--backend-color-text-placeholder);
+}
+
+.app-search .form-control:focus {
+    border-color: var(--backend-color-input-focus-border);
+    box-shadow: var(--backend-focus-ring);
+    background: var(--backend-color-bg-primary);
+}
+
+.app-search span {
+    left: 1rem;
+    right: auto;
+    color: var(--backend-color-text-tertiary);
+    transform: translateY(-50%);
+}
+
+.vertical-menu {
+    background: var(--backend-color-sidebar-bg);
+    border-right: 1px solid var(--backend-color-sidebar-border);
+    box-shadow: var(--backend-sidebar-shadow);
+}
+
+.vertical-menu [data-simplebar] {
+    background: transparent;
+}
+
+#sidebar-menu {
+    padding: 1rem 0.75rem 1.5rem;
+}
+
+#sidebar-menu ul li.menu-title {
+    padding: 0.8rem 0.95rem 0.35rem;
+    color: var(--backend-color-text-tertiary);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#sidebar-menu ul li:not(.menu-title) > a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    margin-bottom: 0.2rem;
+    padding: 0.72rem 0.95rem;
+    color: var(--backend-color-sidebar-text);
+    border-radius: var(--backend-border-radius-lg);
+    transition: all 0.2s ease;
+}
+
+#sidebar-menu ul li:not(.menu-title) > a i {
+    color: var(--backend-color-text-tertiary);
+    transition: color 0.2s ease;
+}
+
+#sidebar-menu ul li:not(.menu-title) > a:hover {
+    background: var(--backend-color-sidebar-hover);
+    color: var(--backend-color-text-primary);
+    transform: translateX(2px);
+}
+
+#sidebar-menu ul li:not(.menu-title) > a:hover i {
+    color: var(--backend-color-primary);
+}
+
+#sidebar-menu ul li.mm-active > a,
+#sidebar-menu ul li.active > a {
+    color: var(--backend-color-primary-dark);
+    background: linear-gradient(135deg, var(--backend-color-primary-bg-light) 0%, var(--backend-color-primary-bg-subtle) 100%);
+    box-shadow: inset 0 0 0 1px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.08);
+}
+
+#sidebar-menu ul li.mm-active > a i,
+#sidebar-menu ul li.active > a i {
+    color: var(--backend-color-primary);
+}
+
+#sidebar-menu ul li ul.sub-menu {
+    margin-top: 0.15rem;
+    padding-left: 0.45rem;
+}
+
+#sidebar-menu ul li ul.sub-menu li a {
+    position: relative;
+    min-height: 38px;
+    padding: 0.58rem 0.85rem 0.58rem 2.35rem;
+    color: var(--backend-color-text-secondary);
+    border-radius: var(--backend-border-radius-md);
+}
+
+#sidebar-menu ul li ul.sub-menu li a::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 1.2rem;
+    width: 0.38rem;
+    height: 0.38rem;
+    border-radius: 50%;
+    background: var(--backend-color-border-emphasis);
+    transform: translateY(-50%);
+}
+
+#sidebar-menu ul li ul.sub-menu li a:hover::before,
+#sidebar-menu ul li ul.sub-menu li.mm-active > a::before,
+#sidebar-menu ul li ul.sub-menu li.active > a::before {
+    background: var(--backend-color-primary);
+}
+
+.sticky-menu-section {
+    background: var(--backend-color-sidebar-bg) !important;
+    border-bottom: 1px solid var(--backend-color-sidebar-border);
+}
+
+.menu-tab-btn {
+    border: 1px solid transparent;
+    border-radius: var(--backend-border-radius-md);
+    background: var(--backend-color-bg-secondary);
+    color: var(--backend-color-text-secondary);
+    transition: all 0.2s ease;
+}
+
+.menu-tab-btn:hover,
+.menu-tab-btn.active {
+    color: var(--backend-color-primary);
+    background: var(--backend-color-primary-bg-subtle);
+    border-color: rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.12);
+}
+
+.search-tab-input,
+.search-tab-input-wrapper .form-control,
+.search-menu-input-wrapper .form-control {
+    background: var(--backend-color-bg-secondary);
+    border-color: var(--backend-color-input-border);
+    color: var(--backend-color-text-primary);
+    border-radius: var(--backend-border-radius-md);
+}
+
+.search-tab-input::placeholder,
+.search-menu-input-wrapper .form-control::placeholder {
+    color: var(--backend-color-text-placeholder);
+}
+
+.card {
+    border: 1px solid var(--backend-color-card-border);
+    border-radius: var(--backend-border-radius-xl);
+    background: var(--backend-color-card-bg);
+    box-shadow: var(--backend-card-shadow);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--backend-shadow-lg);
+}
+
+.card-header,
+.card-footer {
+    background: linear-gradient(180deg, var(--backend-color-card-header-bg) 0%, var(--backend-color-card-bg) 100%);
+    border-color: var(--backend-color-card-border);
+}
+
+.card-header {
+    padding: 1rem 1.25rem;
+}
+
+.card-body {
+    padding: 1.25rem;
+}
+
+.dropdown-menu {
+    padding: 0.5rem;
+    background: var(--backend-color-card-bg);
+    border: 1px solid var(--backend-color-card-border);
+    border-radius: var(--backend-border-radius-xl);
+    box-shadow: var(--backend-dropdown-shadow);
+}
+
+.dropdown-item,
+.dropdown-icon-item {
+    border-radius: var(--backend-border-radius-md);
+    color: var(--backend-color-text-secondary);
+    transition: all 0.18s ease;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus,
+.dropdown-icon-item:hover,
+.dropdown-icon-item:focus {
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-secondary);
+}
+
+.table {
+    --bs-table-color: var(--backend-color-text-primary);
+    --bs-table-bg: var(--backend-color-table-bg);
+    --bs-table-border-color: var(--backend-color-table-border);
+    --bs-table-striped-bg: var(--backend-color-table-bg-striped);
+    --bs-table-hover-bg: var(--backend-color-table-bg-hover);
+}
+
+.table > :not(caption) > * > * {
+    padding: 0.95rem 1rem;
+    border-bottom-color: var(--backend-color-table-border);
+}
+
+.table > thead > tr > th {
+    color: var(--backend-color-text-secondary);
+    background: var(--backend-color-card-header-bg);
+    font-size: 0.77rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.table-responsive {
+    border-radius: var(--backend-border-radius-lg);
+}
+
+.form-control,
+.form-select,
+textarea.form-control {
+    min-height: 44px;
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-input-bg);
+    border: 1px solid var(--backend-color-input-border);
+    border-radius: var(--backend-border-radius-md);
+    box-shadow: none;
+}
+
+textarea.form-control {
+    min-height: 120px;
+}
+
+.form-control::placeholder,
+.form-select::placeholder {
+    color: var(--backend-color-text-placeholder);
+}
+
+.form-control:focus,
+.form-select:focus {
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-primary);
+    border-color: var(--backend-color-input-focus-border);
+    box-shadow: var(--backend-focus-ring);
+}
+
+.input-group-text {
+    color: var(--backend-color-text-secondary);
+    background: var(--backend-color-bg-secondary);
+    border-color: var(--backend-color-input-border);
+}
+
+.btn {
+    border-radius: var(--backend-border-radius-md);
+    font-weight: 600;
+    box-shadow: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark) 100%);
+    box-shadow: 0 10px 24px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.18);
+}
+
+.btn-primary:hover,
+.btn-primary:focus {
+    border-color: transparent;
+    box-shadow: 0 14px 30px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.24);
+}
+
+.btn-light,
+.btn-secondary {
+    color: var(--backend-color-text-primary);
+    background: var(--backend-color-bg-secondary);
+    border-color: var(--backend-color-border-light);
+}
+
+.btn-light:hover,
+.btn-secondary:hover {
+    background: var(--backend-color-bg-tertiary);
+    border-color: var(--backend-color-border-default);
+}
+
+.alert {
+    border-radius: var(--backend-border-radius-lg);
+}
+
+.footer {
+    color: var(--backend-color-text-secondary);
+    background: transparent;
+}
+
+.footer .container-fluid {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+    background: transparent;
+}
+
+@media (max-width: 991.98px) {
+    #page-topbar .navbar-brand-box {
+        border-right: 0;
+    }
+
+    .page-content {
+        padding-top: 1rem;
+    }
+
+    #sidebar-menu {
+        padding-left: 0.55rem;
+        padding-right: 0.55rem;
+    }
+}
+
