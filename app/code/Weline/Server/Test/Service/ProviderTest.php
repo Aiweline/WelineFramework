@@ -35,7 +35,9 @@ class ProviderTest extends TestCase
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'dispatcher_port' => 18080,
-                    'session_server_port' => 18888,
+                    'session' => [
+                        'port' => 18888,
+                    ],
                 ],
             ],
         );
@@ -117,7 +119,38 @@ class ProviderTest extends TestCase
         $command = $provider->buildCommand(0, $this->context);
 
         $this->assertStringContainsString('session_server.php', $command->script);
-        $this->assertContains('--port=18888', $command->arguments);
+        $this->assertContains('18888', $command->arguments);
+    }
+
+    public function testSessionServerProviderSupportsLegacyNestedWlsServerPort(): void
+    {
+        $provider = new SessionServerProvider();
+        $context = new ServiceContext(
+            instanceName: 'test-instance',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '0.0.0.0',
+            mainPort: 443,
+            sslEnabled: true,
+            sslCert: '/path/to/cert.pem',
+            sslKey: '/path/to/key.pem',
+            mode: 'multi',
+            daemon: false,
+            debug: true,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'session' => [
+                        'wls_server' => [
+                            'port' => 18889,
+                        ],
+                    ],
+                ],
+            ],
+        );
+
+        $this->assertEquals(18889, $provider->getPort(0, $context));
     }
 
     public function testHttpRedirectProviderBasic(): void
