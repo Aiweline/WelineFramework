@@ -336,6 +336,9 @@ if ($dataLayout !== 'horizontal'):
             border-radius: var(--backend-border-radius-md);
             background: var(--backend-color-bg-secondary);
             color: var(--backend-color-text-secondary);
+            padding: 0.45rem 0.6rem;
+            min-width: 32px;
+            height: 32px;
             transition: all 0.2s ease;
         }
 
@@ -354,6 +357,9 @@ if ($dataLayout !== 'horizontal'):
             border-color: var(--backend-color-input-border);
             color: var(--backend-color-text-primary);
             border-radius: var(--backend-border-radius-md);
+            min-height: 32px;
+            height: 32px;
+            font-size: 0.82rem;
         }
 
         .search-tab-input::placeholder,
@@ -373,7 +379,7 @@ if ($dataLayout !== 'horizontal'):
             display: flex;
             align-items: center;
             gap: 0.7rem;
-            padding: 0.72rem 0.95rem;
+            padding: 0.56rem 0.8rem;
             color: var(--backend-color-text-secondary);
             border-radius: var(--backend-border-radius-md);
             transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
@@ -600,12 +606,13 @@ if ($dataLayout !== 'horizontal'):
         }
         
         .menu-frequent-submenu .frequent-menu-item a {
-            padding: 8px 20px;
+            padding: 7px 14px;
             display: flex;
             align-items: center;
             color: #74788d;
             text-decoration: none;
             transition: all 0.2s;
+            font-size: 0.84rem;
         }
         
         .menu-frequent-submenu .frequent-menu-item a:hover {
@@ -614,9 +621,9 @@ if ($dataLayout !== 'horizontal'):
         }
         
         .menu-frequent-submenu .frequent-menu-item a i {
-            margin-right: 8px;
-            font-size: 1.1rem;
-            width: 20px;
+            margin-right: 7px;
+            font-size: 1rem;
+            width: 18px;
             text-align: center;
         }
         
@@ -673,9 +680,9 @@ if ($dataLayout !== 'horizontal'):
         body.vertical-collpsed .search-menu-input-wrapper input {
             width: 100%;
             border: 1px solid #e9ecef;
-            border-radius: 4px;
-            padding: 8px 12px;
-            font-size: 14px;
+            border-radius: 10px;
+            padding: 6px 10px;
+            font-size: 13px;
         }
         
         body.vertical-collpsed[data-sidebar="dark"] .search-menu-input-wrapper input,
@@ -865,6 +872,7 @@ if ($dataLayout !== 'horizontal'):
         .menu-tabs-nav {
             border-bottom: 1px solid #e9ecef;
             background-color: transparent;
+            padding: 0.7rem 0.85rem 0.55rem;
         }
         
         body[data-sidebar="dark"] .menu-tabs-nav {
@@ -876,16 +884,16 @@ if ($dataLayout !== 'horizontal'):
             border: none;
             background: transparent;
             color: #6c757d;
-            font-size: 18px;
-            padding: 8px 12px;
-            border-radius: 4px;
+            font-size: 16px;
+            padding: 6px 10px;
+            border-radius: 10px;
             cursor: pointer;
             transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-width: 36px;
-            height: 36px;
+            min-width: 32px;
+            height: 32px;
         }
         
         .menu-tab-btn:hover {
@@ -928,6 +936,7 @@ if ($dataLayout !== 'horizontal'):
             align-items: center;
             flex: 1;
             min-width: 0;
+            min-height: 32px;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
@@ -951,9 +960,9 @@ if ($dataLayout !== 'horizontal'):
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
-            height: 36px;
+            height: 32px;
             background-color: #ffffff;
-            border-radius: 4px;
+            border-radius: 12px;
             border: 1px solid transparent;
         }
         
@@ -987,8 +996,8 @@ if ($dataLayout !== 'horizontal'):
             border: none;
             background: transparent;
             color: #495057;
-            font-size: 14px;
-            padding: 0 35px 0 12px;
+            font-size: 13px;
+            padding: 0 30px 0 10px;
             height: 100%;
             width: 100%;
             outline: none;
@@ -1031,11 +1040,11 @@ if ($dataLayout !== 'horizontal'):
         /* 搜索Tab关闭图标 */
         .search-tab-close {
             position: absolute;
-            right: 8px;
+            right: 9px;
             top: 50%;
             transform: translateY(-50%);
             color: #6c757d;
-            font-size: 18px;
+            font-size: 15px;
             cursor: pointer;
             opacity: 0.75;
             transition: all 0.2s ease;
