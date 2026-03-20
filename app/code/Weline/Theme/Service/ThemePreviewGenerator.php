@@ -49,7 +49,7 @@ class ThemePreviewGenerator
             $imagePath = self::captureScreenshot($previewUrl, $previewPath);
             return $imagePath;
         } catch (\Exception $e) {
-            Env::log_error(__('生成主题预览图失败：%{1}', [$e->getMessage()]));
+            Env::log_error('theme_preview', __('生成主题预览图失败：%{1}', [$e->getMessage()]));
             return false;
         }
     }
