@@ -50,7 +50,8 @@ class ThemePreviewGenerator
             return $imagePath;
         } catch (\Exception $e) {
             Env::log_error('theme_preview', __('生成主题预览图失败：%{1}', [$e->getMessage()]));
-            return false;
+            // 透出异常给上层，便于 SSE/批量任务输出更详细的失败原因
+            throw $e;
         }
     }
 
@@ -124,7 +125,7 @@ class ThemePreviewGenerator
         // 构建命令
         // 使用 Chrome 的 --screenshot 参数截图
         $command = sprintf(
-            '"%s" --headless --disable-gpu --no-sandbox --screenshot="%s" --window-size=1200,800 "%s" 2>&1',
+            '"%s" --headless --disable-gpu --no-sandbox --ignore-certificate-errors --screenshot="%s" --window-size=1200,800 "%s" 2>&1',
             $chromePath,
             $savePath,
             $fullUrl
@@ -133,11 +134,6 @@ class ThemePreviewGenerator
         // 执行命令
         $output = [];
         $returnCode = 0;
-        
-        // Windows 和 Linux 兼容
-        if (PHP_OS_FAMILY === 'Windows') {
-            $command = 'cmd /c "' . $command . '"';
-        }
         
         exec($command, $output, $returnCode);
 
