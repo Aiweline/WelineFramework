@@ -1576,7 +1576,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function beginTransaction(): void
     {
-        $this->getLink()->beginTransaction();
+        $link = $this->getLink();
+        if (!$link->inTransaction()) {
+            $link->beginTransaction();
+        }
     }
 
     public function rollBack(): void
@@ -1597,8 +1600,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function commit(): void
     {
-        // 🔧 修复：getLink() 现在直接返回原始 PDO，不再使用包装器
-        $this->getLink()->commit();
+        $link = $this->getLink();
+        if ($link->inTransaction()) {
+            $link->commit();
+        }
     }
 
     /**
