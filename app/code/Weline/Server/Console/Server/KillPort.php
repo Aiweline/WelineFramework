@@ -45,17 +45,24 @@ class KillPort extends CommandAbstract
             return;
         }
 
-        $pid = Processer::getProcessIdByPort($port);
-        $isWeline = $pid > 0 ? Processer::isWelineServerProcess($pid) : false;
+        $inspect = Processer::inspectPortOccupantWithHistory($port);
+        $pid = (int) ($inspect['pid'] ?? 0);
+        $isWeline = (bool) ($inspect['is_weline'] ?? false);
+        $state = (string) ($inspect['state'] ?? '');
+        $processTag = $isWeline ? __('框架进程') : (($state === 'orphan') ? __('异常占用') : __('非框架进程'));
         
         $this->printer->warning(__('端口 %{1} 被进程占用%{2}', [
             $port,
-            $pid > 0 ? " (PID: {$pid})" . ($isWeline ? ' [' . __('框架进程') . ']' : ' [' . __('非框架进程') . ']') : ''
+            $pid > 0 ? " (PID: {$pid})" . ' [' . $processTag . ']' : ' [' . $processTag . ']'
         ]));
 
-        // 非框架进程需要 -f 才能杀死
+        // 非框架进程需要 -f 才能杀死；异常占用（PID 失效）无法直接 kill
         if (!$isWeline && !$force) {
-            $this->printer->error(__('该端口被非框架进程占用，出于安全考虑不会自动杀死'));
+            if ($state === 'orphan') {
+                $this->printer->error(__('该端口处于异常占用状态（系统返回的 PID 已失效），当前无法直接杀进程'));
+            } else {
+                $this->printer->error(__('该端口被非框架进程占用，出于安全考虑不会自动杀死'));
+            }
             $this->printer->note(__('如果确定要杀死该进程，请使用 -f 参数:'));
             $this->printer->note(__('  php bin/w server:kill-port %{1} -f', [$port]));
             $this->printer->note(__('或手动执行:'));
@@ -64,7 +71,11 @@ class KillPort extends CommandAbstract
         }
         
         if (!$isWeline && $force) {
-            $this->printer->warning(__('警告：即将杀死非框架进程！'));
+            if ($state === 'orphan') {
+                $this->printer->warning(__('警告：端口占用者处于异常状态（PID 失效），强制模式可能仍无法释放端口。'));
+            } else {
+                $this->printer->warning(__('警告：即将杀死非框架进程！'));
+            }
         }
 
         $this->printer->note(__('正在释放端口...'));
