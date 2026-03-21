@@ -14,6 +14,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual\Api;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use GuoLaiRen\PageBuilder\Service\ComponentService;
@@ -456,6 +457,7 @@ class Component extends BackendController
             // 同时同步到 Page.layout_config 保持向后兼容
             $layoutConfig = $layout->exportConfig();
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
+            $this->invalidatePageCache($pageId);
             
             // 记录日志
             w_log_debug("[Component API add()] Page ID: {$pageId}, Type: {$pageType}, IsHome: " . ($isHomePage ? 'yes' : 'no'));
@@ -1078,6 +1080,7 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
+            $this->invalidatePageCache($pageId);
             
             w_log_info("[Component API remove()] Removed {$removedCount} component(s) from PageLayout");
             
@@ -1238,6 +1241,7 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($targetPageId, $layoutConfig);
+            $this->invalidatePageCache($pageId);
             
             return $this->fetchJson([
                 'success' => true,
@@ -1376,6 +1380,7 @@ class Component extends BackendController
             
             // 同步到 Page.layout_config 保持向后兼容
             $this->syncLayoutConfigToPage($pageId, $layoutConfig);
+            $this->invalidatePageCache($pageId);
             
             return $this->fetchJson([
                 'success' => true,
@@ -1421,6 +1426,18 @@ class Component extends BackendController
         }
         
         return $layoutComponents;
+    }
+
+    private function invalidatePageCache(int $pageId): void
+    {
+        if ($pageId <= 0) {
+            return;
+        }
+
+        try {
+            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
+        } catch (\Throwable) {
+        }
     }
     
     /**
