@@ -200,7 +200,7 @@ class Locales extends BaseController
         $this->redirect('*/backend/countries/locales', $this->request->getParams());
     }
 
-    public function install()
+    public function postInstall()
     {
         $code = $this->request->getPost('code');
         try {

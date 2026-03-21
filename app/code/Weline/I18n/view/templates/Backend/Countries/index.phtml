@@ -1,287 +1,429 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
+
+$countries = $this->getData('countries') ?? [];
+$currentFilter = (string)($this->getData('current_filter') ?? 'active');
+$search = (string)($this->getData('search') ?? '');
+$stats = (array)($this->getData('stats') ?? []);
+$pagination = $this->getData('countries_pagination') ?: '';
+
+$readValue = static function ($item, string $key, mixed $default = null): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value === null ? $default : $value;
+        }
+        return $item->{$key} ?? $default;
+    }
+
+    return $default;
+};
+
+$preserve = ['filter' => $currentFilter];
+if ($search !== '') {
+    $preserve['search'] = $search;
+}
+
+$renderHiddenFields = static function (array $fields): string {
+    $html = '';
+    foreach ($fields as $name => $value) {
+        if ($value === '' || $value === null) {
+            continue;
+        }
+        $html .= '<input type="hidden" name="' . htmlspecialchars((string)$name, ENT_QUOTES, 'UTF-8') . '" value="' .
+            htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8') . '">' . PHP_EOL;
+    }
+
+    return $html;
+};
 
 ?>
-<!-- start page title -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-                            <h4 class='mb-sm-0'>
-                                <lang>i18n国际化>国家</lang>
-                            </h4>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('i18n国际化>国家') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><?= __('系统配置') ?></li>
+                    <li class="breadcrumb-item"><?= __('i18n国际化') ?></li>
+                    <li class="breadcrumb-item active"><?= __('国家') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
 
-                            <div class='page-title-right'>
-                                <ol class='breadcrumb m-0'>
-                                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                                            <lang>系统配置</lang>
-                                        </a></li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/countries')">
-                                            <lang>i18n国际化</lang>
-                                        </a>
-                                    </li>
-                                    <li class='breadcrumb-item'>
-                                        <a href="@backend-url('*/backend/countries')">
-                                            <lang>国家</lang>
-                                        </a>
-                                    </li>
-                                </ol>
-                            </div>
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
 
-                        </div>
-                    </div>
+<div class="row g-3 mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="text-muted small"><?= __('国家') ?></div>
+                <div class="fs-3 fw-semibold"><?= (int)($stats['total'] ?? 0) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="text-muted small"><?= __('已安装') ?></div>
+                <div class="fs-3 fw-semibold text-primary"><?= (int)($stats['installed'] ?? 0) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="text-muted small"><?= __('已激活') ?></div>
+                <div class="fs-3 fw-semibold text-success"><?= (int)($stats['active'] ?? 0) ?></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card h-100 shadow-sm border-0">
+            <div class="card-body">
+                <div class="text-muted small"><?= __('未安装') ?></div>
+                <div class="fs-3 fw-semibold text-secondary"><?= (int)($stats['uninstalled'] ?? 0) ?></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <a href="@backend-url('*/backend/countries')?filter=active" class="btn <?= $currentFilter === 'active' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                <?= __('已激活') ?>
+            </a>
+            <a href="@backend-url('*/backend/countries')?filter=inactive" class="btn <?= $currentFilter === 'inactive' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                <?= __('已安装未激活') ?>
+            </a>
+            <a href="@backend-url('*/backend/countries')?filter=installed" class="btn <?= $currentFilter === 'installed' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                <?= __('已安装') ?>
+            </a>
+            <a href="@backend-url('*/backend/countries')?filter=uninstalled" class="btn <?= $currentFilter === 'uninstalled' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                <?= __('未安装') ?>
+            </a>
+            <a href="@backend-url('*/backend/countries')?filter=all" class="btn <?= $currentFilter === 'all' ? 'btn-primary' : 'btn-outline-primary' ?>">
+                <?= __('全部') ?>
+            </a>
+        </div>
+
+        <form method="get" action="@backend-url('*/backend/countries')" class="row g-3 align-items-end">
+            <div class="col-lg-5 col-md-6">
+                <label class="form-label mb-1"><?= __('智能搜索') ?></label>
+                <input type="text"
+                       name="search"
+                       class="form-control"
+                       value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>"
+                       placeholder="<?= __('搜索') ?>">
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label mb-1"><?= __('状态') ?></label>
+                <select name="filter" class="form-select">
+                    <option value="all" <?= $currentFilter === 'all' ? 'selected' : '' ?>><?= __('全部') ?></option>
+                    <option value="active" <?= $currentFilter === 'active' ? 'selected' : '' ?>><?= __('已激活') ?></option>
+                    <option value="inactive" <?= $currentFilter === 'inactive' ? 'selected' : '' ?>><?= __('已安装未激活') ?></option>
+                    <option value="installed" <?= $currentFilter === 'installed' ? 'selected' : '' ?>><?= __('已安装') ?></option>
+                    <option value="uninstalled" <?= $currentFilter === 'uninstalled' ? 'selected' : '' ?>><?= __('未安装') ?></option>
+                </select>
+            </div>
+            <div class="col-lg-4">
+                <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                    <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+                    <a href="@backend-url('*/backend/countries')" class="btn btn-outline-secondary"><?= __('重置') ?></a>
+                    <a href="@backend-url('*/backend/countries/update')" class="btn btn-outline-success"><?= __('更新全球数据') ?></a>
                 </div>
-                <!-- end page title -->
-                <!-- start page message -->
-                <div class='row'>
-                    <template>Weline_Component::message.phtml</template>
-                </div> <!-- end message -->
-                <div class='row'>
-                    <div class='col-12'>
-                        <div class='card'>
-                            <div class='card-body'>
-                                <h4 class='card-title'>
-                                    <lang>国家</lang>
-                                </h4>
-                                <p class='card-title-desc'>
-                                    <lang>国家管理：帮助建立对应国家的i18n翻译。</lang>
-                                </p>
-                                <p class="card-title-desc">
-                                    <lang>展示语言：</lang>
-                                    {{target_locale.flag}} {{target_locale.name}}（{{target_locale.code}}）
-                                </p>
-                                
-                                <!-- 筛选按钮 -->
-                                <div class="row mb-3">
-                                    <div class="col-12">
-                                        <div class="btn-group" role="group">
-                                            <a href="@backend-url('*/backend/countries')?filter=active" 
-                                               class="btn <?= ($current_filter === 'active') ? 'btn-primary' : 'btn-outline-primary' ?>">
-                                                <lang>已激活</lang>
-                                            </a>
-                                            <a href="@backend-url('*/backend/countries')?filter=inactive" 
-                                               class="btn <?= ($current_filter === 'inactive') ? 'btn-primary' : 'btn-outline-primary' ?>">
-                                                <lang>已安装未激活</lang>
-                                            </a>
-                                            <a href="@backend-url('*/backend/countries')?filter=installed" 
-                                               class="btn <?= ($current_filter === 'installed') ? 'btn-primary' : 'btn-outline-primary' ?>">
-                                                <lang>已安装</lang>
-                                            </a>
-                                            <a href="@backend-url('*/backend/countries')?filter=uninstalled" 
-                                               class="btn <?= ($current_filter === 'uninstalled') ? 'btn-primary' : 'btn-outline-primary' ?>">
-                                                <lang>未安装</lang>
-                                            </a>
-                                            <a href="@backend-url('*/backend/countries')?filter=all" 
-                                               class="btn <?= ($current_filter === 'all') ? 'btn-primary' : 'btn-outline-primary' ?>">
-                                                <lang>全部</lang>
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                                <!-- 搜索和筛选 -->
-                                <div class="rounded-3 shadow-sm border mb-4">
-                                    <form method="get" action="@backend-url('*/backend/countries')">
-                                        <div class="p-4">
-                                            <div class="row align-items-center">
-                                                <!-- 搜索框 -->
-                                                <div class="col-lg-4 col-md-6 mb-3 mb-lg-0">
-                                                    <div class="position-relative">
-                                                        <i class="ri-search-line position-absolute top-50 start-0 translate-middle-y text-muted ms-3"></i>
-                                                        <input type="text" name="search" class="form-control ps-5 border-0 bg-light rounded-pill" 
-                                                               placeholder="搜索国家名称或代码..." 
-                                                               value="<?= htmlspecialchars($search ?? '') ?>">
-                                                    </div>
-                                                </div>
-                                                
-                                                <!-- 状态筛选 -->
-                                                <div class="col-lg-3 col-md-6 mb-3 mb-lg-0">
-                                                    <select name="filter" class="form-select border-0 bg-light rounded-pill">
-                                                        <option value="all" <?= ($current_filter === 'all') ? 'selected' : '' ?>>全部状态</option>
-                                                        <option value="active" <?= ($current_filter === 'active') ? 'selected' : '' ?>>已激活</option>
-                                                        <option value="inactive" <?= ($current_filter === 'inactive') ? 'selected' : '' ?>>已安装未激活</option>
-                                                        <option value="installed" <?= ($current_filter === 'installed') ? 'selected' : '' ?>>已安装</option>
-                                                        <option value="uninstalled" <?= ($current_filter === 'uninstalled') ? 'selected' : '' ?>>未安装</option>
-                                                    </select>
-                                                </div>
-                                                
-                                                <!-- 操作按钮 -->
-                                                <div class="col-lg-5">
-                                                    <div class="d-flex align-items-center justify-content-end gap-2">
-                                                        <button type="submit" class="btn btn-primary rounded-pill px-4">
-                                                            <i class="ri-search-line me-2"></i>搜索
-                                                </button>
-                                                        <a href="@backend-url('*/backend/countries')" class="btn btn-outline-secondary rounded-pill px-3">
-                                                            <i class="ri-refresh-line"></i>
-                                                        </a>
-                                                        <div class="vr"></div>
-                                                        <button onclick="startAsyncUpdate()" class="btn btn-success rounded-pill px-3" title="更新全球数据">
-                                                            <i class="ri-download-cloud-line me-1"></i>更新数据
-                                                        </button>
-                                                        <button onclick="testUpdate()" class="btn btn-info rounded-pill px-3" title="测试数据">
-                                                            <i class="ri-bug-line me-1"></i>测试
-                                                </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                            </form>
-                                        </div>
+            </div>
+        </form>
+    </div>
+</div>
 
-                                <!-- 国家列表 -->
-                                <div class="rounded-3 shadow-sm border">
-                                    <div class="table-responsive">
-                                        <table class="table table-hover mb-0">
-                                            <thead class="table-light">
-                                                <tr>
-                                                    <th width="80" class="fw-semibold text-center">#</th>
-                                                    <th width="100" class="fw-semibold">代码</th>
-                                                    <th width="60" class="fw-semibold text-center">旗帜</th>
-                                                    <th class="fw-semibold">国家名称</th>
-                                                    <th width="100" class="fw-semibold text-center">状态</th>
-                                                    <th width="100" class="fw-semibold text-center">安装</th>
-                                                    <th width="300" class="fw-semibold text-center">操作</th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <if condition="countries">
-                                                <foreach name="countries" item="country" key="key">
-                                                    <tr class="align-middle">
-                                                        <td class="text-center">
-                                                        {{key}}
-                                                        </td>
-                                                        <td>
-                                                        {{country.code}}
-                                                        </td>
-                                                        <td class="text-center">
-                                                            <div style="width: 32px; height: 24px; display: inline-block;">
-                                                                {{country.flag}}
-                                                            </div>
-                                                        </td>
-                                                        <td>
-                                                            <div class="fw-medium">{{country.display_name}}</div>
-                                                        </td>
-                                                        <td class="text-center">
-                                                            <if condition="country.is_active == 1">
-                                                                <span class="badge bg-success">已激活</span>
-                                                            <else/>
-                                                                <span class="badge bg-secondary">未激活</span>
-                                                            </if>
-                                                        </td>
-                                                        <td class="text-center">
-                                                            <if condition="country.is_install == 1">
-                                                                <span class="badge bg-info">已安装</span>
-                                                            <else/>
-                                                                <span class="badge bg-warning">未安装</span>
-                                                            </if>
-                                                        </td>
-                                                        <td class="text-center">
-                                                            <div class="d-flex gap-1 justify-content-center flex-wrap">
-                                                                <!-- 未安装的国家：显示安装按钮 -->
-                                                                <if condition="country.is_install !== 1">
-                                                                    <form action="@backend-url('*/backend/countries/install')"
-                                                                          method="post" class="d-inline">
-                                                                        <input type="hidden" name="code" value="{{country.code}}">
-                                                                        <input type="hidden" name="filter" value="{{current_filter}}">
-                                                                        <button type="submit" class="btn btn-success btn-sm rounded-pill px-3">
-                                                                            <i class="ri-download-line me-1"></i>安装
-                                                                        </button>
-                                                                    </form>
-                                                                </if>
-                                                                
-                                                                <!-- 已安装未激活的国家：显示激活按钮 -->
-                                                                <if condition="country.is_install === 1 and country.is_active !== 1">
-                                                                    <form action="@backend-url('*/backend/countries/active')"
-                                                                          method="post" class="d-inline">
-                                                                        <input type="hidden" name="code" value="{{country.code}}">
-                                                                        <input type="hidden" name="filter" value="{{current_filter}}">
-                                                                        <button type="submit" class="btn btn-primary btn-sm rounded-pill px-3">
-                                                                            <i class="ri-play-line me-1"></i>激活
-                                                                        </button>
-                                                                    </form>
-                                                                </if>
-                                                                
-                                                                <!-- 已安装已激活的国家：显示停用或卸载按钮 -->
-                                                                <if condition="country.is_install === 1 and country.is_active === 1">
-                                                                    <form action="@backend-url('*/backend/countries/disable')"
-                                                                          method="post" class="d-inline"
-                                                                          onsubmit="return confirm('@lang(确定要停用) {{country.display_name}} @lang(吗)？\n\n@lang(注意：停用会删除该国家下的所有安装包！)')">
-                                                                        <input type="hidden" name="code" value="{{country.code}}">
-                                                                        <input type="hidden" name="filter" value="{{current_filter}}">
-                                                                        <button type="submit" class="btn btn-warning btn-sm rounded-pill px-3">
-                                                                            <i class="ri-pause-line me-1"></i>停用
-                                                                        </button>
-                                                                    </form>
-                                                                    <form action="@backend-url('*/backend/countries/uninstall')"
-                                                                          method="post" class="d-inline"
-                                                                          onsubmit="return confirm('@lang(确定要卸载) {{country.display_name}} @lang(吗)？\n\n@lang(注意：卸载会禁用并卸载安装标志！)')">
-                                                                        <input type="hidden" name="code" value="{{country.code}}">
-                                                                        <input type="hidden" name="filter" value="{{current_filter}}">
-                                                                        <button type="submit" class="btn btn-danger btn-sm rounded-pill px-3">
-                                                                            <i class="ri-delete-bin-line me-1"></i>卸载
-                                                                        </button>
-                                                                    </form>
-                                                                    <a class='btn btn-info btn-sm rounded-pill px-3'
-                                                                       href="@backend-url('*/backend/localization')?country_filter={{country.code}}">
-                                                                        <i class="ri-map-pin-line me-1"></i>地方/区域
-                                                                    </a>
-                                                                    <a class='btn btn-success btn-sm rounded-pill px-3'
-                                                                       href="@backend-url('*/backend/dictionary')">
-                                                                        <i class="ri-translate-line me-1"></i>翻译包
-                                                                    </a>
-                                                                </if>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </foreach>
-                                                <else/>
-                                                <tr>
-                                                    <td colspan="7" class="text-center">
-                                                        <div class="alert alert-info">
-                                                            <?php if ($current_filter === 'installed'): ?>
-                                                                <h5><lang>暂无已安装的国家</lang></h5>
-                                                                <p><lang>请先导入国家数据，然后安装需要的国家。</lang></p>
-                                                                <a href="@backend-url('*/backend/countries')?filter=uninstalled" class="btn btn-primary">
-                                                                    <lang>去安装</lang>
-                                                                </a>
-                                                            <?php elseif ($current_filter === 'inactive'): ?>
-                                                                <h5><lang>暂无已安装未激活的国家</lang></h5>
-                                                                <p><lang>所有已安装的国家都已激活，或者没有已安装的国家。</lang></p>
-                                                                <a href="@backend-url('*/backend/countries')?filter=installed" class="btn btn-primary">
-                                                                    <lang>查看已安装</lang>
-                                                                </a>
-                                                            <?php elseif ($current_filter === 'active'): ?>
-                                                                <h5><lang>暂无已激活的国家</lang></h5>
-                                                                <p><lang>没有已激活的国家，请先安装并激活需要的国家。</lang></p>
-                                                                <a href="@backend-url('*/backend/countries')?filter=installed" class="btn btn-primary">
-                                                                    <lang>查看已安装</lang>
-                                                                </a>
-                                                            <?php elseif ($current_filter === 'uninstalled'): ?>
-                                                                <h5><lang>暂无未安装的国家</lang></h5>
-                                                                <p><lang>请先导入国家数据。</lang></p>
-                                                                <a href="@backend-url('*/backend/countries/install-all')" class="btn btn-primary">
-                                                                    <lang>更新全球数据</lang>
-                                                                </a>
-                                                            <?php else: ?>
-                                                                <h5><lang>暂无国家数据</lang></h5>
-                                                                <p><lang>请点击"更新全球数据"按钮来更新国家数据。</lang></p>
-                                                                <a href="@backend-url('*/backend/countries/install-all')" class="btn btn-primary">
-                                                                    <lang>更新全球数据</lang>
-                                                                </a>
-                                                            <?php endif; ?>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </if>
-                                            </tbody>
-                                        </table>
-                                        {{countries_pagination}}
+<form id="country-batch-install-form" method="post" action="@backend-url('*/backend/countries/batchInstall')" class="d-none">
+    <?= $renderHiddenFields($preserve) ?>
+</form>
+<form id="country-batch-activate-form" method="post" action="@backend-url('*/backend/countries/batchActive')" class="d-none">
+    <?= $renderHiddenFields($preserve) ?>
+</form>
+<form id="country-batch-disable-form" method="post" action="@backend-url('*/backend/countries/batchDisable')" class="d-none">
+    <?= $renderHiddenFields($preserve) ?>
+</form>
+<form id="country-batch-uninstall-form" method="post" action="@backend-url('*/backend/countries/batchUninstall')" class="d-none">
+    <?= $renderHiddenFields($preserve) ?>
+</form>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div class="text-muted small"><?= __('操作：') ?></div>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button"
+                        class="btn btn-outline-primary"
+                        onclick="submitCountryBatch('country-batch-install-form', '<?= addslashes(__('确定批量安装所选国家吗？')) ?>', 'info')">
+                    <?= __('安装') ?>
+                </button>
+                <button type="button"
+                        class="btn btn-outline-success"
+                        onclick="submitCountryBatch('country-batch-activate-form', '<?= addslashes(__('确定批量启用所选国家吗？')) ?>', 'success')">
+                    <?= __('激活') ?>
+                </button>
+                <button type="button"
+                        class="btn btn-outline-warning"
+                        onclick="submitCountryBatch('country-batch-disable-form', '<?= addslashes(__('确定批量停用所选国家吗？')) ?>', 'warning')">
+                    <?= __('停用') ?>
+                </button>
+                <button type="button"
+                        class="btn btn-outline-danger"
+                        onclick="submitCountryBatch('country-batch-uninstall-form', '<?= addslashes(__('确定批量卸载所选国家吗？相关地区也会同步卸载。')) ?>', 'danger')">
+                    <?= __('卸载') ?>
+                </button>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table align-middle table-hover mb-0">
+                <thead class="table-light">
+                <tr>
+                    <th class="text-center" style="width: 48px;">
+                        <input type="checkbox" class="form-check-input" id="country-select-all">
+                    </th>
+                    <th style="width: 90px;"><?= __('代码') ?></th>
+                    <th style="width: 72px;" class="text-center"><?= __('国旗') ?></th>
+                    <th><?= __('国家名称') ?></th>
+                    <th style="width: 120px;" class="text-center"><?= __('状态') ?></th>
+                    <th style="width: 120px;" class="text-center"><?= __('是否安装') ?></th>
+                    <th style="width: 280px;" class="text-center"><?= __('操作') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (!empty($countries)): ?>
+                    <?php foreach ($countries as $country): ?>
+                        <?php
+                        $code = (string)$readValue($country, 'code', '');
+                        $displayName = (string)$readValue($country, 'display_name', $code);
+                        $flag = (string)$readValue($country, 'flag', '');
+                        $localeCount = (int)$readValue($country, 'locale_count', 0);
+                        $preferredLocale = (string)$readValue($country, 'preferred_locale', '');
+                        $isInstall = (int)$readValue($country, 'is_install', 0) === 1;
+                        $isActive = (int)$readValue($country, 'is_active', 0) === 1;
+                        ?>
+                        <tr>
+                            <td class="text-center">
+                                <input type="checkbox" class="form-check-input country-checkbox" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                            </td>
+                            <td>
+                                <span class="badge bg-primary-subtle text-primary"><?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?></span>
+                            </td>
+                            <td class="text-center"><?= $flag ?></td>
+                            <td>
+                                <div class="fw-semibold"><?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?></div>
+                                <?php if ($localeCount > 0): ?>
+                                    <div class="text-muted small">
+                                        <?= __('区域') ?>: <?= $localeCount ?>
+                                        <?php if ($preferredLocale !== ''): ?>
+                                            | <?= htmlspecialchars($preferredLocale, ENT_QUOTES, 'UTF-8') ?>
+                                        <?php endif; ?>
                                     </div>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <?php if ($isActive): ?>
+                                    <span class="badge bg-success-subtle text-success"><?= __('已激活') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary-subtle text-secondary"><?= __('未激活') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <?php if ($isInstall): ?>
+                                    <span class="badge bg-primary-subtle text-primary"><?= __('已安装') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-light text-muted"><?= __('未安装') ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex flex-wrap justify-content-center gap-2">
+                                    <?php if (!$isInstall): ?>
+                                        <form method="post"
+                                              action="@backend-url('*/backend/countries/install')"
+                                              data-confirm-message="<?= htmlspecialchars(__('确定安装 %{1} 吗？', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-confirm-type="info">
+                                            <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= $renderHiddenFields($preserve) ?>
+                                            <button type="submit" class="btn btn-sm btn-outline-primary"><?= __('安装') ?></button>
+                                        </form>
+                                    <?php elseif (!$isActive): ?>
+                                        <form method="post"
+                                              action="@backend-url('*/backend/countries/active')"
+                                              data-confirm-message="<?= htmlspecialchars(__('确定启用 %{1} 吗？推荐地区会同步启用。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-confirm-type="success">
+                                            <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= $renderHiddenFields($preserve) ?>
+                                            <button type="submit" class="btn btn-sm btn-outline-success"><?= __('激活') ?></button>
+                                        </form>
+                                    <?php endif; ?>
+
+                                    <?php if ($isInstall): ?>
+                                        <a class="btn btn-sm btn-outline-info"
+                                           href="@backend-url('*/backend/countries/locales')?country_code=<?= urlencode($code) ?>">
+                                            <?= __('区域') ?>
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <?php if ($isActive): ?>
+                                        <form method="post"
+                                              action="@backend-url('*/backend/countries/disable')"
+                                              data-confirm-message="<?= htmlspecialchars(__('确定停用 %{1} 吗？关联地区会一并停用。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-confirm-type="warning">
+                                            <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= $renderHiddenFields($preserve) ?>
+                                            <button type="submit" class="btn btn-sm btn-outline-warning"><?= __('停用') ?></button>
+                                        </form>
+                                    <?php endif; ?>
+
+                                    <?php if ($isInstall): ?>
+                                        <form method="post"
+                                              action="@backend-url('*/backend/countries/uninstall')"
+                                              data-confirm-message="<?= htmlspecialchars(__('确定卸载 %{1} 吗？相关地区会同步卸载。', [$displayName]), ENT_QUOTES, 'UTF-8') ?>"
+                                              data-confirm-type="danger">
+                                            <input type="hidden" name="code" value="<?= htmlspecialchars($code, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= $renderHiddenFields($preserve) ?>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger"><?= __('卸载') ?></button>
+                                        </form>
+                                    <?php endif; ?>
                                 </div>
-                            </div>
-                        </div>
-                    </div> <!-- end col -->
-                </div> <!-- end row -->
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <?= __('暂无国家数据') ?>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-3"><?= $pagination ?></div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function showConfirm(message, type) {
+        if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+            return BackendConfirm.show(message, {type: type || 'info'});
+        }
+        if (typeof Swal !== 'undefined' && Swal.fire) {
+            return Swal.fire({
+                text: message,
+                icon: type === 'danger' ? 'warning' : (type || 'info'),
+                showCancelButton: true,
+                confirmButtonText: '<?= addslashes(__('确定')) ?>',
+                cancelButtonText: '<?= addslashes(__('取消')) ?>'
+            }).then(function (result) {
+                return !!result.isConfirmed;
+            });
+        }
+        return Promise.resolve(true);
+    }
+
+    function showWarning(message) {
+        if (typeof BackendToast !== 'undefined' && BackendToast.warning) {
+            BackendToast.warning(message);
+            return;
+        }
+        if (typeof Swal !== 'undefined' && Swal.fire) {
+            Swal.fire({text: message, icon: 'warning'});
+            return;
+        }
+        console.warn(message);
+    }
+
+    function collectSelectedCountryCodes() {
+        return Array.from(document.querySelectorAll('.country-checkbox:checked'))
+            .map(function (checkbox) {
+                return checkbox.value;
+            })
+            .filter(Boolean);
+    }
+
+    function fillBatchForm(form, codes) {
+        form.querySelectorAll('input[name="codes[]"]').forEach(function (input) {
+            input.remove();
+        });
+
+        codes.forEach(function (code) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'codes[]';
+            input.value = code;
+            form.appendChild(input);
+        });
+    }
+
+    window.submitCountryBatch = function (formId, message, type) {
+        var codes = collectSelectedCountryCodes();
+        if (!codes.length) {
+            showWarning('<?= addslashes(__('请选择要操作的国家')) ?>');
+            return;
+        }
+
+        var form = document.getElementById(formId);
+        if (!form) {
+            return;
+        }
+
+        showConfirm(message, type).then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            fillBatchForm(form, codes);
+            form.submit();
+        });
+    };
+
+    var selectAll = document.getElementById('country-select-all');
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            document.querySelectorAll('.country-checkbox').forEach(function (checkbox) {
+                checkbox.checked = selectAll.checked;
+            });
+        });
+    }
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        if (!(form instanceof HTMLFormElement)) {
+            return;
+        }
+        if (form.dataset.confirmed === '1') {
+            form.dataset.confirmed = '0';
+            return;
+        }
+
+        var message = form.getAttribute('data-confirm-message');
+        if (!message) {
+            return;
+        }
+
+        event.preventDefault();
+        showConfirm(message, form.getAttribute('data-confirm-type')).then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+            form.dataset.confirmed = '1';
+            form.submit();
+        });
+    }, true);
+})();
+</script>
