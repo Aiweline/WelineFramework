@@ -41,11 +41,15 @@ class CliCommandExecutedObserver implements ObserverInterface
             return;
         }
 
+        // CacheFlushedObserver will notify WLS after the flush actually happens.
+        // Skipping cache commands here avoids duplicate cache_clear dispatches.
+        if ($reloadType === self::RELOAD_TYPE_CACHE) {
+            return;
+        }
+
         /** @var Printing $printer */
         $printer = ObjectManager::getInstance(Printing::class);
-        $result = $reloadType === self::RELOAD_TYPE_CACHE
-            ? $this->getDispatchService()->cacheClear()
-            : $this->getDispatchService()->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
+        $result = $this->getDispatchService()->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
 
         $printer->note((string)__('WLS 通知：%{1}', [$result['message']]));
     }
