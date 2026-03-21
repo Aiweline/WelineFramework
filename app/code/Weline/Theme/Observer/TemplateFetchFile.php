@@ -14,11 +14,9 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Http\Request;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\Session;
 use Weline\Theme\Helper\Interface\ThemePathResolverInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * 模板文件获取观察者
@@ -38,6 +36,8 @@ class TemplateFetchFile implements ObserverInterface
      */
     private ThemePathResolverInterface $themePathResolver;
 
+    private ThemeContextService $themeContext;
+
     /**
      * 依赖注入：遵循依赖倒置原则 (DIP)
      * 
@@ -46,11 +46,13 @@ class TemplateFetchFile implements ObserverInterface
      */
     public function __construct(
         WelineTheme $welineTheme,
-        ThemePathResolverInterface $themePathResolver
+        ThemePathResolverInterface $themePathResolver,
+        ThemeContextService $themeContext,
     )
     {
         $this->welineTheme = $welineTheme;
         $this->themePathResolver = $themePathResolver;
+        $this->themeContext = $themeContext;
     }
 
     public function execute(Event &$event): void
@@ -86,57 +88,19 @@ class TemplateFetchFile implements ObserverInterface
             }
         }
 
-        # 开始分析主题路径
-        // 检查是否有预览主题：优先 URL 参数 preview_theme，其次 Session（兜底，避免重定向丢失参数）
-        $previewThemeId = 0;
-        $previewThemeArea = '';
-        if (!CLI) {
-            try {
-                $request = ObjectManager::getInstance(Request::class);
-                $previewThemeId = (int)$request->getParam('preview_theme', 0);
-                if (!$previewThemeId) {
-                    $session = ObjectManager::getInstance(Session::class);
-                    $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
-                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-                } else {
-                    $session = ObjectManager::getInstance(Session::class);
-                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-                }
-                // 校验区域：仅当模板路径对应预览区域时才使用预览主题（统一用 / 判断，兼容 Windows \）
-                if ($previewThemeId && $previewThemeArea) {
-                    $pathNorm = str_replace('\\', '/', $module_file_path);
-                    $areaFromPath = str_contains($pathNorm, 'theme/frontend') ? 'frontend' : (str_contains($pathNorm, 'theme/backend') ? 'backend' : '');
-                    if ($areaFromPath !== '' && $areaFromPath !== $previewThemeArea) {
-                        $previewThemeId = 0;
-                    }
-                }
-            } catch (\Throwable $e) {
-                $previewThemeId = 0;
-            }
-        }
+        # 开始分析主题路径（预览 / Session / 激活主题由 ThemeContextService 统一解析）
         $area = $this->resolveAreaFromPath($module_file_path);
-        if ($previewThemeId) {
-            // 使用预览主题
-            $this->welineTheme->load($previewThemeId);
-            if ($this->welineTheme->getId()) {
-                $theme = $this->welineTheme;
-            } else {
-                try {
-                    $theme = $this->welineTheme->getActiveTheme($area);
-                } catch (\Exception $exception) {
-                    throw  new Exception(__('主题异常：') . $exception->getMessage());
-                }
-            }
-        } else {
+        $theme = $this->themeContext->resolveTheme($area);
+        if ($theme === null || !$theme->getId()) {
             try {
                 $theme = $this->welineTheme->getActiveTheme($area);
             } catch (\Exception $exception) {
-                throw  new Exception(__('主题异常：') . $exception->getMessage());
+                throw new Exception(__('主题异常：') . $exception->getMessage());
             }
         }
-        
+
         # 主题不存在且非开发环境
-        if (PROD && !isset($theme)) {
+        if (PROD && (!$theme || !$theme->getId())) {
             $theme = $this->welineTheme->setData(Env::default_theme_DATA);
         }
         

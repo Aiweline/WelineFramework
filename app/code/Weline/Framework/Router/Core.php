@@ -269,6 +269,7 @@ class Core
         
         # 获取URL
         $this->url = $url = $this->processUrl();
+        $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
         
         
         // 性能优化：复用已读取的统一缓存数据
@@ -279,13 +280,13 @@ class Core
         }
         
         // 优先从统一缓存中读取 router
-        if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
+        if (!$hasPreviewTheme && is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
             $this->router = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
             return $this->route();
         }
         
         // 回退到旧的缓存方式（兼容性）
-        $router = $this->cache->get($this->_router_cache_key);
+        $router = $hasPreviewTheme ? null : $this->cache->get($this->_router_cache_key);
         if ($router) {
             $this->router = $router;
             return $this->route();
@@ -386,11 +387,13 @@ class Core
         }
         $url = implode('/', $url_arr) . (('index' !== $last_rule_value) ? '/' . $last_rule_value : '');
         $url = trim($url, '/');
-        return str_replace('//', '/', $url);
+        $normalized = str_replace('//', '/', $url);
+        return $normalized;
     }
 
     public function processUrl()
     {
+        $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
         // 后端请求不缓存，直接跳过缓存读取
         if ($this->is_backend) {
             $this->routerGeneratedGetParams = [];
@@ -426,14 +429,14 @@ class Core
         }
         
         // 性能优化：复用已读取的统一缓存数据
-        if ($this->unifiedCacheData === null) {
+        if ($this->unifiedCacheData === null && !$hasPreviewTheme) {
             $cached = $this->cache->get($this->unified_cache_key);
             // 将 false 转换为 null，保持类型一致性
             $this->unifiedCacheData = ($cached === false) ? null : $cached;
         }
         
         // 优先尝试读取统一缓存（减少 IO 操作）
-        if (is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
+        if (!$hasPreviewTheme && is_array($this->unifiedCacheData) && !empty($this->unifiedCacheData)) {
             $unifiedCache = $this->unifiedCacheData;
             // 从统一缓存中提取数据
             $url = $unifiedCache[KeyBuilder::UNIFIED_CACHE_URL_KEY] ?? null;
@@ -461,7 +464,7 @@ class Core
         }
         
         // 从缓存池读取 URL 缓存
-        $url = $this->cache->get($this->url_cache_key);
+        $url = $hasPreviewTheme ? null : $this->cache->get($this->url_cache_key);
         {
             # 如果后缀是静态文件后缀 .css,.js,.jpg,.png,.jpeg,.gif,.svg,.ico,.woff,.woff2,.eot,.ttf,.otf,.ttf2,.woff3,.mp4,.mp3,.m3u8,.webp
             $isStaticFile = $this->isStaticFile();

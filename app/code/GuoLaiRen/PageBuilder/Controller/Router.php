@@ -162,6 +162,10 @@ class Router implements RouterInterface
         ];
         
         $lowerPath = strtolower($path);
+
+        if (str_starts_with($lowerPath, 'theme/')) {
+            return true;
+        }
         
         foreach ($systemPaths as $systemPath) {
             if (str_starts_with($lowerPath, $systemPath)) {

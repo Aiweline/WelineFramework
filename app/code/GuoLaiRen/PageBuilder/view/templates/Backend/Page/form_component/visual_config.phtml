@@ -17,6 +17,7 @@
 // 尝试从多种方式获取 page_id 和 handle
 $page = $this->getData('page');
 $pageId = $this->getData('visual_config_page_id') ?: ($page && $page->getId() ? $page->getId() : 0);
+$welineThemeId = (int) ($this->getData('visual_config_weline_theme_id') ?: ($_GET['weline_theme_id'] ?? 0));
 $handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('handle') : '');
 $styleSettings = $page ? $page->getStyleSettings() : [];
 $isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
@@ -1631,7 +1632,13 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
-                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
+                <?php
+                $previewFullParams = ['page_id' => $pageId, 'visual_editor' => '1'];
+                if ($welineThemeId > 0) {
+                    $previewFullParams['weline_theme_id'] = (string) $welineThemeId;
+                }
+                ?>
+                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', $previewFullParams) ?>"></iframe>
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
@@ -1645,6 +1652,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
         <?php
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
         $this->assign('page', $page);
+        $this->assign('visual_weline_theme_id', $welineThemeId);
         ?>
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config_right_sidebar.phtml</w:template>
     </div>
@@ -1730,6 +1738,7 @@ if (typeof window.openVisualConfig === 'undefined') {
     window.visualConfigHandle = window.visualConfigHandle || null;
     window.currentVisualLanguage = window.currentVisualLanguage || '';
     window.defaultLanguage = window.defaultLanguage || '';
+    window.visualWelineThemeId = <?= (int) $welineThemeId ?>;
     
     // 延迟初始化，等待 DOM 完全加载后再执行（避免在 iframe 中立即执行导致内存问题）
     const initVisualConfig = function() {
@@ -2192,6 +2201,9 @@ window.refreshPreview = function(savedPosition) {
     }
     
     previewUrl += '&t=' + Date.now();
+    if (typeof window.visualWelineThemeId === 'number' && window.visualWelineThemeId > 0) {
+        previewUrl += '&weline_theme_id=' + encodeURIComponent(String(window.visualWelineThemeId));
+    }
     
     // 重新加载iframe
     iframe.src = previewUrl;
@@ -5199,6 +5211,9 @@ window.addComponentToLayout = async function(componentData, region, replace = fa
             replace: replace,
             template_code: componentData.template || ''
         };
+        if (typeof window.visualWelineThemeId === 'number' && window.visualWelineThemeId > 0) {
+            requestData.weline_theme_id = window.visualWelineThemeId;
+        }
         
         // 如果是 content 区域且指定了位置，添加 position 参数
         if (region === 'content' && position !== null && position !== undefined) {

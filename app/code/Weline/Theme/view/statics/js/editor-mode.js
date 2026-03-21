@@ -424,15 +424,6 @@
             e.preventDefault();
             e.stopPropagation();
             
-            // #region agent log
-            try {
-                var jsonRaw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
-                var hasData = !!jsonRaw;
-                if (typeof window.parent.fetch === 'function') {
-                    window.parent.fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'editor-mode.js:slotDrop:entry',message:'iframe slot drop',data:{slotId:this.dataset.wslot,hasJsonData:hasData},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-                }
-            } catch (err) {}
-            // #endregion
             // 获取插入索引（在清理前读取）
             const insertIndex = this._editorInsertIndex;
             
@@ -522,13 +513,6 @@
             
             // 通知父窗口部件被放入插槽（附带 sort_order）
             if (window.parent !== window) {
-                // #region agent log
-                try {
-                    if (typeof window.parent.fetch === 'function') {
-                        window.parent.fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'editor-mode.js:slotDrop:postMessage',message:'postMessage widget-dropped',data:{slotId:slotData.id,sortOrder:sortOrder},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-                    }
-                } catch (err) {}
-                // #endregion
                 window.parent.postMessage({
                     type: 'widget-dropped',
                     widget: widgetData,
