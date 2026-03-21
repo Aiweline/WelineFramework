@@ -185,11 +185,18 @@ class PassthroughCore
     {
         $this->workerHost = $workerHost;
         $this->workerBasePort = $workerBasePort;
-        $this->workerCount = 0; // 初始为 0，等待 Master 通知实际端口
+        $this->workerCount = 0; // 由 workerPorts 长度决定
         $this->routingCache = RoutingCacheService::getInstance();
-        
-        // 不再预初始化端口，由 Master 通过 add_worker 消息动态添加
-        // Worker 端口将在 addWorkerPort() 中注册
+
+        // 启动期兜底：先按连续端口预热一个临时池，避免控制消息延迟时出现 0/0。
+        // 后续 Master 的 add_worker / set_worker_pool 会覆盖为权威池。
+        if ($workerCount > 0 && $workerBasePort > 0) {
+            $seedPorts = [];
+            for ($i = 0; $i < $workerCount; $i++) {
+                $seedPorts[] = $workerBasePort + $i;
+            }
+            $this->setWorkerPorts($seedPorts);
+        }
     }
     
     /**
@@ -364,8 +371,8 @@ class PassthroughCore
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
         
-        // 7. 自旋等待：热重载期间 Worker 可能有短暂空窗，重试以降低 404/连接拒绝
-        if ($this->spinWaitMaxSeconds > 0 && !empty($this->workerPorts)) {
+        // 7. 自旋等待：热重载/启动窗口期间 Worker 池可能短暂为空，重试以降低瞬时 503
+        if ($this->spinWaitMaxSeconds > 0) {
             $deadline = \microtime(true) + $this->spinWaitMaxSeconds;
             while (\microtime(true) < $deadline) {
                 SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));

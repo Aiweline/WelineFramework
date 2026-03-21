@@ -164,10 +164,16 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
 );
 
 // 配置
+$wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+$startupProtectionConfig = \is_array($wlsConfig['startup_protection'] ?? null) ? $wlsConfig['startup_protection'] : [];
 $dispatcher->configure([
     'sni_routing_enabled' => true,
     'learning_mode_enabled' => true,
     'connection_timeout' => 300,
+    'startup_protection_enabled' => (bool)($startupProtectionConfig['enabled'] ?? true),
+    'startup_protection_window_sec' => (float)($startupProtectionConfig['window_sec'] ?? 45.0),
+    'startup_protection_ready_ratio' => (float)($startupProtectionConfig['ready_ratio'] ?? 0.0),
+    'startup_protection_min_ready' => (int)($startupProtectionConfig['min_ready'] ?? 1),
     'cache' => [
         'default_ttl' => 3600,
         'connection_ttl' => 120,

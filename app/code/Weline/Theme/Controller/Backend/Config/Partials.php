@@ -10,15 +10,22 @@
 namespace Weline\Theme\Controller\Backend\Config;
 
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Helper\PartialsScanner;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeResourceCatalog;
 
 /**
  * 主题 Partials 配置控制器
  */
 class Partials extends BackendController
 {
+    public function __construct(
+        private readonly WelineTheme $welineTheme,
+        private readonly ThemeResourceCatalog $themeResourceCatalog,
+        private readonly ThemeContextService $themeContextService,
+    ) {
+    }
+
     /**
      * 获取主题的 partials 配置页面
      */
@@ -29,21 +36,25 @@ class Partials extends BackendController
             return $this->fetchJson($this->error(__('请选择主题')));
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery();
+        $theme->load((int)$themeId);
         
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
         }
 
-        // 扫描可用的 partials
-        $frontendPartials = PartialsScanner::scanPartials($theme, 'frontend');
-        $backendPartials = PartialsScanner::scanPartials($theme, 'backend');
+        // 扫描可用的 partials（canonical 资源链）
+        $frontendPartials = $this->toLegacyPartialMap(
+            $this->themeResourceCatalog->getPartials('frontend', $theme)
+        );
+        $backendPartials = $this->toLegacyPartialMap(
+            $this->themeResourceCatalog->getPartials('backend', $theme)
+        );
         
         // 获取当前配置
-        $frontendConfig = PartialsScanner::getPartialsConfig($theme, 'frontend');
-        $backendConfig = PartialsScanner::getPartialsConfig($theme, 'backend');
+        $frontendConfig = $this->getPartialsConfig($theme, 'frontend');
+        $backendConfig = $this->getPartialsConfig($theme, 'backend');
 
         $this->assign('theme', $theme);
         $this->assign('frontendPartials', $frontendPartials);
@@ -64,21 +75,25 @@ class Partials extends BackendController
             return $this->fetchJson($this->error(__('请选择主题')));
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery();
+        $theme->load((int)$themeId);
         
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
         }
 
-        // 扫描可用的 partials
-        $frontendPartials = PartialsScanner::scanPartials($theme, 'frontend');
-        $backendPartials = PartialsScanner::scanPartials($theme, 'backend');
+        // 扫描可用的 partials（canonical 资源链）
+        $frontendPartials = $this->toLegacyPartialMap(
+            $this->themeResourceCatalog->getPartials('frontend', $theme)
+        );
+        $backendPartials = $this->toLegacyPartialMap(
+            $this->themeResourceCatalog->getPartials('backend', $theme)
+        );
         
         // 获取当前配置
-        $frontendConfig = PartialsScanner::getPartialsConfig($theme, 'frontend');
-        $backendConfig = PartialsScanner::getPartialsConfig($theme, 'backend');
+        $frontendConfig = $this->getPartialsConfig($theme, 'frontend');
+        $backendConfig = $this->getPartialsConfig($theme, 'backend');
 
         return $this->fetchJson($this->success('', [
             'theme' => [
@@ -105,16 +120,17 @@ class Partials extends BackendController
             return $this->fetchJson($this->error(__('请选择主题')));
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery();
+        $theme->load((int)$themeId);
         
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
         }
 
-        // 验证 partials 选项是否存在
-        $availablePartials = PartialsScanner::scanPartials($theme, $area);
+        $area = $this->themeContextService->normalizeArea((string)$area);
+        // 验证 partials 选项是否存在（canonical 资源链）
+        $availablePartials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));
         foreach ($partials as $type => $option) {
             if (!isset($availablePartials[$type]) || !in_array($option, $availablePartials[$type])) {
                 return $this->fetchJson($this->error(__('Partials 选项无效：%{type}/%{option}', ['type' => $type, 'option' => $option])));
@@ -154,19 +170,45 @@ class Partials extends BackendController
             return $this->fetchJson($this->error(__('参数不完整')));
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery();
+        $theme->load((int)$themeId);
         
         if (!$theme->getId()) {
             return $this->fetchJson($this->error(__('主题不存在')));
         }
 
-        // 扫描可用的 partials
-        $partials = PartialsScanner::scanPartials($theme, $area);
+        $area = $this->themeContextService->normalizeArea((string)$area);
+        // 扫描可用的 partials（canonical 资源链）
+        $partials = $this->toLegacyPartialMap($this->themeResourceCatalog->getPartials($area, $theme));
         $options = $partials[$type] ?? [];
 
         return $this->fetchJson($this->success('', ['options' => $options]));
+    }
+
+    private function getPartialsConfig(WelineTheme $theme, string $area): array
+    {
+        $config = $theme->getConfig();
+        $partials = (array)($config['partials'] ?? []);
+        $area = $this->themeContextService->normalizeArea($area);
+        return (array)($partials[$area] ?? []);
+    }
+
+    private function toLegacyPartialMap(array $partials): array
+    {
+        $result = [];
+        foreach ($partials as $type => $options) {
+            $legacyOptions = [];
+            foreach ($options as $option) {
+                $value = (string)($option['value'] ?? '');
+                if ($value !== '') {
+                    $legacyOptions[] = $value;
+                }
+            }
+            $result[$type] = array_values(array_unique($legacyOptions));
+        }
+
+        return $result;
     }
 }
 
