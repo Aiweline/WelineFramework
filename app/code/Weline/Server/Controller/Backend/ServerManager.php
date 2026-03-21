@@ -14,6 +14,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\Control\BackendStatusService;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\Control\SharedStateAdminService;
 
@@ -34,6 +35,7 @@ class ServerManager extends BackendController
     private OptimizationGuideService $guideService;
     private BackendStatusService $statusService;
     private IpcControlGateway $ipcGateway;
+    private BroadcastControlDispatchService $broadcastControlDispatchService;
     private SharedStateAdminService $sharedStateAdminService;
     
     /**
@@ -43,12 +45,14 @@ class ServerManager extends BackendController
         OptimizationGuideService $guideService,
         BackendStatusService $statusService,
         IpcControlGateway $ipcGateway,
+        BroadcastControlDispatchService $broadcastControlDispatchService,
         SharedStateAdminService $sharedStateAdminService
     )
     {
         $this->guideService = $guideService;
         $this->statusService = $statusService;
         $this->ipcGateway = $ipcGateway;
+        $this->broadcastControlDispatchService = $broadcastControlDispatchService;
         $this->sharedStateAdminService = $sharedStateAdminService;
     }
 
@@ -192,14 +196,7 @@ class ServerManager extends BackendController
     public function postRestart(): array
     {
         $instance = (string)$this->request->getPost('instance', 'default');
-        // 后台重启语义统一映射到 Orchestrator 强制 reload（控制面统一）
-        $result = $this->ipcGateway->command(
-            $instance,
-            ControlMessage::ACTION_RELOAD,
-            ControlMessage::RELOAD_TYPE_FORCE,
-            [],
-            8.0
-        );
+        $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('重启命令已发送')),
@@ -210,13 +207,7 @@ class ServerManager extends BackendController
     public function postReload(): array
     {
         $instance = (string)$this->request->getPost('instance', 'default');
-        $result = $this->ipcGateway->command(
-            $instance,
-            ControlMessage::ACTION_RELOAD,
-            ControlMessage::RELOAD_TYPE_CODE,
-            [],
-            8.0
-        );
+        $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_CODE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('热重载命令已发送')),

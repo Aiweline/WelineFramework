@@ -8,6 +8,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Server\Model\SslCertificate as CertModel;
 use Weline\Server\Service\Control\BackendStatusService;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
@@ -25,6 +26,7 @@ class ServerQueryProvider implements QueryProviderInterface
         private readonly OptimizationGuideService $optimizationGuideService,
         private readonly BackendStatusService $backendStatusService,
         private readonly IpcControlGateway $ipcControlGateway,
+        private readonly BroadcastControlDispatchService $broadcastControlDispatchService,
         private readonly SharedStateAdminService $sharedStateAdminService,
         private readonly CertModel $sslCertModel
     ) {
@@ -541,13 +543,7 @@ class ServerQueryProvider implements QueryProviderInterface
     private function restart(array $params): array
     {
         $instance = (string)($params['instance'] ?? 'default');
-        $result = $this->ipcControlGateway->command(
-            $instance,
-            ControlMessage::ACTION_RELOAD,
-            ControlMessage::RELOAD_TYPE_FORCE,
-            [],
-            8.0
-        );
+        $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_FORCE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('重启命令已发送')),
@@ -558,13 +554,7 @@ class ServerQueryProvider implements QueryProviderInterface
     private function reload(array $params): array
     {
         $instance = (string)($params['instance'] ?? 'default');
-        $result = $this->ipcControlGateway->command(
-            $instance,
-            ControlMessage::ACTION_RELOAD,
-            ControlMessage::RELOAD_TYPE_CODE,
-            [],
-            8.0
-        );
+        $result = $this->broadcastControlDispatchService->reloadAsync($instance, ControlMessage::RELOAD_TYPE_CODE, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('热重载命令已发送')),
