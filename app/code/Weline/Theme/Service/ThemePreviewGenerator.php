@@ -69,6 +69,26 @@ class ThemePreviewGenerator
         return $uploadDir . DS . $filename;
     }
 
+    public static function normalizePreviewRelativePath(string $path): string
+    {
+        $normalized = \str_replace('\\', '/', \trim($path));
+        $pubPath = \str_replace('\\', '/', \rtrim(PUB, '\\/'));
+        $bpPath = \str_replace('\\', '/', \rtrim(BP, '\\/'));
+
+        if ($pubPath !== '' && \str_starts_with($normalized, $pubPath . '/')) {
+            $normalized = \substr($normalized, \strlen($pubPath) + 1);
+        } elseif ($bpPath !== '' && \str_starts_with($normalized, $bpPath . '/')) {
+            $normalized = \substr($normalized, \strlen($bpPath) + 1);
+        }
+
+        $normalized = \ltrim($normalized, '/');
+        if (\str_starts_with($normalized, 'pub/')) {
+            $normalized = \substr($normalized, 4);
+        }
+
+        return \ltrim($normalized, '/');
+    }
+
     /**
      * 获取主题预览URL
      * 

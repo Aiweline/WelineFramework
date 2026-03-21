@@ -88,7 +88,7 @@ class GeneratePreviews extends AbstractConsole
                     $imagePath = ThemePreviewGenerator::generatePreviewImage($theme, $areaItem, $force);
 
                     if ($imagePath) {
-                        $relativePath = ltrim(str_replace(BP, '', $imagePath), '\\/');
+                        $relativePath = ThemePreviewGenerator::normalizePreviewRelativePath($imagePath);
                         
                         // 更新数据库
                         $themeObj = clone $this->welineTheme;
