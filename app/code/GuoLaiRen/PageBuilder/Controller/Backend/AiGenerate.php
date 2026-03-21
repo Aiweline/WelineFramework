@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
 use Weline\Framework\App\Controller\BackendController;
@@ -353,6 +354,7 @@ class AiGenerate extends BackendController
                 $aiDesc = trim((string) $this->request->getPost('description', ''));
                 if ($aiDesc !== '') {
                     $page->setData(PageModel::schema_fields_AI_DESCRIPTION, $aiDesc)->save();
+                    $this->invalidatePageCache((int)$page->getId());
                 }
             }
 
@@ -4456,6 +4458,7 @@ PROMPT;
         }
 
         $page->save();
+        $this->invalidatePageCache((int)$page->getId());
     }
 
     /**
@@ -4498,5 +4501,17 @@ PROMPT;
                 'lengths' => $lengths,
             ],
         ], JSON_UNESCAPED_UNICODE);
+    }
+
+    private function invalidatePageCache(int $pageId): void
+    {
+        if ($pageId <= 0) {
+            return;
+        }
+
+        try {
+            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
+        } catch (\Throwable) {
+        }
     }
 }
