@@ -55,7 +55,112 @@ class AccountService
      */
     public function getProviderByModelCode(string $modelCode): ?string
     {
+        /** @var AiModel $model */
+        $model = $this->objectManager->make(AiModel::class)
+            ->reset()
+            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+            ->find()
+            ->fetch();
+        if ($model && $model->getId()) {
+            $supplier = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($supplier !== '') {
+                return $supplier;
+            }
+        }
         return VendorConfigManager::getProviderByModelCode($modelCode);
+    }
+
+    /**
+     * 校验供应商是否支持指定模型代码
+     * 优先使用 vendor 配置中的 models 列表；若无配置则从账户缓存的 supported_models 判断。
+     */
+    public function supportsModel(string $providerCode, string $modelCode): bool
+    {
+        $providerModels = VendorConfigManager::getProviderModels($providerCode);
+        if (is_array($providerModels) && !empty($providerModels)) {
+            foreach ($providerModels as $item) {
+                $code = is_array($item) ? (string)($item['code'] ?? '') : (string)$item;
+                if ($code === $modelCode) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /** @var Account $accountModel */
+        $accountModel = $this->objectManager->make(Account::class);
+        $accounts = $accountModel->reset()
+            ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+            ->select()
+            ->fetch()
+            ->getItems();
+        foreach ($accounts as $account) {
+            $cfg = $account->getConfig();
+            $supported = $cfg['supported_models'] ?? [];
+            if (is_array($supported) && in_array($modelCode, $supported, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * OpenAI 兼容模式：从供应商账户直接拉取支持模型，并缓存到账户 config.supported_models
+     * 返回拉取到的模型 code 列表。
+     */
+    public function refreshSupportedModels(Account $account): array
+    {
+        $apiKey = $account->getDecryptedApiKey();
+        if ($apiKey === '') {
+            return [];
+        }
+        $baseUrl = (string)$account->getData(Account::schema_fields_BASE_URL);
+        if ($baseUrl === '') {
+            return [];
+        }
+
+        $url = rtrim($baseUrl, '/') . '/models';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey,
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        $resp = curl_exec($ch);
+        if ($resp === false) {
+            curl_close($ch);
+            return [];
+        }
+        $http = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($http < 200 || $http >= 300) {
+            return [];
+        }
+
+        $json = json_decode($resp, true);
+        $rows = $json['data'] ?? [];
+        if (!is_array($rows)) {
+            return [];
+        }
+        $codes = [];
+        foreach ($rows as $row) {
+            if (is_array($row) && !empty($row['id'])) {
+                $codes[] = (string)$row['id'];
+            }
+        }
+        $codes = array_values(array_unique(array_filter($codes)));
+
+        $cfg = $account->getConfig();
+        $cfg['supported_models'] = $codes;
+        $cfg['models_synced_at'] = time();
+        $account->setData(Account::schema_fields_CONFIG, json_encode($cfg, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $account->setData(Account::schema_fields_UPDATED_AT, time());
+        $account->save();
+
+        return $codes;
     }
 
     /**
