@@ -55,8 +55,10 @@ class ConfigMerger
      */
     public function mergeConfig(string $configFile, string $area, ?WelineTheme $theme = null): array
     {
+        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+
         if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme();
+            $theme = $this->welineTheme->getActiveTheme($area);
         }
 
         $config = [];

@@ -105,6 +105,8 @@ class ThemeEditor extends BackendController
     {
         $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
         $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
+        $editorArea = $editorArea === 'backend' ? 'backend' : 'frontend';
         
         // 获取主题列表页面 URL（用于重定向）
         $themeListUrl = $this->_url->getBackendUrl('theme/backend');
@@ -120,7 +122,7 @@ class ThemeEditor extends BackendController
             $themeId = $requestedThemeId;
         } else {
             // 没有指定主题，尝试使用当前激活的主题
-            $activeTheme = $this->welineTheme->getActiveTheme();
+            $activeTheme = $this->welineTheme->getActiveTheme($editorArea);
             if ($activeTheme && $activeTheme->getId()) {
                 $themeId = (int)$activeTheme->getId();
                 $this->welineTheme->reset()->load($themeId);
@@ -175,7 +177,6 @@ class ThemeEditor extends BackendController
         $areas = ThemeLayout::getAreas();
 
         // 编辑区域：默认前端；若主题目录无 backend 则仅前端
-        $editorArea = (string)$this->request->getParam('editor_area', 'frontend');
         $themeHasBackend = $this->themeHasBackendDir($this->welineTheme);
         if (!$themeHasBackend || ($editorArea !== 'frontend' && $editorArea !== 'backend')) {
             $editorArea = 'frontend';

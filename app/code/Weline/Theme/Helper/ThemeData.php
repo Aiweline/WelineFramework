@@ -68,16 +68,16 @@ class ThemeData
         }
         
         try {
-            // 获取当前主题
-            if (self::$currentTheme === null) {
-                /** @var WelineTheme $theme */
-                $theme = ObjectManager::getInstance(WelineTheme::class);
-                self::$currentTheme = $theme->getActiveTheme();
-            }
-            
             // 自动识别区域
             if (self::$currentArea === null) {
                 self::$currentArea = State::isBackend() ? 'backend' : 'frontend';
+            }
+
+            // 获取当前主题（按当前区域解析激活主题，缺失时回退全局）
+            if (self::$currentTheme === null) {
+                /** @var WelineTheme $theme */
+                $theme = ObjectManager::getInstance(WelineTheme::class);
+                self::$currentTheme = $theme->getActiveTheme(self::$currentArea);
             }
             
             // 如果主题存在且不在加载中，预加载配置（防止循环调用）
@@ -1142,6 +1142,71 @@ class ThemeData
         } catch (\Exception $e) {
             return [];
         }
+    }
+
+    /**
+     * 获取当前主题在指定 area 下已存在的 scope 列表
+     *
+     * @param string $area 区域（frontend/backend）
+     * @return array
+     */
+    public static function getScopes(string $area): array
+    {
+        self::ensureInitialized();
+
+        $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
+        $themeId = self::$currentTheme?->getId();
+        $cacheKey = "scope_list_{$area}_{$themeId}";
+        if (isset(self::$performanceCache[$cacheKey])) {
+            return self::$performanceCache[$cacheKey];
+        }
+
+        $scopes = ['default'];
+        if (!$themeId) {
+            self::$performanceCache[$cacheKey] = $scopes;
+            return $scopes;
+        }
+
+        try {
+            /** @var MetaConfig $metaConfig */
+            $metaConfig = ObjectManager::getInstance(MetaConfig::class);
+            $metaConfig->clearQuery();
+
+            $items = $metaConfig
+                ->where(MetaConfig::schema_fields_NAMESPACE, "theme.{$area}")
+                ->where(MetaConfig::schema_fields_IDENTIFY_ID, (string)$themeId)
+                ->select()
+                ->fetch()
+                ->getItems();
+
+            foreach ($items as $item) {
+                if (!$item instanceof MetaConfig) {
+                    continue;
+                }
+
+                $scope = trim((string)$item->getData(MetaConfig::schema_fields_SCOPE));
+                if ($scope !== '') {
+                    $scopes[] = $scope;
+                }
+            }
+        } catch (\Throwable) {
+            // ignore and keep default scope only
+        }
+
+        $scopes = array_values(array_unique($scopes));
+        usort($scopes, static function (string $left, string $right): int {
+            if ($left === 'default') {
+                return -1;
+            }
+            if ($right === 'default') {
+                return 1;
+            }
+
+            return strcmp($left, $right);
+        });
+
+        self::$performanceCache[$cacheKey] = $scopes;
+        return $scopes;
     }
     
     /**

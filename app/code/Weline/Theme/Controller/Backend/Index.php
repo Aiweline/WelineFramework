@@ -164,6 +164,8 @@ class Index extends BackendController
                 'parent_theme' => $parentTheme,
                 'config' => $theme->getConfig(),
                 'preview_image' => $theme->getPreviewImage(),
+                'frontend_preview_image' => $theme->getFrontendPreviewImage(),
+                'backend_preview_image' => $theme->getBackendPreviewImage(),
                 'preview_url_frontend' => $previewUrlFrontend,
                 'preview_url_backend' => $previewUrlBackend,
             ]
@@ -374,8 +376,8 @@ class Index extends BackendController
 
             if ($imagePath) {
                 // 更新数据库中的 preview_image 字段
-                $relativePath = str_replace(Env::VAR_DIR, '', $imagePath);
-                $theme->setPreviewImage($relativePath)->save();
+                $relativePath = ltrim(str_replace(BP, '', $imagePath), '\\/');
+                $this->persistThemePreviewImage($theme, $area, $relativePath);
 
                 return $this->fetchJson($this->success(__('预览图生成成功'), [
                     'image_url' => '/' . $relativePath,
@@ -419,10 +421,10 @@ class Index extends BackendController
                 // 生成 frontend 预览图
                 try {
                     $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
-                    $relativePath1 = str_replace(Env::VAR_DIR, '', $result1);
+                    $relativePath1 = ltrim(str_replace(BP, '', $result1), '\\/');
                     $themeObj1 = clone $themeModel;
                     $themeObj1->load($themeId);
-                    $themeObj1->setPreviewImage($relativePath1)->save();
+                    $this->persistThemePreviewImage($themeObj1, 'frontend', $relativePath1);
 
                     $themeOk = true;
                 } catch (\Exception $e) {
@@ -432,10 +434,10 @@ class Index extends BackendController
                 // 生成 backend 预览图
                 try {
                     $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
-                    $relativePath2 = str_replace(Env::VAR_DIR, '', $result2);
+                    $relativePath2 = ltrim(str_replace(BP, '', $result2), '\\/');
                     $themeObj2 = clone $themeModel;
                     $themeObj2->load($themeId);
-                    $themeObj2->setPreviewImage($relativePath2)->save();
+                    $this->persistThemePreviewImage($themeObj2, 'backend', $relativePath2);
 
                     $themeOk = true;
                 } catch (\Exception $e) {
@@ -526,10 +528,10 @@ class Index extends BackendController
                     ]);
                     $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
                     if ($result1) {
-                        $relativePath1 = str_replace(Env::VAR_DIR, '', $result1);
+                        $relativePath1 = ltrim(str_replace(BP, '', $result1), '\\/');
                         $themeObj1 = clone $themeModel;
                         $themeObj1->load($themeId);
-                        $themeObj1->setPreviewImage($relativePath1)->save();
+                        $this->persistThemePreviewImage($themeObj1, 'frontend', $relativePath1);
 
                         $sse->sendEvent('chunk', [
                             'content' => __("   - frontend OK: %{1}\n", [$relativePath1]),
@@ -550,10 +552,10 @@ class Index extends BackendController
                     ]);
                     $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
                     if ($result2) {
-                        $relativePath2 = str_replace(Env::VAR_DIR, '', $result2);
+                        $relativePath2 = ltrim(str_replace(BP, '', $result2), '\\/');
                         $themeObj2 = clone $themeModel;
                         $themeObj2->load($themeId);
-                        $themeObj2->setPreviewImage($relativePath2)->save();
+                        $this->persistThemePreviewImage($themeObj2, 'backend', $relativePath2);
 
                         $sse->sendEvent('chunk', [
                             'content' => __("   - backend OK: %{1}\n", [$relativePath2]),
@@ -605,6 +607,21 @@ class Index extends BackendController
                 // ignore: 避免 SSE 发送二次异常打断
             }
         }
+    }
+
+    /**
+     * 按区域保存主题预览图路径
+     */
+    private function persistThemePreviewImage(WelineTheme $theme, string $area, string $relativePath): void
+    {
+        if ($area === 'backend') {
+            $theme->setBackendPreviewImage($relativePath);
+        } else {
+            $theme->setFrontendPreviewImage($relativePath)
+                ->setPreviewImage($relativePath);
+        }
+
+        $theme->save();
     }
 
     /**

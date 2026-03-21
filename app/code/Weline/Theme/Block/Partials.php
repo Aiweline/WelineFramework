@@ -104,7 +104,7 @@ class Partials extends Block
         if ($previewThemeId && $previewThemeArea === $area) {
             $theme->load($previewThemeId);
         } else {
-            $theme->getActiveTheme();
+            $theme->getActiveTheme($area);
         }
         
         // 如果没有活动主题，直接跳到默认主题回退逻辑
