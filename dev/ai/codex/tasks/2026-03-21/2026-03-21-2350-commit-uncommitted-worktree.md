@@ -1,7 +1,7 @@
 # Task: Commit Uncommitted Worktree Changes
 
 - Started: 2026-03-21 23:50
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 
 ## Goal
@@ -18,15 +18,18 @@
 
 - 已完成会话启动要求：读取 `SOUL.md`、`USER.md`、`memory/2026-03-21.md`、`memory/2026-03-20.md`、`MEMORY.md`、`dev/ai/codex/ACTIVE.md`。
 - 已盘点工作区状态并查看 `git diff --stat`，确认主要主题为 AI 建站、主题预览/运行时统一、PageBuilder 组件与若干文档同步更新。
-- 正在更新任务记录并准备执行统一提交。
+- 已更新任务记录并执行 `git add -A`。
+- 已创建提交 `ebc9a2d0`：`feat: finalize ai site agent and theme preview integration`。
+- 已确认提交后 `git status --short` 为空，工作区干净。
 
 ## Verification
 
 - `git status --short`
 - `git diff --stat`
+- `git commit -m "feat: finalize ai site agent and theme preview integration"`
+- `git rev-parse --short HEAD`
+- `git log -1 --stat --oneline`
 
 ## Next
 
-- 暂存当前工作区变更。
-- 生成一次描述性提交。
-- 记录提交哈希与最终状态。
+- 如需继续，可基于 `ebc9a2d0` 推送远端或拆分后续更细粒度提交。
