@@ -1097,14 +1097,14 @@ class Localization extends BaseController
     /**
      * 批量操作
      */
-    public function batchAction()
+    public function postBatchAction()
     {
-        $action = (string)$this->request->getParam('action');
-        $localeCodes = array_values(array_unique(array_filter(array_map('strval', (array)$this->request->getParam('locale_codes', [])))));
+        $action = (string)$this->request->getPost('action');
+        $localeCodes = array_values(array_unique(array_filter(array_map('strval', (array)$this->request->getPost('locale_codes', [])))));
 
         if ($action === '' || empty($localeCodes)) {
             Message::error(__('请选择操作和区域'));
-            return $this->redirect('*/backend/localization');
+            return $this->redirect($this->buildListUrl());
         }
 
         $successCount = 0;
@@ -1150,7 +1150,7 @@ class Localization extends BaseController
             Message::warning(implode('<br>', array_slice($errors, 0, 5)));
         }
 
-        return $this->redirect('*/backend/localization');
+        return $this->redirect($this->buildListUrl());
 
         $action = $this->request->getParam('action');
         $countryCodes = $this->request->getParam('country_codes', []);
