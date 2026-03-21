@@ -45,6 +45,7 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
                 $layoutCode = $page->getData('layout') ?: (in_array($page->getData('type'), [\GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST]) ? 'blog' : 'default');
             }
             $this->assign('layout_code', $layoutCode);
+            $this->assign('visual_weline_theme_id', (int) ($this->getData('visual_weline_theme_id') ?: 0));
             ?>
             <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
         </div>

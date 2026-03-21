@@ -23,6 +23,7 @@ use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\CssVariableParser;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeLayoutVersionService;
 
 /**
  * 主题布局配置控制器
@@ -1232,57 +1233,47 @@ class Layout extends BackendController
      */
     private function getLayoutPreviewUrl(Url $url, array $layouts, int $themeId, string $scopePath): string
     {
-        // 布局类型和选项到URL的映射
-        // 注意：布局选项会在渲染时根据配置自动应用，所以URL只需要指向能展示该布局类型的页面即可
-        $layoutUrlMap = [
-            'account' => [
-                'dashboard' => 'frontend/account/index',  // 个人中心首页，使用dashboard布局
-                'profile' => 'frontend/account/index',     // 个人中心首页，使用profile布局
-                'orders' => 'frontend/account/index',      // 个人中心首页，使用orders布局
-                'auth' => 'frontend/account/login',        // 登录页面，使用auth布局
-                'default' => 'frontend/account/index',     // 个人中心首页，使用默认布局
-            ],
-            'homepage' => [
-                'default' => 'frontend/index/index',
-                'minimal' => 'frontend/index/index',
-            ],
-            'category' => [
-                'grid' => 'frontend/category/index',
-                'list' => 'frontend/category/index',
-                'default' => 'frontend/category/index',
-            ],
-            'product' => [
-                'detail' => 'frontend/product/index',
-                'list' => 'frontend/product/index',
-                'default' => 'frontend/product/index',
-            ],
-            'cart' => [
-                'default' => 'frontend/cart/index',
-                'empty' => 'frontend/cart/index',
-            ],
-            'checkout' => [
-                'default' => 'frontend/checkout/index',
-                'one-page' => 'frontend/checkout/index',
-                'success' => 'frontend/checkout/success',
-            ],
-        ];
-        
-        // 优先使用选中的布局类型和选项
-        // 按照优先级：account > homepage > category > product > cart > checkout > default
-        $priorityOrder = ['account', 'homepage', 'category', 'product', 'cart', 'checkout'];
-        
-        foreach ($priorityOrder as $layoutType) {
-            if (isset($layouts[$layoutType]) && !empty($layouts[$layoutType])) {
-                $layoutOption = $layouts[$layoutType];
-                if (isset($layoutUrlMap[$layoutType][$layoutOption])) {
-                    $route = $layoutUrlMap[$layoutType][$layoutOption];
-                    return $url->getFrontendUrl($route, ['preview_theme' => $themeId, 'scope' => $scopePath]);
-                }
+        // 统一走 ThemeEditor layout-preview 链路，避免业务路由差异影响主题预览
+        $layoutType = 'homepage';
+        $layoutOption = 'default';
+        $priorityOrder = ['account', 'homepage', 'category', 'product', 'cart', 'checkout', 'default'];
+        foreach ($priorityOrder as $candidate) {
+            if (isset($layouts[$candidate]) && $layouts[$candidate] !== '') {
+                $layoutType = $candidate;
+                $layoutOption = (string)$layouts[$candidate];
+                break;
             }
         }
-        
-        // 如果没有匹配的布局，使用默认首页
-        return $url->getFrontendUrl('index/index', ['preview_theme' => $themeId, 'scope' => $scopePath]);
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+
+        $versionId = null;
+        try {
+            /** @var ThemeLayoutVersionService $versionService */
+            $versionService = ObjectManager::getInstance(ThemeLayoutVersionService::class);
+            $currentVersion = $versionService->getCurrentVersion($themeId, $layoutType);
+            $versionId = $currentVersion?->getVersionId() ?: null;
+        } catch (\Throwable) {
+            $versionId = null;
+        }
+
+        $params = [
+            'theme_id' => $themeId,
+            'layout_type' => $layoutType,
+            'layout_option' => $layoutOption,
+            'editor_mode' => '1',
+            'preview_mode' => 'version',
+            'status' => 'draft',
+            'editor_area' => 'frontend',
+            'scope' => $scopePath,
+            '_t' => time(),
+        ];
+        if ($versionId !== null && $versionId > 0) {
+            $params['version_id'] = $versionId;
+        }
+
+        return $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params);
     }
     
     /**

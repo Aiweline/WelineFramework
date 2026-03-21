@@ -6,6 +6,7 @@
  */
 $page = $this->getData('page');
 $pageId = $page && $page->getId() ? $page->getId() : 0;
+$welineThemeId = (int) ($this->getData('visual_config_weline_theme_id') ?: ($_GET['weline_theme_id'] ?? 0));
 $styleSettings = $page ? $page->getStyleSettings() : [];
 ?>
 
@@ -587,6 +588,7 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
         <?php 
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
         $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
+        $this->assign('visual_weline_theme_id', $welineThemeId);
         ?>
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
@@ -597,6 +599,7 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
 if (typeof pageId === 'undefined') {
     var pageId = <?= $pageId ?>;
 }
+window.visualWelineThemeId = <?= (int) $welineThemeId ?>;
 
 // 自动保存防抖定时器
 let autoSaveTimer = null;
@@ -694,7 +697,11 @@ function refreshPreview() {
     loading.classList.add('active');
     
     // 重新加载iframe
-    iframe.src = iframe.src.split('?')[0] + '?page_id=' + pageId + '&t=' + Date.now();
+    let previewQs = '?page_id=' + pageId + '&t=' + Date.now();
+    if (typeof window.visualWelineThemeId === 'number' && window.visualWelineThemeId > 0) {
+        previewQs += '&weline_theme_id=' + encodeURIComponent(String(window.visualWelineThemeId));
+    }
+    iframe.src = iframe.src.split('?')[0] + previewQs;
     
     // 监听加载完成
     iframe.onload = function() {
