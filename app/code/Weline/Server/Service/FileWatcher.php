@@ -19,8 +19,10 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
-use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 /**
  * 文件监控服务（高性能版）
@@ -426,49 +428,13 @@ class FileWatcher
             @\file_put_contents($logFile, $logMessage, FILE_APPEND);
         }
         
-        // 优先使用 IPC 控制通道
-        $ipcSuccess = MasterProcess::sendReloadCommand('default', 'code');
-        if ($ipcSuccess) {
-            $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
-            $msg = self::ANSI_GREEN . "已通过 IPC 控制通道通知 Master 重启 Worker（{$changedCount} 个文件变更）✓" . self::ANSI_RESET;
-            echo '[' . \date('Y-m-d H:i:s') . "] {$tag} {$msg}\n";
-            return;
-        }
-        
-        // 回退：信号方式
-        $manager = new ServerInstanceManager();
-        // 尝试向 Master 发送 SIGHUP
-        $masterPids = $manager->getRunningMasterPids();
-        if (!empty($masterPids) && \defined('SIGHUP')) {
-            foreach ($masterPids as $pid) {
-                $pid = (int) $pid;
-                if ($pid > 0 && Processer::isRunningByPid($pid)) {
-                    Processer::sendSignal($pid, SIGHUP, true);
-                    $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
-                    $msg = self::ANSI_YELLOW . "已向 Master (PID: {$pid}) 发送 SIGHUP 信号" . self::ANSI_RESET;
-                    echo "{$tag} {$msg}\n";
-                }
-            }
-            return;
-        }
-        
-        // 无 Master 时回退：直接向 Worker 发送信号
-        $allWorkerPids = $manager->getRunningWorkerPids();
-        $signalCount = 0;
-        if (\defined('SIGUSR1')) {
-            foreach ($allWorkerPids as $pid) {
-                $pid = (int) $pid;
-                if ($pid > 0 && Processer::isRunningByPid($pid)) {
-                    Processer::sendSignal($pid, \SIGUSR1, true);
-                    $signalCount++;
-                }
-            }
-        }
-        if ($signalCount > 0) {
-            $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
-            $msg = self::ANSI_YELLOW . "已向 {$signalCount} 个 Worker 发送 SIGUSR1 信号" . self::ANSI_RESET;
-            echo "{$tag} {$msg}\n";
-        }
+        $result = ObjectManager::getInstance(BroadcastControlDispatchService::class)
+            ->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
+
+        $tag = self::ANSI_BLUE . '[FileWatcher]' . self::ANSI_RESET;
+        $color = !empty($result['success']) ? self::ANSI_GREEN : self::ANSI_YELLOW;
+        $msg = $color . $result['message'] . self::ANSI_RESET;
+        echo '[' . \date('Y-m-d H:i:s') . "] {$tag} {$msg}\n";
     }
 
     /**
