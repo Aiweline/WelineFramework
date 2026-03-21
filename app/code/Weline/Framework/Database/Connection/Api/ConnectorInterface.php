@@ -107,6 +107,16 @@ interface ConnectorInterface
     public function tableExist(string $table_name): bool;
 
     /**
+     * 批量检查哪些表名存在，返回实际存在的表名列表。
+     * 用于 SchemaDiff 阶段将 N 次 tableExist() 合并为 1 次查询。
+     * 方言由适配器实现。
+     *
+     * @param list<string> $tableNames
+     * @return list<string> 实际存在的表名（与输入顺序无关）
+     */
+    public function getExistingTables(array $tableNames): array;
+
+    /**
      * 若表存在则删除。方言由各适配器实现。
      */
     public function dropTableIfExists(string $table): void;
