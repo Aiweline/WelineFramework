@@ -456,7 +456,8 @@ class Start extends CommandAbstract
         // 主端口（Dispatcher 端口）被非框架进程占用时：
         // - 用户未指定 -p 且端口为 80/443（通用 web 端口，可能被宝塔/nginx 占用）→ 自动降级到 9981
         // - 用户指定了 -p 或降级端口 9981 也被占用 → 报错退出
-        if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
+        $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+        if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
             if (!$portExplicit && ($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)) {
                 $this->printer->warning(__('默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}', [$port, self::DEFAULT_PORT_FALLBACK]));
                 $port = self::DEFAULT_PORT_FALLBACK;
@@ -464,8 +465,13 @@ class Start extends CommandAbstract
                 $httpRedirectPort = 0;
             }
             // 降级后仍被占用，或用户指定了端口 → 报错
-            if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
-                $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
+            $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+            if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
+                if (($mainPortInspect['state'] ?? '') === 'orphan') {
+                    $this->printer->error(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$port]));
+                } else {
+                    $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
+                }
                 $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
                 $this->printer->note('');
                 $this->printer->setup(__('解决方案：'));
@@ -496,11 +502,16 @@ class Start extends CommandAbstract
 
         // HTTP Redirect 端口被非框架进程占用时：报错退出，不自动切换
         // HTTP Redirect 端口也是服务的一部分，自动切换会导致 HTTP 入口不一致
+        $httpRedirectInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
         if ($sslEnabled && $httpRedirectPort > 0
-            && Processer::isPortInUse($httpRedirectPort)
-            && !Processer::isPortUsedByWeline($httpRedirectPort)
+            && ($httpRedirectInspect['in_use'] ?? false)
+            && !($httpRedirectInspect['is_weline'] ?? false)
         ) {
-            $this->printer->error(__('HTTP 重定向端口 %{1} 被非框架进程占用', [$httpRedirectPort]));
+            if (($httpRedirectInspect['state'] ?? '') === 'orphan') {
+                $this->printer->error(__('HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$httpRedirectPort]));
+            } else {
+                $this->printer->error(__('HTTP 重定向端口 %{1} 被非框架进程占用', [$httpRedirectPort]));
+            }
             $this->printer->note('');
             $this->printer->setup(__('解决方案：'));
             $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
@@ -2202,14 +2213,16 @@ class Start extends CommandAbstract
         // 与 server:status 使用相同的 Processer::isPortInUse 逻辑
         
         // 检查主端口（Dispatcher 或直连）
-        if (Processer::isPortInUse($port)) {
+        $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
+        if (($mainPortInspect['pid_running'] ?? false) && ($mainPortInspect['is_weline'] ?? false)) {
             return true;
         }
         
         // 检查 Worker 端口
         for ($i = 0; $i < $count; $i++) {
             $workerPort = $workerPortBase + $i;
-            if (Processer::isPortInUse($workerPort)) {
+            $workerPortInspect = Processer::inspectPortOccupantWithHistory($workerPort);
+            if (($workerPortInspect['pid_running'] ?? false) && ($workerPortInspect['is_weline'] ?? false)) {
                 return true;
             }
         }
@@ -2290,7 +2303,8 @@ class Start extends CommandAbstract
             return true;
         }
 
-        $isWelineProcess = Processer::isPortUsedByWeline($port);
+        $portInspect = Processer::inspectPortOccupantWithHistory($port);
+        $isWelineProcess = (bool) ($portInspect['is_weline'] ?? false);
         if (!$forceRelease) {
             $this->printer->error(__('%{1} 端口 %{2} 已被占用', [$label, $port]));
             $this->printer->note(__('使用 -r 参数强制重启（仅杀框架进程），或手动停止占用该端口的进程'));
@@ -2298,7 +2312,11 @@ class Start extends CommandAbstract
             return false;
         }
         if (!$isWelineProcess) {
-            $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
+            if (($portInspect['state'] ?? '') === 'orphan') {
+                $this->printer->error(__('%{1} 端口 %{2} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程', [$label, $port]));
+            } else {
+                $this->printer->error(__('%{1} 端口 %{2} 被非框架进程占用，不予杀死', [$label, $port]));
+            }
             $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
             $this->printer->note(__('或使用: php bin/w server:kill-port %{1} -f', [$port]));
             return false;
@@ -2380,8 +2398,13 @@ class Start extends CommandAbstract
             return false;
         }
         foreach ($portsInUse as $p) {
-            if (!Processer::isPortUsedByWeline($p)) {
-                $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
+            $portInspect = Processer::inspectPortOccupantWithHistory($p);
+            if (!($portInspect['is_weline'] ?? false)) {
+                if (($portInspect['state'] ?? '') === 'orphan') {
+                    $this->printer->error(__('端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程', [$p]));
+                } else {
+                    $this->printer->error(__('端口 %{1} 被非框架进程占用，不予杀死', [$p]));
+                }
                 $this->printer->note(__('请手动停止占用该端口的进程，或更换端口'));
                 return false;
             }
