@@ -48,6 +48,7 @@ class Processer
      * 结构: [pid => true, ...]
      */
     private static array $trustedPidCache = [];
+    private static array $orphanWelinePortHintCache = [];
     
     /**
      * 框架进程名前缀（用于安全校验，防止误杀非框架进程）
@@ -115,6 +116,81 @@ class Processer
         }
         
         return $name ?: 'process';
+    }
+
+    private static function doesRecordedProcessNameMatchPort(string $value, int $port): bool
+    {
+        if ($port <= 0 || $value === '') {
+            return false;
+        }
+
+        $quotedPort = \preg_quote((string) $port, '/');
+        return \preg_match('/(?:localhost:|["\'\s=])' . $quotedPort . '(?:["\'\s]|$)/i', $value) === 1;
+    }
+
+    private static function nameIndexSuggestsWelinePort(int $port): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+
+        if (\array_key_exists($port, self::$orphanWelinePortHintCache)) {
+            return self::$orphanWelinePortHintCache[$port];
+        }
+
+        $pidIndex = self::readPidIndex();
+        foreach ($pidIndex as $pid => $record) {
+            $pname = (string) ($record['pname'] ?? '');
+            if ($pname === '') {
+                continue;
+            }
+
+            $taskName = \str_starts_with($pname, '--name=')
+                ? \substr($pname, 7)
+                : $pname;
+
+            $looksLikeWeline = (\strpos($taskName, self::WELINE_PROCESS_PREFIX) !== false)
+                || (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
+            if (!$looksLikeWeline) {
+                continue;
+            }
+
+            if (!self::doesRecordedProcessNameMatchPort($pname, $port)
+                && !self::doesRecordedProcessNameMatchPort($taskName, $port)) {
+                continue;
+            }
+
+            if (self::isManagedProcessRunning((int) $pid, null, '', $pname)) {
+                self::$orphanWelinePortHintCache[$port] = true;
+                return true;
+            }
+        }
+
+        self::$orphanWelinePortHintCache[$port] = false;
+        return false;
+    }
+
+    public static function inspectPortOccupantWithHistory(int $port): array
+    {
+        $inspect = self::inspectPortOccupant($port);
+        if (!($inspect['in_use'] ?? false)) {
+            return $inspect;
+        }
+
+        if (($inspect['pid_running'] ?? false) || ($inspect['is_weline'] ?? false)) {
+            return $inspect;
+        }
+
+        if (!self::nameIndexSuggestsWelinePort($port)) {
+            return $inspect;
+        }
+
+        $inspect['is_weline'] = true;
+        if (($inspect['state'] ?? '') === 'orphan') {
+            $inspect['state'] = 'weline';
+        }
+
+        return $inspect;
     }
     
     /**
@@ -2118,6 +2194,11 @@ class Processer
     public static function clearPortCache(?int $port = null): void
     {
         self::getDriver()->clearPortCache($port);
+        if ($port !== null) {
+            unset(self::$orphanWelinePortHintCache[$port]);
+        } else {
+            self::$orphanWelinePortHintCache = [];
+        }
     }
     
     /**
@@ -3422,25 +3503,79 @@ class Processer
      */
     public static function isPortUsedByWeline(int $port): bool
     {
-        // 策略1：从 port_index.json 查找
-        // 进程启动时会先注册端口到索引，即使进程正在初始化也能识别
+        return (bool) (self::inspectPortOccupantWithHistory($port)['is_weline'] ?? false);
+    }
+    
+    /**
+     * 统一检查端口占用归属，避免“端口仍可连但 PID 已失效”被误判。
+     *
+     * state:
+     * - free:    端口空闲
+     * - weline:  明确为框架进程占用（或 port_index 命中框架进程名）
+     * - foreign: 明确为非框架进程占用
+     * - orphan:  端口被占用但 PID 不可用/失效
+     *
+     * @return array{
+     *   in_use:bool,
+     *   pid:int,
+     *   pid_running:bool,
+     *   is_weline:bool,
+     *   state:string
+     * }
+     */
+    public static function inspectPortOccupant(int $port): array
+    {
+        if (!self::isPortInUse($port)) {
+            return [
+                'in_use' => false,
+                'pid' => 0,
+                'pid_running' => false,
+                'is_weline' => false,
+                'state' => 'free',
+            ];
+        }
+
+        $portIndexSuggestsWeline = false;
         $portKey = (string) $port;
         $portIndex = self::readPortIndex();
         if (isset($portIndex[$portKey])) {
-            $pname = $portIndex[$portKey];
-            // 验证该进程名是否属于框架进程
-            if (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false
-                || \strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false) {
-                return true;
-            }
+            $pname = (string) $portIndex[$portKey];
+            $portIndexSuggestsWeline = (\strpos($pname, self::WELINE_PROCESS_PREFIX) !== false)
+                || (\strpos($pname, '--name=' . self::WELINE_PROCESS_PREFIX) !== false);
         }
-        
-        // 策略2：通过系统命令获取 PID，再判断是否是框架进程
+
         $pid = self::getProcessIdByPort($port);
         if ($pid <= 0) {
-            return false;
+            $ghostSuggestsWeline = $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port);
+            return [
+                'in_use' => true,
+                'pid' => 0,
+                'pid_running' => false,
+                'is_weline' => $ghostSuggestsWeline,
+                'state' => $ghostSuggestsWeline ? 'weline' : 'orphan',
+            ];
         }
-        return self::isWelineServerProcess($pid);
+
+        $pidRunning = self::isRunningByPid($pid);
+        if (!$pidRunning) {
+            $ghostSuggestsWeline = $portIndexSuggestsWeline || self::nameIndexSuggestsWelinePort($port);
+            return [
+                'in_use' => true,
+                'pid' => $pid,
+                'pid_running' => false,
+                'is_weline' => $ghostSuggestsWeline,
+                'state' => $ghostSuggestsWeline ? 'weline' : 'orphan',
+            ];
+        }
+
+        $isWeline = self::isWelineServerProcess($pid) || $portIndexSuggestsWeline;
+        return [
+            'in_use' => true,
+            'pid' => $pid,
+            'pid_running' => true,
+            'is_weline' => $isWeline,
+            'state' => $isWeline ? 'weline' : 'foreign',
+        ];
     }
     
     /**
@@ -3467,17 +3602,8 @@ class Processer
         if (empty($processName)) {
             return false;
         }
-        
-        // 快速路径：先从文件检查（避免昂贵的系统搜索）
-        $pname = '--name=' . $processName;
-        $pid = (int) self::getData($pname, 'pid');
-        if ($pid > 0 && self::isManagedProcessRunning($pid, $processName, '', $pname)) {
-            return true;
-        }
-        
-        // 慢路径：委托给驱动进行系统级搜索
-        $pids = self::getDriver()->findProcessesByName($processName);
-        return !empty($pids);
+
+        return !empty(self::getProcessIdsByName($processName));
     }
     
     /**
@@ -3491,7 +3617,28 @@ class Processer
         if (empty($processName)) {
             return [];
         }
-        return self::getDriver()->findProcessesByName($processName);
+
+        $pname = '--name=' . $processName;
+        $pids = [];
+
+        // 快速路径：优先使用 Processer 已登记的 PID。
+        $pid = (int) self::getData($pname, 'pid');
+        if ($pid > 0 && self::isManagedProcessRunning($pid, $processName, '', $pname)) {
+            $pids[$pid] = true;
+        }
+
+        // 慢路径：系统级按命令行搜索，但必须再次校验受管身份，避免误命中仅“提到”该 name 的其它进程。
+        foreach (self::getDriver()->findProcessesByName($processName) as $candidatePid) {
+            $candidatePid = (int) $candidatePid;
+            if ($candidatePid <= 0) {
+                continue;
+            }
+            if (self::isManagedProcessRunning($candidatePid, $processName, '', $pname)) {
+                $pids[$candidatePid] = true;
+            }
+        }
+
+        return \array_map('intval', \array_keys($pids));
     }
     
     /**
