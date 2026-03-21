@@ -13,12 +13,12 @@ use Weline\Framework\System\Process\Processer;
  *
  * 设计为与具体应用无关，WLS 和 Cron 均可使用。
  */
-final class OrphanGuard
+class OrphanGuard
 {
     private int $lastCheckTs = 0;
     private int $deadCount = 0;
     private int $unknownDisconnectCount = 0;
-    private IpcLoggerInterface $logger;
+    protected IpcLoggerInterface $logger;
 
     public function __construct(
         private readonly int $checkIntervalSec = 5,
@@ -80,7 +80,7 @@ final class OrphanGuard
         return $this->deadCount >= $this->deadThreshold;
     }
 
-    private function masterAlive(int $masterPid): bool
+    protected function masterAlive(int $masterPid): bool
     {
         if (\function_exists('posix_kill')) {
             $alive = @\posix_kill($masterPid, 0);
