@@ -319,7 +319,7 @@ class DomainResolveService
                 return [
                     'account' => null,
                     'adapter' => null,
-                    'error' => __('域名 DNS 托管在 %{1}，但未配置该服务商账户。请在「域名商账户」中添加 %{1} 账户。', [$this->dnsDetector->getProviderDisplayName($dnsProvider)]),
+                    'error' => __('当前公网 NS 识别为 %{1}，但后台未配置对应账户。请在「域名商账户」中添加可管理该 DNS 的 %{1} 账户。', [$this->dnsDetector->getProviderDisplayName($dnsProvider)]),
                 ];
             }
             return [

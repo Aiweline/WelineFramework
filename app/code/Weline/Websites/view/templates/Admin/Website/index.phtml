@@ -113,6 +113,99 @@ $search = $this->getData('search') ?? '';
 #search-form .form-control:focus {
     border-color: var(--backend-color-primary, #556ee6);
 }
+.weline-websites-compact-table {
+    min-width: 840px;
+    margin-bottom: 0;
+}
+.weline-websites-site-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 14rem;
+}
+.weline-websites-site-name {
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+}
+.weline-websites-site-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.78rem;
+}
+.weline-websites-inline-code {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-danger, #f46a6a);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.78rem;
+}
+.weline-websites-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.5rem;
+    border-radius: var(--backend-border-radius-pill, 999px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.weline-websites-access-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-width: 18rem;
+}
+.weline-websites-url-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    word-break: break-all;
+}
+.weline-websites-domain-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+.weline-websites-domain-badge {
+    background: var(--backend-color-bg-tertiary, #f1f3f5);
+    padding: 0.25rem 0.55rem;
+    border-radius: var(--backend-border-radius-sm, 4px);
+    line-height: 1.2;
+}
+.weline-websites-market-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    min-width: 15rem;
+}
+.weline-websites-market-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+.weline-websites-market-label {
+    min-width: 2.75rem;
+    color: var(--backend-color-text-tertiary, #9a9cae);
+    font-size: 0.78rem;
+    line-height: 1.8;
+}
+.weline-websites-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    flex: 1;
+}
+.weline-websites-op-cell {
+    white-space: nowrap;
+}
+.weline-websites-op-cell .btn {
+    white-space: nowrap;
+}
 </style>
 
 <!-- 页面标题 -->
