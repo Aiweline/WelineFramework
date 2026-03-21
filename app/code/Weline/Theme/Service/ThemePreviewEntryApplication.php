@@ -11,12 +11,7 @@ use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\PreviewTokenService;
-use Weline\Theme\Service\ThemeLayoutVersionService;
 
-/**
- * 主题预览入口：写入 Session 并生成重定向 URL（后台预览页与前台网关共用）
- */
 final class ThemePreviewEntryApplication
 {
     public function __construct(
@@ -52,7 +47,7 @@ final class ThemePreviewEntryApplication
             return ['ok' => false, 'message' => __('主题不存在')];
         }
 
-        if (in_array($area, ['frontend', 'backend'], true) && !$this->themeContextService->themeSupportsArea($theme, $area)) {
+        if (\in_array($area, ['frontend', 'backend'], true) && !$this->themeContextService->themeSupportsArea($theme, $area)) {
             return ['ok' => false, 'message' => __('主题不支持 %{1} 区域', [$area])];
         }
 
@@ -60,7 +55,7 @@ final class ThemePreviewEntryApplication
         $session->set('preview_theme_area', $area);
 
         $shouldAutoLogin = false;
-        if ($area === 'frontend') {
+        if ($area === PreviewContextService::AREA_FRONTEND) {
             if ($autoLogin !== null && $autoLogin !== '') {
                 $shouldAutoLogin = ($autoLogin === '1' || $autoLogin === 1 || $autoLogin === true);
             } else {
@@ -69,86 +64,109 @@ final class ThemePreviewEntryApplication
         }
 
         $session->set('preview_auto_login', $shouldAutoLogin);
-
         if ($shouldAutoLogin) {
             PreviewAccountManager::ensurePreviewUser($theme);
         }
 
         /** @var Url $url */
         $url = ObjectManager::getInstance(Url::class);
+        /** @var PreviewContextService $previewContextService */
+        $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
+        /** @var PreviewTokenService $previewTokenService */
+        $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+        /** @var ThemePageTypeResolver $themePageTypeResolver */
+        $themePageTypeResolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
 
-        if ($area === 'backend') {
-            return [
-                'ok' => true,
-                'redirect' => $url->getBackendUrl('admin', ['preview_theme' => $themeId]),
-            ];
-        }
-
-        $mode = in_array($previewMode, ['live', 'version', 'default'], true) ? $previewMode : 'default';
-
-        if ($mode === 'default') {
-            $params = $appendPreviewThemeQueryOnFrontendUrl ? ['preview_theme' => $themeId] : [];
-            if ($scopeQuery !== null && $scopeQuery !== '') {
-                $params['scope'] = $scopeQuery;
-            }
-            $params['preview_mode'] = 'default';
-            $redirect = $url->getFrontendUrl('index/index', $params);
-            return [
-                'ok' => true,
-                'redirect' => $redirect,
-            ];
-        }
-
-        $layoutType = trim((string)($pageType ?: 'homepage'));
+        $mode = \in_array($previewMode, ['live', 'version', 'default'], true) ? $previewMode : 'default';
+        $layoutType = \trim((string)($pageType ?: 'homepage'));
         if ($layoutType === '') {
             $layoutType = 'homepage';
         }
-        $previewStatus = in_array($status, ['draft', 'published'], true) ? $status : 'draft';
-        $previewEditorArea = $editorArea === 'backend' ? 'backend' : 'frontend';
-        $params = [
-            'theme_id' => $themeId,
-            'layout_type' => $layoutType,
-            'layout_option' => 'default',
-            'editor_mode' => '1',
-            'status' => $previewStatus,
-            'editor_area' => $previewEditorArea,
-            'preview_mode' => $mode,
-            '_t' => time(),
-        ];
+        $previewStatus = \in_array($status, ['draft', 'published'], true) ? $status : 'draft';
+        $previewEditorArea = $editorArea === PreviewContextService::AREA_BACKEND
+            ? PreviewContextService::AREA_BACKEND
+            : PreviewContextService::AREA_FRONTEND;
         $resolvedVersionId = null;
         if ($mode === 'version') {
-            $resolvedVersionId = ($versionId !== null && $versionId > 0) ? $versionId : $this->resolvePreviewVersionId(
-                $themeId,
-                $layoutType,
-                $previewStatus
-            );
-        }
-        if ($resolvedVersionId !== null && $resolvedVersionId > 0) {
-            $params['version_id'] = $resolvedVersionId;
-        }
-        if ($scopeQuery !== null && $scopeQuery !== '') {
-            $params['scope'] = $scopeQuery;
-        }
-        if ($appendPreviewThemeQueryOnFrontendUrl) {
-            $params['preview_theme'] = $themeId;
-        }
-        try {
-            /** @var PreviewTokenService $previewTokenService */
-            $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
-            $previewToken = $previewTokenService->generateToken(
-                $themeId,
-                $layoutType,
-                $resolvedVersionId
-            );
-            $params[PreviewTokenService::TOKEN_KEY] = $previewToken;
-        } catch (\Throwable) {
-            // token 生成失败不阻断预览 URL 生成
+            $resolvedVersionId = ($versionId !== null && $versionId > 0)
+                ? $versionId
+                : $this->resolvePreviewVersionId($themeId, $layoutType, $previewStatus);
         }
 
-        $redirect = $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params);
+        $context = $previewContextService->buildContext([
+            'frontend_theme_id' => $area === PreviewContextService::AREA_FRONTEND ? $themeId : 0,
+            'backend_theme_id' => $area === PreviewContextService::AREA_BACKEND ? $themeId : 0,
+            'editor_area' => $previewEditorArea,
+            'shell' => $area === PreviewContextService::AREA_BACKEND
+                ? PreviewContextService::SHELL_THEME_EDITOR
+                : PreviewContextService::SHELL_PREVIEW,
+            'preview_mode' => $mode === 'default' ? PreviewContextService::DEFAULT_PREVIEW_MODE : $mode,
+            'status' => $previewStatus,
+            'version_id' => $resolvedVersionId,
+            'scope' => ($scopeQuery !== null && $scopeQuery !== '')
+                ? \trim($scopeQuery)
+                : PreviewContextService::DEFAULT_SCOPE,
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $layoutType,
+        ]);
+        $context = $previewContextService->ensureThemeIds($context);
+
+        if ($area === PreviewContextService::AREA_FRONTEND) {
+            $tokenThemeId = $previewContextService->getThemeIdForArea(
+                PreviewContextService::AREA_FRONTEND,
+                $context,
+                true
+            );
+            if ($tokenThemeId > 0) {
+                try {
+                    $previewToken = $previewTokenService->generateToken(
+                        $tokenThemeId,
+                        $layoutType,
+                        $resolvedVersionId,
+                        $context
+                    );
+                    $previewTokenService->setPreviewCookie($previewToken);
+                    $context = $previewContextService->withPreviewToken($context, $previewToken);
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        $previewContextService->persistContext($context);
+
+        if ($area === PreviewContextService::AREA_BACKEND) {
+            $params = $previewContextService->toQueryParams($context, $appendPreviewThemeQueryOnFrontendUrl);
+            $params['theme_id'] = $previewContextService->getThemeIdForArea(
+                PreviewContextService::AREA_BACKEND,
+                $context,
+                true
+            );
+            $params['layout_type'] = $layoutType;
+            $params['layout_option'] = 'default';
+            $params['editor_mode'] = '1';
+            $params['status'] = $previewStatus;
+            $params['editor_area'] = PreviewContextService::AREA_BACKEND;
+            $params['preview_mode'] = $context['preview_mode'];
+            $params['_t'] = \time();
+            if ($resolvedVersionId !== null && $resolvedVersionId > 0) {
+                $params['version_id'] = $resolvedVersionId;
+            }
+
+            return [
+                'ok' => true,
+                'redirect' => $url->getBackendUrl('theme/backend/theme-editor/layout-preview', $params),
+            ];
+        }
+
+        $params = $previewContextService->toQueryParams($context, $appendPreviewThemeQueryOnFrontendUrl);
+        $params['_t'] = \time();
+
         return [
             'ok' => true,
-            'redirect' => $redirect,
+            'redirect' => $url->getFrontendUrl(
+                $themePageTypeResolver->getPreviewRouteByPageType($layoutType),
+                $params
+            ),
         ];
     }
 
@@ -164,10 +182,10 @@ final class ThemePreviewEntryApplication
                 return false;
             }
 
-            $layoutPath = rtrim($themePath, \DS) . \DS . 'view' . \DS . 'theme' . \DS . $area . \DS . 'layouts' . \DS . $layoutType . \DS . $layoutOption . '.phtml';
-            $layoutPath = str_replace('\\', \DS, $layoutPath);
+            $layoutPath = \rtrim($themePath, \DS) . \DS . 'view' . \DS . 'theme' . \DS . $area . \DS . 'layouts' . \DS . $layoutType . \DS . $layoutOption . '.phtml';
+            $layoutPath = \str_replace('\\', \DS, $layoutPath);
 
-            if (!is_file($layoutPath)) {
+            if (!\is_file($layoutPath)) {
                 $parentId = $theme->getParentId();
                 if ($parentId) {
                     /** @var WelineTheme $parentTheme */
