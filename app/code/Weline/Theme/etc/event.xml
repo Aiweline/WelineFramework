@@ -17,6 +17,15 @@
                   shared="true"
                   sort="0"/>
     </event>
+
+    <!-- 在模块 Router 链（sort=0）之前改写带 preview_theme 的首页路径，进入 Theme 前台预览网关 -->
+    <event name="Weline_Framework_Router::process_uri_before">
+        <observer name="Weline_Theme::process_preview_theme_uri_before"
+                  instance="Weline\Theme\Observer\ProcessPreviewThemeUriBefore"
+                  disabled="false"
+                  shared="true"
+                  sort="-7"/>
+    </event>
     
     <!-- 
         模板文件获取事件 - 解析主题文件路径

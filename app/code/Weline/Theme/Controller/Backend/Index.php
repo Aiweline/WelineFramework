@@ -18,10 +18,10 @@ use Weline\Meta\Helper\MetaData;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\MetaTranslation;
-use Weline\Theme\Helper\PreviewAccountManager;
 use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemePreviewEntryApplication;
 use Weline\Theme\Service\ThemePreviewGenerator;
 use Weline\Framework\Http\Sse\SseWriter;
 
@@ -178,64 +178,37 @@ class Index extends BackendController
      */
     public function getPreview()
     {
-        $themeId = $this->request->getParam('theme_id');
+        $themeId = (int)$this->request->getParam('theme_id', 0);
         $area = $this->request->getParam('area', 'frontend'); // frontend、backend 或 mobile
         $autoLogin = $this->request->getParam('auto_login', '1'); // 是否自动登录，默认开启（1=开启，0=关闭）
-        
-        if (!$themeId) {
-            return $this->error(__('请选择主题'));
+        $pageType = (string)$this->request->getParam('page_type', 'homepage');
+        $versionId = (int)$this->request->getParam('version_id', 0);
+        $status = (string)$this->request->getParam('status', 'draft');
+        $previewMode = (string)$this->request->getParam('preview_mode', 'default');
+
+        /** @var ThemePreviewEntryApplication $previewEntry */
+        $previewEntry = ObjectManager::getInstance(ThemePreviewEntryApplication::class);
+        $result = $previewEntry->preparePreviewRedirect(
+            $themeId,
+            (string)$area,
+            $autoLogin,
+            $this->session,
+            true,
+            null,
+            $pageType,
+            $versionId > 0 ? $versionId : null,
+            $status,
+            (string)$area,
+            $previewMode,
+        );
+
+        if (!$result['ok']) {
+            return $this->error($result['message']);
         }
 
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        $theme->load($themeId);
-        
-        if (!$theme->getId()) {
-            return $this->error(__('主题不存在'));
-        }
+        $this->request->getResponse()->redirect($result['redirect']);
 
-        if (in_array($area, ['frontend', 'backend'], true) && !$this->themeSupportsArea($theme, $area)) {
-            return $this->error(__('主题不支持 %{1} 区域', [$area]));
-        }
-
-        // 将预览主题ID存储到session中，供TemplateFetchFile观察者使用
-        $this->session->setData('preview_theme_id', $themeId);
-        $this->session->setData('preview_theme_area', $area);
-        
-        // 判断是否需要自动登录
-        $shouldAutoLogin = false;
-        if ($area === 'frontend') {
-            // 如果手动指定了 auto_login 参数，优先使用
-            if ($autoLogin !== null && $autoLogin !== '') {
-                $shouldAutoLogin = ($autoLogin === '1' || $autoLogin === 1 || $autoLogin === true);
-            } else {
-                // 否则根据布局文件的 @preview.login 标记决定
-                $shouldAutoLogin = $this->shouldAutoLoginByLayout($theme, $area);
-            }
-        }
-        
-        $this->session->setData('preview_auto_login', $shouldAutoLogin);
-
-        // 如果需要自动登录，确保预览用户已创建
-        if ($shouldAutoLogin) {
-            PreviewAccountManager::ensurePreviewUser($theme);
-        }
-
-        // 根据区域重定向到相应的预览页面
-        /** @var Url $url */
-        $url = ObjectManager::getInstance(Url::class);
-        
-        if ($area === 'backend') {
-            // 后端预览：重定向到后台首页
-            $previewUrl = $url->getBackendUrl('admin', ['preview_theme' => $themeId]);
-            $this->request->getResponse()->redirect($previewUrl);
-            return '';
-        } else {
-            // 前端预览：重定向到前端首页
-            $previewUrl = $url->getFrontendUrl('index/index', ['preview_theme' => $themeId]);
-            $this->request->getResponse()->redirect($previewUrl);
-            return '';
-        }
+        return '';
     }
 
 

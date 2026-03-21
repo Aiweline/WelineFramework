@@ -13,7 +13,7 @@ $reviewCount = $product['review_count'] ?? 0;
 ?>
 <main class="px-4 sm:px-6 lg:px-8 xl:px-20 py-10 flex-1">
     <div class="mx-auto max-w-7xl">
-        <w:hook name="WeShop_Product::detail::breadcrumb_before"/>
+        <w:hook>WeShop_Product::detail::breadcrumb_before</w:hook>
         <div class="flex flex-wrap items-center gap-2 mb-8 text-xs uppercase tracking-wide">
             <a class="text-gray-400 hover:text-primary transition-colors font-semibold" href="<?= $this->getUrl('') ?>">
                 <span class="material-symbols-outlined text-sm align-middle mr-1">home</span><?= __('Home') ?>
@@ -27,11 +27,11 @@ $reviewCount = $product['review_count'] ?? 0;
                 <?php endif; ?>
             <?php endforeach; ?>
         </div>
-        <w:hook name="WeShop_Product::detail::breadcrumb_after"/>
+        <w:hook>WeShop_Product::detail::breadcrumb_after</w:hook>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12">
             <div class="flex flex-col gap-4">
-                <w:hook name="WeShop_Product::detail::gallery_before"/>
+                <w:hook>WeShop_Product::detail::gallery_before</w:hook>
                 <div class="relative w-full aspect-square bg-gray-100 dark:bg-gray-800 rounded overflow-hidden motor-product-gallery" id="main-product-image">
                     <?php if ($product['special_price'] ?? null): ?>
                         <div class="absolute top-4 left-4 z-20">
@@ -51,11 +51,11 @@ $reviewCount = $product['review_count'] ?? 0;
                         </button>
                     <?php endforeach; ?>
                 </div>
-                <w:hook name="WeShop_Product::detail::gallery_after"/>
+                <w:hook>WeShop_Product::detail::gallery_after</w:hook>
             </div>
 
             <div class="flex flex-col gap-6">
-                <w:hook name="WeShop_Product::detail::info_before"/>
+                <w:hook>WeShop_Product::detail::info_before</w:hook>
 
                 <?php if ($product['brand'] ?? null): ?>
                     <div class="flex items-center gap-2">
@@ -68,7 +68,7 @@ $reviewCount = $product['review_count'] ?? 0;
                     <?= htmlspecialchars($product['name'] ?? '') ?>
                 </h1>
 
-                <w:hook name="WeShop_Review::product::rating"/>
+                <w:hook>WeShop_Review::product::rating</w:hook>
                 <?php $rating = $product['rating'] ?? 0; ?>
                 <div class="flex items-center gap-3">
                     <div class="flex text-primary">
@@ -104,7 +104,7 @@ $reviewCount = $product['review_count'] ?? 0;
                     </p>
                 <?php endif; ?>
 
-                <w:hook name="WeShop_Product::detail::options_before"/>
+                <w:hook>WeShop_Product::detail::options_before</w:hook>
                 <form id="product-form" action="<?= $this->getUrl('cart/add') ?>" method="post">
                     <input type="hidden" name="product_id" value="<?= $product['product_id'] ?? 0 ?>">
 
@@ -133,7 +133,7 @@ $reviewCount = $product['review_count'] ?? 0;
                         </div>
                     </div>
 
-                    <w:hook name="WeShop_Product::detail::options_after"/>
+                    <w:hook>WeShop_Product::detail::options_after</w:hook>
 
                     <div class="flex flex-col sm:flex-row gap-3">
                         <button type="submit" class="flex-1 motor-btn-primary inline-flex items-center justify-center py-4 text-base font-bold uppercase tracking-wide gap-2">
@@ -144,7 +144,7 @@ $reviewCount = $product['review_count'] ?? 0;
                             <span class="material-symbols-outlined">favorite_border</span>
                         </button>
                     </div>
-                    <w:hook name="WeShop_Product::detail::after_add_to_cart"/>
+                    <w:hook>WeShop_Product::detail::after_add_to_cart</w:hook>
                 </form>
 
                 <?php if ($product['highlights'] ?? null): ?>
@@ -164,12 +164,12 @@ $reviewCount = $product['review_count'] ?? 0;
                     </div>
                 <?php endif; ?>
 
-                <w:hook name="WeShop_Product::detail::info_after"/>
+                <w:hook>WeShop_Product::detail::info_after</w:hook>
             </div>
         </div>
 
         <div class="mt-12">
-            <w:hook name="WeShop_Product::detail::tabs_before"/>
+            <w:hook>WeShop_Product::detail::tabs_before</w:hook>
             <div class="border-b-2 border-gray-200 dark:border-gray-800">
                 <nav class="-mb-px flex space-x-8 font-heading" role="tablist">
                     <button type="button" class="motor-tab py-4 px-1 border-b-2 font-bold text-sm uppercase tracking-wide text-primary border-primary" data-tab="description" role="tab">
@@ -207,14 +207,14 @@ $reviewCount = $product['review_count'] ?? 0;
             </div>
 
             <div class="motor-tab-content py-8 hidden" id="tab-reviews">
-                <w:hook name="WeShop_Review::product::reviews"/>
+                <w:hook>WeShop_Review::product::reviews</w:hook>
             </div>
-            <w:hook name="WeShop_Product::detail::tabs_after"/>
+            <w:hook>WeShop_Product::detail::tabs_after</w:hook>
         </div>
 
         <?php if (!empty($relatedProducts)): ?>
             <div class="mt-16 pt-12 border-t-2 border-gray-200 dark:border-gray-800">
-                <w:hook name="WeShop_Product::detail::related_before"/>
+                <w:hook>WeShop_Product::detail::related_before</w:hook>
                 <div class="flex items-center justify-between mb-8">
                     <h2 class="font-heading text-xl md:text-2xl font-bold uppercase tracking-tight"><?= __('Related Products') ?></h2>
                     <a href="<?= $this->getUrl('catalog/category') ?>" class="text-sm font-bold text-primary uppercase tracking-wide flex items-center gap-1 hover:underline">
@@ -242,7 +242,7 @@ $reviewCount = $product['review_count'] ?? 0;
                         </a>
                     <?php endforeach; ?>
                 </div>
-                <w:hook name="WeShop_Product::detail::related_after"/>
+                <w:hook>WeShop_Product::detail::related_after</w:hook>
             </div>
         <?php endif; ?>
     </div>
