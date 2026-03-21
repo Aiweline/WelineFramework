@@ -73,6 +73,10 @@ class SchemaDiffStage extends AbstractStage
         $this->diffOps = [];
         $processedTables = [];
 
+        // ── Pass 1: 收集所有需要 diff 的表及其声明 schema ──
+        /** @var array<string, \Weline\Framework\Database\Schema\TableSchema> $declaredSchemas */
+        $declaredSchemas = [];
+
         foreach ($modules as $moduleData) {
             $module = new Module($moduleData);
             try {
@@ -115,12 +119,20 @@ class SchemaDiffStage extends AbstractStage
                     continue;
                 }
                 $processedTables[$declared->tableName] = true;
+                $declaredSchemas[$declared->tableName] = $declared;
+            }
+        }
 
-                $actual = $this->dbSchemaReader->readTable($connector, $declared->tableName);
-                $ops = $this->diffEngine->diff($declared, $actual);
-                foreach ($ops as $op) {
-                    $this->diffOps[] = $op;
-                }
+        // ── Pass 2: 批量读取已存在的表结构（N→1 tableExist 查询）──
+        $tableNames = array_keys($declaredSchemas);
+        $actualSchemas = $this->dbSchemaReader->readTablesBatch($connector, $tableNames);
+
+        // ── Pass 3: 执行 diff ──
+        foreach ($declaredSchemas as $tableName => $declared) {
+            $actual = $actualSchemas[$tableName] ?? null;
+            $ops = $this->diffEngine->diff($declared, $actual);
+            foreach ($ops as $op) {
+                $this->diffOps[] = $op;
             }
         }
 
