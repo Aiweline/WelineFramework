@@ -17,8 +17,8 @@ class IpcControlGateway implements IpcControlGatewayInterface
         array $payload = [],
         float $timeout = 6.0
     ): array {
-        $master = MasterProcess::getMasterInfo($instanceName);
-        if (!$master || empty($master['control_port'])) {
+        $controlPort = $this->resolveControlPort($instanceName);
+        if ($controlPort <= 0) {
             return [
                 'success' => false,
                 'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$instanceName]),
@@ -26,75 +26,20 @@ class IpcControlGateway implements IpcControlGatewayInterface
             ];
         }
 
-        $controlPort = (int)($master['control_port'] ?? 0);
-        if ($controlPort <= 0) {
-            return [
-                'success' => false,
-                'message' => (string)__('实例 %{1} 的控制端口无效。', [$instanceName]),
-                'data' => [],
-            ];
-        }
+        return $this->sendCommand($controlPort, ControlMessage::command($action, $reloadType, $payload), $timeout);
+    }
 
-        $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, $timeout);
-        if (!$conn) {
-            return [
-                'success' => false,
-                'message' => (string)__('连接控制端口失败：%{1}', [$errstr ?: 'unknown']),
-                'data' => ['errno' => (int)$errno],
-            ];
-        }
+    public function reloadAsync(
+        string $instanceName,
+        string $reloadType,
+        float $timeout = 3.0
+    ): array {
+        return $this->command($instanceName, ControlMessage::ACTION_RELOAD, $reloadType, [], $timeout);
+    }
 
-        \stream_set_timeout($conn, (int)\ceil($timeout));
-        \stream_set_blocking($conn, false);
-
-        $command = ControlMessage::command($action, $reloadType, $payload);
-        $written = @\fwrite($conn, $command);
-        if ($written === false || $written === 0) {
-            @\fclose($conn);
-            return [
-                'success' => false,
-                'message' => (string)__('发送控制命令失败，请检查 Orchestrator IPC 连接状态。'),
-                'data' => [],
-            ];
-        }
-
-        $buffer = '';
-        $deadline = \microtime(true) + $timeout;
-        while (\microtime(true) < $deadline) {
-            $chunk = @\fread($conn, 4096);
-            if ($chunk === false) {
-                @\fclose($conn);
-                return [
-                    'success' => false,
-                    'message' => (string)__('读取控制命令响应失败。'),
-                    'data' => [],
-                ];
-            }
-
-            if ($chunk !== '') {
-                $buffer .= $chunk;
-                $messages = ControlMessage::extractMessages($buffer);
-                foreach ($messages as $message) {
-                    if (($message['type'] ?? '') !== ControlMessage::TYPE_COMMAND_RESULT) {
-                        continue;
-                    }
-                    @\fclose($conn);
-                    return [
-                        'success' => (bool)($message['success'] ?? false),
-                        'message' => (string)($message['message'] ?? ''),
-                        'data' => \is_array($message['data'] ?? null) ? $message['data'] : [],
-                    ];
-                }
-            }
-            SchedulerSystem::usleep(50000);
-        }
-
-        @\fclose($conn);
-        return [
-            'success' => false,
-            'message' => (string)__('等待控制命令响应超时（%{1}s）。', [\round($timeout, 1)]),
-            'data' => [],
-        ];
+    public function cacheClear(string $instanceName, float $timeout = 3.0): array
+    {
+        return $this->command($instanceName, ControlMessage::ACTION_CACHE_CLEAR, '', [], $timeout);
     }
 
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
@@ -132,5 +77,91 @@ class IpcControlGateway implements IpcControlGatewayInterface
             'message' => (string)__('启动命令已提交，Master PID: %{1}', [$pid]),
             'data' => ['pid' => $pid],
         ];
+    }
+
+    private function resolveControlPort(string $instanceName): int
+    {
+        $master = MasterProcess::getMasterInfo($instanceName);
+        return (int)($master['control_port'] ?? 0);
+    }
+
+    /**
+     * @param resource $conn
+     * @return array{success:bool,message:string,data:array}
+     */
+    private function readCommandResult($conn, float $timeout): array
+    {
+        \stream_set_timeout($conn, (int)\ceil($timeout));
+        \stream_set_blocking($conn, false);
+
+        $buffer = '';
+        $deadline = \microtime(true) + $timeout;
+        while (\microtime(true) < $deadline) {
+            $chunk = @\fread($conn, 4096);
+            if ($chunk === false) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('读取控制命令响应失败。'),
+                    'data' => [],
+                ];
+            }
+
+            if ($chunk !== '') {
+                $buffer .= $chunk;
+                foreach (ControlMessage::extractMessages($buffer) as $message) {
+                    if (($message['type'] ?? '') !== ControlMessage::TYPE_COMMAND_RESULT) {
+                        continue;
+                    }
+
+                    return [
+                        'success' => (bool)($message['success'] ?? false),
+                        'message' => (string)($message['message'] ?? ''),
+                        'data' => \is_array($message['data'] ?? null) ? $message['data'] : [],
+                    ];
+                }
+            }
+
+            if (\feof($conn)) {
+                break;
+            }
+
+            SchedulerSystem::usleep(50000);
+        }
+
+        return [
+            'success' => false,
+            'message' => (string)__('等待控制命令响应超时（%{1}s）。', [\round($timeout, 1)]),
+            'data' => [],
+        ];
+    }
+
+    /**
+     * @return array{success:bool,message:string,data:array}
+     */
+    private function sendCommand(int $controlPort, string $command, float $timeout): array
+    {
+        $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, $timeout);
+        if (!$conn) {
+            return [
+                'success' => false,
+                'message' => (string)__('连接控制端口失败：%{1}', [$errstr ?: 'unknown']),
+                'data' => ['errno' => (int)$errno],
+            ];
+        }
+
+        try {
+            $written = @\fwrite($conn, $command);
+            if ($written === false || $written === 0) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('发送控制命令失败，请检查 Orchestrator IPC 连接状态。'),
+                    'data' => [],
+                ];
+            }
+
+            return $this->readCommandResult($conn, $timeout);
+        } finally {
+            @\fclose($conn);
+        }
     }
 }
