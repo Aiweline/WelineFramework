@@ -19,6 +19,7 @@ use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\ConfigLoader;
 use Weline\Theme\Helper\MetaTranslation;
 use Weline\Theme\Helper\PreviewAccountManager;
+use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemePreviewGenerator;

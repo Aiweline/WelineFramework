@@ -183,9 +183,7 @@ abstract class QueryAst implements QueryInterface
         // 确保子查询已经构建了 AST
         if ($subquery instanceof QueryAst) {
             // 构建子查询的 AST（如果还没有构建）
-            if (empty($subquery->getAst()) || !isset($subquery->getAst()['action'])) {
-                $subquery->prepareSql('select');
-            }
+            $subquery->buildAst('select');
             
             // 获取子查询的干净 AST（不包含方言特定的语法）
             $subqueryAst = $subquery->getAst();
@@ -205,7 +203,12 @@ abstract class QueryAst implements QueryInterface
             $this->ast['from']['alias'] = $this->cleanAstValue($alias);
             
             // 更新表别名
+            $previousAlias = $this->table_alias;
             $this->table_alias = $alias;
+            if ($this->fields === '*' || $this->fields === 'main_table.*' || $this->fields === $previousAlias . '.*') {
+                $this->fields = $alias . '.*';
+                $this->updateAstFields($this->fields);
+            }
             $this->table = ''; // 清空表名，因为使用的是子查询
         }
         
@@ -634,9 +637,7 @@ abstract class QueryAst implements QueryInterface
         // 确保子查询已经构建了 AST
         if ($subquery instanceof QueryAst) {
             // 构建子查询的 AST（如果还没有构建）
-            if (empty($subquery->getAst()) || !isset($subquery->getAst()['action'])) {
-                $subquery->prepareSql('select');
-            }
+            $subquery->buildAst('select');
             
             // 获取子查询的干净 AST（不包含方言特定的语法）
             $subqueryAst = $subquery->getAst();
@@ -771,7 +772,9 @@ abstract class QueryAst implements QueryInterface
 
     public function having(string $having): QueryInterface
     {
-        $this->having = 'having ' . $having;
+        $having = trim($having);
+        $having = preg_replace('/^having\s+/i', '', $having) ?? $having;
+        $this->having = $having;
         // 更新 AST
         $this->updateAstHaving($this->having);
         return $this;
@@ -1169,6 +1172,9 @@ abstract class QueryAst implements QueryInterface
             foreach (self::query_vars as $query_field => $query_var) {
                 $this->$query_field = $query_var;
             }
+            $this->resetQueryRuntimeState();
+            $this->PDOStatement = null;
+            $this->batch = false;
         }
         return $this;
     }
@@ -1178,10 +1184,25 @@ abstract class QueryAst implements QueryInterface
         foreach (self::init_vars as $init_field => $init_var) {
             $this->$init_field = $init_var;
         }
+        $this->resetQueryRuntimeState();
         $this->_unit_primary_keys = [];
         $this->PDOStatement = null;
         $this->batch = false;
         return $this;
+    }
+
+    protected function resetQueryRuntimeState(): void
+    {
+        $this->exist_update_sql = '';
+        $this->insert_update_fields = [];
+        $this->insert_need_fields = [];
+        $this->insert_update_where_fields = [];
+        $this->find_fields = '';
+        $this->dec_inc_updates = [];
+        $this->total = 0;
+        $this->_fallback_data = [];
+        $this->ast = [];
+        $this->subquery_counter = 0;
     }
 
     public function beginTransaction(): void
