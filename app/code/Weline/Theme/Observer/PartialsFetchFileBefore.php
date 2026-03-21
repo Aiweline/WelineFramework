@@ -67,7 +67,7 @@ class PartialsFetchFileBefore implements ObserverInterface
             $currentOption = $pathInfo['option'];
 
             // 获取当前主题
-            $theme = $this->welineTheme->getActiveTheme();
+            $theme = $this->welineTheme->getActiveTheme($area);
             
             // 检查是否有预览主题：优先 URL 参数 preview_theme，其次 Session
             $previewThemeId = 0;

@@ -20,9 +20,9 @@ class ThemeDirectoryResolver
     /**
      * @return WelineTheme[]
      */
-    public function getThemeChain(?WelineTheme $theme = null): array
+    public function getThemeChain(?WelineTheme $theme = null, ?string $area = null): array
     {
-        $theme = $this->getResolvedTheme($theme);
+        $theme = $this->getResolvedTheme($theme, $area);
         if (!$theme || !$theme->getId()) {
             return [];
         }
@@ -46,7 +46,7 @@ class ThemeDirectoryResolver
     public function getAreaDirectories(string $area, ?WelineTheme $theme = null): array
     {
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
-        $theme = $this->getResolvedTheme($theme);
+        $theme = $this->getResolvedTheme($theme, $area);
         $themeId = $theme?->getId() ?: 0;
         $cacheKey = $themeId . ':' . $area;
 
@@ -56,7 +56,7 @@ class ThemeDirectoryResolver
 
         $directories = [];
         $seen = [];
-        foreach ($this->getThemeChain($theme) as $layerTheme) {
+        foreach ($this->getThemeChain($theme, $area) as $layerTheme) {
             $basePath = rtrim($layerTheme->getPath(), '\\/');
             if ($basePath === '') {
                 continue;
@@ -162,15 +162,16 @@ class ThemeDirectoryResolver
         $this->areaDirectoriesCache = [];
     }
 
-    private function getResolvedTheme(?WelineTheme $theme = null): ?WelineTheme
+    private function getResolvedTheme(?WelineTheme $theme = null, ?string $area = null): ?WelineTheme
     {
         if ($theme && $theme->getId()) {
             return $theme;
         }
 
+        $area = strtolower(trim((string)$area)) === 'backend' ? 'backend' : 'frontend';
         $activeTheme = clone $this->welineTheme;
         $activeTheme->clearData()->clearQuery();
-        $activeTheme->getActiveTheme();
+        $activeTheme->getActiveTheme($area);
 
         return $activeTheme->getId() ? $activeTheme : null;
     }
