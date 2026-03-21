@@ -16,7 +16,7 @@ use Weline\Framework\Setup\InstallInterface;
 
 class Upgrade implements InstallInterface
 {
-    public const VERSION = '1.0.1';
+    public const VERSION = '1.0.2';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {

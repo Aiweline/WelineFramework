@@ -32,6 +32,10 @@ class WelineTheme extends Model
     public const schema_fields_PATH = 'path';
     #[Col('varchar', 255, nullable: true, comment: '预览图片路径')]
     public const schema_fields_PREVIEW_IMAGE = 'preview_image';
+    #[Col('varchar', 255, nullable: true, comment: '鍓嶅彴棰勮鍥剧墖璺緞')]
+    public const schema_fields_FRONTEND_PREVIEW_IMAGE = 'frontend_preview_image';
+    #[Col('varchar', 255, nullable: true, comment: '鍚庡彴棰勮鍥剧墖璺緞')]
+    public const schema_fields_BACKEND_PREVIEW_IMAGE = 'backend_preview_image';
     #[Col('int', 11, comment: '父级主题')]
     public const schema_fields_PARENT_ID = 'parent_id';
     #[Col('int', 11, comment: '是否激活')]
@@ -124,6 +128,24 @@ class WelineTheme extends Model
     public function setPreviewImage(?string $value): static
     {
         $this->setData(self::schema_fields_PREVIEW_IMAGE, $value);
+        return $this;
+    }
+    public function getFrontendPreviewImage(): ?string
+    {
+        return $this->getData(self::schema_fields_FRONTEND_PREVIEW_IMAGE);
+    }
+    public function setFrontendPreviewImage(?string $value): static
+    {
+        $this->setData(self::schema_fields_FRONTEND_PREVIEW_IMAGE, $value);
+        return $this;
+    }
+    public function getBackendPreviewImage(): ?string
+    {
+        return $this->getData(self::schema_fields_BACKEND_PREVIEW_IMAGE);
+    }
+    public function setBackendPreviewImage(?string $value): static
+    {
+        $this->setData(self::schema_fields_BACKEND_PREVIEW_IMAGE, $value);
         return $this;
     }
     public function getParentId()
