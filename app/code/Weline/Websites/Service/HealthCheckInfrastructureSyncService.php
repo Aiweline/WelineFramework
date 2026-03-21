@@ -144,8 +144,8 @@ final class HealthCheckInfrastructureSyncService
         $cid = $wd->getCertId();
         $pref = ($cid !== null && $cid > 0) ? $cid : null;
         $cert = $this->sslStatusService()->resolveManagedCertificate($pref, $wd->getDomain());
-        if ($cert !== null && $cert->getCertId() > 0) {
-            $pool->setCertId($cert->getCertId());
+        if (\is_array($cert) && (int) ($cert['cert_id'] ?? 0) > 0) {
+            $pool->setCertId((int) ($cert['cert_id'] ?? 0));
 
             return;
         }

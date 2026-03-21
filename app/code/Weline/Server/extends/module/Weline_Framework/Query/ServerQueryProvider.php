@@ -41,6 +41,9 @@ class ServerQueryProvider implements QueryProviderInterface
             'requestCertificate' => $this->requestCertificate($params),
             'importCertificate' => $this->importCertificate($params),
             'checkDomainReachability' => $this->checkDomainReachability($params),
+            'resolveManagedCertificate' => $this->resolveManagedCertificate($params),
+            'hasValidManagedCertificate' => $this->hasValidManagedCertificate($params),
+            'isManagedCertificateHealthy' => $this->isManagedCertificateHealthy($params),
             'status' => $this->status($params),
             'start' => $this->start($params),
             'stop' => $this->stop($params),
@@ -142,6 +145,29 @@ class ServerQueryProvider implements QueryProviderInterface
                         ['name' => 'url', 'type' => 'string', 'required' => false, 'description' => __('访问 URL，默认 https://domain/')],
                         ['name' => 'expected_ipv4', 'type' => 'string', 'required' => false, 'description' => __('期望 IPv4')],
                         ['name' => 'expected_ipv6', 'type' => 'string', 'required' => false, 'description' => __('期望 IPv6')],
+                    ],
+                ],
+                [
+                    'name' => 'resolveManagedCertificate',
+                    'description' => __('根据主机名解析管理证书，返回安全数据'),
+                    'params' => [
+                        ['name' => 'hostname', 'type' => 'string', 'required' => true, 'description' => __('主机名')],
+                        ['name' => 'preferred_cert_id', 'type' => 'int', 'required' => false, 'description' => __('优先绑定的证书 ID')],
+                    ],
+                ],
+                [
+                    'name' => 'hasValidManagedCertificate',
+                    'description' => __('判断主机名是否存在 active 且未过期的管理证书'),
+                    'params' => [
+                        ['name' => 'hostname', 'type' => 'string', 'required' => true, 'description' => __('主机名')],
+                        ['name' => 'preferred_cert_id', 'type' => 'int', 'required' => false, 'description' => __('优先绑定的证书 ID')],
+                    ],
+                ],
+                [
+                    'name' => 'isManagedCertificateHealthy',
+                    'description' => __('判断主机名的管理证书是否健康（含覆盖与文件有效性）'),
+                    'params' => [
+                        ['name' => 'hostname', 'type' => 'string', 'required' => true, 'description' => __('主机名')],
                     ],
                 ],
                 ['name' => 'status', 'description' => __('获取服务器状态'), 'params' => []],
@@ -860,5 +886,58 @@ class ServerQueryProvider implements QueryProviderInterface
             'message' => (string)($result['message'] ?? ''),
             'data' => (array)($result['data'] ?? []),
         ];
+    }
+
+    private function resolveManagedCertificate(array $params): ?array
+    {
+        $hostname = \strtolower(\trim((string)($params['hostname'] ?? '')));
+        $preferredCertIdRaw = $params['preferred_cert_id'] ?? null;
+        $preferredCertId = $preferredCertIdRaw !== null && $preferredCertIdRaw !== ''
+            ? (int)$preferredCertIdRaw
+            : null;
+        if ($hostname === '') {
+            return null;
+        }
+
+        $cert = CertModel::resolveForWebsiteInfrastructure($preferredCertId, $hostname);
+        if ($cert === null || $cert->getCertId() <= 0) {
+            return null;
+        }
+
+        return $this->buildManagedCertificatePayload($cert, $hostname);
+    }
+
+    private function hasValidManagedCertificate(array $params): bool
+    {
+        $cert = $this->resolveManagedCertificate($params);
+        if ($cert === null) {
+            return false;
+        }
+
+        return (string)($cert['status'] ?? '') === CertModel::STATUS_ACTIVE
+            && !((bool)($cert['is_expired'] ?? true));
+    }
+
+    private function isManagedCertificateHealthy(array $params): bool
+    {
+        $hostname = \strtolower(\trim((string)($params['hostname'] ?? '')));
+        if ($hostname === '') {
+            return false;
+        }
+
+        return $this->sslCertificateService->isManagedCertificateHealthyForHostname($hostname);
+    }
+
+    private function buildManagedCertificatePayload(CertModel $cert, string $hostname): array
+    {
+        $payload = $cert->toSafeArray();
+        $payload['cert_id'] = (int)($payload['cert_id'] ?? $cert->getCertId());
+        $payload['status'] = (string)($payload['status'] ?? $cert->getStatus());
+        $payload['expires_at'] = (string)($payload['expires_at'] ?? $cert->getExpiresAt());
+        $payload['is_expired'] = $cert->isExpired();
+        $payload['valid'] = $cert->getStatus() === CertModel::STATUS_ACTIVE && !$cert->isExpired();
+        $payload['covers_hostname'] = $cert->coversHostname($hostname);
+
+        return $payload;
     }
 }
