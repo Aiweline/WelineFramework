@@ -19,6 +19,7 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Observer\CliCommandExecutedObserver;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 
@@ -280,15 +281,18 @@ class Reload extends CommandAbstract
      */
     protected function executeReloadAsync(string $instanceName, string $reloadType, bool $forceMode): void
     {
-        $ipcSuccess = MasterProcess::sendReloadCommand($instanceName, $reloadType);
-        
-        if (!$ipcSuccess) {
-            $this->printer->warning(__('无法通过 IPC 发送命令，请检查 Master 是否运行'));
+        /** @var BroadcastControlDispatchService $dispatchService */
+        $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+        $result = $dispatchService->reloadAsync($instanceName, $reloadType);
+
+        if (empty($result['success'])) {
+            $this->printer->warning($result['message']);
             return;
         }
         
         echo "\n";
         $this->printer->success(__('✓ 热重载命令已发送'));
+        $this->printer->note($result['message']);
         
         if ($forceMode) {
             $this->printer->note(__('Orchestrator 将批量杀死所有 Worker 后重新启动'));
