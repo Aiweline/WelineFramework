@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use GuoLaiRen\PageBuilder\Service\ComponentService;
@@ -61,6 +62,7 @@ class Builder extends BackendController
         if ($layout->isUsingOriginalTemplate() && empty($layout->getContentComponents()) && $styleCode) {
             $this->layoutService->initializeFromPage($layout, $page);
             $layout->save();
+            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
         }
         
         // 获取组件（包含共享组件和兼容组件）
