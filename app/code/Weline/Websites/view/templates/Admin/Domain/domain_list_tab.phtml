@@ -1230,7 +1230,7 @@ $accounts = $accounts ?? [];
         });
 
         var tbody = document.getElementById('weline-domain-list-body');
-        tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('加载中...') ?></p></td></tr>';
 
         fetch(urls.domainList + '?' + params.toString())
             .then(function(r) { return r.json(); })
@@ -1253,12 +1253,12 @@ $accounts = $accounts ?? [];
                     renderPagination(pagination);
                 } else {
                     toast(data.msg || '<?= __('加载失败') ?>', 'error');
-                    tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0">' + (data.msg || '<?= __('加载失败') ?>') + '</p></td></tr>';
                 }
             })
             .catch(function(err) {
                 toast('<?= __('请求失败') ?>', 'error');
-                tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-alert-circle-outline" style="font-size:2rem;color:var(--backend-color-danger);"></i><p class="mt-2 mb-0"><?= __('请求失败') ?></p></td></tr>';
             });
     }
 
@@ -1275,7 +1275,7 @@ $accounts = $accounts ?? [];
         
         if (accounts.length === 0) {
             var tbody = document.getElementById('weline-domain-list-body');
-            tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty">' +
+            tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
                 '<i class="mdi mdi-account-off-outline" style="font-size:2rem;"></i>' +
                 '<p class="mt-2 mb-0"><?= __('请先添加域名商账户') ?></p></td></tr>';
             return;
@@ -1364,7 +1364,7 @@ $accounts = $accounts ?? [];
             var emptyMsg = (providerErrors && providerErrors.length > 0)
                 ? '<?= __('无法获取域名，请检查上方的错误信息') ?>'
                 : '<?= __('域名商账户下暂无域名') ?>';
-            tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty">' +
+            tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
                 '<i class="mdi mdi-earth-off" style="font-size:2rem;"></i>' +
                 '<p class="mt-2 mb-0">' + emptyMsg + '</p></td></tr>';
             renderPagination({});
@@ -1497,7 +1497,7 @@ $accounts = $accounts ?? [];
         if (!items.length) {
             // 如果有筛选条件且没有数据，提示用户切换到全部状态
             if (hasFilters) {
-                tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty">' +
+                tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
                     '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
                     '<p class="mt-2 mb-1"><?= __('当前筛选条件下暂无已拉取的域名') ?></p>' +
                     '<p class="text-muted small mb-2"><?= __('请切换筛选条件为「全部」，从线上选择域名拉取到本地') ?></p>' +
@@ -1508,13 +1508,13 @@ $accounts = $accounts ?? [];
             // 如果本地没有域名且允许自动拉取，则自动获取远程域名
             if (autoFetchRemote && !autoFetchTriggered) {
                 autoFetchTriggered = true;
-                tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty">' +
+                tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty">' +
                     '<i class="mdi mdi-cloud-download-outline" style="font-size:2rem;color:var(--backend-color-primary);"></i>' +
                     '<p class="mt-2 mb-0"><?= __('本地暂无已拉取的域名，正在从域名商获取...') ?></p></td></tr>';
                 loadRemoteDomainsForDisplay();
                 return;
             }
-            tbody.innerHTML = '<tr><td colspan="10" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="weline-domain-empty"><i class="mdi mdi-earth-off" style="font-size:2rem;"></i><p class="mt-2 mb-0"><?= __('暂无域名数据') ?></p></td></tr>';
             return;
         }
         autoFetchTriggered = false;
@@ -2433,7 +2433,7 @@ $accounts = $accounts ?? [];
             .then(function(data) {
                 if (data.code === 200 && data.data) {
                     if (data.data.per_domain) {
-                        nsSpan.textContent = '<?= __('Cloudflare 将为每个域名分配独立的 Nameserver') ?>';
+                        nsSpan.textContent = '<?= __('Cloudflare 通常会为每个接入的根域分配独立 Nameserver，请以控制台实际显示为准') ?>';
                     } else if (data.data.nameservers && data.data.nameservers.length > 0) {
                         nsSpan.textContent = '<?= __('目标DNS') ?>: ' + data.data.nameservers.join(', ');
                     } else {
