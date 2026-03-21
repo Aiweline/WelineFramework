@@ -12,8 +12,8 @@
                 <span class="uppercase tracking-widest"><?= __('Free Shipping on Orders Over $99') ?></span>
             </div>
             <div class="hidden md:flex items-center gap-4">
-                <w:hook name="WeShop_Frontend::header::language_switcher"/>
-                <w:hook name="WeShop_Frontend::header::currency_switcher"/>
+                <w:hook>WeShop_Frontend::header::language_switcher</w:hook>
+                <w:hook>WeShop_Frontend::header::currency_switcher</w:hook>
             </div>
         </div>
     </div>
@@ -31,7 +31,7 @@
 
             <!-- Navigation -->
             <nav class="hidden lg:flex items-center gap-1 ml-6">
-                <w:hook name="WeShop_Frontend::header::categories-menu"/>
+                <w:hook>WeShop_Frontend::header::categories-menu</w:hook>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category') ?>"><?= __('Motorcycles') ?></a>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category/parts') ?>"><?= __('Parts') ?></a>
                 <a class="text-sm font-semibold text-gray-300 hover:text-primary uppercase tracking-wide px-3 py-2 transition-colors" href="<?= $this->getUrl('catalog/category/gear') ?>"><?= __('Gear & Apparel') ?></a>
@@ -45,7 +45,7 @@
             <div class="w-full max-w-lg">
                 <form action="<?= $this->getUrl('search') ?>" method="get" class="relative flex flex-col w-full">
                     <div class="flex w-full flex-1 items-stretch rounded h-10 border border-gray-600 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary">
-                        <w:hook name="WeShop_Frontend::header::search-before"/>
+                        <w:hook>WeShop_Frontend::header::search-before</w:hook>
                         <input
                             type="text"
                             name="q"
@@ -53,7 +53,7 @@
                             placeholder="<?= __('Search motorcycles, parts, gear...') ?>"
                             value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
                         />
-                        <w:hook name="WeShop_Frontend::header::search-after"/>
+                        <w:hook>WeShop_Frontend::header::search-after</w:hook>
                         <button type="submit" class="flex items-center justify-center px-4 bg-primary hover:bg-primary-dark text-white rounded-r transition-colors">
                             <span class="material-symbols-outlined text-xl">search</span>
                         </button>
@@ -64,14 +64,14 @@
 
         <!-- User Actions -->
         <div class="flex items-center gap-2">
-            <w:hook name="WeShop_Frontend::header::account"/>
+            <w:hook>WeShop_Frontend::header::account</w:hook>
             <a href="<?= $this->getUrl('customer/account') ?>" class="flex items-center justify-center rounded h-10 gap-2 px-3 text-gray-300 hover:text-primary hover:bg-white/5 transition-colors">
                 <span class="material-symbols-outlined text-2xl">person_outline</span>
                 <span class="hidden md:inline text-sm font-semibold uppercase tracking-wide"><?= __('Account') ?></span>
             </a>
 
             <!-- Mini Cart -->
-            <w:hook name="WeShop_Frontend::frontend::partials::header::mini-cart"/>
+            <w:hook>WeShop_Frontend::frontend::partials::header::mini-cart</w:hook>
             <div class="relative group z-50">
                 <a href="<?= $this->getUrl('cart') ?>" class="flex items-center justify-center rounded h-10 gap-2 px-3 text-gray-300 hover:text-primary hover:bg-white/5 relative transition-colors">
                     <span class="material-symbols-outlined text-2xl">shopping_cart</span>
@@ -92,7 +92,7 @@
                                 <span class="text-xs font-medium text-text-secondary-light dark:text-text-secondary-dark bg-primary/10 text-primary px-2 py-1 rounded"><?= $cartCount ?> <?= __('items') ?></span>
                             </div>
 
-                            <w:hook name="WeShop_Cart::header::mini_cart_items"/>
+                            <w:hook>WeShop_Cart::header::mini_cart_items</w:hook>
 
                             <div class="p-5 bg-gray-50/50 dark:bg-white/5 border-t border-border-light dark:border-border-dark">
                                 <?php $cartTotal = $this->getData('cart_total') ?? 0; ?>

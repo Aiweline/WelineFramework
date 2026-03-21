@@ -218,7 +218,9 @@ SQL调试输出,SQL调试输出
 "一共 %{1} 页","一共 %{1} 页"
 请输入页码,请输入页码
 跳转页,跳转页
-不支持的查询类型：%{1},不支持的查询类型：%{1}
+不支持的查询类型：{1},不支持的查询类型：{1}
+"子查询 %{1} 不存在","子查询 %{1} 不存在"
+不支持的数据库驱动：{1},不支持的数据库驱动：{1}
 插入的数据记录中不允许同时存在有主键和无主键的情况！,插入的数据记录中不允许同时存在有主键和无主键的情况！
 请设置更新条件,请设置更新条件
 更新条数大于一条时请使用示例更新,更新条数大于一条时请使用示例更新
@@ -246,7 +248,6 @@ SQL调试输出,SQL调试输出
 "插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}","插入数据和更新依据字段不匹配，请检查! 所需字段：%{1}，实际字段: %{2}"
 "检测打算要更新依据字段不匹配，请检查! 打算更新字段：%{1}，实际字段: %{2}","检测打算要更新依据字段不匹配，请检查! 打算更新字段：%{1}，实际字段: %{2}"
 "IN 条件无法匹配空值数组。数组值：[]","IN 条件无法匹配空值数组。数组值：[]"
-"子查询 %{1} 不存在","子查询 %{1} 不存在"
 "无法回退到普通插入：SQL 准备失败","无法回退到普通插入：SQL 准备失败"
 即将执行信息：,即将执行信息：
 "结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。","结果集超过 %{1} 行，为避免内存耗尽请使用 limit() 或 fetchIterator() 流式读取。"
@@ -269,6 +270,7 @@ SQL调试输出,SQL调试输出
 "错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。","错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。"
 执行后信息：,执行后信息：
 查询结果:,查询结果:
+"SQL 鍑嗗澶辫触锛?{1}銆係QL: %{2}","SQL 鍑嗗澶辫触锛?{1}銆係QL: %{2}"
 "SQL 准备失败：%{1}。SQL: %{2}","SQL 准备失败：%{1}。SQL: %{2}"
 "检测到重复数据！根据更新依赖字段 [%{1}] 检测到重复记录：%{2}","检测到重复数据！根据更新依赖字段 [%{1}] 检测到重复记录：%{2}"
 "错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}","错误的获取类型。fetch之前必须有操作函数，操作函数包含（find,update,delete,select,query,insert,find）函数。当前类型：%{1}"
@@ -1262,7 +1264,6 @@ HTTP方法,HTTP方法
 "✓ composer dump-autoload 执行成功。","✓ composer dump-autoload 执行成功。"
 "执行 composer dump-autoload 时发生错误: %{1}","执行 composer dump-autoload 时发生错误: %{1}"
 "✓ generated/code 目录已清理。","✓ generated/code 目录已清理。"
-"generated/code 目录为空，无需清理。","generated/code 目录为空，无需清理。"
 "清理 generated/code 目录时发生错误: %{1}，将继续执行。","清理 generated/code 目录时发生错误: %{1}，将继续执行。"
 系统升级过程中发生错误：%{1},系统升级过程中发生错误：%{1}
 指定了不存在的参数：%{1}。可用参数：%{2},指定了不存在的参数：%{1}。可用参数：%{2}
@@ -1302,9 +1303,11 @@ HTTP方法,HTTP方法
 后台任务启动失败，改为同步执行...,后台任务启动失败，改为同步执行...
 "后台任务启动异常: %{1}，改为同步执行...","后台任务启动异常: %{1}，改为同步执行..."
 正在生成优化缓存...,正在生成优化缓存...
+"- 已跳过类映射缓存（--skip-classmap）","- 已跳过类映射缓存（--skip-classmap）"
 "✓ 优化缓存生成完成。","✓ 优化缓存生成完成。"
 反射/工厂编译出现警告（exit=%{1}），不影响系统功能。,反射/工厂编译出现警告（exit=%{1}），不影响系统功能。
 反射/工厂编译跳过：%{1},反射/工厂编译跳过：%{1}
+"- classmap 无变化，跳过重新生成","- classmap 无变化，跳过重新生成"
 "- 类映射缓存已生成，共 %{1} 个类","- Class mapping cache generated, %{1} classes in total"
 "- 跳过 PSR-4 缓存生成：Composer autoload 未找到","- 跳过 PSR-4 缓存生成：Composer autoload 未找到"
 "- PSR-4 映射缓存已生成，共 %{1} 个命名空间","- PSR-4 mapping cache generated, %{1} namespaces in total"
@@ -1414,11 +1417,14 @@ HTTP方法,HTTP方法
 "没有可用的 WLS 实例接收热更新信号","没有可用的 WLS 实例接收热更新信号"
 "检测到运行中的 WLS 服务器，发送热重载信号...","检测到运行中的 WLS 服务器，发送热重载信号..."
 "只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}","只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}"
+"热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS","热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS"
 "跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）","Skip reflection metadata and compiled factories generation (run reflection:compile later if needed)"
 禁用后台优化任务，改为同步执行（等待缓存生成完成）,禁用后台优化任务，改为同步执行（等待缓存生成完成）
 "同上，--skip-background-optimize 的简写","同上，--skip-background-optimize 的简写"
+"跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒","跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒"
 "仅运行 schema_diff 阶段（测试声明式表）","仅运行 schema_diff 阶段（测试声明式表）"
 "仅运行 framework_db_bootstrap 阶段","仅运行 framework_db_bootstrap 阶段"
+"跳过 classmap 生成（未新增/删除文件时）","跳过 classmap 生成（未新增/删除文件时）"
 "跳过反射编译（加快 s:up）","Skip reflection compile (speed up s:up)"
 同步执行优化（等待完成）,同步执行优化（等待完成）
 "env.php 中数据库配置有效，直接执行安装...","env.php 中数据库配置有效，直接执行安装..."
