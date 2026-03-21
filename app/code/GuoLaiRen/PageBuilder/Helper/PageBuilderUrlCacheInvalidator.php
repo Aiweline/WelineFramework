@@ -15,7 +15,7 @@ use Weline\Websites\Model\WebsiteDomain;
  * PageBuilder URL / 路由 / WLS dispatch 相关缓存：按页面粒度失效。
  *
  * - url_rewrite 池：按 RouterRewrite 使用的 website_{id}_{path} 键删除
- * - router 池：按完整 URI 删除 unified/url/rule/start 及旧版 fpc: 键（与 Core::route 一致）
+ * - router 池：按完整 URI 删除 unified/url/rule/start 及旧版 fpc: 键（含 FPM/WLS 共用的 FPC HTML）
  * - Router 静态 handle 缓存：当前进程
  * - WLS：IPC 通知各 Worker 清理同站 handle 缓存并重置 ObjectManager（避免 dispatch 单例脏读）
  */
@@ -23,6 +23,9 @@ final class PageBuilderUrlCacheInvalidator
 {
     /**
      * 全量清理（删除站点、批量操作等仍可用）
+     * 说明：
+     * - FPM 模式：直接清理 router/url_rewrite 池与本进程 Router 静态缓存
+     * - WLS 模式：除上述本地清理外，业务入口应继续按需触发 WLS IPC 广播
      */
     public static function invalidateRouterAndRewrite(): void
     {
@@ -41,6 +44,7 @@ final class PageBuilderUrlCacheInvalidator
         } catch (\Throwable) {
         }
         Router::clearCache();
+        self::notifyWlsGlobalCacheClear();
     }
 
     /**
@@ -354,6 +358,19 @@ final class PageBuilderUrlCacheInvalidator
             return (bool)($res['success'] ?? false);
         } catch (\Throwable) {
             return false;
+        }
+    }
+
+    private static function notifyWlsGlobalCacheClear(): void
+    {
+        if (!\class_exists(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)) {
+            return;
+        }
+
+        try {
+            ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
+                ->cacheClear();
+        } catch (\Throwable) {
         }
     }
 }
