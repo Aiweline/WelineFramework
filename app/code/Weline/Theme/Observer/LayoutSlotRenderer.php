@@ -8,11 +8,13 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
+use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
+use Weline\Theme\Service\ThemePageTypeResolver;
 
 /**
  * 布局插槽渲染器 Observer
@@ -43,6 +45,7 @@ class LayoutSlotRenderer implements ObserverInterface
     private ThemeCacheGenerator $cacheGenerator;
     private Url $url;
     private PreviewTokenService $previewTokenService;
+    private ThemePageTypeResolver $pageTypeResolver;
     private bool $isEnabled = true;
 
     public function __construct(
@@ -51,7 +54,8 @@ class LayoutSlotRenderer implements ObserverInterface
         Request $request,
         ThemeCacheGenerator $cacheGenerator,
         Url $url,
-        PreviewTokenService $previewTokenService
+        PreviewTokenService $previewTokenService,
+        ThemePageTypeResolver $pageTypeResolver
     ) {
         $this->slotRenderer = $slotRenderer;
         $this->welineTheme = $welineTheme;
@@ -59,6 +63,7 @@ class LayoutSlotRenderer implements ObserverInterface
         $this->cacheGenerator = $cacheGenerator;
         $this->url = $url;
         $this->previewTokenService = $previewTokenService;
+        $this->pageTypeResolver = $pageTypeResolver;
     }
 
     public function execute(Event &$event): void
@@ -424,6 +429,9 @@ HTML;
         if ($this->previewTokenService->isPreviewMode()) {
             return ThemeLayout::STATUS_DRAFT;
         }
+        if ($this->isPreviewThemeMode()) {
+            return ThemeLayout::STATUS_DRAFT;
+        }
         
         // 3. 后台编辑器 iframe 模式：默认加载 draft
         $editorMode = $this->request->getParam('editor_mode');
@@ -458,6 +466,9 @@ HTML;
     {
         // 预览 Token 模式
         if ($this->previewTokenService->isPreviewMode()) {
+            return true;
+        }
+        if ($this->isPreviewThemeMode()) {
             return true;
         }
         

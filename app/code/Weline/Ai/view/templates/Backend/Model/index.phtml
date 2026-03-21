@@ -216,6 +216,16 @@ $activeTab = $activeTab ?? 'model';
                                         </td>
                                         <td>
                                             <span class="badge bg-info"><?= $model['vendor'] ?? '' ?></span>
+                                            <?php if (!empty($model['is_custom_model'])): ?>
+                                                <span class="badge bg-warning text-dark ms-1" title="<?= __('自定义模型') ?>">
+                                                    <lang>自定义</lang>
+                                                </span>
+                                            <?php endif; ?>
+                                            <?php if (!empty($model['is_custom_supplier'])): ?>
+                                                <span class="badge bg-secondary ms-1" title="<?= __('自定义供应商') ?>">
+                                                    <lang>自定义供应商</lang>
+                                                </span>
+                                            <?php endif; ?>
                                         </td>
                                         <td>
                                             <code><?= $model['model_code'] ?? '' ?></code>

@@ -22,6 +22,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemePageTypeResolver;
 
 /**
  * 控制器模板获取前观察者
@@ -42,10 +43,17 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     private ThemeContextService $themeContext;
 
-    public function __construct(WelineTheme $welineTheme, ThemeContextService $themeContext)
+    private ThemePageTypeResolver $pageTypeResolver;
+
+    public function __construct(
+        WelineTheme $welineTheme,
+        ThemeContextService $themeContext,
+        ThemePageTypeResolver $pageTypeResolver
+    )
     {
         $this->welineTheme = $welineTheme;
         $this->themeContext = $themeContext;
+        $this->pageTypeResolver = $pageTypeResolver;
     }
 
     private static function registerStateManager(): void
@@ -79,10 +87,14 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         $layoutType = $eventData->getData('layoutType');
-        if (empty($layoutType) && isset($_GET['preview_theme']) && (int)($_GET['preview_theme'] ?? 0) > 0) {
-            $request = ObjectManager::getInstance(Request::class);
-            if ($request && !$request->isBackend()) {
-                $layoutType = 'homepage.default';
+        $request = ObjectManager::getInstance(Request::class);
+        if (empty($layoutType) && $request && !$request->isBackend()) {
+            $layoutType = $this->pageTypeResolver->resolveLayoutType(
+                null,
+                $eventData->getData('controller'),
+                $request
+            );
+            if ($layoutType !== '') {
                 $eventData->setData('layoutType', $layoutType);
             }
         }
@@ -93,7 +105,6 @@ class ControllerFetchFileBefore implements ObserverInterface
         $fileName = $eventData->getData('fileName');
         
         // 判断区域（frontend/backend）
-        $request = ObjectManager::getInstance(Request::class);
         $area = $request && $request->isBackend() ? 'backend' : 'frontend';
         
         // 设置主题相关数据到 theme 对象中（由Helper处理业务逻辑，不在模板中处理）

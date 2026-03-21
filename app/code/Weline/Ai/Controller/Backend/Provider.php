@@ -351,6 +351,13 @@ class Provider extends BaseController
 
             $account->save();
 
+            // 自动拉取供应商支持模型（OpenAI兼容接口），用于后续模型切换校验
+            try {
+                $this->accountService->refreshSupportedModels($account);
+            } catch (\Throwable $e) {
+                // 拉取失败不阻断保存，仅保留静默降级
+            }
+
             // 如果设置为默认账户
             if (!empty($data['is_default'])) {
                 $this->accountService->setDefaultAccount($account);
