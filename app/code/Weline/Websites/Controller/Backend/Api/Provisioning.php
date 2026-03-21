@@ -96,7 +96,7 @@ class Provisioning extends BaseController
                 if ($rootDomain->getDomainId() && $rootDomain->getDnsSwitchDeferred() === 1) {
                     $sse->sendEvent('step_info', [
                         'step' => 'purchase',
-                        'message' => __('若存在不同 DNS/CDN，约 5–10 分钟内由自动任务完成。'),
+                        'message' => __('若需要切换 DNS 或 CDN，系统会在约 5–10 分钟内排队处理并同步记录；真正生效时间仍取决于服务商处理和 NS/缓存传播。'),
                         'dns_cdn_tip' => true,
                     ]);
                 }
@@ -104,7 +104,7 @@ class Provisioning extends BaseController
 
             $sse->sendEvent('step_info', [
                 'step' => 'dns_cdn',
-                'message' => __('DNS/CDN 切换由定时任务在约 5–10 分钟内自动完成，无需等待。'),
+                'message' => __('DNS/CDN 切换会由后续定时任务继续处理并同步记录；当前页面无需停留等待，但最终生效仍取决于服务商处理和 NS/缓存传播。'),
             ]);
 
             $sse->sendEvent('step_start', [

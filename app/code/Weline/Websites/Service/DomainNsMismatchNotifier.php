@@ -84,7 +84,7 @@ class DomainNsMismatchNotifier
             $out['alerted'] = true;
             $liveStr = \implode(', ', $liveNameservers);
             w_log_warning(__(
-                '[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；自动切换仅走显式 pending/购买流程，本任务只告警。',
+                '[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。',
                 [$domainName, $detected, $expectedCode, (string) $dnsAccountId, $liveStr]
             ), [], 'domain_ns_check');
         }
