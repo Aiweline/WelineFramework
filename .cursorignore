@@ -46,11 +46,6 @@ out/
 *.tsv
 *.xlsx
 *.xls
-# Log files
-*.log
-*.log.*
-# 允许cursor读取的日志文件
-!.cursor/debug.log
 
 # Database files
 *.sqlite

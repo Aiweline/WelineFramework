@@ -5,16 +5,21 @@ declare(strict_types=1);
 namespace Weline\Theme\Controller\Backend;
 
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\EditorLockService;
+use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewNavigationResolver;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
+use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
@@ -102,6 +107,126 @@ class ThemeEditor extends BackendController
      * 编辑器主页
      */
     public function index()
+    {
+        $previewContextService = $this->getPreviewContextService();
+        $themeContextService = $this->getThemeContextService();
+        $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
+        $requestedFrontendThemeId = (int)$this->request->getParam(
+            'frontend_theme_id',
+            (int)$this->request->getParam('preview_theme', $requestedThemeId)
+        );
+        $requestedBackendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
+        $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $editorArea = $previewContextService->normalizeArea(
+            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+        );
+        $themeListUrl = $this->_url->getBackendUrl('theme/backend');
+
+        $frontendTheme = $requestedFrontendThemeId > 0
+            ? $this->loadThemeModel($requestedFrontendThemeId)
+            : $themeContextService->resolveTheme(PreviewContextService::AREA_FRONTEND);
+        if (!$frontendTheme?->getId()) {
+            $this->getMessageManager()->addError(__('绯荤粺娌℃湁鍙敤鐨勫墠绔富棰橈紝璇峰厛婵€娲绘垨閫夋嫨涓€涓墠绔富棰樸€?));
+            return $this->redirect($themeListUrl);
+        }
+
+        $frontendHasBackend = $this->themeHasBackendDir($frontendTheme);
+        $backendTheme = null;
+        if ($requestedBackendThemeId > 0) {
+            $candidateBackendTheme = $this->loadThemeModel($requestedBackendThemeId);
+            if ($candidateBackendTheme?->getId() && $themeContextService->themeSupportsArea($candidateBackendTheme, PreviewContextService::AREA_BACKEND)) {
+                $backendTheme = $candidateBackendTheme;
+            } else {
+                $this->getMessageManager()->addWarning(__('鎵€閫夊悗鍙颁富棰樹笉鍙敤锛屽凡鑷姩鍥為€€鍒板綋鍓嶅惎鐢ㄧ殑鍚庡彴涓婚銆?));
+            }
+        }
+        if (!$backendTheme?->getId() && $frontendHasBackend) {
+            $backendTheme = $this->loadThemeModel((int)$frontendTheme->getId());
+        }
+        if (!$backendTheme?->getId()) {
+            $backendTheme = $themeContextService->resolveTheme(PreviewContextService::AREA_BACKEND);
+        }
+        if (!$backendTheme?->getId() && $frontendHasBackend) {
+            $backendTheme = $this->loadThemeModel((int)$frontendTheme->getId());
+        }
+
+        $context = $previewContextService->buildContext([
+            'frontend_theme_id' => (int)$frontendTheme->getId(),
+            'backend_theme_id' => (int)($backendTheme?->getId() ?: 0),
+            'editor_area' => $editorArea,
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+            'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
+            'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
+            'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
+            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $pageType,
+        ]);
+        $context = $previewContextService->ensureThemeIds($context, true, true);
+        if ($editorArea === PreviewContextService::AREA_BACKEND
+            && $previewContextService->getThemeIdForArea(PreviewContextService::AREA_BACKEND, $context, false) <= 0) {
+            $context['editor_area'] = PreviewContextService::AREA_FRONTEND;
+        }
+        $context = $previewContextService->persistContext($context);
+        $editorArea = (string)$context['editor_area'];
+        $frontendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, true);
+        $backendThemeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_BACKEND, $context, true);
+        $currentThemeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
+        $currentTheme = $editorArea === PreviewContextService::AREA_BACKEND
+            ? ($backendTheme ?: $this->loadThemeModel($currentThemeId))
+            : ($frontendTheme ?: $this->loadThemeModel($currentThemeId));
+
+        $themesCollection = $this->welineTheme->reset()->select()->fetch()->getItems();
+        $themesById = [];
+        foreach ($themesCollection as $themeItem) {
+            $data = is_object($themeItem) ? $themeItem->getData() : (is_array($themeItem) ? $themeItem : []);
+            $tid = (int)($data['id'] ?? 0);
+            if ($tid && !isset($themesById[$tid])) {
+                $themesById[$tid] = $data + [
+                    'has_backend_area' => $this->themeRecordHasBackendArea($data),
+                ];
+            }
+        }
+        $themes = array_values($themesById);
+
+        $layout = [];
+        $hasDraft = false;
+        if ($currentThemeId) {
+            $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType);
+            if (!$hasDraft) {
+                $this->layoutService->initDraftFromPublished($currentThemeId, $pageType);
+            }
+            $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType);
+        }
+
+        $availableWidgets = $this->layoutService->getAvailableWidgets(
+            $pageType,
+            $editorArea === PreviewContextService::AREA_BACKEND ? ['area' => PreviewContextService::AREA_BACKEND] : []
+        );
+        $availableWidgets = $this->attachWidgetPreviewHtml($availableWidgets);
+
+        $this->assign('theme_id', $currentThemeId);
+        $this->assign('theme', $currentTheme);
+        $this->assign('current_theme', $currentTheme);
+        $this->assign('frontend_theme', $frontendTheme);
+        $this->assign('backend_theme', $backendTheme);
+        $this->assign('frontend_theme_id', $frontendThemeId);
+        $this->assign('backend_theme_id', $backendThemeId);
+        $this->assign('themes', $themes);
+        $this->assign('page_type', $pageType);
+        $this->assign('page_types', ThemeLayout::getPageTypes());
+        $this->assign('areas', ThemeLayout::getAreas());
+        $this->assign('editor_area', $editorArea);
+        $this->assign('theme_has_backend', $frontendHasBackend || $backendThemeId > 0);
+        $this->assign('preview_context', $context);
+        $this->assign('layout', $layout);
+        $this->assign('available_widgets', $availableWidgets);
+        $this->assign('has_draft', $hasDraft);
+
+        return $this->fetch('Weline_Theme::templates/backend/ThemeEditor/index.phtml');
+    }
+
+    public function legacyIndex()
     {
         $requestedThemeId = (int)$this->request->getParam('theme_id', 0);
         $pageType = $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
@@ -1242,6 +1367,85 @@ class ThemeEditor extends BackendController
      */
     public function getCompileLayout()
     {
+        $previewContextService = $this->getPreviewContextService();
+        $editorArea = $previewContextService->normalizeArea(
+            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+        );
+        $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
+        $layoutOption = (string)$this->request->getParam('layout_option', 'default');
+        $context = $this->persistEditorContext([
+            'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
+            'backend_theme_id' => (int)$this->request->getParam('backend_theme_id', 0),
+            'editor_area' => $editorArea,
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+            'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
+            'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
+            'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
+            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $layoutType,
+        ]);
+        $themeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
+
+        if (!$themeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缂哄皯涓婚ID'),
+            ]);
+        }
+
+        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+        $session->setData('preview_theme_id', $themeId);
+        $session->setData('preview_theme_area', $editorArea);
+
+        try {
+            $this->welineTheme->load($themeId);
+            if (!$this->welineTheme->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('涓婚涓嶅瓨鍦?),
+                ]);
+            }
+
+            $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
+            $this->assign('editor_mode', true);
+            $this->assign('theme_id', $themeId);
+            $this->assign('layout_type', $layoutType);
+            $this->assign('preview_context', $context);
+            $this->assign('meta', [
+                'showHeader' => true,
+                'showFooter' => true,
+                'showStatistics' => true,
+                'showFeatures' => true,
+                'showProducts' => true,
+                'showTestimonials' => true,
+                'showNews' => true,
+                'showPartners' => true,
+            ]);
+
+            $html = $this->fetchTagHtml($templatePath);
+            $slots = $this->extractSlots($html);
+
+            return $this->fetchJson([
+                'success' => true,
+                'html' => $html,
+                'slots' => $slots,
+                'layout' => [
+                    'type' => $layoutType,
+                    'option' => $layoutOption,
+                ],
+                'context' => $context,
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function legacyGetCompileLayout()
+    {
         $themeId = (int)$this->request->getParam('theme_id');
         $layoutType = $this->request->getParam('layout_type', 'homepage');
         $layoutOption = $this->request->getParam('layout_option', 'default');
@@ -1777,6 +1981,102 @@ class ThemeEditor extends BackendController
      * 预览模式会读取草稿数据
      */
     public function getLayoutPreview()
+    {
+        $this->layoutType = null;
+
+        $previewContextService = $this->getPreviewContextService();
+        $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
+        $layoutOption = (string)$this->request->getParam('layout_option', 'default');
+        $editorArea = $previewContextService->normalizeArea(
+            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+        );
+        $context = $this->persistEditorContext([
+            'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
+            'backend_theme_id' => (int)$this->request->getParam('backend_theme_id', 0),
+            'editor_area' => $editorArea,
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+            'preview_mode' => (string)$this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE),
+            'status' => (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS),
+            'version_id' => (int)$this->request->getParam('version_id', 0) ?: null,
+            'scope' => (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $layoutType,
+        ]);
+        $themeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
+        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+        $session->setData('preview_theme_id', $themeId);
+        $session->setData('preview_theme_area', $editorArea);
+
+        $this->request->setData('skip_view_file_cache', true);
+
+        try {
+            w_cache('view')->clear();
+            ObjectManager::getInstance(SlotRendererService::class)->clearCache();
+            \Weline\Theme\Helper\ThemeData::clearCache();
+        } catch (\Throwable $e) {
+        }
+
+        $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
+        $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
+        if (!file_exists($templateFile)) {
+            return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
+        }
+
+        $this->assign('editor_mode', true);
+        $this->assign('preview_mode', true);
+        $this->assign('theme_id', $themeId);
+        $this->assign('preview_context', $context);
+        $this->assign('layout_type', $layoutType);
+        $this->assign('meta', [
+            'showHeader' => true,
+            'showFooter' => true,
+            'showStatistics' => true,
+            'showFeatures' => true,
+            'showProducts' => true,
+            'showTestimonials' => true,
+            'showNews' => true,
+            'showPartners' => true,
+        ]);
+
+        $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
+        try {
+            $modulePath = $this->request->getRouterData('module_path');
+            if ($modulePath) {
+                $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
+                $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
+                $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
+                w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
+                w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
+            }
+        } catch (\Throwable $e) {
+        }
+
+        $contentHtml = $this->fetch($templatePath);
+        $basePath = "Weline_Theme::theme/{$editorArea}/layouts/base.phtml";
+        $baseExists = $this->resolveThemeLayoutExists($themeId, $editorArea, 'base', 'default');
+        if ($baseExists) {
+            $this->getTemplate()->setData('child_html', ['content' => $contentHtml]);
+            try {
+                if ($modulePath = $this->request->getRouterData('module_path')) {
+                    $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
+                    $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
+                    $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
+                    w_cache('view')->delete($viewDir . $baseRel . $langLocal);
+                    w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
+                    w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
+                }
+            } catch (\Throwable $e) {
+            }
+            $html = $this->fetch($basePath);
+        } else {
+            $html = $contentHtml;
+        }
+
+        return $this->injectEditorModeAssets($html);
+    }
+
+    public function legacyGetLayoutPreview()
     {
         $this->layoutType = null; // 禁用后端布局，iframe 仅渲染前端内容
 
@@ -2512,6 +2812,107 @@ HTML;
             $data = $this->request->getParams();
         }
 
+        $pageType = (string)($data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME));
+        $frontendThemeId = (int)($data['frontend_theme_id'] ?? $data['theme_id'] ?? $this->request->getParam('frontend_theme_id', $this->request->getParam('theme_id', 0)));
+        if (!$frontendThemeId) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缂哄皯鍓嶇涓婚ID'),
+            ]);
+        }
+
+        try {
+            $context = $this->getPreviewContextService()->buildContext([
+                'frontend_theme_id' => $frontendThemeId,
+                'backend_theme_id' => (int)($data['backend_theme_id'] ?? $this->request->getParam('backend_theme_id', 0)),
+                'editor_area' => $this->getPreviewContextService()->normalizeArea(
+                    (string)($data['editor_area'] ?? $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND))
+                ),
+                'shell' => PreviewContextService::SHELL_PREVIEW,
+                'preview_mode' => (string)($data['preview_mode'] ?? $this->request->getParam('preview_mode', PreviewContextService::DEFAULT_PREVIEW_MODE)),
+                'status' => (string)($data['status'] ?? $this->request->getParam('status', PreviewContextService::DEFAULT_STATUS)),
+                'version_id' => isset($data['version_id']) ? (int)$data['version_id'] : ((int)$this->request->getParam('version_id', 0) ?: null),
+                'scope' => (string)($data['scope'] ?? $this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE)),
+                'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+                'target_value' => $pageType,
+            ]);
+            $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
+            $token = $this->previewTokenService->generateToken(
+                $frontendThemeId,
+                $pageType,
+                $context['version_id'] ?? null,
+                $context
+            );
+            $this->previewTokenService->setPreviewCookie($token);
+            $context = $this->getPreviewContextService()->withPreviewToken($context, $token);
+            $this->getPreviewContextService()->persistContext($context);
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('棰勮宸插惎鍔?),
+                'data' => [
+                    'token' => $token,
+                    'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType),
+                    'context' => $context,
+                    'expires_in' => 3600,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function postResolveNavigation()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $href = \trim((string)($data['href'] ?? ''));
+        if ($href === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缂哄皯璺宠浆鍦板潃'),
+            ]);
+        }
+
+        $context = isset($data['context']) && \is_array($data['context']) ? $data['context'] : [];
+        $context = $this->getPreviewContextService()->buildContext($context);
+        $result = $this->getPreviewNavigationResolver()->resolve($context, $href);
+
+        if (($result['kind'] ?? '') !== 'external') {
+            $resolvedContext = $this->getPreviewContextService()->persistContext((array)($result['context'] ?? []));
+            if (!empty($resolvedContext['preview_token'])) {
+                $this->previewTokenService->setPreviewCookie((string)$resolvedContext['preview_token']);
+            }
+            $result['context'] = $resolvedContext;
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'data' => $result,
+        ]);
+    }
+
+    public function legacyPostStartPreview()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $pageType = $data['page_type'] ?? $this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
         $versionId = isset($data['version_id']) ? (int)$data['version_id'] : null;
@@ -2588,6 +2989,64 @@ HTML;
         }
 
         $token = $data['token'] ?? $this->request->getParam('token', '');
+        if (empty($token)) {
+            $token = $this->previewTokenService->getTokenFromRequest();
+        }
+
+        if (empty($token)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缂哄皯棰勮 Token'),
+            ]);
+        }
+
+        try {
+            $tokenData = $this->previewTokenService->validateToken($token);
+            $context = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+            $pageType = (string)($tokenData['page_type'] ?? ($context['target_value'] ?? ThemeLayout::PAGE_TYPE_HOME));
+
+            $result = $this->previewTokenService->deleteToken($token);
+            $this->previewTokenService->clearPreviewCookie();
+            $this->getPreviewContextService()->clearContext();
+            PreviewManager::clearPreviewConfig();
+            $this->session->delete('preview_auto_login');
+
+            $editorContext = $this->getPreviewContextService()->buildContext(\array_replace($context, [
+                'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+                'preview_token' => '',
+                'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+                'target_value' => $pageType,
+            ]), false);
+            $editorContext = $this->getPreviewContextService()->ensureThemeIds($editorContext, true, true);
+
+            return $this->fetchJson([
+                'success' => $result,
+                'message' => $result ? __('宸查€€鍑洪瑙堟ā寮?) : __('閫€鍑洪瑙堝け璐?),
+                'data' => [
+                    'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
+                    'context' => $editorContext,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function legacyPostExitPreview()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $token = $data['token'] ?? $this->request->getParam('token', '');
 
         // 如果没有传入 token，尝试从请求中获取
         if (empty($token)) {
@@ -2641,6 +3100,94 @@ HTML;
      * 发布当前预览内容并退出预览模式
      */
     public function postPublishAndExit()
+    {
+        $bodyParams = $this->request->getBodyParams();
+        if (is_string($bodyParams)) {
+            $data = json_decode($bodyParams, true) ?: [];
+        } elseif (is_array($bodyParams)) {
+            $data = $bodyParams;
+        } else {
+            $data = $this->request->getParams();
+        }
+
+        $token = $data['token'] ?? $this->request->getParam('token', '');
+        if (empty($token)) {
+            $token = $this->previewTokenService->getTokenFromRequest();
+        }
+
+        if (empty($token)) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缂哄皯棰勮 Token'),
+            ]);
+        }
+
+        try {
+            $tokenData = $this->previewTokenService->validateToken($token);
+            if (!$tokenData) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('棰勮 Token 宸茶繃鏈熸垨鏃犳晥'),
+                ]);
+            }
+
+            $themeId = (int)($tokenData['theme_id'] ?? 0);
+            $pageType = (string)($tokenData['page_type'] ?? ThemeLayout::PAGE_TYPE_HOME);
+            if (!$themeId) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('Token 涓己灏戜富棰樹俊鎭?),
+                ]);
+            }
+
+            $publishResult = $this->layoutService->publishLayout($themeId, $pageType);
+            if (!$publishResult) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('鍙戝竷甯冨眬澶辫触'),
+                ]);
+            }
+
+            $this->cacheGenerator->clearCache($themeId);
+            $this->cacheGenerator->generate($themeId);
+            $this->flushFullPageCache();
+
+            $this->previewTokenService->deleteToken($token);
+            $this->previewTokenService->clearPreviewCookie();
+            $previewContext = \is_array($tokenData['context'] ?? null) ? $tokenData['context'] : [];
+            $this->getPreviewContextService()->clearContext();
+            PreviewManager::clearPreviewConfig();
+            $this->session->delete('preview_auto_login');
+
+            $editorContext = $this->getPreviewContextService()->buildContext(\array_replace($previewContext, [
+                'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+                'preview_token' => '',
+                'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+                'target_value' => $pageType,
+            ]), false);
+            $editorContext = $this->getPreviewContextService()->ensureThemeIds($editorContext, true, true);
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('涓婚宸插彂甯?),
+                'data' => [
+                    'redirect_url' => $this->_url->getFrontendUrl(
+                        $this->getThemePageTypeResolver()->getPreviewRouteByPageType($pageType),
+                        []
+                    ),
+                    'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
+                    'context' => $editorContext,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    public function legacyPostPublishAndExit()
     {
         $bodyParams = $this->request->getBodyParams();
         if (is_string($bodyParams)) {
@@ -2730,6 +3277,102 @@ HTML;
      * @param string $pageType 页面类型
      * @return string 预览路径
      */
+    private function getPreviewContextService(): PreviewContextService
+    {
+        /** @var PreviewContextService $service */
+        $service = ObjectManager::getInstance(PreviewContextService::class);
+        return $service;
+    }
+
+    private function getThemeContextService(): ThemeContextService
+    {
+        /** @var ThemeContextService $service */
+        $service = ObjectManager::getInstance(ThemeContextService::class);
+        return $service;
+    }
+
+    private function getPreviewNavigationResolver(): PreviewNavigationResolver
+    {
+        /** @var PreviewNavigationResolver $resolver */
+        $resolver = ObjectManager::getInstance(PreviewNavigationResolver::class);
+        return $resolver;
+    }
+
+    private function getThemePageTypeResolver(): ThemePageTypeResolver
+    {
+        /** @var ThemePageTypeResolver $resolver */
+        $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
+        return $resolver;
+    }
+
+    private function loadThemeModel(int $themeId): ?WelineTheme
+    {
+        if ($themeId <= 0) {
+            return null;
+        }
+
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery()->load($themeId);
+        return $theme->getId() ? $theme : null;
+    }
+
+    private function persistEditorContext(array $overrides = []): array
+    {
+        $context = $this->getPreviewContextService()->buildContext($overrides);
+        $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
+        return $this->getPreviewContextService()->persistContext($context);
+    }
+
+    private function buildFrontendPreviewUrl(array $context, string $pageType): string
+    {
+        $context = $this->getPreviewContextService()->buildContext(\array_replace($context, [
+            'shell' => PreviewContextService::SHELL_PREVIEW,
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $pageType,
+        ]), false);
+        $params = $this->getPreviewContextService()->toQueryParams($context);
+        $params['_t'] = \time();
+
+        return $this->_url->getFrontendUrl(
+            $this->getThemePageTypeResolver()->getPreviewRouteByPageType($pageType),
+            $params
+        );
+    }
+
+    private function buildEditorShellUrl(array $context, string $pageType): string
+    {
+        $context = $this->getPreviewContextService()->buildContext(\array_replace($context, [
+            'shell' => PreviewContextService::SHELL_THEME_EDITOR,
+            'preview_token' => '',
+            'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
+            'target_value' => $pageType,
+        ]), false);
+        $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
+
+        $editorArea = $this->getPreviewContextService()->normalizeArea(
+            (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND)
+        );
+        $themeId = $this->getPreviewContextService()->getThemeIdForArea($editorArea, $context, true);
+        $params = $this->getPreviewContextService()->toQueryParams($context);
+        $params['theme_id'] = $themeId;
+        $params['page_type'] = $pageType;
+        $params['editor_area'] = $editorArea;
+        $params['_t'] = \time();
+
+        return $this->_url->getBackendUrl('theme/backend/theme-editor', $params);
+    }
+
+    private function themeRecordHasBackendArea(array $themeData): bool
+    {
+        $themeId = (int)($themeData['id'] ?? 0);
+        $theme = $this->loadThemeModel($themeId);
+        if (!$theme) {
+            return false;
+        }
+
+        return $this->themeHasBackendDir($theme);
+    }
+
     private function getPreviewPathByPageType(string $pageType): string
     {
         $pathMap = [
