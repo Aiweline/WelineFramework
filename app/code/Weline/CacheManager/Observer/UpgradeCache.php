@@ -2,98 +2,133 @@
 
 declare(strict_types=1);
 
-/**
- * 缓存升级观察者
- * 
- * 在 setup:upgrade 时同步缓存池配置到数据库
- * 
- * @author Aiweline
- * @email aiweline@qq.com
- */
-
 namespace Weline\CacheManager\Observer;
 
-use Weline\Framework\App\Env;
+use Weline\CacheManager\Model\Cache as CacheRecord;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Manager\ObjectManager;
 
 class UpgradeCache implements \Weline\Framework\Event\ObserverInterface
 {
-    private CacheManager $cacheManager;
-
-    public function __construct(CacheManager $cacheManager)
-    {
-        $this->cacheManager = $cacheManager;
+    public function __construct(
+        private readonly CacheManager $cacheManager
+    ) {
     }
 
-    /**
-     * @inheritDoc
-     */
     public function execute(Event &$event): void
     {
         try {
             $this->syncPoolsToDatabase();
-        } catch (\Throwable $e) {
-            w_log_error('UpgradeCache failed: ' . $e->getMessage(), [], 'CacheManager::UpgradeCache');
+        } catch (\Throwable $throwable) {
+            w_log_error('UpgradeCache failed: ' . $throwable->getMessage(), [], 'CacheManager::UpgradeCache');
         }
     }
 
-    /**
-     * 同步缓存池到数据库
-     */
     private function syncPoolsToDatabase(): void
     {
-        $identities = $this->cacheManager->getPoolIdentities();
-        
-        foreach ($identities as $identity) {
+        foreach ($this->cacheManager->getPoolIdentities() as $identity) {
             try {
                 $pool = $this->cacheManager->pool($identity);
-                $stats = $pool->getStats();
-                
-                $this->savePoolToDatabase([
-                    'identity' => $identity,
-                    'name' => $stats['adapter'] ?? 'Unknown',
-                    'tip' => $stats['tip'] ?? '',
-                    'permanent' => $stats['permanent'] ?? false,
-                    'ttl' => $stats['default_ttl'] ?? 1800,
-                ]);
-            } catch (\Throwable $e) {
-                w_log_error("Sync pool '{$identity}' failed: " . $e->getMessage(), [], 'CacheManager::UpgradeCache');
+                $this->savePoolToDatabase($identity, $pool->getStats());
+            } catch (\Throwable $throwable) {
+                w_log_error("Sync pool '{$identity}' failed: " . $throwable->getMessage(), [], 'CacheManager::UpgradeCache');
             }
         }
     }
 
     /**
-     * 保存缓存池到数据库
+     * @param array<string, mixed> $stats
      */
-    private function savePoolToDatabase(array $poolInfo): void
+    private function savePoolToDatabase(string $identity, array $stats): void
     {
-        /** @var \Weline\CacheManager\Model\Cache $cacheModel */
-        $cacheModel = ObjectManager::make(\Weline\CacheManager\Model\Cache::class);
-        
+        /** @var CacheRecord $cacheModel */
+        $cacheModel = ObjectManager::make(CacheRecord::class);
         $existing = $cacheModel
-            ->where($cacheModel::schema_fields_IDENTITY, $poolInfo['identity'])
+            ->where($cacheModel::schema_fields_IDENTITY, $identity)
             ->find()
             ->fetch();
-        
+
+        $adapterClass = (string)($stats['adapter'] ?? '');
+        $description = \trim((string)($stats['tip'] ?? ''));
         $data = [
-            $cacheModel::schema_fields_NAME => $poolInfo['name'],
-            $cacheModel::schema_fields_IDENTITY => $poolInfo['identity'],
-            $cacheModel::schema_fields_Module => 'Weline_Framework',
-            $cacheModel::schema_fields_FILE => 'CacheManager Pool',
-            $cacheModel::schema_fields_TYPE => 0,
-            $cacheModel::schema_fields_Status => 1,
-            $cacheModel::schema_fields_Permanently => $poolInfo['permanent'] ? 1 : 0,
-            $cacheModel::schema_fields_DESCRIPTION => $poolInfo['tip'],
+            $cacheModel::schema_fields_NAME => $this->resolveDisplayName($existing, $adapterClass),
+            $cacheModel::schema_fields_IDENTITY => $identity,
+            $cacheModel::schema_fields_Module => $this->resolveStringField(
+                $existing,
+                $cacheModel::schema_fields_Module,
+                'Weline_Framework'
+            ),
+            $cacheModel::schema_fields_FILE => $this->resolveStringField(
+                $existing,
+                $cacheModel::schema_fields_FILE,
+                'CacheManager Pool'
+            ),
+            $cacheModel::schema_fields_TYPE => $this->resolveIntField(
+                $existing,
+                $cacheModel::schema_fields_TYPE,
+                0
+            ),
+            $cacheModel::schema_fields_Status => (int)(($stats['enabled'] ?? true) ? 1 : 0),
+            $cacheModel::schema_fields_Permanently => (int)(($stats['permanent'] ?? false) ? 1 : 0),
+            $cacheModel::schema_fields_DESCRIPTION => $description !== ''
+                ? $description
+                : $this->resolveStringField($existing, $cacheModel::schema_fields_DESCRIPTION, ''),
         ];
-        
+
         if ($existing && $existing->getId()) {
             $existing->setData($data)->save();
-        } else {
-            /** @var \Weline\CacheManager\Model\Cache $newCache */
-            $newCache = ObjectManager::make(\Weline\CacheManager\Model\Cache::class);
-            $newCache->setData($data)->save();
+            return;
         }
+
+        /** @var CacheRecord $newCache */
+        $newCache = ObjectManager::make(CacheRecord::class);
+        $newCache->setData($data)->save();
+    }
+
+    private function resolveDisplayName(mixed $existing, string $adapterClass): string
+    {
+        $existingName = $this->resolveStringField($existing, CacheRecord::schema_fields_NAME, '');
+        $adapterLabel = $this->adapterLabel($adapterClass);
+
+        if ($existingName === '' || $existingName === $adapterClass) {
+            return $adapterLabel;
+        }
+
+        return $existingName;
+    }
+
+    private function resolveStringField(mixed $record, string $field, string $default): string
+    {
+        if ($record && \method_exists($record, 'getData')) {
+            $value = \trim((string)$record->getData($field));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return $default;
+    }
+
+    private function resolveIntField(mixed $record, string $field, int $default): int
+    {
+        if ($record && \method_exists($record, 'getData')) {
+            $value = $record->getData($field);
+            if ($value !== null && $value !== '') {
+                return (int)$value;
+            }
+        }
+
+        return $default;
+    }
+
+    private function adapterLabel(string $adapterClass): string
+    {
+        if ($adapterClass === '') {
+            return 'Unknown';
+        }
+
+        $parts = \explode('\\', $adapterClass);
+        return (string)\end($parts);
     }
 }
