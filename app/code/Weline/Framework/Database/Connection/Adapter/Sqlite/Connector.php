@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 /**
- * 文件信息
- * 作者：邹万才
- * 网名：秋风雁飞(Aiweline)
- * 网站：www.aiweline.com/bbs.aiweline.com
- * 工具：PhpStorm
- * 日期：2021/6/21
- * 时间：11:45
- * 描述：此文件源码由Aiweline（秋枫雁飞）开发，请勿随意修改源码！
+ * 鏂囦欢淇℃伅
+ * 浣滆€咃細閭逛竾鎵?
+ * 缃戝悕锛氱椋庨泚椋?Aiweline)
+ * 缃戠珯锛歸ww.aiweline.com/bbs.aiweline.com
+ * 宸ュ叿锛歅hpStorm
+ * 鏃ユ湡锛?021/6/21
+ * 鏃堕棿锛?1:45
+ * 鎻忚堪锛氭鏂囦欢婧愮爜鐢盇iweline锛堢鏋泚椋烇級寮€鍙戯紝璇峰嬁闅忔剰淇敼婧愮爜锛?
  */
 
 namespace Weline\Framework\Database\Connection\Adapter\Sqlite;
@@ -27,6 +27,7 @@ use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\DbManager\ConfigProvider;
 use Weline\Framework\Database\DbManager\ConfigProviderInterface;
+use Weline\Framework\Database\Exception\DbException;
 use Weline\Framework\Database\Exception\LinkException;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -35,7 +36,7 @@ final class Connector extends Query implements ConnectorInterface
     public function __construct(
         private readonly ConfigProvider $configProvider
     ) {
-        // FIXME 停止使用，适配不完全，仅提供Pgsql适配器，后续版本可能移除
+        // FIXME 鍋滄浣跨敤锛岄€傞厤涓嶅畬鍏紝浠呮彁渚汸gsql閫傞厤鍣紝鍚庣画鐗堟湰鍙兘绉婚櫎
         throw new \Exception('SQLite 数据库连接适配器已停止使用，请使用 Pgsql。');
         $identifierFormatter = new SqliteIdentifierFormatter();
         $tableStrategy = new DefaultTableNameStrategy(
@@ -49,7 +50,7 @@ final class Connector extends Query implements ConnectorInterface
         $this->db_name = $this->configProvider->getDatabase();
     }
 
-    /** Connector 自身即持有连接，作为 Query 使用时直接返回，避免依赖 SqlTrait 的 $this->connection */
+    /** Connector 鑷韩鍗虫寔鏈夎繛鎺ワ紝浣滀负 Query 浣跨敤鏃剁洿鎺ヨ繑鍥烇紝閬垮厤渚濊禆 SqlTrait 鐨?$this->connection */
     public function getConnectionInterface(): DbConnectionInterface
     {
         return $this->getWrappedConnection();
@@ -58,7 +59,7 @@ final class Connector extends Query implements ConnectorInterface
     protected ?PDO $link = null;
     protected ?DbConnectionInterface $wrappedConnection = null;
     protected ?Query $query = null;
-    protected bool $fromPool = false; // 标记连接是否来自连接池
+    protected bool $fromPool = false; // 鏍囪杩炴帴鏄惁鏉ヨ嚜杩炴帴姹?
 
     private ?SqliteDialect $dialect = null;
 
@@ -80,20 +81,20 @@ final class Connector extends Query implements ConnectorInterface
 
         $db_type = $this->configProvider->getDbType();
         
-        // 从连接池获取连接
+        // 浠庤繛鎺ユ睜鑾峰彇杩炴帴
         $this->link = ConnectionPool::getConnection(
             $this->configProvider,
             function () use ($db_type) {
                 $dsn = "{$db_type}:{$this->configProvider->getData('path')}";
                 try {
                     $options = $this->configProvider->getOptions();
-                    // SQLite 也支持持久连接，但需要确保错误模式设置
+                    // SQLite 涔熸敮鎸佹寔涔呰繛鎺ワ紝浣嗛渶瑕佺‘淇濋敊璇ā寮忚缃?
                     if (!isset($options[PDO::ATTR_ERRMODE])) {
                         $options[PDO::ATTR_ERRMODE] = PDO::ERRMODE_EXCEPTION;
                     }
                     $connection = new PDO($dsn, null, null, $options);
-                    # PRAGMA case_sensitive_like = ON;  -- 开启大小写敏感的LIKE查询
-                    $connection->exec('PRAGMA case_sensitive_like = OFF; -- 关闭大小写敏感的LIKE查询（默认）');
+                    # PRAGMA case_sensitive_like = ON;  -- 寮€鍚ぇ灏忓啓鏁忔劅鐨凩IKE鏌ヨ
+                    $connection->exec('PRAGMA case_sensitive_like = OFF; -- 鍏抽棴澶у皬鍐欐晱鎰熺殑LIKE鏌ヨ锛堥粯璁わ級');
                     return $connection;
                 } catch (PDOException $e) {
                     throw new LinkException($e->getMessage());
@@ -105,7 +106,7 @@ final class Connector extends Query implements ConnectorInterface
             $version = (string)$this->link->query('SELECT sqlite_version()')->fetchColumn();
             $this->getDialect()->validateVersion($version);
         } catch (\Throwable $e) {
-            w_log_warning(__('SQLite 版本校验未通过（连接已建立，升级可继续）：%{1}', [$e->getMessage()]), [], 'database_version.log');
+            w_log_warning(__('SQLite 鐗堟湰鏍￠獙鏈€氳繃锛堣繛鎺ュ凡寤虹珛锛屽崌绾у彲缁х画锛夛細%{1}', [$e->getMessage()]), [], 'database_version.log');
         }
         $this->wrappedConnection = new PdoConnection($this->link, 'sqlite');
         return $this;
@@ -133,7 +134,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     /**
-     * 析构函数：确保连接在使用后被归还到连接池
+     * 鏋愭瀯鍑芥暟锛氱‘淇濊繛鎺ュ湪浣跨敤鍚庤褰掕繕鍒拌繛鎺ユ睜
      */
     public function __destruct()
     {
@@ -141,7 +142,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     /**
-     * @deprecated 请使用 getWrappedConnection() 获取连接并调用其方法，后续版本可能移除
+     * @deprecated 璇蜂娇鐢?getWrappedConnection() 鑾峰彇杩炴帴骞惰皟鐢ㄥ叾鏂规硶锛屽悗缁増鏈彲鑳界Щ闄?
      */
     public function getLink(): PDO
     {
@@ -150,7 +151,7 @@ final class Connector extends Query implements ConnectorInterface
     }
 
     /**
-     * 使用 SQLite 原生 REINDEX 重建表索引（@since SQLite 3.45+）
+     * 浣跨敤 SQLite 鍘熺敓 REINDEX 閲嶅缓琛ㄧ储寮曪紙@since SQLite 3.45+锛?
      */
     public function reindex(string $table): bool
     {
@@ -171,13 +172,13 @@ final class Connector extends Query implements ConnectorInterface
     public function getIndexFields(string $table): array
     {
         $table = self::processName($table);
-        // 获取表的索引列表
+        // 鑾峰彇琛ㄧ殑绱㈠紩鍒楄〃
         $indexList = $this->query("PRAGMA index_list('$table')")->fetch();
 
         $indexFields = [];
 
         foreach ($indexList as $index) {
-            // 获取索引的详细信息
+            // 鑾峰彇绱㈠紩鐨勮缁嗕俊鎭?
             $indexInfo = $this->query("PRAGMA index_info('{$index['name']}')")->fetch();
 
             foreach ($indexInfo as $info) {
@@ -187,7 +188,7 @@ final class Connector extends Query implements ConnectorInterface
                     'Key_name' => $index['name'],
                     'Seq_in_index' => $info['seqno'],
                     'Column_name' => $info['name'],
-                    'Collation' => 'A', // SQLite 默认使用二进制排序
+                    'Collation' => 'A', // SQLite 榛樿浣跨敤浜岃繘鍒舵帓搴?
                 ];
             }
         }
@@ -198,7 +199,7 @@ final class Connector extends Query implements ConnectorInterface
     public function dev()
     {
         return "
-# 查询表的索引字段并拼接成索引重建SQL
+# 鏌ヨ琛ㄧ殑绱㈠紩瀛楁骞舵嫾鎺ユ垚绱㈠紩閲嶅缓SQL
 SET @rebuild_indexer_schema = 'weline';
 SET @rebuild_indexer_table = 'm_contact';
 SET @rebuild_indexer_sql = '';
@@ -240,12 +241,12 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     }
 
     /**
-     * @DESC          # 读取创建表SQL
+     * @DESC          # 璇诲彇鍒涘缓琛⊿QL
      *
-     * @AUTH    秋枫雁飞
+     * @AUTH    绉嬫灚闆侀
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/9/5 22:08
-     * 参数区：
+     * 鍙傛暟鍖猴細
      *
      * @param string $table_name
      *
@@ -254,13 +255,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     public function getCreateTableSql(string $table_name): string
     {
         $table_name = self::processName($table_name);
-        // 获取表的元数据
+        // 鑾峰彇琛ㄧ殑鍏冩暟鎹?
         $tableMeta = $this->query("SELECT sql FROM sqlite_master WHERE type='table' AND name='$table_name'")->fetch();
 
         if ($tableMeta === false) {
             throw new \Exception("Table '$table_name' does not exist.");
         }
-        // 返回 CREATE TABLE 语句
+        // 杩斿洖 CREATE TABLE 璇彞
         return $tableMeta[0]['sql'] ?? '';
     }
 
@@ -302,7 +303,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function getExistingTables(array $tableNames): array
     {
-        // SQLite connector 已弃用（构造函数 throw），此处降级为逐表检查
+        // SQLite connector 宸插純鐢紙鏋勯€犲嚱鏁?throw锛夛紝姝ゅ闄嶇骇涓洪€愯〃妫€鏌?
         return array_values(array_filter(
             array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
             fn($t) => $t !== '' && $this->tableExist($t)
@@ -311,7 +312,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
 
     public function getVersion(): string
     {
-        // 查询数据库版本号
+        // 鏌ヨ鏁版嵁搴撶増鏈彿
         return $this->link->getAttribute(PDO::ATTR_CLIENT_VERSION);
     }
 
@@ -437,7 +438,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAlterTableCommentSql(string $table, string $comment): string
     {
-        return "SELECT 1"; // SQLite 不支持表注释，返回无操作
+        throw new DbException(__('SQLite 不支持表注释 DDL：ALTER TABLE COMMENT %{1}', [$table]));
     }
 
     /** @inheritDoc */
@@ -465,13 +466,13 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
     /** @inheritDoc */
     public function buildAddForeignKeySql(string $table, array $fk): string
     {
-        return "SELECT 1"; // SQLite 不支持 ALTER TABLE ADD CONSTRAINT
+        throw new DbException(__('SQLite 不支持添加外键 DDL：ALTER TABLE ADD CONSTRAINT %{1}', [$table]));
     }
 
     /** @inheritDoc */
     public function buildDropForeignKeySql(string $table, string $fkName): string
     {
-        return "SELECT 1"; // SQLite 不支持 ALTER TABLE DROP CONSTRAINT
+        throw new DbException(__('SQLite 不支持删除外键 DDL：ALTER TABLE DROP CONSTRAINT %{1}.%{2}', [$table, $fkName]));
     }
 
     private function sqliteColumnDef(array $col): string
@@ -479,7 +480,7 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         $c = $this->getDialect()->quoteIdentifier($col['name'] ?? '');
         $type = strtoupper($col['type'] ?? 'TEXT');
         $len = $col['length'] ?? null;
-        $typeLen = $type . ($len !== null ? "({$len})" : '');
+        $typeLen = $len ? "{$type}({$len})" : $type;
         $opts = [];
         if (!empty($col['primaryKey'])) {
             $opts[] = 'PRIMARY KEY';
