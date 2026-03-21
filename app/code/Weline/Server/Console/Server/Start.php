@@ -464,24 +464,48 @@ class Start extends CommandAbstract
                 $config['port'] = $port;
                 $httpRedirectPort = 0;
             }
-            // 降级后仍被占用，或用户指定了端口 → 报错
+            // 降级后的端口占用由下方统一处理：异常占用尝试自动切换，其他场景保持报错。
             $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
-            if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
-                if (($mainPortInspect['state'] ?? '') === 'orphan') {
-                    $this->printer->error(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$port]));
-                } else {
-                    $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
-                }
-                $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
-                $this->printer->note('');
-                $this->printer->setup(__('解决方案：'));
-                $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$port]));
-                $this->printer->note(__('  2. 或使用 -p 参数显式指定其他端口：'));
-                $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
-                $this->printer->note(__('  3. 查看端口占用：'));
-                $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
-                return;
+        }
+
+        if (($mainPortInspect['in_use'] ?? false)
+            && !($mainPortInspect['is_weline'] ?? false)
+            && !$portExplicit
+            && (($mainPortInspect['state'] ?? '') === 'orphan')
+        ) {
+            $fallbackPort = $this->findAvailableMainPort($port + 1);
+            if ($fallbackPort !== $port) {
+                $this->printer->warning(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），已自动切换到 %{2}', [$port, $fallbackPort]));
+                $this->printer->note(__('自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口'));
+                $port = $fallbackPort;
+                $config['port'] = $port;
+                $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
             }
+        }
+
+        if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
+            if (($mainPortInspect['state'] ?? '') === 'orphan') {
+                $this->printer->error(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$port]));
+            } else {
+                $this->printer->error(__('主端口 %{1} 被非框架进程占用', [$port]));
+            }
+            $this->printer->note(__('主端口是业务入口，不会自动切换以避免服务地址变化'));
+            $this->printer->note('');
+            $this->printer->setup(__('解决方案：'));
+            $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$port]));
+            $this->printer->note(__('  2. 或使用 -p 参数显式指定其他端口：'));
+            $this->printer->note('     php bin/w server:start ' . ($instanceName !== 'default' ? $instanceName . ' ' : '') . '-p <port>');
+            $this->printer->note(__('  3. 查看端口占用：'));
+            $this->printer->note('     php bin/w server:kill-port ' . $port . ' --info');
+            return;
+        }
+
+        if ($dispatcherEnabled) {
+            $workerPort = $workerBasePort + $port;
+        } elseif ($useDirectMode) {
+            $workerPort = $port;
+        } else {
+            $workerPort = $workerBasePort + $port;
         }
 
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
@@ -2489,6 +2513,18 @@ class Start extends CommandAbstract
             }
         }
         return $startPort;
+    }
+
+    protected function findAvailableMainPort(int $startPort, int $maxScan = 200): int
+    {
+        $port = \max($startPort, 1);
+        for ($attempt = 0; $attempt < $maxScan; $attempt++, $port++) {
+            if (!Processer::isPortInUse($port)) {
+                return $port;
+            }
+        }
+
+        return $startPort > 0 ? $startPort - 1 : 0;
     }
     
     /**
