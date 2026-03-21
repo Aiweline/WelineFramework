@@ -219,10 +219,15 @@ class ThemeContextService
     {
         $previewThemeId = 0;
         $previewThemeArea = '';
+        $previewThemeAreaFromRequest = '';
 
         $request = $this->getRequest();
         if ($request) {
             $previewThemeId = (int)$request->getParam('preview_theme', 0);
+            $previewThemeAreaFromRequest = $this->normalizeArea(
+                (string)$request->getParam('preview_area', $area),
+                $area
+            );
         }
 
         $session = $this->getSession();
@@ -231,8 +236,9 @@ class ThemeContextService
                 $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
                 $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
             }
-        } elseif ($session) {
-            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+        } else {
+            // URL 明确带 preview_theme 时，优先使用请求上下文 area，避免被历史 session area 干扰
+            $previewThemeArea = $previewThemeAreaFromRequest;
         }
 
         if (!$previewThemeId) {
