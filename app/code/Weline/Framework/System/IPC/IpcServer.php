@@ -288,8 +288,8 @@ class IpcServer
             $this->handleLifecycleMessage($clientId, $msg, $type);
 
             // 应用层扩展点（WLS 的 TYPE_LOG 等特有消息在这里处理）
-            if ($this->onMessage($msg, $clientId)) {
-                // onMessage 返回 true 表示消息已由扩展处理，跳过外部回调
+            if ($this->handleExtendedMessage($msg, $clientId)) {
+                // handleExtendedMessage 返回 true 表示消息已由扩展处理，跳过外部回调
                 continue;
             }
 
@@ -409,8 +409,8 @@ class IpcServer
 
     public function setVerboseLog(bool $verbose): void { $this->verboseLog = $verbose; }
     public function setLogger(IpcLoggerInterface $logger): void { $this->logger = $logger; }
-    public function onMessage(callable $handler): void { $this->messageHandler = $handler; }
-    public function onDisconnect(callable $handler): void { $this->disconnectHandler = $handler; }
+    public function setMessageHandler(callable $handler): void { $this->messageHandler = $handler; }
+    public function setDisconnectHandler(callable $handler): void { $this->disconnectHandler = $handler; }
 
     // ========== 扩展点（子类覆盖）==========
 
@@ -430,7 +430,7 @@ class IpcServer
      * 返回 true = 消息已处理，跳过外部 messageHandler 回调。
      * 返回 false = 继续传递给 messageHandler。
      */
-    protected function onMessage(array $msg, int $clientId): bool
+    protected function handleExtendedMessage(array $msg, int $clientId): bool
     {
         return false;
     }
