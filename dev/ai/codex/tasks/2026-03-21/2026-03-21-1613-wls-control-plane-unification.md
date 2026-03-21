@@ -2,15 +2,15 @@
 
 ## Goal
 
-统一 WLS 控制面入口与语义，修复命令行通知、缓存清理、重载、SSL 证书刷新等场景下的 reload/cache 控制失效问题，并让 CLI 与 WLS 行为保持一致。
+统一 WLS 控制面入口与语义，修复命令行通知、缓存清理、重载、SSL 证书刷新等场景下的 reload/cache 控制失效问题，并让 CLI 与 WLS 运行状态提示保持一致。
 
 ## Context
 
-- 用户反馈：`WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中`，命令行内通知不生效，缓存清理与重载等行为需要和 WLS 保持一致。
-- 已确认问题根因不在于 WLS 一定没启动，而在于：
-  - 控制面存在新旧两套入口并存。
-  - `ACTION_RELOAD` 被当作“帝王指令”绑定发起端 IPC 生命周期，发起端断开后会中止本轮 reload。
-  - 多个调用方仍硬编码 `default`，没有按运行中的实例广播。
+- 用户反馈：`WLS 重载：所有通知方式均失败，请检查 WLS 是否运行中`，命令行通知、缓存清理与重载等行为没有和真实 WLS 状态保持一致。
+- 已确认根因不在“WLS 一定没启动”，而在于：
+  - 控制面新旧两套入口并存。
+  - `ACTION_RELOAD` 之前被当作“帝王指令”并绑定发起端 IPC 生命周期，发起端断开会中止本轮 reload。
+  - 多个调用方硬编码 `default`，没有广播实际运行中的实例。
 
 ## Implementation Summary
 
@@ -66,31 +66,43 @@
 - `app/code/Weline/Server/extends/module/Weline_Framework/Query/ServerQueryProvider.php`
 - `app/code/Weline/Server/Test/Unit/Control/IpcControlGatewayTest.php`
 - `app/code/Weline/Server/Test/Unit/Control/BroadcastControlDispatchServiceTest.php`
+- `app/code/Weline/Server/Test/Unit/Observer/CliCommandExecutedObserverTest.php`
 
 ## Verification
 
-- 语法检查
-  - `php -l` 通过本次修改涉及的所有 PHP 文件
-- 单测
-  - `vendor/bin/phpunit --no-coverage app/code/Weline/Server/Test/Unit/Control/IpcControlGatewayTest.php app/code/Weline/Server/Test/Unit/Control/BroadcastControlDispatchServiceTest.php`
+- `php -l` 通过本次修改涉及的 PHP 文件
+- `vendor/bin/phpunit --no-coverage app/code/Weline/Server/Test/Unit/Control/IpcControlGatewayTest.php app/code/Weline/Server/Test/Unit/Control/BroadcastControlDispatchServiceTest.php`
   - 结果：`4 tests / 17 assertions / 0 failures`
-  - 备注：runner 仍报告 `PHPUnit Deprecations: 1`，为仓库现有测试配置问题，不属于本次改动引入
-- 在线回归
-  - 2026-03-21 22:57 执行 `php bin/w server:reload -n`
-  - CLI 实际输出：`未检测到运行中的 WLS Worker`
-  - 说明：当前会话下没有可供回归的运行中 Worker，因此未能直接验证“reload 发起端断开后异步继续执行”的 runtime 行为
+  - 备注：runner 仍报 `PHPUnit Deprecations: 1`，属于仓库现有配置问题
 
-## Remaining Verification Targets
+## Runtime Follow-up
 
-- 在恢复/启动 WLS 后继续验证：
-  - `php bin/w server:reload -n`
-  - `php bin/w cache:clear -f`
-  - `php bin/w server:ssl:reload -d <domain>`
-  - 后台/API/query 的 reload/restart
-- 关键日志信号：
-  - `var/log/wls/wls.log` 中不应再出现 `帝王指令发起端 IPC 已断开 (reload)`
+- 已确认 `verify_http` 实例实际处于运行中：
+  - `var/server/instances/verify_http.json` 中 `master_enabled=true`
+  - `master_pid=52436`
+  - Worker / Dispatcher / Session / Memory 均为 `ready`
+- `php bin/w server:reload verify_http -n`
+  - CLI 立即返回 accepted
+  - 后续 `verify_http.json` 中 Worker PID 从 `53520/32532` 更新为 `52908/53168`
+  - `var/log/wls/wls.log` 只出现预期的 `drain -> shutdown -> restart -> ready` 轨迹，未再出现 reload 发起端 IPC 断开中止日志
+- `php bin/w cache:clear -f`
+  - 暴露一个运行时假失败：CLI 提示 WLS 缓存清理超时，但 `wls.log` 同时记录两个 Worker 已收到 `cache_clear` 并完成执行
+  - 根因是 `CliCommandExecutedObserver` 与 `CacheFlushedObserver` 对 `cache:` 命令重复派发，不是 WLS 不可用
+- 已追加补修：
+  - `CliCommandExecutedObserver` 不再对 `cache:` 命令发起二次 WLS 通知
+  - 缓存清理仅由 `CacheFlushedObserver` 在真实 flush 后通知
+- 回归验证
+  - `php -l app/code/Weline/Server/Observer/CliCommandExecutedObserver.php`
+  - `php -l app/code/Weline/Server/Test/Unit/Observer/CliCommandExecutedObserverTest.php`
+  - `vendor/bin/phpunit --no-coverage app/code/Weline/Server/Test/Unit/Observer/CliCommandExecutedObserverTest.php app/code/Weline/Server/Test/Unit/Control/IpcControlGatewayTest.php app/code/Weline/Server/Test/Unit/Control/BroadcastControlDispatchServiceTest.php`
+    - 结果：`6 tests / 22 assertions / 0 failures`
+  - 再次执行 `php bin/w cache:clear -f`，已不再输出误导性的 WLS 超时提示
+- 直接使用 PowerShell TCP 探针验证控制面回包
+  - `cache_clear` 返回 `{"type":"command_result","success":true,"message":"Cache clear broadcast sent"}`
+  - `ssl_cert_reload` 返回 `{"type":"command_result","success":true,"message":"SSL cert reload broadcast sent"}`
 
 ## Resume Notes
 
-- 当前实现已经完成代码层收口与聚焦单测，后续主要是在线环境回归。
-- 如果继续做真机验证，优先先确认 2026-03-21 当前实例是否重新启动成功，否则所有 async reload/cache/ssl reload 验证都会被“无运行实例”短路。
+- 当前代码收口、单测与关键 runtime 验证已经完成。
+- 历史提交 `e1db3f25` 覆盖控制面统一改造；本轮继续验证中发现并修复了 `cache:` 命令重复派发导致的假失败提示。
+- 如需继续收尾，优先将本轮 observer 补修与单测单独提交，避免和工作区其他脏改动混在一起。
