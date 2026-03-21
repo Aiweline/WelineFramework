@@ -306,20 +306,20 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         try {
             // 清理表名，移除反引号
             $table_name = str_replace(['`', '"'], '', $table_name);
-            
+
             // 处理数据库名和表名（如果包含点号分隔）
             $dbName = $this->configProvider->getDatabase();
             $schema = $dbName;
             $table = $table_name;
-            
+
             if (str_contains($table_name, '.')) {
                 $parts = explode('.', $table_name, 2);
                 $schema = $parts[0];
                 $table = $parts[1] ?? $parts[0];
             }
-            
+
             // 使用 information_schema 查询表是否存在，不会产生错误或警告
-            $sql = "SELECT COUNT(*) as count FROM information_schema.tables 
+            $sql = "SELECT COUNT(*) as count FROM information_schema.tables
                     WHERE table_schema = :schema AND table_name = :table";
             $stmt = $this->getLink()->prepare($sql);
             $stmt->execute([
@@ -327,10 +327,21 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
                 ':table' => $table
             ]);
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
             return (bool)($result['count'] ?? 0);
         } catch (\Exception $exception) {
             return false;
         }
+    }
+
+    /** @inheritDoc */
+    public function getExistingTables(array $tableNames): array
+    {
+        // MySQL connector 已弃用（构造函数 throw），此处降级为逐表检查
+        return array_values(array_filter(
+            array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
+            fn($t) => $t !== '' && $this->tableExist($t)
+        ));
     }
 
     public function getVersion(): string

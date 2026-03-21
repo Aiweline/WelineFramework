@@ -21,6 +21,54 @@ $cleanMispointedUrl = $this->getUrl('*/admin/domain/clean-pool-mispointed-apex-d
 $formKey = (string) $this->getFormKeyValue();
 ?>
 
+<style>
+.weline-pool-table {
+    min-width: 760px;
+}
+.weline-pool-domain-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 14rem;
+}
+.weline-pool-domain-sub {
+    font-size: 0.78rem;
+    color: var(--backend-color-text-secondary, #74788d);
+}
+.weline-pool-provider-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 12rem;
+}
+.weline-pool-provider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+}
+.weline-pool-provider-label {
+    color: var(--backend-color-text-tertiary, #9a9cae);
+    min-width: 2.1rem;
+}
+.weline-pool-summary-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 14rem;
+}
+.weline-pool-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.weline-pool-flow-cell {
+    min-width: 15rem;
+    vertical-align: top;
+}
+</style>
+
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
     <h5 class="mb-0">
         <i class="mdi mdi-database me-1"></i><?= __('域名池') ?>
@@ -88,27 +136,20 @@ $formKey = (string) $this->getFormKeyValue();
     </div>
 </div>
 
-<p class="small text-muted mb-2"><?= __('左右滑动可查看更多列') ?></p>
 <div class="table-responsive overflow-x-auto" style="overflow-x: auto; -webkit-overflow-scrolling: touch;">
-    <table class="table table-hover align-middle mb-0" style="min-width: 960px;">
+    <table class="table table-hover align-middle mb-0 weline-pool-table">
         <thead class="table-light">
         <tr>
             <th><?= __('域名') ?></th>
-            <th><?= __('根域') ?></th>
             <th><?= __('服务商') ?></th>
-            <th><?= __('解析') ?></th>
-            <th><?= __('本机') ?></th>
-            <th><?= __('HTTPS') ?></th>
-            <th><?= __('可建站') ?></th>
-            <th><?= __('已建站') ?></th>
-            <th><?= __('连通性') ?></th>
+            <th><?= __('状态') ?></th>
             <th style="min-width:14rem;"><?= __('流转') ?></th>
         </tr>
         </thead>
         <tbody id="weline-pool-tbody">
         <?php if ($poolTotal === 0): ?>
             <tr>
-                <td colspan="10" class="text-center py-5 text-muted">
+                <td colspan="4" class="text-center py-5 text-muted">
                     <i class="mdi mdi-database-remove" style="font-size:2rem;"></i>
                     <p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p>
                     <small><?= __('请先在「域名列表」中转存到域名池，或执行 DNS 查询/解析自动入池') ?></small>
@@ -135,60 +176,60 @@ $formKey = (string) $this->getFormKeyValue();
                 $connTitle = $connDetail !== '' ? $connDetail : ($connCheckedAt !== '' ? __('检测于') . ' ' . $connCheckedAt : __('待检测'));
                 ?>
                 <tr>
-                    <td><strong><?= \htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?></strong></td>
-                    <td><?= \htmlspecialchars($rootDomain, ENT_QUOTES, 'UTF-8') ?></td>
                     <td>
-                        <div class="d-flex flex-column gap-1 small">
-                            <div><span class="text-muted"><?= __('注册') ?>:</span> <?= \htmlspecialchars($registrarName, ENT_QUOTES, 'UTF-8') ?></div>
-                            <div><span class="text-muted">DNS:</span> <?= \htmlspecialchars($dnsProviderName, ENT_QUOTES, 'UTF-8') ?></div>
-                            <div><span class="text-muted">CDN:</span> <?= \htmlspecialchars($cdnProviderName, ENT_QUOTES, 'UTF-8') ?></div>
+                        <div class="weline-pool-domain-cell">
+                            <strong><?= \htmlspecialchars($domain, ENT_QUOTES, 'UTF-8') ?></strong>
+                            <?php if ($rootDomain !== '' && $rootDomain !== $domain): ?>
+                                <span class="weline-pool-domain-sub"><?= \htmlspecialchars($rootDomain, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
                         </div>
                     </td>
                     <td>
-                        <?php if ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVED): ?>
-                            <span class="badge bg-success-subtle text-success"><?= __('已解析') ?></span>
-                        <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVING): ?>
-                            <span class="badge bg-info-subtle text-info"><?= __('解析中') ?></span>
-                        <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_ERROR): ?>
-                            <span class="badge bg-danger-subtle text-danger"><?= __('异常') ?></span>
-                        <?php else: ?>
-                            <span class="badge bg-warning-subtle text-warning"><?= __('待检测') ?></span>
-                        <?php endif; ?>
+                        <div class="weline-pool-provider-cell">
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="badge bg-primary-subtle text-primary"><?= \htmlspecialchars($registrarName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="badge bg-warning-subtle text-warning"><?= \htmlspecialchars($dnsProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="badge bg-info-subtle text-info"><?= \htmlspecialchars($cdnProviderName, ENT_QUOTES, 'UTF-8') ?></span></div>
+                        </div>
                     </td>
                     <td>
-                        <?php if ($isLocal): ?>
-                            <span class="badge bg-success-subtle text-success"><?= __('是') ?></span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary-subtle text-secondary"><?= __('否') ?></span>
-                        <?php endif; ?>
+                        <div class="weline-pool-summary-cell">
+                            <div class="weline-pool-summary-row">
+                                <?php if ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVED): ?>
+                                    <span class="badge bg-success-subtle text-success"><?= __('已解析') ?></span>
+                                <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_RESOLVING): ?>
+                                    <span class="badge bg-info-subtle text-info"><?= __('解析中') ?></span>
+                                <?php elseif ($resolveStatus === DomainPool::RESOLVE_STATUS_ERROR): ?>
+                                    <span class="badge bg-danger-subtle text-danger"><?= __('异常') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning-subtle text-warning"><?= __('待检测') ?></span>
+                                <?php endif; ?>
+                                <?php if ($httpsStatus === DomainPool::HTTPS_STATUS_VALID): ?>
+                                    <span class="badge bg-success-subtle text-success"><?= __('有效') ?></span>
+                                <?php elseif ($httpsStatus === DomainPool::HTTPS_STATUS_PENDING): ?>
+                                    <span class="badge bg-warning-subtle text-warning"><?= __('申请中') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary-subtle text-secondary"><?= __('无') ?></span>
+                                <?php endif; ?>
+                                <?php if ($isLocal): ?>
+                                    <span class="badge bg-primary-subtle text-primary"><?= __('本机') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="weline-pool-summary-row">
+                                <?php if ($siteReady): ?>
+                                    <span class="badge bg-success"><?= __('可用') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary"><?= __('未就绪') ?></span>
+                                <?php endif; ?>
+                                <?php if ($siteCreated): ?>
+                                    <span class="badge bg-info"><?= __('已建站') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary"><?= __('未建站') ?></span>
+                                <?php endif; ?>
+                                <span class="badge bg-light text-muted" title="<?= \htmlspecialchars($connTitle, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>
+                            </div>
+                        </div>
                     </td>
-                    <td>
-                        <?php if ($httpsStatus === DomainPool::HTTPS_STATUS_VALID): ?>
-                            <span class="badge bg-success-subtle text-success"><?= __('有效') ?></span>
-                        <?php elseif ($httpsStatus === DomainPool::HTTPS_STATUS_PENDING): ?>
-                            <span class="badge bg-warning-subtle text-warning"><?= __('申请中') ?></span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary-subtle text-secondary"><?= __('无') ?></span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($siteReady): ?>
-                            <span class="badge bg-success"><?= __('可用') ?></span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary"><?= __('未就绪') ?></span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <?php if ($siteCreated): ?>
-                            <span class="badge bg-info"><?= __('是') ?></span>
-                        <?php else: ?>
-                            <span class="badge bg-secondary"><?= __('否') ?></span>
-                        <?php endif; ?>
-                    </td>
-                    <td>
-                        <span class="text-nowrap" title="<?= \htmlspecialchars($connTitle, ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-help-circle-outline text-muted" aria-hidden="true"></i></span>
-                    </td>
-                    <td class="align-top">
+                    <td class="weline-pool-flow-cell">
                         <?= $flowHtml !== '' ? $flowHtml : '<span class="text-muted small">—</span>' ?>
                         <?php if ($poolId > 0): ?>
                             <div class="mt-1">
@@ -233,7 +274,7 @@ function rowHtml(row) {
     var cdn = row._cdn_provider_name || '-';
     var connDetail = (row.connectivity_detail || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     var connTitle = connDetail || (row.connectivity_checked_at ? ('<?= __('检测于') ?> ' + (row.connectivity_checked_at || '')) : '<?= __('待检测') ?>');
-    var connCell = '<span class="text-nowrap" title="' + connTitle + '"><i class="mdi mdi-help-circle-outline text-muted" aria-hidden="true"></i></span>';
+    var connCell = '<span class="badge bg-light text-muted" title="' + connTitle + '"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>';
     function rb(s, a, b, c, e) {
         if (s === 'resolved') return '<span class="badge bg-success-subtle text-success">' + a + '</span>';
         if (s === 'resolving') return '<span class="badge bg-info-subtle text-info">' + b + '</span>';
@@ -241,19 +282,27 @@ function rowHtml(row) {
         return '<span class="badge bg-warning-subtle text-warning">' + e + '</span>';
     }
     var resolveBadge = rb(rs, '<?= __('已解析') ?>', '<?= __('解析中') ?>', '<?= __('异常') ?>', '<?= __('待检测') ?>');
-    var localBadge = il ? '<span class="badge bg-success-subtle text-success"><?= __('是') ?></span>' : '<span class="badge bg-secondary-subtle text-secondary"><?= __('否') ?></span>';
+    var localBadge = il ? '<span class="badge bg-primary-subtle text-primary"><?= __('本机') ?></span>' : '';
     var httpsBadge = hs === 'valid' ? '<span class="badge bg-success-subtle text-success"><?= __('有效') ?></span>' : (hs === 'pending' ? '<span class="badge bg-warning-subtle text-warning"><?= __('申请中') ?></span>' : '<span class="badge bg-secondary-subtle text-secondary"><?= __('无') ?></span>');
     var readyBadge = sr ? '<span class="badge bg-success"><?= __('可用') ?></span>' : '<span class="badge bg-secondary"><?= __('未就绪') ?></span>';
-    var createdBadge = sc ? '<span class="badge bg-info"><?= __('是') ?></span>' : '<span class="badge bg-secondary"><?= __('否') ?></span>';
+    var createdBadge = sc ? '<span class="badge bg-info"><?= __('已建站') ?></span>' : '<span class="badge bg-secondary"><?= __('未建站') ?></span>';
     var flowCell = flowH || '<span class="text-muted small">—</span>';
     if (pid > 0) {
         flowCell += '<div class="mt-1"><button type="button" class="btn btn-link btn-sm p-0 weline-pool-flow-log-btn" data-pool-id="' + pid + '"><?= __('时间线') ?></button></div>';
     }
-    return '<tr><td><strong>' + escapeHtml(d) + '</strong></td><td>' + escapeHtml(r) + '</td><td><div class="d-flex flex-column gap-1 small">' +
-        '<div><span class="text-muted"><?= __('注册') ?>:</span> ' + escapeHtml(reg) + '</div>' +
-        '<div><span class="text-muted">DNS:</span> ' + escapeHtml(dns) + '</div>' +
-        '<div><span class="text-muted">CDN:</span> ' + escapeHtml(cdn) + '</div></div></td>' +
-        '<td>' + resolveBadge + '</td><td>' + localBadge + '</td><td>' + httpsBadge + '</td><td>' + readyBadge + '</td><td>' + createdBadge + '</td><td>' + connCell + '</td><td class="align-top">' + flowCell + '</td></tr>';
+    var domainCell = '<div class="weline-pool-domain-cell"><strong>' + escapeHtml(d) + '</strong>' +
+        ((r && r !== d) ? '<span class="weline-pool-domain-sub">' + escapeHtml(r) + '</span>' : '') +
+        '</div>';
+    var providerCell = '<div class="weline-pool-provider-cell">' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label"><?= __('注册') ?></span><span class="badge bg-primary-subtle text-primary">' + escapeHtml(reg) + '</span></div>' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">DNS</span><span class="badge bg-warning-subtle text-warning">' + escapeHtml(dns) + '</span></div>' +
+        '<div class="weline-pool-provider-row"><span class="weline-pool-provider-label">CDN</span><span class="badge bg-info-subtle text-info">' + escapeHtml(cdn) + '</span></div>' +
+        '</div>';
+    var summaryCell = '<div class="weline-pool-summary-cell">' +
+        '<div class="weline-pool-summary-row">' + resolveBadge + httpsBadge + localBadge + '</div>' +
+        '<div class="weline-pool-summary-row">' + readyBadge + createdBadge + connCell + '</div>' +
+        '</div>';
+    return '<tr><td>' + domainCell + '</td><td>' + providerCell + '</td><td>' + summaryCell + '</td><td class="weline-pool-flow-cell">' + flowCell + '</td></tr>';
 }
 function openWelinePoolFlowLogModal(title, htmlInner) {
     var overlay = document.createElement('div');
@@ -286,11 +335,11 @@ function loadPage(page) {
     currentPage = page || 1;
     var tbody = document.getElementById('weline-pool-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4"><i class="mdi mdi-loading mdi-spin"></i> <?= __('加载中...') ?></td></tr>';
     var u = poolListUrl + (poolListUrl.indexOf('?') >= 0 ? '&' : '?') + 'page=' + encodeURIComponent(currentPage) + '&page_size=' + encodeURIComponent(pageSize);
     fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4">' + escapeHtml(data.msg || 'Error') + '</td></tr>';
             return;
         }
         var d = data.data;
@@ -303,13 +352,13 @@ function loadPage(page) {
             : '<?= __('暂无数据') ?>';
         var items = d.items || [];
         if (items.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center py-5 text-muted"><i class="mdi mdi-database-remove" style="font-size:2rem;"></i><p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p></td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center py-5 text-muted"><i class="mdi mdi-database-remove" style="font-size:2rem;"></i><p class="mb-0 mt-2"><?= __('域名池暂无数据') ?></p></td></tr>';
         } else {
             tbody.innerHTML = items.map(rowHtml).join('');
         }
         renderPager(parseInt(d.page, 10) || 1, pages);
     }).catch(function(){
-        tbody.innerHTML = '<tr><td colspan="10" class="text-center text-danger py-4"><?= __('请求失败') ?></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger py-4"><?= __('请求失败') ?></td></tr>';
     });
 }
 function renderPager(page, lastPage) {

@@ -17,6 +17,7 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\WebsiteSslCertificateStatusService;
 
 /**
  * 域名列表提供者观察者
@@ -81,26 +82,33 @@ class ProvideDomainList implements ObserverInterface
             $query->where(WebsiteDomain::schema_fields_ROOT_DOMAIN, $filter['root_domain']);
         }
         
-        if (isset($filter['has_certificate'])) {
-            if ($filter['has_certificate']) {
-                $query->where(WebsiteDomain::schema_fields_CERT_ID, 'null', 'is not');
-            } else {
-                $query->where(WebsiteDomain::schema_fields_CERT_ID, 'null', 'is');
-            }
-        }
-        
         $rows = $query->order(WebsiteDomain::schema_fields_ROOT_DOMAIN, 'ASC')
             ->order(WebsiteDomain::schema_fields_DOMAIN, 'ASC')
             ->select()
             ->fetchArray();
-        
+
+        /** @var WebsiteSslCertificateStatusService $sslStatusService */
+        $sslStatusService = ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
         $domains = [];
         foreach ($rows as $row) {
+            $preferredCertId = !empty($row[WebsiteDomain::schema_fields_CERT_ID])
+                ? (int) $row[WebsiteDomain::schema_fields_CERT_ID]
+                : null;
+            $managedCertId = $this->resolveManagedCertificateId(
+                $sslStatusService,
+                (string) ($row[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
+                $preferredCertId
+            );
+
+            if (isset($filter['has_certificate']) && (bool) $filter['has_certificate'] !== ($managedCertId !== null)) {
+                continue;
+            }
+
             $domains[] = [
                 'domain' => $row[WebsiteDomain::schema_fields_DOMAIN],
                 'root_domain' => $row[WebsiteDomain::schema_fields_ROOT_DOMAIN],
                 'website_id' => (int) $row[WebsiteDomain::schema_fields_WEBSITE_ID],
-                'cert_id' => $row[WebsiteDomain::schema_fields_CERT_ID] ? (int) $row[WebsiteDomain::schema_fields_CERT_ID] : null,
+                'cert_id' => $managedCertId,
                 'https_enabled' => (bool) $row[WebsiteDomain::schema_fields_HTTPS_ENABLED],
                 'is_primary' => (bool) $row[WebsiteDomain::schema_fields_IS_PRIMARY],
                 'health_status' => $row[WebsiteDomain::schema_fields_HEALTH_STATUS] ?? 'unknown',
@@ -124,20 +132,56 @@ class ProvideDomainList implements ObserverInterface
         $model = ObjectManager::getInstance(DomainPool::class);
         
         $rows = $model->getActiveDomains();
-        
+
+        /** @var WebsiteSslCertificateStatusService $sslStatusService */
+        $sslStatusService = ObjectManager::getInstance(WebsiteSslCertificateStatusService::class);
         $domains = [];
         foreach ($rows as $row) {
+            $preferredCertId = !empty($row[DomainPool::schema_fields_CERT_ID])
+                ? (int) $row[DomainPool::schema_fields_CERT_ID]
+                : null;
+            $managedCertId = $this->resolveManagedCertificateId(
+                $sslStatusService,
+                (string) ($row[DomainPool::schema_fields_DOMAIN] ?? ''),
+                $preferredCertId
+            );
+
+            if (isset($filter['has_certificate']) && (bool) $filter['has_certificate'] !== ($managedCertId !== null)) {
+                continue;
+            }
+
             $domains[] = [
                 'domain' => $row[DomainPool::schema_fields_DOMAIN],
                 'root_domain' => $row[DomainPool::schema_fields_ROOT_DOMAIN],
                 'description' => $row[DomainPool::schema_fields_DESCRIPTION] ?? '',
-                'cert_id' => null,
-                'https_enabled' => false,
+                'cert_id' => $managedCertId,
+                'https_enabled' => $managedCertId !== null,
                 'source' => 'domain_pool',
             ];
         }
         
         return $domains;
+    }
+
+    private function resolveManagedCertificateId(
+        WebsiteSslCertificateStatusService $sslStatusService,
+        string $domain,
+        ?int $preferredCertId
+    ): ?int {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return null;
+        }
+
+        try {
+            $cert = $sslStatusService->resolveManagedCertificate($preferredCertId, $domain);
+        } catch (\Throwable) {
+            return $preferredCertId !== null && $preferredCertId > 0 ? $preferredCertId : null;
+        }
+
+        $certId = (int) ($cert['cert_id'] ?? 0);
+
+        return $certId > 0 ? $certId : null;
     }
     
     /**

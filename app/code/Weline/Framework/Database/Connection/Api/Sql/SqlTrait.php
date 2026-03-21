@@ -522,6 +522,8 @@ trait SqlTrait
         }
         // 🔧 清理表名：AST 是操作结构，不应该包含引号等方言信息
         $this->ast['from']['table'] = $this->cleanAstValue($table);
+        $this->ast['from']['is_subquery'] = false;
+        unset($this->ast['from']['subquery_id']);
         if ($alias) {
             $this->ast['from']['alias'] = $this->cleanAstValue($alias);
         } elseif (isset($this->table_alias)) {
@@ -606,7 +608,7 @@ trait SqlTrait
         if (!isset($this->ast)) {
             $this->ast = [];
         }
-        $this->ast['group'] = $groupBy;
+        $this->ast['group'] = $groupBy === '' ? '' : $this->cleanAstFields($groupBy);
     }
 
     /**
@@ -618,7 +620,8 @@ trait SqlTrait
         if (!isset($this->ast)) {
             $this->ast = [];
         }
-        $this->ast['having'] = $having;
+        $having = trim($having);
+        $this->ast['having'] = preg_replace('/^having\s+/i', '', $having) ?? $having;
     }
 
     /**
@@ -630,7 +633,7 @@ trait SqlTrait
         if (!isset($this->ast)) {
             $this->ast = [];
         }
-        $this->ast['limit'] = $limit;
+        $this->ast['limit'] = trim($limit);
     }
 
     /**
