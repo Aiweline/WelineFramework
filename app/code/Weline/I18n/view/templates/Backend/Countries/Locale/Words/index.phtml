@@ -1,221 +1,399 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
+
+$locale = $this->getData('locale');
+$words = (array)($this->getData('words') ?? []);
+$pagination = $this->getData('pagination') ?: '';
+$total = (int)($this->getData('total') ?? 0);
+$translateMode = (string)($this->getData('translate_mode') ?? '');
+$countryCode = (string)($_GET['country_code'] ?? '');
+$localeCode = (string)($_GET['code'] ?? '');
+$search = (string)($_GET['search'] ?? '');
+
+$readValue = static function ($item, string $key, mixed $default = null): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value === null ? $default : $value;
+        }
+        return $item->{$key} ?? $default;
+    }
+
+    return $default;
+};
+
+$localeName = (string)$readValue($locale, 'ln_display_name', $localeCode);
+$countryName = (string)$readValue($locale, 'display_name', $countryCode);
+$countryName = $countryName === '' ? $countryCode : $countryName;
 ?>
-<!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>i18n国际化>国家>地区>词典</lang>
-            </h4>
+<link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
+<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
-                            <lang>系统配置</lang>
-                        </a></li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/countries')">
-                            <lang>i18n国际化</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/countries')">
-                            <lang>国家</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/countries/locales')?country_code={{req
-                        .country_code}}">
-                            <lang>地区</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <a href="@backend-url('*/backend/countries/locale/words')?country_code={{req
-                        .country_code}}&code={{req.params.code}}">
-                            <lang>词典</lang>
-                        </a>
-                    </li>
-                </ol>
+<div class="i18n-admin-page">
+    <div class="row">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= __('i18n国际化>国家>地区>词典') ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><?= __('系统配置') ?></li>
+                        <li class="breadcrumb-item"><a href="@backend-url('*/backend/countries')"><?= __('国家') ?></a></li>
+                        <li class="breadcrumb-item"><a href="@backend-url('*/backend/countries/locales')?country_code=<?= urlencode($countryCode) ?>"><?= __('地区') ?></a></li>
+                        <li class="breadcrumb-item active"><?= __('词典') ?></li>
+                    </ol>
+                </div>
             </div>
+        </div>
+    </div>
 
+    <div class="row">
+        <div class="col-12">
+            <template>Weline_Component::message.phtml</template>
+        </div>
+    </div>
+
+    <div class="i18n-admin-shell">
+        <div class="card i18n-admin-card i18n-admin-hero">
+            <div class="card-body d-flex flex-column gap-3">
+                <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+                    <div class="i18n-admin-hero-copy">
+                        <div class="i18n-admin-pills">
+                            <span class="i18n-admin-chip"><strong><?= __('当前词典（语言包）：') ?></strong> <?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?></span>
+                            <span class="i18n-admin-chip"><strong><?= __('所属国家：') ?></strong> <?= htmlspecialchars($countryName, ENT_QUOTES, 'UTF-8') ?></span>
+                        </div>
+                        <p class="i18n-admin-lead"><?= __('根据地区翻译来自前端采集到的词.') ?></p>
+                    </div>
+                    <div class="i18n-admin-actions">
+                        <a class="btn btn-outline-primary" href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-href="@backend-url('*/backend/countries/locale/words/collect')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>" data-confirm-message="<?= htmlspecialchars(__('更新（收集）'), ENT_QUOTES, 'UTF-8') ?>" data-confirm-type="info"><?= __('更新') ?></a>
+                        <a class="btn btn-outline-success" href="javascript:void(0)" id="locale-word-publish-btn"><?= __('发布') ?></a>
+                        <button type="button" class="btn btn-primary" id="locale-word-add-btn"><?= __('添加翻译') ?></button>
+                        <a class="btn btn-outline-secondary" href="@backend-url('*/backend/dictionary')?locale_code=<?= urlencode($localeCode) ?>"><?= __('全局词典') ?></a>
+                    </div>
+                </div>
+
+                <div class="i18n-admin-metrics">
+                    <div class="i18n-admin-metric">
+                        <div class="i18n-admin-metric-label"><?= __('一共') ?></div>
+                        <div class="i18n-admin-metric-value"><?= $total ?></div>
+                    </div>
+                    <div class="i18n-admin-metric">
+                        <div class="i18n-admin-metric-label"><?= __('展示语言：') ?></div>
+                        <div class="i18n-admin-metric-value fs-5"><?= htmlspecialchars($localeName, ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="i18n-admin-metric">
+                        <div class="i18n-admin-metric-label"><?= __('当前翻译模式：') ?></div>
+                        <div class="i18n-admin-metric-value fs-5" id="locale-word-mode-label"><?= htmlspecialchars($translateMode === '' ? __('缓存') : $translateMode, ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="i18n-admin-metric">
+                        <div class="i18n-admin-metric-label"><?= __('操作：') ?></div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-success" data-mode-switch="online"><?= __('实时') ?></button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" data-mode-switch="default"><?= __('缓存') ?></button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="i18n-admin-note">
+                    <div class="fs-4 text-info">i</div>
+                    <div>
+                        <strong><?= __('词典管理') ?></strong>
+                        <span><?= __('双击表格行或点击编辑按钮即可快速修改译文。恢复按钮会把译文重置为原词，适合误翻或临时实验回滚。') ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card i18n-admin-card">
+            <div class="card-body">
+                <form method="get" action="@backend-url('*/backend/countries/locale/words')" class="row g-3 align-items-end i18n-admin-form">
+                    <input type="hidden" name="country_code" value="<?= htmlspecialchars($countryCode, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="code" value="<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="col-lg-9">
+                        <label class="form-label"><?= __('搜索') ?></label>
+                        <input type="text" name="search" class="form-control" value="<?= htmlspecialchars($search, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= __('请输入关键词') ?>">
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="d-flex gap-2 justify-content-lg-end">
+                            <button type="submit" class="btn btn-primary"><?= __('搜索') ?></button>
+                            <a class="btn btn-outline-secondary" href="@backend-url('*/backend/countries/locale/words')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>"><?= __('重置') ?></a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card i18n-admin-card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table align-middle table-hover i18n-admin-table mb-0" id="locale-word-table">
+                        <thead>
+                        <tr>
+                            <th><?= __('词') ?></th>
+                            <th><?= __('翻译') ?></th>
+                            <th style="width: 160px;"><?= __('收集时间') ?></th>
+                            <th style="width: 160px;"><?= __('翻译时间') ?></th>
+                            <th style="width: 180px;" class="text-center"><?= __('操作') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (!empty($words)): ?>
+                            <?php foreach ($words as $word): ?>
+                                <?php
+                                $source = (string)$readValue($word, 'word', '');
+                                $translation = (string)$readValue($word, 'translate', $source);
+                                $md5 = (string)$readValue($word, 'md5', '');
+                                $createTime = (string)$readValue($word, 'create_time', '');
+                                $updateTime = (string)$readValue($word, 'update_time', '');
+                                $isTranslated = $translation !== '' && $translation !== $source;
+                                ?>
+                                <tr class="locale-word-row"
+                                    data-md5="<?= htmlspecialchars($md5, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-word="<?= htmlspecialchars($source, ENT_QUOTES, 'UTF-8') ?>"
+                                    data-translate="<?= htmlspecialchars($translation, ENT_QUOTES, 'UTF-8') ?>">
+                                    <td>
+                                        <div class="fw-semibold"><?= htmlspecialchars($source, ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="small text-muted"><?= $isTranslated ? __('已翻译:') : __('未翻译:') ?></div>
+                                    </td>
+                                    <td class="locale-word-translation-cell">
+                                        <?php if ($isTranslated): ?>
+                                            <span class="text-success fw-medium"><?= htmlspecialchars($translation, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <?php else: ?>
+                                            <span class="text-muted fst-italic"><?= __('暂无翻译数据') ?></span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><?= htmlspecialchars($createTime, ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><?= htmlspecialchars($updateTime, ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td class="text-center">
+                                        <div class="d-flex flex-wrap justify-content-center gap-2">
+                                            <button type="button" class="btn btn-sm btn-outline-primary locale-word-edit-btn"><?= __('编辑') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline-warning locale-word-restore-btn"><?= __('恢复') ?></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="5" class="i18n-admin-empty">
+                                    <div class="fw-semibold mb-2"><?= __('词典') ?></div>
+                                    <div><?= __('请前往i18n模块收集词语后重试！或者开启实时收集词语功能！') ?></div>
+                                </td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3"><?= $pagination ?></div>
+            </div>
         </div>
     </div>
 </div>
-<!-- end page title -->
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>词典</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>根据地区翻译来自前端采集到的词.</lang>
-                <p>
-                    <lang>只需要在前端或者后端刷新页面，或者使用命令：php bin/w i18n:collect
-                        也可以收集到大部分词。
-                    </lang>
-                </p>
-                <p>
-                    <lang>提示：使用词典收集功能请先开启在线收集词语功能。开启命令：php bin/w
-                        translate:model:set online
-                    </lang>
-                </p>
-                </p>
-                <p class="card-title-desc">
-                    <lang>展示语言：</lang>
-                    {{target_locale.name}}（{{target_locale.code}}）
-                </p>
-                <p class='card-title-desc'>
-                    <lang>操作：</lang>
-                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
-                    .params.code}}">
-                        <lang>更新</lang>
-                    </a>
-                    <span class='fas fa-question-circle' data-trigger='hover' data-toggle='popover'
-                          data-content='@lang(刷新来自前端采集到的词。)'></span>
-                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
-                    .code}}">
-                        <lang>导出语言包</lang>
-                        <lang>（尚未开发）</lang>
-                    </a>
-                    <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req.params.country_code}}&code={{req
-                    .code}}">
-                        <lang>导入语言包</lang>
-                        <lang>（尚未开发）</lang>
-                    </a>
-                    <a class="text-warning" href="@backend-url('*/backend/countries/locale/words/push')?country_code={{req
-                    .params.country_code}}&code={{req.params
-                    .code}}">
-                        <lang>发布</lang>
-                    </a>
-                    <lang>在线收集词典功能状态：</lang>
-                    <lang>{{translate_mode}}</lang>
-                    <a class="text-info" href="@backend-url('*/backend/countries/locale/words/enable')?country_code={{req
-                    .params.country_code}}&code={{req.params.code}}">
-                        <lang>实时</lang>
-                    </a>
-                    <a class="text-info" href="@backend-url('*/backend/countries/locale/words/disable')?country_code={{req
-                    .params.country_code}}&code={{req.params.code}}">
-                        <lang>缓存</lang>
-                    </a>
-                </p>
-                <div class='table-rep-plugin'>
-                    <p class='card-title-desc'>
-                        <b>
-                            <lang>当前词典（语言包）：</lang>
-                        </b>
-                        {{locale.code}}（{{locale.ln_display_name}}）
-                        <b>
-                            <lang>所属国家：</lang>
-                        </b>
-                        {{locale.display_name}}（{{locale.country_code}}）
-                        <span><lang>一共</lang>{{total}} <lang>个词条</lang></span>
-                    </p>
-                    <!-- search form -->
-                    <div class='row'>
-                        <div class='col-12'>
-                            <block class='Weline\Component\Block\Form\Search'
-                                   id='translate-words-search'
-                                   action='*/backend/countries/locale/words'
-                                   method='get'
-                                   keyword='search' value=''
-                                   params="code,country_code"
-                                   placeholder='请输入要翻译的词'></block>
+
+<div class="modal fade" id="locale-word-edit-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <form id="locale-word-edit-form" class="i18n-admin-form">
+                <div class="modal-header">
+                    <h5 class="modal-title"><?= __('编辑') ?></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="md5" id="locale-word-md5">
+                    <input type="hidden" name="code" value="<?= htmlspecialchars($localeCode, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="country_code" value="<?= htmlspecialchars($countryCode, ENT_QUOTES, 'UTF-8') ?>">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('词') ?></label>
+                            <input type="text" id="locale-word-source" name="word" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('展示语言：') ?></label>
+                            <input type="text" class="form-control" value="<?= htmlspecialchars($localeName, ENT_QUOTES, 'UTF-8') ?>" readonly>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label"><?= __('翻译') ?></label>
+                            <textarea name="translate" id="locale-word-translate" rows="6" class="form-control" required></textarea>
                         </div>
                     </div>
-                    <!-- end search form -->
-                    {{pagination}}
-                    <div class='table-responsive mb-0 mCustomScrollbar' data-pattern='priority-columns'>
-                        <table id='words-table' class='table table-striped table-bordered table-edits'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'><?= __('编辑') ?></th>
-                                <th data-priority='1'><?= __('词') ?></th>
-                                <th data-priority='1'><?= __('翻译') ?></th>
-                                <th data-priority='1'><?= __('收集时间') ?></th>
-                                <th data-priority='1'><?= __('翻译时间') ?></th>
-                                <th data-priority='1'><?= __('删除') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <notempty name="words">
-                                <foreach name="words" item="word" key="key">
-                                    <tr data-id="{{word.word}}">
-                                        <td class='co-action'>
-                                            <a class='btn btn-outline-secondary btn-sm edit'
-                                               title='<?= __('编辑') ?>'>
-                                                <i class='fas fa-pencil-alt'></i>
-                                            </a>
-                                        </td>
-                                        <td class='co-name'>{{word.word}}</td>
-                                        <td data-field='translate' data-word='{{word.word}}'
-                                            data-code="{{req.params.code}}"
-                                            data-country-code="{{req.params.country_code}}"
-                                            data-md5="{{word.md5}}" class='co-name'>{{word
-                                            .translate}}
-                                        </td>
-                                        <td class='co-name'>{{word.create_time}}</td>
-                                        <td class='co-name'>{{locale.update_time}}</td>
-                                        <td class='co-action'>
-                                            <a class='btn btn-outline-secondary btn-sm word-restore'
-                                               data-md5='{{word.md5}}'
-                                               data-code='{{req.params.code}}'
-                                               data-country-code='{{req.params.country_code}}'
-                                               title='@lang{恢复}'>
-                                                <i class='mdi mdi-restore-alert'
-                                                   data-md5='{{word.md5}}'
-                                                   data-code='{{req.params.code}}'
-                                                   data-country-code='{{req.params.country_code}}'></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                </foreach>
-                            </notempty>
-                            </tbody>
-                        </table>
-                        <empty name='words'>
-                            <lang>请</lang>
-                            <a href="@backend-url('*/backend/countries/locale/words/collect')?country_code={{req
-                            .params.country_code}}&code={{req.params.code}}">
-                                <lang>更新（收集）</lang>
-                            </a>
-                            <lang>词典</lang>
-                        </empty>
-                        {{pagination}}
-                    </div>
-
                 </div>
-
-            </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><?= __('取消') ?></button>
+                    <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
+                </div>
+            </form>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+    </div>
+</div>
 
-<!-- jquery.mCustomScrollbar 插件 -->
-<link href="@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.css)" rel="stylesheet"/>
-<!-- Responsive Table css -->
-<link href='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.css)' rel='stylesheet' type='text/css'/>
-<!-- Sweet Alert-->
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
+<script>
+(function () {
+    var endpoints = {
+        translate: "@backend-url('*/backend/countries/locale/words/translate')",
+        restore: "@backend-url('*/backend/countries/locale/words/restore')",
+        push: "@backend-url('*/backend/countries/locale/words/push')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>",
+        enable: "@backend-url('*/backend/countries/locale/words/enable')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>",
+        disable: "@backend-url('*/backend/countries/locale/words/disable')?country_code=<?= urlencode($countryCode) ?>&code=<?= urlencode($localeCode) ?>"
+    };
 
-<!-- Table Editable plugin -->
-<script src="@static(Weline_Admin::assets/libs/table-edits/build/table-edits.min.js)"></script>
-<script src="@static(Weline_I18n::js/words-table-editable.init.js)"></script>
-<script src='@static(Weline_Admin::/libs/jquery.mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js)'></script>
-<!-- Responsive Table js -->
-<script src='@static(Weline_Admin::assets/libs/admin-resources/rwd-table/rwd-table.min.js)'></script>
+    var modalElement = document.getElementById('locale-word-edit-modal');
+    var modal = typeof bootstrap !== 'undefined' && bootstrap.Modal ? new bootstrap.Modal(modalElement) : null;
+    var currentRow = null;
 
-<!-- Init js -->
-<script src='@static(Weline_Admin::assets/js/pages/table-responsive.init.js)'></script>
+    function postForm(url, payload) {
+        return fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            credentials: 'same-origin',
+            body: new URLSearchParams(payload)
+        }).then(function (response) {
+            return response.json();
+        });
+    }
 
-<!-- Sweet Alerts js -->
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+    function updateRowTranslation(row, translation) {
+        if (!row) {
+            return;
+        }
 
-<!-- Sweet alert init js-->
-<script src='@static(Weline_I18n::js/sweet-alerts.init.js)'></script>
+        row.dataset.translate = translation;
+        var cell = row.querySelector('.locale-word-translation-cell');
+        if (!cell) {
+            return;
+        }
+
+        var source = row.dataset.word || '';
+        if (translation && translation !== source) {
+            cell.innerHTML = '<span class="text-success fw-medium"></span>';
+            cell.querySelector('span').textContent = translation;
+        } else {
+            cell.innerHTML = '<span class="text-muted fst-italic"><?= addslashes(__('暂无翻译数据')) ?></span>';
+        }
+    }
+
+    document.querySelectorAll('.locale-word-row').forEach(function (row) {
+        row.addEventListener('dblclick', function () {
+            row.querySelector('.locale-word-edit-btn').click();
+        });
+    });
+
+    document.querySelectorAll('.locale-word-edit-btn').forEach(function (button) {
+        button.addEventListener('click', function () {
+            currentRow = button.closest('.locale-word-row');
+            if (!currentRow) {
+                return;
+            }
+
+            document.getElementById('locale-word-md5').value = currentRow.dataset.md5 || '';
+            document.getElementById('locale-word-source').value = currentRow.dataset.word || '';
+            document.getElementById('locale-word-source').readOnly = true;
+            document.getElementById('locale-word-translate').value = (currentRow.dataset.translate || '') === (currentRow.dataset.word || '') ? '' : (currentRow.dataset.translate || '');
+
+            if (modal) {
+                modal.show();
+            }
+        });
+    });
+
+    document.querySelectorAll('.locale-word-restore-btn').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var row = button.closest('.locale-word-row');
+            if (!row) {
+                return;
+            }
+
+            I18nAdminUI.confirm('<?= addslashes(__('确定恢复该词典么？')) ?>', 'warning').then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+
+                postForm(endpoints.restore, {
+                    md5: row.dataset.md5 || '',
+                    code: "<?= addslashes($localeCode) ?>",
+                    country_code: "<?= addslashes($countryCode) ?>"
+                }).then(function (result) {
+                    if (!result.success) {
+                        I18nAdminUI.toast('error', result.msg || result.message || '<?= addslashes(__('保存失败')) ?>');
+                        return;
+                    }
+
+                    updateRowTranslation(row, row.dataset.word || '');
+                    I18nAdminUI.toast('success', result.msg || result.message || '<?= addslashes(__('恢复成功！')) ?>');
+                }).catch(function (error) {
+                    I18nAdminUI.toast('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
+                });
+            });
+        });
+    });
+
+    document.getElementById('locale-word-edit-form').addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        var payload = {
+            md5: document.getElementById('locale-word-md5').value,
+            word: document.getElementById('locale-word-source').value,
+            translate: document.getElementById('locale-word-translate').value,
+            code: "<?= addslashes($localeCode) ?>",
+            country_code: "<?= addslashes($countryCode) ?>"
+        };
+
+        postForm(endpoints.translate, payload).then(function (result) {
+            if (!result.success) {
+                I18nAdminUI.toast('error', result.msg || result.message || '<?= addslashes(__('保存失败')) ?>');
+                return;
+            }
+
+            if (currentRow) {
+                updateRowTranslation(currentRow, payload.translate);
+            } else {
+                window.location.reload();
+                return;
+            }
+            I18nAdminUI.toast('success', result.msg || result.message || '<?= addslashes(__('成功保存！')) ?>');
+            if (modal) {
+                modal.hide();
+            }
+        }).catch(function (error) {
+            I18nAdminUI.toast('error', '<?= addslashes(__('请求错误！')) ?>' + ': ' + error.message);
+        });
+    });
+
+    document.getElementById('locale-word-add-btn').addEventListener('click', function () {
+        currentRow = null;
+        document.getElementById('locale-word-md5').value = '';
+        document.getElementById('locale-word-source').value = '';
+        document.getElementById('locale-word-source').readOnly = false;
+        document.getElementById('locale-word-translate').value = '';
+        if (modal) {
+            modal.show();
+        }
+    });
+
+    document.getElementById('locale-word-publish-btn').addEventListener('click', function () {
+        I18nAdminUI.confirm('<?= addslashes(__('发布')) ?>', 'success').then(function (confirmed) {
+            if (!confirmed) {
+                return;
+            }
+
+            window.location.href = endpoints.push;
+        });
+    });
+
+    document.querySelectorAll('[data-mode-switch]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            var mode = button.getAttribute('data-mode-switch');
+            I18nAdminUI.confirm(mode === 'online' ? '<?= addslashes(__('实时')) ?>' : '<?= addslashes(__('缓存')) ?>', mode === 'online' ? 'success' : 'info').then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+
+                window.location.href = mode === 'online' ? endpoints.enable : endpoints.disable;
+            });
+        });
+    });
+})();
+</script>

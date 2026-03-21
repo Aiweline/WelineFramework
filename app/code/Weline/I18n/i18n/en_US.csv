@@ -443,3 +443,9 @@ AI驱动,"AI Driven"
 是否禁用,"Is Disabled"
 国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
 I18n翻译,"I18n Translation"
+语言,Language
+全局词典,Global Dictionary
+优先处理未翻译词条，先选目标语言，再结合关键词缩小范围。双击或点击编辑都可以快速进入翻译。,"Prioritize untranslated entries first. Choose the target language, narrow the scope with keywords, and then double-click or tap Edit to translate quickly."
+确定删除 %{1} 的译文吗？,"Delete the translation for %{1}?"
+双击表格行或点击编辑按钮即可快速修改译文。恢复按钮会把译文重置为原词，适合误翻或临时实验回滚。,"Double-click a row or use Edit to update the translation quickly. Restore resets the translation back to the source word, which is useful for rollback after a mistaken translation."
+这里展示当前展示语言下的可用语言列表。已安装语言可以直接进入全局词典，未安装语言建议先在地区管理页完成安装与启用。,"This page shows the languages available under the current display language. Installed languages can go straight to the global dictionary, while uninstalled ones should be installed and activated from locale management first."
