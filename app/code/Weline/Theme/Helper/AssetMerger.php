@@ -64,8 +64,10 @@ class AssetMerger implements AssetMergerInterface
      */
     public function mergeAssets(string $assetType, string $area, ?WelineTheme $theme = null): array
     {
+        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+
         if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme();
+            $theme = $this->welineTheme->getActiveTheme($area);
         }
 
         // 1. 获取主题继承链（从基础到当前：父主题在前，激活主题在后）
