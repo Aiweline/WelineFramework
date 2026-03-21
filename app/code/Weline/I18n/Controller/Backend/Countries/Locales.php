@@ -16,11 +16,13 @@ namespace Weline\I18n\Controller\Backend\Countries;
 use Symfony\Component\Intl\Countries;
 use Weline\Framework\App\Debug;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Controller\Backend\BaseController;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
 use Weline\Framework\App\Env;
 use Weline\I18n\Model\Locale\Name;
+use Weline\I18n\Service\CountryLocaleLifecycleService;
 
 class Locales extends BaseController
 {
@@ -28,6 +30,7 @@ class Locales extends BaseController
      * @var \Weline\I18n\Model\Locale\Name
      */
     private Name $localeName;
+    private CountryLocaleLifecycleService $lifecycle;
 
     public function __construct(
         Locale $locale,
@@ -37,6 +40,7 @@ class Locales extends BaseController
     {
         parent::__construct($locale, $i18n);
         $this->localeName = $localeName;
+        $this->lifecycle = ObjectManager::getInstance(CountryLocaleLifecycleService::class);
     }
 
     public function __init()
@@ -123,25 +127,27 @@ class Locales extends BaseController
             $this->redirect('*/backend/countries/locales');
         }
         $country = $this->i18n->getCountry($country_code);
-        $locales = $country->getLocales();
+        $countryLocales = (array)($country['locales'] ?? []);
+        $locales = [];
         $locales_display = [];
         $this->locale->clearQuery();
-        foreach ($locales as $key => $locale) {
-            unset($locales[$key]);
-            // 提取简码、ISO2和ISO3
-            $localeCodes = Locale::extractLocaleCodes($locale);
-            
+        foreach ($countryLocales as $localeCode) {
+            $localeCodes = Locale::extractLocaleCodes($localeCode);
+
             $locales[] = [
-                $this->locale::schema_fields_CODE => $locale,
+                $this->locale::schema_fields_CODE => $localeCode,
                 $this->locale::schema_fields_COUNTRY_CODE => $country_code,
                 $this->locale::schema_fields_SHORT_CODE => $localeCodes['short_code'],
                 $this->locale::schema_fields_ISO2 => $localeCodes['iso2'],
                 $this->locale::schema_fields_ISO3 => $localeCodes['iso3'],
+                $this->locale::schema_fields_IS_INSTALL => 0,
+                $this->locale::schema_fields_IS_ACTIVE => 0,
+                $this->locale::schema_fields_FLAG => '',
             ];
             $locales_display[] = [
                 Name::schema_fields_DISPLAY_LOCALE_CODE => Cookie::getLangLocal(),
-                Name::schema_fields_LOCALE_CODE => $locale,
-                Name::schema_fields_DISPLAY_NAME => $this->i18n->getLocaleName($locale, Cookie::getLangLocal()),
+                Name::schema_fields_LOCALE_CODE => $localeCode,
+                Name::schema_fields_DISPLAY_NAME => $this->i18n->getLocaleName($localeCode, Cookie::getLangLocal()),
             ];
         }
         $this->locale->beginTransaction();
@@ -167,11 +173,7 @@ class Locales extends BaseController
         $code = $this->request->getPost('code');
         if ($this->i18n->localeExists($code)) {
             try {
-                $this->locale->clearQuery();# 清理之前加载的target_locale_code数据
-                $this->locale->where($this->locale::schema_fields_CODE, $code)
-                    ->setData($this->locale::schema_fields_IS_ACTIVE, 1)
-                    ->update()
-                    ->fetch();
+                $this->lifecycle->activateLocale((string)$code);
                 $this->getMessageManager()->addSuccess(__('激活成功！'));
             } catch (\Exception $exception) {
                 $this->getMessageManager()->addException($exception);
@@ -187,12 +189,7 @@ class Locales extends BaseController
         $code = $this->request->getPost('code');
         if ($this->i18n->localeExists($code)) {
             try {
-                $this->locale->clearQuery();# 清理之前加载的target_locale_code数据
-                $this->locale->clearData();# 清理之前加载的target_locale_code数据
-                $this->locale->where($this->locale::schema_fields_CODE, $code)
-                    ->setData($this->locale::schema_fields_IS_ACTIVE, 0)
-                    ->update()
-                    ->fetch();
+                $this->lifecycle->deactivateLocale((string)$code);
                 $this->getMessageManager()->addSuccess(__('禁用成功！'));
             } catch (\Exception $exception) {
                 $this->getMessageManager()->addException($exception);
@@ -206,38 +203,24 @@ class Locales extends BaseController
     public function install()
     {
         $code = $this->request->getPost('code');
-        $this->locale->clearQuery();
-        $locale = $this->locale->load($code);
-        if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%{1}', $code));
-            $this->redirect($this->request->getReferer());
+        try {
+            $this->lifecycle->installLocale((string)$code);
+            $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
+        } catch (\Exception $exception) {
+            $this->getMessageManager()->addException($exception);
         }
-        $flag = $this->i18n->getCountryFlagWithLocal($code, 42);
-        
-        // 如果简码字段为空，自动计算并保存
-        if (!$locale->getData($locale::schema_fields_SHORT_CODE)) {
-            $localeCodes = Locale::extractLocaleCodes($code);
-            $locale->setData($locale::schema_fields_SHORT_CODE, $localeCodes['short_code'])
-                ->setData($locale::schema_fields_ISO2, $localeCodes['iso2'])
-                ->setData($locale::schema_fields_ISO3, $localeCodes['iso3']);
-        }
-        
-        $locale->setData($locale::schema_fields_IS_INSTALL, 1)->setData($locale::schema_fields_FLAG, $flag['flag'] ?? '')->save(true);
-        $this->getMessageManager()->addSuccess(__('区域已安装！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
 
     public function postUninstall()
     {
         $code = $this->request->getPost('code');
-        $this->locale->clearQuery();
-        $locale = $this->locale->load($code);
-        if (!$locale->getId()) {
-            $this->getMessageManager()->addWarning(__('该区域不存在！区域代码：%{1}', $code));
-            $this->redirect($this->request->getReferer());
+        try {
+            $this->lifecycle->uninstallLocale((string)$code);
+            $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
+        } catch (\Exception $exception) {
+            $this->getMessageManager()->addException($exception);
         }
-        $locale->setData($locale::schema_fields_IS_INSTALL, 0)->save();
-        $this->getMessageManager()->addSuccess(__('区域已卸载！区域代码：%{1}', $code));
         $this->redirect($this->request->getReferer());
     }
 
@@ -259,7 +242,7 @@ class Locales extends BaseController
             
             // 获取该国家的所有区域
             $country = $this->i18n->getCountry($country_code);
-            $locales = $country->getLocales();
+            $locales = (array)($country['locales'] ?? []);
             
             if (empty($locales)) {
                 return;

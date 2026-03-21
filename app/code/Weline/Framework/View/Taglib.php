@@ -373,6 +373,8 @@ class Taglib
         }
         
         $this->compilations++;
+        $topLevelCompile = false;
+        $tags = [];
         
         // 调试模式：创建 SourceMap
         if ($this->debug) {
@@ -386,6 +388,7 @@ class Taglib
         // 阶段 1: 提取 PHP 代码
         // 嵌套编译（如 <w:template> 触发子模板编译）必须用独立 extractor，否则会覆盖父级占位符
         self::$compileDepth++;
+        $topLevelCompile = self::$compileDepth === 1;
         try {
             $extractor = (self::$compileDepth > 1) ? new PhpExtractor() : $this->getPhpExtractor();
             $extractor->reset();
@@ -395,6 +398,9 @@ class Taglib
             $tokenizer = $this->getTokenizer();
             $tokenizer->reset();
             $tags = $this->getTags($template, $fileName, $content);
+            if ($topLevelCompile) {
+                $this->resetCompileScopedTagState();
+            }
             $tokenizer->setFrameworkTags(array_keys($tags));
             $tokens = $tokenizer->tokenize($cleanContent);
             
@@ -430,6 +436,21 @@ class Taglib
             return $result;
         } finally {
             self::$compileDepth--;
+            if ($topLevelCompile) {
+                $this->resetCompileScopedTagState();
+            }
+        }
+    }
+
+    /**
+     * 某些 Taglib 会用静态属性追踪“单次编译周期”的状态。
+     * 在 WLS 常驻 Worker 中，这类状态必须在每次顶层编译前后重置，避免跨请求残留。
+     */
+    private function resetCompileScopedTagState(): void
+    {
+        $slotTaglibClass = \Weline\Theme\Taglib\Slot::class;
+        if (\class_exists($slotTaglibClass) && \method_exists($slotTaglibClass, 'clearRegisteredSlots')) {
+            $slotTaglibClass::clearRegisteredSlots();
         }
     }
     
@@ -446,9 +467,9 @@ class Taglib
             $callback = $tagConfig['callback'];
             
             // 构建注册闭包
-            $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName) {
+            $registerCallback = function(string $registerName) use ($generator, $callback, $tagConfig, $tagName, $fileName) {
                 // 将回调适配到原始参数格式：function ($tag_key, $config, $tag_data, $attributes)
-                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName) {
+                $generator->registerTag($registerName, function(array $params) use ($callback, $tagConfig, $tagName, $fileName) {
                 // 从 params 中提取属性
                 $attrs = [];
                 foreach ($params as $key => $value) {
@@ -532,7 +553,13 @@ class Taglib
                 ];
 
                 // 调用原始回调：function ($tag_key, $config, $tag_data, $attributes)
-                return $callback($tag_key, $tagConfig, $tag_data, $attrs);
+                $runtimeConfig = $this->enrichTagConfigWithSource(
+                    $tagConfig,
+                    $fileName,
+                    (int)($params['line'] ?? 0)
+                );
+
+                return $callback($tag_key, $runtimeConfig, $tag_data, $attrs);
                 });
             };
             
@@ -3584,6 +3611,7 @@ class Taglib
         if ($config === null) {
             return $this->buildOriginalTagMarkup($node);
         }
+        $config = $this->enrichTagConfigWithSource($config, $fileName, $node->line ?? 0);
         $tagKey = $this->resolveTagKey($node, $config);
         $rawAttributes = $node->rawAttributes ?? '';
         
@@ -3772,11 +3800,24 @@ class Taglib
         if ($config === null) {
             return $content;
         }
+        $config = $this->enrichTagConfigWithSource($config, $fileName);
         $tagData = ($tagKey === '@tag()' || $tagKey === '@tag{}')
             ? [$inlineContent, $inlineContent]
             : [$this->buildRuntimeRawTag($tagName, $rawAttributes, $content, $tagKey), $rawAttributes, $content];
 
         return $config['callback']($tagKey, $config, $tagData, $attributes);
+    }
+
+    private function enrichTagConfigWithSource(array $config, string $fileName, int $line = 0): array
+    {
+        if ($fileName !== '') {
+            $config['file'] = $fileName;
+        }
+        if ($line > 0) {
+            $config['line'] = $line;
+        }
+
+        return $config;
     }
 
     private function buildRuntimeRawTag(string $tagName, string $rawAttributes, string $content, string $tagKey): string
