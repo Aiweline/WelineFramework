@@ -284,6 +284,83 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
     background: var(--backend-color-bg-tertiary, #f1f3f5);
     color: var(--backend-color-text-tertiary, #9a9cae);
 }
+.pb-dm-table--compact .pb-dm-col-check {
+    width: 42px;
+    text-align: center;
+}
+.pb-dm-table--compact .pb-dm-col-domain {
+    min-width: 14rem;
+}
+.pb-dm-table--compact .pb-dm-col-provider {
+    min-width: 12.5rem;
+}
+.pb-dm-table--compact .pb-dm-col-summary {
+    min-width: 16rem;
+}
+.pb-dm-table--compact .pb-dm-col-flow {
+    min-width: 13rem;
+    max-width: 28rem;
+    vertical-align: top;
+}
+.pb-dm-table--compact .pb-dm-col-ops {
+    min-width: 10rem;
+}
+.pb-dm-domain-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.pb-dm-domain-name {
+    font-weight: 600;
+    color: var(--backend-color-text-primary, #212529);
+    word-break: break-all;
+}
+.pb-dm-domain-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.78rem;
+}
+.pb-dm-domain-meta-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--backend-border-radius-pill, 999px);
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+}
+.pb-dm-summary-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+.pb-dm-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.pb-dm-summary-note {
+    color: var(--backend-color-text-secondary, #6c757d);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+.pb-dm-summary-code {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.78rem;
+    word-break: break-all;
+}
+.pb-dm-actions-cell {
+    white-space: nowrap;
+}
 .pb-dm-modal-md {
     max-width: 600px;
     width: 90%;
@@ -4692,6 +4769,334 @@ $purchaseDialogJsUrl = (defined('DEV') && DEV)
         nextBtn.disabled = poolState.page >= poolState.pages;
     }
 
+    function renderDomainAccordion(groups) {
+        if (!groups || groups.length === 0) {
+            domainContainer.innerHTML = '<div class="pb-dm-empty"><i class="mdi mdi-domain"></i><p><?= __("暂无域名数据") ?></p></div>';
+            paginationEl.style.display = 'none';
+            return;
+        }
+
+        var html = '';
+
+        groups.forEach(function(group, gIdx) {
+            var isOpen = gIdx === 0 ? ' pb-dm-accordion--open' : '';
+            html += '<div class="pb-dm-accordion' + isOpen + '" data-account-id="' + group.account_id + '">';
+
+            var dnsOnlyLabel = group.is_dns_only
+                ? ' <span class="pb-dm-badge pb-dm-badge--warn" style="font-size:0.7rem;"><?= __("仅 DNS") ?></span>'
+                : '';
+            var registrarLabel = group.registrar_name
+                ? ' <span class="pb-dm-badge pb-dm-badge--info" style="font-size:0.7rem;">' + escapeHtml(group.registrar_name) + '</span>'
+                : '';
+
+            html += '<div class="pb-dm-accordion-header">' +
+                '<i class="mdi mdi-chevron-right pb-dm-accordion-icon"></i>' +
+                '<div class="pb-dm-accordion-title">' +
+                    '<i class="mdi mdi-account-key"></i> ' + escapeHtml(group.account_name) + registrarLabel + dnsOnlyLabel +
+                '</div>' +
+                '<div class="pb-dm-accordion-stats">' +
+                    '<span class="pb-dm-accordion-stat">' +
+                        '<i class="mdi mdi-domain"></i> ' + group.total + ' <?= __("个") ?>' +
+                    '</span>' +
+                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--ok">' +
+                        '<i class="mdi mdi-check-circle"></i> ' + group.pulled + ' <?= __("已拉取") ?>' +
+                    '</span>' +
+                    '<span class="pb-dm-accordion-stat pb-dm-accordion-stat--warn">' +
+                        '<i class="mdi mdi-alert-circle"></i> ' + group.not_pulled + ' <?= __("未拉取") ?>' +
+                    '</span>' +
+                '</div>' +
+                '<div class="pb-dm-accordion-actions">' +
+                    '<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-all-btn" data-account-id="' + group.account_id + '" title="<?= __("拉取全部未拉取域名") ?>">' +
+                        '<i class="mdi mdi-download-multiple"></i>' +
+                    '</button>' +
+                '</div>' +
+            '</div>';
+
+            html += '<div class="pb-dm-accordion-body">';
+            if (group.items && group.items.length > 0) {
+                html += '<table class="pb-dm-table pb-dm-table--compact" style="margin:0;border-radius:0;"><thead><tr>' +
+                    '<th class="pb-dm-col-check"><input type="checkbox" class="pb-dm-select-all-group" data-account-id="' + group.account_id + '"></th>' +
+                    '<th class="pb-dm-col-domain"><?= __("域名") ?></th>' +
+                    '<th class="pb-dm-col-provider" title="<?= __("用于查看当前识别到的 DNS 管理信息，不等于 NS 已完全生效") ?>"><?= __("服务商") ?></th>' +
+                    '<th class="pb-dm-col-summary"><?= __("概览") ?></th>' +
+                    '<th class="pb-dm-col-ops"><?= __("操作") ?></th>' +
+                    '</tr></thead><tbody>';
+
+                group.items.forEach(function(d) {
+                    var isPulled = d.is_pulled === true || d.is_pulled === 1;
+                    var pullBadge = renderPulledStatusBadge(isPulled);
+                    var checkboxDisabled = '';
+                    var actionButtons = [];
+
+                    if (isPulled) {
+                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-resolve-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("解析到本地") ?>"><i class="mdi mdi-dns"></i></button>');
+                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm pb-dm-manage-dns-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("管理 DNS 记录") ?>"><i class="mdi mdi-playlist-plus"></i></button>');
+                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-switch-dns-btn' + (d.is_registering ? ' pb-dm-btn-disabled' : '') + '" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-dns-account-id="' + (d.dns_account_id || 0) + '" data-cdn-account-id="' + (d.cdn_account_id || 0) + '" data-dns-provider-name="' + escapeHtml(d.dns_provider_name || '') + '" data-cdn-provider-name="' + escapeHtml(d.cdn_provider_name || '') + '" data-is-registering="' + (d.is_registering ? '1' : '0') + '" title="' + (d.is_registering ? '<?= __("域名注册完成后将自动处理，无需手动切换") ?>' : '<?= __("切换 DNS/CDN") ?>') + '"' + (d.is_registering ? ' disabled' : '') + '><i class="mdi mdi-swap-horizontal"></i></button>');
+                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-root-delete-btn" data-domain-id="' + d.domain_id + '" data-domain="' + escapeHtml(d.domain) + '" title="<?= __("删除根域，含子域名与域名池记录") ?>"><i class="mdi mdi-delete-outline"></i></button>');
+                    } else {
+                        actionButtons.push('<button class="pb-dm-btn pb-dm-btn-success pb-dm-btn-sm pb-dm-pull-single-btn" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" title="<?= __("拉取并入池") ?>"><i class="mdi mdi-download"></i></button>');
+                    }
+
+                    var registrarName = d.registrar_name || group.registrar_name || '-';
+                    var dnsName = d.dns_provider_name || d.dns_provider || '-';
+                    var cdnName = d.cdn_provider_name || d.cdn_provider || '-';
+
+                    var registrarClass = registrarName !== '-' ? 'pb-dm-provider--registrar' : 'pb-dm-provider--none';
+                    var dnsClass = dnsName !== '-' ? 'pb-dm-provider--dns' : 'pb-dm-provider--none';
+                    var cdnClass = cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none';
+
+                    var providerCell = '<div class="pb-dm-provider-cell">' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label"><?= __("注册") ?></span>' +
+                            '<span class="pb-dm-provider-badge ' + registrarClass + '">' + escapeHtml(registrarName) + '</span>' +
+                        '</div>' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label">DNS</span>' +
+                            '<span class="pb-dm-provider-badge ' + dnsClass + '" style="display:inline-flex;align-items:center;gap:4px;max-width:100%;">' +
+                                escapeHtml(dnsName) +
+                                (d.dns_status_hint
+                                    ? '<i class="mdi mdi-information-outline pb-dm-dns-hint-icon" style="cursor:help;opacity:0.85;flex-shrink:0;" title="' + escapeAttr(d.dns_status_hint) + '" aria-label="<?= __("DNS 状态说明") ?>"></i>'
+                                    : '') +
+                            '</span>' +
+                        '</div>' +
+                        '<div class="pb-dm-provider-row">' +
+                            '<span class="pb-dm-provider-label">CDN</span>' +
+                            '<span class="pb-dm-provider-badge ' + cdnClass + '">' + escapeHtml(cdnName) + '</span>' +
+                        '</div>' +
+                    '</div>';
+
+                    var domainMeta = [];
+                    if (d.expires_at) {
+                        domainMeta.push('<span class="pb-dm-domain-meta-chip"><?= __("到期") ?> ' + escapeHtml(d.expires_at) + '</span>');
+                    }
+                    if (d.is_registering && d.lifecycle_stage_label) {
+                        domainMeta.push('<span class="pb-dm-domain-meta-chip">' + escapeHtml(d.lifecycle_stage_label) + '</span>');
+                    }
+
+                    var siteReadyBadge = (d.site_ready === 1 || d.site_ready === true)
+                        ? '<span class="pb-dm-badge pb-dm-badge--ok"><?= __("可建站") ?></span>'
+                        : '<span class="pb-dm-badge pb-dm-badge--no"><?= __("不可建站") ?></span>';
+                    var siteCreatedBadge = (d.site_created === 1 || d.site_created === true)
+                        ? '<span class="pb-dm-badge pb-dm-badge--info"><?= __("已建站") ?></span>'
+                        : '<span class="pb-dm-badge pb-dm-badge--no"><?= __("未建站") ?></span>';
+                    var domainCell = '<div class="pb-dm-domain-cell">' +
+                        '<div class="pb-dm-domain-name">' + escapeHtml(d.domain) + '</div>' +
+                        (domainMeta.length ? '<div class="pb-dm-domain-meta">' + domainMeta.join('') + '</div>' : '') +
+                    '</div>';
+                    var summaryCell = '<div class="pb-dm-summary-cell">' +
+                        '<div class="pb-dm-summary-row">' + pullBadge + renderDomainStatusBadge(d.status) + '</div>' +
+                        '<div class="pb-dm-summary-row">' + siteReadyBadge + siteCreatedBadge + '</div>' +
+                        (d.dns_status_hint ? '<div class="pb-dm-summary-note">' + escapeHtml(d.dns_status_hint) + '</div>' : '') +
+                    '</div>';
+
+                    html += '<tr data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '">' +
+                        '<td class="pb-dm-col-check"><input type="checkbox" class="pb-dm-domain-select" data-domain="' + escapeHtml(d.domain) + '" data-account-id="' + group.account_id + '" data-pulled="' + (isPulled ? '1' : '0') + '"' + checkboxDisabled + '></td>' +
+                        '<td class="pb-dm-col-domain">' + domainCell + '</td>' +
+                        '<td class="pb-dm-col-provider">' + providerCell + '</td>' +
+                        '<td class="pb-dm-col-summary">' + summaryCell + '</td>' +
+                        '<td class="pb-dm-col-ops pb-dm-actions-cell"><div class="pb-dm-pool-ops">' + actionButtons.join('') + '</div></td>' +
+                    '</tr>';
+                });
+
+                html += '</tbody></table>';
+            } else if (group.fetch_error) {
+                html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                    '<i class="mdi mdi-alert-circle-outline" style="font-size:1.5rem;color:var(--backend-color-danger,#f46a6a);"></i>' +
+                    '<p style="color:var(--backend-color-danger,#f46a6a);"><?= __("拉取失败") ?>: ' + escapeHtml(group.fetch_error) + '</p>' +
+                    '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请检查账户 API 凭据，或点击测试按钮验证连接。") ?></p>' +
+                '</div>';
+            } else if (group.is_dns_only) {
+                html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                    '<i class="mdi mdi-dns" style="font-size:1.5rem;color:var(--backend-color-warning,#f1b44c);"></i>' +
+                    '<p style="color:var(--backend-color-warning,#f1b44c);">' + escapeHtml(group.registrar_name || '') + ' <?= __("是 DNS 服务商，不是域名注册商。域名归属以实际注册商为准。") ?></p>' +
+                '</div>';
+            } else {
+                if (domainListState.status === 'pulled') {
+                    html += '<div class="pb-dm-empty" style="padding:20px;">' +
+                        '<i class="mdi mdi-cloud-download-outline" style="font-size:1.5rem;color:var(--backend-color-primary,#556ee6);"></i>' +
+                        '<p><?= __("该账户下暂无已拉取域名") ?></p>' +
+                        '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请切换到全部状态或未拉取状态，从线上选择域名拉取到本地。") ?></p>' +
+                        '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.getElementById(\'pb-dm-domain-status\').value=\'\';document.getElementById(\'pb-dm-domain-status\').dispatchEvent(new Event(\'change\'));">' +
+                            '<i class="mdi mdi-filter-off"></i> <?= __("查看全部状态") ?>' +
+                        '</button>' +
+                    '</div>';
+                } else {
+                    html += '<div class="pb-dm-empty" style="padding:20px;"><p><?= __("该账户下暂无域名") ?></p></div>';
+                }
+            }
+            html += '</div>';
+            html += '</div>';
+        });
+
+        domainContainer.innerHTML = html;
+        paginationEl.style.display = 'none';
+        bindAccordionEvents();
+        bindDomainSelectEvents();
+    }
+
+    function renderDomainPool(items) {
+        var container = document.getElementById('pb-dm-pool-container');
+        if (!items || items.length === 0) {
+            container.innerHTML = '<div class="pb-dm-empty">' +
+                '<i class="mdi mdi-database-off" style="font-size:2rem;color:var(--backend-color-text-secondary,#6c757d);"></i>' +
+                '<p><?= __("暂无域名池数据") ?></p>' +
+                '<p style="font-size:0.85rem;color:var(--backend-color-text-secondary,#6c757d);"><?= __("请先在根域列表中拉取域名，然后转存到域名池。") ?></p>' +
+                '<button class="pb-dm-btn pb-dm-btn-primary pb-dm-btn-sm" style="margin-top:8px;" onclick="document.querySelector(\'.pb-dm-tab[data-tab=domains]\').click();">' +
+                    '<i class="mdi mdi-earth"></i> <?= __("前往根域列表") ?>' +
+                '</button>' +
+            '</div>';
+            return;
+        }
+
+        var html = '<table class="pb-dm-table pb-dm-table--compact" id="pb-dm-pool-table"><thead><tr>' +
+            '<th class="pb-dm-col-domain"><?= __("域名") ?></th>' +
+            '<th class="pb-dm-col-provider"><?= __("服务商") ?></th>' +
+            '<th class="pb-dm-col-summary"><?= __("概览") ?></th>' +
+            '<th class="pb-dm-col-flow"><?= __("流转") ?></th>' +
+            '<th class="pb-dm-col-ops"><?= __("操作") ?></th>' +
+        '</tr></thead><tbody>';
+
+        items.forEach(function(item) {
+            var statusBadge = '';
+            var isRegistering = !!item.is_registering;
+            if (isRegistering && (item.lifecycle_stage_label || '')) {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn" title="' + escapeHtml(item.lifecycle_stage_label) + '">' + escapeHtml(item.lifecycle_stage_label) + '</span>';
+            } else if (item.status === 'available') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--ok"><?= __("可用") ?></span>';
+            } else if (item.status === 'allocated') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--info"><?= __("已分配") ?></span>';
+            } else if (item.status === 'reserved') {
+                statusBadge = '<span class="pb-dm-badge pb-dm-badge--warn"><?= __("预留") ?></span>';
+            } else {
+                statusBadge = '<span class="pb-dm-badge">' + (item.status || '-') + '</span>';
+            }
+
+            var resolveBadge = renderResolveStatusBadge(item);
+            var httpsBadge = renderHttpsStatusBadge(item);
+            var siteReadyBadge = renderSiteReadyBadge(item);
+            var siteCreatedBadge = renderSiteCreatedBadge(item);
+            var typeText = item.subdomain ? '<?= __("子域名") ?>' : '<?= __("根域名") ?>';
+            var registrarName = item.registrar_name || '-';
+            var dnsName = item.dns_provider_name || '-';
+            var cdnName = item.cdn_provider_name || '-';
+            var providerCell = '<div class="pb-dm-provider-cell">' +
+                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label"><?= __("注册") ?></span><span class="pb-dm-provider-badge ' + (registrarName !== '-' ? 'pb-dm-provider--registrar' : 'pb-dm-provider--none') + '">' + escapeHtml(registrarName) + '</span></div>' +
+                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">DNS</span><span class="pb-dm-provider-badge ' + (dnsName !== '-' ? 'pb-dm-provider--dns' : 'pb-dm-provider--none') + '">' + escapeHtml(dnsName) + '</span></div>' +
+                '<div class="pb-dm-provider-row"><span class="pb-dm-provider-label">CDN</span><span class="pb-dm-provider-badge ' + (cdnName !== '-' ? 'pb-dm-provider--cdn' : 'pb-dm-provider--none') + '">' + escapeHtml(cdnName) + '</span></div>' +
+            '</div>';
+            var criticalOffLocal = String(item.resolve_status || '').toLowerCase() === 'resolved' && String(item.is_local_server || '0') !== '1';
+            var localBadge = String(item.is_local_server || '0') === '1'
+                ? '<span class="pb-dm-badge pb-dm-badge--info"><?= __("本机") ?></span>'
+                : '';
+
+            var poolId = item.pool_id || 0;
+            var resolvedDisplay = item.resolved_ip || '-';
+            if (item.resolved_ipv6 && item.resolved_ipv6 !== item.resolved_ip) {
+                resolvedDisplay += ' / ' + item.resolved_ipv6;
+            }
+
+            var registeringTitle = (item.lifecycle_stage_label && item.lifecycle_stage_label.trim())
+                ? item.lifecycle_stage_label
+                : '<?= __("注册处理中") ?>';
+            var checkBtn = poolId > 0
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-dns"></i> <?= __("检查") ?></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-check-btn" data-pool-id="' + poolId + '" title="<?= __("快速检查解析并刷新状态") ?>"><i class="mdi mdi-dns"></i> <?= __("检查") ?></button>')
+                : '';
+            var needCert = String(item.https_status || '').toLowerCase() !== 'valid';
+            var httpsBtn = poolId > 0
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-certificate"></i> <?= __("申请证书") ?></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-https-btn' + (needCert ? '' : ' pb-dm-btn--disabled') + '" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" ' + (needCert ? 'title="<?= __("手动申请 HTTPS 证书") ?>"' : 'disabled title="<?= __("证书有效，无需申请") ?>"') + '><i class="mdi mdi-certificate"></i> <?= __("申请证书") ?></button>')
+                : '';
+            var delBtn = poolId > 0
+                ? (isRegistering
+                    ? '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn pb-dm-btn--disabled" disabled title="' + registeringTitle + '"><i class="mdi mdi-delete-outline"></i></button>'
+                    : '<button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-delete-btn" data-pool-id="' + poolId + '" data-domain="' + escapeHtml(item.domain || '') + '" title="<?= __("从域名池删除") ?>"><i class="mdi mdi-delete-outline"></i></button>')
+                : '';
+            var opHtml = '<div class="pb-dm-pool-ops">' + [checkBtn, httpsBtn, delBtn].filter(Boolean).join('') + '</div>';
+            var flowHtml = (item.flow_html && String(item.flow_html).trim() !== '')
+                ? String(item.flow_html)
+                : '<span class="text-muted small"><?= __("暂无流转") ?></span>';
+            var flowTimeline = poolId > 0
+                ? '<div class="mt-1"><button type="button" class="pb-dm-btn pb-dm-btn-outline pb-dm-btn-sm pb-dm-pool-flow-log-btn" data-pool-id="' + poolId + '" style="font-size:0.75rem;padding:2px 8px;"><?= __("时间线") ?></button></div>'
+                : '';
+
+            var domainMeta = ['<span class="pb-dm-domain-meta-chip">' + typeText + '</span>'];
+            if (item.allocated_at) {
+                domainMeta.push('<span class="pb-dm-domain-meta-chip">' + escapeHtml(item.allocated_at) + '</span>');
+            }
+            var domainCell = '<div class="pb-dm-domain-cell">' +
+                '<div class="pb-dm-domain-name">' + escapeHtml(item.full_domain || item.domain || '') + '</div>' +
+                '<div class="pb-dm-domain-meta">' + domainMeta.join('') + '</div>' +
+            '</div>';
+            var summaryCell = '<div class="pb-dm-summary-cell">' +
+                '<div class="pb-dm-summary-row">' + statusBadge + resolveBadge + httpsBadge + '</div>' +
+                '<div class="pb-dm-summary-row">' + siteReadyBadge + siteCreatedBadge + localBadge + '</div>' +
+                (resolvedDisplay !== '-'
+                    ? '<div class="pb-dm-summary-row"><span class="pb-dm-summary-code">' + escapeHtml(resolvedDisplay) + '</span></div>'
+                    : '<div class="pb-dm-summary-note"><?= __("解析 IP 待同步") ?></div>') +
+            '</div>';
+
+            html += '<tr class="' + (criticalOffLocal ? 'pb-dm-row--critical' : '') + '">' +
+                '<td class="pb-dm-col-domain">' + domainCell + '</td>' +
+                '<td class="pb-dm-col-provider">' + providerCell + '</td>' +
+                '<td class="pb-dm-col-summary">' + summaryCell + '</td>' +
+                '<td class="pb-dm-col-flow">' + flowHtml + flowTimeline + '</td>' +
+                '<td class="pb-dm-col-ops pb-dm-actions-cell">' + opHtml + '</td>' +
+            '</tr>';
+        });
+
+        html += '</tbody></table>';
+        container.innerHTML = html;
+
+        container.querySelectorAll('.pb-dm-pool-check-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                if (poolId <= 0) return;
+                doPoolCheckResolve(poolId, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-https-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                var domain = this.getAttribute('data-domain') || '';
+                if (poolId <= 0) return;
+                openHttpsRequestModal(poolId, domain, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-delete-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var poolId = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                var domain = this.getAttribute('data-domain') || '';
+                if (poolId <= 0) return;
+                doPoolDelete(poolId, domain, this);
+            });
+        });
+        container.querySelectorAll('.pb-dm-pool-flow-log-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var pid = parseInt(this.getAttribute('data-pool-id') || '0', 10);
+                if (pid <= 0) return;
+                postForm(API.getPoolFlowLog, { pool_id: String(pid) }).then(function(res) {
+                    if (!res || !res.success || !res.data || !res.data.items) {
+                        if (typeof BackendToast !== 'undefined') BackendToast.error((res && res.msg) || 'Error');
+                        return;
+                    }
+                    var lines = res.data.items.map(function(x) {
+                        return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || '');
+                    });
+                    var body = lines.length
+                        ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
+                            lines.map(function(s) { return escapeHtml(s); }).join('\n') +
+                          '</pre>'
+                        : '<?= __("暂无记录") ?>';
+                    openPbDmPoolFlowModal('<?= __("流转记录") ?> #' + pid, body);
+                }).catch(function() {
+                    if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __("请求失败") ?>');
+                });
+            });
+        });
+    }
     (function initHttpsRequestModal() {
         var modal = document.getElementById('pb-dm-https-request-modal');
         var closeBtn = document.getElementById('pb-dm-https-request-close');
