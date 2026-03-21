@@ -2187,33 +2187,70 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         return null;
     }
     
-    // 安全检查：防止目录遍历
+    // 安全检查：防止目录遍历，并兼容带 backend key / 货币 / 语言前缀的静态资源 URL
     $normalizedUri = \str_replace(['../', '..\\'], '', $uriPath);
-    $normalizedUri = \ltrim($normalizedUri, '/\\');
-    
+    $normalizedUri = \trim(\str_replace('\\', '/', $normalizedUri), '/\\');
+    if ($normalizedUri === '') {
+        return null;
+    }
+
+    $candidateUris = [];
+    $addCandidateUri = static function (string $candidate) use (&$candidateUris): void {
+        $candidate = \trim(\str_replace('\\', '/', $candidate), '/');
+        if ($candidate === '') {
+            return;
+        }
+        $candidateUris[] = $candidate;
+        if (\str_starts_with($candidate, 'pub/')) {
+            $stripped = \substr($candidate, 4);
+            if ($stripped !== '') {
+                $candidateUris[] = $stripped;
+            }
+        }
+    };
+    $isCurrencySegment = static fn(string $segment): bool => \preg_match('/^[A-Z]{3}$/', $segment) === 1;
+    $isLocaleSegment = static fn(string $segment): bool => \preg_match('/^[a-z]{2}_[A-Za-z]{2,4}(?:_[A-Z]{2})?$/', $segment) === 1;
+
+    $addCandidateUri($normalizedUri);
+    $segments = \array_values(\array_filter(\explode('/', $normalizedUri), static fn(string $segment): bool => $segment !== ''));
+    $segmentCount = \count($segments);
+
+    if ($segmentCount >= 2 && $segments[0] === 'pub') {
+        $addCandidateUri(\implode('/', \array_slice($segments, 1)));
+    }
+    if ($segmentCount >= 3 && $isCurrencySegment($segments[1]) && $isLocaleSegment($segments[2])) {
+        $addCandidateUri(\implode('/', \array_slice($segments, 3)));
+    }
+    if ($segmentCount >= 2 && $isCurrencySegment($segments[0]) && $isLocaleSegment($segments[1])) {
+        $addCandidateUri(\implode('/', \array_slice($segments, 2)));
+    }
+    if ($segmentCount >= 1 && $isLocaleSegment($segments[0])) {
+        $addCandidateUri(\implode('/', \array_slice($segments, 1)));
+    }
+    if ($segmentCount >= 2
+        && !\str_contains($segments[0], '.')
+        && \in_array($segments[1], ['pub', 'statics', 'theme_previews', 'media', '.well-known', 'errors'], true)
+    ) {
+        $addCandidateUri(\implode('/', \array_slice($segments, 1)));
+    }
+
+    $candidateUris = \array_values(\array_unique($candidateUris));
+
     // 查找文件位置（按优先级）
     $filename = null;
-    $searchPaths = [];
-    
-    // 1. pub 目录（发布的静态资源）
-    $searchPaths[] = BP . 'pub' . DS . $normalizedUri;
-    
-    // 2. app/code 目录（模块视图资源）
-    // URL 格式: /Vendor/Module/view/... -> app/code/Vendor/Module/view/...
-    $searchPaths[] = BP . 'app' . DS . 'code' . DS . \str_replace('/', DS, $normalizedUri);
-    
-    // 3. vendor 目录
-    $searchPaths[] = BP . 'vendor' . DS . \str_replace('/', DS, $normalizedUri);
-    
-    // 4. 根目录
-    $searchPaths[] = BP . \str_replace('/', DS, $normalizedUri);
-    
-    foreach ($searchPaths as $path) {
-        // 修复双斜杠
-        $path = \str_replace([DS . DS, '//'], DS, $path);
-        if (\is_file($path) && \is_readable($path)) {
-            $filename = $path;
-            break;
+    foreach ($candidateUris as $candidateUri) {
+        $searchPaths = [];
+        $searchPaths[] = BP . 'pub' . DS . \str_replace('/', DS, $candidateUri);
+        $searchPaths[] = BP . 'app' . DS . 'code' . DS . \str_replace('/', DS, $candidateUri);
+        $searchPaths[] = BP . 'vendor' . DS . \str_replace('/', DS, $candidateUri);
+        $searchPaths[] = BP . \str_replace('/', DS, $candidateUri);
+
+        foreach ($searchPaths as $path) {
+            $path = \str_replace([DS . DS, '//'], DS, $path);
+            if (\is_file($path) && \is_readable($path)) {
+                $filename = $path;
+                break 2;
+            }
         }
     }
     
