@@ -97,4 +97,83 @@ final class DbSchemaReader
         }
         return $result;
     }
+
+    /**
+     * 批量读取多表结构，返回 [tableName => TableSchema] 映射（不存在的表不出现在结果中）。
+     * 先用一次 getExistingTables() 批量检查表是否存在，再逐表读取列/索引/外键数据。
+     * 相比逐表 readTable()（每表 1 次 tableExist 查询），可将 N 次 tableExist 合并为 1 次。
+     *
+     * @param list<string> $tableNames
+     * @return array<string, TableSchema>  key = tableName
+     */
+    public function readTablesBatch(ConnectorInterface $connector, array $tableNames): array
+    {
+        if ($tableNames === []) {
+            return [];
+        }
+
+        // 一次查询确认哪些表实际存在（N→1 DB round-trip）
+        $existing = array_flip($connector->getExistingTables($tableNames));
+
+        $result = [];
+        foreach ($tableNames as $name) {
+            $cleanName = trim(str_replace(['`', '"'], '', $name));
+            if ($cleanName === '' || !isset($existing[$cleanName])) {
+                continue;
+            }
+            $tableComment = $connector->getTableComment($cleanName);
+            $columnRows   = $connector->getTableColumns($cleanName);
+            $indexRows    = $connector->getTableIndexes($cleanName);
+            $fkRows       = $connector->getTableForeignKeys($cleanName);
+
+            $columns = [];
+            foreach ($columnRows as $row) {
+                $columns[] = new ColumnDefinition(
+                    name: (string) ($row['name'] ?? ''),
+                    type: (string) ($row['type'] ?? ''),
+                    length: array_key_exists('length', $row) ? $row['length'] : null,
+                    nullable: (bool) ($row['nullable'] ?? true),
+                    primaryKey: (bool) ($row['primary_key'] ?? false),
+                    autoIncrement: (bool) ($row['auto_increment'] ?? false),
+                    default: $row['default'] ?? null,
+                    comment: (string) ($row['comment'] ?? ''),
+                    unique: (bool) ($row['unique'] ?? false)
+                );
+            }
+
+            $indexes = [];
+            foreach ($indexRows as $row) {
+                $indexes[] = new IndexDefinition(
+                    name: (string) ($row['name'] ?? ''),
+                    columns: array_values($row['columns'] ?? []),
+                    type: !empty($row['unique']) ? 'UNIQUE' : 'DEFAULT',
+                    comment: '',
+                    method: 'BTREE'
+                );
+            }
+
+            $foreignKeys = [];
+            foreach ($fkRows as $row) {
+                $foreignKeys[] = new ForeignKeyDefinition(
+                    name: (string) ($row['name'] ?? ''),
+                    columns: array_values($row['columns'] ?? []),
+                    referencesTable: (string) ($row['ref_table'] ?? ''),
+                    referencesColumns: array_values($row['ref_columns'] ?? []),
+                    onDeleteCascade: (bool) ($row['on_delete_cascade'] ?? false),
+                    onUpdateCascade: (bool) ($row['on_update_cascade'] ?? false)
+                );
+            }
+
+            $result[$cleanName] = new TableSchema(
+                tableName: $cleanName,
+                comment: $tableComment,
+                columns: $columns,
+                indexes: $indexes,
+                foreignKeys: $foreignKeys,
+                modelClass: null
+            );
+        }
+
+        return $result;
+    }
 }
