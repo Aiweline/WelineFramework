@@ -88,12 +88,18 @@ class GeneratePreviews extends AbstractConsole
                     $imagePath = ThemePreviewGenerator::generatePreviewImage($theme, $areaItem, $force);
 
                     if ($imagePath) {
-                        $relativePath = str_replace(\Weline\Framework\App\Env::VAR_DIR, '', $imagePath);
+                        $relativePath = ltrim(str_replace(BP, '', $imagePath), '\\/');
                         
                         // 更新数据库
                         $themeObj = clone $this->welineTheme;
                         $themeObj->load($themeId);
-                        $themeObj->setPreviewImage($relativePath)->save();
+                        if ($areaItem === 'backend') {
+                            $themeObj->setBackendPreviewImage($relativePath);
+                        } else {
+                            $themeObj->setFrontendPreviewImage($relativePath)
+                                ->setPreviewImage($relativePath);
+                        }
+                        $themeObj->save();
 
                         $this->printing->success(__('✓ %{1} [%{2}] 区域预览图生成成功', [$themeName, $areaItem]));
                         $themeSuccess = true;

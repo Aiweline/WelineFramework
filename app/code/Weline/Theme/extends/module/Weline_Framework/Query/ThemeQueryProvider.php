@@ -38,8 +38,9 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function getActiveTheme(array $params): ?array
     {
+        $area = $this->normalizeArea($params['area'] ?? null);
         $theme = clone $this->welineTheme;
-        $theme->getActiveTheme();
+        $theme->getActiveTheme($area);
 
         if (!$theme->getId()) {
             return null;
@@ -54,6 +55,8 @@ class ThemeQueryProvider implements QueryProviderInterface
             'is_active' => $theme->getData(WelineTheme::schema_fields_IS_ACTIVE),
             'config' => $theme->getData(WelineTheme::schema_fields_CONFIG),
             'preview_image' => $theme->getData(WelineTheme::schema_fields_PREVIEW_IMAGE),
+            'frontend_preview_image' => $theme->getData(WelineTheme::schema_fields_FRONTEND_PREVIEW_IMAGE),
+            'backend_preview_image' => $theme->getData(WelineTheme::schema_fields_BACKEND_PREVIEW_IMAGE),
         ];
     }
 
@@ -101,12 +104,12 @@ class ThemeQueryProvider implements QueryProviderInterface
     private function scanThemeLayoutsByType(array $params): array
     {
         $layoutType = (string)($params['layout_type'] ?? '');
-        $area = (string)($params['area'] ?? 'frontend');
+        $area = $this->normalizeArea($params['area'] ?? 'frontend') ?? 'frontend';
         if ($layoutType === '') {
             return [];
         }
         $theme = clone $this->welineTheme;
-        $theme->getActiveTheme();
+        $theme->getActiveTheme($area);
         if (!$theme->getId()) {
             return [];
         }
@@ -174,7 +177,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getActiveTheme',
                     'description' => __('获取当前激活的主题信息'),
-                    'params' => [],
+                    'params' => [
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'description' => __('可选：frontend 或 backend')],
+                    ],
                 ],
                 [
                     'name' => 'getConfigValue',
@@ -206,5 +211,16 @@ class ThemeQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
+    }
+
+    private function normalizeArea(mixed $area): ?string
+    {
+        $area = strtolower(trim((string)$area));
+
+        return match ($area) {
+            'frontend' => 'frontend',
+            'backend' => 'backend',
+            default => null,
+        };
     }
 }
