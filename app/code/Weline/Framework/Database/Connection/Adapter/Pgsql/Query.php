@@ -269,11 +269,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function alias(string $table_alias_name): QueryInterface
     {
-        $this->table_alias = $table_alias_name;
-        if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
-            $this->fields = $this->table_alias . '.*';
-        }
-        return $this;
+        return parent::alias($table_alias_name);
     }
 
     /**
@@ -523,9 +519,37 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function prepareSql(string $action): void
     {
-        if ($this->table === '') {
+        $this->reorderWhereByIndexes();
+        $this->buildAst($action);
+        $from = $this->ast['from'] ?? [];
+        if ($this->table === '' && empty($from['is_subquery'])) {
             throw new DbException(__('没有指定table表名！'));
         }
+
+        $compiler = new PgsqlCompiler();
+        $options = [
+            'identity_field' => $this->identity_field,
+            'table_alias' => $this->table_alias,
+            'exist_update_sql' => $this->exist_update_sql,
+            'insert_update_fields' => $this->insert_update_fields,
+            'insert_update_where_fields' => $this->insert_update_where_fields,
+        ];
+        $compiled = $compiler->compile($this->ast, $options);
+        $this->sql = $compiled->sql;
+        $this->bound_values = $compiled->bindings;
+
+        $this->sql = $this->normalizeSql($this->sql);
+        $this->sql = preg_replace('/\s+(AND|OR)\s*\)\s*(LIMIT|ORDER|GROUP|HAVING|$)/i', ') $2', $this->sql);
+        $this->sql = preg_replace('/\s+(AND|OR)(\s*)(LIMIT|ORDER|GROUP|HAVING|$)/i', ' $3', $this->sql);
+        $this->sql = preg_replace('/\s+/', ' ', $this->sql);
+        $this->sql = trim($this->sql);
+
+        if (!empty($this->sql)) {
+            $this->PDOStatement = $this->preparePgsql($this->sql);
+        } else {
+            $this->PDOStatement = null;
+        }
+        return;
 
         $this->reorderWhereByIndexes();
         $this->buildAst($action);
