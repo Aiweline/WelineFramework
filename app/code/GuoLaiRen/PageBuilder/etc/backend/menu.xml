@@ -52,6 +52,13 @@
              action="pagebuilder/backend/quickBuild/orders"
              icon="mdi mdi-clipboard-list-outline"
              order="20"/>
+
+        <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
+             name="ai_site_agent"
+             title="AI 建站工作台"
+             action="pagebuilder/backend/aiSiteAgent/index"
+             icon="mdi mdi-robot-outline"
+             order="15"/>
     </menu>
     
     <!-- 3. 网站管理：站点与域名 -->

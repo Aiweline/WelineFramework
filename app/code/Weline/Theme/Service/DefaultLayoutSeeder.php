@@ -42,7 +42,7 @@ class DefaultLayoutSeeder
         }
 
         // 获取该页面类型的默认布局配置
-        $defaultConfig = $this->getDefaultLayoutConfig($pageType);
+        $defaultConfig = $this->getDefaultLayoutConfig($pageType, $themeId);
         
         if (empty($defaultConfig)) {
             return false;
@@ -148,8 +148,12 @@ class DefaultLayoutSeeder
      * @param string $pageType 页面类型
      * @return array 默认配置数组
      */
-    private function getDefaultLayoutConfig(string $pageType): array
+    private function getDefaultLayoutConfig(string $pageType, ?int $themeId = null): array
     {
+        if ($themeId && ($themeConfig = $this->getThemeDefaultLayoutConfig($themeId, $pageType))) {
+            return $themeConfig;
+        }
+
         $configs = [
             // ==================== 首页默认布局 ====================
             ThemeLayout::PAGE_TYPE_HOME => [
@@ -340,6 +344,61 @@ class DefaultLayoutSeeder
         return $configs[$pageType] ?? [];
     }
 
+    private function getThemeDefaultLayoutConfig(int $themeId, string $pageType): array
+    {
+        $theme = clone $this->welineTheme;
+        $theme->clearData()->clearQuery()->load($themeId);
+        if (!$theme->getId()) {
+            return [];
+        }
+
+        $themePath = rtrim((string)$theme->getPath(), '/\\');
+        if ($themePath === '') {
+            return [];
+        }
+
+        $layoutJson = $themePath . DS . 'frontend' . DS . 'layouts' . DS . $pageType . DS . 'default.layout.json';
+        if (!is_file($layoutJson)) {
+            return [];
+        }
+
+        $raw = file_get_contents($layoutJson);
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+
+        $widgets = $decoded['widgets'] ?? null;
+        if (!is_array($widgets)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                continue;
+            }
+            if (empty($widget['widget_code']) || empty($widget['widget_module']) || empty($widget['area'])) {
+                continue;
+            }
+            $normalized[] = [
+                'area' => (string)$widget['area'],
+                'slot_id' => isset($widget['slot_id']) ? (string)$widget['slot_id'] : null,
+                'widget_code' => (string)$widget['widget_code'],
+                'widget_module' => (string)$widget['widget_module'],
+                'widget_type' => isset($widget['widget_type']) ? (string)$widget['widget_type'] : '',
+                'config' => is_array($widget['config'] ?? null) ? $widget['config'] : [],
+                'sort_order' => (int)($widget['sort_order'] ?? 0),
+            ];
+        }
+
+        return $normalized;
+    }
+
     /**
      * 获取所有支持的页面类型及其默认配置概览
      *
@@ -350,7 +409,7 @@ class DefaultLayoutSeeder
         $summary = [];
 
         foreach (ThemeLayout::getPageTypes() as $pageType => $label) {
-            $config = $this->getDefaultLayoutConfig($pageType);
+            $config = $this->getDefaultLayoutConfig($pageType, null);
             $summary[$pageType] = [
                 'label' => $label,
                 'widget_count' => count($config),
