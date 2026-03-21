@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Framework\System\IPC\NdjsonProtocol;
+use Weline\Framework\System\IPC\ProcessKind;
+
 class ControlMessage
 {
     // ========== 消息类型常量 ==========
@@ -179,7 +182,7 @@ class ControlMessage
     /** Worker #1：延迟 6 秒 */
     public const RESURRECTION_WORKER = 3;
 
-    // ========== 编解码方法 ==========
+    // ========== 编解码方法（委托给框架层 NdjsonProtocol）==========
 
     /**
      * 编码消息为 NDJSON 行
@@ -189,7 +192,7 @@ class ControlMessage
      */
     public static function encode(array $data): string
     {
-        return \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+        return NdjsonProtocol::encode($data);
     }
 
     /**
@@ -200,17 +203,7 @@ class ControlMessage
      */
     public static function decode(string $line): ?array
     {
-        $line = \trim($line);
-        if ($line === '') {
-            return null;
-        }
-
-        $data = \json_decode($line, true);
-        if (!\is_array($data) || !isset($data['type'])) {
-            return null;
-        }
-
-        return $data;
+        return NdjsonProtocol::decodeWithType($line);
     }
 
     /**
@@ -224,38 +217,15 @@ class ControlMessage
      */
     public static function extractMessages(string &$buffer): array
     {
-        $messages = [];
-
-        // 找最后一个换行符的位置
-        $lastNewline = \strrpos($buffer, "\n");
-        if ($lastNewline === false) {
-            // 没有完整行，全部留在缓冲区
-            return $messages;
-        }
-
-        // 提取完整行部分
-        $complete = \substr($buffer, 0, $lastNewline + 1);
-        // 剩余半包留在缓冲区
-        $buffer = \substr($buffer, $lastNewline + 1);
-
-        // 逐行解码
-        $lines = \explode("\n", $complete);
-        foreach ($lines as $line) {
-            $msg = self::decode($line);
-            if ($msg !== null) {
-                $messages[] = $msg;
-            }
-        }
-
-        return $messages;
+        return NdjsonProtocol::extractMessages($buffer);
     }
 
-    // ========== 进程归属类型常量 ==========
+    // ========== 进程归属类型常量（规范源：ProcessKind，此处作向后兼容别名）==========
 
     /** 框架内置进程（Worker、Dispatcher、Session Server 等） */
-    public const PROCESS_KIND_FRAMEWORK = 'framework';
+    public const PROCESS_KIND_FRAMEWORK = ProcessKind::FRAMEWORK;
     /** 第三方模块注册的自定义子进程 */
-    public const PROCESS_KIND_MODULE    = 'module';
+    public const PROCESS_KIND_MODULE    = ProcessKind::MODULE;
 
     // ========== 消息构建快捷方法 ==========
 
