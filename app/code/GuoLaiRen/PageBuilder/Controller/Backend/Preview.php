@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
+use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
@@ -686,7 +687,7 @@ SCRIPT;
                         ->setData('content', $page->getData('content'))
                         ->save(true);
                 }
-                
+                $this->invalidatePageCache($pageId);
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('语言配置已保存到 %{1}', $locale),
@@ -726,7 +727,7 @@ SCRIPT;
                 // 保存配置
                 $page->setData('style_setting', json_encode($currentSettings));
                 $page->save();
-
+                $this->invalidatePageCache($pageId);
                 return $this->fetchJson([
                     'success' => true,
                     'message' => __('默认配置已保存'),
@@ -850,6 +851,7 @@ SCRIPT;
                     }
                 }
                 
+                $this->invalidatePageCache($pageId);
                 w_log_info('✅ 重置成功（LocalDescription），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
@@ -876,6 +878,7 @@ SCRIPT;
                     $page->save();
                 }
                 
+                $this->invalidatePageCache($pageId);
                 w_log_info('✅ 重置成功（Page.style_setting），字段数: ' . count($configKeys));
                 return $this->fetchJson([
                     'success' => true,
@@ -1305,6 +1308,18 @@ JS;
 
         $cache[$styleCode] = $map;
         return $map;
+    }
+
+    private function invalidatePageCache(int $pageId): void
+    {
+        if ($pageId <= 0) {
+            return;
+        }
+
+        try {
+            PageBuilderUrlCacheInvalidator::invalidateForPageId($pageId);
+        } catch (\Throwable) {
+        }
     }
 }
 

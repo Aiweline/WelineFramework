@@ -1041,6 +1041,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     ->save();
             }
 
+            $this->clearRouterAndPageBuilderCache($pageId);
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('SEO 配置已保存'),
@@ -1490,6 +1491,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         }
         $page->setData(PageModel::schema_fields_STATUS, PageModel::STATUS_PUBLISHED);
         $page->save();
+        $this->clearRouterAndPageBuilderCache((int)$page->getId());
         return $this->fetchJson(['success' => true, 'message' => __('页面已发布')]);
     }
 
@@ -1519,6 +1521,7 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             $page->save();
             $count++;
         }
+        $this->clearRouterAndPageBuilderCache();
         return $this->fetchJson([
             'success' => true,
             'message' => __('本站已发布，共 %{count} 个页面', ['count' => $count]),
