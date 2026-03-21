@@ -2,39 +2,52 @@
 declare(strict_types=1);
 
 /**
- * 站点域名与 SSL 证书管理表对齐：所有「证书是否有效 / 应否启用 HTTPS」的判定统一走此服务，
+ * 站点域名与 SSL 证书管理表对齐：所有「证书是否有效 / 是否启用 HTTPS」的判断统一走此服务。
  * 不通过带证书校验的 HTTPS 请求推断。
  */
 
 namespace Weline\Websites\Service;
 
-use Weline\Server\Model\SslCertificate;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 
 final class WebsiteSslCertificateStatusService
 {
-    public function resolveManagedCertificate(?int $preferredCertId, string $hostname): ?SslCertificate
+    private const STATUS_PENDING = 'pending';
+    private const STATUS_ACTIVE = 'active';
+    private const STATUS_EXPIRED = 'expired';
+    private const STATUS_REVOKED = 'revoked';
+    private const STATUS_ERROR = 'error';
+
+    public function resolveManagedCertificate(?int $preferredCertId, string $hostname): ?array
     {
-        if (!\class_exists(SslCertificate::class)) {
-            return null;
-        }
         $hostname = \strtolower(\trim($hostname));
         if ($hostname === '') {
             return null;
         }
 
-        return SslCertificate::resolveForWebsiteInfrastructure($preferredCertId, $hostname);
+        try {
+            $result = w_query('server', 'resolveManagedCertificate', [
+                'hostname' => $hostname,
+                'preferred_cert_id' => $preferredCertId,
+            ]);
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        return \is_array($result) ? $result : null;
     }
 
     public function hasValidManagedCertificate(string $hostname, ?int $preferredCertId): bool
     {
-        $c = $this->resolveManagedCertificate($preferredCertId, $hostname);
-        if ($c === null || $c->getCertId() <= 0) {
+        try {
+            return (bool) w_query('server', 'hasValidManagedCertificate', [
+                'hostname' => $hostname,
+                'preferred_cert_id' => $preferredCertId,
+            ]);
+        } catch (\Throwable $e) {
             return false;
         }
-
-        return $c->getStatus() === SslCertificate::STATUS_ACTIVE && !$c->isExpired();
     }
 
     /**
@@ -42,15 +55,12 @@ final class WebsiteSslCertificateStatusService
      */
     public function effectiveCertIdForWebsiteBinding(string $hostname, ?int $preferredCertId): ?int
     {
-        $c = $this->resolveManagedCertificate($preferredCertId, $hostname);
-        if ($c === null || $c->getCertId() <= 0) {
-            return null;
-        }
-        if ($c->getStatus() !== SslCertificate::STATUS_ACTIVE || $c->isExpired()) {
+        $cert = $this->resolveManagedCertificate($preferredCertId, $hostname);
+        if (!$this->isValidCertificate($cert)) {
             return null;
         }
 
-        return $c->getCertId();
+        return (int) ($cert['cert_id'] ?? 0);
     }
 
     /**
@@ -58,25 +68,22 @@ final class WebsiteSslCertificateStatusService
      */
     public function getManagementSummaryLabel(string $hostname, ?int $preferredCertId = null): string
     {
-        if (!\class_exists(SslCertificate::class)) {
-            return '';
-        }
         try {
-            $c = $this->resolveManagedCertificate($preferredCertId, $hostname);
-            if ($c === null || $c->getCertId() <= 0) {
+            $cert = $this->resolveManagedCertificate($preferredCertId, $hostname);
+            if (!$this->hasCertificateId($cert)) {
                 return (string) \__('证书管理：无记录（待申请）');
             }
-            $st = $c->getStatus();
-            if ($st === SslCertificate::STATUS_REVOKED || $st === SslCertificate::STATUS_ERROR) {
+            $status = $this->getStatus($cert);
+            if ($status === self::STATUS_REVOKED || $status === self::STATUS_ERROR) {
                 return (string) \__('证书管理：异常');
             }
-            if ($st === SslCertificate::STATUS_EXPIRED || $c->isExpired()) {
+            if ($status === self::STATUS_EXPIRED || $this->isExpired($cert)) {
                 return (string) \__('证书管理：已过期');
             }
-            if ($st === SslCertificate::STATUS_PENDING) {
+            if ($status === self::STATUS_PENDING) {
                 return (string) \__('证书管理：申请中');
             }
-            if ($st === SslCertificate::STATUS_ACTIVE && !$c->isExpired()) {
+            if ($status === self::STATUS_ACTIVE && !$this->isExpired($cert)) {
                 return (string) \__('证书管理：有效');
             }
 
@@ -86,47 +93,69 @@ final class WebsiteSslCertificateStatusService
         }
     }
 
-    public function mapToPoolHttpsStatus(?SslCertificate $cert): string
+    public function mapToPoolHttpsStatus(?array $cert): string
     {
-        if ($cert === null || $cert->getCertId() <= 0) {
+        if (!$this->hasCertificateId($cert)) {
             return DomainPool::HTTPS_STATUS_PENDING;
         }
-        $st = $cert->getStatus();
-        if ($st === SslCertificate::STATUS_REVOKED || $st === SslCertificate::STATUS_ERROR) {
+        $status = $this->getStatus($cert);
+        if ($status === self::STATUS_REVOKED || $status === self::STATUS_ERROR) {
             return DomainPool::HTTPS_STATUS_ERROR;
         }
-        if ($st === SslCertificate::STATUS_EXPIRED || $cert->isExpired()) {
+        if ($status === self::STATUS_EXPIRED || $this->isExpired($cert)) {
             return DomainPool::HTTPS_STATUS_EXPIRED;
         }
-        if ($st === SslCertificate::STATUS_PENDING) {
+        if ($status === self::STATUS_PENDING) {
             return DomainPool::HTTPS_STATUS_PENDING;
         }
-        if ($st === SslCertificate::STATUS_ACTIVE && !$cert->isExpired()) {
+        if ($status === self::STATUS_ACTIVE && !$this->isExpired($cert)) {
             return DomainPool::HTTPS_STATUS_VALID;
         }
 
         return DomainPool::HTTPS_STATUS_PENDING;
     }
 
-    public function mapToDomainHttpsStatus(?SslCertificate $cert): string
+    public function mapToDomainHttpsStatus(?array $cert): string
     {
-        if ($cert === null || $cert->getCertId() <= 0) {
+        if (!$this->hasCertificateId($cert)) {
             return Domain::HTTPS_STATUS_PENDING;
         }
-        $st = $cert->getStatus();
-        if ($st === SslCertificate::STATUS_REVOKED || $st === SslCertificate::STATUS_ERROR) {
+        $status = $this->getStatus($cert);
+        if ($status === self::STATUS_REVOKED || $status === self::STATUS_ERROR) {
             return Domain::HTTPS_STATUS_ERROR;
         }
-        if ($st === SslCertificate::STATUS_EXPIRED || $cert->isExpired()) {
+        if ($status === self::STATUS_EXPIRED || $this->isExpired($cert)) {
             return Domain::HTTPS_STATUS_EXPIRED;
         }
-        if ($st === SslCertificate::STATUS_PENDING) {
+        if ($status === self::STATUS_PENDING) {
             return Domain::HTTPS_STATUS_PENDING;
         }
-        if ($st === SslCertificate::STATUS_ACTIVE && !$cert->isExpired()) {
+        if ($status === self::STATUS_ACTIVE && !$this->isExpired($cert)) {
             return Domain::HTTPS_STATUS_VALID;
         }
 
         return Domain::HTTPS_STATUS_PENDING;
+    }
+
+    private function hasCertificateId(?array $cert): bool
+    {
+        return $cert !== null && (int) ($cert['cert_id'] ?? 0) > 0;
+    }
+
+    private function isValidCertificate(?array $cert): bool
+    {
+        return $this->hasCertificateId($cert)
+            && $this->getStatus($cert) === self::STATUS_ACTIVE
+            && !$this->isExpired($cert);
+    }
+
+    private function getStatus(?array $cert): string
+    {
+        return (string) ($cert['status'] ?? '');
+    }
+
+    private function isExpired(?array $cert): bool
+    {
+        return (bool) ($cert['is_expired'] ?? true);
     }
 }

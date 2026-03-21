@@ -4,12 +4,9 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Event\EventsManager;
-use WeShop\Cart\Service\CartService;
-use WeShop\Order\Service\OrderService;
+use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
-use WeShop\Order\Model\OrderItem;
 
 /**
  * 结算服务
@@ -18,78 +15,101 @@ class CheckoutService
 {
     /**
      * 创建订单（从购物车）
-     * 
+     *
      * @param int $customerId 客户ID
      * @param array $checkoutData 结算数据（地址、支付方式等）
      * @return Order
      */
     public function createOrderFromCart(int $customerId, array $checkoutData): Order
     {
-        // 获取购物车商品
-        /** @var CartService $cartService */
-        $cartService = ObjectManager::getInstance(CartService::class);
-        $cartItems = $cartService->getCartItems($customerId);
-        $totals = $cartService->calculateTotals($customerId);
-        
-        if (empty($cartItems)) {
+        $cartItems = w_query('cart', 'getCartItems', [
+            'customer_id' => $customerId,
+        ]);
+        $cartItems = \is_array($cartItems) ? $cartItems : [];
+
+        $totals = w_query('cart', 'calculateTotals', [
+            'customer_id' => $customerId,
+        ]);
+        $totals = \is_array($totals) ? $totals : [];
+
+        if ($cartItems === []) {
             throw new \Exception(__('购物车为空，无法创建订单'));
         }
-        
-        // 创建订单
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        
+
         $orderData = [
             'customer_id' => $customerId,
             'status' => 'pending',
-            'total' => $totals['total'],
+            'total' => (float)($totals['total'] ?? 0),
         ];
-        
-        $order = $orderService->createOrder($orderData);
-        
-        // 创建订单项
-        foreach ($cartItems as $cartItem) {
-            /** @var OrderItem $orderItem */
-            $orderItem = ObjectManager::getInstance(OrderItem::class);
-            $orderItem->clearData()
-                ->setData(OrderItem::schema_fields_ORDER_ID, $order->getId())
-                ->setData(OrderItem::schema_fields_PRODUCT_ID, $cartItem['product_id'] ?? 0)
-                ->setData(OrderItem::schema_fields_PRODUCT_NAME, $cartItem['product']['name'] ?? '')
-                ->setData(OrderItem::schema_fields_PRODUCT_SKU, $cartItem['product']['sku'] ?? '')
-                ->setData(OrderItem::schema_fields_QUANTITY, $cartItem['quantity'] ?? 1)
-                ->setData(OrderItem::schema_fields_PRICE, $cartItem['price'] ?? 0)
-                ->setData(OrderItem::schema_fields_TOTAL, ($cartItem['price'] ?? 0) * ($cartItem['quantity'] ?? 1))
-                ->save();
+
+        $orderSummary = w_query('order', 'createOrder', [
+            'order_data' => $orderData,
+        ]);
+        if (!\is_array($orderSummary) || (int)($orderSummary['order_id'] ?? 0) <= 0) {
+            throw new \Exception(__('订单创建失败'));
         }
-        
-        // 清空购物车
-        $cartService->clearCart($customerId);
-        
-        // 触发订单创建事件
+
+        $orderId = (int)($orderSummary['order_id'] ?? 0);
+        $orderItems = [];
+        foreach ($cartItems as $cartItem) {
+            $product = \is_array($cartItem['product'] ?? null) ? $cartItem['product'] : [];
+            $quantity = (int)($cartItem['quantity'] ?? 1);
+            $price = (float)($cartItem['price'] ?? 0);
+            $orderItems[] = [
+                'product_id' => (int)($cartItem['product_id'] ?? 0),
+                'product_name' => (string)($product['name'] ?? ''),
+                'product_sku' => (string)($product['sku'] ?? ''),
+                'quantity' => $quantity,
+                'price' => $price,
+                'total' => $price * $quantity,
+            ];
+        }
+
+        w_query('order', 'addOrderItems', [
+            'order_id' => $orderId,
+            'items' => $orderItems,
+        ]);
+
+        w_query('cart', 'clearCart', [
+            'customer_id' => $customerId,
+        ]);
+
+        /** @var Order $order */
+        $order = ObjectManager::getInstance(Order::class);
+        $order->load($orderId);
+        if (!$order->getId()) {
+            $order->setData(Order::schema_fields_ID, $orderId)
+                ->setData(Order::schema_fields_increment_id, (string)($orderSummary['increment_id'] ?? ''))
+                ->setData(Order::schema_fields_customer_id, (int)($orderSummary['customer_id'] ?? $customerId))
+                ->setData(Order::schema_fields_status, (string)($orderSummary['status'] ?? 'pending'))
+                ->setData(Order::schema_fields_total, (float)($orderSummary['total'] ?? 0))
+                ->setData(Order::schema_fields_created_at, (string)($orderSummary['created_at'] ?? ''))
+                ->setData(Order::schema_fields_updated_at, (string)($orderSummary['updated_at'] ?? ''));
+        }
+
         EventsManager::getInstance()->dispatch('WeShop_Checkout::order_created', [
             'order' => $order,
             'customer_id' => $customerId,
         ]);
-        
+
         return $order;
     }
-    
+
     /**
      * 验证结算数据
-     * 
+     *
      * @param array $checkoutData 结算数据
      * @return bool
      */
     public function validateCheckoutData(array $checkoutData): bool
     {
-        // 验证必填字段
         $required = ['shipping_address', 'payment_method'];
         foreach ($required as $field) {
             if (empty($checkoutData[$field])) {
                 throw new \Exception(__('结算数据不完整：缺少 %{1}', [$field]));
             }
         }
-        
+
         return true;
     }
 }

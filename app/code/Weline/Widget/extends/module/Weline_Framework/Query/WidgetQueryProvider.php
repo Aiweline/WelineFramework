@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Widget\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Widget\Service\WidgetConfigService;
 use Weline\Widget\Service\WidgetListService;
 use Weline\Widget\Service\WidgetPreviewService;
@@ -13,7 +14,8 @@ class WidgetQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly WidgetListService $listService,
         private readonly WidgetConfigService $configService,
-        private readonly WidgetPreviewService $previewService
+        private readonly WidgetPreviewService $previewService,
+        private readonly ThemePlaceableRegistry $placeableRegistry,
     ) {
     }
 
@@ -25,15 +27,13 @@ class WidgetQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'getAvailableList' => $this->listService->getAvailableList(
+            'getAvailableList' => $this->placeableRegistry->getAvailableList(
                 $params['page_type'] ?? null,
-                $params['filter_options'] ?? null
+                $params['filter_options'] ?? null,
+                null,
+                (string)(($params['filter_options']['area'] ?? null) ?: ($params['area'] ?? 'frontend'))
             ),
-            'getParamDefinitions' => $this->configService->getParamDefinitions(
-                (string)($params['widget_module'] ?? ''),
-                (string)($params['widget_code'] ?? ''),
-                (string)($params['area'] ?? 'frontend')
-            ),
+            'getParamDefinitions' => $this->getParamDefinitions($params),
             'getConfigForm' => $this->configService->renderForm(
                 $params['layout_id'] ?? '',
                 $params['params'] ?? [],
@@ -54,15 +54,37 @@ class WidgetQueryProvider implements QueryProviderInterface
                 $params['params'] ?? [],
                 $params['values'] ?? []
             ),
-            'preview' => $this->previewService->render(
-                (string)($params['widget_module'] ?? ''),
-                (string)($params['widget_code'] ?? ''),
-                $params['config'] ?? [],
-                (string)($params['area'] ?? 'frontend')
-            ),
+            'preview' => $this->renderPreview($params),
             'getRegisteredTypes' => $this->configService->getRegisteredTypes(),
             default => throw new \InvalidArgumentException((string)__('Widget 查询器不支持的 operation：%{1}', $operation)),
         };
+    }
+
+    private function getParamDefinitions(array $params): array
+    {
+        $module = (string)($params['widget_module'] ?? '');
+        $code = (string)($params['widget_code'] ?? '');
+        $area = (string)($params['area'] ?? 'frontend');
+
+        if ($module === 'Weline_Theme' && str_contains($code, '/')) {
+            return $this->placeableRegistry->getParamDefinitions($module, 'theme_component', $code, null, $area);
+        }
+
+        return $this->configService->getParamDefinitions($module, $code, $area);
+    }
+
+    private function renderPreview(array $params): string
+    {
+        $module = (string)($params['widget_module'] ?? '');
+        $code = (string)($params['widget_code'] ?? '');
+        $config = $params['config'] ?? [];
+        $area = (string)($params['area'] ?? 'frontend');
+
+        if ($module === 'Weline_Theme' && str_contains($code, '/')) {
+            return $this->placeableRegistry->renderPreview($module, 'theme_component', $code, is_array($config) ? $config : [], null, $area);
+        }
+
+        return $this->previewService->render($module, $code, is_array($config) ? $config : [], $area);
     }
 
     public function getDescriptor(): array

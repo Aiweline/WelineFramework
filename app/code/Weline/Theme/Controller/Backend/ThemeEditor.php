@@ -15,6 +15,7 @@ use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemeCacheGenerator;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
+use Weline\Theme\Service\ThemePlaceableRegistry;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Theme\Helper\PreviewManager;
@@ -1093,6 +1094,7 @@ class ThemeEditor extends BackendController
         
         $widgetModule = $widgetLayout->getData('widget_module');
         $widgetCode = $widgetLayout->getData('widget_code');
+        $widgetType = $widgetLayout->getData('widget_type') ?: '';
         $area = $widgetLayout->getData('area') ?: 'frontend';
         
         // 通过 Weline_Widget::query 获取参数定义
@@ -1118,7 +1120,7 @@ class ThemeEditor extends BackendController
             ]);
         }
         
-        $identify = ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $area);
+        $identify = $this->resolveThemeConfigIdentify($widgetModule, $widgetType, $widgetCode, $area);
 
         // 以 layout 已保存配置为 base（保证选择器等非翻译字段刷新后回填正确）
         $config = $widgetLayout->getWidgetConfig();
@@ -1134,6 +1136,7 @@ class ThemeEditor extends BackendController
             'data' => [
                 'layout_id' => $layoutId,
                 'widget_module' => $widgetModule,
+                'widget_type' => $widgetType,
                 'widget_code' => $widgetCode,
                 'params' => $params,
                 'config' => $config,
@@ -1181,6 +1184,7 @@ class ThemeEditor extends BackendController
         
         $widgetModule = $widgetLayout->getData('widget_module');
         $widgetCode = $widgetLayout->getData('widget_code');
+        $widgetType = $widgetLayout->getData('widget_type') ?: '';
         $area = $widgetLayout->getData('area') ?: 'frontend';
         
         try {
@@ -1201,7 +1205,7 @@ class ThemeEditor extends BackendController
                 $paramDefs = [];
             }
 
-            $identify = ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $area);
+            $identify = $this->resolveThemeConfigIdentify($widgetModule, $widgetType, $widgetCode, $area);
 
             // 分离路径 key（如 slides.0.title）与普通 key，同时写入翻译存储
             $normalConfig = ThemeData::saveTranslatablePaths($configData, $paramDefs, $identify, $locale);
@@ -1212,10 +1216,10 @@ class ThemeEditor extends BackendController
                 $widgetLayout->save();
 
                 // 普通（非路径、非翻译）参数也写入 ThemeData 以保持兼容
-                ThemeData::setWidgetParams($widgetModule, $widgetCode, $normalConfig, null, $area);
+                $this->persistThemeDefaultConfig($widgetModule, $widgetType, $widgetCode, $normalConfig, null, $area);
             } else {
                 // 特定语言：只写翻译层（普通可翻译字段）
-                ThemeData::setWidgetParams($widgetModule, $widgetCode, $normalConfig, $locale, $area);
+                $this->persistThemeDefaultConfig($widgetModule, $widgetType, $widgetCode, $normalConfig, $locale, $area);
             }
 
             return $this->fetchJson([
@@ -1398,6 +1402,18 @@ class ThemeEditor extends BackendController
      */
     private function buildWidgetPreviewHtml(array $widget): string
     {
+        $widgetModule = (string)($widget['module'] ?? $widget['widget_module'] ?? '');
+        $widgetType = (string)($widget['type'] ?? $widget['widget_type'] ?? '');
+        $widgetCode = (string)($widget['code'] ?? $widget['widget_code'] ?? '');
+        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
+            /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
+            $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
+            $html = $placeableRegistry->renderPreview('Weline_Theme', 'theme_component', $widgetCode, [], null, 'frontend');
+            if ($html !== '') {
+                return $this->sanitizeWidgetPreviewHtml($html);
+            }
+        }
+
         $template = $widget['template'] ?? '';
         if (!$template) {
             $name = $widget['name'] ?? $widget['code'] ?? '';
@@ -1556,7 +1572,46 @@ class ThemeEditor extends BackendController
                 }
             }
         }
+
+        if ($widgetModule === 'Weline_Theme' && str_contains($widgetCode, '/')) {
+            /** @var \Weline\Theme\Service\ThemePlaceableRegistry $placeableRegistry */
+            $placeableRegistry = ObjectManager::getInstance(\Weline\Theme\Service\ThemePlaceableRegistry::class);
+            $definition = $placeableRegistry->find($widgetModule, 'theme_component', $widgetCode, null, 'frontend');
+            if ($definition) {
+                return $definition->toWidgetArray();
+            }
+        }
+
         return null;
+    }
+
+    private function resolveThemeConfigIdentify(string $widgetModule, string $widgetType, string $widgetCode, string $area): string
+    {
+        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
+            /** @var ThemePlaceableRegistry $placeableRegistry */
+            $placeableRegistry = ObjectManager::getInstance(ThemePlaceableRegistry::class);
+            $definition = $placeableRegistry->find($widgetModule, 'theme_component', $widgetCode, null, $area);
+            if ($definition) {
+                return $definition->getMetaIdentify();
+            }
+        }
+
+        return ThemeData::getWidgetIdentify($widgetModule, $widgetCode, $area);
+    }
+
+    private function persistThemeDefaultConfig(string $widgetModule, string $widgetType, string $widgetCode, array $config, ?string $locale, string $area): void
+    {
+        if ($widgetModule === 'Weline_Theme' && ($widgetType === 'theme_component' || str_contains($widgetCode, '/'))) {
+            ThemeData::setParamValues(
+                $this->resolveThemeConfigIdentify($widgetModule, $widgetType, $widgetCode, $area),
+                $config,
+                'default',
+                $locale
+            );
+            return;
+        }
+
+        ThemeData::setWidgetParams($widgetModule, $widgetCode, $config, $locale, $area);
     }
 
     /**
