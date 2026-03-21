@@ -122,7 +122,7 @@ class LayoutSlotRenderer implements ObserverInterface
             $themeId = (int)$urlThemeId;
         } else {
             // 获取当前激活的主题
-            $activeTheme = $this->welineTheme->getActiveTheme();
+            $activeTheme = $this->welineTheme->getActiveTheme('frontend');
             if ($activeTheme) {
                 $themeId = (int)$activeTheme->getId();
             }
