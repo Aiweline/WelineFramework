@@ -11,13 +11,14 @@ Register::register(
     Register::MODULE,
     'GuoLaiRen_PageBuilder',
     __DIR__,
-    '1.0.23',
+    '1.0.31',
     '网站构建器模块 - 提供可视化网站页面构建和管理功能',
     [
         'Weline_Framework',
         'Weline_Admin',
         'Weline_Backend',
-        'Weline_Websites'
+        'Weline_Websites',
+        'Weline_Theme',
     ]
 );
 

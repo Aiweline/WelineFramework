@@ -13,6 +13,7 @@ use Weline\Theme\Helper\Interface\AssetMergerInterface;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Helper\Interface\AssetScannerInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * 主题资源合并助手类
@@ -37,6 +38,8 @@ class AssetMerger implements AssetMergerInterface
      */
     private AssetScannerInterface $assetScanner;
 
+    private ThemeContextService $themeContext;
+
     /**
      * 依赖注入：遵循依赖倒置原则 (DIP)
      * 
@@ -47,11 +50,13 @@ class AssetMerger implements AssetMergerInterface
     public function __construct(
         WelineTheme $welineTheme,
         ThemeChainResolverInterface $themeChainResolver,
-        AssetScannerInterface $assetScanner
+        AssetScannerInterface $assetScanner,
+        ThemeContextService $themeContext,
     ) {
         $this->welineTheme = $welineTheme;
         $this->themeChainResolver = $themeChainResolver;
         $this->assetScanner = $assetScanner;
+        $this->themeContext = $themeContext;
     }
 
     /**
@@ -64,10 +69,11 @@ class AssetMerger implements AssetMergerInterface
      */
     public function mergeAssets(string $assetType, string $area, ?WelineTheme $theme = null): array
     {
-        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        $area = $this->themeContext->normalizeArea($area);
 
         if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme($area);
+            $resolved = $this->themeContext->resolveTheme($area);
+            $theme = $resolved ?? $this->welineTheme->getActiveTheme($area);
         }
 
         // 1. 获取主题继承链（从基础到当前：父主题在前，激活主题在后）
