@@ -130,9 +130,47 @@ $accounts = $accounts ?? [];
 .weline-domain-table td {
     vertical-align: middle;
 }
+.weline-domain-table {
+    min-width: 760px;
+}
 .weline-domain-actions .btn {
     padding: 0.25rem 0.5rem;
     font-size: 0.8rem;
+}
+.weline-domain-summary-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-width: 14rem;
+}
+.weline-domain-summary-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+}
+.weline-domain-summary-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.78rem;
+    color: var(--backend-color-text-secondary, #74788d);
+}
+.weline-domain-summary-code {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.45rem;
+    border-radius: 4px;
+    background: var(--backend-color-bg-secondary, #f8f9fa);
+    color: var(--backend-color-text-primary, #495057);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.78rem;
+    max-width: 100%;
+    word-break: break-all;
+}
+.weline-domain-actions {
+    white-space: nowrap;
 }
 .weline-domain-table .domain-name {
     font-weight: 500;
@@ -414,18 +452,13 @@ $accounts = $accounts ?? [];
                 <th><input type="checkbox" id="weline-domain-select-all" onchange="WelineDomainList.toggleSelectAll()"></th>
                 <th><?= __('域名') ?></th>
                 <th><?= __('服务商') ?></th>
-                <th><?= __('解析状态') ?></th>
-                <th><?= __('解析IP') ?></th>
-                <th><?= __('HTTPS') ?></th>
-                <th><?= __('可建站') ?></th>
-                <th><?= __('已建站') ?></th>
-                <th><?= __('连通性') ?></th>
+                <th><?= __('状态') ?></th>
                 <th class="text-end"><?= __('操作') ?></th>
             </tr>
         </thead>
         <tbody id="weline-domain-list-body">
             <tr>
-                <td colspan="10" class="weline-domain-empty">
+                <td colspan="5" class="weline-domain-empty">
                     <i class="mdi mdi-loading mdi-spin" style="font-size:2rem;"></i>
                     <p class="mt-2 mb-0"><?= __('加载中...') ?></p>
                 </td>
@@ -1515,12 +1548,16 @@ $accounts = $accounts ?? [];
                 httpsText = '<?= __('已过期') ?>';
             }
 
-            var localBadge = item.is_local_server ? '<span class="weline-domain-local-badge ms-1"><?= __('本机') ?></span>' : '';
-            var siteReady = item.site_ready ? '<i class="mdi mdi-check-circle text-success" title="' + (typeof __ !== 'undefined' ? __('可建站') : '可建站') + '"></i>' : '<i class="mdi mdi-close-circle text-muted"></i>';
-            var siteCreated = (item.site_created === 1 || item.site_created === true) ? '<i class="mdi mdi-earth text-info" title="' + (typeof __ !== 'undefined' ? __('已建站') : '已建站') + '"></i>' : '<i class="mdi mdi-earth-off-outline text-muted"></i>';
+            var localBadge = item.is_local_server ? '<span class="weline-domain-local-badge"><?= __('本机') ?></span>' : '';
+            var siteReady = item.site_ready
+                ? '<span class="badge bg-success-subtle text-success"><i class="mdi mdi-check-circle-outline me-1"></i><?= __('可建站') ?></span>'
+                : '<span class="badge bg-secondary-subtle text-secondary"><i class="mdi mdi-clock-outline me-1"></i><?= __('未就绪') ?></span>';
+            var siteCreated = (item.site_created === 1 || item.site_created === true)
+                ? '<span class="badge bg-info-subtle text-info"><i class="mdi mdi-earth me-1"></i><?= __('已建站') ?></span>'
+                : '<span class="badge bg-secondary-subtle text-secondary"><i class="mdi mdi-earth-off me-1"></i><?= __('未建站') ?></span>';
             var connDetail = (item.connectivity_detail || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
             var connTitle = connDetail || (item.connectivity_checked_at ? ('<?= __('检测于') ?> ' + (item.connectivity_checked_at || '')) : '<?= __('待检测') ?>');
-            var connCell = '<span class="text-nowrap" title="' + connTitle + '"><i class="mdi mdi-help-circle-outline text-muted" aria-hidden="true"></i></span>';
+            var connCell = '<span class="badge bg-light text-muted" title="' + connTitle + '"><i class="mdi mdi-radar me-1" aria-hidden="true"></i><?= __('连通性') ?></span>';
 
             // 构建服务商列（三行：注册商、DNS、CDN）
             var registrarName = item.registrar_name || item.account_name || '-';
@@ -1545,17 +1582,27 @@ $accounts = $accounts ?? [];
                     '<span class="weline-domain-provider-badge ' + cdnClass + '">' + cdnName + '</span>' +
                 '</div>' +
             '</div>';
+            var summaryCell = '<div class="weline-domain-summary-cell">' +
+                '<div class="weline-domain-summary-row">' +
+                    '<span class="weline-domain-status-badge ' + resolveClass + '">' + resolveText + '</span>' +
+                    '<span class="weline-domain-status-badge ' + httpsClass + '">' + httpsText + '</span>' +
+                '</div>' +
+                '<div class="weline-domain-summary-meta">' +
+                    '<span class="weline-domain-summary-code">' + (item.resolved_ip || '-') + '</span>' +
+                    localBadge +
+                '</div>' +
+                '<div class="weline-domain-summary-row">' +
+                    siteReady +
+                    siteCreated +
+                    connCell +
+                '</div>' +
+            '</div>';
 
             html += '<tr data-domain-id="' + item.domain_id + '">' +
                 '<td><input type="checkbox" class="weline-domain-checkbox" value="' + item.domain_id + '" data-domain="' + (item.domain || '') + '"></td>' +
                 '<td><span class="domain-name">' + (item.domain || '') + '</span></td>' +
                 '<td>' + providerCell + '</td>' +
-                '<td><span class="weline-domain-status-badge ' + resolveClass + '">' + resolveText + '</span></td>' +
-                '<td>' + (item.resolved_ip || '-') + localBadge + '</td>' +
-                '<td><span class="weline-domain-status-badge ' + httpsClass + '">' + httpsText + '</span></td>' +
-                '<td>' + siteReady + '</td>' +
-                '<td>' + siteCreated + '</td>' +
-                '<td>' + connCell + '</td>' +
+                '<td>' + summaryCell + '</td>' +
                 '<td class="text-end weline-domain-actions">' +
                     '<button type="button" class="btn btn-outline-success btn-sm" title="<?= __('转存域名池') ?>" onclick="WelineDomainList.transferToPool(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-database-export"></i></button> ' +
                     '<button type="button" class="btn btn-outline-info btn-sm" title="<?= __('DNS管理') ?>" onclick="WelineDomainList.showDnsModal(' + item.domain_id + ', \'' + (item.domain || '').replace(/'/g, "\\'") + '\')"><i class="mdi mdi-dns"></i></button> ' +

@@ -252,7 +252,8 @@ class AsyncUpdate extends BaseController
             $countryCode = $country->getData(Countries::schema_fields_CODE);
             
             try {
-                $countryLocales = $i18n->getCountry($countryCode)->getLocales();
+                $country = $i18n->getCountry($countryCode);
+                $countryLocales = (array)($country['locales'] ?? []);
                 
                 foreach ($countryLocales as $localeCode) {
                     $allLocales[] = [
@@ -383,7 +384,8 @@ class AsyncUpdate extends BaseController
             $allLocales = [];
             foreach ($allCountries as $country) {
                 $countryCode = $country->getData(Countries::schema_fields_CODE);
-                $countryLocales = $i18n->getCountry($countryCode)->getLocales();
+                $country = $i18n->getCountry($countryCode);
+                $countryLocales = (array)($country['locales'] ?? []);
                 
                 foreach ($countryLocales as $localeCode) {
                     $allLocales[] = [

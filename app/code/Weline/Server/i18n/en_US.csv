@@ -656,6 +656,8 @@ CPU密集模式,CPU密集模式
 架构,架构
 "使用策略: %{1}","使用策略: %{1}"
 "架构: %{1}","架构: %{1}"
+"每 3 秒刷新","每 3 秒刷新"
+退出,退出
 "Weline Server 状态","Weline Server status"
 没有运行中的服务器实例,没有运行中的服务器实例
 ╔══════════════════════════════════════════════════════════════╗,╔══════════════════════════════════════════════════════════════╗
@@ -687,8 +689,10 @@ unknown,unknown
 "查看 Weline Server 运行状态","View Weline Server status"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
+"Watch 模式：每 3 秒自动刷新，Ctrl+C 退出","Watch 模式：每 3 秒自动刷新，Ctrl+C 退出"
 查看所有实例,"View all instances"
 查看指定实例,"View specific instance"
+"实时监控（watch 模式）","实时监控（watch 模式）"
 "检测到端口 %{1} 被 WLS 进程占用 (PID: %{2})，正在结束…","Port %{1} is in use by WLS process (PID: %{2}); terminating…"
 "使用 server:listing 查看所有实例","使用 server:listing 查看所有实例"
 "停止 Weline Server","停止 Weline Server"

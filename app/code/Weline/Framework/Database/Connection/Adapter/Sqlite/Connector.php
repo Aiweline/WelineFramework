@@ -299,6 +299,16 @@ SELECT CONCAT('ALTER TABLE `', @rebuild_indexer_schema, '`.`', @rebuild_indexer_
         }
     }
 
+    /** @inheritDoc */
+    public function getExistingTables(array $tableNames): array
+    {
+        // SQLite connector 已弃用（构造函数 throw），此处降级为逐表检查
+        return array_values(array_filter(
+            array_map(fn($t) => trim(str_replace(['`', '"'], '', (string) $t)), $tableNames),
+            fn($t) => $t !== '' && $this->tableExist($t)
+        ));
+    }
+
     public function getVersion(): string
     {
         // 查询数据库版本号

@@ -33,13 +33,44 @@ class Status extends CommandAbstract
         // 解析参数
         $instanceName = $this->parseInstanceName($args);
         $showAll = isset($args['all']) || isset($args['a']) || $instanceName === '';
-        
+        $watchMode = isset($args['w']) || isset($args['watch']);
+
+        if ($watchMode) {
+            $this->runWatchMode($instanceName, $showAll);
+            return;
+        }
+
         if ($showAll || ($instanceName === 'default' && !$this->instanceExists('default'))) {
             $this->showAllInstances();
             return;
         }
-        
+
         $this->showInstanceStatus($instanceName);
+    }
+
+    /**
+     * Watch 模式：每 3 秒清屏刷新状态
+     */
+    protected function runWatchMode(string $instanceName, bool $showAll): void
+    {
+        $supportsAnsi = \function_exists('stream_isatty') && \stream_isatty(\STDOUT);
+
+        while (true) {
+            if ($supportsAnsi) {
+                echo "\033[2J\033[H";
+            } else {
+                \strtoupper(\substr(\PHP_OS, 0, 3)) === 'WIN' ? \system('cls') : \system('clear');
+            }
+
+            if ($showAll || ($instanceName === 'default' && !$this->instanceExists('default'))) {
+                $this->showAllInstances();
+            } else {
+                $this->showInstanceStatus($instanceName);
+            }
+
+            echo "\n  [ " . __('每 3 秒刷新') . " | Ctrl+C " . __('退出') . " ]\n";
+            \sleep(3);
+        }
     }
     
     /**
@@ -392,12 +423,14 @@ class Status extends CommandAbstract
             [
                 '[name]' => __('实例名称（默认显示所有实例）'),
                 '-a, --all' => __('显示所有实例'),
+                '-w, --watch' => __('Watch 模式：每 3 秒自动刷新，Ctrl+C 退出'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
             [
                 __('查看所有实例') => 'php bin/w server:status',
                 __('查看指定实例') => 'php bin/w server:status api-server',
+                __('实时监控（watch 模式）') => 'php bin/w server:status -w',
             ]
         );
     }

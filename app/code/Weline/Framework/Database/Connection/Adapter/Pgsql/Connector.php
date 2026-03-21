@@ -370,6 +370,41 @@ SQL;
         }
     }
 
+    /** @inheritDoc */
+    public function getExistingTables(array $tableNames): array
+    {
+        if ($tableNames === []) {
+            return [];
+        }
+        // 清理并归一化表名（去除可能的 schema. 前缀，仅保留裸表名）
+        $clean = [];
+        foreach ($tableNames as $t) {
+            $t = trim(str_replace(['`', '"'], '', (string) $t));
+            if ($t === '') {
+                continue;
+            }
+            [$_schema, $bare] = $this->parseSchemaTable($t);
+            $clean[] = $bare;
+        }
+        $clean = array_values(array_unique($clean));
+        if ($clean === []) {
+            return [];
+        }
+
+        $pdo = $this->getWrappedConnection()->getPdo();
+        try {
+            $placeholders = implode(',', array_fill(0, count($clean), '?'));
+            $sql = "SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public' AND table_name IN ({$placeholders})";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute(array_values($clean));
+            return $stmt->fetchAll(PDO::FETCH_COLUMN, 0) ?: [];
+        } catch (\Throwable) {
+            // 降级为逐表检查
+            return array_values(array_filter($clean, fn($t) => $this->tableExist($t)));
+        }
+    }
+
     public function getVersion(): string
     {
         // 查询数据库版本号
