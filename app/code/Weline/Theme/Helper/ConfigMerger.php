@@ -12,6 +12,7 @@ namespace Weline\Theme\Helper;
 use Weline\Framework\App\Env;
 use Weline\Theme\Helper\Interface\ThemeChainResolverInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * 主题配置合并助手类
@@ -31,6 +32,8 @@ class ConfigMerger
      */
     private ThemeChainResolverInterface $themeChainResolver;
 
+    private ThemeContextService $themeContext;
+
     /**
      * 依赖注入：遵循依赖倒置原则 (DIP)
      * 
@@ -39,10 +42,12 @@ class ConfigMerger
      */
     public function __construct(
         WelineTheme $welineTheme,
-        ThemeChainResolverInterface $themeChainResolver
+        ThemeChainResolverInterface $themeChainResolver,
+        ThemeContextService $themeContext,
     ) {
         $this->welineTheme = $welineTheme;
         $this->themeChainResolver = $themeChainResolver;
+        $this->themeContext = $themeContext;
     }
 
     /**
@@ -55,10 +60,11 @@ class ConfigMerger
      */
     public function mergeConfig(string $configFile, string $area, ?WelineTheme $theme = null): array
     {
-        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        $area = $this->themeContext->normalizeArea($area);
 
         if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme($area);
+            $resolved = $this->themeContext->resolveTheme($area);
+            $theme = $resolved ?? $this->welineTheme->getActiveTheme($area);
         }
 
         $config = [];

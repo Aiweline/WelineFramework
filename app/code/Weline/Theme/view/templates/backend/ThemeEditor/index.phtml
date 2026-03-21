@@ -13,7 +13,7 @@
  * @var array $available_widgets
  */
 
-$theme_id = $this->getData('theme_id') ?: 0;
+$theme_id = (int)($this->getData('theme_id') ?: 0);
 $theme = $this->getData('theme');
 $themes = $this->getData('themes') ?: [];
 $page_type = $this->getData('page_type') ?: 'homepage';
@@ -106,14 +106,14 @@ $getWidgetIcon = function ($type) {
                     <option value=""><?= __('-- 选择主题 --') ?></option>
                     <?php foreach ($themes as $t): 
                         // 支持数组和对象两种格式
-                        $tId = is_array($t) ? ($t['id'] ?? 0) : (is_object($t) ? $t->getId() : 0);
+                        $tId = (int)(is_array($t) ? ($t['id'] ?? 0) : (is_object($t) ? $t->getId() : 0));
                         $tName = is_array($t) ? ($t['name'] ?? '') : (is_object($t) ? ($t->getName() ?? '') : '');
                         $tName = (string)($tName ?? '');
                         $tIsActive = is_array($t) ? ($t['is_active'] ?? false) : (is_object($t) ? $t->getIsActive() : false);
                     ?>
-                        <option value="<?= $tId ?>" <?= $tId == $theme_id ? 'selected' : '' ?>>
+                        <option value="<?= $tId ?>" <?= $tId === $theme_id ? 'selected' : '' ?>>
                             <?= htmlspecialchars($tName) ?>
-                            <?= $tIsActive ? ' ✓' : '' ?>
+                            <?= $tIsActive ? '（已启用）' : '' ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

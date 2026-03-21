@@ -10,45 +10,71 @@
 namespace Weline\Theme\Console\Theme;
 
 use Weline\Framework\Exception\Core;
+use Weline\Framework\Output\Cli\Printing;
+use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 class Active extends AbstractConsole
 {
+    public function __construct(
+        WelineTheme $welineTheme,
+        Printing $printing,
+        private readonly ThemeContextService $themeContext,
+    ) {
+        parent::__construct($welineTheme, $printing);
+    }
+
     public function execute(array $args = [], array $data = [])
     {
-        $theme_name = isset($args[1]) ? $args[1] : '';
-        if ($theme_name) {
+        $theme_name = $args[1] ?? '';
+        if ($theme_name !== '') {
             $theme = $this->welineTheme->load('name', $theme_name);
-            if ($theme->getId()) {
-                $status = $theme->isActive() ? __('已激活') : __('未激活');
-                $this->printing->note(__('当前主题:') . $theme_name);
-                $this->printing->note(__('安装状态:已安装！'));
-                $this->printing->note(__('激活状态:') . $status);
-                if ($theme->isActive()) {
-                    $this->printing->error(__('无需再次激活'));
-                } else {
-                    $this->printing->note(__('正在激活...'));
-                }
-                if (!$theme->isActive()) {
-                    $theme->setIsActive(true);
-                    try {
-                        $theme->save();
-                        $this->printing->success(__('已成功激活主题：') . $theme_name);
-                    } catch (\ReflectionException $e) {
-                        throw $e;
-                    } catch (Core $e) {
-                        throw $e;
-                    }
-                }
-            } else {
+            if (!$theme->getId()) {
                 $this->printing->error(__('当前主题未安装：激活失败！'), __('主题'));
+
+                return;
+            }
+            $areaRaw = isset($args[2]) ? strtolower(trim((string)$args[2])) : '';
+            if ($areaRaw !== '' && !$this->themeContext->isSupportedActivationArea($areaRaw)) {
+                $this->printing->error(__('theme:active 区域参数无效，可选 frontend、backend、global'), __('主题'));
+
+                return;
+            }
+            $activationArea = $this->themeContext->normalizeActivationArea($areaRaw === '' ? 'global' : $areaRaw);
+            $field = $this->themeContext->getActivationField($activationArea);
+            $alreadyActive = (int)$theme->getData($field) === 1;
+            $status = $alreadyActive ? __('已激活') : __('未激活');
+            $this->printing->note(__('当前主题:') . $theme_name);
+            $this->printing->note(__('安装状态:已安装！'));
+            $this->printing->note(__('激活状态:') . $status);
+            if ($alreadyActive) {
+                $this->printing->error(__('无需再次激活'));
+            } else {
+                $this->printing->note(__('正在激活...'));
+            }
+            if (!$alreadyActive) {
+                if ($activationArea === null) {
+                    $theme->setIsActive(true);
+                } else {
+                    $theme->setData($field, 1);
+                }
+                try {
+                    $theme->save();
+                    $this->printing->success(__('已成功激活主题：') . $theme_name);
+                } catch (\ReflectionException $e) {
+                    throw $e;
+                } catch (Core $e) {
+                    throw $e;
+                }
             }
         } else {
-            $theme = $this->welineTheme->getActiveTheme();
-            if ($theme) {
-                $this->printing->success(__('当前主题：%{1}', [$theme->getName()]));
-                $this->printing->success(__('路径：%{1}', [$theme->getPath()]));
-            } else {
-                $this->printing->warning(__('主题'), __('系统未安装任何主题！'));
+            $fe = $this->themeContext->resolveTheme(ThemeContextService::AREA_FRONTEND, null, false);
+            $be = $this->themeContext->resolveTheme(ThemeContextService::AREA_BACKEND, null, false);
+            $this->printing->success(__('theme:active 前台：%{1}', [$fe && $fe->getId() ? $fe->getName() : '-']));
+            $this->printing->success(__('theme:active 后台：%{1}', [$be && $be->getId() ? $be->getName() : '-']));
+            $legacy = $this->welineTheme->getActiveTheme();
+            if ($legacy->getId()) {
+                $this->printing->note(__('theme:active 全局 is_active：%{1}', [$legacy->getName()]));
             }
         }
     }
@@ -68,10 +94,12 @@ class Active extends AbstractConsole
             ],
             [
                 '<主题名>' => '要激活的主题名称（可选，例如：Weline_Default）',
+                '<区域>' => '可选：frontend | backend | global（默认 global，对应 is_active）',
             ],
             [
-                '查看当前激活的主题' => 'php bin/w theme:active',
-                '激活指定主题' => 'php bin/w theme:active Weline_Default',
+                '查看前台/后台激活主题' => 'php bin/w theme:active',
+                '激活指定主题（全局）' => 'php bin/w theme:active Weline_Default',
+                '仅激活前台' => 'php bin/w theme:active Weline_Default frontend',
             ]
         );
     }

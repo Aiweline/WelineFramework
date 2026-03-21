@@ -4,7 +4,15 @@
 - Status: draft
 - Scope: `app/code/GuoLaiRen/PageBuilder`
 - Maintainer: Codex
-- Last Updated: 2026-03-21 14:59
+- Last Updated: 2026-03-21 16:35
+
+## Document map
+
+| 文档 | 用途 |
+|------|------|
+| `dev/ai/plans/AI建站智能体的计划` | 原始计划项说明（愿景与流程叙述，不承载 Codex 统筹内容） |
+| 本文件 | 结构化阶段、能力、风险与任务拆分（Codex 执行依据） |
+| `dev/ai/plans/codex-pagebuilder-ai-site-agent.plan.md` | 从会话恢复的**实现向**待办与进度（模型、渲染、SSE、前后台等） |
 
 ## Goal
 
