@@ -14,6 +14,7 @@ Before doing anything else:
 2. Read `USER.md` — this is who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
+5. Read `dev/ai/codex/ACTIVE.md` if it exists, then create or update the current task record under `dev/ai/codex/tasks/`
 
 Don't ask permission. Just do it.
 
@@ -41,6 +42,10 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
 - "Mental notes" don't survive session restarts. Files do.
 - When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file
+- Every Codex task must have a written progress log in `dev/ai/codex/`
+- At task start: create/update `dev/ai/codex/ACTIVE.md` and a task file in `dev/ai/codex/tasks/YYYY-MM-DD/`
+- During the task: keep the task file updated with progress, decisions, blockers, and next steps
+- At task end: record outcome, changed files, verification, and any resume notes
 - When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
