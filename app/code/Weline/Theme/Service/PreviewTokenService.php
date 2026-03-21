@@ -58,9 +58,10 @@ class PreviewTokenService
      * @param int $themeId 主题ID
      * @param string $pageType 页面类型
      * @param int|null $versionId 版本ID（可选）
+     * @param array $context Normalized preview/editor context payload
      * @return string 生成的 token
      */
-    public function generateToken(int $themeId, string $pageType, ?int $versionId = null): string
+    public function generateToken(int $themeId, string $pageType, ?int $versionId = null, array $context = []): string
     {
         // 生成唯一 token：主题ID + 时间戳 + 随机数
         $token = sprintf(
@@ -76,6 +77,7 @@ class PreviewTokenService
             'theme_id' => $themeId,
             'page_type' => $pageType,
             'version_id' => $versionId,
+            'context' => $context,
             'created_at' => time(),
             'expires_at' => time() + self::TOKEN_TTL,
         ];
@@ -149,6 +151,15 @@ class PreviewTokenService
             'theme_id' => $themeId,
             'page_type' => 'homepage',
             'version_id' => null,
+            'context' => [
+                'frontend_theme_id' => $themeId,
+                'shell' => 'preview',
+                'preview_mode' => 'live',
+                'status' => 'draft',
+                'target_type' => 'layout',
+                'target_value' => 'homepage',
+                'preview_token' => $token,
+            ],
             'created_at' => $createdAt,
             'expires_at' => $now + self::TOKEN_TTL,
             'last_activity' => $now,

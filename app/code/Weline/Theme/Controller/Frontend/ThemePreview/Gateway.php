@@ -17,8 +17,17 @@ class Gateway extends FrontendController
 {
     public function index(): string
     {
-        $themeId = (int)$this->request->getParam('preview_theme', 0);
-        $area = (string)$this->request->getParam('preview_area', 'frontend');
+        $frontendThemeId = (int)$this->request->getParam(
+            'frontend_theme_id',
+            (int)$this->request->getParam('preview_theme', 0)
+        );
+        $backendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
+        $editorArea = (string)$this->request->getParam(
+            'editor_area',
+            (string)$this->request->getParam('preview_area', 'frontend')
+        );
+        $area = $editorArea === 'backend' ? 'backend' : 'frontend';
+        $themeId = $area === 'backend' ? $backendThemeId : $frontendThemeId;
         $autoLogin = $this->request->getParam('auto_login', '1');
         $scope = $this->request->getParam('scope');
         $pageType = (string)$this->request->getParam('page_type', 'homepage');
@@ -39,7 +48,7 @@ class Gateway extends FrontendController
             $pageType,
             $versionId > 0 ? $versionId : null,
             $status,
-            'frontend',
+            $editorArea,
             $previewMode,
         );
 
