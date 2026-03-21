@@ -15,11 +15,13 @@ use Weline\Ai\Model\AiModel;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
-use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\App\Env;
 
 class DesensitizationService
 {
+    private const CONFIG_MODULE = 'GuoLaiRen_Desensitization';
+    private const CONFIG_AREA = 'backend';
+
     private DesensitizationRule $ruleModel;
     private DesensitizationLog $logModel;
     private array $config;
@@ -454,10 +456,7 @@ class DesensitizationService
             
             // 从系统配置加载平台敏感词作为参考
             try {
-                /** @var \Weline\SystemConfig\Model\SystemConfig $sysCfg */
-                $sysCfg = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class);
-                $metaRules = (string)($sysCfg->getConfig('meta_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
-                $googleRules = (string)($sysCfg->getConfig('google_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+                ['meta_rules' => $metaRules, 'google_rules' => $googleRules] = $this->getPlatformPolicyRules();
             } catch (\Throwable $e) {
                 $metaRules = '';
                 $googleRules = '';
@@ -761,6 +760,31 @@ class DesensitizationService
         return $config['desensitization'] ?? [];
     }
 
+    private function getPlatformPolicyRules(): array
+    {
+        return [
+            'meta_rules' => $this->getBackendConfigValue('meta_rules'),
+            'google_rules' => $this->getBackendConfigValue('google_rules'),
+        ];
+    }
+
+    private function getBackendConfigValue(string $key): string
+    {
+        try {
+            $value = w_query('system_config', 'getConfig', [
+                'key' => $key,
+                'module' => self::CONFIG_MODULE,
+                'area' => self::CONFIG_AREA,
+            ]);
+
+            return \is_scalar($value) ? (string) $value : '';
+        } catch (\Throwable $e) {
+            Env::log('desensitization.log', "鑾峰彇绯荤粺閰嶇疆澶辫触: " . $e->getMessage(), 'ERROR');
+
+            return '';
+        }
+    }
+
     /**
      * 获取适配器参数配置
      * 如果系统配置中有保存的参数，使用保存的参数；否则使用适配器默认参数
@@ -772,15 +796,14 @@ class DesensitizationService
     private function getAdapterParams(string $adapterCode, string $adapterType): array
     {
         try {
-            /** @var SystemConfig $systemConfig */
-            $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+            $paramsJson = '';
             
             $configKey = $adapterType === 'desensitization' 
                 ? 'desensitization_adapter_params' 
                 : 'rewrite_adapter_params';
             
             // 获取系统配置中的参数
-            $paramsJson = $systemConfig->getConfig($configKey, 'GuoLaiRen_Desensitization', SystemConfig::area_BACKEND);
+            $paramsJson = $this->getBackendConfigValue($configKey);
             
             Env::log('desensitization.log', "获取适配器参数 - 配置键: " . $configKey . ", 原始值: " . ($paramsJson ?: '空'), 'DEBUG');
             
@@ -844,10 +867,7 @@ class DesensitizationService
             
             // 引入平台规则，指导改写为合规表达
             try {
-                /** @var \Weline\SystemConfig\Model\SystemConfig $sysCfg */
-                $sysCfg = ObjectManager::getInstance(\Weline\SystemConfig\Model\SystemConfig::class);
-                $metaRules = (string)($sysCfg->getConfig('meta_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
-                $googleRules = (string)($sysCfg->getConfig('google_rules', 'GuoLaiRen_Desensitization', \Weline\SystemConfig\Model\SystemConfig::area_BACKEND) ?? '');
+                ['meta_rules' => $metaRules, 'google_rules' => $googleRules] = $this->getPlatformPolicyRules();
             } catch (\Throwable $e) {
                 $metaRules = '';
                 $googleRules = '';

@@ -6,6 +6,7 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Widget\Service\WidgetRegistry;
 
@@ -31,6 +32,8 @@ class SlotRendererService
 {
     private ThemeLayoutService $layoutService;
     private WidgetRegistry $widgetRegistry;
+    private ThemePlaceableRegistryInterface $placeableRegistry;
+    private ThemeComponentRenderer $componentRenderer;
     private Template $template;
 
     // 缓存
@@ -46,10 +49,14 @@ class SlotRendererService
     public function __construct(
         ThemeLayoutService $layoutService,
         WidgetRegistry $widgetRegistry,
+        mixed $placeableRegistry,
+        ThemeComponentRenderer $componentRenderer,
         Template $template
     ) {
         $this->layoutService = $layoutService;
         $this->widgetRegistry = $widgetRegistry;
+        $this->placeableRegistry = $this->resolvePlaceableRegistry($placeableRegistry);
+        $this->componentRenderer = $componentRenderer;
         $this->template = $template;
     }
 
@@ -378,6 +385,41 @@ class SlotRendererService
         $config = $widget['config'] ?? [];
 
         // 检查缓存
+        $definition = $this->placeableRegistry->find($widgetModule, $widgetType, $widgetCode, null, 'frontend');
+        if ($definition) {
+            try {
+                $html = $this->componentRenderer->render($definition, is_array($config) ? $config : [], null, [
+                    'area' => 'frontend',
+                    'preview_mode' => false,
+                ]);
+                if ($layoutId) {
+                    $wrapperAttrs = sprintf(
+                        'data-layout-id="%s" data-widget-code="%s" data-widget-module="%s" data-widget-type="%s"',
+                        htmlspecialchars((string)$layoutId),
+                        htmlspecialchars((string)$widgetCode),
+                        htmlspecialchars((string)$widgetModule),
+                        htmlspecialchars((string)$widgetType)
+                    );
+                    $widgetName = htmlspecialchars((string)($definition->name ?: $widgetCode));
+                    $html = sprintf(
+                        '<div class="widget-wrapper" %s data-widget-name="%s">%s</div>',
+                        $wrapperAttrs,
+                        $widgetName,
+                        $html
+                    );
+                }
+
+                return $html;
+            } catch (\Throwable $throwable) {
+                if (defined('DEV') && DEV) {
+                    return sprintf(
+                        '<div class="widget-render-error" style="color:red;padding:10px;border:1px solid red;">%s</div>',
+                        htmlspecialchars((string)$throwable->getMessage())
+                    );
+                }
+            }
+        }
+
         $cacheKey = $widgetModule . '::' . $widgetCode;
         if (!isset($this->widgetCache[$cacheKey])) {
             $this->widgetCache[$cacheKey] = $this->getWidgetMeta($widgetModule, $widgetCode);
@@ -748,5 +790,13 @@ class SlotRendererService
         libxml_clear_errors();
         
         return $slots;
+    }
+    private function resolvePlaceableRegistry(mixed $placeableRegistry): ThemePlaceableRegistryInterface
+    {
+        if ($placeableRegistry instanceof ThemePlaceableRegistryInterface) {
+            return $placeableRegistry;
+        }
+
+        return ObjectManager::getInstance(ThemePlaceableRegistry::class);
     }
 }

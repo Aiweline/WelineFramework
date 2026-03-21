@@ -28,6 +28,9 @@ class LayoutScanner
      */
     public static function scanLayouts(WelineTheme $theme, string $area = 'frontend', bool $includeDefault = true): array
     {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getLayouts($area, $theme);
+
         $layouts = [];
         $area = strtolower($area);
         
@@ -297,6 +300,14 @@ class LayoutScanner
      */
     public static function scanHeaders(WelineTheme $theme, string $area = 'frontend'): array
     {
+        $partials = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getPartials($area, $theme);
+        $headers = [];
+        foreach ($partials['header'] ?? [] as $partial) {
+            $headers[] = $partial['value'];
+        }
+        return $headers;
+
         $headers = [];
         $area = strtolower($area);
         
@@ -425,6 +436,9 @@ class LayoutScanner
      */
     public static function scanColors(WelineTheme $theme, string $area = 'frontend'): array
     {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getColors($area, $theme);
+
         $colors = [];
         $area = strtolower($area);
         
@@ -641,6 +655,9 @@ class LayoutScanner
      */
     public static function scanPartials(WelineTheme $theme, string $area = 'frontend'): array
     {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getPartials($area, $theme);
+
         $partials = [];
         $area = strtolower($area);
         
@@ -820,6 +837,9 @@ class LayoutScanner
      */
     public static function scanVariables(WelineTheme $theme, string $area = 'frontend'): array
     {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getVariables($area, $theme);
+
         $variables = [];
         $area = strtolower($area);
         
@@ -1003,6 +1023,9 @@ class LayoutScanner
      */
     public static function scanComponents(WelineTheme $theme, string $area = 'frontend'): array
     {
+        return \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeResourceCatalog::class)
+            ->getComponents($area, $theme);
+
         $components = [];
         $area = strtolower($area);
         
