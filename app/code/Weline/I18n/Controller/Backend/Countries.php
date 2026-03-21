@@ -125,7 +125,7 @@ class Countries extends BaseController
         return $this->redirect('*/backend/countries');
     }
 
-    public function install()
+    public function postInstall()
     {
         if (!$this->request->isPost()) {
             Message::error(__('请求错误！'));

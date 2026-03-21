@@ -3,7 +3,7 @@ name: Codex Recovered Plan - I18n Country Lifecycle
 overview: Recover the unfinished country and locale lifecycle work from Codex session logs.
 source_session: C:\Users\17142\.codex\sessions\2026\03\21\rollout-2026-03-21T09-38-12-019d0e0a-f4db-7e80-9dd3-91745f18e8b6.jsonl
 source_timestamp: 2026-03-21T04:22:23.130Z
-status: pending
+status: in_progress
 isProject: false
 todos:
   - id: codex-i18n-country-lifecycle-1
@@ -11,13 +11,13 @@ todos:
     status: in_progress
   - id: codex-i18n-country-lifecycle-2
     content: Correct POST route semantics for Countries, Countries/Locales, and Localization and sync template requests
-    status: pending
+    status: completed
   - id: codex-i18n-country-lifecycle-3
     content: Rework country and locale admin templates with one-click or batch actions and friendly confirmation prompts
-    status: pending
+    status: completed
   - id: codex-i18n-country-lifecycle-4
     content: Complete i18n copy, remove mistakenly created files, and finish syntax or route validation
-    status: pending
+    status: completed
 ---
 
 # Codex Recovered Plan - I18n Country Lifecycle
