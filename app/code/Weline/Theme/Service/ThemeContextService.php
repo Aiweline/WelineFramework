@@ -20,12 +20,13 @@ class ThemeContextService
 
     public function __construct(
         private readonly WelineTheme $welineTheme,
+        private readonly ?PreviewContextService $previewContextService = null,
     ) {
     }
 
     public function normalizeArea(?string $area, string $default = self::AREA_FRONTEND): string
     {
-        $area = strtolower(trim((string)$area));
+        $area = \strtolower(\trim((string)$area));
 
         return $area === self::AREA_BACKEND ? self::AREA_BACKEND
             : ($area === self::AREA_FRONTEND ? self::AREA_FRONTEND : $default);
@@ -33,7 +34,7 @@ class ThemeContextService
 
     public function isSupportedActivationArea(?string $area): bool
     {
-        $area = strtolower(trim((string)$area));
+        $area = \strtolower(\trim((string)$area));
 
         return $area === ''
             || $area === self::AREA_GLOBAL
@@ -43,7 +44,7 @@ class ThemeContextService
 
     public function normalizeActivationArea(?string $area): ?string
     {
-        $area = strtolower(trim((string)$area));
+        $area = \strtolower(\trim((string)$area));
 
         return match ($area) {
             self::AREA_FRONTEND => self::AREA_FRONTEND,
@@ -68,17 +69,17 @@ class ThemeContextService
         $scope = self::DEFAULT_SCOPE;
 
         if ($scopeParam !== null) {
-            $scopeParam = trim($scopeParam);
+            $scopeParam = \trim($scopeParam);
             if ($scopeParam !== '') {
-                if (str_contains($scopeParam, '/')) {
-                    [$maybeArea, $rest] = explode('/', $scopeParam, 2);
+                if (\str_contains($scopeParam, '/')) {
+                    [$maybeArea, $rest] = \explode('/', $scopeParam, 2);
                     if ($maybeArea !== '') {
                         $area = $this->normalizeArea($maybeArea, $area);
                     }
                     $scopeParam = $rest;
                 }
 
-                $scopeParam = trim($scopeParam);
+                $scopeParam = \trim($scopeParam);
                 if ($scopeParam !== '') {
                     $scope = $scopeParam;
                 }
@@ -95,20 +96,20 @@ class ThemeContextService
         }
 
         $area = $this->normalizeArea($area);
-        $scopeParam = trim($scopeParam);
+        $scopeParam = \trim($scopeParam);
         if ($scopeParam === '') {
             return self::DEFAULT_SCOPE;
         }
 
-        if (str_contains($scopeParam, '/')) {
-            [$maybeArea, $rest] = explode('/', $scopeParam, 2);
+        if (\str_contains($scopeParam, '/')) {
+            [$maybeArea, $rest] = \explode('/', $scopeParam, 2);
             if ($maybeArea !== '' && $this->normalizeArea($maybeArea, $area) !== $area) {
                 return null;
             }
             $scopeParam = $rest;
         }
 
-        $scopeParam = trim($scopeParam);
+        $scopeParam = \trim($scopeParam);
 
         return $scopeParam !== '' ? $scopeParam : self::DEFAULT_SCOPE;
     }
@@ -117,13 +118,22 @@ class ThemeContextService
     {
         $area = $this->normalizeArea($area);
 
-        if ($scopeParam !== null && trim($scopeParam) !== '') {
+        if ($scopeParam !== null && \trim($scopeParam) !== '') {
             return $this->extractScopeForArea($area, $scopeParam) ?? self::DEFAULT_SCOPE;
+        }
+
+        try {
+            $previewContext = $this->getPreviewContextService()->getCurrentContext();
+            $previewScope = $this->extractScopeForArea($area, (string)($previewContext['scope'] ?? ''));
+            if ($previewScope !== null && \trim($previewScope) !== '') {
+                return $previewScope;
+            }
+        } catch (\Throwable) {
         }
 
         if (PreviewManager::isPreviewMode()) {
             $previewScope = PreviewManager::getPreviewScope($area);
-            if ($previewScope !== null && trim($previewScope) !== '') {
+            if ($previewScope !== null && \trim($previewScope) !== '') {
                 return $this->extractScopeForArea($area, $previewScope) ?? self::DEFAULT_SCOPE;
             }
         }
@@ -133,7 +143,7 @@ class ThemeContextService
             $requestScope = $request->getParam('scope_' . $area) ?? $request->getParam('scope');
             $resolvedScope = $this->extractScopeForArea(
                 $area,
-                is_scalar($requestScope) ? (string)$requestScope : null
+                \is_scalar($requestScope) ? (string)$requestScope : null
             );
             if ($resolvedScope !== null) {
                 return $resolvedScope;
@@ -146,7 +156,7 @@ class ThemeContextService
     public function formatScopePath(string $area, string $scope): string
     {
         $area = $this->normalizeArea($area);
-        $scope = trim($scope) !== '' ? trim($scope) : self::DEFAULT_SCOPE;
+        $scope = \trim($scope) !== '' ? \trim($scope) : self::DEFAULT_SCOPE;
 
         return $area . '/' . $scope;
     }
@@ -162,7 +172,7 @@ class ThemeContextService
             $formatted[] = $this->formatScopePath($area, self::DEFAULT_SCOPE);
         }
 
-        return array_values(array_unique($formatted));
+        return \array_values(\array_unique($formatted));
     }
 
     public function getDirectActiveTheme(?string $area = null): ?WelineTheme
@@ -204,53 +214,62 @@ class ThemeContextService
     public function themeSupportsArea(WelineTheme $theme, string $area): bool
     {
         $area = $this->normalizeArea($area);
-        $originPath = trim((string)$theme->getOriginPath(), '/\\');
+        $originPath = \trim((string)$theme->getOriginPath(), '/\\');
         if ($originPath === '') {
             return false;
         }
 
-        $basePath = rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . DS . str_replace(['/', '\\'], DS, $originPath);
+        $basePath = \rtrim(Env::path_THEME_DESIGN_DIR, '/\\') . \DIRECTORY_SEPARATOR . \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $originPath);
 
-        return is_dir($basePath . DS . $area)
-            || is_dir($basePath . DS . 'view' . DS . 'theme' . DS . $area);
+        return \is_dir($basePath . \DIRECTORY_SEPARATOR . $area)
+            || \is_dir($basePath . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR . 'theme' . \DIRECTORY_SEPARATOR . $area)
+            || \is_dir($basePath . \DIRECTORY_SEPARATOR . 'theme' . \DIRECTORY_SEPARATOR . $area);
     }
 
     private function resolvePreviewTheme(string $area): ?WelineTheme
     {
         $previewThemeId = 0;
-        $previewThemeArea = '';
-        $previewThemeAreaFromRequest = '';
 
-        $request = $this->getRequest();
-        if ($request) {
-            $previewThemeId = (int)$request->getParam('preview_theme', 0);
-            $previewThemeAreaFromRequest = $this->normalizeArea(
-                (string)$request->getParam('preview_area', $area),
-                $area
-            );
+        try {
+            $previewThemeId = $this->getPreviewContextService()->getThemeIdForArea($area, null, false);
+        } catch (\Throwable) {
+            $previewThemeId = 0;
         }
 
-        $session = $this->getSession();
         if (!$previewThemeId) {
-            if ($session) {
-                $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
-                $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+            $previewThemeArea = '';
+            $previewThemeAreaFromRequest = '';
+
+            $request = $this->getRequest();
+            if ($request) {
+                $previewThemeId = (int)$request->getParam('preview_theme', 0);
+                $previewThemeAreaFromRequest = $this->normalizeArea(
+                    (string)$request->getParam('preview_area', $area),
+                    $area
+                );
             }
-        } else {
-            // URL 明确带 preview_theme 时，优先使用请求上下文 area，避免被历史 session area 干扰
-            $previewThemeArea = $previewThemeAreaFromRequest;
-        }
 
-        if (!$previewThemeId) {
-            return null;
-        }
+            $session = $this->getSession();
+            if (!$previewThemeId) {
+                if ($session) {
+                    $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
+                    $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
+                }
+            } else {
+                $previewThemeArea = $previewThemeAreaFromRequest;
+            }
 
-        if ($previewThemeArea === '') {
-            $previewThemeArea = $area;
-        }
+            if (!$previewThemeId) {
+                return null;
+            }
 
-        if ($previewThemeArea !== $area) {
-            return null;
+            if ($previewThemeArea === '') {
+                $previewThemeArea = $area;
+            }
+
+            if ($previewThemeArea !== $area) {
+                return null;
+            }
         }
 
         $previewTheme = $this->newThemeModel();
@@ -284,5 +303,16 @@ class ThemeContextService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    private function getPreviewContextService(): PreviewContextService
+    {
+        if ($this->previewContextService) {
+            return $this->previewContextService;
+        }
+
+        /** @var PreviewContextService $service */
+        $service = ObjectManager::getInstance(PreviewContextService::class);
+        return $service;
     }
 }
