@@ -2378,14 +2378,6 @@ class ServiceOrchestrator
      */
     private function isImperialIpcCommand(string $action, array $msg): bool
     {
-        if ($action === ControlMessage::ACTION_RELOAD) {
-            return \in_array(
-                (string)($msg['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE),
-                [ControlMessage::RELOAD_TYPE_CODE, ControlMessage::RELOAD_TYPE_FORCE],
-                true
-            );
-        }
-
         return \in_array($action, [
             ControlMessage::ACTION_STOP,
             ControlMessage::ACTION_RELOAD_WAIT,
@@ -3681,20 +3673,12 @@ class ServiceOrchestrator
             case ControlMessage::ACTION_RELOAD:
                 $type = (string)($msg['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
                 if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Reload initiated'));
                     $this->broadcastCacheClear();
+                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Cache clear broadcast sent'));
                     break;
                 }
-                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_RELOAD);
-                $snap = $this->ipcImperialEpoch;
-                try {
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Reload initiated'));
-                    $this->reloadAll($type, $snap);
-                } finally {
-                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
-                        $this->ipcReleaseExclusive();
-                    }
-                }
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, ['async' => true], 'Reload initiated'));
+                $this->reloadAll($type);
                 break;
 
             case ControlMessage::ACTION_RELOAD_WAIT:
@@ -3740,8 +3724,8 @@ class ServiceOrchestrator
                 break;
 
             case ControlMessage::ACTION_SSL_CERT_RELOAD:
-                $sslReloadDomains = isset($message['domains']) && \is_array($message['domains'])
-                    ? $message['domains']
+                $sslReloadDomains = isset($msg['domains']) && \is_array($msg['domains'])
+                    ? $msg['domains']
                     : [];
                 $this->broadcastSslCertReload($sslReloadDomains);
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'SSL cert reload broadcast sent'));

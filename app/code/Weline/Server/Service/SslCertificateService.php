@@ -4295,7 +4295,8 @@ CNF;
         
         w_log_debug('[SslCertificateService] 证书映射文件已重新生成，包含 ' . \count($map) . ' 个域名');
 
-        // 通知所有 Worker 热重载 SNI 证书映射（无需重启即可生效新证书）
-        MasterProcess::sendSslCertReloadCommand('default');
+        // 通知所有运行中的实例热重载 SNI 证书映射（无需重启即可生效新证书）
+        ObjectManager::getInstance(\Weline\Server\Service\Control\BroadcastControlDispatchService::class)
+            ->reloadSslCert();
     }
 }
