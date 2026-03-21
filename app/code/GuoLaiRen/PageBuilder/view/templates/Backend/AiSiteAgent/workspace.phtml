@@ -1,0 +1,778 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession|null $session
+ * @var string $scope_preview
+ * @var list<array{event_id?: int, event_type: string, payload: array<string, mixed>, create_time: string}> $events
+ * @var string $preview_full_url
+ * @var list<array{value: string, label: string}> $stage_options
+ * @var string $stream_sse_path
+ * @var int $last_event_id
+ */
+
+$session = $this->getData('session');
+$scope_preview = (string) ($this->getData('scope_preview') ?? '{}');
+$events = $this->getData('events') ?? [];
+$backUrl = $this->getBackendUrl('*/backend/aiSiteAgent/index');
+$preview_full_url = (string) ($this->getData('preview_full_url') ?? '');
+$stage_options = $this->getData('stage_options') ?? [];
+$stream_sse_path = (string) ($this->getData('stream_sse_path') ?? 'pagebuilder/backend/aiSiteAgent/stream-sse');
+$last_event_id = (int) ($this->getData('last_event_id') ?? 0);
+
+if (!$session instanceof \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession) {
+    return;
+}
+
+$publicId = $session->getPublicId();
+$mergeScopeUrl = $this->getBackendUrl('*/backend/aiSiteAgent/post-merge-scope');
+$replaceScopeUrl = $this->getBackendUrl('*/backend/aiSiteAgent/post-replace-scope');
+$setStageUrl = $this->getBackendUrl('*/backend/aiSiteAgent/post-set-stage');
+$bindLinksUrl = $this->getBackendUrl('*/backend/aiSiteAgent/post-bind-links');
+$stateJsonUrl = $this->getBackendUrl('*/backend/aiSiteAgent/get-state-json', ['public_id' => $publicId]);
+$streamBaseUrl = $this->getBackendUrl($stream_sse_path);
+$ai_module_available = (bool) ($this->getData('ai_module_available') ?? false);
+$query_domain_status_url = (string) ($this->getData('query_domain_status_url') ?? '');
+$ai_generate_brief_url = (string) ($this->getData('ai_generate_brief_url') ?? '');
+$publish_check_url = (string) ($this->getData('publish_check_url') ?? '');
+$scope = $this->getData('scope');
+$scope = \is_array($scope) ? $scope : [];
+$wizard_links = $this->getData('wizard_links');
+$wizard_links = \is_array($wizard_links) ? $wizard_links : [];
+$currentStage = $session->getStage();
+
+$wv = static function (array $sc, string $key, string $default = ''): string {
+    $v = $sc[$key] ?? $default;
+    return \is_string($v) ? $v : (\is_scalar($v) ? (string) $v : $default);
+};
+$pageTypesStr = '';
+if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
+    $pageTypesStr = \implode(', ', \array_map(static fn($x) => (string) $x, $scope['page_types']));
+} elseif (isset($scope['page_types']) && \is_string($scope['page_types'])) {
+    $pageTypesStr = $scope['page_types'];
+}
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0">
+                <i class="mdi mdi-clipboard-text-outline me-1"></i>
+                <?= htmlspecialchars(__('AI 建站会话'), ENT_QUOTES, 'UTF-8') ?>
+            </h4>
+            <div class="d-flex gap-2 flex-wrap">
+                <a class="btn btn-soft-info btn-sm" href="<?= htmlspecialchars($stateJsonUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                    <i class="mdi mdi-code-json me-1"></i>
+                    <lang>状态 JSON</lang>
+                </a>
+                <?php if ($preview_full_url !== '') { ?>
+                    <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars($preview_full_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                        <i class="mdi mdi-open-in-new me-1"></i>
+                        <lang>全页预览</lang>
+                    </a>
+                <?php } ?>
+                <a href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-soft-secondary btn-sm">
+                    <i class="mdi mdi-arrow-left me-1"></i>
+                    <lang>返回入口</lang>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if ($preview_full_url === '') { ?>
+    <div class="alert alert-info mb-0" role="alert">
+        <?= htmlspecialchars(__('在向导「可视化」步骤填写预览页面 ID，并绑定 weline_theme_id 后即可使用全页预览。'), ENT_QUOTES, 'UTF-8') ?>
+    </div>
+<?php } ?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card border-primary border-opacity-25 shadow-sm mb-3">
+            <div class="card-header bg-primary bg-opacity-10 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5 class="card-title mb-0">
+                    <i class="mdi mdi-map-marker-path me-1"></i>
+                    <lang>建站向导</lang>
+                </h5>
+                <span class="text-muted small"><lang>按阶段填写，数据写入会话 scope，可随时在下方「高级」中查看 JSON。</lang></span>
+            </div>
+            <div class="card-body">
+                <ul class="nav nav-pills flex-wrap gap-1 mb-3 pb-ai-wizard-nav" role="tablist">
+                    <?php
+                    $wizStages = [
+                        'brief' => __('向导：简报'),
+                        'domain' => __('向导：域名'),
+                        'domain_wait' => __('向导：等域名'),
+                        'virtual_theme' => __('向导：虚拟主题'),
+                        'page_types' => __('向导：页面类型'),
+                        'content' => __('向导：内容'),
+                        'visual_edit' => __('向导：可视化'),
+                        'publish' => __('向导：发布'),
+                    ];
+                    foreach ($wizStages as $st => $lab) {
+                        $active = ($st === $currentStage) ? ' active' : '';
+                        ?>
+                        <li class="nav-item" role="presentation">
+                            <button type="button" class="nav-link<?= $active ?> pb-ai-wizard-tab" data-wizard-stage="<?= htmlspecialchars($st, ENT_QUOTES, 'UTF-8') ?>">
+                                <?= htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') ?>
+                            </button>
+                        </li>
+                    <?php } ?>
+                </ul>
+
+                <div class="pb-ai-wizard-panels">
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'brief' ? '' : ' d-none' ?>" data-wizard-panel="brief">
+                        <h6 class="text-primary"><lang>站点简报</lang></h6>
+                        <p class="text-muted small"><lang>描述品牌与建站目标，供后续 AI 与人工参考。</lang></p>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-site-title"><lang>站点标题</lang></label>
+                            <input type="text" class="form-control" id="wiz-site-title" value="<?= htmlspecialchars($wv($scope, 'site_title'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-site-tagline"><lang>一句话定位</lang></label>
+                            <input type="text" class="form-control" id="wiz-site-tagline" value="<?= htmlspecialchars($wv($scope, 'site_tagline'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-brief-desc"><lang>详细需求</lang></label>
+                            <textarea class="form-control" id="wiz-brief-desc" rows="4" placeholder="<?= htmlspecialchars(__('产品、受众、风格、必做页面等'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($wv($scope, 'brief_description', $wv($scope, 'user_description')), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <?php if ($ai_module_available) { ?>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-soft-info btn-sm" id="pb-ai-gen-brief">
+                                    <i class="mdi mdi-robot-outline me-1"></i>
+                                    <lang>AI 生成简报</lang>
+                                </button>
+                                <span class="text-muted small ms-2"><lang>根据「详细需求」调用模型，自动填充标题与定位（可先保存或直接使用当前输入框内容）。</lang></span>
+                            </div>
+                        <?php } else { ?>
+                            <p class="text-muted small mb-3"><lang>未检测到 Weline_Ai 模块，AI 生成简报不可用。</lang></p>
+                        <?php } ?>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="brief"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="brief"><lang>并设为当前阶段</lang></button>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'domain' ? '' : ' d-none' ?>" data-wizard-panel="domain">
+                        <h6 class="text-primary"><lang>域名与基础设施</lang></h6>
+                        <p class="text-muted small"><lang>在此记录目标域名；购买与解析请使用下方快捷入口。</lang></p>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-target-domain"><lang>目标域名</lang></label>
+                            <input type="text" class="form-control font-monospace" id="wiz-target-domain" placeholder="example.com" value="<?= htmlspecialchars($wv($scope, 'target_domain'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-domain-notes"><lang>备注</lang></label>
+                            <textarea class="form-control" id="wiz-domain-notes" rows="2"><?= htmlspecialchars($wv($scope, 'domain_notes'), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="domain"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="domain"><lang>并设为当前阶段</lang></button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-query-domain">
+                                <i class="mdi mdi-dns me-1"></i>
+                                <lang>查询域名状态</lang>
+                            </button>
+                        </div>
+                        <pre id="pb-ai-domain-status-out" class="bg-light p-2 rounded small mb-3 font-monospace d-none" style="max-height:220px;overflow:auto;"></pre>
+                        <div class="d-flex flex-wrap gap-2">
+                            <?php if (!empty($wizard_links['quick_build_wizard'])) { ?>
+                                <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['quick_build_wizard'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>快速建站向导</lang></a>
+                            <?php } ?>
+                            <?php if (!empty($wizard_links['domain_management'])) { ?>
+                                <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['domain_management'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>域名管理</lang></a>
+                            <?php } ?>
+                            <?php if (!empty($wizard_links['site_builder_agent'])) { ?>
+                                <a class="btn btn-soft-info btn-sm" href="<?= htmlspecialchars((string) $wizard_links['site_builder_agent'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>建站智能体</lang></a>
+                            <?php } ?>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'domain_wait' ? '' : ' d-none' ?>" data-wizard-panel="domain_wait">
+                        <h6 class="text-primary"><lang>等待域名就绪</lang></h6>
+                        <p class="text-muted"><lang>DNS 与证书生效可能需要数分钟至数小时。可开启右侧 SSE 监听后续事件，或前往域名管理查看状态。</lang></p>
+                        <div class="d-flex flex-wrap gap-2 mb-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-query-domain-wait">
+                                <i class="mdi mdi-refresh me-1"></i>
+                                <lang>刷新域名状态</lang>
+                            </button>
+                            <button type="button" class="btn btn-outline-info btn-sm" id="pb-ai-auto-domain-toggle" data-running="0">
+                                <i class="mdi mdi-timer-outline me-1"></i>
+                                <lang>自动轮询（10秒）</lang>
+                            </button>
+                            <?php if (!empty($wizard_links['domain_management'])) { ?>
+                                <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['domain_management'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>域名管理</lang></a>
+                            <?php } ?>
+                        </div>
+                        <pre id="pb-ai-domain-status-out-wait" class="bg-light p-2 rounded small font-monospace d-none" style="max-height:220px;overflow:auto;"></pre>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'virtual_theme' ? '' : ' d-none' ?>" data-wizard-panel="virtual_theme">
+                        <h6 class="text-primary"><lang>虚拟主题</lang></h6>
+                        <p class="text-muted small"><lang>将 Weline 主题层 ID 绑定到本会话（右侧「绑定」或主题模块生成后填入）。虚拟部件随该主题解析。</lang></p>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-theme-hint"><lang>主题备注</lang></label>
+                            <textarea class="form-control" id="wiz-theme-hint" rows="2" placeholder="<?= htmlspecialchars(__('风格关键词、参考站等'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($wv($scope, 'virtual_theme_notes'), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="virtual_theme"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="virtual_theme"><lang>并设为当前阶段</lang></button>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'page_types' ? '' : ' d-none' ?>" data-wizard-panel="page_types">
+                        <h6 class="text-primary"><lang>页面类型</lang></h6>
+                        <p class="text-muted small"><lang>逗号分隔，例如：</lang> <code>home, about, contact, blog</code></p>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-page-types"><lang>类型列表</lang></label>
+                            <input type="text" class="form-control font-monospace" id="wiz-page-types" value="<?= htmlspecialchars($pageTypesStr, ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="page_types"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="page_types"><lang>并设为当前阶段</lang></button>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'content' ? '' : ' d-none' ?>" data-wizard-panel="content">
+                        <h6 class="text-primary"><lang>内容规划</lang></h6>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-content-notes"><lang>文案与模块要点</lang></label>
+                            <textarea class="form-control" id="wiz-content-notes" rows="4"><?= htmlspecialchars($wv($scope, 'content_notes'), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="content"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="content"><lang>并设为当前阶段</lang></button>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-3<?= $currentStage === 'visual_edit' ? '' : ' d-none' ?>" data-wizard-panel="visual_edit">
+                        <h6 class="text-primary"><lang>可视化与预览</lang></h6>
+                        <p class="text-muted small"><lang>填写用于全页预览的页面 ID（须已绑定 weline_theme_id）。</lang></p>
+                        <div class="mb-2">
+                            <label class="form-label" for="wiz-preview-page-id"><lang>预览页面 ID</lang></label>
+                            <input type="number" class="form-control" id="wiz-preview-page-id" min="0" value="<?= (int) ($scope['preview_page_id'] ?? 0) > 0 ? (int) $scope['preview_page_id'] : '' ?>">
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-primary btn-sm pb-ai-wiz-save" data-wizard-save="visual_edit"><lang>保存本步</lang></button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="visual_edit"><lang>并设为当前阶段</lang></button>
+                            <?php if (!empty($wizard_links['page_builder'])) { ?>
+                                <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['page_builder'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>网站构建器</lang></a>
+                            <?php } ?>
+                        </div>
+                    </div>
+
+                    <div class="pb-ai-wizard-panel border rounded p-3 mb-0<?= $currentStage === 'publish' ? '' : ' d-none' ?>" data-wizard-panel="publish">
+                        <h6 class="text-primary"><lang>发布检查</lang></h6>
+                        <ul class="small text-muted mb-3">
+                            <li><lang>域名解析与 HTTPS 是否就绪</lang></li>
+                            <li><lang>站点与页面是否已创建并挂载</lang></li>
+                            <li><lang>预览与正式环境主题 ID 一致</lang></li>
+                        </ul>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-outline-secondary btn-sm pb-ai-wiz-apply-stage" data-stage="publish"><lang>标记为当前阶段</lang></button>
+                            <button type="button" class="btn btn-primary btn-sm" id="pb-ai-publish-check">
+                                <i class="mdi mdi-check-decagram-outline me-1"></i>
+                                <lang>执行发布前检查</lang>
+                            </button>
+                            <?php if (!empty($wizard_links['website_management'])) { ?>
+                                <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['website_management'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>网站列表</lang></a>
+                            <?php } ?>
+                            <?php if (!empty($wizard_links['quick_build_wizard'])) { ?>
+                                <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars((string) $wizard_links['quick_build_wizard'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>快速建站向导</lang></a>
+                            <?php } ?>
+                        </div>
+                        <pre id="pb-ai-publish-check-out" class="bg-light p-2 rounded small mb-0 mt-2 font-monospace d-none" style="max-height:220px;overflow:auto;"></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><lang>会话状态</lang></h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-4 text-muted"><lang>令牌</lang></dt>
+                    <dd class="col-sm-8 font-monospace small text-break"><?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8') ?></dd>
+                    <dt class="col-sm-4 text-muted"><lang>当前阶段</lang></dt>
+                    <dd class="col-sm-8"><code id="pb-ai-display-stage"><?= htmlspecialchars($session->getStage(), ENT_QUOTES, 'UTF-8') ?></code></dd>
+                    <dt class="col-sm-4 text-muted"><lang>发布状态</lang></dt>
+                    <dd class="col-sm-8"><code><?= htmlspecialchars($session->getPublishStatus(), ENT_QUOTES, 'UTF-8') ?></code></dd>
+                    <dt class="col-sm-4 text-muted"><lang>站点 ID</lang></dt>
+                    <dd class="col-sm-8" id="pb-ai-display-website"><?= (int) $session->getWebsiteId() ?></dd>
+                    <dt class="col-sm-4 text-muted"><lang>主题 ID</lang></dt>
+                    <dd class="col-sm-8" id="pb-ai-display-theme"><?= (int) $session->getWelineThemeId() ?></dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><lang>操作</lang></h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label" for="pb-ai-stage-select"><lang>阶段</lang></label>
+                    <div class="input-group">
+                        <select class="form-select" id="pb-ai-stage-select">
+                            <?php foreach ($stage_options as $opt) {
+                                $v = (string) ($opt['value'] ?? '');
+                                $sel = $v === $session->getStage() ? ' selected' : '';
+                                ?>
+                                <option value="<?= htmlspecialchars($v, ENT_QUOTES, 'UTF-8') ?>"<?= $sel ?>><?= htmlspecialchars((string) ($opt['label'] ?? $v), ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php } ?>
+                        </select>
+                        <button type="button" class="btn btn-outline-primary" id="pb-ai-save-stage">
+                            <lang>保存阶段</lang>
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label"><lang>绑定站点 / 主题</lang></label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input type="number" class="form-control" id="pb-ai-bind-website" min="0" placeholder="<?= htmlspecialchars(__('站点 ID'), ENT_QUOTES, 'UTF-8') ?>" value="<?= (int) $session->getWebsiteId() > 0 ? (int) $session->getWebsiteId() : '' ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <input type="number" class="form-control" id="pb-ai-bind-theme" min="0" placeholder="<?= htmlspecialchars(__('主题 ID'), ENT_QUOTES, 'UTF-8') ?>" value="<?= (int) $session->getWelineThemeId() > 0 ? (int) $session->getWelineThemeId() : '' ?>">
+                        </div>
+                        <div class="col-12">
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-ai-bind-links">
+                                <lang>保存绑定</lang>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <details class="mb-0">
+                    <summary class="form-label mb-2" style="cursor:pointer;">
+                        <i class="mdi mdi-tune-variant me-1"></i>
+                        <lang>高级：Scope JSON 编辑</lang>
+                    </summary>
+                    <div class="mb-3">
+                        <label class="form-label" for="pb-ai-scope-full"><lang>Scope JSON（整体替换）</lang></label>
+                        <textarea class="form-control font-monospace small" id="pb-ai-scope-full" rows="8"><?= htmlspecialchars($scope_preview, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        <div class="mt-2 d-flex gap-2 flex-wrap">
+                            <button type="button" class="btn btn-primary btn-sm" id="pb-ai-replace-scope"><lang>保存 Scope</lang></button>
+                            <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-merge-scope"><lang>合并补丁</lang></button>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="pb-ai-scope-patch"><lang>补丁 JSON（仅合并）</lang></label>
+                        <textarea class="form-control font-monospace small" id="pb-ai-scope-patch" rows="4" placeholder="{}"></textarea>
+                    </div>
+                </details>
+                <div id="pb-ai-workspace-msg" class="alert alert-danger mt-3 mb-0 d-none" role="alert"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><lang>事件流（最近）</lang></h5>
+                <button type="button" class="btn btn-sm btn-soft-primary" id="pb-ai-reload-page">
+                    <i class="mdi mdi-refresh me-1"></i>
+                    <lang>刷新页面</lang>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <?php if ($events === []) { ?>
+                    <p class="text-muted p-3 mb-0"><lang>尚无事件记录。</lang></p>
+                <?php } else { ?>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped mb-0">
+                            <thead>
+                            <tr>
+                                <th><lang>ID</lang></th>
+                                <th><lang>时间</lang></th>
+                                <th><lang>类型</lang></th>
+                                <th><lang>负载</lang></th>
+                            </tr>
+                            </thead>
+                            <tbody id="pb-ai-events-tbody">
+                            <?php foreach ($events as $ev) {
+                                $payloadJson = isset($ev['payload']) && \is_array($ev['payload'])
+                                    ? (string) \json_encode($ev['payload'], \JSON_UNESCAPED_UNICODE)
+                                    : '{}';
+                                $eid = (int) ($ev['event_id'] ?? 0);
+                                ?>
+                                <tr>
+                                    <td class="small text-muted"><?= $eid ?></td>
+                                    <td class="text-muted small"><?= htmlspecialchars((string) ($ev['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                    <td><code><?= htmlspecialchars((string) ($ev['event_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
+                                    <td class="small font-monospace text-break"><?= htmlspecialchars($payloadJson, ENT_QUOTES, 'UTF-8') ?></td>
+                                </tr>
+                            <?php } ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php } ?>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><lang>实时事件</lang> <span class="text-muted small">(SSE)</span></h5>
+                <button type="button" class="btn btn-sm btn-primary" id="pb-ai-start-sse">
+                    <i class="mdi mdi-play me-1"></i>
+                    <lang>连接</lang>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <w:theme:sse-terminal
+                    id="pb-ai-site-agent-terminal"
+                    path="<?= htmlspecialchars($stream_sse_path, ENT_QUOTES, 'UTF-8') ?>"
+                    title="<?= htmlspecialchars(__('AI 建站事件流'), ENT_QUOTES, 'UTF-8') ?>"
+                    height="280px"
+                    events="start,snapshot,log,done,error,progress,warning,info"
+                />
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var publicId = <?= json_encode($publicId, JSON_THROW_ON_ERROR) ?>;
+    var mergeScopeUrl = <?= json_encode($mergeScopeUrl, JSON_THROW_ON_ERROR) ?>;
+    var replaceScopeUrl = <?= json_encode($replaceScopeUrl, JSON_THROW_ON_ERROR) ?>;
+    var setStageUrl = <?= json_encode($setStageUrl, JSON_THROW_ON_ERROR) ?>;
+    var bindLinksUrl = <?= json_encode($bindLinksUrl, JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrl = <?= json_encode($streamBaseUrl, JSON_THROW_ON_ERROR) ?>;
+    var lastEventId = <?= (int) $last_event_id ?>;
+    var queryDomainUrl = <?= json_encode($query_domain_status_url, JSON_THROW_ON_ERROR) ?>;
+    var aiBriefUrl = <?= json_encode($ai_generate_brief_url, JSON_THROW_ON_ERROR) ?>;
+    var publishCheckUrl = <?= json_encode($publish_check_url, JSON_THROW_ON_ERROR) ?>;
+
+    function setDomainStatusPre(text) {
+        ['pb-ai-domain-status-out', 'pb-ai-domain-status-out-wait'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+                el.textContent = text;
+                el.classList.remove('d-none');
+            }
+        });
+    }
+
+    var msgBox = document.getElementById('pb-ai-workspace-msg');
+    function showErr(msg) {
+        if (window.BackendToast && typeof BackendToast.error === 'function') {
+            BackendToast.error(msg);
+        }
+        if (msgBox) {
+            msgBox.textContent = msg;
+            msgBox.classList.remove('d-none');
+        }
+    }
+    function clearMsg() {
+        if (msgBox) {
+            msgBox.classList.add('d-none');
+            msgBox.textContent = '';
+        }
+    }
+    function postForm(url, fields) {
+        var fd = new FormData();
+        Object.keys(fields).forEach(function (k) {
+            fd.append(k, fields[k]);
+        });
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function (r) { return r.json(); });
+    }
+
+    var saveStageBtn = document.getElementById('pb-ai-save-stage');
+    var stageSelect = document.getElementById('pb-ai-stage-select');
+    if (saveStageBtn && stageSelect) {
+        saveStageBtn.addEventListener('click', function () {
+            clearMsg();
+            postForm(setStageUrl, { public_id: publicId, stage: stageSelect.value }).then(function (data) {
+                if (data && data.success) {
+                    var el = document.getElementById('pb-ai-display-stage');
+                    if (el) el.textContent = data.stage || stageSelect.value;
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('已保存'), JSON_THROW_ON_ERROR) ?>);
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+
+    var bindBtn = document.getElementById('pb-ai-bind-links');
+    var bindWebsite = document.getElementById('pb-ai-bind-website');
+    var bindTheme = document.getElementById('pb-ai-bind-theme');
+    if (bindBtn && bindWebsite && bindTheme) {
+        bindBtn.addEventListener('click', function () {
+            clearMsg();
+            var wid = parseInt(bindWebsite.value, 10) || 0;
+            var tid = parseInt(bindTheme.value, 10) || 0;
+            postForm(bindLinksUrl, {
+                public_id: publicId,
+                website_id: String(wid),
+                weline_theme_id: String(tid)
+            }).then(function (data) {
+                if (data && data.success) {
+                    var wEl = document.getElementById('pb-ai-display-website');
+                    var tEl = document.getElementById('pb-ai-display-theme');
+                    if (wEl) wEl.textContent = String(data.website_id || 0);
+                    if (tEl) tEl.textContent = String(data.weline_theme_id || 0);
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('已保存'), JSON_THROW_ON_ERROR) ?>);
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+
+    var fullTa = document.getElementById('pb-ai-scope-full');
+    var patchTa = document.getElementById('pb-ai-scope-patch');
+    var replaceBtn = document.getElementById('pb-ai-replace-scope');
+    var mergeBtn = document.getElementById('pb-ai-merge-scope');
+    if (replaceBtn && fullTa) {
+        replaceBtn.addEventListener('click', function () {
+            clearMsg();
+            postForm(replaceScopeUrl, { public_id: publicId, scope: fullTa.value }).then(function (data) {
+                if (data && data.success) {
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('Scope 已保存'), JSON_THROW_ON_ERROR) ?>);
+                    window.location.reload();
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+    if (mergeBtn && patchTa) {
+        mergeBtn.addEventListener('click', function () {
+            clearMsg();
+            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: patchTa.value }).then(function (data) {
+                if (data && data.success) {
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('已合并'), JSON_THROW_ON_ERROR) ?>);
+                    window.location.reload();
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+
+    var reloadBtn = document.getElementById('pb-ai-reload-page');
+    if (reloadBtn) {
+        reloadBtn.addEventListener('click', function () { window.location.reload(); });
+    }
+
+    function mergeScopePatch(patch) {
+        return postForm(mergeScopeUrl, {
+            public_id: publicId,
+            scope_patch: JSON.stringify(patch)
+        });
+    }
+    function applyStageOnly(stage) {
+        return postForm(setStageUrl, { public_id: publicId, stage: stage });
+    }
+
+    document.querySelectorAll('.pb-ai-wizard-tab').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var st = btn.getAttribute('data-wizard-stage');
+            if (!st) return;
+            document.querySelectorAll('.pb-ai-wizard-tab').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            document.querySelectorAll('.pb-ai-wizard-panel').forEach(function (p) {
+                var match = p.getAttribute('data-wizard-panel') === st;
+                p.classList.toggle('d-none', !match);
+            });
+        });
+    });
+
+    document.querySelectorAll('.pb-ai-wiz-apply-stage').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var st = btn.getAttribute('data-stage');
+            if (!st) return;
+            clearMsg();
+            applyStageOnly(st).then(function (data) {
+                if (data && data.success) {
+                    var el = document.getElementById('pb-ai-display-stage');
+                    if (el) el.textContent = st;
+                    if (stageSelect) stageSelect.value = st;
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('阶段已更新'), JSON_THROW_ON_ERROR) ?>);
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    });
+
+    function runQueryDomain() {
+        clearMsg();
+        var domInput = document.getElementById('wiz-target-domain');
+        var domain = domInput ? domInput.value.trim() : '';
+        postForm(queryDomainUrl, { public_id: publicId, domain: domain }).then(function (data) {
+            if (data && data.success) {
+                try {
+                    setDomainStatusPre(JSON.stringify(data.data ?? {}, null, 2));
+                } catch (e) {
+                    setDomainStatusPre(String(data.data));
+                }
+                if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('已更新域名状态'), JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            showErr((data && data.message) ? data.message : <?= json_encode(__('查询失败'), JSON_THROW_ON_ERROR) ?>);
+        }).catch(function () {
+            showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+        });
+    }
+
+    var qdBtn = document.getElementById('pb-ai-query-domain');
+    var qdWaitBtn = document.getElementById('pb-ai-query-domain-wait');
+    if (qdBtn) qdBtn.addEventListener('click', runQueryDomain);
+    if (qdWaitBtn) qdWaitBtn.addEventListener('click', runQueryDomain);
+    var autoPollBtn = document.getElementById('pb-ai-auto-domain-toggle');
+    var autoTimer = null;
+    if (autoPollBtn) {
+        autoPollBtn.addEventListener('click', function () {
+            var running = autoPollBtn.getAttribute('data-running') === '1';
+            if (running) {
+                if (autoTimer) clearInterval(autoTimer);
+                autoTimer = null;
+                autoPollBtn.setAttribute('data-running', '0');
+                autoPollBtn.innerHTML = '<i class="mdi mdi-timer-outline me-1"></i><?= addslashes(__('自动轮询（10秒）')) ?>';
+                if (window.BackendToast && BackendToast.info) BackendToast.info(<?= json_encode(__('已停止轮询'), JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            runQueryDomain();
+            autoTimer = setInterval(runQueryDomain, 10000);
+            autoPollBtn.setAttribute('data-running', '1');
+            autoPollBtn.innerHTML = '<i class="mdi mdi-pause-circle-outline me-1"></i><?= addslashes(__('停止轮询')) ?>';
+            if (window.BackendToast && BackendToast.info) BackendToast.info(<?= json_encode(__('已开启轮询'), JSON_THROW_ON_ERROR) ?>);
+        });
+    }
+
+    var genBriefBtn = document.getElementById('pb-ai-gen-brief');
+    if (genBriefBtn) {
+        genBriefBtn.addEventListener('click', function () {
+            clearMsg();
+            var hintsEl = document.getElementById('wiz-brief-desc');
+            var hints = hintsEl ? hintsEl.value.trim() : '';
+            postForm(aiBriefUrl, { public_id: publicId, hints: hints }).then(function (data) {
+                if (data && data.success) {
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('AI 简报已写入'), JSON_THROW_ON_ERROR) ?>);
+                    window.location.reload();
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('生成失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+
+    var publishCheckBtn = document.getElementById('pb-ai-publish-check');
+    var publishOut = document.getElementById('pb-ai-publish-check-out');
+    if (publishCheckBtn) {
+        publishCheckBtn.addEventListener('click', function () {
+            clearMsg();
+            postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
+                if (data && data.success) {
+                    var text = '';
+                    try {
+                        text = JSON.stringify(data.data ?? {}, null, 2);
+                    } catch (e) {
+                        text = String(data.data);
+                    }
+                    if (publishOut) {
+                        publishOut.textContent = text;
+                        publishOut.classList.remove('d-none');
+                    }
+                    if (window.BackendToast && BackendToast.success) {
+                        BackendToast.success((data.data && data.data.passed) ? <?= json_encode(__('发布检查通过'), JSON_THROW_ON_ERROR) ?> : <?= json_encode(__('发布检查存在缺项'), JSON_THROW_ON_ERROR) ?>);
+                    }
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('检查失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    }
+
+    document.querySelectorAll('.pb-ai-wiz-save').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var step = btn.getAttribute('data-wizard-save');
+            var patch = {};
+            if (step === 'brief') {
+                var t = document.getElementById('wiz-site-title');
+                var g = document.getElementById('wiz-site-tagline');
+                var d = document.getElementById('wiz-brief-desc');
+                patch.site_title = t ? t.value.trim() : '';
+                patch.site_tagline = g ? g.value.trim() : '';
+                patch.brief_description = d ? d.value.trim() : '';
+            } else if (step === 'domain') {
+                var dom = document.getElementById('wiz-target-domain');
+                var n = document.getElementById('wiz-domain-notes');
+                patch.target_domain = dom ? dom.value.trim() : '';
+                patch.domain_notes = n ? n.value.trim() : '';
+            } else if (step === 'virtual_theme') {
+                var h = document.getElementById('wiz-theme-hint');
+                patch.virtual_theme_notes = h ? h.value.trim() : '';
+            } else if (step === 'page_types') {
+                var pt = document.getElementById('wiz-page-types');
+                var raw = pt ? pt.value : '';
+                patch.page_types = raw.split(/[,，]/).map(function (s) { return s.trim(); }).filter(Boolean);
+            } else if (step === 'content') {
+                var c = document.getElementById('wiz-content-notes');
+                patch.content_notes = c ? c.value.trim() : '';
+            } else if (step === 'visual_edit') {
+                var pidEl = document.getElementById('wiz-preview-page-id');
+                var pid = pidEl ? parseInt(pidEl.value, 10) : 0;
+                patch.preview_page_id = isNaN(pid) ? 0 : Math.max(0, pid);
+            } else {
+                return;
+            }
+            clearMsg();
+            mergeScopePatch(patch).then(function (data) {
+                if (data && data.success) {
+                    if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('已保存'), JSON_THROW_ON_ERROR) ?>);
+                    window.location.reload();
+                    return;
+                }
+                showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+            });
+        });
+    });
+
+    var sseBtn = document.getElementById('pb-ai-start-sse');
+    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-site-agent-terminal'] : null;
+    if (sseBtn && terminal) {
+        sseBtn.addEventListener('click', function () {
+            clearMsg();
+            var sep = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
+            var url = streamBaseUrl + sep + 'public_id=' + encodeURIComponent(publicId) + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+            terminal.clear();
+            terminal.setUrl(url);
+            sseBtn.disabled = true;
+            terminal.start();
+            terminal.on('done', function () { sseBtn.disabled = false; });
+            terminal.on('error', function () { sseBtn.disabled = false; });
+        });
+    }
+})();
+</script>

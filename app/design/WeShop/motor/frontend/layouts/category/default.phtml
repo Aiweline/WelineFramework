@@ -31,7 +31,7 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
         <!-- Sidebar Filters -->
         <aside class="w-full lg:w-64 xl:w-72 flex-shrink-0">
             <div class="sticky top-28">
-                <w:hook name="WeShop_Catalog::listing::filters_before"/>
+                <w:hook>WeShop_Catalog::listing::filters_before</w:hook>
 
                 <!-- Mobile Filter Toggle -->
                 <button type="button" class="lg:hidden w-full flex items-center justify-between p-4 bg-gray-100 dark:bg-gray-900 rounded mb-4 font-heading font-bold uppercase tracking-wide" onclick="document.getElementById('motor-filters').classList.toggle('hidden')">
@@ -115,13 +115,13 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
                         </div>
                     </form>
                 </div>
-                <w:hook name="WeShop_Catalog::listing::filters_after"/>
+                <w:hook>WeShop_Catalog::listing::filters_after</w:hook>
             </div>
         </aside>
 
         <!-- Product Grid -->
         <div class="flex-1">
-            <w:hook name="WeShop_Catalog::listing::header_before"/>
+            <w:hook>WeShop_Catalog::listing::header_before</w:hook>
             <?php if (!($category['image'] ?? null)): ?>
                 <h1 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight mb-2">
                     <?= htmlspecialchars($category['name'] ?? __('Products')) ?>
@@ -150,9 +150,9 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
                     </div>
                 </div>
             </div>
-            <w:hook name="WeShop_Catalog::listing::header_after"/>
+            <w:hook>WeShop_Catalog::listing::header_after</w:hook>
 
-            <w:hook name="WeShop_Catalog::listing::products_before"/>
+            <w:hook>WeShop_Catalog::listing::products_before</w:hook>
             <div id="product-grid" class="grid <?= $viewMode === 'list' ? 'grid-cols-1' : 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4' ?> gap-6">
                 <?php foreach ($products as $product): ?>
                     <div class="motor-card flex flex-col rounded overflow-hidden group">
@@ -212,7 +212,7 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
                     </div>
                 <?php endforeach; ?>
             </div>
-            <w:hook name="WeShop_Catalog::listing::products_after"/>
+            <w:hook>WeShop_Catalog::listing::products_after</w:hook>
 
             <?php if ($pagination): ?>
                 <div class="mt-10 flex justify-center">

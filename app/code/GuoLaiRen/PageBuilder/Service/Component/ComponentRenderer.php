@@ -21,9 +21,12 @@ namespace GuoLaiRen\PageBuilder\Service\Component;
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\PreviewPageStub;
+use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderThemeComponentBridge;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeComponentRenderer;
 
 class ComponentRenderer
 {
@@ -110,6 +113,41 @@ class ComponentRenderer
         $styleSettings = $options['style_settings'] ?? [];
         $children = $options['children'] ?? [];
         
+        $welineThemeId = (int) ($options['weline_theme_id'] ?? 0);
+        if ($welineThemeId > 0) {
+            $virtualHtml = $this->tryRenderViaWelineVirtualTheme(
+                $componentCode,
+                $config,
+                $page,
+                $styleSettings,
+                $welineThemeId,
+                $options
+            );
+            if ($virtualHtml !== null) {
+                if ($visualMode) {
+                    $actualStyleCode = $styleCode;
+                    $virtualHtml = $this->wrapForVisualEditor(
+                        $virtualHtml,
+                        $componentCode,
+                        $instanceId,
+                        $region,
+                        (int) $index,
+                        $actualStyleCode,
+                        !empty($children)
+                    );
+                }
+                return RenderResult::success($virtualHtml, [
+                    'instance_id' => $instanceId,
+                    'component_code' => $componentCode,
+                    'style_code' => $styleCode,
+                    'region' => $region,
+                    'index' => $index,
+                    'weline_theme_id' => $welineThemeId,
+                    'render_source' => 'weline_virtual_theme',
+                ]);
+            }
+        }
+        
         // 解析组件模板路径
         $templatePath = $this->resolveComponentTemplatePath($componentCode, $styleCode);
         if ($templatePath === null) {
@@ -193,26 +231,33 @@ class ComponentRenderer
      * @param string $componentCode 组件代码
      * @param string $styleCode 模板代码
      * @param array $config 组件配置
+     * @param array<string, mixed> $extraOptions 合并进 renderSingle 的选项（如 weline_theme_id、theme_component_area、style_settings）
      * @return RenderResult
      */
     public function renderPreview(
         string $componentCode,
         string $styleCode,
-        array $config = []
+        array $config = [],
+        array $extraOptions = []
     ): RenderResult {
         $instanceId = 'preview-' . uniqid();
+        
+        $options = array_merge(
+            [
+                'region' => 'content',
+                'index' => 0,
+                'visual_mode' => false,  // 预览不需要编辑包装器
+                'is_preview' => true,
+            ],
+            $extraOptions
+        );
         
         return $this->renderSingle(
             $componentCode,
             $instanceId,
             $styleCode,
             $config,
-            [
-                'region' => 'content',
-                'index' => 0,
-                'visual_mode' => false,  // 预览不需要编辑包装器
-                'is_preview' => true,
-            ]
+            $options
         );
     }
     
@@ -261,6 +306,53 @@ class ComponentRenderer
      * @param string $styleCode 模板代码
      * @return string|null 模板引用路径
      */
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function tryRenderViaWelineVirtualTheme(
+        string $componentCode,
+        array $config,
+        mixed $page,
+        array $styleSettings,
+        int $welineThemeId,
+        array $options
+    ): ?string {
+        try {
+            $bridge = ObjectManager::getInstance(PageBuilderThemeComponentBridge::class);
+            $area = strtolower((string) ($options['theme_component_area'] ?? 'frontend')) === 'backend' ? 'backend' : 'frontend';
+            $definition = $bridge->resolveDefinition($componentCode, $welineThemeId, $area);
+            if ($definition === null) {
+                return null;
+            }
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $theme = clone $themeModel;
+            $theme->clearData()->clearQuery()->load($welineThemeId);
+            if (!$theme->getId()) {
+                return null;
+            }
+            $renderer = ObjectManager::getInstance(ThemeComponentRenderer::class);
+            $isPreview = (bool) ($options['is_preview'] ?? false);
+            $instanceConfig = array_merge($config, [
+                'page' => $page,
+                'style' => $styleSettings,
+                'style_settings' => $styleSettings,
+                'component_config' => $config,
+            ]);
+            $html = $renderer->render(
+                $definition,
+                $instanceConfig,
+                $theme,
+                [
+                    'area' => $definition->area ?: $area,
+                    'preview_mode' => $isPreview || ($options['visual_mode'] ?? false),
+                ]
+            );
+            return is_string($html) ? $html : '';
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+    
     private function resolveComponentTemplatePath(string $componentCode, string $styleCode): ?string
     {
         // 使用 ComponentResolver 解析

@@ -431,9 +431,9 @@ HTML;
             return ThemeLayout::STATUS_DRAFT;
         }
         
-        // 4. 前台草稿预览模式：加载 draft（向后兼容）
+        // 4. 前台草稿预览模式：加载 draft（向后兼容 + 新模式）
         $previewMode = $this->request->getParam('preview_mode');
-        if ($previewMode === '1' || $previewMode === 'true') {
+        if ($previewMode === '1' || $previewMode === 'true' || $previewMode === 'live' || $previewMode === 'version') {
             return ThemeLayout::STATUS_DRAFT;
         }
         
@@ -467,9 +467,9 @@ HTML;
             return true;
         }
         
-        // 前台预览模式（向后兼容）
+        // 前台预览模式（向后兼容 + 新模式）
         $previewMode = $this->request->getParam('preview_mode');
-        if ($previewMode === '1' || $previewMode === 'true') {
+        if ($previewMode === '1' || $previewMode === 'true' || $previewMode === 'live' || $previewMode === 'version') {
             return true;
         }
         

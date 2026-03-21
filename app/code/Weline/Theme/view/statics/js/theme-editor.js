@@ -3262,9 +3262,6 @@
      * @returns {Promise<Object|null>} 保存结果，失败返回 null
      */
     async function saveWidget({ area, slotId, widgetData, sortOrder, exclusive, switchToPreview = true }) {
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:saveWidget:entry',message:'saveWidget called',data:{area:area,slotId:slotId,widgetCode:widgetData&&widgetData.code,sortOrder:sortOrder,exclusive:exclusive},timestamp:Date.now(),hypothesisId:'R1'})}).catch(function(){});
-        // #endregion
 
         if (!state.themeId) {
             showToast('请先选择主题', 'warning');
@@ -3298,9 +3295,6 @@
 
             const result = await response.json();
 
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:saveWidget:response',message:'saveWidget response',data:{success:result.success,layoutId:result.data&&result.data.layout_id,hasPreviewHtml:!!result.preview_html,message:result.message||''},timestamp:Date.now(),hypothesisId:'R1'})}).catch(function(){});
-            // #endregion
 
             if (result.success) {
                 const widgetName = widgetData.name || widgetData.code;
@@ -7242,6 +7236,8 @@
         url.searchParams.set('_t', Date.now());
         // 使用 editor_mode=1 标识后台编辑器 iframe
         url.searchParams.set('editor_mode', '1');
+        // 实时编辑预览：live 模式（不固定版本号）
+        url.searchParams.set('preview_mode', 'live');
         // 支持版本切换：默认 draft，可通过 state.previewStatus 切换
         url.searchParams.set('status', state.previewStatus || 'draft');
         elements.previewFrame.src = url.toString();
@@ -7422,9 +7418,6 @@
         url.searchParams.set('status', state.previewStatus || 'draft');
         url.searchParams.set('editor_area', state.editorArea || 'frontend');
 
-        // #region agent log
-        fetch('http://127.0.0.1:7243/ingest/c0ecf822-3bcf-4f3d-a88a-8940482b2d3a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'theme-editor.js:loadLayoutPreview:setSrc',message:'layout preview iframe load',data:{url:url.toString(),themeId:state.themeId},timestamp:Date.now(),hypothesisId:'H5'})}).catch(function(){});
-        // #endregion
         elements.previewFrame.src = url.toString();
 
         // 同时获取插槽信息

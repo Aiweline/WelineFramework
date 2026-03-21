@@ -287,14 +287,19 @@ class Start implements CommandInterface
             ];
         }
         
-        // 检查端口是否被占用（仅以端口是否可连接为准；占用进程以“当前存活”为准，避免使用系统返回的陈旧 PID）
+        // 检查端口是否被占用：
+        // 仅当可确认是“存活中的 PHP 内置服务器进程”时，才判定为 server 运行中。
+        // 端口可连但 PID 不存在/已失效时，避免误判为“服务器在运行”。
         $connection = @fsockopen($host, $port, $errno, $errstr, 1);
         
         if ($connection !== false) {
             fclose($connection);
             $pid = $this->getProcessIdByPort($port);
-            if ($pid !== null && !Processer::isRunningByPid($pid)) {
-                $pid = null; // 系统返回的 PID 已失效（如 Windows netstat 滞后），不当作当前占用者
+            if ($pid === null || !Processer::isRunningByPid($pid)) {
+                return [
+                    'running' => false,
+                    'pid' => null
+                ];
             }
             return [
                 'running' => true,
@@ -401,8 +406,8 @@ class Start implements CommandInterface
                         fclose($retryConn);
                     }
                     if ($deadPidCount >= 2) {
-                        $this->printer->warning(__('进程检测异常（端口与 PID 不一致），尝试继续启动；若绑定失败请先执行 server:kill-php 或 taskkill 后重试。'));
-                        return true;
+                        $this->printer->warning(__('进程检测异常（端口与 PID 不一致），且端口 %{1} 仍可连接，已中止启动。请先执行 server:kill-php 或 taskkill 后重试。', [$port]));
+                        return false;
                     }
                     continue;
                 }

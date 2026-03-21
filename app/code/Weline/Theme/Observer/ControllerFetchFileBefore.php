@@ -16,12 +16,12 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\StateManager;
-use Weline\Framework\Session\Session;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Helper\ThemeModeResolver;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * 控制器模板获取前观察者
@@ -40,9 +40,12 @@ class ControllerFetchFileBefore implements ObserverInterface
 
     private WelineTheme $welineTheme;
 
-    public function __construct(WelineTheme $welineTheme)
+    private ThemeContextService $themeContext;
+
+    public function __construct(WelineTheme $welineTheme, ThemeContextService $themeContext)
     {
         $this->welineTheme = $welineTheme;
+        $this->themeContext = $themeContext;
     }
 
     private static function registerStateManager(): void
@@ -76,6 +79,13 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
 
         $layoutType = $eventData->getData('layoutType');
+        if (empty($layoutType) && isset($_GET['preview_theme']) && (int)($_GET['preview_theme'] ?? 0) > 0) {
+            $request = ObjectManager::getInstance(Request::class);
+            if ($request && !$request->isBackend()) {
+                $layoutType = 'homepage.default';
+                $eventData->setData('layoutType', $layoutType);
+            }
+        }
         // 关键检查：只有当控制器设置了 layoutType 时才处理
         if (empty($layoutType)) {
             return;
@@ -90,8 +100,8 @@ class ControllerFetchFileBefore implements ObserverInterface
         $template = Template::getInstance();
         $welineThemeColorMode = ThemeModeResolver::getThemeMode($area);
         
-        // 获取当前主题：优先使用预览主题（URL 参数或 Session），否则使用激活主题
-        $theme = $this->resolveThemeForLayout($request, $area);
+        // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
+        $theme = $this->resolveThemeForLayout($area);
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -117,33 +127,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
 
             // 先解析 scope 和 configCacheKey，再按需 performanceLoad（有 layoutConfig 缓存则跳过）
-            $scope = 'default';
-            try {
-                if (class_exists(\Weline\Theme\Helper\PreviewManager::class)) {
-                    if (\Weline\Theme\Helper\PreviewManager::isPreviewMode()) {
-                        $previewScope = \Weline\Theme\Helper\PreviewManager::getPreviewScope($area);
-                        if ($previewScope) {
-                            $scope = $previewScope;
-                        }
-                    }
-                }
-                if ($scope === 'default' && $request) {
-                    $paramName = 'scope_' . $area;
-                    $scopeParam = $request->getParam($paramName) ?? $request->getParam('scope');
-                    if ($scopeParam) {
-                        if (str_contains($scopeParam, '/')) {
-                            [$maybeArea, $rest] = explode('/', $scopeParam, 2);
-                            if ($maybeArea === $area) {
-                                $scope = $rest ?: 'default';
-                            }
-                        } else {
-                            $scope = $scopeParam;
-                        }
-                    }
-                }
-            } catch (\Throwable $e) {
-                // 忽略错误，使用默认 scope
-            }
+            $scope = $this->themeContext->resolveCurrentScope($area);
 
             self::registerStateManager();
             $themeId = $theme->getId() ?: 0;
@@ -366,37 +350,17 @@ class ControllerFetchFileBefore implements ObserverInterface
     /**
      * 解析布局用主题：优先预览主题（URL 参数或 Session），否则激活主题
      */
-    private function resolveThemeForLayout(?Request $request, string $area): WelineTheme
+    private function resolveThemeForLayout(string $area): WelineTheme
     {
         self::registerStateManager();
         if (isset(self::$themeByAreaCache[$area])) {
             return self::$themeByAreaCache[$area];
         }
-        $previewThemeId = 0;
-        $previewThemeArea = '';
-        if ($request) {
-            $previewThemeId = (int)$request->getParam('preview_theme', 0);
-        }
-        if (!$previewThemeId) {
-            $session = ObjectManager::getInstance(Session::class);
-            $previewThemeId = (int)($session->getData('preview_theme_id') ?? 0);
-            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-        } else {
-            $session = ObjectManager::getInstance(Session::class);
-            $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-        }
-        if ($previewThemeArea === '' && $previewThemeId) {
-            $previewThemeArea = $area;
-        }
-        $theme = null;
-        if ($previewThemeId && $previewThemeArea === $area) {
-            $this->welineTheme->load($previewThemeId);
-            if ($this->welineTheme->getId()) {
-                $theme = $this->welineTheme;
-            }
-        }
-        if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme($area);
+        $theme = $this->themeContext->resolveTheme($area);
+        if ($theme === null || !$theme->getId()) {
+            $theme = clone $this->welineTheme;
+            $theme->clearData()->clearQuery();
+            $theme->getActiveTheme($area);
         }
         self::$themeByAreaCache[$area] = $theme;
         return $theme;

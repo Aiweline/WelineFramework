@@ -5,6 +5,7 @@ namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * 主题查询器
@@ -14,7 +15,8 @@ use Weline\Theme\Model\WelineTheme;
 class ThemeQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly WelineTheme $welineTheme
+        private readonly WelineTheme $welineTheme,
+        private readonly ThemeContextService $themeContext,
     ) {
     }
 
@@ -38,25 +40,25 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function getActiveTheme(array $params): ?array
     {
-        $area = $this->normalizeArea($params['area'] ?? null);
-        $theme = clone $this->welineTheme;
-        $theme->getActiveTheme($area);
-
-        if (!$theme->getId()) {
+        $area = $this->normalizeQueryArea($params['area'] ?? null);
+        $resolved = $this->themeContext->resolveTheme($area);
+        if ($resolved === null || !$resolved->getId()) {
             return null;
         }
 
+        $field = $this->themeContext->getActivationField($area);
+
         return [
-            'id' => $theme->getId(),
-            'name' => $theme->getData(WelineTheme::schema_fields_NAME),
-            'module_name' => $theme->getData(WelineTheme::schema_fields_MODULE_NAME),
-            'path' => $theme->getData(WelineTheme::schema_fields_PATH),
-            'parent_id' => $theme->getData(WelineTheme::schema_fields_PARENT_ID),
-            'is_active' => $theme->getData(WelineTheme::schema_fields_IS_ACTIVE),
-            'config' => $theme->getData(WelineTheme::schema_fields_CONFIG),
-            'preview_image' => $theme->getPreviewImage(),
-            'frontend_preview_image' => $theme->getFrontendPreviewImage(),
-            'backend_preview_image' => $theme->getBackendPreviewImage(),
+            'id' => $resolved->getId(),
+            'name' => $resolved->getData(WelineTheme::schema_fields_NAME),
+            'module_name' => $resolved->getData(WelineTheme::schema_fields_MODULE_NAME),
+            'path' => $resolved->getData(WelineTheme::schema_fields_PATH),
+            'parent_id' => $resolved->getData(WelineTheme::schema_fields_PARENT_ID),
+            'is_active' => (int)$resolved->getData($field) === 1,
+            'config' => $resolved->getData(WelineTheme::schema_fields_CONFIG),
+            'preview_image' => $resolved->getPreviewImage(),
+            'frontend_preview_image' => $resolved->getFrontendPreviewImage(),
+            'backend_preview_image' => $resolved->getBackendPreviewImage(),
         ];
     }
 
@@ -104,12 +106,18 @@ class ThemeQueryProvider implements QueryProviderInterface
     private function scanThemeLayoutsByType(array $params): array
     {
         $layoutType = (string)($params['layout_type'] ?? '');
-        $area = $this->normalizeArea($params['area'] ?? 'frontend') ?? 'frontend';
+        $area = $this->normalizeQueryArea($params['area'] ?? 'frontend', true) ?? ThemeContextService::AREA_FRONTEND;
         if ($layoutType === '') {
             return [];
         }
-        $theme = clone $this->welineTheme;
-        $theme->getActiveTheme($area);
+        $resolved = $this->themeContext->resolveTheme($area);
+        if ($resolved !== null && $resolved->getId()) {
+            $theme = $resolved;
+        } else {
+            $theme = clone $this->welineTheme;
+            $theme->clearData()->clearQuery();
+            $theme->getActiveTheme($area);
+        }
         if (!$theme->getId()) {
             return [];
         }
@@ -213,13 +221,19 @@ class ThemeQueryProvider implements QueryProviderInterface
         ];
     }
 
-    private function normalizeArea(mixed $area): ?string
+    /**
+     * @param bool $defaultFrontend 当 area 为空时是否默认 frontend（getActiveTheme 为 false，scan 为 true）
+     */
+    private function normalizeQueryArea(mixed $area, bool $defaultFrontend = false): ?string
     {
-        $area = strtolower(trim((string)$area));
+        $raw = strtolower(trim((string)$area));
+        if ($raw === '') {
+            return $defaultFrontend ? ThemeContextService::AREA_FRONTEND : null;
+        }
 
-        return match ($area) {
-            'frontend' => 'frontend',
-            'backend' => 'backend',
+        return match ($raw) {
+            ThemeContextService::AREA_FRONTEND => ThemeContextService::AREA_FRONTEND,
+            ThemeContextService::AREA_BACKEND => ThemeContextService::AREA_BACKEND,
             default => null,
         };
     }
