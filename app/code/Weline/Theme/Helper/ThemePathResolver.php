@@ -48,6 +48,13 @@ class ThemePathResolver implements ThemePathResolverInterface
      */
     public function resolveThemeFile(string $modulePath, WelineTheme $theme): string
     {
+        try {
+            /** @var \Weline\Theme\Service\ThemeDirectoryResolver $directoryResolver */
+            $directoryResolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class);
+            return $directoryResolver->resolveThemeTemplatePath($modulePath, $theme);
+        } catch (\Throwable $throwable) {
+        }
+
         $visited = [];
         return $this->resolveThemeFileRecursive($modulePath, $theme, $visited);
     }
