@@ -263,8 +263,7 @@ class ThemeConfigManager
 
     private static function normalizeArea(string $area): string
     {
-        $area = strtolower(trim($area));
-        return $area === 'backend' ? 'backend' : 'frontend';
+        return self::getThemeContext()->normalizeArea($area, ThemeContextService::AREA_FRONTEND);
     }
 
     private static function getThemeContext(): ThemeContextService

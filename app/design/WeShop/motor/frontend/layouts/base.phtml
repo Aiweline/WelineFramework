@@ -64,7 +64,7 @@
     </style>
 
     <!-- Hook: head-before -->
-    <w:hook name="Weline_Theme::frontend::layouts::base::head-before"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
 
     <!-- 父主题 CSS -->
     <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/main.css') ?>">
@@ -72,53 +72,66 @@
     <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/motor.css') ?>">
 
     <!-- Hook: head-after -->
-    <w:hook name="Weline_Theme::frontend::layouts::base::head-after"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
 </head>
 <body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
     <!-- Hook: body-start -->
-    <w:hook name="Weline_Theme::frontend::layouts::base::body-start"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::default::body-start</w:hook>
 
     <div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
         <div class="layout-container flex h-full grow flex-col">
 
-            <!-- Hook: header-before -->
-            <w:hook name="Weline_Theme::frontend::layouts::base::header-before"/>
+            <if condition="meta.showHeader">
+                <!-- Hook: header-before -->
+                <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
 
-            <!-- Header -->
-            <w:theme:template layout="partials.header">
-                WeShop_Motor::frontend/partials/header/default.phtml
-            </w:theme:template>
+                <!-- Header -->
+                <w:theme:template layout="partials.header">
+                    Weline_Theme::theme/frontend/partials/header/default.phtml
+                </w:theme:template>
 
-            <!-- Hook: header-after -->
-            <w:hook name="Weline_Theme::frontend::layouts::base::header-after"/>
+                <!-- Hook: header-after -->
+                <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+            </if>
+
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
 
             <!-- Main Content -->
             <main class="flex-1">
                 <!-- Hook: content-before -->
-                <w:hook name="Weline_Theme::frontend::layouts::base::content-before"/>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
 
                 <?= $this->getChildHtml('content') ?>
 
                 <!-- Hook: content-after -->
-                <w:hook name="Weline_Theme::frontend::layouts::base::content-after"/>
+                <w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
+                <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
             </main>
 
-            <!-- Hook: footer-before -->
-            <w:hook name="Weline_Theme::frontend::layouts::base::footer-before"/>
+            <if condition="meta.showFooter">
+                <!-- Hook: footer-before -->
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
 
-            <!-- Footer -->
-            <w:theme:template layout="partials.footer">
-                WeShop_Motor::frontend/partials/footer/default.phtml
-            </w:theme:template>
+                <!-- Footer -->
+                <w:theme:template layout="partials.footer">
+                    Weline_Theme::theme/frontend/partials/footer/default.phtml
+                </w:theme:template>
 
-            <!-- Hook: footer-after -->
-            <w:hook name="Weline_Theme::frontend::layouts::base::footer-after"/>
+                <!-- Hook: footer-after -->
+                <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+            </if>
 
         </div>
     </div>
 
     <!-- Hook: body-end -->
-    <w:hook name="Weline_Theme::frontend::layouts::base::body-end"/>
+    <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 
     <!-- 父主题 JS -->
     <script src="<?= $this->getStaticUrl('frontend/assets/js/main.js') ?>"></script>

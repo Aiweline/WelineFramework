@@ -21,10 +21,13 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
+use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderThemeComponentBridge;
 use Weline\Framework\App\State;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeComponentRenderer;
 
 class PageRenderService
 {
@@ -50,9 +53,12 @@ class PageRenderService
     
     /** @var array 模板变量 */
     private array $templateVars = [];
-    
+
     /** @var array 组件文件映射缓存 */
     private static array $componentFilesCache = [];
+
+    /** 当前 render() 调用内生效的 Weline 主题层 ID（用于 ThemeComponent 虚拟部件回退），0 表示关闭 */
+    private int $renderWelineThemeId = 0;
     
     public function __construct(
         LayoutAssembler $layoutAssembler,
@@ -129,16 +135,21 @@ class PageRenderService
      * @param string $mode 渲染模式 (visual/preview/live)
      * @param string|null $locale 语言代码
      * @param string|null $tempStyleCode 临时样式代码（用于预览）
+     * @param int|null $welineThemeId 可选 Weline 主题 ID：>0 时布局中的组件码可解析为该主题下虚拟部件（ThemeComponent 落库）
      * @return string 渲染后的 HTML
      */
     public function render(
         Page $page,
         string $mode = self::MODE_LIVE,
         ?string $locale = null,
-        ?string $tempStyleCode = null
+        ?string $tempStyleCode = null,
+        ?int $welineThemeId = null
     ): string {
+        $savedWelineThemeId = $this->renderWelineThemeId;
+        $this->renderWelineThemeId = ($welineThemeId !== null && $welineThemeId > 0) ? $welineThemeId : 0;
         // 重置模板变量
         $this->templateVars = [];
+        try {
         
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
@@ -268,6 +279,56 @@ class PageRenderService
         
         // 根据模式处理输出
         return $this->finalizeOutput($headerHtml, $contentHtml, $footerHtml, $debugInfo, $page, $styleCode, $mode);
+        } finally {
+            $this->renderWelineThemeId = $savedWelineThemeId;
+        }
+    }
+
+    /**
+     * 布局组件在文件与 PageBuilder Component 模型均未命中时，尝试按当前 render 的 weline_theme_id 渲染虚拟主题部件
+     */
+    private function renderVirtualThemeComponentHtml(
+        string $code,
+        array $config,
+        Page $page,
+        array $styleSettings,
+        string $mode
+    ): ?string {
+        if ($this->renderWelineThemeId <= 0) {
+            return null;
+        }
+        try {
+            $bridge = ObjectManager::getInstance(PageBuilderThemeComponentBridge::class);
+            $definition = $bridge->resolveDefinition($code, $this->renderWelineThemeId, 'frontend');
+            if ($definition === null) {
+                return null;
+            }
+            $themeProto = ObjectManager::getInstance(WelineTheme::class);
+            $theme = clone $themeProto;
+            $theme->clearData()->clearQuery()->load($this->renderWelineThemeId);
+            if (!$theme->getId()) {
+                return null;
+            }
+            $renderer = ObjectManager::getInstance(ThemeComponentRenderer::class);
+            $instanceConfig = array_merge($config, [
+                'page' => $page,
+                'style' => $styleSettings,
+                'style_settings' => $styleSettings,
+                'component_config' => $config,
+            ]);
+            $html = $renderer->render(
+                $definition,
+                $instanceConfig,
+                $theme,
+                [
+                    'area' => $definition->area ?: 'frontend',
+                    'preview_mode' => $mode !== self::MODE_LIVE,
+                ]
+            );
+            return is_string($html) ? $html : '';
+        } catch (\Throwable) {
+            return null;
+        }
     }
     
     /**
@@ -1017,42 +1078,54 @@ class PageRenderService
                 }
             }
             
+            $virtualThemeHtml = null;
             if (!$componentFile && !$componentPath) {
-                $html .= "<!-- Component not found: {$code} (tried file-based and Component model) -->\n";
-                $componentIndex++;
-                continue;
+                $virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);
+                if ($virtualThemeHtml === null) {
+                    $html .= "<!-- Component not found: {$code} (tried file-based, Component model, virtual theme) -->\n";
+                    $componentIndex++;
+                    continue;
+                }
+                $html .= "<!-- Component {$code} resolved via Weline_Theme virtual theme (theme_id={$this->renderWelineThemeId}) -->\n";
             }
             
-            // 构建组件模板路径（如果未通过 Component 模型解析）
-            if (!$componentPath) {
-                $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
+            // 构建组件模板路径（如果未通过 Component 模型解析且非虚拟主题）
+            if ($virtualThemeHtml === null) {
+                if (!$componentPath) {
+                    $componentPath = $this->pathResolver->getComponentTemplateReference($useTemplateCode, $componentFile);
+                }
             }
             
-            // 传递数据到组件
+            // 传递数据到组件（文件/模型路径与虚拟主题路径共用，便于片段内 @var 一致）
             $this->assign('page', $page);
             $this->assign('style', $styleSettings);
             $this->assign('style_settings', $styleSettings);
             $this->assign('component_config', $config);
             
-            try {
-                $componentHtml = $this->fetch($componentPath);
-                
-                if (empty($componentHtml)) {
-                    $html .= "<!-- Component {$code} rendered but output is empty -->\n";
-                } else {
-                    // 在可视化编辑器模式下，添加组件包装器
-                    if ($isVisualEditor) {
-                        $escapedCode = htmlspecialchars($code);
-                        $escapedRegion = htmlspecialchars($region);
-                        // 存储组件实际所属的模板代码（用于跨模板组件编辑）
-                        $escapedStyleCode = htmlspecialchars($useTemplateCode);
-                        $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
-                    }
-                    $html .= $componentHtml;
-                    $html .= "<!-- Component {$code} rendered successfully -->\n";
+            if ($virtualThemeHtml === null) {
+                try {
+                    $componentHtml = $this->fetch($componentPath);
+                } catch (\Throwable $e) {
+                    $html .= "<!-- Error rendering component {$code}: " . htmlspecialchars($e->getMessage()) . " -->\n";
+                    $componentIndex++;
+                    continue;
                 }
-            } catch (\Throwable $e) {
-                $html .= "<!-- Error rendering component {$code}: " . htmlspecialchars($e->getMessage()) . " -->\n";
+            } else {
+                $componentHtml = $virtualThemeHtml;
+            }
+            
+            if ($componentHtml === '') {
+                $html .= "<!-- Component {$code} rendered but output is empty -->\n";
+            } else {
+                // 在可视化编辑器模式下，添加组件包装器
+                if ($isVisualEditor) {
+                    $escapedCode = htmlspecialchars($code);
+                    $escapedRegion = htmlspecialchars($region);
+                    $escapedStyleCode = htmlspecialchars($useTemplateCode);
+                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
+                }
+                $html .= $componentHtml;
+                $html .= "<!-- Component {$code} rendered successfully -->\n";
             }
             
             $componentIndex++;

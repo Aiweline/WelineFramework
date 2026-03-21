@@ -1,10 +1,16 @@
 <?php
 /**
  * WeShop Motor Theme - Homepage Layout
- * 摩托车主题首页布局（对应 Theme/view/theme/frontend/layouts/homepage 结构）
+ * 摩托车主题首页布局（骨架 + slot，具体内容由 widget/default.layout.json 提供）
  */
 $this->setLayout('base');
 ?>
+
+<w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
+<w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+<w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
+
 <!-- Welcome 弹窗：页面加载后自动显示一次 -->
 <div id="motor-welcome-modal" class="motor-welcome-modal fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4" role="dialog" aria-labelledby="motor-welcome-title" aria-modal="true">
     <div class="motor-welcome-modal__box max-w-md w-full rounded-xl bg-white dark:bg-surface-dark p-6 shadow-xl border border-border-light dark:border-border-dark">
@@ -14,269 +20,24 @@ $this->setLayout('base');
     </div>
 </div>
 
-<!-- Hero Banner - 摩托车运动风格 -->
-<section class="relative w-full min-h-[500px] lg:min-h-[600px] bg-motor-black overflow-hidden">
-    <w:hook name="WeShop_Promotion::homepage::hero_banner"/>
+<w:hook>WeShop_Promotion::homepage::hero_banner</w:hook>
+<section class="relative w-full overflow-hidden" data-wslot="homepage-hero" data-wslot-name="Homepage Hero" data-wslot-accept="banner,carousel,content" data-wslot-multiple="false"></section>
 
-    <!-- 背景 -->
-    <div class="absolute inset-0 bg-gradient-to-r from-motor-black via-motor-black/95 to-transparent z-10"></div>
-    <div class="absolute inset-0 bg-[url('<?= $this->getStaticUrl('assets/images/motor-hero.jpg') ?>')] bg-cover bg-center opacity-60"></div>
+<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" data-wslot="homepage-categories" data-wslot-name="Homepage Categories" data-wslot-accept="category,content" data-wslot-multiple="true"></section>
 
-    <!-- 内容 -->
-    <div class="relative z-20 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-        <div class="max-w-2xl">
-            <span class="inline-block bg-primary text-white text-xs font-bold uppercase tracking-widest px-3 py-1 mb-4 rounded">
-                <?= __('New Season 2026') ?>
-            </span>
-            <h1 class="font-heading text-4xl md:text-5xl lg:text-6xl font-bold text-white uppercase tracking-tight mb-4 leading-tight">
-                <?= __('Ride The<br>Extraordinary') ?>
-            </h1>
-            <p class="text-lg text-gray-300 mb-8 max-w-lg">
-                <?= __('Premium motorcycles, parts, and gear. Built for riders who demand the best.') ?>
-            </p>
-            <div class="flex flex-wrap gap-4">
-                <a href="<?= $this->getUrl('catalog/category') ?>" class="motor-btn-primary inline-flex items-center justify-center px-8 py-3 text-sm font-bold uppercase tracking-wide">
-                    <span class="material-symbols-outlined mr-2 text-xl">two_wheeler</span>
-                    <?= __('Shop Motorcycles') ?>
-                </a>
-                <a href="<?= $this->getUrl('catalog/category/parts') ?>" class="inline-flex items-center justify-center px-8 py-3 border-2 border-white/30 text-white text-sm font-bold uppercase tracking-wide hover:border-primary hover:text-primary transition-colors rounded">
-                    <?= __('Browse Parts') ?>
-                </a>
-            </div>
-        </div>
-    </div>
+<w:hook>WeShop_Promotion::homepage::deals_before</w:hook>
+<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" data-wslot="homepage-deals" data-wslot-name="Homepage Deals" data-wslot-accept="product,carousel,banner" data-wslot-multiple="true"></section>
+<w:hook>WeShop_Promotion::homepage::deals_after</w:hook>
 
-    <!-- 品牌标签滚动条 -->
-    <div class="absolute bottom-0 left-0 right-0 bg-black/60 backdrop-blur-sm py-4 z-20">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-center gap-8 lg:gap-16 text-gray-400 text-xs font-bold uppercase tracking-widest">
-                <span class="hover:text-primary transition-colors cursor-pointer">Honda</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">Yamaha</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">Kawasaki</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">Suzuki</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">Harley-Davidson</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">BMW</span>
-                <span class="hover:text-primary transition-colors cursor-pointer">Ducati</span>
-            </div>
-        </div>
-    </div>
-</section>
+<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8" data-wslot="homepage-promo" data-wslot-name="Homepage Promo" data-wslot-accept="banner,content" data-wslot-multiple="true"></section>
 
-<!-- 特色分类 - 三列布局 -->
-<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <!-- 摩托车 -->
-        <a href="<?= $this->getUrl('catalog/category/motorcycles') ?>" class="group relative overflow-hidden rounded aspect-[4/3]">
-            <div class="absolute inset-0 bg-gradient-to-t from-motor-black via-motor-black/50 to-transparent z-10"></div>
-            <div class="absolute inset-0 bg-[url('<?= $this->getStaticUrl('assets/images/cat-motorcycles.jpg') ?>')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
-                <h3 class="font-heading text-xl font-bold text-white uppercase tracking-wide mb-1"><?= __('Motorcycles') ?></h3>
-                <span class="text-primary text-sm font-semibold uppercase tracking-wide flex items-center">
-                    <?= __('Shop Now') ?>
-                    <span class="material-symbols-outlined text-lg ml-1">arrow_forward</span>
-                </span>
-            </div>
-        </a>
+<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12" data-wslot="homepage-brands" data-wslot-name="Homepage Brands" data-wslot-accept="content,category" data-wslot-multiple="true"></section>
 
-        <!-- 配件 -->
-        <a href="<?= $this->getUrl('catalog/category/parts') ?>" class="group relative overflow-hidden rounded aspect-[4/3]">
-            <div class="absolute inset-0 bg-gradient-to-t from-motor-black via-motor-black/50 to-transparent z-10"></div>
-            <div class="absolute inset-0 bg-[url('<?= $this->getStaticUrl('assets/images/cat-parts.jpg') ?>')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
-                <h3 class="font-heading text-xl font-bold text-white uppercase tracking-wide mb-1"><?= __('Parts & Accessories') ?></h3>
-                <span class="text-primary text-sm font-semibold uppercase tracking-wide flex items-center">
-                    <?= __('Shop Now') ?>
-                    <span class="material-symbols-outlined text-lg ml-1">arrow_forward</span>
-                </span>
-            </div>
-        </a>
-
-        <!-- 骑行装备 -->
-        <a href="<?= $this->getUrl('catalog/category/gear') ?>" class="group relative overflow-hidden rounded aspect-[4/3]">
-            <div class="absolute inset-0 bg-gradient-to-t from-motor-black via-motor-black/50 to-transparent z-10"></div>
-            <div class="absolute inset-0 bg-[url('<?= $this->getStaticUrl('assets/images/cat-gear.jpg') ?>')] bg-cover bg-center group-hover:scale-105 transition-transform duration-500"></div>
-            <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
-                <h3 class="font-heading text-xl font-bold text-white uppercase tracking-wide mb-1"><?= __('Riding Gear') ?></h3>
-                <span class="text-primary text-sm font-semibold uppercase tracking-wide flex items-center">
-                    <?= __('Shop Now') ?>
-                    <span class="material-symbols-outlined text-lg ml-1">arrow_forward</span>
-                </span>
-            </div>
-        </a>
-    </div>
-</section>
-
-<!-- 今日特价商品 -->
-<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-    <w:hook name="WeShop_Promotion::homepage::deals_before"/>
-
-    <div class="flex items-center justify-between mb-8">
-        <div>
-            <h2 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight">
-                <?= __('Hot Deals') ?>
-            </h2>
-            <p class="text-text-secondary-light dark:text-text-secondary-dark mt-1"><?= __('Limited time offers on top brands') ?></p>
-        </div>
-        <a class="text-sm font-bold text-primary hover:text-primary-dark uppercase tracking-wide flex items-center" href="<?= $this->getUrl('promotion/deals') ?>">
-            <?= __('View All') ?>
-            <span class="material-symbols-outlined text-lg ml-1">arrow_forward</span>
-        </a>
-    </div>
-
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        <?php $deals = $this->getData('deals') ?? []; ?>
-        <?php if (empty($deals)): ?>
-            <?php for ($i = 0; $i < 4; $i++): ?>
-                <div class="motor-card flex flex-col rounded overflow-hidden">
-                    <div class="relative aspect-square bg-gray-100 dark:bg-gray-800">
-                        <div class="absolute top-2 left-2 z-10">
-                            <span class="motor-badge bg-primary"><?= __('Sale') ?></span>
-                        </div>
-                        <div class="w-full h-full flex items-center justify-center text-gray-400">
-                            <span class="material-symbols-outlined text-6xl">image</span>
-                        </div>
-                    </div>
-                    <div class="p-4">
-                        <h3 class="font-semibold text-text-primary-light dark:text-text-primary-dark text-sm mb-2 truncate"><?= __('Product Name') ?></h3>
-                        <div class="flex items-center gap-2">
-                            <span class="text-lg font-bold text-primary">$999</span>
-                            <span class="text-sm text-gray-400 line-through">$1,299</span>
-                        </div>
-                    </div>
-                </div>
-            <?php endfor; ?>
-        <?php else: ?>
-            <?php foreach ($deals as $product): ?>
-                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="motor-card flex flex-col rounded overflow-hidden group">
-                    <div class="relative aspect-square bg-gray-100 dark:bg-gray-800 overflow-hidden">
-                        <?php if ($product['discount_percent'] ?? 0 > 0): ?>
-                            <div class="absolute top-2 left-2 z-10">
-                                <span class="motor-badge">-<?= $product['discount_percent'] ?>%</span>
-                            </div>
-                        <?php endif; ?>
-                        <?php if ($product['image'] ?? null): ?>
-                            <img src="<?= htmlspecialchars($product['image']) ?>" alt="<?= htmlspecialchars($product['name'] ?? '') ?>" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300">
-                        <?php else: ?>
-                            <div class="w-full h-full flex items-center justify-center text-gray-400">
-                                <span class="material-symbols-outlined text-6xl">image</span>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                    <div class="p-4 bg-white dark:bg-gray-900">
-                        <h3 class="font-semibold text-text-primary-light dark:text-text-primary-dark text-sm mb-2 truncate group-hover:text-primary transition-colors">
-                            <?= htmlspecialchars($product['name'] ?? '') ?>
-                        </h3>
-                        <div class="flex items-center gap-2">
-                            <?php if ($product['special_price'] ?? null): ?>
-                                <span class="text-lg font-bold text-primary"><?= $this->formatPrice($product['special_price']) ?></span>
-                                <span class="text-sm text-gray-400 line-through"><?= $this->formatPrice($product['price']) ?></span>
-                            <?php else: ?>
-                                <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </a>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-
-    <w:hook name="WeShop_Promotion::homepage::deals_after"/>
-</section>
-
-<!-- 促销横幅 -->
-<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-    <div class="relative overflow-hidden rounded bg-primary">
-        <div class="absolute inset-0 bg-[url('<?= $this->getStaticUrl('assets/images/motor-pattern.png') ?>')] opacity-10"></div>
-        <div class="relative px-8 py-12 md:py-16 text-center">
-            <h2 class="font-heading text-2xl md:text-3xl font-bold text-white uppercase tracking-wide mb-2">
-                <?= __('Free Shipping On Orders Over $99') ?>
-            </h2>
-            <p class="text-white/80 mb-6"><?= __('On all motorcycles, parts, and accessories') ?></p>
-            <a href="<?= $this->getUrl('catalog/category') ?>" class="inline-flex items-center justify-center px-8 py-3 bg-white text-primary text-sm font-bold uppercase tracking-wide hover:bg-gray-100 transition-colors rounded">
-                <?= __('Shop Now') ?>
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- 热门品牌 -->
-<section class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12">
-    <div class="text-center mb-8">
-        <h2 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight">
-            <?= __('Top Brands') ?>
-        </h2>
-        <p class="text-text-secondary-light dark:text-text-secondary-dark mt-1"><?= __('We carry the best names in the industry') ?></p>
-    </div>
-
-    <div class="grid grid-cols-3 md:grid-cols-6 gap-6">
-        <?php
-        $brands = [
-            ['name' => 'Honda', 'logo' => 'brand-honda.svg'],
-            ['name' => 'Yamaha', 'logo' => 'brand-yamaha.svg'],
-            ['name' => 'Kawasaki', 'logo' => 'brand-kawasaki.svg'],
-            ['name' => 'Suzuki', 'logo' => 'brand-suzuki.svg'],
-            ['name' => 'Harley-Davidson', 'logo' => 'brand-harley.svg'],
-            ['name' => 'BMW', 'logo' => 'brand-bmw.svg'],
-        ];
-        ?>
-        <?php foreach ($brands as $brand): ?>
-            <a href="<?= $this->getUrl('catalog/brand', ['name' => strtolower($brand['name'])]) ?>" class="flex items-center justify-center p-6 bg-white dark:bg-gray-900 rounded border border-border-light dark:border-border-dark hover:border-primary hover:shadow-lg transition-all group">
-                <div class="text-gray-400 group-hover:text-primary transition-colors">
-                    <span class="font-heading text-lg font-bold uppercase tracking-wide"><?= $brand['name'] ?></span>
-                </div>
-            </a>
-        <?php endforeach; ?>
-    </div>
-</section>
-
-<!-- 为什么选择我们 -->
-<section class="bg-gray-50 dark:bg-gray-900 py-12">
-    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-10">
-            <h2 class="font-heading text-2xl md:text-3xl font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-tight">
-                <?= __('Why Choose Us') ?>
-            </h2>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div class="text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-                    <span class="material-symbols-outlined text-3xl text-primary">local_shipping</span>
-                </div>
-                <h3 class="font-heading font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-wide mb-2"><?= __('Free Shipping') ?></h3>
-                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('On orders over $99') ?></p>
-            </div>
-
-            <div class="text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-                    <span class="material-symbols-outlined text-3xl text-primary">verified</span>
-                </div>
-                <h3 class="font-heading font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-wide mb-2"><?= __('Genuine Parts') ?></h3>
-                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('100% authentic products') ?></p>
-            </div>
-
-            <div class="text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-                    <span class="material-symbols-outlined text-3xl text-primary">support_agent</span>
-                </div>
-                <h3 class="font-heading font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-wide mb-2"><?= __('Expert Support') ?></h3>
-                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Technical assistance 24/7') ?></p>
-            </div>
-
-            <div class="text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
-                    <span class="material-symbols-outlined text-3xl text-primary">assignment_return</span>
-                </div>
-                <h3 class="font-heading font-bold text-text-primary-light dark:text-text-primary-dark uppercase tracking-wide mb-2"><?= __('Easy Returns') ?></h3>
-                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('30-day return policy') ?></p>
-            </div>
-        </div>
-    </div>
-</section>
+<section class="bg-gray-50 dark:bg-gray-900 py-12" data-wslot="homepage-benefits" data-wslot-name="Homepage Benefits" data-wslot-accept="content,testimonial,faq" data-wslot-multiple="true"></section>
 
 <?= $this->getChildHtml('content') ?>
-<!-- Hook: Homepage Content After -->
-<w:hook name="WeShop_Frontend::homepage::content_after"/>
+<w:hook>WeShop_Frontend::homepage::content_after</w:hook>
+<w:hook>Weline_Theme::frontend::layouts::default::content-after</w:hook>
 
 <script>
 (function() {

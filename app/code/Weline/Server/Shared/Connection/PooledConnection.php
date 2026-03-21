@@ -215,6 +215,11 @@ class PooledConnection implements PooledConnectionInterface
 
     private function log(string $message): void
     {
+        // 避免在 Web 请求响应中混入连接池日志（会污染 HTML 输出）。
+        // 仅在 CLI/调试器场景输出到 WLS 日志流。
+        if (\PHP_SAPI !== 'cli' && \PHP_SAPI !== 'phpdbg') {
+            return;
+        }
         WlsLogger::info_('[PooledConnection] ' . $message);
     }
 }
