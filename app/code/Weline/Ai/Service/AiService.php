@@ -619,7 +619,10 @@ class AiService
         $usage = [];
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($providerCode === '') {
+                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+            }
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -769,7 +772,10 @@ class AiService
         
         try {
             // 1. 获取供应商代码
-            $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($providerCode === '') {
+                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+            }
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
@@ -856,6 +862,15 @@ class AiService
         if ($account->getData(Account::schema_fields_BASE_URL)) {
             $modelConfig['base_url'] = $account->getData(Account::schema_fields_BASE_URL);
             $modelConfig['api_url'] = $account->getData(Account::schema_fields_BASE_URL);
+        }
+
+        // 应用模型到供应商模型 code 的映射
+        $providerConfigRaw = $model->getData(AiModel::schema_fields_PROVIDER_CONFIG);
+        $providerConfig = is_string($providerConfigRaw) ? (json_decode($providerConfigRaw, true) ?: []) : (is_array($providerConfigRaw) ? $providerConfigRaw : []);
+        $providerModelCode = (string)($providerConfig['provider_model_code'] ?? $providerConfig['model'] ?? '');
+        if ($providerModelCode !== '') {
+            $modelConfig['model'] = $providerModelCode;
+            $modelConfig['model_id'] = $providerModelCode;
         }
         
         // 注入代理配置
@@ -1150,7 +1165,10 @@ class AiService
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
-        $providerCode = $this->accountService->getProviderByModelCode($model->getData(AiModel::schema_fields_MODEL_CODE));
+        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+        if ($providerCode === '') {
+            $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+        }
         Env::log('ai_agent_debug.log', sprintf(
             '[executeAgent] modelCode=%s, providerCode=%s',
             $model->getData(AiModel::schema_fields_MODEL_CODE),

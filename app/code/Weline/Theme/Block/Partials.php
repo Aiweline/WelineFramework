@@ -14,7 +14,6 @@ use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\LayoutPathResolver;
-use Weline\Theme\Helper\LayoutScanner;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
@@ -111,8 +110,15 @@ class Partials extends Block
         
         $scope = $ctx->resolveCurrentScope($normalizedArea);
 
-        // 获取配置的选项（支持预览配置和 scope）
-        $config = LayoutScanner::getPartialsConfig($theme, $normalizedArea, $scope);
+        // 获取配置的选项（优先 ThemeData 元配置，回退主题 config）
+        ThemeData::setCurrentTheme($theme);
+        ThemeData::setCurrentArea($normalizedArea);
+        $config = ThemeData::getPartialsConfig($normalizedArea, $scope);
+        if (empty($config)) {
+            $themeConfig = (array)$theme->getConfig();
+            $partialsByArea = (array)($themeConfig['partials'] ?? []);
+            $config = (array)($partialsByArea[$normalizedArea] ?? []);
+        }
         $option = $config[$type] ?? $defaultOption;
         
         // 构建部件文件路径

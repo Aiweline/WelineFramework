@@ -90,6 +90,7 @@ class Model extends BackendController
 
             // 简化数据，只获取必要字段
             $models = [];
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
             foreach ($modelData as $data) {
                 // 检查配置状态
                 $config = $data['config'] ?? '';
@@ -117,10 +118,16 @@ class Model extends BackendController
                 // 检查供应商连通性状态
                 $providerTestStatus = $data['provider_test_status'] ?? 'pending';
                 
+                $supplier = (string)($data['supplier'] ?? '');
+                $modelSource = (string)($data[AiModel::schema_fields_MODEL_SOURCE] ?? '');
+                $isCustomSupplier = ($supplier !== '' && !isset($supportedProviders[$supplier]));
+                $isCustomModel = $isCustomSupplier || $modelSource === AiModel::SOURCE_LOCAL;
+
                 $models[] = [
                     'id' => $data['id'] ?? '',
                     // 显示供应商：优先使用配置中的vendor，退回到数据库字段supplier
                     'vendor' => $data['vendor'] ?? ($data['supplier'] ?? ''),
+                    'supplier' => $supplier,
                     'name' => $data['name'] ?? '',
                     'model_code' => $data['model_code'] ?? '',
                     'version' => $data['version'] ?? '',
@@ -137,6 +144,8 @@ class Model extends BackendController
                     'connection_test_time' => $data['connection_test_time'] ?? 0,
                     'self_config_test_status' => $selfConfigTestStatus,
                     'provider_test_status' => $providerTestStatus,
+                    'is_custom_model' => $isCustomModel,
+                    'is_custom_supplier' => $isCustomSupplier,
                 ];
             }
 
@@ -875,9 +884,25 @@ class Model extends BackendController
 
         // 供应商选项（供 search-select 使用）
         $providers = VendorConfigManager::getSupportedProviders();
-        $opts = [];
+        $optsMap = [];
         foreach ($providers as $code => $info) {
-            $opts[] = $code . ':' . ($info['name'] ?? $code);
+            $optsMap[$code] = ($info['name'] ?? $code);
+        }
+        // 合并账户中已有的自定义供应商代码，确保“新建供应商账户后可在模型里选择”
+        /** @var Account $accountModel */
+        $accountModel = ObjectManager::getInstance(Account::class);
+        $accounts = $accountModel->reset()->select()->fetchArray();
+        if (is_array($accounts)) {
+            foreach ($accounts as $acc) {
+                $code = (string)($acc['provider_code'] ?? '');
+                if ($code !== '' && !isset($optsMap[$code])) {
+                    $optsMap[$code] = $code;
+                }
+            }
+        }
+        $opts = [];
+        foreach ($optsMap as $code => $name) {
+            $opts[] = $code . ':' . $name;
         }
         $this->assign('providerOptionsStr', implode(',', $opts));
         
@@ -946,6 +971,12 @@ class Model extends BackendController
             
             // 模型名称始终可以修改（用于区分复制模型）
             $model->setData(AiModel::schema_fields_NAME, $data['model_name'] ?? $data['name'] ?? '');
+
+            // 供应商模型 code 映射：provider_model_code 可与 model_code 不同
+            $providerModelCode = trim((string)($data['provider_model_code'] ?? ''));
+            if ($providerModelCode === '') {
+                $providerModelCode = (string)($data['model_code'] ?? $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '');
+            }
             
             // 令牌价格：只在字段存在时更新，避免清空已有数据
             if (isset($data['token_price_input'])) {
@@ -1070,13 +1101,44 @@ class Model extends BackendController
                 $providerConfig = array_filter($data['provider_config'], function($value) {
                     return $value !== '' && $value !== null;
                 });
+                // 写入供应商模型 code 映射（OpenAI 兼容字段 model/model_id）
+                if ($providerModelCode !== '') {
+                    $providerConfig['provider_model_code'] = $providerModelCode;
+                    $providerConfig['model'] = $providerModelCode;
+                    $providerConfig['model_id'] = $providerModelCode;
+                }
                 if (!empty($providerConfig)) {
                     $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
                 } else {
                     $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, '');
                 }
             } else {
-                $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $data['provider_config_json'] ?? '');
+                $pcRaw = $data['provider_config_json'] ?? '';
+                if (is_string($pcRaw) && trim($pcRaw) !== '') {
+                    $pcArr = json_decode($pcRaw, true);
+                    if (is_array($pcArr) && $providerModelCode !== '') {
+                        $pcArr['provider_model_code'] = $providerModelCode;
+                        $pcArr['model'] = $providerModelCode;
+                        $pcArr['model_id'] = $providerModelCode;
+                        $pcRaw = json_encode($pcArr, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                    }
+                }
+                $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $pcRaw);
+            }
+
+            // 保存前校验：供应商必须支持映射后的供应商模型 code
+            $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($supplierCode !== '' && $providerModelCode !== '') {
+                /** @var AccountService $accService */
+                $accService = ObjectManager::getInstance(AccountService::class);
+                if (!$accService->supportsModel($supplierCode, $providerModelCode)) {
+                    $msg = __('供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。', [$supplierCode, $providerModelCode]);
+                    if ($isAjax) {
+                        return $this->jsonResponse(['success' => false, 'message' => $msg]);
+                    }
+                    $this->getMessageManager()->addError($msg);
+                    return $this->redirect('*/backend/model/edit', ['id' => $id]);
+                }
             }
             
             // 处理其他字段

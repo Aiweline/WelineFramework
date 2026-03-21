@@ -47,6 +47,7 @@ class CacheManager implements CacheManagerInterface
         'ttl' => 1800,
         'permanent' => false,
         'taggable' => false,
+        'enabled' => true,
         'tip' => '',
     ];
 
@@ -125,7 +126,8 @@ class CacheManager implements CacheManagerInterface
 
     public function clearAll(): void
     {
-        foreach ($this->pools as $pool) {
+        foreach ($this->getPoolIdentities() as $identity) {
+            $pool = $this->pool($identity);
             if (!$pool->isPermanent()) {
                 $pool->clear();
             }
@@ -134,19 +136,19 @@ class CacheManager implements CacheManagerInterface
 
     public function flushAll(): void
     {
-        foreach ($this->pools as $pool) {
-            $pool->clear();
+        foreach ($this->getPoolIdentities() as $identity) {
+            $this->pool($identity)->clear();
         }
     }
 
     public function getAllStats(): array
     {
         $stats = [];
-        
-        foreach ($this->pools as $identity => $pool) {
-            $stats[$identity] = $pool->getStats();
+
+        foreach ($this->getPoolIdentities() as $identity) {
+            $stats[$identity] = $this->pool($identity)->getStats();
         }
-        
+
         return $stats;
     }
 
@@ -164,12 +166,13 @@ class CacheManager implements CacheManagerInterface
         $permanent = $poolConfig['permanent'] ?? false;
         $ttl = $poolConfig['ttl'] ?? 1800;
         $taggable = $poolConfig['taggable'] ?? false;
+        $enabled = $poolConfig['enabled'] ?? true;
 
         if ($taggable) {
-            return new TaggableCachePool($identity, $adapter, $tip, $permanent, $ttl);
+            return new TaggableCachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled);
         }
 
-        return new CachePool($identity, $adapter, $tip, $permanent, $ttl);
+        return new CachePool($identity, $adapter, $tip, $permanent, $ttl, (bool)$enabled);
     }
 
     /**
@@ -181,6 +184,10 @@ class CacheManager implements CacheManagerInterface
 
         if (isset(self::PREDEFINED_POOLS[$identity])) {
             $config = array_merge($config, self::PREDEFINED_POOLS[$identity]);
+        }
+
+        if (isset($this->config['status'][$identity])) {
+            $config['enabled'] = (bool)$this->config['status'][$identity];
         }
 
         if (isset($this->config['pools'][$identity])) {

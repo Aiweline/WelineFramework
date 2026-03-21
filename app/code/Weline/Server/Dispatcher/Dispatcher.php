@@ -177,6 +177,15 @@ class Dispatcher
      * 上次输出「所有 Worker 不可用」日志时间（节流，避免启动期刷屏）
      */
     private float $lastAllWorkersUnavailableLogAt = 0.0;
+
+    /**
+     * 启动保护：窗口期内未达到最小 READY 阈值时，对外返回 503 而非直接断开。
+     */
+    private bool $startupProtectionEnabled = true;
+    private float $startupProtectionWindowSec = 45.0;
+    private float $startupProtectionReadyRatio = 0.0;
+    private int $startupProtectionMinReady = 1;
+    private int $expectedWorkerCount = 0;
     
     // ========== IPC 控制通道 ==========
     
@@ -257,6 +266,7 @@ class Dispatcher
         $this->instanceName = $instanceName;
         $this->processName = $processName;
         $this->port = $port;
+        $this->expectedWorkerCount = \max(0, $workerCount);
         $this->httpsEnabled = $this->detectHttpsEnabled($instanceName);
         $this->startTime = \time();
         $this->lastMasterCheck = \time();
@@ -324,6 +334,31 @@ class Dispatcher
         if (isset($config['http_redirect_port'])) {
             $this->httpRedirectPort = (int) $config['http_redirect_port'];
             $this->passthroughCore->setHttpRedirectPort($this->httpRedirectPort);
+        }
+
+        if (isset($config['startup_protection_enabled'])) {
+            $this->startupProtectionEnabled = (bool)$config['startup_protection_enabled'];
+        }
+        if (isset($config['startup_protection_window_sec'])) {
+            $this->startupProtectionWindowSec = (float)$config['startup_protection_window_sec'];
+        }
+        if (isset($config['startup_protection_ready_ratio'])) {
+            $this->startupProtectionReadyRatio = (float)$config['startup_protection_ready_ratio'];
+        }
+        if (isset($config['startup_protection_min_ready'])) {
+            $this->startupProtectionMinReady = (int)$config['startup_protection_min_ready'];
+        }
+        if ($this->startupProtectionWindowSec < 0.0) {
+            $this->startupProtectionWindowSec = 0.0;
+        }
+        if ($this->startupProtectionReadyRatio < 0.0) {
+            $this->startupProtectionReadyRatio = 0.0;
+        }
+        if ($this->startupProtectionReadyRatio > 1.0) {
+            $this->startupProtectionReadyRatio = 1.0;
+        }
+        if ($this->startupProtectionMinReady < 1) {
+            $this->startupProtectionMinReady = 1;
         }
     }
     
@@ -520,6 +555,8 @@ class Dispatcher
                 $ports = $msg['ports'] ?? [];
                 if (\is_array($ports)) {
                     $this->passthroughCore->setWorkerPorts($ports);
+                    // 维护模式下若切到维护池，仍走正常分流；若池为空，启用维护页兜底。
+                    $this->maintenanceFallbackActive = $ports === [];
                     $this->log('SET_WORKER_POOL: ' . \implode(',', $ports), 'INFO');
                 }
                 break;
@@ -984,11 +1021,70 @@ class Dispatcher
                         . "healthy: {$healthSummary['healthy']}/{$healthSummary['total']}", 'ERROR');
                     $this->lastAllWorkersUnavailableLogAt = $now;
                 }
-                @\socket_close($clientSocket);
+                if ($this->shouldServeMaintenanceFallback()) {
+                    $this->respondWithStartupProtection($clientSocket);
+                } else {
+                    @\socket_close($clientSocket);
+                }
             }
             
             $accepted++;
         } while ($accepted < $maxAcceptPerLoop);
+    }
+
+    private function shouldApplyStartupProtection(): bool
+    {
+        if (!$this->startupProtectionEnabled || $this->startupProtectionWindowSec <= 0.0) {
+            return false;
+        }
+
+        $uptime = \time() - $this->startTime;
+        if ($uptime < 0 || $uptime > $this->startupProtectionWindowSec) {
+            return false;
+        }
+
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $healthy = (int)($healthSummary['healthy'] ?? 0);
+        $dynamicTotal = (int)($healthSummary['total'] ?? 0);
+        $expected = $this->expectedWorkerCount > 0 ? $this->expectedWorkerCount : $dynamicTotal;
+        if ($expected <= 0) {
+            $expected = 1;
+        }
+
+        $requiredByRatio = (int)\ceil($expected * $this->startupProtectionReadyRatio);
+        $required = \max($this->startupProtectionMinReady, $requiredByRatio);
+        if ($required > $expected) {
+            $required = $expected;
+        }
+
+        return $healthy < $required;
+    }
+
+    private function shouldServeMaintenanceFallback(): bool
+    {
+        if ($this->maintenanceFallbackActive) {
+            return true;
+        }
+
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $total = (int)($healthSummary['total'] ?? 0);
+        if ($total <= 0) {
+            // 还没有任何可路由后端（启动窗口/池未下发）→ 返回维护页而非断开连接
+            return true;
+        }
+
+        return $this->shouldApplyStartupProtection();
+    }
+
+    /**
+     * 启动保护响应：在可控窗口内明确返回 503，避免客户端表现为随机断连。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function respondWithStartupProtection($clientSocket): void
+    {
+        @\socket_write($clientSocket, $this->fallbackMaintenancePage);
+        @\socket_close($clientSocket);
     }
 
     /**
