@@ -1,104 +1,149 @@
 <?php
 /**
  * 网站列表表格 - Weline_Websites
+ *
  * @var \Weline\Framework\View\Template $this
  */
 $websites = $this->getData('websites') ?: [];
 $pagination = $this->getData('pagination') ?: '';
 ?>
 <div class="table-responsive weline-websites-table-wrap">
-    <table class="table table-hover">
+    <table class="table table-hover align-middle weline-websites-compact-table">
         <thead>
         <tr>
-            <th>ID</th>
-            <th><lang>名称</lang></th>
-            <th><lang>代码</lang></th>
-            <th>URL</th>
-            <th><lang>关联域名</lang></th>
-            <th><lang>默认货币</lang></th>
-            <th><lang>关联货币</lang></th>
-            <th><lang>关联语言</lang></th>
-            <th><lang>时区</lang></th>
-            <th><lang>操作</lang></th>
+            <th><lang>站点</lang></th>
+            <th><lang>访问入口</lang></th>
+            <th><lang>语言 / 货币</lang></th>
+            <th class="text-end"><lang>操作</lang></th>
         </tr>
         </thead>
         <tbody>
         <?php if (empty($websites)): ?>
             <tr>
-                <td colspan="10" class="text-center text-muted py-4">
+                <td colspan="4" class="text-center text-muted py-4">
                     <i class="mdi mdi-web-off" style="font-size: 2rem;"></i>
-                    <p class="mt-2"><lang>暂无网站数据</lang></p>
+                    <p class="mt-2 mb-0"><lang>暂无网站数据</lang></p>
                 </td>
             </tr>
         <?php else: ?>
             <?php foreach ($websites as $website): ?>
+                <?php
+                $websiteId = (int)($website['website_id'] ?? 0);
+                $name = (string)($website['name'] ?? '');
+                $code = (string)($website['code'] ?? '');
+                $timezone = (string)($website['default_timezone'] ?? '');
+                $domainList = $website['domain_list'] ?? [];
+                if (!is_array($domainList)) {
+                    $domainList = [];
+                }
+                $siteUrl = (string)($website['url'] ?? '');
+                if ($siteUrl === '' && $domainList !== []) {
+                    $firstDomain = $domainList[0] ?? [];
+                    $firstHost = (string)($firstDomain['domain'] ?? '');
+                    if ($firstHost !== '') {
+                        $siteUrl = (!empty($firstDomain['https_enabled']) ? 'https://' : 'http://') . $firstHost;
+                    }
+                }
+                $defaultCurrency = (string)($website['default_currency'] ?? '');
+                $currencyCodes = $website['currency_codes'] ?? [];
+                if (!is_array($currencyCodes)) {
+                    $currencyCodes = [];
+                }
+                $languageCodes = $website['language_codes'] ?? [];
+                if (!is_array($languageCodes)) {
+                    $languageCodes = [];
+                }
+                ?>
                 <tr>
-                    <td><?= (int)$website['website_id'] ?></td>
-                    <td><?= htmlspecialchars($website['name'] ?? '') ?></td>
-                    <td><code><?= htmlspecialchars($website['code'] ?? '') ?></code></td>
                     <td>
-                        <a href="<?= htmlspecialchars($website['url'] ?? '') ?>" target="_blank" class="weline-websites-url-link text-decoration-none">
-                            <?= htmlspecialchars($website['url'] ?? '') ?>
-                            <i class="mdi mdi-open-in-new ms-1 small"></i>
-                        </a>
-                    </td>
-                    <td class="weline-websites-domain-cell">
-                        <?php
-                        $domainList = $website['domain_list'] ?? [];
-                        if (!empty($domainList)):
-                            foreach ($domainList as $d):
-                                $domain = $d['domain'] ?? '';
-                                if ($domain === '') continue;
-                                $isPrimary = !empty($d['is_primary']);
-                                $protocol = (!empty($d['https_enabled'])) ? 'https' : 'http';
-                                $url = $protocol . '://' . $domain;
-                        ?>
-                            <span class="weline-websites-domain-badge">
-                                <a href="<?= htmlspecialchars($url) ?>" target="_blank" class="weline-websites-domain-link" title="<?= htmlspecialchars($domain) ?>">
-                                    <?= htmlspecialchars($domain) ?>
-                                    <i class="mdi mdi-open-in-new ms-1 small"></i>
-                                </a>
-                                <?php if ($isPrimary): ?>
-                                    <span class="badge bg-primary ms-1"><lang>主</lang></span>
+                        <div class="weline-websites-site-cell">
+                            <div class="weline-websites-site-name"><?= htmlspecialchars($name) ?></div>
+                            <div class="weline-websites-site-meta">
+                                <span class="weline-websites-inline-code"><?= htmlspecialchars($code) ?></span>
+                                <span class="weline-websites-meta-chip">#<?= $websiteId ?></span>
+                                <?php if ($timezone !== ''): ?>
+                                    <span class="weline-websites-meta-chip"><?= htmlspecialchars($timezone) ?></span>
                                 <?php endif; ?>
-                            </span>
-                        <?php endforeach; ?>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
+                            </div>
+                        </div>
                     </td>
                     <td>
-                        <?php if (!empty($website['default_currency'])): ?>
-                            <span class="badge bg-primary"><?= htmlspecialchars($website['default_currency']) ?></span>
-                        <?php else: ?>
-                            <span class="text-muted">-</span>
-                        <?php endif; ?>
+                        <div class="weline-websites-access-cell">
+                            <?php if ($siteUrl !== ''): ?>
+                                <a href="<?= htmlspecialchars($siteUrl) ?>" target="_blank" rel="noopener" class="weline-websites-url-link weline-websites-url-row">
+                                    <span><?= htmlspecialchars($siteUrl) ?></span>
+                                    <i class="mdi mdi-open-in-new"></i>
+                                </a>
+                            <?php else: ?>
+                                <span class="text-muted small"><lang>未生成访问地址</lang></span>
+                            <?php endif; ?>
+
+                            <div class="weline-websites-domain-list">
+                                <?php if ($domainList !== []): ?>
+                                    <?php foreach ($domainList as $domainRow): ?>
+                                        <?php
+                                        $domain = (string)($domainRow['domain'] ?? '');
+                                        if ($domain === '') {
+                                            continue;
+                                        }
+                                        $isPrimary = !empty($domainRow['is_primary']);
+                                        $protocol = !empty($domainRow['https_enabled']) ? 'https' : 'http';
+                                        $domainUrl = $protocol . '://' . $domain;
+                                        ?>
+                                        <span class="weline-websites-domain-badge">
+                                            <a href="<?= htmlspecialchars($domainUrl) ?>" target="_blank" rel="noopener" class="weline-websites-domain-link" title="<?= htmlspecialchars($domain) ?>">
+                                                <?= htmlspecialchars($domain) ?>
+                                                <i class="mdi mdi-open-in-new ms-1 small"></i>
+                                            </a>
+                                            <?php if ($isPrimary): ?>
+                                                <span class="badge bg-primary-subtle text-primary ms-1"><lang>主</lang></span>
+                                            <?php endif; ?>
+                                        </span>
+                                    <?php endforeach; ?>
+                                <?php else: ?>
+                                    <span class="text-muted small">-</span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
                     </td>
                     <td>
-                        <?php
-                        $currencyCodes = $website['currency_codes'] ?? [];
-                        if (!empty($currencyCodes)):
-                            foreach ($currencyCodes as $code): ?>
-                                <span class="badge bg-info me-1"><?= htmlspecialchars($code) ?></span>
-                            <?php endforeach;
-                        else: ?>
-                            <span class="text-muted"><lang>全部</lang></span>
-                        <?php endif; ?>
+                        <div class="weline-websites-market-cell">
+                            <div class="weline-websites-market-row">
+                                <span class="weline-websites-market-label"><lang>货币</lang></span>
+                                <div class="weline-websites-chip-group">
+                                    <?php if ($defaultCurrency !== ''): ?>
+                                        <span class="badge bg-primary-subtle text-primary"><?= __('默认') ?> <?= htmlspecialchars($defaultCurrency) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($currencyCodes !== []): ?>
+                                        <?php foreach ($currencyCodes as $currencyCode): ?>
+                                            <span class="badge bg-info-subtle text-info"><?= htmlspecialchars((string)$currencyCode) ?></span>
+                                        <?php endforeach; ?>
+                                    <?php elseif ($defaultCurrency === ''): ?>
+                                        <span class="text-muted small"><lang>全部</lang></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <div class="weline-websites-market-row">
+                                <span class="weline-websites-market-label"><lang>语言</lang></span>
+                                <div class="weline-websites-chip-group">
+                                    <?php if ($languageCodes !== []): ?>
+                                        <?php foreach ($languageCodes as $languageCode): ?>
+                                            <span class="badge bg-success-subtle text-success"><?= htmlspecialchars((string)$languageCode) ?></span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <span class="text-muted small"><lang>全部</lang></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
                     </td>
-                    <td>
-                        <?php
-                        $languageCodes = $website['language_codes'] ?? [];
-                        if (!empty($languageCodes)):
-                            foreach ($languageCodes as $code): ?>
-                                <span class="badge bg-success me-1"><?= htmlspecialchars($code) ?></span>
-                            <?php endforeach;
-                        else: ?>
-                            <span class="text-muted"><lang>全部</lang></span>
-                        <?php endif; ?>
-                    </td>
-                    <td><small><?= htmlspecialchars($website['default_timezone'] ?? '') ?></small></td>
-                    <td>
-                        <div class="d-flex gap-1 flex-wrap">
+                    <td class="text-end weline-websites-op-cell">
+                        <div class="d-flex gap-2 flex-wrap justify-content-end">
+                            <?php if ($siteUrl !== ''): ?>
+                                <a href="<?= htmlspecialchars($siteUrl) ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="<?= __('访问网站') ?>">
+                                    <i class="mdi mdi-open-in-new"></i> <lang>访问</lang>
+                                </a>
+                            <?php endif; ?>
                             <block class='Weline\Component\Block\OffCanvas'
                                    cache='0'
                                    id='edit_website_{{website.website_id}}'
@@ -117,7 +162,7 @@ $pagination = $this->getData('pagination') ?: '';
                                    target-tag='a'
                                    save='1'
                             />
-                            <a href="<?= $this->getUrl('*/admin/website/delete') ?>?id=<?= $website['website_id'] ?>"
+                            <a href="<?= $this->getUrl('*/admin/website/delete') ?>?id=<?= $websiteId ?>"
                                w-delete="true"
                                w-msg="<?= __('您确定要删除此网站吗？') ?>"
                                class="btn btn-sm btn-outline-danger"
@@ -134,4 +179,3 @@ $pagination = $this->getData('pagination') ?: '';
 
     <?= $pagination ?>
 </div>
-
