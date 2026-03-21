@@ -6,9 +6,9 @@ namespace Weline\Theme\Service;
 
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
-use Weline\Widget\Service\WidgetRegistry;
 
 /**
  * 主题布局服务
@@ -18,16 +18,16 @@ class ThemeLayoutService
 {
     private ThemeLayout $themeLayout;
     private WelineTheme $welineTheme;
-    private WidgetRegistry $widgetRegistry;
+    private ThemePlaceableRegistryInterface $placeableRegistry;
 
     public function __construct(
         ThemeLayout $themeLayout,
         WelineTheme $welineTheme,
-        WidgetRegistry $widgetRegistry
+        mixed $placeableRegistry = null
     ) {
         $this->themeLayout = $themeLayout;
         $this->welineTheme = $welineTheme;
-        $this->widgetRegistry = $widgetRegistry;
+        $this->placeableRegistry = $this->resolvePlaceableRegistry($placeableRegistry);
     }
 
     private function getEventsManager(): EventsManager
@@ -134,7 +134,7 @@ class ThemeLayoutService
     public function getFullLayout(int $themeId, string $pageType = ThemeLayout::PAGE_TYPE_DEFAULT, string $status = ThemeLayout::STATUS_PUBLISHED): array
     {
         $layout = $this->getLayout($themeId, $pageType, $status);
-        $widgetRegistry = $this->widgetRegistry->getRegistry();
+        $widgetRegistry = ObjectManager::getInstance(\Weline\Widget\Service\WidgetRegistry::class)->getRegistry();
 
         // 为每个部件添加元信息，并按 slot_id 组织到 slots 子数组
         foreach ($layout as $area => &$areaData) {
@@ -143,10 +143,20 @@ class ThemeLayoutService
             
             foreach ($areaData['widgets'] as &$widget) {
                 // 添加部件元信息
+                $definition = $this->placeableRegistry->find(
+                    (string)($widget['widget_module'] ?? ''),
+                    (string)($widget['widget_type'] ?? ''),
+                    (string)($widget['widget_code'] ?? ''),
+                    null,
+                    (string)$area
+                );
+                if ($definition) {
+                    $widget['meta'] = $definition->toWidgetArray();
+                }
                 $widgetKey = $widget['widget_module'] . '/' . $widget['widget_type'] . '/' . $widget['widget_code'];
-                if (isset($widgetRegistry[$widgetKey])) {
+                if (!isset($widget['meta']) && isset($widgetRegistry[$widgetKey])) {
                     $widget['meta'] = $widgetRegistry[$widgetKey];
-                } else {
+                } elseif (!isset($widget['meta'])) {
                     // 尝试其他匹配方式（注册表是嵌套结构：type -> code -> widget_data）
                     $found = false;
                     foreach ($widgetRegistry as $type => $typeWidgets) {
@@ -681,6 +691,7 @@ class ThemeLayoutService
         return [
             'layout_id' => $layoutId,
             'widget_module' => $widgetModule,
+            'widget_type' => $this->themeLayout->getWidgetType(),
             'widget_code' => $widgetCode,
             'config' => $config,
             'area' => $this->themeLayout->getArea(),
@@ -846,20 +857,14 @@ class ThemeLayoutService
      *   - show_exclusive_only: bool 是否只显示独占部件
      * @return array
      */
-    public function getAvailableWidgets(?string $pageType = null, ?array $filterOptions = null): array
+    public function getAvailableWidgets(?string $pageType = null, ?array $filterOptions = null, string $area = 'frontend'): array
     {
-        $eventData = [
-            'data' => [
-                'operation' => 'getAvailableList',
-                'params' => [
-                    'page_type' => $pageType,
-                    'filter_options' => $filterOptions,
-                ],
-            ],
-        ];
-        $this->getEventsManager()->dispatch('Weline_Widget::query', $eventData);
-        $result = $eventData['data']['result'] ?? null;
-        return is_array($result) ? $result : [];
+        $effectiveArea = (string)($filterOptions['area'] ?? $area);
+        if ($effectiveArea !== 'backend') {
+            $effectiveArea = 'frontend';
+        }
+
+        return $this->placeableRegistry->getAvailableList($pageType, $filterOptions, null, $effectiveArea);
     }
     
     /**
@@ -944,4 +949,12 @@ class ThemeLayoutService
         ];
     }
 
+    private function resolvePlaceableRegistry(mixed $placeableRegistry): ThemePlaceableRegistryInterface
+    {
+        if ($placeableRegistry instanceof ThemePlaceableRegistryInterface) {
+            return $placeableRegistry;
+        }
+
+        return ObjectManager::getInstance(ThemePlaceableRegistry::class);
+    }
 }
