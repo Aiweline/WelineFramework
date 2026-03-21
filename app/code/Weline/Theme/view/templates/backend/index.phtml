@@ -64,31 +64,33 @@ foreach ($themes as $themeItem) {
             </div>
         </div>
     <?php else: ?>
-        <!-- 前后端 Tab -->
-        <ul class="nav nav-tabs weline-theme-manage__tabs mb-3" role="tablist">
-            <li class="nav-item">
-                <a class="nav-link active" data-bs-toggle="tab" href="#weline-theme-tab-frontend" role="tab">
-                    <i class="mdi mdi-store-front"></i> <?= __('前台主题') ?>
-                    <?php if ($active_frontend_id): ?>
-                        <span class="badge bg-success ms-1"><?= __('已选') ?></span>
-                    <?php endif; ?>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" data-bs-toggle="tab" href="#weline-theme-tab-backend" role="tab">
-                    <i class="mdi mdi-cog"></i> <?= __('后台主题') ?>
-                    <?php if ($active_backend_id): ?>
-                        <span class="badge bg-success ms-1"><?= __('已选') ?></span>
-                    <?php endif; ?>
-                </a>
-            </li>
-        </ul>
-
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <span class="text-muted small"><?= __('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $backendThemeCount]) ?></span>
+        <div class="weline-theme-manage__tabbar mb-3">
+            <!-- 前后端 Tab -->
+            <ul class="nav nav-tabs weline-theme-manage__tabs mb-0" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link active" data-bs-toggle="tab" href="#weline-theme-tab-frontend" role="tab">
+                        <i class="mdi mdi-store-front"></i> <?= __('前台主题') ?>
+                        <?php if ($active_frontend_id): ?>
+                            <span class="badge bg-success ms-1"><?= __('已选') ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-bs-toggle="tab" href="#weline-theme-tab-backend" role="tab">
+                        <i class="mdi mdi-cog"></i> <?= __('后台主题') ?>
+                        <?php if ($active_backend_id): ?>
+                            <span class="badge bg-success ms-1"><?= __('已选') ?></span>
+                        <?php endif; ?>
+                    </a>
+                </li>
+            </ul>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="batchGeneratePreviews">
                 <i class="mdi mdi-camera-plus"></i> <?= __('批量生成预览图') ?>
             </button>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small"><?= __('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $backendThemeCount]) ?></span>
         </div>
 
         <div class="tab-content">
@@ -115,7 +117,9 @@ foreach ($themes as $themeItem) {
                     $themeName = $theme['name'] ?? '';
                     $moduleName = $theme['module_name'] ?? '';
                     $isActive = ($activeId && $themeId === $activeId);
-                    $previewImage = $theme['preview_image'] ?? '';
+                    $previewImage = $area === 'backend'
+                        ? ($theme['backend_preview_image'] ?? $theme['preview_image'] ?? '')
+                        : ($theme['frontend_preview_image'] ?? $theme['preview_image'] ?? '');
                     $previewImageSrc = $previewImage ? $template->getBaseUrl() . ltrim($previewImage, '/') : '';
             ?>
                 <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
@@ -133,7 +137,7 @@ foreach ($themes as $themeItem) {
                                 <span class="active-badge"><i class="mdi mdi-check-circle"></i> <?= __('已激活') ?></span>
                             <?php endif; ?>
                             <?php if (!$previewImageSrc): ?>
-                                <button type="button" class="btn btn-sm btn-primary generate-preview-btn" data-theme-id="<?= $themeId ?>" data-theme-name="<?= htmlspecialchars($themeName) ?>" title="<?= __('生成预览图') ?>">
+                                <button type="button" class="btn btn-sm btn-primary generate-preview-btn" data-theme-id="<?= $themeId ?>" data-theme-name="<?= htmlspecialchars($themeName) ?>" data-area="<?= $area ?>" title="<?= __('生成预览图') ?>">
                                     <i class="mdi mdi-camera"></i>
                                 </button>
                             <?php endif; ?>
@@ -393,25 +397,27 @@ foreach ($themes as $themeItem) {
         btn.addEventListener('click', function() {
             const themeId = this.dataset.themeId;
             const themeName = this.dataset.themeName;
+            const area = this.dataset.area || 'frontend';
+            const areaLabel = area === 'backend' ? '<?= __('后台') ?>' : '<?= __('前台') ?>';
             
             // 显示弹窗
             const modal = new bootstrap.Modal(document.getElementById('singleGenerateModal'));
             modal.show();
             
             // 更新标题
-            document.getElementById('singleGenerateTitle').innerText = '生成 "' + themeName + '" 的预览图';
+            document.getElementById('singleGenerateTitle').innerText = '生成 "' + themeName + '" 的 ' + areaLabel + ' 预览图';
             
             // 显示进度
             document.getElementById('singleStatus').innerHTML = '正在生成预览图，请稍候...';
             document.getElementById('singleSpinner').style.display = 'block';
             
             // 发送生成请求
-            generateSinglePreview(themeId);
+            generateSinglePreview(themeId, area);
         });
     });
 
     // 生成单个主题预览图
-    async function generateSinglePreview(themeId) {
+    async function generateSinglePreview(themeId, area) {
         try {
             const response = await fetch('<?= $url->getBackendUrl('theme/backend/index/postGeneratePreviewImage') ?>', {
                 method: 'POST',
@@ -422,7 +428,7 @@ foreach ($themes as $themeItem) {
                 body: new URLSearchParams({
                     'form_key': CSRF_TOKEN,
                     'theme_id': themeId,
-                    'area': 'frontend',
+                    'area': area,
                     'force': '1'
                 })
             });
@@ -470,6 +476,17 @@ foreach ($themes as $themeItem) {
 
 <style>
 /* 主题管理：使用主题变量，避免硬编码颜色 */
+.weline-theme-manage__tabbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.weline-theme-manage__tabbar .btn {
+    flex-shrink: 0;
+}
+
 .weline-theme-manage__tabs.nav-tabs .nav-link {
     color: var(--backend-color-text-secondary, #6c757d);
     border-color: transparent;
@@ -614,6 +631,15 @@ foreach ($themes as $themeItem) {
 
 /* 响应式调整 */
 @media (max-width: 768px) {
+    .weline-theme-manage__tabbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .weline-theme-manage__tabbar .btn {
+        width: 100%;
+    }
+
     .weline-theme-manage .theme-preview {
         height: 140px;
     }

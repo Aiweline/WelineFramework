@@ -396,7 +396,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
         }
         if ($theme === null) {
-            $theme = $this->welineTheme->getActiveTheme();
+            $theme = $this->welineTheme->getActiveTheme($area);
         }
         self::$themeByAreaCache[$area] = $theme;
         return $theme;
