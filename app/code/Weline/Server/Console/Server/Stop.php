@@ -88,9 +88,16 @@ class Stop extends CommandAbstract
      */
     public function findWelineServerInstanceNameByPort(int $port): ?string
     {
+        $portInspect = Processer::inspectPortOccupantWithHistory($port);
+        $runningWelineOnPort = (bool) ($portInspect['pid_running'] ?? false)
+            && (bool) ($portInspect['is_weline'] ?? false);
+        if (!$runningWelineOnPort) {
+            return $this->findConfiguredRunningInstanceNameByPort($port);
+        }
+
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
         if (!\is_dir($instanceDir)) {
-            return null;
+            return $this->findConfiguredRunningInstanceNameByPort($port);
         }
         $files = \glob($instanceDir . '*.json');
         foreach ($files as $file) {
@@ -109,7 +116,8 @@ class Stop extends CommandAbstract
                 return $name;
             }
         }
-        return null;
+
+        return $this->findConfiguredRunningInstanceNameByPort($port);
     }
 
     /**
@@ -172,7 +180,14 @@ class Stop extends CommandAbstract
         
         if ($instanceInfo === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
-            $this->printer->note(__('使用 server:listing 查看所有实例'));
+            if ($this->hasRecoverableManagedProcessHint($name)) {
+                $recovered = $this->cleanupRecoverableProcessesWithoutInstanceFile($name);
+                if ($recovered > 0) {
+                    $this->printer->success(__('已在实例文件缺失场景下安全清理 %{1} 个受管 WLS 进程', [$recovered]));
+                }
+            } else {
+                $this->printer->note(__('使用 server:listing 查看所有实例'));
+            }
             // 清理可能残留的启动锁（如上次 server:start 崩溃遗留），便于后续启动
             $this->releaseStartLock($name);
             return;
@@ -818,6 +833,84 @@ class Stop extends CommandAbstract
         if ($totalKilled > 0) {
             $this->printer->note(__('清理了 %{1} 个残留 WLS 进程', [$totalKilled]));
         }
+    }
+
+    private function findConfiguredRunningInstanceNameByPort(int $port): ?string
+    {
+        $configDir = Env::VAR_DIR . 'server' . DS . 'config' . DS;
+        if (!\is_dir($configDir)) {
+            return null;
+        }
+
+        foreach (\glob($configDir . '*.json') ?: [] as $file) {
+            $name = \basename($file, '.json');
+            $data = \json_decode((string) @\file_get_contents($file), true);
+            if (!\is_array($data)) {
+                continue;
+            }
+
+            $instancePort = (int) ($data['port'] ?? 0);
+            if ($instancePort !== $port) {
+                continue;
+            }
+
+            if ($this->hasRecoverableManagedProcessHint($name)) {
+                return $name;
+            }
+        }
+
+        return null;
+    }
+
+    private function hasRecoverableManagedProcessHint(string $name): bool
+    {
+        $processNames = [
+            MasterProcess::getMasterProcessName($name),
+            'weline-wls-dispatcher-' . $name,
+            'weline-wls-session-' . $name,
+            'weline-wls-memory-' . $name,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+        ];
+
+        foreach ($processNames as $processName) {
+            $pname = '--name=' . $processName;
+            $pid = (int) Processer::getData($pname, 'pid');
+            if ($pid > 0 && Processer::isManagedProcessRunning($pid, $processName, '', $pname)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function cleanupRecoverableProcessesWithoutInstanceFile(string $name, bool $dryRun = false): int
+    {
+        $prefixes = [
+            MasterProcess::getMasterProcessName($name),
+            'weline-wls-dispatcher-' . $name,
+            'weline-wls-worker-' . $name . '-',
+            'weline-master-' . $name . '-worker-',
+            'weline-wls-session-' . $name,
+            'weline-wls-memory-' . $name,
+            MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+        ];
+
+        $recoverable = 0;
+        foreach ($prefixes as $prefix) {
+            if ($dryRun) {
+                if ($this->hasRecoverableManagedProcessHint($name)) {
+                    return 1;
+                }
+                continue;
+            }
+            $recoverable += Processer::killByProcessNamePrefix($prefix);
+        }
+
+        if (!$dryRun) {
+            Processer::cleanupStalePidFiles();
+        }
+
+        return $recoverable;
     }
     
     /**
