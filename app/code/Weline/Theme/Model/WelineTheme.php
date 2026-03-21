@@ -121,31 +121,45 @@ class WelineTheme extends Model
         $this->setData(self::schema_fields_PATH, $value);
         return $this;
     }
+    private function normalizePreviewImagePath(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        $value = \str_replace('\\', '/', \trim($value));
+        $value = \ltrim($value, '/');
+        if (\str_starts_with($value, 'pub/')) {
+            $value = \substr($value, 4);
+        }
+
+        return \ltrim($value, '/');
+    }
     public function getPreviewImage(): ?string
     {
-        return $this->getData(self::schema_fields_PREVIEW_IMAGE);
+        return $this->normalizePreviewImagePath($this->getData(self::schema_fields_PREVIEW_IMAGE));
     }
     public function setPreviewImage(?string $value): static
     {
-        $this->setData(self::schema_fields_PREVIEW_IMAGE, $value);
+        $this->setData(self::schema_fields_PREVIEW_IMAGE, $this->normalizePreviewImagePath($value));
         return $this;
     }
     public function getFrontendPreviewImage(): ?string
     {
-        return $this->getData(self::schema_fields_FRONTEND_PREVIEW_IMAGE);
+        return $this->normalizePreviewImagePath($this->getData(self::schema_fields_FRONTEND_PREVIEW_IMAGE));
     }
     public function setFrontendPreviewImage(?string $value): static
     {
-        $this->setData(self::schema_fields_FRONTEND_PREVIEW_IMAGE, $value);
+        $this->setData(self::schema_fields_FRONTEND_PREVIEW_IMAGE, $this->normalizePreviewImagePath($value));
         return $this;
     }
     public function getBackendPreviewImage(): ?string
     {
-        return $this->getData(self::schema_fields_BACKEND_PREVIEW_IMAGE);
+        return $this->normalizePreviewImagePath($this->getData(self::schema_fields_BACKEND_PREVIEW_IMAGE));
     }
     public function setBackendPreviewImage(?string $value): static
     {
-        $this->setData(self::schema_fields_BACKEND_PREVIEW_IMAGE, $value);
+        $this->setData(self::schema_fields_BACKEND_PREVIEW_IMAGE, $this->normalizePreviewImagePath($value));
         return $this;
     }
     public function getParentId()

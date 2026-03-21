@@ -376,7 +376,7 @@ class Index extends BackendController
 
             if ($imagePath) {
                 // 更新数据库中的 preview_image 字段
-                $relativePath = ltrim(str_replace(BP, '', $imagePath), '\\/');
+                $relativePath = ThemePreviewGenerator::normalizePreviewRelativePath($imagePath);
                 $this->persistThemePreviewImage($theme, $area, $relativePath);
 
                 return $this->fetchJson($this->success(__('预览图生成成功'), [
@@ -421,7 +421,7 @@ class Index extends BackendController
                 // 生成 frontend 预览图
                 try {
                     $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
-                    $relativePath1 = ltrim(str_replace(BP, '', $result1), '\\/');
+                    $relativePath1 = ThemePreviewGenerator::normalizePreviewRelativePath($result1);
                     $themeObj1 = clone $themeModel;
                     $themeObj1->load($themeId);
                     $this->persistThemePreviewImage($themeObj1, 'frontend', $relativePath1);
@@ -434,7 +434,7 @@ class Index extends BackendController
                 // 生成 backend 预览图
                 try {
                     $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
-                    $relativePath2 = ltrim(str_replace(BP, '', $result2), '\\/');
+                    $relativePath2 = ThemePreviewGenerator::normalizePreviewRelativePath($result2);
                     $themeObj2 = clone $themeModel;
                     $themeObj2->load($themeId);
                     $this->persistThemePreviewImage($themeObj2, 'backend', $relativePath2);
@@ -528,7 +528,7 @@ class Index extends BackendController
                     ]);
                     $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
                     if ($result1) {
-                        $relativePath1 = ltrim(str_replace(BP, '', $result1), '\\/');
+                        $relativePath1 = ThemePreviewGenerator::normalizePreviewRelativePath($result1);
                         $themeObj1 = clone $themeModel;
                         $themeObj1->load($themeId);
                         $this->persistThemePreviewImage($themeObj1, 'frontend', $relativePath1);
@@ -552,7 +552,7 @@ class Index extends BackendController
                     ]);
                     $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
                     if ($result2) {
-                        $relativePath2 = ltrim(str_replace(BP, '', $result2), '\\/');
+                        $relativePath2 = ThemePreviewGenerator::normalizePreviewRelativePath($result2);
                         $themeObj2 = clone $themeModel;
                         $themeObj2->load($themeId);
                         $this->persistThemePreviewImage($themeObj2, 'backend', $relativePath2);
@@ -614,6 +614,8 @@ class Index extends BackendController
      */
     private function persistThemePreviewImage(WelineTheme $theme, string $area, string $relativePath): void
     {
+        $relativePath = ThemePreviewGenerator::normalizePreviewRelativePath($relativePath);
+
         if ($area === 'backend') {
             $theme->setBackendPreviewImage($relativePath);
         } else {
