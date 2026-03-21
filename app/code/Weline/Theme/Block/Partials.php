@@ -12,13 +12,12 @@ namespace Weline\Theme\Block;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
-use Weline\Framework\Http\Request;
 use Weline\Theme\Helper\ComponentMetaParser;
 use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\LayoutScanner;
-use Weline\Theme\Helper\PreviewManager;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ThemeContextService;
 
 /**
  * Partials Block
@@ -94,23 +93,15 @@ class Partials extends Block
      */
     public function getPartialsPath(string $area, string $type, string $defaultOption = 'default'): ?string
     {
-        /** @var WelineTheme $theme */
-        $theme = ObjectManager::getInstance(WelineTheme::class);
-        
-        // 检查是否有预览主题
-        $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $previewThemeId = $session->getData('preview_theme_id');
-        $previewThemeArea = (string)($session->getData('preview_theme_area') ?? '');
-        if ($previewThemeId && $previewThemeArea === $area) {
-            $theme->load($previewThemeId);
-        } else {
-            $theme->getActiveTheme($area);
-        }
-        
+        /** @var ThemeContextService $ctx */
+        $ctx = ObjectManager::getInstance(ThemeContextService::class);
+        $normalizedArea = $ctx->normalizeArea($area);
+        $theme = $ctx->resolveTheme($normalizedArea);
+
         // 如果没有活动主题，直接跳到默认主题回退逻辑
-        if (!$theme->getId()) {
+        if (!$theme || !$theme->getId()) {
             // 直接尝试默认主题（Weline_Theme）
-            $defaultPartialsPath = 'Weline_Theme::theme/' . $area . '/partials/' . $type . '/' . $defaultOption . '.phtml';
+            $defaultPartialsPath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $defaultOption . '.phtml';
             $defaultAbsolutePath = $this->resolveModulePath($defaultPartialsPath);
             if ($defaultAbsolutePath && is_file($defaultAbsolutePath)) {
                 return $defaultPartialsPath;
@@ -118,50 +109,10 @@ class Partials extends Block
             return null;
         }
         
-        // 解析 scope（优先从预览模式获取，其次从请求参数获取，最后使用 default）
-        // 与 ControllerFetchFileBefore 保持一致的处理逻辑
-        $scope = 'default';
-        try {
-            // 检查预览模式
-            if (class_exists(PreviewManager::class)) {
-                if (PreviewManager::isPreviewMode()) {
-                    $previewScope = PreviewManager::getPreviewScope($area);
-                    if ($previewScope) {
-                        $scope = $previewScope;
-                    }
-                }
-            }
-            
-            // 如果不在预览模式，尝试从请求参数获取
-            if ($scope === 'default') {
-                try {
-                    /** @var Request $request */
-                    $request = ObjectManager::getInstance(Request::class);
-                    if ($request) {
-                        $paramName = 'scope_' . $area;
-                        $scopeParam = $request->getParam($paramName) ?? $request->getParam('scope');
-                        if ($scopeParam) {
-                            // 处理 scope 格式（可能是 frontend/default）
-                            if (str_contains($scopeParam, '/')) {
-                                [$maybeArea, $rest] = explode('/', $scopeParam, 2);
-                                if ($maybeArea === $area) {
-                                    $scope = $rest ?: 'default';
-                                }
-                            } else {
-                                $scope = $scopeParam;
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // 忽略错误，使用默认 scope
-                }
-            }
-        } catch (\Throwable $e) {
-            // 忽略错误，使用默认 scope
-        }
-        
+        $scope = $ctx->resolveCurrentScope($normalizedArea);
+
         // 获取配置的选项（支持预览配置和 scope）
-        $config = LayoutScanner::getPartialsConfig($theme, $area, $scope);
+        $config = LayoutScanner::getPartialsConfig($theme, $normalizedArea, $scope);
         $option = $config[$type] ?? $defaultOption;
         
         // 构建部件文件路径
@@ -173,7 +124,7 @@ class Partials extends Block
         // 构建模块路径格式：Module_Name::theme/{area}/partials/{type}/{option}.phtml
         // 首先尝试当前主题
         $themeModuleName = $theme->getModuleName();
-        $partialsPath = $themeModuleName . '::theme/' . $area . '/partials/' . $type . '/' . $option . '.phtml';
+        $partialsPath = $themeModuleName . '::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
         
         // 检查文件是否存在（通过尝试获取绝对路径）
         $absolutePath = $this->resolveModulePath($partialsPath);
@@ -185,7 +136,7 @@ class Partials extends Block
         $parentTheme = $theme->getParentTheme();
         if ($parentTheme) {
             $parentModuleName = $parentTheme->getModuleName();
-            $parentPartialsPath = $parentModuleName . '::theme/' . $area . '/partials/' . $type . '/' . $option . '.phtml';
+            $parentPartialsPath = $parentModuleName . '::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
             $parentAbsolutePath = $this->resolveModulePath($parentPartialsPath);
             if ($parentAbsolutePath && is_file($parentAbsolutePath)) {
                 return $parentPartialsPath;
@@ -315,47 +266,9 @@ class Partials extends Block
      */
     private function resolveScope(string $area): string
     {
-        $scope = 'default';
-        try {
-            // 检查预览模式
-            if (class_exists(PreviewManager::class)) {
-                if (PreviewManager::isPreviewMode()) {
-                    $previewScope = PreviewManager::getPreviewScope($area);
-                    if ($previewScope) {
-                        $scope = $previewScope;
-                    }
-                }
-            }
-            
-            // 如果不在预览模式，尝试从请求参数获取
-            if ($scope === 'default') {
-                try {
-                    /** @var Request $request */
-                    $request = ObjectManager::getInstance(Request::class);
-                    if ($request) {
-                        $paramName = 'scope_' . $area;
-                        $scopeParam = $request->getParam($paramName) ?? $request->getParam('scope');
-                        if ($scopeParam) {
-                            // 处理 scope 格式（可能是 frontend/default）
-                            if (str_contains($scopeParam, '/')) {
-                                [$maybeArea, $rest] = explode('/', $scopeParam, 2);
-                                if ($maybeArea === $area) {
-                                    $scope = $rest ?: 'default';
-                                }
-                            } else {
-                                $scope = $scopeParam;
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    // 忽略错误，使用默认 scope
-                }
-            }
-        } catch (\Throwable $e) {
-            // 忽略错误，使用默认 scope
-        }
-        
-        return $scope;
+        $ctx = ObjectManager::getInstance(ThemeContextService::class);
+
+        return $ctx->resolveCurrentScope($ctx->normalizeArea($area));
     }
     
     /**
