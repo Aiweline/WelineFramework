@@ -55,7 +55,8 @@ class TestUpdate extends BaseController
             
             foreach ($testCountries as $countryCode) {
                 try {
-                    $countryLocales = $i18n->getCountry($countryCode)->getLocales();
+                    $country = $i18n->getCountry($countryCode);
+                    $countryLocales = (array)($country['locales'] ?? []);
                     $localesByCountry[$countryCode] = count($countryLocales);
                 } catch (\Exception $e) {
                     $localesByCountry[$countryCode] = 'Error: ' . $e->getMessage();

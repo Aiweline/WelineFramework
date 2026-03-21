@@ -21,12 +21,14 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\I18n\Model\Countries\Locale\Name;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
+use Weline\I18n\Service\CountryLocaleLifecycleService;
 
 class Localization extends BaseController
 {
     private \Weline\I18n\Model\Locale $locales;
     private \Weline\I18n\Model\Locale\Name $localeNames;
     private \Weline\I18n\Model\Countries $countries;
+    private CountryLocaleLifecycleService $lifecycle;
 
     public function __construct(
         Locale                       $locale,
@@ -37,11 +39,12 @@ class Localization extends BaseController
     )
     {
         parent::__construct($locale, $i18n);
-        
+
         // 初始化模型
         $this->localeNames = $localeName;
         $this->locales = $locales;
         $this->countries = $countries;
+        $this->lifecycle = ObjectManager::getInstance(CountryLocaleLifecycleService::class);
     }
 
     public function __init()
@@ -132,6 +135,7 @@ class Localization extends BaseController
             'total' => $total,
             'active' => $active,
             'installed' => $installed,
+            'inactive' => max(0, $installed - $active),
             'uninstalled' => $uninstalled
         ];
         
@@ -155,6 +159,7 @@ class Localization extends BaseController
         $this->assign('search', $search);
         $this->assign('country_filter', $countryFilter);
         $this->assign('stats', $stats);
+        $this->assign('pagination', $this->locale->getPagination());
         
         return $this->fetch();
     }
@@ -163,43 +168,36 @@ class Localization extends BaseController
      * 清理不属于已安装国家的区域数据
      * 删除那些国家未安装的区域数据，避免数据冗余
      */
-    private function cleanupUninstalledCountryLocales()
+    private function cleanupUninstalledCountryLocales(): int
     {
         try {
-            // 获取已安装的国家列表
             $installedCountries = $this->getInstalledCountries();
-            
-            if (empty($installedCountries)) {
-                // 如果没有已安装的国家，先统计要删除的数量
-                $localeModel = clone $this->locale;
-                $deleteCount = $localeModel->reset()->count();
-                
-                // 删除所有区域数据
-                $localeModel->reset()->delete();
-                if ($deleteCount > 0) {
-                    Message::success(__('清理了 %{1} 个不属于已安装国家的区域数据', $deleteCount));
-                }
-                return;
-            }
-            
-            // 先统计要删除的数量
+            $installedCountries[] = 'CN';
+            $installedCountries = array_values(array_unique(array_filter($installedCountries)));
             $localeModel = clone $this->locale;
-            $deleteCount = $localeModel->reset()
+
+            if (empty($installedCountries)) {
+                $deleteCount = (int)$localeModel->reset()->count();
+                if ($deleteCount > 0) {
+                    $localeModel->reset()->delete();
+                }
+
+                return $deleteCount;
+            }
+
+            $deleteCount = (int)$localeModel->reset()
                 ->where($this->locale::schema_fields_COUNTRY_CODE, $installedCountries, 'not in')
                 ->count();
-            
+
             if ($deleteCount > 0) {
-                // 删除不属于已安装国家的区域数据
                 $localeModel->reset()
                     ->where($this->locale::schema_fields_COUNTRY_CODE, $installedCountries, 'not in')
                     ->delete();
-                
-                Message::success(__('清理了 %{1} 个不属于已安装国家的区域数据', $deleteCount));
-                
             }
-            
-        } catch (\Exception $e) {
-            Message::error(__('清理区域数据失败: %{1}', $e->getMessage()));
+
+            return $deleteCount;
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException((string)__('清理区域数据失败: %{1}', $throwable->getMessage()), 0, $throwable);
         }
     }
     
@@ -207,47 +205,39 @@ class Localization extends BaseController
      * 清理孤立的区域名称数据
      * 删除那些区域已被删除的区域名称数据
      */
-    private function cleanupOrphanedLocaleNames()
+    private function cleanupOrphanedLocaleNames(): int
     {
         try {
-            // 获取现有的区域代码
             $localeModel = clone $this->locale;
             $existingLocales = $localeModel->reset()->select()->fetch()->getItems();
             $existingCodes = [];
             foreach ($existingLocales as $locale) {
                 $existingCodes[] = $locale->getData($this->locale::schema_fields_CODE);
             }
-            
-            if (empty($existingCodes)) {
-                // 如果没有区域数据，先统计要删除的数量
-                $localeNameModel = clone $this->localeNames;
-                $deleteCount = $localeNameModel->reset()->count();
-                
-                // 删除所有区域名称数据
-                $localeNameModel->reset()->delete();
-                if ($deleteCount > 0) {
-                    Message::success(__('清理了 %{1} 个孤立的区域名称数据', $deleteCount));
-                }
-                return;
-            }
-            
-            // 先统计要删除的数量
+
             $localeNameModel = clone $this->localeNames;
-            $deleteCount = $localeNameModel->reset()
+            if (empty($existingCodes)) {
+                $deleteCount = (int)$localeNameModel->reset()->count();
+                if ($deleteCount > 0) {
+                    $localeNameModel->reset()->delete();
+                }
+
+                return $deleteCount;
+            }
+
+            $deleteCount = (int)$localeNameModel->reset()
                 ->where($localeNameModel::schema_fields_LOCALE_CODE, $existingCodes, 'not in')
                 ->count();
-            
+
             if ($deleteCount > 0) {
-                // 删除不存在对应区域的名称数据
                 $localeNameModel->reset()
                     ->where($localeNameModel::schema_fields_LOCALE_CODE, $existingCodes, 'not in')
                     ->delete();
-                
-                Message::success(__('清理了 %{1} 个孤立的区域名称数据', $deleteCount));
             }
-            
-        } catch (\Exception $e) {
-            Message::error(__('清理孤立区域名称数据失败: %{1}', $e->getMessage()));
+
+            return $deleteCount;
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException((string)__('清理孤立区域名称数据失败: %{1}', $throwable->getMessage()), 0, $throwable);
         }
     }
 
@@ -817,7 +807,6 @@ class Localization extends BaseController
      */
     private function getUnactivatedRegionsCountry()
     {
-        // 获取所有已安装的国家，直接 JOIN 国家名称表
         $countriesModel = ObjectManager::getInstance(\Weline\I18n\Model\Countries::class);
         $countriesModel->joinModel(\Weline\I18n\Model\Countries\Locale\Name::class, 'cn', 'main_table.code=cn.country_code', 'left');
         $countriesModel->where('main_table.' . $countriesModel::schema_fields_IS_INSTALL, 1);
@@ -830,178 +819,162 @@ class Localization extends BaseController
         $unactivatedCountries = [];
         
         foreach ($installedCountries as $country) {
-            // 检查该国家下是否有任何激活的区域
-            $localeModel = ObjectManager::getInstance(\Weline\I18n\Model\Locale::class);
-            $activeLocalesCount = $localeModel->where($localeModel::schema_fields_COUNTRY_CODE, $country['code'])
-                                             ->where($localeModel::schema_fields_IS_ACTIVE, 1)
-                                             ->count();
-            
-            // 添加调试信息
-            Message::notes(__('国家 %{1} 有 %{2} 个激活的区域', [$country['code'], $activeLocalesCount]));
-            
-            // 如果该国家没有任何激活的区域，将该国家添加到未启用列表
-            if ($activeLocalesCount == 0) {
-                // 获取国旗SVG
-                $flagSvg = $this->i18n->getCountryFlag($country['code'], 20, 15);
-                
-                $unactivatedCountries[] = [
-                    'code' => $country['code'],
-                    'display_name' => $country['display_name'] ?: $country['code'],
-                    'is_install' => $country['is_install'],
-                    'is_active' => $country['is_active'],
-                    'flag' => $flagSvg
-                ];
+            $countryCode = (string)$country['code'];
+            $summary = $this->lifecycle->getCountrySummary($countryCode);
+            $activeLocalesCount = (int)($summary['active_locale_count'] ?? 0);
+            $installedLocalesCount = (int)($summary['installed_locale_count'] ?? 0);
+
+            if ($installedLocalesCount === 0 || $activeLocalesCount !== 0) {
+                continue;
             }
+
+            $flagSvg = $this->i18n->getCountryFlag($countryCode, 20, 15);
+
+            $unactivatedCountries[] = [
+                'code' => $countryCode,
+                'display_name' => $country['display_name'] ?: ($summary['display_name'] ?? $countryCode),
+                'is_install' => $country['is_install'],
+                'is_active' => $country['is_active'],
+                'flag' => $flagSvg,
+                'preferred_locale' => $summary['preferred_locale'] ?? null,
+                'installed_locale_count' => $installedLocalesCount,
+            ];
         }
         
         return $unactivatedCountries;
     }
 
+    private function getListStateFromRequest(): array
+    {
+        $params = [];
+
+        $filter = trim((string)$this->request->getParam('filter', 'all'));
+        $params['filter'] = $filter === '' ? 'all' : $filter;
+
+        foreach (['search', 'country_filter'] as $key) {
+            $value = trim((string)$this->request->getParam($key, ''));
+            if ($value !== '') {
+                $params[$key] = $value;
+            }
+        }
+
+        $page = (int)$this->request->getParam('page', 1);
+        if ($page > 1) {
+            $params['page'] = $page;
+        }
+
+        $pageSize = (int)$this->request->getParam('page_size', 20);
+        if ($pageSize > 0 && $pageSize !== 20) {
+            $params['page_size'] = $pageSize;
+        }
+
+        return $params;
+    }
+
+    private function buildListUrl(array $overrides = []): string
+    {
+        $params = array_merge($this->getListStateFromRequest(), $overrides);
+        $params = array_filter($params, static fn($value) => $value !== '' && $value !== null);
+
+        return '*/backend/localization' . (empty($params) ? '' : '?' . http_build_query($params));
+    }
+
     /**
      * 激活区域
      */
-    public function activate()
+    public function postActivate()
     {
-        $localeCode = $this->request->getParam('locale_code');
-        
-        if (empty($localeCode)) {
+        $localeCode = (string)$this->request->getPost('locale_code');
+
+        if ($localeCode === '') {
             Message::error(__('请选择要激活的区域'));
-            $this->redirect('*/backend/localization');
+            return $this->redirect($this->buildListUrl());
         }
-        
+
         try {
-            $locale = $this->locale->where($this->locale::schema_fields_CODE, $localeCode)->find()->fetch();
-            
-            if (!$locale->getId()) {
-                Message::error(__('区域不存在'));
-                $this->redirect('*/backend/localization');
-            }
-            
-            // 检查是否已安装
-            if (!$locale->getData($this->locale::schema_fields_IS_INSTALL)) {
-                Message::error(__('请先安装该区域'));
-                $this->redirect('*/backend/localization');
-            }
-            
-            // 激活区域
-            $locale->setData($this->locale::schema_fields_IS_ACTIVE, 1);
-            $locale->save();
-            
-            Message::success(__('区域激活成功'));
-        } catch (\Exception $e) {
-            Message::error(__('激活失败：%{1}', $e->getMessage()));
+            $summary = $this->lifecycle->activateLocale($localeCode);
+            Message::success(__('地区 %{1} 已安装并启用，所属国家 %{2} 已同步启用', [
+                $summary['locale_code'] ?? $localeCode,
+                $summary['country']['display_name'] ?? ($summary['country_code'] ?? ''),
+            ]));
+        } catch (\Exception $exception) {
+            Message::exception($exception);
         }
-        
-        $this->redirect('*/backend/localization');
+
+        return $this->redirect($this->buildListUrl());
     }
     
     /**
      * 停用区域
      */
-    public function deactivate()
+    public function postDeactivate()
     {
-        $localeCode = $this->request->getParam('locale_code');
-        
-        if (empty($localeCode)) {
+        $localeCode = (string)$this->request->getPost('locale_code');
+
+        if ($localeCode === '') {
             Message::error(__('请选择要停用的区域'));
-            $this->redirect('*/backend/localization');
+            return $this->redirect($this->buildListUrl());
         }
-        
-        // 禁止停用 zh_Hans_CN
-        if ($localeCode === 'zh_Hans_CN') {
-            Message::error(__('不允许停用 zh_Hans_CN 区域，这是系统默认区域'));
-            $this->redirect('*/backend/localization');
-        }
-        
+
         try {
-            $locale = $this->locale->where($this->locale::schema_fields_CODE, $localeCode)->find()->fetch();
-            
-            if (!$locale->getId()) {
-                Message::error(__('区域不存在'));
-                $this->redirect('*/backend/localization');
-            }
-            
-            // 停用区域
-            $locale->setData($this->locale::schema_fields_IS_ACTIVE, 0);
-            $locale->save();
-            
-            Message::success(__('区域停用成功'));
-        } catch (\Exception $e) {
-            Message::error(__('停用失败：%{1}', $e->getMessage()));
+            $summary = $this->lifecycle->deactivateLocale($localeCode);
+            Message::success(__('地区 %{1} 已停用，所属国家状态已自动同步', [
+                $summary['locale_code'] ?? $localeCode,
+            ]));
+        } catch (\Exception $exception) {
+            Message::exception($exception);
         }
-        
-        $this->redirect('*/backend/localization');
+
+        return $this->redirect($this->buildListUrl());
     }
     
     /**
      * 安装区域
      */
-    public function install()
+    public function postInstall()
     {
-        $localeCode = $this->request->getParam('locale_code');
-        
-        if (empty($localeCode)) {
+        $localeCode = (string)$this->request->getPost('locale_code');
+
+        if ($localeCode === '') {
             Message::error(__('请选择要安装的区域'));
-            $this->redirect('*/backend/localization');
+            return $this->redirect($this->buildListUrl());
         }
-        
+
         try {
-            $locale = $this->locale->where($this->locale::schema_fields_CODE, $localeCode)->find()->fetch();
-            
-            if (!$locale->getId()) {
-                Message::error(__('区域不存在'));
-                $this->redirect('*/backend/localization');
-            }
-            
-            // 安装区域
-            $locale->setData($this->locale::schema_fields_IS_INSTALL, 1);
-            $locale->save();
-            
-            Message::success(__('区域安装成功'));
-        } catch (\Exception $e) {
-            Message::error(__('安装失败：%{1}', $e->getMessage()));
+            $summary = $this->lifecycle->installLocale($localeCode);
+            Message::success(__('地区 %{1} 已安装，所属国家 %{2} 已同步安装', [
+                $summary['locale_code'] ?? $localeCode,
+                $summary['country']['display_name'] ?? ($summary['country_code'] ?? ''),
+            ]));
+        } catch (\Exception $exception) {
+            Message::exception($exception);
         }
-        
-        $this->redirect('*/backend/localization');
+
+        return $this->redirect($this->buildListUrl());
     }
     
     /**
      * 卸载区域
      */
-    public function uninstall()
+    public function postUninstall()
     {
-        $localeCode = $this->request->getParam('locale_code');
-        
-        if (empty($localeCode)) {
+        $localeCode = (string)$this->request->getPost('locale_code');
+
+        if ($localeCode === '') {
             Message::error(__('请选择要卸载的区域'));
-            $this->redirect('*/backend/localization');
+            return $this->redirect($this->buildListUrl());
         }
-        
-        // 禁止删除 zh_Hans_CN
-        if ($localeCode === 'zh_Hans_CN') {
-            Message::error(__('不允许卸载 zh_Hans_CN 区域，这是系统默认区域'));
-            $this->redirect('*/backend/localization');
-        }
-        
+
         try {
-            $locale = $this->locale->where($this->locale::schema_fields_CODE, $localeCode)->find()->fetch();
-            
-            if (!$locale->getId()) {
-                Message::error(__('区域不存在'));
-                $this->redirect('*/backend/localization');
-            }
-            
-            // 先停用再卸载
-            $locale->setData($this->locale::schema_fields_IS_ACTIVE, 0);
-            $locale->setData($this->locale::schema_fields_IS_INSTALL, 0);
-            $locale->save();
-            
-            Message::success(__('区域卸载成功'));
-        } catch (\Exception $e) {
-            Message::error(__('卸载失败：%{1}', $e->getMessage()));
+            $summary = $this->lifecycle->uninstallLocale($localeCode);
+            Message::success(__('地区 %{1} 已卸载，语言包和缓存已同步清理', [
+                $summary['locale_code'] ?? $localeCode,
+            ]));
+        } catch (\Exception $exception) {
+            Message::exception($exception);
         }
-        
-        $this->redirect('*/backend/localization');
+
+        return $this->redirect($this->buildListUrl());
     }
 
     /**
@@ -1054,11 +1027,11 @@ class Localization extends BaseController
     /**
      * 手动同步区域名称数据
      */
-    public function syncNames()
+    public function postSyncNames()
     {
         try {
             $currentLang = \Weline\Framework\Http\Cookie::getLangLocal();
-            $force = $this->request->getParam('force', false);
+            $force = (bool)$this->request->getPost('force', false);
             
             if ($force) {
                 // 强制更新：先删除现有数据
@@ -1066,25 +1039,39 @@ class Localization extends BaseController
                 $localeNameModel->reset()
                     ->where($localeNameModel::schema_fields_DISPLAY_LOCALE_CODE, $currentLang)
                     ->delete();
-                Message::success('已清除现有区域名称数据，开始重新同步');
+                Message::success(__('已清除现有区域名称数据，开始重新同步'));
             }
             
             $this->syncLocaleNames($currentLang);
-            Message::success('区域名称数据同步完成');
+            Message::success(__('区域名称数据同步完成'));
         } catch (\Exception $e) {
-            Message::error('同步失败：' . $e->getMessage());
+            Message::error(__('同步失败：%{1}', [$e->getMessage()]));
         }
         
-        $this->redirect('*/backend/localization');
+        return $this->redirect($this->buildListUrl());
     }
     
     /**
      * 手动清理区域数据
      * 清理不属于已安装国家的区域数据
      */
-    public function cleanupLocales()
+    public function postCleanupLocales()
     {
         try {
+            $cleanedLocales = $this->cleanupUninstalledCountryLocales();
+            $cleanedLocaleNames = $this->cleanupOrphanedLocaleNames();
+
+            if ($cleanedLocales > 0 || $cleanedLocaleNames > 0) {
+                Message::success(__('清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录', [
+                    $cleanedLocales,
+                    $cleanedLocaleNames,
+                ]));
+            } else {
+                Message::success(__('数据已是最新，无需清理'));
+            }
+
+            return $this->redirect($this->buildListUrl());
+
             // 获取清理前的统计
             $localeModel = clone $this->locale;
             $beforeCount = $localeModel->reset()->count();
@@ -1112,6 +1099,59 @@ class Localization extends BaseController
      */
     public function batchAction()
     {
+        $action = (string)$this->request->getParam('action');
+        $localeCodes = array_values(array_unique(array_filter(array_map('strval', (array)$this->request->getParam('locale_codes', [])))));
+
+        if ($action === '' || empty($localeCodes)) {
+            Message::error(__('请选择操作和区域'));
+            return $this->redirect('*/backend/localization');
+        }
+
+        $successCount = 0;
+        $errors = [];
+
+        foreach ($localeCodes as $localeCode) {
+            try {
+                switch ($action) {
+                    case 'activate':
+                        $this->lifecycle->activateLocale($localeCode);
+                        break;
+                    case 'deactivate':
+                        $this->lifecycle->deactivateLocale($localeCode);
+                        break;
+                    case 'install':
+                        $this->lifecycle->installLocale($localeCode);
+                        break;
+                    case 'uninstall':
+                        $this->lifecycle->uninstallLocale($localeCode);
+                        break;
+                    default:
+                        throw new \RuntimeException((string)__('不支持的批量操作：%{1}', [$action]));
+                }
+
+                $successCount++;
+            } catch (\Throwable $throwable) {
+                $errors[] = $localeCode . ': ' . $throwable->getMessage();
+            }
+        }
+
+        if ($successCount > 0) {
+            $successMessages = [
+                'activate' => __('已批量安装并启用 %{1} 个地区', [$successCount]),
+                'deactivate' => __('已批量停用 %{1} 个地区', [$successCount]),
+                'install' => __('已批量安装 %{1} 个地区', [$successCount]),
+                'uninstall' => __('已批量卸载 %{1} 个地区', [$successCount]),
+            ];
+            Message::success($successMessages[$action] ?? __('已处理 %{1} 个地区', [$successCount]));
+        }
+
+        if (!empty($errors)) {
+            Message::warning(__('共有 %{1} 个地区处理失败', [count($errors)]));
+            Message::warning(implode('<br>', array_slice($errors, 0, 5)));
+        }
+
+        return $this->redirect('*/backend/localization');
+
         $action = $this->request->getParam('action');
         $countryCodes = $this->request->getParam('country_codes', []);
         
@@ -1183,6 +1223,20 @@ class Localization extends BaseController
         try {
             $localeCode = 'zh_Hans_CN';
             $locale = $this->locale->reset()->where($this->locale::schema_fields_CODE, $localeCode)->find()->fetch();
+
+            $needSync = !$locale->getId()
+                || (int)$locale->getData($this->locale::schema_fields_IS_INSTALL) !== 1
+                || (int)$locale->getData($this->locale::schema_fields_IS_ACTIVE) !== 1
+                || !$locale->getData($this->locale::schema_fields_SHORT_CODE)
+                || !$locale->getData($this->locale::schema_fields_ISO2)
+                || !$locale->getData($this->locale::schema_fields_ISO3);
+
+            if ($needSync) {
+                $this->lifecycle->activateLocale($localeCode);
+                Message::notes(__('已自动安装并激活默认区域：%{1}', [$localeCode]));
+            }
+
+            return;
             
             // 如果区域不存在，先创建
             if (!$locale->getId()) {
@@ -1369,6 +1423,18 @@ class Localization extends BaseController
             $countryCode = 'CN';
             $countryModel = clone $this->countries;
             $country = $countryModel->reset()->where($countryModel::schema_fields_CODE, $countryCode)->find()->fetch();
+
+            $needSync = !$country->getId()
+                || (int)$country->getData($countryModel::schema_fields_IS_INSTALL) !== 1
+                || (int)$country->getData($countryModel::schema_fields_IS_ACTIVE) !== 1
+                || !$country->getData($countryModel::schema_fields_FLAG);
+
+            if ($needSync) {
+                $this->lifecycle->activateCountry($countryCode);
+                Message::notes(__('已安装并启用默认国家：%{1}', [$countryCode]));
+            }
+
+            return;
             
             if (!$country->getId()) {
                 // 国家不存在，创建国家记录

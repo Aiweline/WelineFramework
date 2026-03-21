@@ -96,7 +96,7 @@ final class WebsiteSslCertificateStatusService
     public function mapToPoolHttpsStatus(?array $cert): string
     {
         if (!$this->hasCertificateId($cert)) {
-            return DomainPool::HTTPS_STATUS_PENDING;
+            return DomainPool::HTTPS_STATUS_NONE;
         }
         $status = $this->getStatus($cert);
         if ($status === self::STATUS_REVOKED || $status === self::STATUS_ERROR) {
@@ -112,13 +112,13 @@ final class WebsiteSslCertificateStatusService
             return DomainPool::HTTPS_STATUS_VALID;
         }
 
-        return DomainPool::HTTPS_STATUS_PENDING;
+        return DomainPool::HTTPS_STATUS_NONE;
     }
 
     public function mapToDomainHttpsStatus(?array $cert): string
     {
         if (!$this->hasCertificateId($cert)) {
-            return Domain::HTTPS_STATUS_PENDING;
+            return Domain::HTTPS_STATUS_NONE;
         }
         $status = $this->getStatus($cert);
         if ($status === self::STATUS_REVOKED || $status === self::STATUS_ERROR) {
@@ -134,7 +134,7 @@ final class WebsiteSslCertificateStatusService
             return Domain::HTTPS_STATUS_VALID;
         }
 
-        return Domain::HTTPS_STATUS_PENDING;
+        return Domain::HTTPS_STATUS_NONE;
     }
 
     private function hasCertificateId(?array $cert): bool

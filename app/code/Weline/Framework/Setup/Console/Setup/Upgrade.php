@@ -86,6 +86,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         'skip-reflect',
         'skip-background-optimize',
         'sync',
+        'skip-classmap',
         'y',
         'yes',
         '-y',
@@ -106,6 +107,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         '--force, -f',
         '--skip-reflection-compile, --skip-reflect',
         '--skip-background-optimize, --sync',
+        '--skip-classmap',
         '--yes, -y',
         '--help, -h',
     ];
@@ -342,40 +344,18 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     private function cleanGeneratedCodeDirectory(): void
     {
         $generatedCodePath = BP . 'generated' . DS . 'code';
-        
-        if (!is_dir($generatedCodePath)) {
-            // 目录不存在，创建它
-            mkdir($generatedCodePath, 0755, true);
-            return;
-        }
-        
-        // 清理目录内容，但保留目录本身
-        /** @var System $system */
-        $system = ObjectManager::getInstance(System::class);
-        
+
         try {
-            // 扫描目录中的文件和子目录
-            $files = scandir($generatedCodePath);
-            $hasContent = false;
-            
-            foreach ($files as $file) {
-                if ($file != '.' && $file != '..') {
-                    $filePath = $generatedCodePath . DS . $file;
-                    if (is_dir($filePath)) {
-                        $system->exec('rm -rf ' . escapeshellarg($filePath));
-                        $hasContent = true;
-                    } elseif (is_file($filePath)) {
-                        @unlink($filePath);
-                        $hasContent = true;
-                    }
+            if (is_dir($generatedCodePath)) {
+                // 一次性删除整个目录（比逐文件 scandir + unlink 快数倍）
+                if (PHP_OS_FAMILY === 'Windows') {
+                    exec('rd /s /q ' . escapeshellarg(str_replace('/', '\\', $generatedCodePath)));
+                } else {
+                    exec('rm -rf ' . escapeshellarg($generatedCodePath));
                 }
             }
-            
-            if ($hasContent) {
-                $this->printing->success(__('✓ generated/code 目录已清理。'));
-            } else {
-                $this->printing->note(__('generated/code 目录为空，无需清理。'));
-            }
+            mkdir($generatedCodePath, 0755, true);
+            $this->printing->success(__('✓ generated/code 目录已清理。'));
         } catch (\Exception $e) {
             // 清理失败不影响主流程，只记录警告
             $this->printing->warning(__('清理 generated/code 目录时发生错误: %{1}，将继续执行。', [$e->getMessage()]));
@@ -751,6 +731,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if (isset($args['skip-reflection-compile']) || isset($args['skip-reflect'])) {
             $cmd .= ' --skip-reflection-compile';
         }
+
+        // 传递跳过 classmap 参数
+        if (isset($args['skip-classmap'])) {
+            $cmd .= ' --skip-classmap';
+        }
         
         // 添加进程名标识
         $processName = 'weline-setup-background-optimize-' . time();
@@ -787,8 +772,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     {
         $this->printing->note(__('正在生成优化缓存...'));
 
-        // 1. 生成类映射缓存
-        $this->generateClassmapCache();
+        // 1. 生成类映射缓存（支持 --skip-classmap 跳过）
+        if (isset($args['skip-classmap'])) {
+            $this->printing->note(__('  - 已跳过类映射缓存（--skip-classmap）'));
+        } else {
+            $this->generateClassmapCache();
+        }
         
         // 2. 生成 PSR-4 映射缓存
         $this->generatePsr4Cache();
@@ -833,42 +822,85 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
     /**
      * 生成类映射缓存
      * 扫描 app/code 和 generated/code 目录，生成类名到文件路径的映射
-     * 
+     * 使用指纹文件（.classmap.manifest）跳过未改动的重复扫描
+     *
      * @return void
      */
     private function generateClassmapCache(): void
     {
-        $classMap = [];
         $directories = [
             APP_CODE_PATH,
             BP . 'generated' . DS . 'code' . DS,
         ];
+        $classMapFile = BP . 'generated' . DS . 'classmap.php';
+        $manifestFile = BP . 'generated' . DS . '.classmap.manifest';
 
+        // 计算当前源目录指纹
+        $currentHash = $this->computeDirectoryFingerprint($directories);
+
+        // 指纹命中且 classmap 文件存在 → 直接跳过
+        if (
+            is_file($manifestFile)
+            && is_file($classMapFile)
+            && file_get_contents($manifestFile) === $currentHash
+        ) {
+            $this->printing->note(__('  - classmap 无变化，跳过重新生成'));
+            return;
+        }
+
+        $classMap = [];
         foreach ($directories as $baseDir) {
             if (!is_dir($baseDir)) {
                 continue;
             }
-
             $this->scanDirectoryForClasses($baseDir, $baseDir, $classMap);
         }
 
         // 保存类映射缓存
-        $classMapFile = BP . 'generated' . DS . 'classmap.php';
         $content = '<?php' . PHP_EOL;
         $content .= '// 类映射缓存 - 由 setup:upgrade 自动生成' . PHP_EOL;
         $content .= '// 生成时间: ' . date('Y-m-d H:i:s') . PHP_EOL;
         $content .= 'return ' . var_export($classMap, true) . ';' . PHP_EOL;
 
         file_put_contents($classMapFile, $content, LOCK_EX);
+        file_put_contents($manifestFile, $currentHash, LOCK_EX);
 
         $this->printing->note(__('  - 类映射缓存已生成，共 %{1} 个类', [count($classMap)]));
     }
+
+    /**
+     * 计算多个目录的 mtime 指纹（用于判断目录内容是否改变）
+     * 仅读取 mtime，不读取文件内容，比 hash_file() 快得多。
+     *
+     * @param list<string> $dirs
+     */
+    private function computeDirectoryFingerprint(array $dirs): string
+    {
+        $parts = [];
+        foreach ($dirs as $dir) {
+            if (!is_dir($dir)) {
+                continue;
+            }
+            $it = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::UNIX_PATHS)
+            );
+            /** @var \SplFileInfo $file */
+            foreach ($it as $file) {
+                if ($file->getExtension() !== 'php') {
+                    continue;
+                }
+                $parts[] = $file->getPathname() . ':' . $file->getMTime();
+            }
+        }
+        sort($parts);
+        return md5(implode("\n", $parts));
+    }
     
     /**
-     * 递归扫描目录查找 PHP 类文件
-     * 
+     * 递归扫描目录查找 PHP 类文件（使用 RecursiveDirectoryIterator，减少递归调用栈）
+     *
      * @param string $dir 当前扫描目录
-     * @param string $baseDir 基础目录（用于计算命名空间）
+     * @param string $baseDir 基础目录（保留参数，供兼容）
      * @param array $classMap 类映射数组（引用）
      * @return void
      */
@@ -877,25 +909,19 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if (!is_dir($dir)) {
             return;
         }
-        
-        $files = scandir($dir);
-        foreach ($files as $file) {
-            if ($file === '.' || $file === '..') {
+
+        $it = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($dir, \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::UNIX_PATHS)
+        );
+        /** @var \SplFileInfo $fileInfo */
+        foreach ($it as $fileInfo) {
+            if ($fileInfo->getExtension() !== 'php') {
                 continue;
             }
-            
-            $path = $dir . $file;
-            
-            if (is_dir($path)) {
-                $this->scanDirectoryForClasses($path . DS, $baseDir, $classMap);
-            } elseif (str_ends_with($file, '.php')) {
-                // 从文件内容解析实际的 namespace 和 class 名称
-                // 这样可以正确处理大小写（如 extends vs Extends）
-                $className = $this->extractFullyQualifiedClassName($path);
-                
-                if ($className !== null) {
-                    $classMap[$className] = $path;
-                }
+            $path = $fileInfo->getPathname();
+            $className = $this->extractFullyQualifiedClassName($path);
+            if ($className !== null) {
+                $classMap[$className] = $path;
             }
         }
     }
@@ -2619,26 +2645,28 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 '--route' => '仅升级路由',
                 '-m, --module=<模块名>' => '升级指定模块（例如：Weline_Demo）',
                 '--stage=<code>[,code...]' => __('只运行指定阶段（跳过其他阶段，便于单阶段测试）。阶段 code：%{1}', [$stageCodes]),
-                '--hot' => '热更新模式，通知运行中的 WLS 服务器重载',
+                '--hot' => __('热更新模式，仅通知 WLS 服务器重载（不执行 Schema/路由操作）。适用：只改了 Controller/Template/CSS/JS'),
                 '-s, --skip-env-check' => '跳过环境依赖检测',
                 '-f, --force' => '强制升级（跳过环境依赖检测）',
                 '--skip-reflection-compile, --skip-reflect' => __('跳过反射元数据与编译型工厂生成（可事后执行 reflection:compile）'),
                 '--skip-background-optimize' => __('禁用后台优化任务，改为同步执行（等待缓存生成完成）'),
                 '--sync' => __('同上，--skip-background-optimize 的简写'),
+                '--skip-classmap' => __('跳过类映射缓存生成（classmap.php）。适用：未新增/删除 PHP 文件时可节省数秒'),
                 '-h, --help' => '显示帮助信息',
             ],
             [],
             [
                 '升级所有模块' => 'php bin/w setup:upgrade',
                 '仅升级数据库模型' => 'php bin/w setup:upgrade --model',
-                '仅升级路由' => 'php bin/w setup:upgrade --route',
+                '仅升级路由（新增 Controller 后）' => 'php bin/w setup:upgrade --route',
                 __('仅运行 schema_diff 阶段（测试声明式表）') => 'php bin/w setup:upgrade --stage=schema_diff',
                 __('仅运行 framework_db_bootstrap 阶段') => 'php bin/w setup:upgrade --stage=framework_db_bootstrap',
                 '升级指定模块（位置参数）' => 'php bin/w setup:upgrade Weline_Demo',
                 '升级指定模块（长选项）' => 'php bin/w setup:upgrade --module Weline_Demo',
                 '升级指定模块（短选项）' => 'php bin/w setup:upgrade -m Weline_Demo',
                 '升级指定模块的模型' => 'php bin/w setup:upgrade --model -m Weline_Demo',
-                '热更新 WLS 服务器' => 'php bin/w setup:upgrade --hot',
+                '热更新 WLS 服务器（最快，< 1s）' => 'php bin/w setup:upgrade --hot',
+                __('跳过 classmap 生成（未新增/删除文件时）') => 'php bin/w setup:upgrade --skip-classmap',
                 __('跳过反射编译（加快 s:up）') => 'php bin/w setup:upgrade --skip-reflection-compile',
                 __('同步执行优化（等待完成）') => 'php bin/w setup:upgrade --sync',
             ],
