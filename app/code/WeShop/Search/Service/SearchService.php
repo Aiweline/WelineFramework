@@ -5,10 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Search\Service;
 
 use Weline\Framework\Manager\ObjectManager;
-use WeShop\Product\Model\Product;
-use WeShop\Catalog\Model\Category;
 use WeShop\Search\Model\SearchHistory;
-use WeShop\Search\Api\SearchEngineInterface;
 
 /**
  * 搜索服务
@@ -16,8 +13,8 @@ use WeShop\Search\Api\SearchEngineInterface;
 class SearchService
 {
     /**
-     * 搜索产品
-     * 
+     * 搜索商品
+     *
      * @param string $keyword 关键词
      * @param array $filters 过滤条件
      * @param int $page 页码
@@ -27,105 +24,56 @@ class SearchService
      */
     public function searchProducts(string $keyword, array $filters = [], int $page = 1, int $pageSize = 20, string $scope = 'default'): array
     {
-        // 使用可配置的搜索引擎
         $engine = SearchEngineFactory::create($scope);
-        
+
         if (!$engine) {
-            // 如果无法创建引擎，回退到默认MySQL搜索
             return $this->fallbackSearch($keyword, $filters, $page, $pageSize);
         }
-        
-        // 使用配置的搜索引擎进行搜索
+
         $result = $engine->search($keyword, $filters, $page, $pageSize);
-        
-        $total = $result['total'] ?? 0;
-        
-        // 记录搜索历史
+        $total = (int) ($result['total'] ?? 0);
+
         if (!empty($keyword)) {
             /** @var SearchHistory $searchHistory */
             $searchHistory = ObjectManager::getInstance(SearchHistory::class);
             $userId = $this->getCurrentUserId();
             $searchHistory->recordSearch($keyword, $total, $userId);
         }
-        
-        // 如果是MySQL引擎，需要获取分页HTML
-        $pagination = '';
-        if ($engine->getEngineType() === 'mysql') {
-            /** @var Product $product */
-            $product = ObjectManager::getInstance(Product::class);
-            $pagination = $product->getPagination();
-        }
-        
+
         return [
-            'items' => $result['items'] ?? [],
+            'items' => \is_array($result['items'] ?? null) ? $result['items'] : [],
             'total' => $total,
-            'pagination' => $pagination,
+            'pagination' => (string) ($result['pagination'] ?? ''),
             'keyword' => $keyword,
             'engine' => $engine->getEngineType(),
         ];
     }
-    
+
     /**
-     * 回退搜索（默认MySQL搜索）
-     * 
-     * @param string $keyword
-     * @param array $filters
-     * @param int $page
-     * @param int $pageSize
-     * @return array
+     * 回退搜索（默认 MySQL 搜索）
      */
     private function fallbackSearch(string $keyword, array $filters = [], int $page = 1, int $pageSize = 20): array
     {
-        /** @var Product $product */
-        $product = ObjectManager::getInstance(Product::class);
-        $product->clear();
-        
-        // 关键词搜索 - 支持多字段搜索
-        if (!empty($keyword)) {
-            $keyword = trim($keyword);
-            $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_sku, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_short_description, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_description, ['like', '%' . $keyword . '%'], 'or');
-        }
-        
-        // 应用过滤条件
-        if (!empty($filters['category_id'])) {
-            $product->where('category_id', $filters['category_id']);
-        }
-        
-        if (!empty($filters['price_min'])) {
-            $product->where(Product::schema_fields_price, ['>=', $filters['price_min']]);
-        }
-        
-        if (!empty($filters['price_max'])) {
-            $product->where(Product::schema_fields_price, ['<=', $filters['price_max']]);
-        }
-        
-        // 只搜索上架的产品
-        $product->where(Product::schema_fields_status, 1);
-        
-        // 排序
-        $orderBy = $filters['order_by'] ?? Product::schema_fields_ID;
-        $orderDir = $filters['order_dir'] ?? 'DESC';
-        $product->order($orderBy, $orderDir);
-        
-        // 分页
-        $product->pagination($page, $pageSize);
-        $items = $product->select()->fetchArray();
-        
+        $result = w_query('product', 'searchProducts', [
+            'keyword' => $keyword,
+            'filters' => $filters,
+            'page' => $page,
+            'page_size' => $pageSize,
+        ]);
+        $result = \is_array($result) ? $result : [];
+
         return [
-            'items' => $items,
-            'total' => $product->getTotalCount(),
-            'pagination' => $product->getPagination(),
+            'items' => \is_array($result['items'] ?? null) ? $result['items'] : [],
+            'total' => (int) ($result['total'] ?? 0),
+            'pagination' => (string) ($result['pagination'] ?? ''),
             'keyword' => $keyword,
             'engine' => 'mysql',
         ];
     }
-    
+
     /**
      * 获取搜索建议
-     * 
+     *
      * @param string $keyword 关键词
      * @param int $limit 返回数量
      * @param string $scope 作用域
@@ -133,104 +81,70 @@ class SearchService
      */
     public function getSearchSuggestions(string $keyword, int $limit = 10, string $scope = 'default'): array
     {
-        if (empty(trim($keyword))) {
+        if (empty(\trim($keyword))) {
             return [];
         }
-        
-        $keyword = trim($keyword);
-        
-        // 使用可配置的搜索引擎获取建议
+
+        $keyword = \trim($keyword);
         $engine = SearchEngineFactory::create($scope);
-        
+
         if ($engine) {
             $engineSuggestions = $engine->getSuggestions($keyword, $limit);
             if (!empty($engineSuggestions)) {
-                return $engineSuggestions;
+                return \array_slice($engineSuggestions, 0, $limit);
             }
         }
-        
-        // 如果引擎没有返回建议，使用默认逻辑
+
         $suggestions = [];
-        
-        // 1. 从产品名称获取建议
-        /** @var Product $product */
-        $product = ObjectManager::getInstance(Product::class);
-        $product->clear();
-        $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'])
-            ->where(Product::schema_fields_status, 1)
-            ->order(Product::schema_fields_ID, 'DESC')
-            ->limit(min(5, $limit));
-        
-        $products = $product->select()->fetchArray();
-        foreach ($products as $item) {
-            $suggestions[] = [
-                'text' => $item[Product::schema_fields_name],
-                'type' => 'product',
-                'icon' => 'fa-shopping-bag',
-                'url' => '/product/view?id=' . $item[Product::schema_fields_ID],
-            ];
+        $productSuggestions = w_query('product', 'getProductSuggestions', [
+            'keyword' => $keyword,
+            'limit' => \min(5, $limit),
+        ]);
+        if (\is_array($productSuggestions)) {
+            $suggestions = $this->appendUniqueSuggestions($suggestions, $productSuggestions, $limit);
         }
-        
-        // 2. 从分类名称获取建议
-        if (count($suggestions) < $limit) {
-            /** @var Category $category */
-            $category = ObjectManager::getInstance(Category::class);
-            $category->clear();
-            $category->where(Category::schema_fields_NAME, ['like', '%' . $keyword . '%'])
-                ->where(Category::schema_fields_IS_ACTIVE, 1)
-                ->order(Category::schema_fields_ID, 'DESC')
-                ->limit(min(3, $limit - count($suggestions)));
-            
-            $categories = $category->select()->fetchArray();
-            foreach ($categories as $item) {
-                $suggestions[] = [
-                    'text' => $item[Category::schema_fields_NAME],
-                    'type' => 'category',
-                    'icon' => 'fa-folder',
-                    'url' => '/catalog/category/view?id=' . $item[Category::schema_fields_ID],
-                ];
+
+        if (\count($suggestions) < $limit) {
+            $categorySuggestions = w_query('catalog', 'getCategorySuggestions', [
+                'keyword' => $keyword,
+                'limit' => \min(3, $limit - \count($suggestions)),
+            ]);
+            if (\is_array($categorySuggestions)) {
+                $suggestions = $this->appendUniqueSuggestions($suggestions, $categorySuggestions, $limit);
             }
         }
-        
-        // 3. 从搜索历史获取建议（如果还有剩余位置）
-        if (count($suggestions) < $limit) {
+
+        if (\count($suggestions) < $limit) {
             /** @var SearchHistory $searchHistory */
             $searchHistory = ObjectManager::getInstance(SearchHistory::class);
             $searchHistory->clear();
             $searchHistory->where(SearchHistory::schema_fields_KEYWORD, ['like', '%' . $keyword . '%'])
                 ->order(SearchHistory::schema_fields_SEARCH_COUNT, 'DESC')
-                ->limit(min(3, $limit - count($suggestions)));
-            
+                ->limit(\min(3, $limit - \count($suggestions)));
+
             $histories = $searchHistory->select()->fetchArray();
             foreach ($histories as $item) {
-                // 避免重复
-                $exists = false;
-                foreach ($suggestions as $suggestion) {
-                    if ($suggestion['text'] === $item[SearchHistory::schema_fields_KEYWORD]) {
-                        $exists = true;
-                        break;
-                    }
+                $text = (string) ($item[SearchHistory::schema_fields_KEYWORD] ?? '');
+                if ($text === '' || $this->hasSuggestionText($suggestions, $text)) {
+                    continue;
                 }
-                if (!$exists) {
-                    $suggestions[] = [
-                        'text' => $item[SearchHistory::schema_fields_KEYWORD],
-                        'type' => 'history',
-                        'icon' => 'fa-history',
-                        'url' => '/search/index?q=' . urlencode($item[SearchHistory::schema_fields_KEYWORD]),
-                    ];
+                $suggestions[] = [
+                    'text' => $text,
+                    'type' => 'history',
+                    'icon' => 'fa-history',
+                    'url' => '/search/index?q=' . \urlencode($text),
+                ];
+                if (\count($suggestions) >= $limit) {
+                    break;
                 }
             }
         }
-        
-        // 限制返回数量
-        return array_slice($suggestions, 0, $limit);
+
+        return \array_slice($suggestions, 0, $limit);
     }
-    
+
     /**
      * 获取热门搜索词
-     * 
-     * @param int $limit 返回数量
-     * @return array
      */
     public function getPopularKeywords(int $limit = 10): array
     {
@@ -238,16 +152,39 @@ class SearchService
         $searchHistory = ObjectManager::getInstance(SearchHistory::class);
         return $searchHistory->getPopularKeywords($limit);
     }
-    
+
     /**
-     * 获取当前用户ID
-     * 
-     * @return int|null
+     * 获取当前用户 ID
      */
     private function getCurrentUserId(): ?int
     {
-        // TODO: 从会话或认证系统获取当前用户ID
-        // 这里暂时返回null，实际使用时需要根据框架的认证系统实现
         return null;
+    }
+
+    private function appendUniqueSuggestions(array $target, array $candidates, int $limit): array
+    {
+        foreach ($candidates as $candidate) {
+            $text = (string) ($candidate['text'] ?? '');
+            if ($text === '' || $this->hasSuggestionText($target, $text)) {
+                continue;
+            }
+            $target[] = $candidate;
+            if (\count($target) >= $limit) {
+                break;
+            }
+        }
+
+        return $target;
+    }
+
+    private function hasSuggestionText(array $suggestions, string $text): bool
+    {
+        foreach ($suggestions as $suggestion) {
+            if ((string) ($suggestion['text'] ?? '') === $text) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

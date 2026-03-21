@@ -28,6 +28,8 @@ class ProductQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getProductById' => $this->getProductById($params),
             'getProductByIds' => $this->getProductByIds($params),
+            'searchProducts' => $this->searchProducts($params),
+            'getProductSuggestions' => $this->getProductSuggestions($params),
             'getPriceStats' => $this->getPriceStats($params),
             'filterByPriceRange' => $this->filterByPriceRange($params),
             'countByPriceRange' => $this->countByPriceRange($params),
@@ -299,6 +301,86 @@ class ProductQueryProvider implements QueryProviderInterface
         return preg_replace('/[^a-z0-9_]/', '', strtolower($code)) ?: 'input_string';
     }
 
+    private function searchProducts(array $params): array
+    {
+        $keyword = \trim((string)($params['keyword'] ?? ''));
+        $filters = $params['filters'] ?? [];
+        if (!\is_array($filters)) {
+            $filters = [];
+        }
+        $page = \max(1, (int)($params['page'] ?? 1));
+        $pageSize = \max(1, (int)($params['page_size'] ?? 20));
+
+        $product = clone $this->productModel;
+        $product->clear();
+        $this->applyProductSearchFilters($product, $keyword, $filters);
+
+        $orderBy = (string)($filters['order_by'] ?? Product::schema_fields_ID);
+        $orderDir = \strtoupper((string)($filters['order_dir'] ?? 'DESC')) === 'ASC' ? 'ASC' : 'DESC';
+        $product->order($orderBy, $orderDir);
+        $product->pagination($page, $pageSize);
+        $items = $product->select()->fetchArray();
+
+        return [
+            'items' => $items,
+            'total' => $product->getTotalCount(),
+            'pagination' => $product->getPagination(),
+        ];
+    }
+
+    private function getProductSuggestions(array $params): array
+    {
+        $keyword = \trim((string)($params['keyword'] ?? ''));
+        $limit = \max(1, (int)($params['limit'] ?? 10));
+        if ($keyword === '') {
+            return [];
+        }
+
+        $product = clone $this->productModel;
+        $product->clear();
+        $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'])
+            ->where(Product::schema_fields_status, 1)
+            ->order(Product::schema_fields_ID, 'DESC')
+            ->limit(\min(5, $limit));
+
+        $products = $product->select()->fetchArray();
+        $suggestions = [];
+        foreach ($products as $item) {
+            $suggestions[] = [
+                'text' => $item[Product::schema_fields_name] ?? '',
+                'type' => 'product',
+                'icon' => 'fa-shopping-bag',
+                'url' => '/product/view?id=' . ($item[Product::schema_fields_ID] ?? ''),
+            ];
+        }
+
+        return \array_slice($suggestions, 0, $limit);
+    }
+
+    private function applyProductSearchFilters(Product $product, string $keyword, array $filters): void
+    {
+        if ($keyword !== '') {
+            $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_sku, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_short_description, ['like', '%' . $keyword . '%'], 'or')
+                ->where(Product::schema_fields_description, ['like', '%' . $keyword . '%'], 'or');
+        }
+
+        if (!empty($filters['category_id'])) {
+            $product->where('category_id', $filters['category_id']);
+        }
+
+        if (!empty($filters['price_min'])) {
+            $product->where(Product::schema_fields_price, ['>=', $filters['price_min']]);
+        }
+
+        if (!empty($filters['price_max'])) {
+            $product->where(Product::schema_fields_price, ['<=', $filters['price_max']]);
+        }
+
+        $product->where(Product::schema_fields_status, 1);
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -316,6 +398,24 @@ class ProductQueryProvider implements QueryProviderInterface
                     'name' => 'getProductByIds',
                     'description' => __('批量获取产品信息'),
                     'params' => [['name' => 'product_ids', 'type' => 'array', 'required' => true]],
+                ],
+                [
+                    'name' => 'searchProducts',
+                    'description' => __('按关键字与筛选条件搜索商品'),
+                    'params' => [
+                        ['name' => 'keyword', 'type' => 'string', 'required' => false],
+                        ['name' => 'filters', 'type' => 'array', 'required' => false],
+                        ['name' => 'page', 'type' => 'int', 'required' => false],
+                        ['name' => 'page_size', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'getProductSuggestions',
+                    'description' => __('获取商品搜索建议'),
+                    'params' => [
+                        ['name' => 'keyword', 'type' => 'string', 'required' => true],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
                 ],
                 [
                     'name' => 'getPriceStats',
