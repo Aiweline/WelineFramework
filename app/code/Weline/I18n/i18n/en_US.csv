@@ -203,6 +203,19 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 "地区 %{1} 已卸载，语言包和缓存已同步清理","地区 %{1} 已卸载，语言包和缓存已同步清理"
 "正在跳转到 %{1} 的词典管理页面","Redirecting to dictionary management page for %{1}"
 "无法处理区域代码 %{1}: %{2}","Unable to process locale code %{1}: %{2}"
+已清除现有区域名称数据，开始重新同步,已清除现有区域名称数据，开始重新同步
+区域名称数据同步完成,区域名称数据同步完成
+同步失败：%{1},同步失败：%{1}
+"清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录","清理完成：移除 %{1} 条地区记录，清理 %{2} 条孤立地区名称记录"
+数据已是最新，无需清理,数据已是最新，无需清理
+请选择操作和区域,请选择操作和区域
+不支持的批量操作：%{1},不支持的批量操作：%{1}
+"已批量安装并启用 %{1} 个地区","已批量安装并启用 %{1} 个地区"
+"已批量停用 %{1} 个地区","已批量停用 %{1} 个地区"
+"已批量安装 %{1} 个地区","已批量安装 %{1} 个地区"
+"已批量卸载 %{1} 个地区","已批量卸载 %{1} 个地区"
+"已处理 %{1} 个地区","已处理 %{1} 个地区"
+"共有 %{1} 个地区处理失败","共有 %{1} 个地区处理失败"
 已自动安装并激活默认区域：%{1},"Default locale automatically installed and activated: %{1}"
 已自动激活默认区域：%{1},"Default locale automatically activated: %{1}"
 "确保 zh_Hans_CN 安装失败: %{1}","Failed to ensure zh_Hans_CN installation: %{1}"
@@ -214,6 +227,7 @@ CSV文件为空或格式不正确,"CSV file is empty or format is incorrect"
 默认区域数据安装完成,默认区域数据安装完成
 已安装默认区域：zh_Hans_CN,已安装默认区域：zh_Hans_CN
 "安装区域数据失败: %{1}","安装区域数据失败: %{1}"
+已安装并启用默认国家：%{1},已安装并启用默认国家：%{1}
 已安装默认国家：%{1},已安装默认国家：%{1}
 已安装并激活默认国家：%{1},已安装并激活默认国家：%{1}
 已激活默认国家：%{1},已激活默认国家：%{1}
@@ -312,31 +326,43 @@ i18n国际化>国家,"i18n Internationalization > Countries"
 系统配置,"System Configuration"
 i18n国际化,"i18n Internationalization"
 国家,Country
-国家管理：帮助建立对应国家的i18n翻译。,"Country Management: Help establish i18n translations for corresponding countries."
-展示语言：,"Display Language:"
-已激活,Activated
-已安装未激活,"Installed but not activated"
 已安装,Installed
+已激活,Activated
 未安装,"Not installed"
+已安装未激活,"Installed but not activated"
 全部,All
-暂无已安装的国家,"No installed countries"
-请先导入国家数据，然后安装需要的国家。,"Please import country data first, then install the countries you need."
-去安装,"Go to Install"
-暂无已安装未激活的国家,"No installed but not activated countries"
-所有已安装的国家都已激活，或者没有已安装的国家。,"All installed countries are activated, or there are no installed countries."
-查看已安装,"View Installed"
-暂无已激活的国家,"No activated countries"
-没有已激活的国家，请先安装并激活需要的国家。,"No activated countries, please install and activate the countries you need first."
-暂无未安装的国家,"No uninstalled countries"
-请先导入国家数据。,"Please import country data first."
+智能搜索,"Smart Search"
+搜索,Search
+状态,Status
+重置,Reset
 更新全球数据,"Update Global Data"
+操作：,Actions:
+确定批量安装所选国家吗？,"Install the selected countries in batch?"
+安装,Install
+确定批量启用所选国家吗？,"Enable the selected countries in batch?"
+激活,Activate
+确定批量停用所选国家吗？,"Disable the selected countries in batch?"
+停用,Disable
+确定批量卸载所选国家吗？相关地区也会同步卸载。,"Uninstall the selected countries in batch? Related locales will also be uninstalled."
+卸载,Uninstall
+代码,Code
+国旗,"National Flag"
+国家名称,"Country Name"
+是否安装,"Is Installed"
+操作,Operation
+区域,Locale
+未激活,"Not activated"
+"确定安装 %{1} 吗？","Install %{1}?"
+"确定启用 %{1} 吗？推荐地区会同步启用。","Enable %{1}? The recommended locale will be enabled as well."
+"确定停用 %{1} 吗？关联地区会一并停用。","Disable %{1}? Related locales will be disabled as well."
+"确定卸载 %{1} 吗？相关地区会同步卸载。","Uninstall %{1}? Related locales will also be uninstalled."
 暂无国家数据,"No country data"
-"请点击""更新全球数据""按钮来更新国家数据。","请点击""更新全球数据""按钮来更新国家数据。"
+请选择要操作的国家,"Please select countries to operate on"
 i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regions > Dictionary"
 地区,Region
 词典,Dictionary
 根据地区翻译来自前端采集到的词.,"Translate words collected from the frontend according to regions."
-操作：,Actions:
+展示语言：,"Display Language:"
 更新,Update
 导出语言包,"Export Language Pack"
 （尚未开发）,"(Not yet developed)"
@@ -357,24 +383,16 @@ i18n国际化>国家>地区>词典,"i18n Internationalization > Countries > Regi
 收集时间,"Collection Time"
 翻译时间,"Translation Time"
 删除,Delete
-i18n国际化国家列表,"i18n Internationalization Country List"
-国际化支持：查看和安装国家.,"Internationalization Support: View and install countries."
-区域,Locale
-词典管理,"Dictionary Management"
+i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
 地区列表,"Region List"
-排序,Sort
-代码,Code
-简码,简码
+简码,"Short Code"
 名称,Name
 国家代码,"Country Code"
-国家名称,"Country Name"
-旗帜,Flag
 激活状态,"Activation Status"
-是否安装,"Is Installed"
-操作,Operation
-i18n国际化>国家>地区,"i18n Internationalization > Countries > Regions"
-安装国家,"Install Country"
-安装,Install
+词典管理,"Dictionary Management"
+"确定启用 %{1} 吗？所属国家会同步启用。","Enable %{1}? Its country will be enabled automatically."
+"确定停用 %{1} 吗？所属国家状态会自动同步。","Disable %{1}? Its country status will be synchronized automatically."
+"确定卸载 %{1} 吗？语言包和缓存会同步清理。","Uninstall %{1}? Language packs and cache will be cleaned up as well."
 i18n国际化词典,"i18n Internationalization Dictionary"
 国际化支持：管理从源语言到目标语言的翻译词典,"Internationalization Support: Manage translation dictionaries from source language to target language"
 当前目标语言：,"Current Target Language:"
@@ -399,21 +417,29 @@ AI驱动,"AI Driven"
 目标语言,"Target Language"
 核心,Core
 选择要翻译的目标语言,"Select target language to translate"
-智能搜索,"Smart Search"
-搜索,Search
-重置,Reset
 原文,"Source Text"
 译文,"Translated Text"
 更新时间,"Update time"
 暂无翻译数据,"No translation data"
 "请点击""收集词典""按钮从框架中收集词汇，或手动添加翻译","Please click the Collect Dictionary"" button to collect vocabulary from the framework"
+确定同步当前语言的区域名称数据吗？,"Sync locale display names for the current language?"
+同步名称,"Sync Names"
+确定强制重新同步当前语言的区域名称数据吗？这会先删除当前语言的现有名称记录。,"Force re-sync locale display names for the current language? Existing records for this language will be deleted first."
+强制同步,"Force Sync"
+确定清理不属于已安装国家的区域数据吗？,"Clean locale data that no longer belongs to installed countries?"
+清理多余区域,"Clean Extra Locales"
+确定批量安装所选地区吗？,"Install the selected locales in batch?"
+确定批量启用所选地区吗？所属国家会自动同步。,"Enable the selected locales in batch? Their countries will be synchronized automatically."
+确定批量停用所选地区吗？,"Disable the selected locales in batch?"
+确定批量卸载所选地区吗？语言包和缓存会同步清理。,"Uninstall the selected locales in batch? Language packs and cache will be cleaned up as well."
+查看已安装,"View Installed"
 请前往i18n模块收集词语后重试！或者开启实时收集词语功能！,"Please go to the i18n module to collect words and try again! Or enable real-time word collection feature!"
 填写正确！,"Filled correctly!"
 请输入关键词,"Please enter keywords"
 国际化支持：翻译管理多种语言词典,"Internationalization Support: Translation management for multiple language dictionaries"
+排序,Sort
 语言代码,"Language Code"
 语言名,"Language Name"
 是否禁用,"Is Disabled"
 国际化支持：翻译管理多种语言词典.,"Internationalization Support: Translation management for multiple language dictionaries."
-国旗,"National Flag"
 I18n翻译,"I18n Translation"
