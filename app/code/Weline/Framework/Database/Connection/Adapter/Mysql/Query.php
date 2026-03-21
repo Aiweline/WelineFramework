@@ -129,11 +129,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
 
     public function alias(string $table_alias_name): QueryInterface
     {
-        $this->table_alias = $table_alias_name;
-        if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
-            $this->fields = $this->table_alias . '.*';
-        }
-        return $this;
+        return parent::alias($table_alias_name);
     }
 
     public function join(string $table, string $condition, string $type = 'left'): QueryInterface
@@ -258,12 +254,45 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function prepareSql(string $action): void
     {
-        if ($this->table === '') {
+        $this->reorderWhereByIndexes();
+        $this->buildAst($action);
+        $from = $this->ast['from'] ?? [];
+        if ($this->table === '' && empty($from['is_subquery'])) {
             throw new DbException(__('没有指定table表名！'));
         }
 
-        $this->reorderWhereByIndexes();
-        $this->buildAst($action);
+        $compiler = new MysqlCompiler();
+        $options = [
+            'identity_field' => $this->identity_field,
+            'table_alias' => $this->table_alias,
+            'exist_update_sql' => $this->exist_update_sql,
+            'insert_update_fields' => $this->insert_update_fields,
+            'insert_update_where_fields' => $this->insert_update_where_fields,
+        ];
+        $compiled = $compiler->compile($this->ast, $options);
+
+        $paramCount = count($compiled->bindings);
+        if ($paramCount > $this->maxParamsPerStatement) {
+            throw new DbException(__('MySQL 单条 SQL 绑定参数数量 %{1} 超过安全阈值 %{2}', [$paramCount, $this->maxParamsPerStatement]));
+            /*
+            throw new DbException(
+                __(
+                    'MySQL 鍗曟潯 SQL 缁戝畾鍙傛暟鏁伴噺锛?{1}锛夎秴杩囨柟瑷€瀹夊叏闃堝€硷紙%{2}锛夈€傝鍑忓皯鍗曟鎵归噺鍐欏叆鐨勮褰曟暟鎴栨敼涓哄垎鎵瑰啓鍏ァ€?,
+                    [$paramCount, $this->maxParamsPerStatement]
+                )
+            );
+            */
+        }
+
+        $this->sql = preg_replace('/\s+/', ' ', trim($compiled->sql));
+        $this->bound_values = $compiled->bindings;
+
+        if (!empty($this->sql)) {
+            $this->PDOStatement = $this->getLink()->prepare($this->sql);
+        } else {
+            $this->PDOStatement = null;
+        }
+        return;
 
         $paramCount = count($this->bound_values);
         if ($paramCount > $this->maxParamsPerStatement) {

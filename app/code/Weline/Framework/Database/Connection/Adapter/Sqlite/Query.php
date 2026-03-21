@@ -367,9 +367,36 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function prepareSql(string $action): void
     {
-        if ($this->table === '') {
+        $this->reorderWhereByIndexes();
+        $this->buildAst($action);
+        $from = $this->ast['from'] ?? [];
+        if ($this->table === '' && empty($from['is_subquery'])) {
             throw new \Weline\Framework\Database\Exception\DbException(__('没有指定table表名！'));
         }
+
+        $compiler = new SqliteCompiler();
+        $options = [
+            'identity_field' => $this->identity_field,
+            'table_alias' => $this->table_alias,
+            'exist_update_sql' => $this->exist_update_sql,
+            'insert_update_fields' => $this->insert_update_fields,
+            'insert_update_where_fields' => $this->insert_update_where_fields,
+        ];
+        $compiled = $compiler->compile($this->ast, $options);
+        $this->sql = preg_replace('/\s+/', ' ', trim($compiled->sql));
+        $this->bound_values = $compiled->bindings;
+
+        if (!empty($this->sql)) {
+            $stmt = $this->getLink()->prepare($this->sql);
+            if ($stmt === false) {
+                $err = $this->getLink()->errorInfo();
+                throw new Exception(__('SQL 鍑嗗澶辫触锛?{1}銆係QL: %{2}', [$err[2] ?? 'Unknown', substr($this->sql, 0, 200)]));
+            }
+            $this->PDOStatement = $stmt;
+        } else {
+            $this->PDOStatement = null;
+        }
+        return;
 
         $this->reorderWhereByIndexes();
         $this->buildAst($action);
