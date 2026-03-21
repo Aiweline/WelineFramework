@@ -47,6 +47,9 @@ if ($search !== '') {
     $preserve['search'] = $search;
 }
 ?>
+<link rel="stylesheet" href="@static(Weline_I18n::css/backend-admin.css)">
+<script src="@static(Weline_I18n::js/backend-admin.js)"></script>
+<div class="i18n-admin-page">
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -278,3 +281,4 @@ if ($search !== '') {
     }, true);
 })();
 </script>
+</div>

@@ -123,7 +123,7 @@ class Dictionary extends BaseController
         
         // 显示提示信息
         // 如果没有数据，显示提示信息（通过模板变量传递，不直接输出Message）
-        if (empty($translations->items)) {
+        if (empty($formattedItems)) {
             $this->assign('showNoDataWarning', true);
         }
         
@@ -646,7 +646,7 @@ class Dictionary extends BaseController
     {
         // 获取所有可用的locale_code
         $availableLocales = $this->getAvailableLocales();
-        return in_array($localeCode, array_column($availableLocales, 'locale_code'));
+        return in_array($localeCode, array_column($availableLocales, 'code'), true);
     }
 
     /**
