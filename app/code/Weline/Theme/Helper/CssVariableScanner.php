@@ -38,7 +38,7 @@ class CssVariableScanner
         // 获取主题
         if ($theme === null) {
             $theme = ObjectManager::getInstance(WelineTheme::class);
-            $theme = $theme->getActiveTheme();
+            $theme = $theme->getActiveTheme($area);
         }
         
         if (!$theme || !$theme->getId()) {
