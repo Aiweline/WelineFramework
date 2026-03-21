@@ -31,6 +31,12 @@ Implement the unified preview/editor behavior for:
 
 - 23:35 Re-read current modified state, confirmed the target files, and switched ACTIVE.md to this task.
 - 23:35 Confirmed ThemeEditor already uses widget param renderer + i18n hooks, which reduces the amount of new config-form work needed.
+- 01:10 Re-read workspace startup files (`SOUL.md`, `USER.md`, `memory/2026-03-21.md`, `ACTIVE.md`) and repo skill guidance before continuing implementation.
+- 01:11 Reconfirmed current root causes: preview context is still single-theme/single-area, ThemeEditor still guesses internal link targets on the client, PageBuilder still uses a separate `PageBuilderVisualEditor` message contract, and frontend preview token persistence still depends on late injection paths.
+- 01:13 Re-read current dirty worktree diffs in `Weline_Theme` to avoid overwriting unrelated runtime unification work already present in this branch.
+- 01:15 Resumed this task in `ACTIVE.md`; next critical path is shared preview context, then ThemeEditor dual-theme state + navigation resolve, then shell-side unification.
+- 01:20 Re-read workspace skill routing and repo-wide constraints; confirmed this implementation must reuse `BackendToast` / `BackendConfirm`, preserve theme metadata conventions, and run `setup:upgrade --route` if new controllers are added.
+- 01:21 Corrected `dev/ai/codex/ACTIVE.md` back to this task and prepared to syntax-check the shared preview-context services before extending entry points and editor shells.
 
 ## Verification Plan
 
