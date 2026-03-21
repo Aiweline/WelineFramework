@@ -19,11 +19,13 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
+use Weline\Server\Service\Control\IpcControlGateway;
 
 class MasterProcess
 {
@@ -859,35 +861,16 @@ class MasterProcess
      */
     public static function sendReloadCommand(string $instanceName = 'default', string $type = 'code'): bool
     {
-        $info = self::getMasterInfo($instanceName);
-        if (!$info || empty($info['control_port'])) {
+        try {
+            /** @var IpcControlGateway $gateway */
+            $gateway = ObjectManager::getInstance(IpcControlGateway::class);
+            $result = $type === ControlMessage::RELOAD_TYPE_CACHE
+                ? $gateway->cacheClear($instanceName)
+                : $gateway->reloadAsync($instanceName, $type, 3.0);
+            return (bool)($result['success'] ?? false);
+        } catch (\Throwable) {
             return false;
         }
-
-        $controlPort = (int) $info['control_port'];
-        $host = '127.0.0.1';
-
-        $errno = 0;
-        $errstr = '';
-        $conn = @\stream_socket_client("tcp://{$host}:{$controlPort}", $errno, $errstr, 3);
-        if (!$conn) {
-            return false;
-        }
-
-        $reloadMsg = ControlMessage::command(ControlMessage::ACTION_RELOAD, $type);
-        @\fwrite($conn, $reloadMsg);
-
-        \stream_set_timeout($conn, 3);
-        $response = @\fread($conn, 4096);
-        @\fclose($conn);
-
-        if ($response) {
-            $msg = ControlMessage::decode($response);
-            return $msg !== null && ($msg['success'] ?? false);
-        }
-
-        // 没有收到响应，视为失败（可能 Master 进程已退出或无响应）
-        return false;
     }
 
     /**
@@ -899,35 +882,14 @@ class MasterProcess
      */
     public static function sendSslCertReloadCommand(string $instanceName = 'default', array $domains = []): bool
     {
-        $info = self::getMasterInfo($instanceName);
-        if (!$info || empty($info['control_port'])) {
+        try {
+            /** @var IpcControlGateway $gateway */
+            $gateway = ObjectManager::getInstance(IpcControlGateway::class);
+            $result = $gateway->reloadSslCert($instanceName, $domains);
+            return (bool)($result['success'] ?? false);
+        } catch (\Throwable) {
             return false;
         }
-
-        $controlPort = (int) $info['control_port'];
-        $host = '127.0.0.1';
-
-        $errno = 0;
-        $errstr = '';
-        $conn = @\stream_socket_client("tcp://{$host}:{$controlPort}", $errno, $errstr, 3);
-        if (!$conn) {
-            return false;
-        }
-
-        $payload = empty($domains) ? [] : ['domains' => \array_values(\array_unique($domains))];
-        $msg = ControlMessage::command(ControlMessage::ACTION_SSL_CERT_RELOAD, '', $payload);
-        @\fwrite($conn, $msg);
-
-        \stream_set_timeout($conn, 3);
-        $response = @\fread($conn, 4096);
-        @\fclose($conn);
-
-        if ($response) {
-            $decoded = ControlMessage::decode($response);
-            return $decoded !== null && ($decoded['success'] ?? false);
-        }
-
-        return false;
     }
 
     /**
@@ -939,36 +901,18 @@ class MasterProcess
      */
     public static function sendStatusQuery(string $instanceName = 'default', float $timeout = 3): ?array
     {
-        $info = self::getMasterInfo($instanceName);
-        if (!$info || empty($info['control_port'])) {
-            return null;
-        }
-
-        $controlPort = (int) $info['control_port'];
-        $host = '127.0.0.1';
-
-        $errno = 0;
-        $errstr = '';
-        $conn = @\stream_socket_client("tcp://{$host}:{$controlPort}", $errno, $errstr, $timeout);
-        if (!$conn) {
-            return null;
-        }
-
-        $statusMsg = ControlMessage::command(ControlMessage::ACTION_STATUS);
-        @\fwrite($conn, $statusMsg);
-
-        \stream_set_timeout($conn, (int) \ceil($timeout));
-        $response = @\fread($conn, 65536);
-        @\fclose($conn);
-
-        if ($response) {
-            $msg = ControlMessage::decode($response);
-            if ($msg !== null && ($msg['success'] ?? false)) {
-                return $msg['data'] ?? [];
+        try {
+            /** @var IpcControlGateway $gateway */
+            $gateway = ObjectManager::getInstance(IpcControlGateway::class);
+            $result = $gateway->getStatus($instanceName, $timeout);
+            if (!($result['success'] ?? false)) {
+                return null;
             }
-        }
 
-        return null;
+            return \is_array($result['data'] ?? null) ? $result['data'] : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
