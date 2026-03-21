@@ -64,7 +64,7 @@ class ThemePreviewGenerator
      */
     public static function getPreviewImagePath(int $themeId, string $area = 'frontend'): string
     {
-        $uploadDir = Env::VAR_DIR . self::PREVIEW_DIR;
+        $uploadDir = PUB . self::PREVIEW_DIR;
         $filename = "theme_{$themeId}_{$area}.png";
         return $uploadDir . DS . $filename;
     }

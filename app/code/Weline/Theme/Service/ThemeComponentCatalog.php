@@ -25,9 +25,9 @@ class ThemeComponentCatalog
      */
     public function getDefinitions(string $area = 'frontend', ?WelineTheme $theme = null, bool $forceReload = false): array
     {
-        $resolvedTheme = $this->resolveTheme($theme);
-        $themeId = $resolvedTheme?->getId() ?: 0;
         $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        $resolvedTheme = $this->resolveTheme($area, $theme);
+        $themeId = $resolvedTheme?->getId() ?: 0;
         $cacheKey = "{$themeId}:{$area}";
         if (!$forceReload && isset($this->cache[$cacheKey])) {
             return $this->cache[$cacheKey];
@@ -92,7 +92,7 @@ class ThemeComponentCatalog
         }
     }
 
-    private function resolveTheme(?WelineTheme $theme = null): ?WelineTheme
+    private function resolveTheme(string $area, ?WelineTheme $theme = null): ?WelineTheme
     {
         if ($theme && $theme->getId()) {
             return $theme;
@@ -100,7 +100,7 @@ class ThemeComponentCatalog
 
         $activeTheme = clone $this->welineTheme;
         $activeTheme->clearData()->clearQuery();
-        $activeTheme->getActiveTheme();
+        $activeTheme->getActiveTheme($area);
 
         return $activeTheme->getId() ? $activeTheme : null;
     }
