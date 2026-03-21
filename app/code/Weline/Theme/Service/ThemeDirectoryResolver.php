@@ -27,7 +27,8 @@ class ThemeDirectoryResolver
             return [];
         }
 
-        $cacheKey = (string)$theme->getId();
+        $normalizedArea = strtolower(trim((string)$area)) === 'backend' ? 'backend' : 'frontend';
+        $cacheKey = (string)$theme->getId() . ':' . $normalizedArea;
         if (isset($this->themeChainCache[$cacheKey])) {
             return $this->themeChainCache[$cacheKey];
         }
@@ -37,7 +38,13 @@ class ThemeDirectoryResolver
             $chain = [$theme];
         }
 
-        $chain = array_values(array_reverse($chain));
+        $chain = array_values(array_filter(
+            array_reverse($chain),
+            fn(WelineTheme $chainTheme): bool => $this->themeHasAreaDirectory($chainTheme, $normalizedArea)
+        ));
+        if (empty($chain)) {
+            $chain = [$theme];
+        }
         $this->themeChainCache[$cacheKey] = $chain;
 
         return $chain;
@@ -180,5 +187,27 @@ class ThemeDirectoryResolver
     {
         $path = str_replace(['/', '\\'], DS, $path);
         return rtrim($path, DS);
+    }
+
+    private function themeHasAreaDirectory(WelineTheme $theme, string $area): bool
+    {
+        $basePath = rtrim((string)$theme->getPath(), '\\/');
+        if ($basePath === '') {
+            return false;
+        }
+
+        $candidates = [
+            $basePath . DS . $area,
+            $basePath . DS . 'theme' . DS . $area,
+            $basePath . DS . 'view' . DS . 'theme' . DS . $area,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_dir($this->normalizePath($candidate))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

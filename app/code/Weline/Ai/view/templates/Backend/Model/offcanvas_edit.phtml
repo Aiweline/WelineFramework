@@ -264,6 +264,34 @@ $selectedAccountId = (string)($providerConfig['account_id'] ?? '');
                                         <div class="form-text"><?= __('模型的唯一标识符') ?></div>
                                     </div>
                                 </div>
+
+                                <!-- 供应商模型代码映射 -->
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label for="provider_model_code" class="form-label">
+                                            <?= __('供应商模型代码') ?>
+                                        </label>
+                                        <?php
+                                        $providerModelCode = '';
+                                        if (!empty($providerConfig['provider_model_code'])) {
+                                            $providerModelCode = (string)$providerConfig['provider_model_code'];
+                                        } elseif (!empty($providerConfig['model'])) {
+                                            $providerModelCode = (string)$providerConfig['model'];
+                                        } elseif ($model) {
+                                            $providerModelCode = (string)$model->getData('model_code');
+                                        }
+                                        ?>
+                                        <input type="text"
+                                               class="form-control"
+                                               id="provider_model_code"
+                                               name="provider_model_code"
+                                               value="<?= htmlspecialchars($providerModelCode) ?>"
+                                               placeholder="<?= __('留空默认使用模型代码') ?>">
+                                        <div class="form-text">
+                                            <?= __('用于映射供应商真实模型 code，切换供应商时会按此值做支持校验') ?>
+                                        </div>
+                                    </div>
+                                </div>
                                 
                                 <!-- 模型名称 -->
                                 <div class="col-md-6">

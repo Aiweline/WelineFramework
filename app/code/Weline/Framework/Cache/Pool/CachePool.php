@@ -17,6 +17,8 @@ namespace Weline\Framework\Cache\Pool;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Contract\StatsInterface;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 
 class CachePool implements CachePoolInterface
 {
@@ -24,6 +26,7 @@ class CachePool implements CachePoolInterface
     private string $tip;
     private bool $permanent;
     private int $defaultTtl;
+    private bool $enabled;
     private CacheAdapterInterface $adapter;
 
     private int $hits = 0;
@@ -34,13 +37,15 @@ class CachePool implements CachePoolInterface
         CacheAdapterInterface $adapter,
         string $tip = '',
         bool $permanent = false,
-        int $defaultTtl = 1800
+        int $defaultTtl = 1800,
+        bool $enabled = true
     ) {
         $this->identity = $identity;
         $this->adapter = $adapter;
         $this->tip = $tip;
         $this->permanent = $permanent;
         $this->defaultTtl = $defaultTtl;
+        $this->enabled = $enabled;
     }
 
     public function getIdentity(): string
@@ -60,6 +65,11 @@ class CachePool implements CachePoolInterface
 
     public function get(string $key): mixed
     {
+        if (!$this->enabled) {
+            $this->misses++;
+            return null;
+        }
+
         $value = $this->adapter->get($this->buildKey($key));
         
         if ($value === null) {
@@ -73,6 +83,10 @@ class CachePool implements CachePoolInterface
 
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
+        if (!$this->enabled) {
+            return true;
+        }
+
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         return $this->adapter->set($this->buildKey($key), $value, $ttl);
     }
@@ -86,11 +100,21 @@ class CachePool implements CachePoolInterface
     {
         $this->hits = 0;
         $this->misses = 0;
-        return $this->adapter->clear();
+        $result = $this->adapter->clear();
+
+        if ($result) {
+            $this->dispatchCacheFlushedEvent('clear');
+        }
+
+        return $result;
     }
 
     public function has(string $key): bool
     {
+        if (!$this->enabled) {
+            return false;
+        }
+
         return $this->adapter->has($this->buildKey($key));
     }
 
@@ -152,6 +176,7 @@ class CachePool implements CachePoolInterface
             'misses' => $this->misses,
             'hit_ratio' => $total > 0 ? round($this->hits / $total * 100, 2) : 0,
             'permanent' => $this->permanent,
+            'enabled' => $this->enabled,
             'default_ttl' => $this->defaultTtl,
             'adapter' => get_class($this->adapter),
         ], $adapterStats);
@@ -176,6 +201,11 @@ class CachePool implements CachePoolInterface
         return $this->adapter;
     }
 
+    public function isEnabled(): bool
+    {
+        return $this->enabled;
+    }
+
     /**
      * 重置统计
      */
@@ -186,6 +216,22 @@ class CachePool implements CachePoolInterface
         
         if ($this->adapter instanceof StatsInterface) {
             $this->adapter->resetStats();
+        }
+    }
+
+    protected function dispatchCacheFlushedEvent(string $operation): void
+    {
+        try {
+            ObjectManager::getInstance(EventsManager::class)->dispatch(
+                'Weline_Framework_Cache::integration::cache_flushed',
+                [
+                    'identity' => $this->identity,
+                    'operation' => $operation,
+                    'tip' => $this->tip,
+                ]
+            );
+        } catch (\Throwable) {
+            // Cache clear should never fail just because runtime integration hooks are unavailable.
         }
     }
 }

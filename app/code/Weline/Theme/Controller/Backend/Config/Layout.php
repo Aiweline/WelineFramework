@@ -84,10 +84,8 @@ class Layout extends BackendController
         $backendColorConfig = $this->getColorConfigFromMeta($theme, $backendArea, $backendScope)
             ?? LayoutScanner::getColorConfig($theme, $backendArea, $backendScope);
 
-        $frontendPartialsConfig = $this->getPartialsConfigFromMeta($theme, $frontendArea, $frontendScope)
-            ?? LayoutScanner::getPartialsConfig($theme, $frontendArea, $frontendScope);
-        $backendPartialsConfig = $this->getPartialsConfigFromMeta($theme, $backendArea, $backendScope)
-            ?? LayoutScanner::getPartialsConfig($theme, $backendArea, $backendScope);
+        $frontendPartialsConfig = $this->getResolvedPartialsConfig($theme, $frontendArea, $frontendScope);
+        $backendPartialsConfig = $this->getResolvedPartialsConfig($theme, $backendArea, $backendScope);
 
         $frontendVariablesConfig = $this->getVariablesConfigFromMeta($theme, $frontendArea, $frontendScope)
             ?? LayoutScanner::getVariablesConfig($theme, $frontendArea, $frontendScope);
@@ -163,10 +161,8 @@ class Layout extends BackendController
         $backendColorConfig = $this->getColorConfigFromMeta($theme, $backendArea, $backendScope)
             ?? LayoutScanner::getColorConfig($theme, $backendArea, $backendScope);
 
-        $frontendPartialsConfig = $this->getPartialsConfigFromMeta($theme, $frontendArea, $frontendScope)
-            ?? LayoutScanner::getPartialsConfig($theme, $frontendArea, $frontendScope);
-        $backendPartialsConfig = $this->getPartialsConfigFromMeta($theme, $backendArea, $backendScope)
-            ?? LayoutScanner::getPartialsConfig($theme, $backendArea, $backendScope);
+        $frontendPartialsConfig = $this->getResolvedPartialsConfig($theme, $frontendArea, $frontendScope);
+        $backendPartialsConfig = $this->getResolvedPartialsConfig($theme, $backendArea, $backendScope);
 
         $frontendVariablesConfig = $this->getVariablesConfigFromMeta($theme, $frontendArea, $frontendScope)
             ?? LayoutScanner::getVariablesConfig($theme, $frontendArea, $frontendScope);
@@ -2113,6 +2109,19 @@ class Layout extends BackendController
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    private function getResolvedPartialsConfig(WelineTheme $theme, string $area, string $scope): array
+    {
+        $metaConfig = $this->getPartialsConfigFromMeta($theme, $area, $scope);
+        if (\is_array($metaConfig) && !empty($metaConfig)) {
+            return $metaConfig;
+        }
+
+        $themeConfig = (array)$theme->getConfig();
+        $partialsByArea = (array)($themeConfig['partials'] ?? []);
+        $normalizedArea = \strtolower(\trim($area)) === 'backend' ? 'backend' : 'frontend';
+        return (array)($partialsByArea[$normalizedArea] ?? []);
     }
     
     /**
