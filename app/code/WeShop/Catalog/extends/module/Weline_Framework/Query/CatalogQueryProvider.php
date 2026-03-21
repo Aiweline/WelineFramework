@@ -30,6 +30,7 @@ class CatalogQueryProvider implements QueryProviderInterface
             'getCategoryById' => $this->getCategoryById($params),
             'getCategoryByHandle' => $this->getCategoryByHandle($params),
             'getCategoryNames' => $this->getCategoryNames($params),
+            'getCategorySuggestions' => $this->getCategorySuggestions($params),
             'getAllDescendantCategoryIds' => $this->getAllDescendantCategoryIds($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Catalog 查询器不支持的操作：%{1}', $operation)
@@ -141,6 +142,35 @@ class CatalogQueryProvider implements QueryProviderInterface
         return array_values(array_unique($categoryIds));
     }
 
+    private function getCategorySuggestions(array $params): array
+    {
+        $keyword = \trim((string)($params['keyword'] ?? ''));
+        $limit = \max(1, (int)($params['limit'] ?? 10));
+        if ($keyword === '') {
+            return [];
+        }
+
+        $category = clone $this->categoryModel;
+        $category->clear();
+        $category->where(Category::schema_fields_NAME, ['like', '%' . $keyword . '%'])
+            ->where(Category::schema_fields_IS_ACTIVE, 1)
+            ->order(Category::schema_fields_ID, 'DESC')
+            ->limit(\min(3, $limit));
+
+        $categories = $category->select()->fetchArray();
+        $suggestions = [];
+        foreach ($categories as $item) {
+            $suggestions[] = [
+                'text' => $item[Category::schema_fields_NAME] ?? '',
+                'type' => 'category',
+                'icon' => 'fa-folder',
+                'url' => '/catalog/category/view?id=' . ($item[Category::schema_fields_ID] ?? ''),
+            ];
+        }
+
+        return \array_slice($suggestions, 0, $limit);
+    }
+
     private function categoryToArray($category): array
     {
         return [
@@ -177,6 +207,14 @@ class CatalogQueryProvider implements QueryProviderInterface
                     'name' => 'getCategoryNames',
                     'description' => __('根据分类 ID 列表获取分类名称'),
                     'params' => [['name' => 'category_ids', 'type' => 'array', 'required' => true]],
+                ],
+                [
+                    'name' => 'getCategorySuggestions',
+                    'description' => __('获取分类搜索建议'),
+                    'params' => [
+                        ['name' => 'keyword', 'type' => 'string', 'required' => true],
+                        ['name' => 'limit', 'type' => 'int', 'required' => false],
+                    ],
                 ],
                 [
                     'name' => 'getAllDescendantCategoryIds',

@@ -23,8 +23,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\Domain;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\DomainPoolFlowLog;
-use Weline\Server\Model\SslCertificate;
-use Weline\Server\Service\SslCertificateService;
 use Weline\Websites\Service\CertificateRequestService;
 use Weline\Websites\Service\DomainCronLockService;
 use Weline\Websites\Service\DomainPoolFlowLogService;
@@ -48,6 +46,7 @@ class DomainPoolCertificateRequest
     use WebsitesCronTestRunnerTrait;
 
     private const DEFAULT_CERT_STRATEGY = 'wildcard_prefer';
+    private const DEFAULT_CHALLENGE_STRATEGY = 'dns01';
 
     /** CLI 下同时输出到屏幕，便于手动执行时查看 */
     private function echoLine(string $line): void
@@ -82,14 +81,13 @@ class DomainPoolCertificateRequest
                     }
                 ));
             }
-            $sslSvc = ObjectManager::getInstance(SslCertificateService::class);
             $domains = [];
             foreach ($candidates as $row) {
                 $fq = \strtolower(\trim((string) ($row[DomainPool::schema_fields_DOMAIN] ?? '')));
                 if ($fq === '') {
                     continue;
                 }
-                if ($sslSvc->isManagedCertificateHealthyForHostname($fq)) {
+                if ($this->hasHealthyManagedCertificate($fq)) {
                     $this->reconcilePoolWithManagedCertificateIfOutOfSync($row, $fq);
                     continue;
                 }
@@ -238,7 +236,7 @@ class DomainPoolCertificateRequest
                 'cert_type' => $isWildcard ? 'wildcard' : 'exact',
                 'pool_id' => $poolId,
                 'domain_id' => $domainId > 0 ? $domainId : 0,
-                'challenge_strategy' => SslCertificateService::CHALLENGE_DNS01,
+                'challenge_strategy' => self::DEFAULT_CHALLENGE_STRATEGY,
                 '_on_progress' => $onProgress,
             ]);
 
@@ -349,9 +347,12 @@ class DomainPoolCertificateRequest
         if ($poolId <= 0) {
             return;
         }
-        $certProbe = ObjectManager::getInstance(SslCertificate::class, [], false);
-        $certRow = $certProbe->findCertificateForDomain($fqdn);
-        if ($certRow === null || (int) $certRow->getCertId() <= 0) {
+        $preferredCertIdRaw = $row[DomainPool::schema_fields_CERT_ID] ?? null;
+        $preferredCertId = $preferredCertIdRaw !== null && $preferredCertIdRaw !== ''
+            ? (int) $preferredCertIdRaw
+            : null;
+        $certRow = $this->resolveManagedCertificate($fqdn, $preferredCertId);
+        if (!\is_array($certRow) || (int) ($certRow['cert_id'] ?? 0) <= 0) {
             return;
         }
         $pool = ObjectManager::getInstance(DomainPool::class, [], false);
@@ -359,19 +360,19 @@ class DomainPoolCertificateRequest
         if ((int) $pool->getPoolId() <= 0) {
             return;
         }
-        $exp = \trim((string) $certRow->getExpiresAt());
+        $exp = \trim((string) ($certRow['expires_at'] ?? ''));
         $poolExp = $pool->getHttpsExpiresAt();
         $poolExpStr = $poolExp !== null && $poolExp !== '' ? \trim((string) $poolExp) : '';
         if ($pool->getHttpsStatus() === DomainPool::HTTPS_STATUS_VALID
             && $pool->getPoolLifecycleStage() === DomainPool::LIFECYCLE_CERT_VALID
-            && (int) $pool->getCertId() === (int) $certRow->getCertId()
+            && (int) $pool->getCertId() === (int) ($certRow['cert_id'] ?? 0)
             && ($exp === $poolExpStr || ($exp === '' && $poolExpStr === ''))) {
             return;
         }
         $pool->setHttpsStatus(DomainPool::HTTPS_STATUS_VALID);
         $pool->setHttpsError('');
         $pool->setPoolLifecycleStage(DomainPool::LIFECYCLE_CERT_VALID);
-        $pool->setCertId((int) $certRow->getCertId());
+        $pool->setCertId((int) ($certRow['cert_id'] ?? 0));
         if ($exp !== '') {
             $pool->setHttpsExpiresAt($exp);
         }
@@ -409,5 +410,33 @@ class DomainPoolCertificateRequest
         $line = __('泛域证书已覆盖同根下 %{1} 条池子记录，已全部标为有效', [\count($rows)]);
         $this->echoLine($line);
         w_log_info('[DomainPoolCertificateRequest] ' . $line, [], 'domain_pool_cert');
+    }
+    private function hasHealthyManagedCertificate(string $hostname): bool
+    {
+        try {
+            return (bool) w_query('server', 'isManagedCertificateHealthy', [
+                'hostname' => $hostname,
+            ]);
+        } catch (\Throwable $e) {
+            w_log_warning('[DomainPoolCertificateRequest] ' . __('查询管理证书健康状态失败：%{1}', [$e->getMessage()]), [], 'domain_pool_cert');
+
+            return false;
+        }
+    }
+
+    private function resolveManagedCertificate(string $hostname, ?int $preferredCertId = null): ?array
+    {
+        try {
+            $result = w_query('server', 'resolveManagedCertificate', [
+                'hostname' => $hostname,
+                'preferred_cert_id' => $preferredCertId,
+            ]);
+        } catch (\Throwable $e) {
+            w_log_warning('[DomainPoolCertificateRequest] ' . __('解析管理证书失败：%{1}', [$e->getMessage()]), [], 'domain_pool_cert');
+
+            return null;
+        }
+
+        return \is_array($result) ? $result : null;
     }
 }

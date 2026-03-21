@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Widget\Service\WidgetRegistry;
 
@@ -14,6 +16,7 @@ use Weline\Widget\Service\WidgetRegistry;
 class WidgetPositionResolver
 {
     private WidgetRegistry $widgetRegistry;
+    private ThemePlaceableRegistryInterface $placeableRegistry;
 
     // 位置到区域的映射
     private const POSITION_TO_AREA_MAP = [
@@ -34,9 +37,10 @@ class WidgetPositionResolver
         ],
     ];
 
-    public function __construct(WidgetRegistry $widgetRegistry)
+    public function __construct(WidgetRegistry $widgetRegistry, mixed $placeableRegistry)
     {
         $this->widgetRegistry = $widgetRegistry;
+        $this->placeableRegistry = $this->resolvePlaceableRegistry($placeableRegistry);
     }
 
     /**
@@ -135,6 +139,13 @@ class WidgetPositionResolver
      */
     private function getWidget(string $module, string $code): ?array
     {
+        if ($module === 'Weline_Theme' && str_contains($code, '/')) {
+            $definition = $this->placeableRegistry->find($module, 'theme_component', $code, null, 'frontend');
+            if ($definition) {
+                return $definition->toWidgetArray();
+            }
+        }
+
         $registry = $this->widgetRegistry->getRegistry();
 
         // 查找匹配的部件（注册表是嵌套结构：type -> code -> widget_data）
@@ -199,5 +210,13 @@ class WidgetPositionResolver
             'is_compatible' => $widget['compatible'] ?? false,
             'widget_name' => $widget['name'] ?? $widgetCode,
         ];
+    }
+    private function resolvePlaceableRegistry(mixed $placeableRegistry): ThemePlaceableRegistryInterface
+    {
+        if ($placeableRegistry instanceof ThemePlaceableRegistryInterface) {
+            return $placeableRegistry;
+        }
+
+        return ObjectManager::getInstance(ThemePlaceableRegistry::class);
     }
 }

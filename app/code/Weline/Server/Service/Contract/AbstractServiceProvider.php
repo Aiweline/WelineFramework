@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Contract;
 
+use Weline\Framework\System\IPC\ProcessKind;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\ServiceOrchestrator;
 
@@ -167,7 +168,7 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
      */
     public function getProcessKind(): string
     {
-        return \Weline\Server\IPC\ControlMessage::PROCESS_KIND_FRAMEWORK;
+        return \Weline\Framework\System\IPC\ProcessKind::FRAMEWORK;
     }
 
     /**
