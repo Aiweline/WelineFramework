@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Database\Compiler;
 
 use Weline\Framework\Database\Compiler\Dialect\MysqlDialect;
+use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\Database\Exception\DbException;
 
 /**
@@ -78,7 +79,24 @@ final class MysqlCompiler extends AbstractCompiler
             $sql .= 'INSERT INTO ' . $table . ' (' . implode(',', $insertFieldsQuoted) . ') VALUES ' . $values;
 
             if ($existUpdateSql !== '') {
-                $sql .= ' ' . $existUpdateSql;
+                if ($existUpdateSql === QueryInterface::EXIST_UPDATE_ALL_FIELDS) {
+                    $parts = [];
+                    foreach ($insertFields as $f) {
+                        if (($insertUpdateWhereFields !== [] && in_array($f, $insertUpdateWhereFields, true)) ||
+                            ($identityField && $f === $identityField)) {
+                            continue;
+                        }
+                        $q = $this->dialect->quoteIdentifier($f);
+                        $parts[] = "{$q}=VALUES({$q})";
+                    }
+                    if ($parts !== []) {
+                        $existUpdateSql = 'ON DUPLICATE KEY UPDATE ' . implode(', ', $parts);
+                    }
+                }
+
+                if ($existUpdateSql !== QueryInterface::EXIST_UPDATE_ALL_FIELDS && $existUpdateSql !== '') {
+                    $sql .= ' ' . $existUpdateSql;
+                }
             } elseif ($insertUpdateFields !== [] || $insertUpdateWhereFields !== []) {
                 if ($insertUpdateFields !== []) {
                     $parts = [];

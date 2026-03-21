@@ -163,7 +163,13 @@ abstract class QueryAst implements QueryInterface
         }
         $this->table = $this->tableNameStrategy->resolve($table_name, $this->db_name);
         // 更新 AST
-        $this->updateAstTable($this->table, $this->table_alias);
+        $from = $this->ast['from'] ?? [];
+        if (!empty($from['is_subquery']) && !empty($from['subquery_id']) && $this->table === '') {
+            $this->ast['from']['table'] = '';
+            $this->ast['from']['alias'] = $this->cleanAstValue($this->table_alias);
+        } else {
+            $this->updateAstTable($this->table, $this->table_alias);
+        }
         return $this;
     }
 
@@ -198,11 +204,13 @@ abstract class QueryAst implements QueryInterface
             if (!isset($this->ast['from'])) {
                 $this->ast['from'] = [];
             }
+            $this->ast['from']['table'] = '';
             $this->ast['from']['is_subquery'] = true;
             $this->ast['from']['subquery_id'] = $subqueryId;
             $this->ast['from']['alias'] = $this->cleanAstValue($alias);
             
             // 更新表别名
+            $previousAlias = $this->table_alias;
             $previousAlias = $this->table_alias;
             $this->table_alias = $alias;
             if ($this->fields === '*' || $this->fields === 'main_table.*' || $this->fields === $previousAlias . '.*') {
@@ -487,12 +495,20 @@ abstract class QueryAst implements QueryInterface
 
     public function alias(string $table_alias_name): QueryInterface
     {
+        $previousAlias = $this->table_alias;
         $this->table_alias = $table_alias_name;
-        if ($this->fields === '*' || $this->fields === $this->table_alias . '.*' || 'main_table.*' === $this->fields) {
+        if ($this->fields === '*' || $this->fields === $previousAlias . '.*' || 'main_table.*' === $this->fields) {
             $this->fields = $this->table_alias . '.*';
+            $this->updateAstFields($this->fields);
         }
         // 更新 AST
-        $this->updateAstTable($this->table, $this->table_alias);
+        $from = $this->ast['from'] ?? [];
+        if (!empty($from['is_subquery']) && !empty($from['subquery_id']) && $this->table === '') {
+            $this->ast['from']['table'] = '';
+            $this->ast['from']['alias'] = $this->cleanAstValue($this->table_alias);
+        } else {
+            $this->updateAstTable($this->table, $this->table_alias);
+        }
         return $this;
     }
 
@@ -1361,7 +1377,18 @@ abstract class QueryAst implements QueryInterface
             // 确保所有部分都已更新（从属性同步，以防有遗漏）
             // 🔧 比较时使用清理后的值，确保 AST 中的值是干净的
             $cleanedTable = $this->cleanAstValue($this->table);
-            if (!isset($this->ast['from']['table']) || $this->ast['from']['table'] !== $cleanedTable) {
+            $cleanedAlias = $this->cleanAstValue($this->table_alias);
+            $isFromSubquery = !empty($this->ast['from']['is_subquery']) && !empty($this->ast['from']['subquery_id']);
+            if ($isFromSubquery && $cleanedTable === '') {
+                $this->ast['from']['table'] = '';
+                if (($this->ast['from']['alias'] ?? '') !== $cleanedAlias) {
+                    $this->ast['from']['alias'] = $cleanedAlias;
+                }
+            } elseif (
+                !isset($this->ast['from']['table']) ||
+                $this->ast['from']['table'] !== $cleanedTable ||
+                ($this->ast['from']['alias'] ?? '') !== $cleanedAlias
+            ) {
                 $this->updateAstTable($this->table, $this->table_alias);
             }
             $cleanedFields = $this->cleanAstFields($this->fields);
