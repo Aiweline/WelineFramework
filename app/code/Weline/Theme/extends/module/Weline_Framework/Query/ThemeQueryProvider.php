@@ -54,9 +54,9 @@ class ThemeQueryProvider implements QueryProviderInterface
             'parent_id' => $theme->getData(WelineTheme::schema_fields_PARENT_ID),
             'is_active' => $theme->getData(WelineTheme::schema_fields_IS_ACTIVE),
             'config' => $theme->getData(WelineTheme::schema_fields_CONFIG),
-            'preview_image' => $theme->getData(WelineTheme::schema_fields_PREVIEW_IMAGE),
-            'frontend_preview_image' => $theme->getData(WelineTheme::schema_fields_FRONTEND_PREVIEW_IMAGE),
-            'backend_preview_image' => $theme->getData(WelineTheme::schema_fields_BACKEND_PREVIEW_IMAGE),
+            'preview_image' => $theme->getPreviewImage(),
+            'frontend_preview_image' => $theme->getFrontendPreviewImage(),
+            'backend_preview_image' => $theme->getBackendPreviewImage(),
         ];
     }
 
