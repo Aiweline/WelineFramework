@@ -3366,10 +3366,13 @@ HTML;
             'target_value' => $pageType,
         ]), false);
         $params = $this->getPreviewContextService()->toQueryParams($context);
+        $params['page_type'] = $pageType;
+        $params['layout_type'] = $pageType;
+        $params['layout_option'] = 'default';
         $params['_t'] = \time();
 
         return $this->_url->getFrontendUrl(
-            $this->getThemePageTypeResolver()->getPreviewRouteByPageType($pageType),
+            'theme/frontend/theme-preview/content',
             $params
         );
     }
