@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
-use Weline\Framework\App\Env;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -79,6 +78,7 @@ class SessionServerProvider extends AbstractServiceProvider
 
         $port = $this->getPort($instanceId, $context);
         $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $tokenFileName = $this->getTokenFileName($context);
 
         $arguments = [
             '127.0.0.1',
@@ -86,6 +86,7 @@ class SessionServerProvider extends AbstractServiceProvider
             $context->instanceName,
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
+            '--token-file-name=' . $tokenFileName,
         ];
 
         if ($context->frontend) {
@@ -110,5 +111,19 @@ class SessionServerProvider extends AbstractServiceProvider
             ?? $context->envConfig['session']['server_port']
             ?? 19970
         );
+    }
+
+    private function getTokenFileName(ServiceContext $context): string
+    {
+        $wlsSession = ($context->envConfig['wls'] ?? [])['session'] ?? [];
+        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+
+        $tokenFileName = (string) (
+            $wlsServer['token_file_name']
+            ?? $wlsSession['token_file_name']
+            ?? 'session_server.token'
+        );
+
+        return $tokenFileName !== '' ? $tokenFileName : 'session_server.token';
     }
 }
