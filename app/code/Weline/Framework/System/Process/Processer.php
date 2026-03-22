@@ -1994,12 +1994,6 @@ class Processer
      */
     private static function tryBatchCreateOptimized(array $commands): ?array
     {
-        foreach ($commands as $config) {
-            if (!empty($config['foreground'])) {
-                return null;
-            }
-        }
-
         if (IS_WIN) {
             return self::batchCreateWindows($commands);
         }
@@ -2064,6 +2058,7 @@ class Processer
                 'process_name' => self::extractCommandLineArg($processCommand, 'name'),
                 'cwd' => BP,
                 'enable_log' => $enableLog,
+                'foreground' => (bool) ($config['foreground'] ?? false),
             ];
         }
 
@@ -2199,7 +2194,7 @@ class Processer
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
     private static function writeWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2296,7 +2291,7 @@ POWERSHELL;
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2312,6 +2307,7 @@ POWERSHELL;
             $php = \str_replace("'", "''", (string) ($item['php'] ?? ''));
             $cwd = \str_replace("'", "''", (string) ($item['cwd'] ?? BP));
             $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
+            $foreground = !empty($item['foreground']);
             $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
             $redirectBase = \preg_replace('/[^A-Za-z0-9._-]+/', '-', $redirectBase) ?: 'process';
             $stdoutPath = self::escapePowerShellLiteral(
@@ -2329,12 +2325,14 @@ POWERSHELL;
             $lines[] = '    $startArgs = @{';
             $lines[] = "        FilePath = '{$php}'";
             $lines[] = "        WorkingDirectory = '{$cwd}'";
-            $lines[] = "        WindowStyle = 'Hidden'";
+            $lines[] = "        WindowStyle = '" . ($foreground ? 'Normal' : 'Hidden') . "'";
             $lines[] = '        PassThru = $true';
-            $lines[] = "        RedirectStandardOutput = '{$stdoutPath}'";
-            $lines[] = "        RedirectStandardError = '{$stderrPath}'";
             $lines[] = "        ErrorAction = 'Stop'";
             $lines[] = '    }';
+            if (!$foreground) {
+                $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
+                $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
+            }
             if ($arguments !== '') {
                 $lines[] = "    \$startArgs.ArgumentList = '{$arguments}'";
             }

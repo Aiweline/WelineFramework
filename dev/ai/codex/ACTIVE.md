@@ -1,32 +1,32 @@
 # Active Task
 
-- Updated: 2026-03-22 14:10
-- Task File: dev/ai/codex/tasks/2026-03-22/2026-03-22-1320-websites-ai-workbench-epic1-extends-registry.md
-- Status: completed
+- Updated: 2026-03-22 18:11
+- Task File: dev/ai/codex/tasks/2026-03-22/2026-03-22-1811-wls-frontend-worker-window-and-startup-hardening.md
+- Status: in_progress
 
 ## Current Goal
 
-Complete Epic 1 for the unified `Weline_Websites` AI site-building workbench:
-extension contracts, provider/theme-source registries, and the built-in default provider are now in place.
+Make WLS frontend-mode worker startup show visible worker windows reliably on Windows, then harden the remaining startup/reload edge cases so WLS reaches an industrial-grade startup and rolling-reload experience.
 
 ## Latest Progress
 
-- Epic 1 contracts and registry infrastructure were implemented.
-- `websites_default` is now registered as a built-in `AiSiteBuilderProvider` implementation.
-- Registry tests were added and passed their assertions.
-- `generated/extends.php` was refreshed and now contains the new provider extension entry.
+- Completed workspace startup context required by `AGENTS.md`.
+- Routed repo skill usage through `weline-framework-skill-router` to `runtime-and-process` with `windows-command-quoting` support.
+- Confirmed the workspace is dirty, including pre-existing edits in `app/code/Weline/Server/IPC/MasterControlServer.php`; integration must avoid overwriting unrelated changes.
+- Began tracing the real Windows WLS launch path from `Start.php` through `Processer.php` and `ServiceOrchestrator.php`.
+- Identified an existing comment in `Start.php` that explicitly intends to keep Worker windows visible in frontend mode, which suggests some runtime paths are bypassing or neutralizing that behavior.
 
 ## Verification
 
-- `php -l` passed for touched Websites files.
-- Targeted PHPUnit registry tests passed assertions; the process exited non-zero only because of environment warnings.
-- `php bin/w setup:upgrade -m Weline_Websites --yes` completed successfully.
+- Pending.
 
 ## Risks / Notes
 
-- Theme source real implementation is intentionally still pending.
-- The next architectural risk remains keeping future provider capabilities split from module-private state.
+- The worktree contains many unrelated modified and untracked files; do not revert them.
+- The user also reported post-startup instability, so the task scope includes both visible window behavior and startup/reload control-plane hardening where needed.
 
 ## Next
 
-- Continue with Epic 2 persistence models/services, or insert the real `Weline_Theme` theme-source implementation before UI work.
+- Inspect the exact Windows process creation code paths used by initial startup, worker resurrection, and rolling reload.
+- Reproduce and fix any path that hides or detaches worker windows even when frontend mode is requested.
+- Validate with lint plus real `server:start` / `server:reload` runtime checks.

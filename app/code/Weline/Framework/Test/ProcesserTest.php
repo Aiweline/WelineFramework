@@ -191,4 +191,48 @@ class ProcesserTest extends TestCore
     {
         self::assertGreaterThan(0, Processer::PROCESS_NAME_MAX_LENGTH);
     }
+
+    public function testBuildWindowsBatchCreateScriptKeepsForegroundWindowsVisible(): void
+    {
+        $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
+            [
+                [
+                    'key' => 'worker-foreground',
+                    'command' => '"C:\php\php.exe" worker.php --name=weline-worker-visible',
+                    'php' => 'C:\php\php.exe',
+                    'arguments' => 'worker.php --name=weline-worker-visible',
+                    'process_name' => 'weline-worker-visible',
+                    'cwd' => 'C:\repo',
+                    'enable_log' => true,
+                    'foreground' => true,
+                ],
+                [
+                    'key' => 'worker-hidden',
+                    'command' => '"C:\php\php.exe" worker.php --name=weline-worker-hidden',
+                    'php' => 'C:\php\php.exe',
+                    'arguments' => 'worker.php --name=weline-worker-hidden',
+                    'process_name' => 'weline-worker-hidden',
+                    'cwd' => 'C:\repo',
+                    'enable_log' => true,
+                    'foreground' => false,
+                ],
+            ],
+            'C:\temp\batch-result.txt',
+            'C:\temp\batch-error.txt',
+        ]);
+
+        self::assertIsString($script);
+        self::assertStringContainsString("WindowStyle = 'Normal'", $script);
+        self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
+        self::assertSame(1, \substr_count($script, 'RedirectStandardOutput'));
+        self::assertSame(1, \substr_count($script, 'RedirectStandardError'));
+    }
+
+    private function invokePrivateStatic(string $class, string $method, array $args): mixed
+    {
+        $ref = new \ReflectionMethod($class, $method);
+        $ref->setAccessible(true);
+
+        return $ref->invokeArgs(null, $args);
+    }
 }
