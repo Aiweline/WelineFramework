@@ -115,7 +115,7 @@ final class ThemePreviewEntryApplication
                 : PreviewContextService::DEFAULT_SCOPE,
             'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
             'target_value' => $layoutType,
-        ]);
+        ], false);
         $context = $previewContextService->ensureThemeIds($context);
 
         if ($area === PreviewContextService::AREA_FRONTEND) {
