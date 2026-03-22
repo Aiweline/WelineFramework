@@ -168,6 +168,12 @@ $reviewCount = $product['review_count'] ?? 0;
             </div>
         </div>
 
+        <aside class="mt-10 rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-gray-900 p-6"
+               data-wslot="product-sidebar"
+               data-wslot-name="Product Sidebar"
+               data-wslot-accept="content,banner,product,review"
+               data-wslot-multiple="true"></aside>
+
         <div class="mt-12">
             <w:hook>WeShop_Product::detail::tabs_before</w:hook>
             <div class="border-b-2 border-gray-200 dark:border-gray-800">
@@ -213,7 +219,11 @@ $reviewCount = $product['review_count'] ?? 0;
         </div>
 
         <?php if (!empty($relatedProducts)): ?>
-            <div class="mt-16 pt-12 border-t-2 border-gray-200 dark:border-gray-800">
+            <div class="mt-16 pt-12 border-t-2 border-gray-200 dark:border-gray-800"
+                 data-wslot="product-related"
+                 data-wslot-name="Product Related"
+                 data-wslot-accept="product,content,banner"
+                 data-wslot-multiple="true">
                 <w:hook>WeShop_Product::detail::related_before</w:hook>
                 <div class="flex items-center justify-between mb-8">
                     <h2 class="font-heading text-xl md:text-2xl font-bold uppercase tracking-tight"><?= __('Related Products') ?></h2>
@@ -247,8 +257,6 @@ $reviewCount = $product['review_count'] ?? 0;
         <?php endif; ?>
     </div>
 </main>
-
-<?= $this->getChildHtml('content') ?>
 
 <script>
 (function() {

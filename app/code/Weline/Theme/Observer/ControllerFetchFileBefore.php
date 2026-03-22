@@ -105,7 +105,21 @@ class ControllerFetchFileBefore implements ObserverInterface
         $fileName = $eventData->getData('fileName');
         
         // 判断区域（frontend/backend）
-        $area = $request && $request->isBackend() ? 'backend' : 'frontend';
+        $area = 'frontend';
+        if ($request && $request->isBackend()) {
+            $editorArea = (string)$request->getParam('editor_area', '');
+            if ($editorArea === '') {
+                $editorArea = (string)$request->getParam('preview_area', '');
+            }
+            $editorArea = strtolower(trim($editorArea));
+            if ($editorArea === 'backend') {
+                $area = 'backend';
+            } elseif ($editorArea === 'frontend') {
+                $area = 'frontend';
+            } else {
+                $area = 'backend';
+            }
+        }
         
         // 设置主题相关数据到 theme 对象中（由Helper处理业务逻辑，不在模板中处理）
         $template = Template::getInstance();
