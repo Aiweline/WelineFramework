@@ -494,6 +494,49 @@ HTML;
     }
 
     /**
+     * 检测是否处于 legacy preview_theme 预览模式
+     *
+     * 兼容老入口（preview_theme URL 参数 + Session），并限制为 frontend 预览场景。
+     */
+    private function isPreviewThemeMode(): bool
+    {
+        $requestPreviewThemeId = (int)$this->request->getParam('preview_theme', 0);
+        if ($requestPreviewThemeId > 0) {
+            $requestPreviewArea = (string)$this->request->getParam(
+                'preview_area',
+                (string)$this->request->getParam('editor_area', 'frontend')
+            );
+
+            return $this->normalizePreviewArea($requestPreviewArea) === 'frontend';
+        }
+
+        try {
+            if (!PreviewManager::isPreviewMode()) {
+                return false;
+            }
+
+            $sessionPreviewArea = $this->normalizePreviewArea((string)(PreviewManager::getPreviewArea() ?? ''));
+
+            return $sessionPreviewArea === '' || $sessionPreviewArea === 'frontend';
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function normalizePreviewArea(string $area): string
+    {
+        $normalized = \strtolower(\trim($area));
+        if ($normalized === 'admin' || $normalized === 'backend') {
+            return 'backend';
+        }
+        if ($normalized === 'front' || $normalized === 'frontend') {
+            return 'frontend';
+        }
+
+        return $normalized;
+    }
+
+    /**
      * 检测区域（前端/后端）
      */
     private function detectArea(string $template): string
