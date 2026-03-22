@@ -48,7 +48,7 @@ final class SubprocessControlKernel
             return false;
         }
 
-        $client->register(
+        $registered = $client->register(
             $this->identity->role,
             $this->identity->pid,
             $this->identity->port,
@@ -58,13 +58,22 @@ final class SubprocessControlKernel
             $this->identity->processKind,
             $this->identity->moduleCode
         );
-        $client->sendReady(
+        if (!$registered) {
+            $client->close();
+            return false;
+        }
+
+        $ready = $client->sendReady(
             $this->identity->role,
             $this->identity->workerId,
             $this->identity->port,
             $this->identity->epoch,
             $this->identity->launchId
         );
+        if (!$ready) {
+            $client->close();
+            return false;
+        }
 
         $kernel = $this;
         $client->onMessage(static function (array $msg, ControlClient $client) use ($kernel): void {

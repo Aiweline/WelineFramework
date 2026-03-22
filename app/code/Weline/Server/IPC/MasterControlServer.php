@@ -247,6 +247,7 @@ class MasterControlServer
         }
 
         \stream_set_blocking($conn, false);
+        @\stream_set_write_buffer($conn, 0);
 
         $clientId = (int) $conn;
         $this->clients[$clientId] = [
@@ -273,6 +274,46 @@ class MasterControlServer
      *
      * @param resource $socket 可读的客户端 socket
      */
+    /**
+     * 排空本轮 poll 中所有待 accept 的连接，避免只接入一个连接后其余首包滞留。
+     *
+     * @return int[]
+     */
+    private function acceptPendingClients(): array
+    {
+        $accepted = [];
+
+        while (true) {
+            $conn = @\stream_socket_accept($this->serverSocket, 0);
+            if (!$conn) {
+                break;
+            }
+
+            \stream_set_blocking($conn, false);
+            @\stream_set_write_buffer($conn, 0);
+
+            $clientId = (int) $conn;
+            $this->clients[$clientId] = [
+                'socket'                => $conn,
+                'buffer'                => '',
+                'role'                  => null,
+                'pid'                   => 0,
+                'port'                  => 0,
+                'worker_id'             => 0,
+                'epoch'                 => 0,
+                'launch_id'             => '',
+                'state'                 => null,
+                'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
+            ];
+
+            $peerName = @\stream_socket_get_name($conn, true) ?: 'unknown';
+            $this->ipcLog("[IPC-Master] CONNECT 鏂板鎴风杩炴帴 #{$clientId} from {$peerName}");
+            $accepted[] = $clientId;
+        }
+
+        return $accepted;
+    }
+
     public function handleReadable($socket): void
     {
         $clientId = (int) $socket;
@@ -467,8 +508,67 @@ class MasterControlServer
         $type = $decoded['type'] ?? 'raw';
         $this->ipcVerboseLog("[IPC-Master] SEND --> {$tag}: type={$type}" . ($decoded ? $this->formatMsgPayload($decoded) : ''));
 
-        $written = @\fwrite($socket, $message);
-        return $written !== false;
+        $sent = $this->writeFully($socket, $message);
+        if (!$sent) {
+            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}");
+            if (@\feof($socket)) {
+                $this->removeClient($clientId);
+            }
+        }
+
+        return $sent;
+    }
+
+    /**
+     * 在非阻塞 socket 上完整写入一条 IPC 消息，避免 NDJSON 半包被误判为发送成功。
+     *
+     * @param resource $socket
+     */
+    private function writeFully($socket, string $message, float $timeoutSec = 1.0): bool
+    {
+        $length = \strlen($message);
+        if ($length === 0) {
+            return true;
+        }
+
+        $offset = 0;
+        $deadline = \microtime(true) + $timeoutSec;
+
+        while ($offset < $length) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0) {
+                return false;
+            }
+
+            $read = [];
+            $write = [$socket];
+            $except = [];
+            $sec = (int)$remaining;
+            $usec = (int)(($remaining - $sec) * 1000000);
+
+            $ready = @\stream_select($read, $write, $except, $sec, $usec);
+            if ($ready === false) {
+                return false;
+            }
+            if ($ready === 0) {
+                continue;
+            }
+
+            $written = @\fwrite($socket, \substr($message, $offset));
+            if ($written === false) {
+                return false;
+            }
+            if ($written === 0) {
+                if (@\feof($socket)) {
+                    return false;
+                }
+                continue;
+            }
+
+            $offset += $written;
+        }
+
+        return true;
     }
 
     /**
@@ -666,15 +766,34 @@ class MasterControlServer
         }
 
         $events = 0;
+        $clientSockets = [];
+        $serverReadable = false;
 
         foreach ($read as $socket) {
             if ($socket === $this->serverSocket) {
-                $this->acceptClient();
-                $events++;
-            } else {
-                $this->handleReadable($socket);
+                $serverReadable = true;
+                continue;
+            }
+            $clientSockets[] = $socket;
+        }
+
+        if ($serverReadable) {
+            $acceptedClientIds = $this->acceptPendingClients();
+            $events += \count($acceptedClientIds);
+
+            // 新连接建立后立即尝试读取首包，避免 register/ready 必须等到下一个 poll 周期。
+            foreach ($acceptedClientIds as $clientId) {
+                if (!isset($this->clients[$clientId])) {
+                    continue;
+                }
+                $this->handleReadable($this->clients[$clientId]['socket']);
                 $events++;
             }
+        }
+
+        foreach ($clientSockets as $socket) {
+            $this->handleReadable($socket);
+            $events++;
         }
 
         return $events;

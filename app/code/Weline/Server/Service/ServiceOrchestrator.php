@@ -993,6 +993,9 @@ class ServiceOrchestrator
             
             $instance->pid = $pid > 0 ? $pid : 0;
             $instance->state = ServiceInstance::STATE_STARTING;
+            // Worker batch startup can be delayed slot-by-slot on Windows.
+            // Reset startup baseline after the actual spawn result is available.
+            $instance->startedAt = \microtime(true);
             $this->registry->addInstance($instance);
             
             WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
