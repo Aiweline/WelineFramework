@@ -85,9 +85,7 @@
                 <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
 
                 <!-- Header -->
-                <w:theme:template layout="partials.header">
-                    Weline_Theme::theme/frontend/partials/header/default.phtml
-                </w:theme:template>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default"/>
 
                 <!-- Hook: header-after -->
                 <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
@@ -115,9 +113,7 @@
                 <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
 
                 <!-- Footer -->
-                <w:theme:template layout="partials.footer">
-                    Weline_Theme::theme/frontend/partials/footer/default.phtml
-                </w:theme:template>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
 
                 <!-- Hook: footer-after -->
                 <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
