@@ -37,6 +37,9 @@ Implement the unified preview/editor behavior for:
 - 01:15 Resumed this task in `ACTIVE.md`; next critical path is shared preview context, then ThemeEditor dual-theme state + navigation resolve, then shell-side unification.
 - 01:20 Re-read workspace skill routing and repo-wide constraints; confirmed this implementation must reuse `BackendToast` / `BackendConfirm`, preserve theme metadata conventions, and run `setup:upgrade --route` if new controllers are added.
 - 01:21 Corrected `dev/ai/codex/ACTIVE.md` back to this task and prepared to syntax-check the shared preview-context services before extending entry points and editor shells.
+- 02:15 Resumed from the broken intermediate `ThemeEditor.php` state and confirmed the immediate blocker was malformed legacy comment wrapping plus garbled response strings in the new preview/editor actions.
+- 02:19 Repaired `ThemeEditor.php` enough to restore controller syntax: fixed the broken `getCompileLayout()` JSON response, removed the stray comment terminators left by legacy wrappers, and replaced the syntax-breaking preview/publish response strings with stable messages.
+- 02:20 Re-ran `php -l app/code/Weline/Theme/Controller/Backend/ThemeEditor.php`; result passed. Functional shell/template/PageBuilder unification work is still pending after this syntax recovery checkpoint.
 
 ## Verification Plan
 
