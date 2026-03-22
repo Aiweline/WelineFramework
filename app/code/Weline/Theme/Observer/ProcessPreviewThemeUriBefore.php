@@ -56,6 +56,8 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
             || (int)$request->getParam('backend_theme_id', 0) > 0
             || $previewToken !== '';
 
+        ThemeRouter::rewritePreviewThemeQuery($path, $ruleArr);
+
         if ($hasPreviewContext) {
             try {
                 /** @var PreviewContextService $previewContextService */
@@ -85,8 +87,6 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
             } catch (\Throwable) {
             }
         }
-
-        ThemeRouter::rewritePreviewThemeQuery($path, $ruleArr);
 
         $data->setData('path', $path);
         $data->setData('rule', new DataObject($ruleArr));
