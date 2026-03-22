@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Console\Server;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
@@ -39,8 +40,11 @@ use Weline\Server\Service\ServerInstanceManager;
  */
 class Reload extends CommandAbstract
 {
-    /** 等待模式最大超时时间（秒） */
-    private const WAIT_MAX_TIMEOUT = 120;
+    /** 等待模式最小硬超时（秒） */
+    private const WAIT_MIN_TIMEOUT = 120;
+
+    /** 等待模式最大硬超时（秒） */
+    private const WAIT_MAX_TIMEOUT = 7200;
     
     /**
      * @inheritDoc
@@ -95,6 +99,7 @@ class Reload extends CommandAbstract
     {
         $info = MasterProcess::getMasterInfo($instanceName);
         $controlPort = (int)($info['control_port'] ?? 0);
+        $waitTimeout = $this->estimateWaitTimeout($totalWorkers);
         
         if ($controlPort <= 0) {
             $this->printer->warning(__('无法获取控制端口，请检查 Master 是否运行'));
@@ -108,7 +113,7 @@ class Reload extends CommandAbstract
             return;
         }
         
-        \stream_set_timeout($conn, self::WAIT_MAX_TIMEOUT);
+        \stream_set_timeout($conn, $waitTimeout);
         \stream_set_blocking($conn, false);
         
         // 发送 reload_wait 命令
@@ -126,16 +131,16 @@ class Reload extends CommandAbstract
         $this->printer->note(__('等待 Orchestrator 完成滚动重启...'));
         
         // 等待 Master 推送完成/失败事件
-        $this->waitForCompletion($conn, $totalWorkers);
+        $this->waitForCompletion($conn, $totalWorkers, $waitTimeout);
     }
     
     /**
      * 等待 Orchestrator 完成滚动重启
      */
-    protected function waitForCompletion($conn, int $totalWorkers): void
+    protected function waitForCompletion($conn, int $totalWorkers, int $waitTimeout): void
     {
         $startTime = \microtime(true);
-        $deadline = $startTime + self::WAIT_MAX_TIMEOUT;
+        $deadline = $startTime + $waitTimeout;
         $buffer = '';
         $lastProgress = '';
         
@@ -184,7 +189,7 @@ class Reload extends CommandAbstract
         
         @\fclose($conn);
         echo "\n";
-        $this->printer->warning(__('等待超时（%{1}s），重启可能仍在进行中', [self::WAIT_MAX_TIMEOUT]));
+        $this->printer->warning(__('等待超时（%{1}s），重启可能仍在进行中', [$waitTimeout]));
         $this->printer->note(__('可用 server:status 查看当前状态'));
     }
     
@@ -226,21 +231,64 @@ class Reload extends CommandAbstract
      */
     protected function handleReloadProgress(array $msg, int $totalWorkers, string $lastProgress): string
     {
-        $completed = $msg['completed'] ?? 0;
+        $completed = $msg['completed'] ?? $msg['progress'] ?? 0;
         $total = $msg['total'] ?? $totalWorkers;
         $currentWorkerId = $msg['current_worker_id'] ?? 0;
         $stage = $msg['stage'] ?? '';
+        $message = (string) ($msg['message'] ?? '');
+
+        if ($message !== '') {
+            $this->printProgress($message, $lastProgress);
+            return $message;
+        }
         
         $stageText = match ($stage) {
             'draining' => __('排水中'),
             'starting' => __('启动中'),
             'waiting_ready' => __('等待就绪'),
+            'waiting_exit' => __('等待旧进程退出'),
+            'removing_from_dispatcher' => __('从 Dispatcher 摘除'),
+            'stopping' => __('停止中'),
+            'rejoin_dispatcher' => __('回加 Dispatcher'),
             default => $stage,
         };
         
         $progress = __('Worker #%{1} %{2} (%{3}/%{4})', [$currentWorkerId, $stageText, $completed, $total]);
         $this->printProgress($progress, $lastProgress);
         return $progress;
+    }
+
+    protected function estimateWaitTimeout(int $totalWorkers): int
+    {
+        $workerCount = \max(1, $totalWorkers);
+        $minThree = (int) (Env::get('wls.orchestrator.worker_three_batch_min_count', 7) ?? 7);
+        if ($minThree < 4) {
+            $minThree = 7;
+        }
+
+        $batchCount = $workerCount >= $minThree ? 3 : $workerCount;
+        $baseSize = intdiv($workerCount, $batchCount);
+        $remainder = $workerCount % $batchCount;
+        $batchSizes = [];
+        for ($i = 0; $i < $batchCount; $i++) {
+            $batchSizes[] = $baseSize + ($i < $remainder ? 1 : 0);
+        }
+
+        $drainTimeout = (float) (Env::get('wls.orchestrator.drain_timeout_sec', 120.0) ?? 120.0);
+        $drainTimeout = \max(5.0, \min(7200.0, $drainTimeout));
+
+        $startupTimeout = (float) (Env::get('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
+        $startupTimeout = \max(10.0, \min(1800.0, $startupTimeout));
+
+        $estimated = 15.0;
+        foreach ($batchSizes as $batchSize) {
+            $exitWait = 15.0 + 5.0 * $batchSize;
+            $readyWait = $startupTimeout + 20.0 + 10.0 * $batchSize;
+            $estimated += $drainTimeout + $exitWait + $readyWait;
+        }
+        $estimated += 30.0;
+
+        return (int) \max(self::WAIT_MIN_TIMEOUT, \min(self::WAIT_MAX_TIMEOUT, (int) \ceil($estimated)));
     }
     
     /**
