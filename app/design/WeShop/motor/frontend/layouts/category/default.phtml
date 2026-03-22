@@ -223,7 +223,11 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
     </div>
 </main>
 
-<?= $this->getChildHtml('content') ?>
+<section class="mx-auto max-w-screen-xl px-4 sm:px-6 lg:px-8 py-10"
+         data-wslot="category-related"
+         data-wslot-name="Category Related"
+         data-wslot-accept="product,category,content,banner"
+         data-wslot-multiple="true"></section>
 
 <script>
 (function() {
