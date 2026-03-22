@@ -239,7 +239,14 @@ class ControllerFetchFileBefore implements ObserverInterface
                     ];
                     $template->setData('theme', $themeData);
                     $template->setData('colors', self::$colorsCache[$configCacheKey] ?? []);
-                    $template->setData('meta', self::$layoutParamsRequestCache[$paramsCacheKey]);
+                    $existingMeta = $template->getData('meta');
+                    if (!is_array($existingMeta)) {
+                        $existingMeta = [];
+                    }
+                    $template->setData('meta', array_merge(
+                        self::$layoutParamsRequestCache[$paramsCacheKey],
+                        $existingMeta
+                    ));
                     $eventData->setData('contentTemplate', $fileName);
                     $eventData->setData('fileName', $resolvedLayoutPath);
                     $eventData->setData('layoutType', $layoutType);
@@ -318,12 +325,11 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $layoutParams = [];
                 }
                 // 将所有参数统一设置到 meta 数组中（供模板使用 {{meta.参数}} 语法）
-                $existingMeta = $template->getData('meta') ?? [];
-                if(empty($existingMeta)){
-                    $metaData = array_merge($existingMeta, $layoutParams);
-                }else{
-                    $metaData = $layoutParams;
+                $existingMeta = $template->getData('meta');
+                if (!is_array($existingMeta)) {
+                    $existingMeta = [];
                 }
+                $metaData = array_merge($layoutParams, $existingMeta);
                 // 关于主题的元数据传递给模板数据（performanceLoad 已在前面统一调用）
                 // 注意：必须使用 getMeta() 而不是 get()
                 // get() 方法用于获取 .value 格式的配置值，对于非 .value 格式会调用 MetaData::get()

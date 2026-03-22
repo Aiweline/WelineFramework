@@ -21,6 +21,7 @@ use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePlaceableRegistry;
+use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 use Weline\Theme\Helper\PreviewManager;
@@ -2221,7 +2222,15 @@ HTML;
             $this->assign('preview_context', $context);
             $this->assign('layout_type', $layoutType);
             $this->assign('layout_option', $layoutOption);
-            $this->assign('meta', [
+            /** @var ThemePreviewContentRenderer $previewContentRenderer */
+            $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
+            $previewPayload = $previewContentRenderer->build(
+                $themeId,
+                $layoutType,
+                (string)$this->request->getParam('status', ThemeLayout::STATUS_DRAFT)
+            );
+            $this->assign('content', $previewPayload['content']);
+            $this->assign('meta', array_merge([
                 'showHeader' => true,
                 'showFooter' => true,
                 'showStatistics' => true,
@@ -2230,7 +2239,7 @@ HTML;
                 'showTestimonials' => true,
                 'showNews' => true,
                 'showPartners' => true,
-            ]);
+            ], $previewPayload['meta']));
 
             return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
         } catch (\Throwable) {
