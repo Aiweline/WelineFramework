@@ -65,11 +65,8 @@
 
     <!-- Hook: head-before -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
-
-    <!-- 父主题 CSS -->
-    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/main.css') ?>">
-    <!-- Motor 主题 CSS -->
-    <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/motor.css') ?>">
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <theme:css>Weline_Theme::theme/frontend/assets/css/motor.css</theme:css>
 
     <!-- Hook: head-after -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
@@ -133,9 +130,6 @@
     <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 
-    <!-- 父主题 JS -->
-    <script src="<?= $this->getStaticUrl('frontend/assets/js/main.js') ?>"></script>
-    <!-- Motor 主题 JS -->
-    <script src="<?= $this->getStaticUrl('frontend/assets/js/motor.js') ?>"></script>
+    <theme:js>Weline_Theme::theme/frontend/assets/js/motor.js</theme:js>
 </body>
 </html>

@@ -1,0 +1,13 @@
+<?php
+/**
+ * Unified preview content stub.
+ *
+ * Controller lifecycle observers rewrite this template into themed layouts.
+ */
+$content = $this->getData('content');
+if (is_string($content) && $content !== '') {
+    echo $content;
+    return;
+}
+?>
+<div class="weline-theme-preview-content" data-theme-preview-content="1"></div>
