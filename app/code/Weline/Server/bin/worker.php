@@ -145,6 +145,11 @@ if (\defined('DEV') && DEV) {
 } elseif ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev') {
     $isDev = true;
 }
+if ($isFrontend) {
+    WlsLogger::getInstance()
+        ->setStdoutEnabled(true)
+        ->setProcessTag('Worker#' . $workerId . ':' . $port);
+}
 // ========== 日志系统结束 ==========
 
 // 注册 PID 到 Processer（启用快速 PID 查找）
