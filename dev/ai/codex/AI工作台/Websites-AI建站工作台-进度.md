@@ -1,8 +1,8 @@
 # Websites AI建站工作台进度
 
-- 最后更新：2026-03-22 14:10
-- 当前状态：epic_1_completed
-- 当前阶段：扩展契约与 registry 已落地
+- 最后更新：2026-03-22 14:16
+- 当前状态：epic_2_completed
+- 当前阶段：核心持久化模型与服务已落地
 
 ## 里程碑状态
 
@@ -13,7 +13,7 @@
 | theme source 抽象设计 | 已完成 | Theme 通过独立扩展点接入 |
 | 任务拆解 | 已完成 | 已拆到可实施 Epic 级别 |
 | Epic 1 扩展契约与 registry | 已完成 | provider/theme source contract 与 registry 已落地 |
-| 核心持久化模型 | 未开始 | 等 Epic 2 |
+| 核心持久化模型 | 已完成 | session / message / artifact / event 与服务层已落地 |
 | 工作台 UI / SSE | 未开始 | 等 Epic 3 |
 | Theme 真实接入 | 未开始 | 等 Epic 6 |
 | PageBuilder provider 接入 | 未开始 | 等 Epic 9 |
@@ -46,8 +46,33 @@
 2. `ThemeSourceRegistry` 已可用，但当前仍等待 `Weline_Theme` 或其他模块提供真实 source 实现。
 3. `Weline_Websites` 核心仍未感知 `PageBuilder` 私有字段，边界保持干净。
 
+## Epic 2 完成情况
+
+1. 已新增四个核心模型：
+   - `AiSiteBuilderSession`
+   - `AiSiteBuilderMessage`
+   - `AiSiteBuilderArtifact`
+   - `AiSiteBuilderEvent`
+2. 已新增四个服务封装：
+   - `SessionService`
+   - `MessageService`
+   - `ArtifactService`
+   - `EventStreamService`
+3. 已完成持久化语义：
+   - session 保存 provider / stage / scope / provider_state / website / domain / preview
+   - message 保存聊天与工具消息
+   - artifact 以 `(session_id, artifact_type, artifact_code)` 做 upsert
+   - event 以 append-only 方式服务 SSE 回放
+4. 已完成验证：
+   - Epic 2 新增文件 `php -l` 全通过
+   - `setup:upgrade -m Weline_Websites --yes` 已通过
+   - 定向 PHPUnit：`4 tests / 53 assertions`
+5. 发现并绕过一个环境噪音：
+   - 旧的 `generated/routers/backend_pc.php` 生成物损坏会阻塞升级
+   - 清理旧生成物后，升级成功
+
 ## 下一步建议
 
-1. 主线继续做 Epic 2：session / message / artifact / event 持久化。
-2. 如果你想先打通主题选择，可插入做 Epic 6 的前半段：给 `Weline_Theme` 增加 `WebsiteThemeSource` 实现。
-3. PageBuilder provider 仍建议等 Websites 主线流程跑通后再接。
+1. 主线进入 Epic 3：后台控制器、工作台 JSON API、SSE 流接口。
+2. 让 Epic 3 只依赖当前服务层，不跨层直操作模型。
+3. 主题选择能力仍建议在 Epic 6 通过 `WebsiteThemeSource` 注入，不提前耦合到 Websites 核心。
