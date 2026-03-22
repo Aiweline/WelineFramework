@@ -610,48 +610,61 @@ class Processer
                 $arguments = \trim(\substr($pname, \strlen($phpBinary)));
             }
 
-            $escapedPhp = \str_replace("'", "''", $phpBinary);
-            $escapedArgs = \str_replace("'", "''", $arguments);
-            $escapedBP = \str_replace("'", "''", BP);
-
-            $psCommand = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' .
-                '$p = Start-Process -FilePath \'' . $escapedPhp . '\' ' .
-                '-ArgumentList \'' . $escapedArgs . '\' ' .
-                '-WorkingDirectory \'' . $escapedBP . '\' ' .
-                '-WindowStyle Hidden ' .
-                '-PassThru; ' .
-                'Write-Output $p.Id' .
-                '"';
-
-            $descriptorspec = [
-                0 => ['file', $nullDevice, 'r'],
-                1 => ['pipe', 'w'],
-                2 => ['file', $nullDevice, 'w'],
-            ];
-
-            $lastError = null;
-            \set_error_handler(function ($type, $msg) use (&$lastError) {
-                $lastError = $msg;
-                return true;
-            });
-            try {
-                $psProcess = \proc_open($psCommand, $descriptorspec, $psPipes, BP);
-            } finally {
-                \restore_error_handler();
-            }
-
-            if (\is_resource($psProcess)) {
-                $output = '';
-                if (isset($psPipes[1])) {
-                    $output = \trim(\stream_get_contents($psPipes[1]));
-                    @\fclose($psPipes[1]);
+            $scriptPath = self::writeWindowsStartScript($phpBinary, $arguments, BP);
+            if ($scriptPath === null) {
+                if ($enableLog) {
+                    self::setOutput($pname, "[ERROR] failed to prepare windows start script" . PHP_EOL);
                 }
-                @\proc_close($psProcess);
+            } else {
+                $descriptorspec = [
+                    0 => ['file', $nullDevice, 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ];
 
-                if (\is_numeric($output) && $output !== '' && (int)$output > 0) {
-                    $pid = (int)$output;
-                    $pid = self::setPid($pname, $pid);
-                    return $pid;
+                $lastError = null;
+                \set_error_handler(function ($type, $msg) use (&$lastError) {
+                    $lastError = $msg;
+                    return true;
+                });
+                try {
+                    $psProcess = \proc_open(
+                        self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                        $descriptorspec,
+                        $psPipes,
+                        BP,
+                        null,
+                        ['bypass_shell' => true]
+                    );
+                } finally {
+                    \restore_error_handler();
+                }
+
+                if (\is_resource($psProcess)) {
+                    $output = '';
+                    $stderr = '';
+                    if (isset($psPipes[1])) {
+                        $output = \trim(\stream_get_contents($psPipes[1]));
+                        @\fclose($psPipes[1]);
+                    }
+                    if (isset($psPipes[2])) {
+                        $stderr = \trim(\stream_get_contents($psPipes[2]));
+                        @\fclose($psPipes[2]);
+                    }
+                    @\proc_close($psProcess);
+                    @\unlink($scriptPath);
+
+                    if (\is_numeric($output) && $output !== '' && (int)$output > 0) {
+                        $pid = (int)$output;
+                        $pid = self::setPid($pname, $pid);
+                        return $pid;
+                    }
+
+                    if ($enableLog && $stderr !== '') {
+                        self::setOutput($pname, "[ERROR] start-process failed: {$stderr}" . PHP_EOL);
+                    }
+                } else {
+                    @\unlink($scriptPath);
                 }
             }
 
@@ -1939,8 +1952,7 @@ class Processer
         if (empty($commands)) {
             return [];
         }
-        
-        // 单个命令时直接走普通路径
+
         if (\count($commands) === 1) {
             $key = \array_key_first($commands);
             $config = $commands[$key];
@@ -1950,50 +1962,444 @@ class Processer
                 $config['foreground'] ?? false,
                 $config['enableLog'] ?? null
             );
+
             return [$key => $pid];
         }
-        
+
+        $optimizedResults = self::tryBatchCreateOptimized($commands);
+        if ($optimizedResults !== null) {
+            return $optimizedResults;
+        }
+
         $results = [];
-        $fibers = [];
-        
-        // 为每个命令创建 Fiber
         foreach ($commands as $key => $config) {
-            $fibers[$key] = new \Fiber(function () use ($config): int {
-                return self::create(
+            try {
+                $results[$key] = self::create(
                     $config['command'],
                     $config['block'] ?? false,
                     $config['foreground'] ?? false,
                     $config['enableLog'] ?? null
                 );
-            });
-        }
-        
-        // 启动所有 Fiber
-        foreach ($fibers as $key => $fiber) {
-            try {
-                $fiber->start();
-            } catch (\Throwable $e) {
-                $results[$key] = 0;
-                unset($fibers[$key]);
-            }
-        }
-        
-        // 收集所有 Fiber 的结果
-        foreach ($fibers as $key => $fiber) {
-            try {
-                // Fiber 内部的 create() 是同步的，start() 后立即完成
-                if ($fiber->isTerminated()) {
-                    $results[$key] = $fiber->getReturn();
-                } else {
-                    // 理论上不会走到这里，因为 create() 是同步操作
-                    $results[$key] = 0;
-                }
-            } catch (\Throwable $e) {
+            } catch (\Throwable) {
                 $results[$key] = 0;
             }
         }
-        
+
         return $results;
+    }
+
+    /**
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     * @return array<string, int>|null
+     */
+    private static function tryBatchCreateOptimized(array $commands): ?array
+    {
+        foreach ($commands as $config) {
+            if (!empty($config['foreground'])) {
+                return null;
+            }
+        }
+
+        if (IS_WIN) {
+            return self::batchCreateWindows($commands);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     * @return array<string, int>|null
+     */
+    private static function batchCreateWindows(array $commands): ?array
+    {
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        $procOpenAvailable = \function_exists('proc_open') && !\in_array('proc_open', $disabledFunctions, true);
+        $execAvailable = \function_exists('exec') && !\in_array('exec', $disabledFunctions, true);
+        if (!$procOpenAvailable && !$execAvailable) {
+            return null;
+        }
+
+        $results = [];
+        $launchItems = [];
+
+        foreach ($commands as $key => $config) {
+            $command = (string) ($config['command'] ?? '');
+            if ($command === '') {
+                $results[$key] = 0;
+                continue;
+            }
+
+            $enableLog = $config['enableLog'] ?? null;
+            if ($enableLog === null) {
+                $enableLog = self::isLogEnabled();
+            }
+
+            $processInfo = self::ensureProcessName($command);
+            $processCommand = $processInfo['command'];
+            $block = (bool) ($config['block'] ?? false);
+
+            if ($block) {
+                $existingPid = (int) self::getData($processCommand, 'pid');
+                if ($existingPid > 0 && self::isManagedProcessRunning($existingPid, null, '', $processCommand)) {
+                    $results[$key] = $existingPid;
+                    continue;
+                }
+            }
+
+            if ($enableLog) {
+                self::setOutput(
+                    $processCommand,
+                    PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . ' ---' . PHP_EOL . $processCommand . PHP_EOL,
+                    true
+                );
+            }
+
+            [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($processCommand);
+            $launchItems[] = [
+                'key' => (string) $key,
+                'command' => $processCommand,
+                'php' => $phpBinary,
+                'arguments' => $arguments,
+                'process_name' => self::extractCommandLineArg($processCommand, 'name'),
+                'cwd' => BP,
+                'enable_log' => $enableLog,
+            ];
+        }
+
+        if ($launchItems === []) {
+            return $results;
+        }
+
+        $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
+        $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
+        if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
+            return null;
+        }
+        $scriptPath = self::writeWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
+        if ($scriptPath === null) {
+            @\unlink($resultPath);
+            @\unlink($errorPath);
+            return null;
+        }
+
+        $nullDevice = 'NUL';
+        $batchCommand = 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File '
+            . \escapeshellarg($scriptPath);
+        $lastError = null;
+
+        if ($procOpenAvailable) {
+            $descriptorspec = [
+                0 => ['file', $nullDevice, 'r'],
+                1 => ['file', $nullDevice, 'w'],
+                2 => ['file', $errorPath, 'a'],
+            ];
+
+            \set_error_handler(function ($type, $msg) use (&$lastError) {
+                $lastError = $msg;
+                return true;
+            });
+            try {
+                $psProcess = @\proc_open(
+                    self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                    $descriptorspec,
+                    $psPipes,
+                    BP,
+                    null,
+                    ['bypass_shell' => true]
+                );
+            } finally {
+                \restore_error_handler();
+            }
+
+            if (!\is_resource($psProcess)) {
+                @\unlink($scriptPath);
+                @\unlink($resultPath);
+                @\unlink($errorPath);
+                if ($lastError !== null) {
+                    foreach ($launchItems as $item) {
+                        if (!empty($item['enable_log'])) {
+                            self::setOutput($item['command'], "[ERROR] batchCreate(proc_open powershell) failed: {$lastError}" . PHP_EOL, true);
+                        }
+                    }
+                }
+
+                return null;
+            }
+            @\proc_close($psProcess);
+        } elseif ($execAvailable) {
+            \set_error_handler(function ($type, $msg) use (&$lastError) {
+                $lastError = $msg;
+                return true;
+            });
+            try {
+                @\exec($batchCommand . ' > NUL 2>> ' . \escapeshellarg($errorPath), $outputLines, $exitCode);
+            } finally {
+                \restore_error_handler();
+            }
+
+            if ($lastError !== null) {
+                @\unlink($scriptPath);
+                @\unlink($resultPath);
+                @\unlink($errorPath);
+                foreach ($launchItems as $item) {
+                    if (!empty($item['enable_log'])) {
+                        self::setOutput($item['command'], "[ERROR] batchCreate(exec powershell) failed: {$lastError}" . PHP_EOL, true);
+                    }
+                }
+
+                return null;
+            }
+            unset($outputLines, $exitCode);
+        }
+
+        $output = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($resultPath) ?: ''));
+        $stderr = self::normalizeWindowsPowerShellPipeOutput((string) (@\file_get_contents($errorPath) ?: ''));
+        @\unlink($scriptPath);
+        @\unlink($resultPath);
+        @\unlink($errorPath);
+        $diagnostic = \trim(\implode(' | ', \array_filter([$output, $stderr], static fn (string $text): bool => $text !== '')));
+
+        $pidMap = [];
+        $lines = \preg_split('/\r\n|\r|\n/', \trim($output)) ?: [];
+        foreach ($lines as $line) {
+            if ($line === '') {
+                continue;
+            }
+
+            $parts = \explode("\t", $line, 2);
+            if (\count($parts) !== 2) {
+                continue;
+            }
+
+            $pid = \trim((string) $parts[1]);
+            if (\is_numeric($pid) && (int) $pid > 0) {
+                $pidMap[(string) $parts[0]] = (int) $pid;
+            }
+        }
+
+        foreach ($launchItems as $item) {
+            $pid = (int) ($pidMap[$item['key']] ?? 0);
+            if ($pid <= 0 && !empty($item['enable_log'])) {
+                if ($diagnostic !== '') {
+                    self::setOutput($item['command'], "[ERROR] batchCreate(raw output) {$diagnostic}" . PHP_EOL, true);
+                }
+            }
+            $results[$item['key']] = $pid > 0 ? self::setPid($item['command'], $pid) : 0;
+        }
+
+        foreach ($commands as $key => $config) {
+            unset($config);
+            if (!\array_key_exists($key, $results)) {
+                $results[$key] = 0;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool}> $launchItems
+     */
+    private static function writeWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
+    {
+        $script = self::buildWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
+        if ($script === null) {
+            return null;
+        }
+
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-batch-create-');
+        if ($tmpBase === false || $tmpBase === '') {
+            return null;
+        }
+
+        $scriptPath = $tmpBase . '.ps1';
+        @\unlink($tmpBase);
+
+        if (@\file_put_contents($scriptPath, $script) === false) {
+            @\unlink($scriptPath);
+            return null;
+        }
+
+        return $scriptPath;
+    }
+
+    private static function writeWindowsStartScript(string $phpBinary, string $arguments, string $workingDir): ?string
+    {
+        $template = <<<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$arguments = '__ARGUMENTS__'
+$startArgs = @{
+    FilePath = '__PHP_BINARY__'
+    WorkingDirectory = '__WORKING_DIR__'
+    WindowStyle = 'Hidden'
+    PassThru = $true
+    ErrorAction = 'Stop'
+}
+if ($arguments -ne '') {
+    $startArgs.ArgumentList = $arguments
+}
+try {
+    $p = Start-Process @startArgs
+    [Console]::Out.WriteLine([string]$p.Id)
+} catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+POWERSHELL;
+
+        $script = \str_replace(
+            ['__PHP_BINARY__', '__ARGUMENTS__', '__WORKING_DIR__'],
+            [
+                self::escapePowerShellLiteral($phpBinary),
+                self::escapePowerShellLiteral($arguments),
+                self::escapePowerShellLiteral($workingDir),
+            ],
+            $template
+        );
+
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-start-');
+        if ($tmpBase === false || $tmpBase === '') {
+            return null;
+        }
+
+        $scriptPath = $tmpBase . '.ps1';
+        @\unlink($tmpBase);
+
+        if (@\file_put_contents($scriptPath, $script) === false) {
+            @\unlink($scriptPath);
+            return null;
+        }
+
+        return $scriptPath;
+    }
+
+    private static function escapePowerShellLiteral(string $value): string
+    {
+        return \str_replace("'", "''", $value);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private static function buildWindowsPowerShellProcOpenCommand(string $scriptPath): array
+    {
+        return [
+            'powershell',
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            $scriptPath,
+        ];
+    }
+
+    /**
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool}> $launchItems
+     */
+    private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
+    {
+        $lines = [
+            "\$ErrorActionPreference = 'Stop'",
+            '$results = New-Object System.Collections.Generic.List[string]',
+            "\$resultPath = '" . self::escapePowerShellLiteral($resultPath) . "'",
+            "\$errorPath = '" . self::escapePowerShellLiteral($errorPath) . "'",
+        ];
+
+        foreach ($launchItems as $item) {
+            $key = \str_replace('"', '""', (string) ($item['key'] ?? ''));
+            $php = \str_replace("'", "''", (string) ($item['php'] ?? ''));
+            $cwd = \str_replace("'", "''", (string) ($item['cwd'] ?? BP));
+            $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
+            $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
+            $redirectBase = \preg_replace('/[^A-Za-z0-9._-]+/', '-', $redirectBase) ?: 'process';
+            $stdoutPath = self::escapePowerShellLiteral(
+                \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-batch-' . $redirectBase . '.out.log'
+            );
+            $stderrPath = self::escapePowerShellLiteral(
+                \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-batch-' . $redirectBase . '.err.log'
+            );
+
+            if ($key === '' || $php === '') {
+                return null;
+            }
+
+            $lines[] = 'try {';
+            $lines[] = '    $startArgs = @{';
+            $lines[] = "        FilePath = '{$php}'";
+            $lines[] = "        WorkingDirectory = '{$cwd}'";
+            $lines[] = "        WindowStyle = 'Hidden'";
+            $lines[] = '        PassThru = $true';
+            $lines[] = "        RedirectStandardOutput = '{$stdoutPath}'";
+            $lines[] = "        RedirectStandardError = '{$stderrPath}'";
+            $lines[] = "        ErrorAction = 'Stop'";
+            $lines[] = '    }';
+            if ($arguments !== '') {
+                $lines[] = "    \$startArgs.ArgumentList = '{$arguments}'";
+            }
+            $lines[] = '    $p = Start-Process @startArgs';
+            $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
+            $lines[] = '} catch {';
+            $lines[] = '    [System.IO.File]::AppendAllText($errorPath, $_.Exception.Message + [Environment]::NewLine)';
+            $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
+            $lines[] = '}';
+        }
+
+        $lines[] = '$utf8NoBom = New-Object System.Text.UTF8Encoding($false)';
+        $lines[] = '[System.IO.File]::WriteAllLines($resultPath, $results, $utf8NoBom)';
+
+        return \implode(PHP_EOL, $lines) . PHP_EOL;
+    }
+
+    private static function normalizeWindowsPowerShellPipeOutput(string $output): string
+    {
+        if ($output === '') {
+            return '';
+        }
+
+        $looksUtf16Le = \str_starts_with($output, "\xFF\xFE")
+            || \substr_count($output, "\x00") > (\strlen($output) / 8);
+        if (!$looksUtf16Le) {
+            return $output;
+        }
+
+        $decoded = \function_exists('mb_convert_encoding')
+            ? \mb_convert_encoding($output, 'UTF-8', 'UTF-16LE')
+            : \iconv('UTF-16LE', 'UTF-8//IGNORE', $output);
+
+        if ($decoded === false || $decoded === '') {
+            return $output;
+        }
+
+        return \preg_replace('/^\x{FEFF}/u', '', $decoded) ?? $decoded;
+    }
+
+    /**
+     * @return array{0: string, 1: string}
+     */
+    private static function splitPhpCommandForStartProcess(string $command): array
+    {
+        $phpBinary = PHP_BINARY;
+        $arguments = $command;
+
+        if (\str_starts_with($command, '"' . $phpBinary . '"')) {
+            return [$phpBinary, \trim(\substr($command, \strlen('"' . $phpBinary . '"')))];
+        }
+
+        if (\str_starts_with($command, $phpBinary)) {
+            return [$phpBinary, \trim(\substr($command, \strlen($phpBinary)))];
+        }
+
+        if (\preg_match('/^"([^"]+)"(.*)$/', $command, $matches)) {
+            $candidateBinary = (string) ($matches[1] ?? '');
+            if ($candidateBinary !== ''
+                && \strcasecmp(\str_replace('/', '\\', $candidateBinary), \str_replace('/', '\\', $phpBinary)) === 0) {
+                return [$candidateBinary, \trim((string) ($matches[2] ?? ''))];
+            }
+        }
+
+        return [$phpBinary, $arguments];
     }
     
     /**

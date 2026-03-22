@@ -921,24 +921,40 @@ class ServiceOrchestrator
      */
     private function startInstancesBatch(ServiceProviderInterface $provider, int $instanceCount, ServiceContext $context): array
     {
-        // 单实例时走普通路径（避免 Fiber 开销）
-        if ($instanceCount === 1) {
-            return [$this->startInstance($provider, 1, $context)];
+        if ($instanceCount <= 0) {
+            return [];
         }
-        
+
+        return $this->startInstanceIdsBatch($provider, \range(1, $instanceCount), $context);
+    }
+
+    /**
+     * @param int[] $instanceIds
+     * @return array<ServiceInstance|null>
+     */
+    private function startInstanceIdsBatch(ServiceProviderInterface $provider, array $instanceIds, ServiceContext $context): array
+    {
+        $instanceIds = \array_values(\array_unique(\array_map('intval', $instanceIds)));
+        \sort($instanceIds, \SORT_NUMERIC);
+        if ($instanceIds === []) {
+            return [];
+        }
+
+        if (\count($instanceIds) === 1) {
+            return [$this->startInstance($provider, $instanceIds[0], $context)];
+        }
+
         $role = $provider->getRole();
-        
-        // 阶段1：准备所有实例对象和命令
         $preparedInstances = [];
         $commands = [];
-        
-        for ($i = 1; $i <= $instanceCount; $i++) {
-            $port = $provider->getPort($i, $context);
-            $launchId = $this->generateLaunchId($role, $i);
-            
+
+        foreach ($instanceIds as $instanceId) {
+            $port = $provider->getPort($instanceId, $context);
+            $launchId = $this->generateLaunchId($role, $instanceId);
+
             $instance = new ServiceInstance(
                 role: $role,
-                instanceId: $i,
+                instanceId: $instanceId,
                 epoch: $context->epoch,
                 launchId: $launchId,
                 port: $port,
@@ -948,7 +964,7 @@ class ServiceOrchestrator
                 moduleCode: $provider->getModuleCode(),
             );
 
-            $command = $provider->buildCommand($i, $context);
+            $command = $provider->buildCommand($instanceId, $context);
             $processName = $command->getProcessName();
             if ($processName !== null) {
                 $instance->setMeta('process_name', $processName);
@@ -956,11 +972,10 @@ class ServiceOrchestrator
             $instance->setMeta('control_capabilities', $this->buildControlCapabilities($provider));
             $instance->setMeta('epoch', $context->epoch);
             $instance->setMeta('launch_id', $launchId);
-            
-            // 构建完整命令字符串
+
             $cmd = $command->build();
             if ($instance->epoch > 0) {
-                $cmd .= ' --epoch=' . \escapeshellarg((string)$instance->epoch);
+                $cmd .= ' --epoch=' . \escapeshellarg((string) $instance->epoch);
             }
             if ($instance->launchId !== '') {
                 $cmd .= ' --launch-id=' . \escapeshellarg($instance->launchId);
@@ -968,45 +983,42 @@ class ServiceOrchestrator
             if ($processName !== null) {
                 $cmd .= ' --name=' . \escapeshellarg($processName);
             }
-            
-            $preparedInstances[$i] = $instance;
-            $commands[$i] = [
+
+            $preparedInstances[$instanceId] = $instance;
+            $commands[(string) $instanceId] = [
                 'command' => $cmd,
                 'block' => false,
                 'foreground' => $this->shouldLaunchForeground($role, $context),
             ];
         }
-        
-        // 阶段2：使用 Fiber 批量并发启动进程
-        WlsLogger::debug_("[Orchestrator] 批量启动 {$role} x {$instanceCount} 实例（Fiber 并发）");
+
+        WlsLogger::debug_(
+            "[Orchestrator] 批量启动 {$role} [" . \implode(',', $instanceIds) . ']（Processer::batchCreate）'
+        );
         $pids = Processer::batchCreate($commands);
-        
-        // 阶段3：收集结果并注册实例
+
         $results = [];
         foreach ($preparedInstances as $instanceId => $instance) {
-            $pid = $pids[$instanceId] ?? 0;
-            
-            // 非阻塞启动时 Windows/Linux 均可能不返回 PID，统一等待子进程通过 IPC register 上报
+            $pid = (int) ($pids[(string) $instanceId] ?? $pids[$instanceId] ?? 0);
             if ($pid <= 0) {
                 WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
             }
-            
+
             $instance->pid = $pid > 0 ? $pid : 0;
             $instance->state = ServiceInstance::STATE_STARTING;
-            // Worker batch startup can be delayed slot-by-slot on Windows.
-            // Reset startup baseline after the actual spawn result is available.
             $instance->startedAt = \microtime(true);
             $this->registry->addInstance($instance);
-            
-            WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
-            
+
+            WlsLogger::info_(
+                "[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')'
+            );
+
             $provider->onStarted($instance);
             $results[] = $instance;
         }
-        
-        // 批量启动后 poll 一次 IPC
+
         $this->controlServer?->poll(0, 100000);
-        
+
         return $results;
     }
     
@@ -2032,7 +2044,15 @@ class ServiceOrchestrator
                 WlsLogger::info_(
                     '[Orchestrator] 重载第 ' . $batchIdx . "/{$batchTotal} 批 Worker: " . \implode(',', $batch)
                 );
-                $result = $this->restartWorkerBatchDispatcherAware($batch, $imperialEpochSnap, 'reload');
+                $result = $this->restartWorkerBatchDispatcherAware(
+                    $batch,
+                    $imperialEpochSnap,
+                    'reload',
+                    $done,
+                    \count($ids),
+                    $batchIdx,
+                    $batchTotal
+                );
                 if ($result === 'aborted') {
                     return;
                 }
@@ -2109,6 +2129,10 @@ class ServiceOrchestrator
         array $instanceIds,
         ?int $imperialEpochSnap,
         string $rollingOrReload,
+        int $completedBefore = 0,
+        int $totalWorkers = 0,
+        int $batchIndex = 0,
+        int $batchTotal = 0,
     ): string {
         if ($this->context === null) {
             $this->failWorkerBatchNotify($rollingOrReload, 'Context lost');
@@ -2122,6 +2146,34 @@ class ServiceOrchestrator
             return 'failed';
         }
 
+        $instanceIds = \array_values(\array_unique(\array_map('intval', $instanceIds)));
+        \sort($instanceIds, \SORT_NUMERIC);
+        if ($instanceIds === []) {
+            return 'ok';
+        }
+
+        if ($totalWorkers <= 0) {
+            $totalWorkers = \count($instanceIds);
+        }
+
+        $batchLabel = ($batchIndex > 0 && $batchTotal > 0) ? "Batch {$batchIndex}/{$batchTotal}" : 'Batch';
+        $batchList = '[' . \implode(',', $instanceIds) . ']';
+        $leadWorkerId = $instanceIds[0] ?? 0;
+        $batchMeta = [
+            'batch_index' => $batchIndex,
+            'batch_total' => $batchTotal,
+            'batch_size' => \count($instanceIds),
+            'batch_ids' => $instanceIds,
+        ];
+
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: removing workers {$batchList} from dispatcher",
+            $completedBefore,
+            $totalWorkers,
+            'removing_from_dispatcher',
+            $leadWorkerId,
+            $batchMeta
+        );
         foreach ($instanceIds as $instanceId) {
             if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                 return 'aborted';
@@ -2135,6 +2187,14 @@ class ServiceOrchestrator
         SchedulerSystem::usleep(80000);
 
         $drainRefs = [];
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: draining workers {$batchList}",
+            $completedBefore,
+            $totalWorkers,
+            'draining',
+            $leadWorkerId,
+            $batchMeta
+        );
         foreach ($instanceIds as $instanceId) {
             if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                 return 'aborted';
@@ -2154,7 +2214,43 @@ class ServiceOrchestrator
                 }
             }
             if ($instancesForDrain !== []) {
-                $drained = $this->waitForDrain($instancesForDrain, $this->drainTimeout, $imperialEpochSnap);
+                $drainStart = \microtime(true);
+                $drained = false;
+                $lastDrainHeartbeatAt = 0.0;
+                while ((\microtime(true) - $drainStart) < $this->drainTimeout) {
+                    if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+                        return 'aborted';
+                    }
+
+                    $remainingDraining = 0;
+                    foreach ($instancesForDrain as $instance) {
+                        if ($instance->state === ServiceInstance::STATE_DRAINING && $this->isProcessRunning($instance->pid)) {
+                            $remainingDraining++;
+                        }
+                    }
+
+                    if ($remainingDraining === 0) {
+                        $drained = true;
+                        break;
+                    }
+
+                    $now = \microtime(true);
+                    if (($now - $lastDrainHeartbeatAt) >= 5.0) {
+                        $elapsed = (int) \round($now - $drainStart);
+                        $this->sendReloadProgressMessage(
+                            "{$batchLabel}: draining {$remainingDraining}/" . \count($instancesForDrain) . " workers {$batchList} ({$elapsed}s/{$this->drainTimeout}s)",
+                            $completedBefore,
+                            $totalWorkers,
+                            'draining',
+                            $leadWorkerId,
+                            $batchMeta
+                        );
+                        $lastDrainHeartbeatAt = $now;
+                    }
+
+                    $this->controlServer?->poll(0, 100000);
+                    SchedulerSystem::usleep(100000);
+                }
                 if (!$drained) {
                     if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                         return 'aborted';
@@ -2166,6 +2262,14 @@ class ServiceOrchestrator
             }
         }
 
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: stopping workers {$batchList}",
+            $completedBefore,
+            $totalWorkers,
+            'stopping',
+            $leadWorkerId,
+            $batchMeta
+        );
         foreach ($instanceIds as $instanceId) {
             if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                 return 'aborted';
@@ -2178,20 +2282,35 @@ class ServiceOrchestrator
 
         $maxWaitExit = 15.0 + 5.0 * \count($instanceIds);
         $exitDeadline = \microtime(true) + $maxWaitExit;
+        $lastExitHeartbeatAt = 0.0;
         while (\microtime(true) < $exitDeadline) {
             if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                 return 'aborted';
             }
             $allGone = true;
+            $remainingExit = 0;
             foreach ($instanceIds as $instanceId) {
                 $cur = $this->registry->getInstance('worker', $instanceId);
                 if ($cur !== null && $cur->ipcClientId !== null) {
                     $allGone = false;
-                    break;
+                    $remainingExit++;
                 }
             }
             if ($allGone) {
                 break;
+            }
+            $now = \microtime(true);
+            if (($now - $lastExitHeartbeatAt) >= 5.0) {
+                $elapsed = (int) \round($maxWaitExit - ($exitDeadline - $now));
+                $this->sendReloadProgressMessage(
+                    "{$batchLabel}: waiting old workers to exit {$remainingExit}/" . \count($instanceIds) . " {$batchList} ({$elapsed}s/{$maxWaitExit}s)",
+                    $completedBefore,
+                    $totalWorkers,
+                    'waiting_exit',
+                    $leadWorkerId,
+                    $batchMeta
+                );
+                $lastExitHeartbeatAt = $now;
             }
             $this->controlServer?->poll(0, 100000);
             SchedulerSystem::usleep(100000);
@@ -2209,37 +2328,55 @@ class ServiceOrchestrator
             $this->cleanupInstancePidFile($worker);
         }
 
-        foreach ($instanceIds as $instanceId) {
-            if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
-                return 'aborted';
-            }
-            if ($this->startInstance($workerProvider, $instanceId, $this->context) === null) {
-                $this->failWorkerBatchNotify(
-                    $rollingOrReload,
-                    "Failed to restart worker #{$instanceId} in batch [" . \implode(',', $instanceIds) . ']'
-                );
-
-                return 'failed';
-            }
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: starting workers {$batchList} concurrently",
+            $completedBefore,
+            $totalWorkers,
+            'starting',
+            $leadWorkerId,
+            $batchMeta
+        );
+        if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
+            return 'aborted';
         }
+        $this->startInstanceIdsBatch($workerProvider, $instanceIds, $this->context);
 
         $readyExtra = 20.0 + 10.0 * \count($instanceIds);
         $readyDeadline = \microtime(true) + $this->startupTimeout + $readyExtra;
         $allReady = false;
+        $lastReadyHeartbeatAt = 0.0;
+        $readyCount = 0;
         while (\microtime(true) < $readyDeadline) {
             if ($imperialEpochSnap !== null && $this->ipcImperialEpoch !== $imperialEpochSnap) {
                 return 'aborted';
             }
             $allReady = true;
+            $readyCount = 0;
             foreach ($instanceIds as $instanceId) {
                 $w = $this->registry->getInstance('worker', $instanceId);
+                if ($w !== null && $w->state === Contract\ServiceInstance::STATE_READY) {
+                    $readyCount++;
+                    continue;
+                }
                 if ($w === null || $w->state !== Contract\ServiceInstance::STATE_READY) {
                     $allReady = false;
-                    break;
                 }
             }
             if ($allReady) {
                 break;
+            }
+            $now = \microtime(true);
+            if (($now - $lastReadyHeartbeatAt) >= 5.0) {
+                $elapsed = (int) \round(($this->startupTimeout + $readyExtra) - ($readyDeadline - $now));
+                $this->sendReloadProgressMessage(
+                    "{$batchLabel}: waiting READY {$readyCount}/" . \count($instanceIds) . " for workers {$batchList} ({$elapsed}s/" . ($this->startupTimeout + $readyExtra) . 's)',
+                    $completedBefore + $readyCount,
+                    $totalWorkers,
+                    'waiting_ready',
+                    $leadWorkerId,
+                    $batchMeta
+                );
+                $lastReadyHeartbeatAt = $now;
             }
             $this->controlServer?->poll(0, 100000);
             SchedulerSystem::usleep(100000);
@@ -2253,6 +2390,14 @@ class ServiceOrchestrator
             return 'failed';
         }
 
+        $this->sendReloadProgressMessage(
+            "{$batchLabel}: workers {$batchList} are READY, rejoining dispatcher",
+            $completedBefore + \count($instanceIds),
+            $totalWorkers,
+            'rejoin_dispatcher',
+            $leadWorkerId,
+            $batchMeta
+        );
         foreach ($instanceIds as $instanceId) {
             $readyInst = $this->registry->getInstance('worker', $instanceId);
             if ($readyInst !== null && $readyInst->port !== null && $readyInst->port > 0 && !$this->maintenanceMode) {
@@ -5042,7 +5187,15 @@ class ServiceOrchestrator
             $this->sendRollingRestartProgress(
                 "Batch {$batchIdx}/{$batchTotal}: restart workers [" . \implode(',', $batch) . "] ({$restarted}/{$total} done)"
             );
-            $result = $this->restartWorkerBatchDispatcherAware($batch, $epochSnap, 'rolling');
+            $result = $this->restartWorkerBatchDispatcherAware(
+                $batch,
+                $epochSnap,
+                'rolling',
+                $restarted,
+                $total,
+                $batchIdx,
+                $batchTotal
+            );
             if ($result === 'aborted') {
                 return;
             }
@@ -5126,16 +5279,44 @@ class ServiceOrchestrator
     /**
      * 发送滚动重启进度
      */
-    private function sendRollingRestartProgress(string $message): void
-    {
-        if ($this->rollingRestartClientId !== null) {
-            $this->controlServer?->sendTo($this->rollingRestartClientId, ControlMessage::encode([
-                'type' => ControlMessage::TYPE_RELOAD_PROGRESS,
-                'message' => $message,
-                'progress' => $this->rollingRestartProgress,
-                'total' => $this->rollingRestartTotal,
-            ]));
+    private function sendRollingRestartProgress(
+        string $message,
+        string $stage = '',
+        int $currentWorkerId = 0,
+        array $extra = []
+    ): void {
+        $this->sendReloadProgressMessage(
+            $message,
+            $this->rollingRestartProgress,
+            $this->rollingRestartTotal,
+            $stage,
+            $currentWorkerId,
+            $extra
+        );
+    }
+
+    private function sendReloadProgressMessage(
+        string $message,
+        int $completed,
+        int $total,
+        string $stage = '',
+        int $currentWorkerId = 0,
+        array $extra = []
+    ): void {
+        if ($this->rollingRestartClientId === null) {
+            return;
         }
+
+        $payload = \array_merge([
+            'type' => ControlMessage::TYPE_RELOAD_PROGRESS,
+            'message' => $message,
+            'completed' => $completed,
+            'progress' => $completed,
+            'total' => $total,
+            'current_worker_id' => $currentWorkerId,
+            'stage' => $stage,
+        ], $extra);
+        $this->controlServer?->sendTo($this->rollingRestartClientId, ControlMessage::encode($payload));
     }
 
     /**
