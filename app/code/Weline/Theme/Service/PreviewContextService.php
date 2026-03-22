@@ -428,7 +428,9 @@ final class PreviewContextService
 
     private function syncRequest(array $context): void
     {
-        foreach ($this->toQueryParams($context) as $key => $value) {
+        // Keep request state aligned with the normalized preview context without
+        // re-injecting legacy preview_theme params into canonical preview URLs.
+        foreach ($this->toQueryParams($context, false) as $key => $value) {
             if ($value === null || $value === '') {
                 continue;
             }

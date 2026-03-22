@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
+ * 鏈枃浠剁敱 绉嬫灚闆侀 缂栧啓锛屾墍鏈夎В閲婃潈褰扐iweline鎵€鏈夈€?
+ * 閭锛歛iweline@qq.com
+ * 缃戝潃锛歛iweline.com
+ * 璁哄潧锛歨ttps://bbs.aiweline.com
  */
 
 namespace Weline\Frontend\Observer;
@@ -39,51 +39,51 @@ class ResponseRedirectBefore implements ObserverInterface
         $url = $data->getUrl();
         $code = $data->getCode();
         
-        // 只处理前端请求
+        // 鍙鐞嗗墠绔姹?
         if ($this->request->isBackend()) {
             return;
         }
 
-        # 如果不是http开头，则认为是相对路径
+        # 濡傛灉涓嶆槸http寮€澶达紝鍒欒涓烘槸鐩稿璺緞
         if (!str_starts_with($url, 'http')) {
             $url = $this->request->getUrlBuilder()->getFrontendUrl($url);
         }
         
-        // 处理URL重写重定向
+        // 澶勭悊URL閲嶅啓閲嶅畾鍚?
         $this->handleUrlRewrite($data, $url, $code);
         
-        // 处理SEO重定向
+        // 澶勭悊SEO閲嶅畾鍚?
         $this->handleSeoRedirect($data, $url, $code);
         
-        // 处理安全重定向
+        // 澶勭悊瀹夊叏閲嶅畾鍚?
         $this->handleSecurityRedirect($data, $url, $code);
         
-        // 处理移动端重定向
+        // 澶勭悊绉诲姩绔噸瀹氬悜
         $this->handleMobileRedirect($data, $url, $code);
     }
 
     /**
-     * 处理URL重写重定向
+     * 澶勭悊URL閲嶅啓閲嶅畾鍚?
      */
     protected function handleUrlRewrite(DataObject $data, string $url, int $code): void
     {
         try {
-            // 检查是否有URL重写规则
+            // 妫€鏌ユ槸鍚︽湁URL閲嶅啓瑙勫垯
             if (class_exists(UrlRewrite::class)) {
                 /** @var UrlRewrite $urlRewrite */
                 $urlRewrite = ObjectManager::getInstance(UrlRewrite::class);
                 
-                // 解析当前URL路径
+                // 瑙ｆ瀽褰撳墠URL璺緞
                 $parsedUrl = parse_url($url);
                 $path = $parsedUrl['path'] ?? '';
                 
                 if (!empty($path)) {
                     $path = ltrim($path, '/');
                     
-                    // 获取当前网站ID
+                    // 鑾峰彇褰撳墠缃戠珯ID
                     $websiteId = UrlRewrite::getCurrentWebsiteId();
                     
-                    // 按 website_id 查找重写规则（不回退到 website_id=0）
+                    // 鎸?website_id 鏌ユ壘閲嶅啓瑙勫垯锛堜笉鍥為€€鍒?website_id=0锛?
                     $rewrite = $urlRewrite->reset()
                         ->clearQuery()
                         ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
@@ -94,7 +94,7 @@ class ResponseRedirectBefore implements ObserverInterface
                     if ($rewrite->getId()) {
                         $rewritePath = $rewrite->getData('rewrite');
                         if (!empty($rewritePath)) {
-                            // 构建新的URL
+                            // 鏋勫缓鏂扮殑URL
                             $newUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
                             if (isset($parsedUrl['port'])) {
                                 $newUrl .= ':' . $parsedUrl['port'];
@@ -106,104 +106,109 @@ class ResponseRedirectBefore implements ObserverInterface
                             }
                             
                             $data->setData('url', $newUrl);
-                            $data->setData('code', 301); // 永久重定向
+                            $data->setData('code', 301); // 姘镐箙閲嶅畾鍚?
                         }
                     }
                 }
             }
         } catch (\Exception $e) {
-            // 记录错误但不影响重定向
-            w_log_error("URL重写处理失败: " . $e->getMessage());
+            // 璁板綍閿欒浣嗕笉褰卞搷閲嶅畾鍚?
+            w_log_error("URL閲嶅啓澶勭悊澶辫触: " . $e->getMessage());
         }
     }
 
     /**
-     * 处理SEO重定向
+     * 澶勭悊SEO閲嶅畾鍚?
      */
     protected function handleSeoRedirect(DataObject $data, string $url, int $code): void
     {
         try {
-            // 检查是否需要SEO重定向
             $parsedUrl = parse_url($url);
+            if (!is_array($parsedUrl)) {
+                return;
+            }
+
+            // Preview URLs are internal workflow links and must not be canonicalized.
+            if ($this->isPreviewRequestUrl($parsedUrl)) {
+                return;
+            }
+
             $path = $parsedUrl['path'] ?? '';
-            
-            // 处理尾部斜杠重定向
+
             if (strlen($path) > 1 && !str_ends_with($path, '/')) {
-                // 检查是否是目录路径（不包含文件扩展名）
                 $pathInfo = pathinfo($path);
                 if (empty($pathInfo['extension'])) {
-                    $newUrl = $url . '/';
+                    $parsedUrl['path'] = $path . '/';
+                    $newUrl = $this->buildUrl($parsedUrl);
                     $data->setData('url', $newUrl);
                     $data->setData('code', 301);
+                    $url = $newUrl;
+                    $parsedUrl = parse_url($newUrl) ?: $parsedUrl;
                 }
             }
-            
-            // 处理www重定向
+
             $host = $parsedUrl['host'] ?? '';
             if (str_starts_with($host, 'www.')) {
-                $newHost = substr($host, 4);
-                $newUrl = str_replace($host, $newHost, $url);
+                $parsedUrl['host'] = substr($host, 4);
+                $newUrl = $this->buildUrl($parsedUrl);
                 $data->setData('url', $newUrl);
                 $data->setData('code', 301);
             }
-            
+
         } catch (\Exception $e) {
-            w_log_error("SEO重定向处理失败: " . $e->getMessage());
+            w_log_error("SEO redirect handling failed: " . $e->getMessage());
         }
     }
 
-    /**
-     * 处理安全重定向
-     */
     protected function handleSecurityRedirect(DataObject $data, string $url, int $code): void
     {
         try {
-            // 检查URL安全性
+            // 妫€鏌RL瀹夊叏鎬?
             $parsedUrl = parse_url($url);
             
-            // 防止开放重定向攻击
+            // 闃叉寮€鏀鹃噸瀹氬悜鏀诲嚮
             if (isset($parsedUrl['host'])) {
                 $host = $parsedUrl['host'];
                 $currentHost = $_SERVER['HTTP_HOST'] ?? '';
                 
-                // 只允许重定向到当前域名或白名单域名
+                // 鍙厑璁搁噸瀹氬悜鍒板綋鍓嶅煙鍚嶆垨鐧藉悕鍗曞煙鍚?
                 if ($host !== $currentHost && !$this->isAllowedHost($host)) {
-                    // 重定向到首页
+                    // 閲嶅畾鍚戝埌棣栭〉
                     $data->setData('url', '/');
                     $data->setData('code', 302);
                     return;
                 }
             }
             
-            // 检查URL中是否包含危险字符
+            // 妫€鏌RL涓槸鍚﹀寘鍚嵄闄╁瓧绗?
             if (str_contains($url, '<script') || str_contains($url, 'javascript:') || str_contains($url, 'data:')) {
                 $data->setData('url', '/');
                 $data->setData('code', 302);
             }
             
         } catch (\Exception $e) {
-            w_log_error("安全重定向处理失败: " . $e->getMessage());
+            w_log_error("瀹夊叏閲嶅畾鍚戝鐞嗗け璐? " . $e->getMessage());
         }
     }
 
     /**
-     * 处理移动端重定向
+     * 澶勭悊绉诲姩绔噸瀹氬悜
      */
     protected function handleMobileRedirect(DataObject $data, string $url, int $code): void
     {
         try {
-            // 检查是否是移动设备
+            // 妫€鏌ユ槸鍚︽槸绉诲姩璁惧
             $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
             $isMobile = $this->isMobileDevice($userAgent);
             
             if ($isMobile) {
-                // 检查是否需要移动端特殊处理
+                // 妫€鏌ユ槸鍚﹂渶瑕佺Щ鍔ㄧ鐗规畩澶勭悊
                 $parsedUrl = parse_url($url);
                 $path = $parsedUrl['path'] ?? '';
                 
-                // 移动端特殊路径处理
+                // 绉诲姩绔壒娈婅矾寰勫鐞?
                 if (str_contains($path, '/mobile/')) {
-                    // 移动端路径优化
+                    // 绉诲姩绔矾寰勪紭鍖?
                     $mobilePath = str_replace('/mobile/', '/m/', $path);
                     $newUrl = str_replace($path, $mobilePath, $url);
                     $data->setData('url', $newUrl);
@@ -211,26 +216,26 @@ class ResponseRedirectBefore implements ObserverInterface
             }
             
         } catch (\Exception $e) {
-            w_log_error("移动端重定向处理失败: " . $e->getMessage());
+            w_log_error("绉诲姩绔噸瀹氬悜澶勭悊澶辫触: " . $e->getMessage());
         }
     }
 
     /**
-     * 检查是否是允许的主机
+     * 妫€鏌ユ槸鍚︽槸鍏佽鐨勪富鏈?
      */
     protected function isAllowedHost(string $host): bool
     {
         $allowedHosts = [
             'localhost',
             '127.0.0.1',
-            // 可以添加更多允许的域名
+            // 鍙互娣诲姞鏇村鍏佽鐨勫煙鍚?
         ];
         
         return in_array($host, $allowedHosts);
     }
 
     /**
-     * 检查是否是移动设备
+     * 妫€鏌ユ槸鍚︽槸绉诲姩璁惧
      */
     protected function isMobileDevice(string $userAgent): bool
     {
@@ -246,5 +251,37 @@ class ResponseRedirectBefore implements ObserverInterface
         }
         
         return false;
+    }
+
+    private function isPreviewRequestUrl(array $parsedUrl): bool
+    {
+        $query = [];
+        if (!empty($parsedUrl['query'])) {
+            parse_str((string)$parsedUrl['query'], $query);
+        }
+
+        foreach (['preview_theme', 'frontend_theme_id', 'backend_theme_id', 'weline_preview_token'] as $key) {
+            $value = $query[$key] ?? null;
+            if ($value !== null && $value !== '' && $value !== '0' && $value !== 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function buildUrl(array $parts): string
+    {
+        $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
+        $user = (string)($parts['user'] ?? '');
+        $pass = isset($parts['pass']) ? ':' . $parts['pass'] : '';
+        $auth = $user !== '' ? $user . $pass . '@' : '';
+        $host = (string)($parts['host'] ?? '');
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $path = (string)($parts['path'] ?? '');
+        $query = isset($parts['query']) && $parts['query'] !== '' ? '?' . $parts['query'] : '';
+        $fragment = isset($parts['fragment']) && $parts['fragment'] !== '' ? '#' . $parts['fragment'] : '';
+
+        return $scheme . $auth . $host . $port . $path . $query . $fragment;
     }
 }
