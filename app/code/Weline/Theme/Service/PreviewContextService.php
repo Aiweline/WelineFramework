@@ -310,8 +310,19 @@ final class PreviewContextService
         }
 
         $previewToken = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
-        if (\is_scalar($previewToken) && (string)$previewToken !== '') {
+        $hasExplicitPreviewToken = \is_scalar($previewToken) && \trim((string)$previewToken) !== '';
+        if ($hasExplicitPreviewToken) {
             $context['preview_token'] = (string)$previewToken;
+        }
+
+        $requestFrontendThemeId = \max(0, (int)$this->request->getParam('frontend_theme_id', 0));
+        if ($requestFrontendThemeId > 0) {
+            $context['frontend_theme_id'] = $requestFrontendThemeId;
+        }
+
+        $requestBackendThemeId = \max(0, (int)$this->request->getParam('backend_theme_id', 0));
+        if ($requestBackendThemeId > 0) {
+            $context['backend_theme_id'] = $requestBackendThemeId;
         }
 
         $legacyPreviewThemeId = (int)$this->request->getParam('preview_theme', 0);
@@ -320,16 +331,18 @@ final class PreviewContextService
         );
         if ($legacyPreviewThemeId > 0) {
             if ($legacyPreviewArea === self::AREA_BACKEND) {
-                $context['backend_theme_id'] = (int)($context['backend_theme_id'] ?? $legacyPreviewThemeId) ?: $legacyPreviewThemeId;
-            } else {
-                $context['frontend_theme_id'] = (int)($context['frontend_theme_id'] ?? $legacyPreviewThemeId) ?: $legacyPreviewThemeId;
+                if ($requestBackendThemeId <= 0) {
+                    $context['backend_theme_id'] = $legacyPreviewThemeId;
+                }
+            } elseif ($requestFrontendThemeId <= 0) {
+                $context['frontend_theme_id'] = $legacyPreviewThemeId;
             }
             $context['editor_area'] = $context['editor_area'] ?? $legacyPreviewArea;
             $context['shell'] = $context['shell'] ?? self::SHELL_PREVIEW;
         }
 
         $requestThemeId = (int)$this->request->getParam('theme_id', 0);
-        if ($requestThemeId > 0 && (int)($context['frontend_theme_id'] ?? 0) <= 0 && (int)($context['backend_theme_id'] ?? 0) <= 0) {
+        if ($requestThemeId > 0 && $requestFrontendThemeId <= 0 && $requestBackendThemeId <= 0) {
             $requestArea = $this->normalizeArea(
                 (string)$this->request->getParam('editor_area', (string)$this->request->getParam('preview_area', self::AREA_FRONTEND))
             );
@@ -342,8 +355,22 @@ final class PreviewContextService
         }
 
         $welineThemeId = (int)$this->request->getParam('weline_theme_id', 0);
-        if ($welineThemeId > 0 && (int)($context['frontend_theme_id'] ?? 0) <= 0) {
+        if ($welineThemeId > 0 && $requestFrontendThemeId <= 0 && (int)($context['frontend_theme_id'] ?? 0) <= 0) {
             $context['frontend_theme_id'] = $welineThemeId;
+        }
+
+        $hasExplicitThemeSelection = $requestFrontendThemeId > 0
+            || $requestBackendThemeId > 0
+            || $legacyPreviewThemeId > 0
+            || $requestThemeId > 0
+            || $welineThemeId > 0;
+        if ($hasExplicitThemeSelection && !$hasExplicitPreviewToken) {
+            // Fresh theme-selection requests must not inherit an older preview token,
+            // otherwise the old token context can override the new theme choice.
+            $context['preview_token'] = '';
+            if (($this->request->getParam('version_id') ?? '') === '') {
+                $context['version_id'] = null;
+            }
         }
 
         if (empty($context['shell'])) {
