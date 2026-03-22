@@ -166,12 +166,15 @@ final class ThemePreviewEntryApplication
         }
 
         $params = $previewContextService->toQueryParams($context, $appendPreviewThemeQueryOnFrontendUrl);
+        $params['page_type'] = $layoutType;
+        $params['layout_type'] = $layoutType;
+        $params['layout_option'] = 'default';
         $params['_t'] = \time();
 
         return [
             'ok' => true,
             'redirect' => $url->getFrontendUrl(
-                $themePageTypeResolver->getPreviewRouteByPageType($resolvedPageType),
+                'theme/frontend/theme-preview/content',
                 $params
             ),
         ];
