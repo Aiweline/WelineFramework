@@ -397,6 +397,13 @@ class Start extends CommandAbstract
         }
         
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
+        $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart);
+        $sessionServerPort = (int) ($sharedStateRuntime['session']['port'] ?? 19970);
+        $memoryServerPort = (int) ($sharedStateRuntime['memory']['port'] ?? 19971);
+        $config['session_server_port'] = $sessionServerPort;
+        $config['session_server_token_file_name'] = (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token');
+        $config['memory_server_port'] = $memoryServerPort;
+        $config['memory_server_token_file_name'] = (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token');
         
         // 计算 Worker 端口
         // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
@@ -601,7 +608,6 @@ class Start extends CommandAbstract
         }
         
         // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
-        $sessionServerPort = (int) (Env::get('wls.session.port') ?? 19970);
         if ($count > 1 && $sessionServerPort > 0) {
             if (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
@@ -609,6 +615,16 @@ class Start extends CommandAbstract
                     $this->printer->note(__('维护模式已关闭（Session Server 端口检查未通过）。'));
                 }
                 $this->printer->note(__('解决方案：先执行 php bin/w server:stop，或使用 -r 强制重启（仅杀框架进程）'));
+                return;
+            }
+        }
+        if ($memoryServerPort > 0) {
+            if (!$this->checkAndReleasePort($host, $memoryServerPort, $forceRestart, 'Memory Service', $instanceName)) {
+                if (!empty($maintenanceEnabledByUs)) {
+                    $this->disableMaintenanceMode();
+                    $this->printer->note(__('Maintenance mode disabled (Memory Service port check failed).'));
+                }
+                $this->printer->note(__('Resolution: run php bin/w server:stop first, or use -r to force restart (framework processes only).'));
                 return;
             }
         }
@@ -634,7 +650,7 @@ class Start extends CommandAbstract
         $workerScript = $this->ensureWorkerScript($workerSslEnabled);
         
         // 保存实例信息（Master 将从这里读取配置并启动所有进程）
-        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort);
+        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime);
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         $this->saveInstanceConfig($instanceName, $args, $config);
@@ -739,8 +755,13 @@ class Start extends CommandAbstract
             'host' => (string)($data['host'] ?? '127.0.0.1'),
             'port' => $port,
             'worker_count' => $workerCount,
+            'dispatcher_enabled' => $dispatcherEnabled,
             'worker_port' => $workerPort,
             'worker_base_port' => $workerBasePort,
+            'session_server_port' => (int) ($data['session_server_port'] ?? 19970),
+            'session_server_token_file_name' => (string) ($data['session_server_token_file_name'] ?? 'session_server.token'),
+            'memory_server_port' => (int) ($data['memory_server_port'] ?? 19971),
+            'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
             'daemon' => true,
         ];
         // HTTPS 模式始终启动 HTTP Redirect Worker（从实例文件或智能计算）
@@ -768,14 +789,16 @@ class Start extends CommandAbstract
         
         /** @var MasterProcess $master */
         $master = ObjectManager::getInstance(MasterProcess::class);
-        $master->setPrinter($this->printer)
-            ->setMode($masterMode)
-            ->setMainPort($mainPort)
+        $this->configureMasterRuntime(
+            $master,
+            $dispatcherEnabled,
+            $workerCount,
+            $workerBasePort,
+            $workerPort,
+            $masterMode,
+            $mainPort
+        )->setPrinter($this->printer)
             // 恢复运行态配置（由 Start.php 保存）
-            ->setDispatcherEnabled($dispatcherEnabled)
-            ->setWorkerCount($workerCount)
-            ->setWorkerBasePort($workerBasePort)
-            ->setWorkerPort($workerPort)
             ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
             ->setWorkerPids($workerPids)
             ->setDispatcherPid((int)($data['dispatcher_pid'] ?? 0))
@@ -944,10 +967,23 @@ class Start extends CommandAbstract
         $this->printer->note(__('按 Ctrl+C 停止服务'));
         $this->printer->note(__(''));
         
+        $dispatcherEnabled = (bool) ($config['dispatcher_enabled'] ?? true);
+        $workerCount = $config['worker_count'] ?? null;
+        $workerBasePort = isset($config['worker_base_port']) ? (int) $config['worker_base_port'] : null;
+        $workerPort = isset($config['worker_port']) ? (int) $config['worker_port'] : null;
+
         /** @var MasterProcess $master */
         $master = ObjectManager::getInstance(MasterProcess::class);
         try {
-            $master->setPrinter($this->printer)
+            $this->configureMasterRuntime(
+                $master,
+                $dispatcherEnabled,
+                $workerCount,
+                $workerBasePort,
+                $workerPort,
+                MasterProcess::MODE_LEGACY,
+                (int) ($config['port'] ?? 0)
+            )->setPrinter($this->printer)
                 ->setOnStartedCallback(fn() => $this->releaseStartLock())
                 ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
                 ->setWorkerPids($workerPids)
@@ -964,6 +1000,166 @@ class Start extends CommandAbstract
             $this->printer->note(__(''));
             throw $e;
         }
+    }
+
+    protected function configureMasterRuntime(
+        MasterProcess $master,
+        bool $dispatcherEnabled,
+        int|string|null $workerCount,
+        ?int $workerBasePort,
+        ?int $workerPort,
+        string $masterMode,
+        int $mainPort
+    ): MasterProcess {
+        $runtimeWorkerBasePort = $workerBasePort;
+        if ($masterMode !== MasterProcess::MODE_LINUX_DIRECT && $workerPort !== null && $workerPort > 0) {
+            $runtimeWorkerBasePort = $workerPort - 1;
+        }
+
+        return $master
+            ->setMode($masterMode)
+            ->setMainPort($mainPort)
+            ->setDispatcherEnabled($dispatcherEnabled)
+            ->setWorkerCount($workerCount)
+            ->setWorkerBasePort($runtimeWorkerBasePort)
+            ->setWorkerPort($workerPort);
+    }
+
+    protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false): array
+    {
+        $envConfig = Env::getInstance()->getConfig();
+        if (!\is_array($envConfig)) {
+            $envConfig = [];
+        }
+
+        $sessionConfig = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
+        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
+        $wlsSession = \is_array($wlsConfig['session'] ?? null) ? $wlsConfig['session'] : [];
+        $wlsSessionServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+        $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
+
+        $sessionPreferredPort = (int) (
+            $config['session_server_port']
+            ?? $wlsSession['port']
+            ?? $wlsSessionServer['port']
+            ?? $sessionConfig['server_port']
+            ?? 19970
+        );
+        if ($sessionPreferredPort <= 0) {
+            $sessionPreferredPort = 19970;
+        }
+        $sessionPortExplicit = \array_key_exists('session_server_port', $config);
+
+        $memoryPreferredPort = (int) (
+            $config['memory_server_port']
+            ?? $memoryConfig['port']
+            ?? 19971
+        );
+        if ($memoryPreferredPort <= 0) {
+            $memoryPreferredPort = 19971;
+        }
+        $memoryPortExplicit = \array_key_exists('memory_server_port', $config);
+
+        $sessionPort = $sessionPreferredPort;
+        if (!$forceRestart && !$sessionPortExplicit && Processer::isPortInUse($sessionPreferredPort)) {
+            $sessionPort = $this->findAvailableAuxiliaryPort($sessionPreferredPort);
+            if ($sessionPort !== $sessionPreferredPort) {
+                $this->printer->warning(__('Session Server port switched to %{1} automatically (preferred %{2} was busy).', [
+                    $sessionPort,
+                    $sessionPreferredPort,
+                ]));
+            }
+        }
+
+        $memoryPort = $memoryPreferredPort;
+        $memoryPortNeedsSwitch = !$forceRestart && !$memoryPortExplicit && (
+            $memoryPreferredPort === $sessionPort
+            || Processer::isPortInUse($memoryPreferredPort)
+        );
+        if ($memoryPortNeedsSwitch) {
+            $memoryPort = $this->findAvailableAuxiliaryPort($memoryPreferredPort, [$sessionPort]);
+            if ($memoryPort !== $memoryPreferredPort) {
+                $this->printer->warning(__('Memory Service port switched to %{1} automatically (preferred %{2} was busy).', [
+                    $memoryPort,
+                    $memoryPreferredPort,
+                ]));
+            }
+        } elseif ($memoryPort === $sessionPort) {
+            $nextMemoryPort = $this->findAvailableAuxiliaryPort($memoryPort, [$sessionPort]);
+            if ($nextMemoryPort !== $memoryPort) {
+                $this->printer->warning(__('Memory Service port switched to %{1} automatically (preferred %{2} was busy).', [
+                    $nextMemoryPort,
+                    $memoryPort,
+                ]));
+                $memoryPort = $nextMemoryPort;
+            }
+        }
+
+        $sessionTokenFileName = (string) (
+            $config['session_server_token_file_name']
+            ?? $wlsSessionServer['token_file_name']
+            ?? $wlsSession['token_file_name']
+            ?? ''
+        );
+        if ($sessionTokenFileName === '') {
+            $sessionTokenFileName = $this->getSharedStateTokenFileName($instanceName, 'session_server.token');
+        }
+
+        $memoryTokenFileName = (string) (
+            $config['memory_server_token_file_name']
+            ?? $memoryConfig['token_file_name']
+            ?? ''
+        );
+        if ($memoryTokenFileName === '') {
+            $memoryTokenFileName = $this->getSharedStateTokenFileName($instanceName, 'memory_server.token');
+        }
+
+        return [
+            'session' => [
+                'host' => '127.0.0.1',
+                'port' => $sessionPort,
+                'token_file_name' => $sessionTokenFileName,
+            ],
+            'memory' => [
+                'host' => '127.0.0.1',
+                'port' => $memoryPort,
+                'token_file_name' => $memoryTokenFileName,
+            ],
+        ];
+    }
+
+    protected function getSharedStateTokenFileName(string $instanceName, string $defaultFileName): string
+    {
+        $safeInstanceName = \preg_replace('/[^a-z0-9_-]/i', '_', \trim($instanceName)) ?: 'default';
+        if ($safeInstanceName === 'default') {
+            return $defaultFileName;
+        }
+
+        $extension = \pathinfo($defaultFileName, \PATHINFO_EXTENSION);
+        $filename = \pathinfo($defaultFileName, \PATHINFO_FILENAME);
+        if ($filename === '') {
+            return $defaultFileName;
+        }
+
+        return $extension !== ''
+            ? $filename . '.' . $safeInstanceName . '.' . $extension
+            : $filename . '.' . $safeInstanceName;
+    }
+
+    protected function findAvailableAuxiliaryPort(int $preferredPort, array $reservedPorts = [], int $maxScan = 200): int
+    {
+        $reservedPorts = \array_values(\array_unique(\array_map('intval', $reservedPorts)));
+        $port = \max($preferredPort + 1, 1);
+        for ($attempt = 0; $attempt < $maxScan; $attempt++, $port++) {
+            if (\in_array($port, $reservedPorts, true)) {
+                continue;
+            }
+            if (!Processer::isPortInUse($port)) {
+                return $port;
+            }
+        }
+
+        return $preferredPort;
     }
     
     /**
@@ -2604,7 +2800,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = []): void
     {
         $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
         if (!\is_dir($instanceDir)) {
@@ -2633,6 +2829,11 @@ class Start extends CommandAbstract
             'dispatcher_pid' => 0,
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
             'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
+            'session_server_port' => (int) ($sharedStateRuntime['session']['port'] ?? 19970),
+            'session_server_token_file_name' => (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token'),
+            'memory_server_port' => (int) ($sharedStateRuntime['memory']['port'] ?? 19971),
+            'memory_server_token_file_name' => (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token'),
+            'shared_state' => $sharedStateRuntime,
             // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
             'http_redirect_port' => $httpRedirectPort,
             // 前台模式（重启 Worker 时保持可见窗口）
@@ -2754,7 +2955,7 @@ class Start extends CommandAbstract
         
         // 从当前合并后的配置中提取可复用项
         // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
-        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
+        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port', 'session_server_port', 'session_server_token_file_name', 'memory_server_port', 'memory_server_token_file_name'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
