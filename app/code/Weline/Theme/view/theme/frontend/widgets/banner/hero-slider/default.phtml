@@ -67,35 +67,52 @@ $showArrows = (bool)($this->getData('show_arrows') ?? true);
 $effect = $this->getData('effect') ?? 'slide';
 $height = $this->getData('height') ?? '500px';
 $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
+$configTitle = trim((string)($this->getData('title') ?? ''));
+$configSubtitle = trim((string)($this->getData('subtitle') ?? ''));
+$configButtonText = trim((string)($this->getData('button_text') ?? ''));
+$configLink = (string)($this->getData('link') ?? '#');
+$configTextPosition = trim((string)($this->getData('text_position') ?? 'left'));
+$configImage = (string)($this->getData('image') ?? $placeholder);
 
 // 示例数据
 if (empty($slides)) {
-    $slides = [
-        [
-            'image' => $placeholder,
-            'title' => __('2026春季新品上市'),
-            'subtitle' => __('探索最新时尚潮流'),
-            'button_text' => __('立即选购'),
-            'link' => '/products/new',
-            'text_position' => 'left', // left/center/right
-        ],
-        [
-            'image' => $placeholder,
-            'title' => __('限时特惠'),
-            'subtitle' => __('全场满300减50'),
-            'button_text' => __('查看详情'),
-            'link' => '/promotions',
-            'text_position' => 'center',
-        ],
-        [
-            'image' => $placeholder,
-            'title' => __('品质生活'),
-            'subtitle' => __('精选优质好物'),
-            'button_text' => __('开始探索'),
-            'link' => '/featured',
-            'text_position' => 'right',
-        ],
-    ];
+    if ($configTitle !== '' || $configSubtitle !== '' || $configButtonText !== '') {
+        $slides = [[
+            'image' => $configImage,
+            'title' => $configTitle,
+            'subtitle' => $configSubtitle,
+            'button_text' => $configButtonText,
+            'link' => $configLink,
+            'text_position' => $configTextPosition !== '' ? $configTextPosition : 'left',
+        ]];
+    } else {
+        $slides = [
+            [
+                'image' => $placeholder,
+                'title' => __('2026春季新品上市'),
+                'subtitle' => __('探索最新时尚潮流'),
+                'button_text' => __('立即选购'),
+                'link' => '/products/new',
+                'text_position' => 'left', // left/center/right
+            ],
+            [
+                'image' => $placeholder,
+                'title' => __('限时特惠'),
+                'subtitle' => __('全场满300减50'),
+                'button_text' => __('查看详情'),
+                'link' => '/promotions',
+                'text_position' => 'center',
+            ],
+            [
+                'image' => $placeholder,
+                'title' => __('品质生活'),
+                'subtitle' => __('精选优质好物'),
+                'button_text' => __('开始探索'),
+                'link' => '/featured',
+                'text_position' => 'right',
+            ],
+        ];
+    }
 }
 
 $sliderId = 'hero-slider-' . uniqid();
