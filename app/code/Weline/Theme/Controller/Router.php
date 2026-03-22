@@ -24,6 +24,7 @@ class Router implements RouterInterface
             return;
         }
 
+        $request = null;
         try {
             /** @var Request $request */
             $request = ObjectManager::getInstance(Request::class);
@@ -74,41 +75,59 @@ class Router implements RouterInterface
             $editorArea = PreviewContextService::AREA_FRONTEND;
         }
 
+        $queryOverrides = [
+            'editor_area' => $editorArea,
+            'page_type' => $layoutType,
+        ];
+
         if ($editorArea === PreviewContextService::AREA_BACKEND) {
-            if ((int)($_GET['backend_theme_id'] ?? 0) <= 0) {
-                $_GET['backend_theme_id'] = $themeId;
-            }
+            // Legacy preview_theme is an explicit theme choice and must win over
+            // any stale preview context that may already exist in the worker.
+            $queryOverrides['backend_theme_id'] = $themeId;
         } else {
-            if ((int)($_GET['frontend_theme_id'] ?? 0) <= 0) {
-                $_GET['frontend_theme_id'] = $themeId;
-            }
+            $queryOverrides['frontend_theme_id'] = $themeId;
         }
 
-        $_GET['editor_area'] = $editorArea;
-        $_GET['page_type'] = $layoutType;
         if ((string)($_GET['layout_type'] ?? '') === '') {
-            $_GET['layout_type'] = $layoutType;
+            $queryOverrides['layout_type'] = $layoutType;
         }
         if ((string)($_GET['layout_option'] ?? '') === '') {
-            $_GET['layout_option'] = 'default';
+            $queryOverrides['layout_option'] = 'default';
         }
         if ((string)($_GET['preview_mode'] ?? '') === '') {
-            $_GET['preview_mode'] = PreviewContextService::DEFAULT_PREVIEW_MODE;
+            $queryOverrides['preview_mode'] = PreviewContextService::DEFAULT_PREVIEW_MODE;
         }
         if ((string)($_GET['status'] ?? '') === '') {
-            $_GET['status'] = PreviewContextService::DEFAULT_STATUS;
+            $queryOverrides['status'] = PreviewContextService::DEFAULT_STATUS;
         }
         if ((string)($_GET['shell'] ?? '') === '') {
-            $_GET['shell'] = PreviewContextService::SHELL_PREVIEW;
+            $queryOverrides['shell'] = PreviewContextService::SHELL_PREVIEW;
         }
         if ((string)($_GET['target_type'] ?? '') === '') {
-            $_GET['target_type'] = PreviewContextService::TARGET_TYPE_LAYOUT;
+            $queryOverrides['target_type'] = PreviewContextService::TARGET_TYPE_LAYOUT;
         }
         if ((string)($_GET['target_value'] ?? '') === '') {
-            $_GET['target_value'] = $layoutType;
+            $queryOverrides['target_value'] = $layoutType;
         }
 
+        self::applyQueryOverrides($request, $queryOverrides);
+
         $path = 'theme/frontend/theme-preview/gateway';
+    }
+
+    private static function applyQueryOverrides(?Request $request, array $queryOverrides): void
+    {
+        foreach ($queryOverrides as $key => $value) {
+            $_GET[$key] = $value;
+
+            if ($request) {
+                $request->setGet($key, $value);
+            }
+        }
+
+        if ($request) {
+            $request->setData('params', $request->getParameterBag()->all());
+        }
     }
 
     private static function shouldSkipPreviewRewrite(string $normalizedPath): bool
