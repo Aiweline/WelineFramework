@@ -78,10 +78,17 @@ final class ThemePreviewEntryApplication
         $themePageTypeResolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
 
         $mode = \in_array($previewMode, ['live', 'version', 'default'], true) ? $previewMode : 'default';
-        $layoutType = \trim((string)($pageType ?: 'homepage'));
-        if ($layoutType === '') {
-            $layoutType = 'homepage';
+        $requestedLayoutType = \trim((string)($pageType ?: 'homepage'));
+        if ($requestedLayoutType === '') {
+            $requestedLayoutType = 'homepage';
         }
+        $layoutType = $themePageTypeResolver->resolveLayoutType(
+            $requestedLayoutType,
+            null,
+            null,
+            'homepage'
+        );
+        $resolvedPageType = $themePageTypeResolver->mapLayoutTypeToPageType($layoutType);
         $previewStatus = \in_array($status, ['draft', 'published'], true) ? $status : 'draft';
         $previewEditorArea = $editorArea === PreviewContextService::AREA_BACKEND
             ? PreviewContextService::AREA_BACKEND
@@ -164,7 +171,7 @@ final class ThemePreviewEntryApplication
         return [
             'ok' => true,
             'redirect' => $url->getFrontendUrl(
-                $themePageTypeResolver->getPreviewRouteByPageType($layoutType),
+                $themePageTypeResolver->getPreviewRouteByPageType($resolvedPageType),
                 $params
             ),
         ];

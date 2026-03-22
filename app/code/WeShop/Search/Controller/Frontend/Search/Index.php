@@ -4,15 +4,17 @@ declare(strict_types=1);
 
 namespace WeShop\Search\Controller\Frontend\Search;
 
-use Weline\Framework\App\Controller\FrontendController;
+use WeShop\Frontend\Controller\BaseController;
 use WeShop\Search\Service\SearchService;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 搜索页面控制器
  */
-class Index extends FrontendController
+class Index extends BaseController
 {
+    protected ?string $layoutType = 'search';
+
     /**
      * 搜索页面
      */
