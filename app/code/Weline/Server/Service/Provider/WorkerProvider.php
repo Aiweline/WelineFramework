@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
-use Weline\Framework\App\Env;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\HealthCheckResult;
 use Weline\Server\Service\Contract\ServiceCommand;
@@ -73,7 +72,7 @@ class WorkerProvider extends AbstractServiceProvider
         $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName . '-' . $instanceId;
 
         // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
-        // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外；Worker 端口只供本机 Dispatcher 连接
+        // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
         $mode = $context->mode;
         $host = ($mode === 'linux-direct')
             ? ($context->host ?: '127.0.0.1')
@@ -102,8 +101,10 @@ class WorkerProvider extends AbstractServiceProvider
             $arguments[] = '--reuseport';
         }
 
-        // Dispatcher 模式（TCP 透传）下启用延迟 SSL：
-        // Worker 以 tcp:// 接入，accept 后根据首包判断协议并手动启用 SSL，
+        $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
+
+        // Dispatcher 模式（TCP 透传）下启用延迟 SSL
+        // Worker 先 tcp:// 接入，accept 后根据首包判断协议并手动启用 SSL
         // 解决 ssl:// 非阻塞模式下 stream_socket_accept 无法完成 TLS 握手的问题。
         if ($context->sslEnabled && $mode !== 'linux-direct') {
             $arguments[] = '--defer-ssl';
@@ -154,5 +155,66 @@ class WorkerProvider extends AbstractServiceProvider
         }
 
         return false;
+    }
+
+    /**
+     * @return string[]
+     */
+    private function buildSharedStateArguments(ServiceContext $context): array
+    {
+        $session = $this->resolveSessionRuntime($context);
+        $memory = $this->resolveMemoryRuntime($context);
+
+        return [
+            '--session-host=' . $session['host'],
+            '--session-port=' . $session['port'],
+            '--session-token-file-name=' . $session['token_file_name'],
+            '--memory-host=' . $memory['host'],
+            '--memory-port=' . $memory['port'],
+            '--memory-token-file-name=' . $memory['token_file_name'],
+        ];
+    }
+
+    /**
+     * @return array{host: string, port: int, token_file_name: string}
+     */
+    private function resolveSessionRuntime(ServiceContext $context): array
+    {
+        $wlsSession = \is_array(($context->envConfig['wls'] ?? [])['session'] ?? null)
+            ? $context->envConfig['wls']['session']
+            : [];
+        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+
+        $host = (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? '127.0.0.1');
+        $host = \trim($host) !== '' ? $host : '127.0.0.1';
+        $port = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? 19970);
+        $tokenFileName = (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token');
+
+        return [
+            'host' => $host,
+            'port' => $port > 0 ? $port : 19970,
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'session_server.token',
+        ];
+    }
+
+    /**
+     * @return array{host: string, port: int, token_file_name: string}
+     */
+    private function resolveMemoryRuntime(ServiceContext $context): array
+    {
+        $memory = \is_array(($context->envConfig['wls'] ?? [])['memory_service'] ?? null)
+            ? $context->envConfig['wls']['memory_service']
+            : [];
+
+        $host = (string) ($memory['host'] ?? '127.0.0.1');
+        $host = \trim($host) !== '' ? $host : '127.0.0.1';
+        $port = (int) ($memory['port'] ?? 19971);
+        $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+
+        return [
+            'host' => $host,
+            'port' => $port > 0 ? $port : 19971,
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'memory_server.token',
+        ];
     }
 }
