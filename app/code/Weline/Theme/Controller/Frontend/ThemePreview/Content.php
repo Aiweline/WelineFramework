@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
+use Weline\Theme\Service\ThemePreviewContentRenderer;
 
 class Content extends FrontendController
 {
@@ -55,9 +56,29 @@ class Content extends FrontendController
 
         $this->assign('preview_mode', (string)($context['preview_mode'] ?? PreviewContextService::DEFAULT_PREVIEW_MODE));
         $this->assign('preview_context', $context);
-        $this->assign('theme_id', $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, true));
+        $themeId = $previewContextService->getThemeIdForArea(PreviewContextService::AREA_FRONTEND, $context, true);
+        $this->assign('theme_id', $themeId);
         $this->assign('layout_type', $layoutType);
         $this->assign('layout_option', $layoutOption);
+
+        /** @var ThemePreviewContentRenderer $previewContentRenderer */
+        $previewContentRenderer = ObjectManager::getInstance(ThemePreviewContentRenderer::class);
+        $previewPayload = $previewContentRenderer->build(
+            $themeId,
+            $layoutType,
+            (string)$this->request->getParam('status', PreviewContextService::DEFAULT_STATUS)
+        );
+        $this->assign('content', $previewPayload['content']);
+        $this->assign('meta', array_merge([
+            'showHeader' => true,
+            'showFooter' => true,
+            'showStatistics' => true,
+            'showFeatures' => true,
+            'showProducts' => true,
+            'showTestimonials' => true,
+            'showNews' => true,
+            'showPartners' => true,
+        ], $previewPayload['meta']));
 
         return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
     }
