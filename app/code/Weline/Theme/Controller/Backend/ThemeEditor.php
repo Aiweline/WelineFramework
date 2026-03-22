@@ -126,7 +126,10 @@ class ThemeEditor extends BackendController
             ? $this->loadThemeModel($requestedFrontendThemeId)
             : $themeContextService->resolveTheme(PreviewContextService::AREA_FRONTEND);
         if (!$frontendTheme?->getId()) {
+            /*
             $this->getMessageManager()->addError(__('绯荤粺娌℃湁鍙敤鐨勫墠绔富棰橈紝璇峰厛婵€娲绘垨閫夋嫨涓€涓墠绔富棰樸€?));
+            */
+            $this->getMessageManager()->addError(__('No available frontend theme. Please activate or select one first.'));
             return $this->redirect($themeListUrl);
         }
 
@@ -137,7 +140,10 @@ class ThemeEditor extends BackendController
             if ($candidateBackendTheme?->getId() && $themeContextService->themeSupportsArea($candidateBackendTheme, PreviewContextService::AREA_BACKEND)) {
                 $backendTheme = $candidateBackendTheme;
             } else {
+                /*
                 $this->getMessageManager()->addWarning(__('鎵€閫夊悗鍙颁富棰樹笉鍙敤锛屽凡鑷姩鍥為€€鍒板綋鍓嶅惎鐢ㄧ殑鍚庡彴涓婚銆?));
+                */
+                $this->getMessageManager()->addWarning(__('Selected backend theme is unavailable, fallback to the active backend theme.'));
             }
         }
         if (!$backendTheme?->getId() && $frontendHasBackend) {
@@ -1390,7 +1396,7 @@ class ThemeEditor extends BackendController
         if (!$themeId) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缂哄皯涓婚ID'),
+                'message' => __('Missing theme ID'),
             ]);
         }
 
@@ -1403,7 +1409,7 @@ class ThemeEditor extends BackendController
             if (!$this->welineTheme->getId()) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('涓婚涓嶅瓨鍦?),
+                    'message' => __('Theme not found'),
                 ]);
             }
 
@@ -1446,6 +1452,9 @@ class ThemeEditor extends BackendController
 
     public function legacyGetCompileLayout()
     {
+        return $this->getCompileLayout();
+    }
+/*
         $themeId = (int)$this->request->getParam('theme_id');
         $layoutType = $this->request->getParam('layout_type', 'homepage');
         $layoutOption = $this->request->getParam('layout_option', 'default');
@@ -2078,6 +2087,9 @@ class ThemeEditor extends BackendController
 
     public function legacyGetLayoutPreview()
     {
+        return $this->getLayoutPreview();
+    }
+/*
         $this->layoutType = null; // 禁用后端布局，iframe 仅渲染前端内容
 
         $themeId = (int)$this->request->getParam('theme_id');
@@ -2849,7 +2861,7 @@ HTML;
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('棰勮宸插惎鍔?),
+                'message' => __('Preview started'),
                 'data' => [
                     'token' => $token,
                     'preview_url' => $this->buildFrontendPreviewUrl($context, $pageType),
@@ -2880,7 +2892,7 @@ HTML;
         if ($href === '') {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缂哄皯璺宠浆鍦板潃'),
+                'message' => __('Missing navigation target'),
             ]);
         }
 
@@ -2904,6 +2916,9 @@ HTML;
 
     public function legacyPostStartPreview()
     {
+        return $this->postStartPreview();
+    }
+/*
         $bodyParams = $this->request->getBodyParams();
         if (is_string($bodyParams)) {
             $data = json_decode($bodyParams, true) ?: [];
@@ -2996,7 +3011,7 @@ HTML;
         if (empty($token)) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缂哄皯棰勮 Token'),
+                'message' => __('Missing preview token'),
             ]);
         }
 
@@ -3021,7 +3036,7 @@ HTML;
 
             return $this->fetchJson([
                 'success' => $result,
-                'message' => $result ? __('宸查€€鍑洪瑙堟ā寮?) : __('閫€鍑洪瑙堝け璐?),
+                'message' => $result ? __('Preview exited') : __('Failed to exit preview'),
                 'data' => [
                     'editor_url' => $this->buildEditorShellUrl($editorContext, $pageType),
                     'context' => $editorContext,
@@ -3118,7 +3133,7 @@ HTML;
         if (empty($token)) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('缂哄皯棰勮 Token'),
+                'message' => __('Missing preview token'),
             ]);
         }
 
@@ -3127,7 +3142,7 @@ HTML;
             if (!$tokenData) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('棰勮 Token 宸茶繃鏈熸垨鏃犳晥'),
+                    'message' => __('Preview token is invalid or expired'),
                 ]);
             }
 
@@ -3136,7 +3151,7 @@ HTML;
             if (!$themeId) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('Token 涓己灏戜富棰樹俊鎭?),
+                    'message' => __('Preview token is missing theme information'),
                 ]);
             }
 
@@ -3144,7 +3159,7 @@ HTML;
             if (!$publishResult) {
                 return $this->fetchJson([
                     'success' => false,
-                    'message' => __('鍙戝竷甯冨眬澶辫触'),
+                    'message' => __('Failed to publish layout'),
                 ]);
             }
 
@@ -3169,7 +3184,7 @@ HTML;
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('涓婚宸插彂甯?),
+                'message' => __('Theme published'),
                 'data' => [
                     'redirect_url' => $this->_url->getFrontendUrl(
                         $this->getThemePageTypeResolver()->getPreviewRouteByPageType($pageType),
