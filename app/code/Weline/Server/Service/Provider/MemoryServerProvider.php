@@ -32,7 +32,7 @@ class MemoryServerProvider extends AbstractServiceProvider
     public function isEnabled(ServiceContext $context): bool
     {
         $m = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
-        return (bool)($m['enabled'] ?? true);
+        return (bool) ($m['enabled'] ?? true);
     }
 
     public function getInstanceCount(ServiceContext $context): int
@@ -72,14 +72,16 @@ class MemoryServerProvider extends AbstractServiceProvider
 
         $port = $this->getPort($instanceId, $context);
         $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $tokenFileName = $this->getTokenFileName($context);
 
         $arguments = [
             '127.0.0.1',
-            (string)$port,
+            (string) $port,
             $context->instanceName,
             '--role=' . ControlMessage::ROLE_MEMORY_SERVER,
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
+            '--token-file-name=' . $tokenFileName,
         ];
 
         if ($context->frontend) {
@@ -96,6 +98,14 @@ class MemoryServerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $ms = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
-        return (int)($ms['port'] ?? 19971);
+        return (int) ($ms['port'] ?? 19971);
+    }
+
+    private function getTokenFileName(ServiceContext $context): string
+    {
+        $memory = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
+        $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+
+        return $tokenFileName !== '' ? $tokenFileName : 'memory_server.token';
     }
 }
