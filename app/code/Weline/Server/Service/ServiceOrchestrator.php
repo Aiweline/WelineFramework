@@ -1100,7 +1100,7 @@ class ServiceOrchestrator
         WlsLogger::debug_("[Orchestrator] 执行命令: {$cmd}");
 
         // 必须 block=false，否则会阻塞 Master 主循环。
-        // Worker 一律走后台并发拉起，避免前台模式下拉起链路产生串行观感。
+        // Windows 前台模式下允许 Worker 打开独立控制台窗口，便于直接观察每个槽位的启动与请求日志。
         return Processer::create(
             $cmd,
             block: false,
@@ -1110,15 +1110,15 @@ class ServiceOrchestrator
 
     private function shouldLaunchForeground(string $role, ?ServiceContext $context): bool
     {
-        if ($context === null) {
+        if ($context === null || !$context->frontend) {
             return false;
         }
 
-        if ($role === ControlMessage::ROLE_WORKER) {
-            return false;
+        if (\in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)) {
+            return IS_WIN && (bool) ($context->getConfig('wls.orchestrator.frontend_worker_windows', true) ?? true);
         }
 
-        return $context->frontend;
+        return true;
     }
 
     /**
@@ -2842,6 +2842,16 @@ class ServiceOrchestrator
         $label = $this->ipcExclusiveCommand ?? '';
         if ($label === ControlMessage::ACTION_STOP && $this->isStopFlowActive()) {
             WlsLogger::info_('[Orchestrator] stop 发起端已断开，停机流程继续执行');
+            return;
+        }
+        if ($label === ControlMessage::ACTION_RELOAD_WAIT) {
+            $this->rollingRestartClientId = null;
+            WlsLogger::warning_('[Orchestrator] reload_wait 发起端已断开，当前滚动重载继续在 Master 内完成');
+            return;
+        }
+        if ($label === ControlMessage::ACTION_ROLLING_RESTART && $this->rollingRestartInProgress) {
+            $this->rollingRestartClientId = null;
+            WlsLogger::warning_('[Orchestrator] rolling_restart 发起端已断开，维护滚动重启继续在 Master 内完成');
             return;
         }
         if ($this->rollingRestartInProgress) {
