@@ -99,6 +99,7 @@ class ControlClient
         }
 
         \stream_set_blocking($this->socket, false);
+        @\stream_set_write_buffer($this->socket, 0);
         $this->buffer = '';
         $this->ipcLog("[IPC-{$this->selfTag}] CONNECT 已连接 Master {$host}:{$port}");
         return true;
@@ -323,8 +324,65 @@ class ControlClient
         $type = $decoded['type'] ?? 'raw';
         $this->ipcVerboseLog("[IPC-{$this->selfTag}] SEND --> Master: type={$type}" . ($decoded ? $this->formatMsgPayload($decoded) : ''));
 
-        $written = @\fwrite($this->socket, $message);
-        return $written !== false && $written > 0;
+        $sent = $this->writeFully($this->socket, $message);
+        if (!$sent) {
+            $this->ipcLog("[IPC-{$this->selfTag}] SEND FAILED --> Master: type={$type}");
+            $this->handleDisconnect();
+        }
+
+        return $sent;
+    }
+
+    /**
+     * 在非阻塞 socket 上完整写入 IPC 消息，避免 NDJSON 半包被误判为成功。
+     *
+     * @param resource $socket
+     */
+    private function writeFully($socket, string $message, float $timeoutSec = 1.0): bool
+    {
+        $length = \strlen($message);
+        if ($length === 0) {
+            return true;
+        }
+
+        $offset = 0;
+        $deadline = \microtime(true) + $timeoutSec;
+
+        while ($offset < $length) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0) {
+                return false;
+            }
+
+            $read = [];
+            $write = [$socket];
+            $except = [];
+            $sec = (int)$remaining;
+            $usec = (int)(($remaining - $sec) * 1000000);
+
+            $ready = @\stream_select($read, $write, $except, $sec, $usec);
+            if ($ready === false) {
+                return false;
+            }
+            if ($ready === 0) {
+                continue;
+            }
+
+            $written = @\fwrite($socket, \substr($message, $offset));
+            if ($written === false) {
+                return false;
+            }
+            if ($written === 0) {
+                if (@\feof($socket)) {
+                    return false;
+                }
+                continue;
+            }
+
+            $offset += $written;
+        }
+
+        return true;
     }
 
     /**
@@ -471,7 +529,7 @@ class ControlClient
         // 重连成功，重新注册
         if ($this->registerInfo) {
             $this->ipcLog("[IPC-{$this->selfTag}] RECONNECT 重连成功，重新注册...");
-            $this->register(
+            $registered = $this->register(
                 $this->registerInfo['role'],
                 $this->registerInfo['pid'],
                 $this->registerInfo['port'],
@@ -481,10 +539,15 @@ class ControlClient
                 (string)($this->registerInfo['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK),
                 (string)($this->registerInfo['module_code'] ?? '')
             );
+            if (!$registered) {
+                return false;
+            }
 
             // 如果之前已就绪，重新发送 ready
             if ($this->isReady) {
-                $this->sendReady();
+                if (!$this->sendReady()) {
+                    return false;
+                }
             }
         }
 
