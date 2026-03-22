@@ -1,11 +1,6 @@
 <?php
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
+declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
@@ -15,69 +10,175 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\View\Template;
 
 /**
- * 控制器模板获取后观察者
- * 将控制器返回的内容提取并包装到布局文件中
+ * Keep layout rendering lifecycle unified for controller template fetch.
+ *
+ * Flow:
+ * 1) render original content template
+ * 2) inject `meta.content` / `meta.contentTemplate` + `child_html.content`
+ * 3) render layout template
+ * 4) if layout requested wrapper via `$this->setLayout(...)`, continue wrapping
  */
 class ControllerFetchFileAfter implements ObserverInterface
 {
+    private const MAX_LAYOUT_WRAP_DEPTH = 4;
+
     public function execute(Event &$event): void
     {
-        /** @var DataObject $eventData */
+        /** @var DataObject|mixed $eventData */
         $eventData = $event->getData('data');
         if (!$eventData instanceof DataObject) {
             return;
         }
 
-        $layoutType = $eventData->getData('layoutType');
-        $contentTemplate = $eventData->getData('contentTemplate');
-        $fileName = $eventData->getData('fileName');
-        $content = $eventData->getData('content');
-        // 关键检查：只有当控制器设置了 layoutType 时才处理
-        // layoutType 必须不为 null 且不为空字符串
-        if ($layoutType === null || $layoutType === '') {
+        $layoutType = (string)$eventData->getData('layoutType');
+        $contentTemplate = (string)$eventData->getData('contentTemplate');
+        $layoutTemplate = (string)$eventData->getData('fileName');
+        if ($layoutType === '' || $contentTemplate === '' || $layoutTemplate === '') {
             return;
         }
 
-        // 如果 ControllerFetchFileBefore 没有设置 contentTemplate，说明没有找到布局文件或不需要处理
-        // contentTemplate 是 ControllerFetchFileBefore 在找到布局文件时设置的原始模板路径
-        // 如果 contentTemplate 存在，说明 ControllerFetchFileBefore 已经处理过，fileName 就是布局文件路径
-        if (empty($contentTemplate)) {
-            return;
-        }
+        $template = Template::getInstance();
+        $fallbackContent = (string)$eventData->getData('content');
 
         try {
-            // 获取模板实例（单例，数据在整个生命周期中保持）
-            $template = Template::getInstance();
-            
-            // 渲染内容模板，获取控制器返回的内容
-            // Template 是单例，控制器传递的变量（如 $user）会自动保持，不需要手动保存
-            $contentHtml = $template->fetch($contentTemplate);
-            
-            // 将渲染后的内容放到 meta.content 中，供模板使用 {{meta.content}} 语法
-            $metaData = $template->getData('meta') ?? [];
-            $metaData['content'] = $contentHtml;
-            $metaData['contentTemplate'] = $contentTemplate; // 保留原始模板路径，供需要时使用
-            $template->setData('meta', $metaData);
-            
-            // 准备布局数据，只传递 content
-            // 其他参数（如 title、sidebar 等）已在 ControllerFetchFileBefore 中通过 ThemeData 加载到模板实例
-            // fetch 方法的第二个参数会通过 addData 添加到模板数据中，不会覆盖现有数据
-            $layoutData = [
-                'content' => $contentHtml,
-            ];
-            
-            // 渲染布局文件，将内容作为参数传递
-            // 传入的 $layoutData 会与模板现有数据合并，控制器传递的变量（如 $user）和布局参数仍然可用
-            $layoutContent = $template->fetch($fileName, $layoutData);
-            
-            // 更新事件数据中的内容
-            $eventData->setData('content', $layoutContent);
-            
-        } catch (\Exception $e) {
-            // 如果出现异常，保持原内容，不影响原有功能
-            // 可以记录日志，但不抛出异常
-            return;
+            $contentHtml = $this->renderContentTemplate($template, $contentTemplate, $fallbackContent);
+            [$renderedHtml, $finalLayoutTemplate] = $this->renderLayoutChain(
+                $template,
+                $layoutTemplate,
+                $contentTemplate,
+                $contentHtml
+            );
+
+            $eventData->setData('content', $renderedHtml);
+            $eventData->setData('fileName', $finalLayoutTemplate);
+        } catch (\Throwable) {
+            // Keep original event content when wrapping fails.
         }
     }
-}
 
+    private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
+    {
+        try {
+            $rendered = (string)$template->fetch($contentTemplate);
+            if ($rendered !== '') {
+                return $rendered;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $fallbackContent;
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private function renderLayoutChain(
+        Template $template,
+        string $layoutTemplate,
+        string $contentTemplate,
+        string $contentHtml
+    ): array {
+        $currentLayoutTemplate = $layoutTemplate;
+        $currentContentTemplate = $contentTemplate;
+        $currentContentHtml = $contentHtml;
+        $renderedHtml = $contentHtml;
+
+        for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
+            $this->primeTemplateData($template, $currentContentTemplate, $currentContentHtml);
+
+            // Clear previous layout directive before rendering.
+            $template->setData('layout', null);
+            $renderedHtml = (string)$template->fetch($currentLayoutTemplate, [
+                'content' => $currentContentHtml,
+            ]);
+
+            $nextLayout = trim((string)$template->getData('layout'));
+            if ($nextLayout === '') {
+                return [$renderedHtml, $currentLayoutTemplate];
+            }
+
+            $nextLayoutTemplate = $this->resolveNextLayoutTemplate($currentLayoutTemplate, $nextLayout);
+            if ($nextLayoutTemplate === '' || $nextLayoutTemplate === $currentLayoutTemplate) {
+                return [$renderedHtml, $currentLayoutTemplate];
+            }
+
+            // Next wrapper uses current layout output as its content.
+            $currentContentTemplate = $currentLayoutTemplate;
+            $currentContentHtml = $renderedHtml;
+            $currentLayoutTemplate = $nextLayoutTemplate;
+        }
+
+        return [$renderedHtml, $currentLayoutTemplate];
+    }
+
+    private function primeTemplateData(Template $template, string $contentTemplate, string $contentHtml): void
+    {
+        $metaData = $template->getData('meta');
+        if (!is_array($metaData)) {
+            $metaData = [];
+        }
+        $metaData['content'] = $contentHtml;
+        $metaData['contentTemplate'] = $contentTemplate;
+        $template->setData('meta', $metaData);
+
+        $childHtml = $template->getData('child_html');
+        if (!is_array($childHtml)) {
+            $childHtml = [];
+        }
+        $childHtml['content'] = $contentHtml;
+        $template->setData('child_html', $childHtml);
+
+        // Keep compatibility for templates that read plain vars instead of meta.
+        $template->setData('content', $contentHtml);
+        $template->setData('contentTemplate', $contentTemplate);
+    }
+
+    private function resolveNextLayoutTemplate(string $currentLayoutTemplate, string $layoutSpec): string
+    {
+        $layoutSpec = trim($layoutSpec);
+        if ($layoutSpec === '') {
+            return '';
+        }
+
+        if (str_contains($layoutSpec, '::')) {
+            return $layoutSpec;
+        }
+
+        $layoutSpec = str_replace('\\', '/', $layoutSpec);
+        if (str_starts_with($layoutSpec, 'theme/')) {
+            return str_ends_with($layoutSpec, '.phtml') ? $layoutSpec : ($layoutSpec . '.phtml');
+        }
+
+        $area = $this->detectAreaFromTemplatePath($currentLayoutTemplate);
+        $layoutSpec = trim($layoutSpec, '/');
+
+        if (str_ends_with($layoutSpec, '.phtml')) {
+            if (str_starts_with($layoutSpec, 'layouts/')) {
+                return "theme/{$area}/{$layoutSpec}";
+            }
+
+            return "theme/{$area}/layouts/{$layoutSpec}";
+        }
+
+        if (!str_contains($layoutSpec, '.')) {
+            if ($layoutSpec === 'base') {
+                return "theme/{$area}/layouts/base.phtml";
+            }
+
+            return "theme/{$area}/layouts/{$layoutSpec}/default.phtml";
+        }
+
+        return 'theme/' . $area . '/layouts/' . str_replace('.', '/', $layoutSpec) . '.phtml';
+    }
+
+    private function detectAreaFromTemplatePath(string $templatePath): string
+    {
+        $normalizedPath = str_replace('\\', '/', strtolower($templatePath));
+        if (str_contains($normalizedPath, '/theme/backend/layouts/')
+            || str_contains($normalizedPath, 'theme/backend/layouts/')) {
+            return 'backend';
+        }
+
+        return 'frontend';
+    }
+}
