@@ -296,6 +296,10 @@ class MasterProcess
     private function buildContext(): ServiceContext
     {
         $envConfig = Env::getInstance()->getConfig() ?: [];
+        if (!\is_array($envConfig)) {
+            $envConfig = [];
+        }
+        $envConfig = $this->applySharedStateRuntimeConfig($envConfig);
 
         return new ServiceContext(
             instanceName: $this->instanceName,
@@ -319,6 +323,65 @@ class MasterProcess
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
         );
+    }
+
+    /**
+     * Keep sidecar runtime ports/token names instance-local without mutating env.php on disk.
+     *
+     * @param array<string, mixed> $envConfig
+     * @return array<string, mixed>
+     */
+    private function applySharedStateRuntimeConfig(array $envConfig): array
+    {
+        $sessionPort = (int) ($this->config['session_server_port'] ?? 0);
+        $sessionTokenFileName = (string) ($this->config['session_server_token_file_name'] ?? '');
+        $memoryPort = (int) ($this->config['memory_server_port'] ?? 0);
+        $memoryTokenFileName = (string) ($this->config['memory_server_token_file_name'] ?? '');
+
+        if ($sessionPort > 0) {
+            if (!isset($envConfig['session']) || !\is_array($envConfig['session'])) {
+                $envConfig['session'] = [];
+            }
+            $envConfig['session']['server_host'] = '127.0.0.1';
+            $envConfig['session']['server_port'] = $sessionPort;
+
+            if (!isset($envConfig['wls']) || !\is_array($envConfig['wls'])) {
+                $envConfig['wls'] = [];
+            }
+            if (!isset($envConfig['wls']['session']) || !\is_array($envConfig['wls']['session'])) {
+                $envConfig['wls']['session'] = [];
+            }
+            $envConfig['wls']['session']['host'] = '127.0.0.1';
+            $envConfig['wls']['session']['port'] = $sessionPort;
+            if ($sessionTokenFileName !== '') {
+                $envConfig['wls']['session']['token_file_name'] = $sessionTokenFileName;
+            }
+
+            if (!isset($envConfig['wls']['session']['wls_server']) || !\is_array($envConfig['wls']['session']['wls_server'])) {
+                $envConfig['wls']['session']['wls_server'] = [];
+            }
+            $envConfig['wls']['session']['wls_server']['host'] = '127.0.0.1';
+            $envConfig['wls']['session']['wls_server']['port'] = $sessionPort;
+            if ($sessionTokenFileName !== '') {
+                $envConfig['wls']['session']['wls_server']['token_file_name'] = $sessionTokenFileName;
+            }
+        }
+
+        if ($memoryPort > 0) {
+            if (!isset($envConfig['wls']) || !\is_array($envConfig['wls'])) {
+                $envConfig['wls'] = [];
+            }
+            if (!isset($envConfig['wls']['memory_service']) || !\is_array($envConfig['wls']['memory_service'])) {
+                $envConfig['wls']['memory_service'] = [];
+            }
+            $envConfig['wls']['memory_service']['host'] = '127.0.0.1';
+            $envConfig['wls']['memory_service']['port'] = $memoryPort;
+            if ($memoryTokenFileName !== '') {
+                $envConfig['wls']['memory_service']['token_file_name'] = $memoryTokenFileName;
+            }
+        }
+
+        return $envConfig;
     }
 
     /**
