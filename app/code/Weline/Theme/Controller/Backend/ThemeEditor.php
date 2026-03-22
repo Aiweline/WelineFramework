@@ -1991,11 +1991,15 @@ class ThemeEditor extends BackendController
      */
     public function getLayoutPreview()
     {
-        $this->layoutType = null;
-
         $previewContextService = $this->getPreviewContextService();
         $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
+        if ($layoutType === '') {
+            $layoutType = 'homepage';
+        }
         $layoutOption = (string)$this->request->getParam('layout_option', 'default');
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
         $editorArea = $previewContextService->normalizeArea(
             (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
         );
@@ -2025,61 +2029,15 @@ class ThemeEditor extends BackendController
         } catch (\Throwable $e) {
         }
 
-        $relativePath = "theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        $templateFile = BP . "app/code/Weline/Theme/view/{$relativePath}";
-        if (!file_exists($templateFile)) {
+        $html = $this->renderUnifiedLayoutPreview(
+            $themeId,
+            $layoutType,
+            $layoutOption,
+            $editorArea,
+            $context
+        );
+        if ($html === '') {
             return $this->renderLayoutNotFoundError($layoutType, $layoutOption);
-        }
-
-        $this->assign('editor_mode', true);
-        $this->assign('preview_mode', true);
-        $this->assign('theme_id', $themeId);
-        $this->assign('preview_context', $context);
-        $this->assign('layout_type', $layoutType);
-        $this->assign('meta', [
-            'showHeader' => true,
-            'showFooter' => true,
-            'showStatistics' => true,
-            'showFeatures' => true,
-            'showProducts' => true,
-            'showTestimonials' => true,
-            'showNews' => true,
-            'showPartners' => true,
-        ]);
-
-        $templatePath = "Weline_Theme::theme/{$editorArea}/layouts/{$layoutType}/{$layoutOption}.phtml";
-        try {
-            $modulePath = $this->request->getRouterData('module_path');
-            if ($modulePath) {
-                $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                $layoutRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . $layoutType . DS . $layoutOption . '.phtml';
-                $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                w_cache('view')->delete($viewDir . $layoutRel . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_tplFile' . $langLocal);
-                w_cache('view')->delete($viewDir . $templatePath . '_comFileName' . $langLocal);
-            }
-        } catch (\Throwable $e) {
-        }
-
-        $contentHtml = $this->fetch($templatePath);
-        $basePath = "Weline_Theme::theme/{$editorArea}/layouts/base.phtml";
-        $baseExists = $this->resolveThemeLayoutExists($themeId, $editorArea, 'base', 'default');
-        if ($baseExists) {
-            $this->getTemplate()->setData('child_html', ['content' => $contentHtml]);
-            try {
-                if ($modulePath = $this->request->getRouterData('module_path')) {
-                    $viewDir = rtrim(str_replace(['/', '\\'], DS, $modulePath), DS) . DS . 'view' . DS;
-                    $baseRel = 'theme' . DS . $editorArea . DS . 'layouts' . DS . 'base.phtml';
-                    $langLocal = \Weline\Framework\Http\Cookie::getLangLocal();
-                    w_cache('view')->delete($viewDir . $baseRel . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_tplFile' . $langLocal);
-                    w_cache('view')->delete($viewDir . $basePath . '_comFileName' . $langLocal);
-                }
-            } catch (\Throwable $e) {
-            }
-            $html = $this->fetch($basePath);
-        } else {
-            $html = $contentHtml;
         }
 
         return $this->injectEditorModeAssets($html);
@@ -2234,6 +2192,54 @@ HTML;
     /**
      * 判断当前预览主题下是否存在指定布局文件（用于两阶段渲染时是否套 base）
      */
+    /**
+     * Render preview layout via shared fetch lifecycle.
+     */
+    private function renderUnifiedLayoutPreview(
+        int $themeId,
+        string $layoutType,
+        string $layoutOption,
+        string $editorArea,
+        array $context = []
+    ): string {
+        $previousLayoutType = $this->layoutType;
+
+        try {
+            $this->layoutType = $layoutType;
+            $this->request->setGet('layout_type', $layoutType);
+            $this->request->setGet('layout_option', $layoutOption);
+            $this->request->setGet('editor_area', $editorArea);
+            $this->request->setGet('theme_id', (string)$themeId);
+            if ((string)$this->request->getParam('status', '') === '') {
+                $this->request->setGet('status', ThemeLayout::STATUS_DRAFT);
+            }
+            $this->request->setData('skip_view_file_cache', true);
+
+            $this->assign('editor_mode', true);
+            $this->assign('preview_mode', true);
+            $this->assign('theme_id', $themeId);
+            $this->assign('preview_context', $context);
+            $this->assign('layout_type', $layoutType);
+            $this->assign('layout_option', $layoutOption);
+            $this->assign('meta', [
+                'showHeader' => true,
+                'showFooter' => true,
+                'showStatistics' => true,
+                'showFeatures' => true,
+                'showProducts' => true,
+                'showTestimonials' => true,
+                'showNews' => true,
+                'showPartners' => true,
+            ]);
+
+            return (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+        } catch (\Throwable) {
+            return '';
+        } finally {
+            $this->layoutType = $previousLayoutType;
+        }
+    }
+
     private function resolveThemeLayoutExists(int $themeId, string $editorArea, string $layoutType, string $layoutOption = 'default'): bool
     {
         if ($themeId <= 0) {
@@ -2372,6 +2378,20 @@ HTML;
     private function renderLayoutPreviewHtml(int $themeId, string $pageType, string $layoutType, string $layoutOption): string
     {
         try {
+            $session = ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
+            $session->setData('preview_theme_id', $themeId);
+            $session->setData('preview_theme_area', PreviewContextService::AREA_FRONTEND);
+            $this->request->setGet('status', ThemeLayout::STATUS_DRAFT);
+            $this->request->setGet('editor_area', PreviewContextService::AREA_FRONTEND);
+
+            return $this->renderUnifiedLayoutPreview(
+                $themeId,
+                $layoutType,
+                $layoutOption,
+                PreviewContextService::AREA_FRONTEND,
+                []
+            );
+
             $templatePath = "Weline_Theme::theme/frontend/layouts/{$layoutType}/{$layoutOption}.phtml";
             
             // 设置渲染参数（与getLayoutPreview()相同）
