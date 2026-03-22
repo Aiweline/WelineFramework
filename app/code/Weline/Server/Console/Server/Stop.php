@@ -460,14 +460,16 @@ class Stop extends CommandAbstract
         // 否则会频繁误判超时并走强杀 Master，造成状态抖动。
         $timeout = $force ? max(self::IPC_TIMEOUT, 20) : self::IPC_TIMEOUT;
         $startedAt = \microtime(true);
-        $deadline = $startedAt + $timeout;
-        $hardDeadline = $startedAt + $this->getIpcHardTimeout();
+        $hardTimeout = $this->getIpcHardTimeout();
+        $hardDeadline = $startedAt + $hardTimeout;
+        $lastActivityAt = $startedAt;
+        $lastIdleNoticeAt = 0.0;
         $lastProgress = '';
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
         $exitedPids = []; // 用 PID 去重，防止同一进程的 "已断开" 和 "已退出" 重复计数
         $totalInstances = 0; // 总实例数
         
-        while (\microtime(true) < $deadline && \microtime(true) < $hardDeadline) {
+        while (\microtime(true) < $hardDeadline) {
             // 优先检查 Master 是否已退出（每次循环都检查）
             if (!Processer::processExists($masterPid)) {
                 $this->ipcMsg("Master 进程已退出 ✓", 'success');
@@ -496,7 +498,7 @@ class Stop extends CommandAbstract
                     return $this->waitForMasterExit($masterPid);
                 }
 
-                $deadline = \min($hardDeadline, \microtime(true) + $timeout);
+                $lastActivityAt = \microtime(true);
                 
                 // 解析消息
                 $lines = \explode("\n", \trim($data));
@@ -542,8 +544,23 @@ class Stop extends CommandAbstract
                 @\fclose($conn);
                 return $this->waitForMasterExit($masterPid);
             }
+            // 空闲超时仅作提示，不立即判定失败，避免长排水阶段误杀 Master
+            $now = \microtime(true);
+            if (($now - $lastActivityAt) >= $timeout) {
+                if (!Processer::processExists($masterPid)) {
+                    $this->ipcMsg("Master 进程已退出 ✓", 'success');
+                    @\fclose($conn);
+                    return true;
+                }
+                if (($now - $lastIdleNoticeAt) >= $timeout) {
+                    $elapsed = (int)\round($now - $startedAt);
+                    $this->ipcMsg("Idle {$timeout}s (elapsed {$elapsed}s), Master still running, continue waiting...", 'info');
+                    $lastIdleNoticeAt = $now;
+                }
+                $lastActivityAt = $now;
+            }
         }
-        
+
         @\fclose($conn);
         
         // 超时前最后一次检查 Master 状态
@@ -552,18 +569,37 @@ class Stop extends CommandAbstract
             return true;
         }
         
-        $timeoutLabel = \microtime(true) >= $hardDeadline
-            ? "等待超时（硬超时 {$this->getIpcHardTimeout()}s）"
-            : "等待超时（空闲 {$timeout}s）";
-        $this->ipcMsg($timeoutLabel, 'error');
+        $this->ipcMsg("Wait timeout (hard {$hardTimeout}s)", 'error');
         return false;
     }
 
     private function getIpcHardTimeout(): int
     {
-        return (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN')
-            ? self::IPC_HARD_TIMEOUT_WIN
-            : self::IPC_HARD_TIMEOUT_LINUX;
+        $isWin = (\strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN');
+        $base = $isWin ? self::IPC_HARD_TIMEOUT_WIN : self::IPC_HARD_TIMEOUT_LINUX;
+        $cap = $isWin ? 600 : 420;
+
+        $stopDrainWait = (float) Env::get('wls.orchestrator.stop_all_drain_wait_sec', 10.0);
+        if ($stopDrainWait < 1.0) {
+            $stopDrainWait = 1.0;
+        }
+        if ($stopDrainWait > 300.0) {
+            $stopDrainWait = 300.0;
+        }
+
+        $terminateTimeout = (float) Env::get('wls.orchestrator.stop_terminate_timeout_sec', 3.0);
+        if ($terminateTimeout < 1.0) {
+            $terminateTimeout = 1.0;
+        }
+        if ($terminateTimeout > 30.0) {
+            $terminateTimeout = 30.0;
+        }
+
+        // 预留阶段切换、IPC 传输与最终校验窗口，避免长排水配置下过早硬超时
+        $adaptive = (int) \ceil($stopDrainWait + $terminateTimeout + 20.0);
+        $adaptive = \max($base, $adaptive);
+
+        return \min($adaptive, $cap);
     }
     
     /**
