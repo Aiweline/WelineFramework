@@ -76,6 +76,11 @@
         在控制器渲染完成后可靠触发
     -->
     <event name="Weline_Framework_Controller::fetch_file_after">
+        <observer name="Weline_Theme::controller_fetch_file_after"
+                  instance="Weline\Theme\Observer\ControllerFetchFileAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="90"/>
         <observer name="Weline_Theme::layout_slot_renderer"
                   instance="Weline\Theme\Observer\LayoutSlotRenderer"
                   disabled="false"

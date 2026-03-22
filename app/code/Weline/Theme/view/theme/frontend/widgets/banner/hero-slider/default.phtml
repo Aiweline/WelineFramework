@@ -60,8 +60,8 @@ if (is_string($slides)) {
 if (!is_array($slides)) {
     $slides = [];
 }
-$autoplay = (bool)($this->getData('autoplay') ?? true);
-$autoplaySpeed = (int)($this->getData('autoplay_speed') ?? 5000);
+$autoplay = (bool)($this->getData('autoplay') ?? $this->getData('auto_play') ?? true);
+$autoplaySpeed = (int)($this->getData('autoplay_speed') ?? $this->getData('interval') ?? 5000);
 $showDots = (bool)($this->getData('show_dots') ?? true);
 $showArrows = (bool)($this->getData('show_arrows') ?? true);
 $effect = $this->getData('effect') ?? 'slide';
