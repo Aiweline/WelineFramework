@@ -1357,6 +1357,8 @@ class ServiceOrchestrator
     {
         $start = \microtime(true);
         $drainedInstances = [];
+        $lastHeartbeatAt = 0.0;
+        $heartbeatInterval = 5.0;
         
         while (\microtime(true) - $start < $timeout) {
             $this->controlServer?->poll(0, 100000);
@@ -1378,6 +1380,15 @@ class ServiceOrchestrator
                     $displayName = $provider?->getDisplayName() ?? $instance->role;
                     $msg = "  ✓ {$displayName}(PID:{$instance->pid}) 排水完成";
                     $this->sendStopProgress($msg);
+                }
+            }
+
+            if ($reportProgress && $drainingCount > 0) {
+                $now = \microtime(true);
+                if (($now - $lastHeartbeatAt) >= $heartbeatInterval) {
+                    $elapsed = (int)\round($now - $start);
+                    $this->sendStopProgress("Stage2 waiting for drain: {$drainingCount} remaining ({$elapsed}s/{$timeout}s)");
+                    $lastHeartbeatAt = $now;
                 }
             }
 
@@ -1411,11 +1422,22 @@ class ServiceOrchestrator
         $start = \microtime(true);
         $lastClientCount = -1;
         $exitedInstances = [];
+        $lastHeartbeatAt = 0.0;
+        $heartbeatInterval = 5.0;
 
         while (\microtime(true) - $start < $timeout) {
             $this->controlServer?->poll(0, 100000);
 
             $clientCount = $this->controlServer?->getClientCount() ?? 0;
+
+            if ($clientCount > 0) {
+                $now = \microtime(true);
+                if (($now - $lastHeartbeatAt) >= $heartbeatInterval) {
+                    $elapsed = (int)\round($now - $start);
+                    $this->sendStopProgress("Stage4 waiting for exits: {$clientCount} IPC connections remaining ({$elapsed}s/{$timeout}s)");
+                    $lastHeartbeatAt = $now;
+                }
+            }
 
             // 检查每个实例的退出状态
             foreach ($this->registry->getAllInstances() as $instance) {
