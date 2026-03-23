@@ -681,83 +681,92 @@ $area = $themeData['area'] ?? 'frontend';
                             <if condition="meta.filters">
                                 {{meta.filters}}
                             <else/>
-                                <w:hook>WeShop_Catalog::product_list::filters_before</w:hook>
-                                <div class="weshop-filters-list">
-                                    <!-- Category Filter -->
-                                    <details class="weshop-filter-group" open>
-                                        <summary class="weshop-filter-summary">
-                                            <p class="weshop-filter-title"><?= __('Category') ?></p>
-                                            <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
-                                        </summary>
-                                        <div class="weshop-filter-content">
-                                            <w:hook>WeShop_Catalog::product_list::filters_category</w:hook>
-                                            <?php $categories = $this->getData('categories') ?? []; ?>
-                                            <?php foreach ($categories as $category): ?>
-                                                <a href="<?= $this->getUrl('catalog/category/view', ['id' => $category['category_id']]) ?>" class="weshop-filter-link-sub"><?= htmlspecialchars($category['name'] ?? '') ?></a>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </details>
-                                    
-                                    <!-- Brand Filter -->
-                                    <details class="weshop-filter-group" open>
-                                        <summary class="weshop-filter-summary">
-                                            <p class="weshop-filter-title"><?= __('Brand') ?></p>
-                                            <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
-                                        </summary>
-                                        <div class="weshop-filter-content">
-                                            <w:hook>WeShop_Catalog::product_list::filters_brand</w:hook>
-                                            <?php $brands = $this->getData('brands') ?? []; ?>
-                                            <?php foreach ($brands as $brand): ?>
-                                                <label class="weshop-filter-checkbox">
-                                                    <input type="checkbox" name="brand[]" value="<?= $brand['brand_id'] ?>" class="form-checkbox">
-                                                    <span><?= htmlspecialchars($brand['name'] ?? '') ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </details>
-                                    
-                                    <!-- Price Range Filter -->
-                                    <details class="weshop-filter-group">
-                                        <summary class="weshop-filter-summary">
-                                            <p class="weshop-filter-title"><?= __('Price Range') ?></p>
-                                            <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
-                                        </summary>
-                                        <div class="weshop-filter-content">
-                                            <w:hook>WeShop_Catalog::product_list::filters_price</w:hook>
-                                            <input type="range" class="weshop-filter-range" min="0" max="2000" value="750" name="price_max">
-                                            <div class="weshop-filter-range-info">
-                                                <span>$0</span>
-                                                <span>$2000+</span>
+                                <?php $legacyFilterSidebar = trim((string) $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar')); ?>
+                                <?php $canonicalFilterContainer = trim((string) $this->getHook('WeShop_Filters::frontend::partials::filters::container')); ?>
+                                <?= $legacyFilterSidebar ?>
+                                <?= $canonicalFilterContainer ?>
+                                <?php if ($legacyFilterSidebar === '' && $canonicalFilterContainer === ''): ?>
+                                    <w:hook>WeShop_Catalog::product_list::filters_before</w:hook>
+                                    <w:hook>WeShop_Filters::frontend::partials::filters::header</w:hook>
+                                    <w:hook>WeShop_Filters::frontend::partials::filters::applied</w:hook>
+                                    <div class="weshop-filters-list">
+                                        <!-- Category Filter -->
+                                        <details class="weshop-filter-group" open>
+                                            <summary class="weshop-filter-summary">
+                                                <p class="weshop-filter-title"><?= __('Category') ?></p>
+                                                <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
+                                            </summary>
+                                            <div class="weshop-filter-content">
+                                                <w:hook>WeShop_Catalog::product_list::filters_category</w:hook>
+                                                <?php $categories = $this->getData('categories') ?? []; ?>
+                                                <?php foreach ($categories as $category): ?>
+                                                    <a href="<?= $this->getUrl('catalog/category/view', ['id' => $category['category_id']]) ?>" class="weshop-filter-link-sub"><?= htmlspecialchars($category['name'] ?? '') ?></a>
+                                                <?php endforeach; ?>
                                             </div>
-                                        </div>
-                                    </details>
-                                    
-                                    <!-- Customer Rating Filter -->
-                                    <details class="weshop-filter-group">
-                                        <summary class="weshop-filter-summary">
-                                            <p class="weshop-filter-title"><?= __('Customer Rating') ?></p>
-                                            <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
-                                        </summary>
-                                        <div class="weshop-filter-content">
-                                            <w:hook>WeShop_Catalog::product_list::filters_rating</w:hook>
-                                            <?php for ($rating = 4; $rating >= 1; $rating--): ?>
-                                                <label class="weshop-filter-checkbox">
-                                                    <input type="radio" name="rating" value="<?= $rating ?>" class="form-radio">
-                                                    <span class="weshop-product-stars">
-                                                        <?php for ($i = 1; $i <= 5; $i++): ?>
-                                                            <span class="material-symbols-outlined" style="font-size: 1rem;">
-                                                                <?= $i <= $rating ? 'star' : ($i == $rating + 0.5 ? 'star_half' : 'star') ?>
-                                                            </span>
-                                                        <?php endfor; ?>
-                                                    </span>
-                                                    <span>& up</span>
-                                                </label>
-                                            <?php endfor; ?>
-                                        </div>
-                                    </details>
-                                </div>
-                                <a href="<?= $this->getUrl('catalog/category') ?>" class="weshop-clear-filters"><?= __('Clear All Filters') ?></a>
-                                <w:hook>WeShop_Catalog::product_list::filters_after</w:hook>
+                                        </details>
+                                        
+                                        <!-- Brand Filter -->
+                                        <details class="weshop-filter-group" open>
+                                            <summary class="weshop-filter-summary">
+                                                <p class="weshop-filter-title"><?= __('Brand') ?></p>
+                                                <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
+                                            </summary>
+                                            <div class="weshop-filter-content">
+                                                <w:hook>WeShop_Catalog::product_list::filters_brand</w:hook>
+                                                <?php $brands = $this->getData('brands') ?? []; ?>
+                                                <?php foreach ($brands as $brand): ?>
+                                                    <label class="weshop-filter-checkbox">
+                                                        <input type="checkbox" name="brand[]" value="<?= $brand['brand_id'] ?>" class="form-checkbox">
+                                                        <span><?= htmlspecialchars($brand['name'] ?? '') ?></span>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </details>
+                                        
+                                        <!-- Price Range Filter -->
+                                        <details class="weshop-filter-group">
+                                            <summary class="weshop-filter-summary">
+                                                <p class="weshop-filter-title"><?= __('Price Range') ?></p>
+                                                <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
+                                            </summary>
+                                            <div class="weshop-filter-content">
+                                                <w:hook>WeShop_Catalog::product_list::filters_price</w:hook>
+                                                <input type="range" class="weshop-filter-range" min="0" max="2000" value="750" name="price_max">
+                                                <div class="weshop-filter-range-info">
+                                                    <span>$0</span>
+                                                    <span>$2000+</span>
+                                                </div>
+                                            </div>
+                                        </details>
+                                        
+                                        <!-- Customer Rating Filter -->
+                                        <details class="weshop-filter-group">
+                                            <summary class="weshop-filter-summary">
+                                                <p class="weshop-filter-title"><?= __('Customer Rating') ?></p>
+                                                <span class="material-symbols-outlined weshop-filter-expand">expand_more</span>
+                                            </summary>
+                                            <div class="weshop-filter-content">
+                                                <w:hook>WeShop_Catalog::product_list::filters_rating</w:hook>
+                                                <?php for ($rating = 4; $rating >= 1; $rating--): ?>
+                                                    <label class="weshop-filter-checkbox">
+                                                        <input type="radio" name="rating" value="<?= $rating ?>" class="form-radio">
+                                                        <span class="weshop-product-stars">
+                                                            <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                                <span class="material-symbols-outlined" style="font-size: 1rem;">
+                                                                    <?= $i <= $rating ? 'star' : ($i == $rating + 0.5 ? 'star_half' : 'star') ?>
+                                                                </span>
+                                                            <?php endfor; ?>
+                                                        </span>
+                                                        <span>& up</span>
+                                                    </label>
+                                                <?php endfor; ?>
+                                            </div>
+                                        </details>
+                                    </div>
+                                    <a href="<?= $this->getUrl('catalog/category') ?>" class="weshop-clear-filters"><?= __('Clear All Filters') ?></a>
+                                    <w:hook>WeShop_Filters::frontend::partials::filters::footer</w:hook>
+                                    <w:hook>WeShop_Catalog::product_list::filters_after</w:hook>
+                                <?php endif; ?>
                             </if>
                         </div>
                     </aside>
@@ -824,36 +833,40 @@ $area = $themeData['area'] ?? 'frontend';
                         <if condition="meta.products">
                             {{meta.products}}
                         <else/>
-                            <w:hook>WeShop_Catalog::product_list::products_before</w:hook>
-                            <div class="weshop-products-grid">
-                                <?php $products = $this->getData('products') ?? []; ?>
-                                <?php foreach ($products as $product): ?>
-                                    <div class="weshop-product-card">
-                                        <div class="weshop-product-image-wrapper">
-                                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-image" style="background-image: url('<?= $product['image'] ?? '' ?>');"></a>
-                                        </div>
-                                        <div class="weshop-product-info">
-                                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-name"><?= htmlspecialchars($product['name'] ?? '') ?></a>
-                                            <div class="weshop-product-rating">
-                                                <div class="weshop-product-stars">
-                                                    <?php $rating = $product['rating'] ?? 0; ?>
-                                                    <?php for ($i = 1; $i <= 5; $i++): ?>
-                                                        <span class="material-symbols-outlined" style="font-size: 1rem;">
-                                                            <?= $i <= floor($rating) ? 'star' : ($i == ceil($rating) && $rating % 1 >= 0.5 ? 'star_half' : 'star') ?>
-                                                        </span>
-                                                    <?php endfor; ?>
-                                                </div>
-                                                <span class="weshop-product-reviews">(<?= $product['reviews_count'] ?? 0 ?> <?= __('reviews') ?>)</span>
+                            <?php $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::frontend::layouts::category::products-content')); ?>
+                            <?= $canonicalCategoryProducts ?>
+                            <?php if ($canonicalCategoryProducts === ''): ?>
+                                <w:hook>WeShop_Catalog::product_list::products_before</w:hook>
+                                <div class="weshop-products-grid">
+                                    <?php $products = $this->getData('products') ?? []; ?>
+                                    <?php foreach ($products as $product): ?>
+                                        <div class="weshop-product-card">
+                                            <div class="weshop-product-image-wrapper">
+                                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-image" style="background-image: url('<?= $product['image'] ?? '' ?>');"></a>
                                             </div>
-                                            <p class="weshop-product-price"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
-                                            <button class="weshop-product-button" onclick="addToCart(<?= $product['product_id'] ?>)">
-                                                <?= __('Add to Cart') ?>
-                                            </button>
+                                            <div class="weshop-product-info">
+                                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="weshop-product-name"><?= htmlspecialchars($product['name'] ?? '') ?></a>
+                                                <div class="weshop-product-rating">
+                                                    <div class="weshop-product-stars">
+                                                        <?php $rating = $product['rating'] ?? 0; ?>
+                                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                                            <span class="material-symbols-outlined" style="font-size: 1rem;">
+                                                                <?= $i <= floor($rating) ? 'star' : ($i == ceil($rating) && $rating % 1 >= 0.5 ? 'star_half' : 'star') ?>
+                                                            </span>
+                                                        <?php endfor; ?>
+                                                    </div>
+                                                    <span class="weshop-product-reviews">(<?= $product['reviews_count'] ?? 0 ?> <?= __('reviews') ?>)</span>
+                                                </div>
+                                                <p class="weshop-product-price"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
+                                                <button class="weshop-product-button" onclick="addToCart(<?= $product['product_id'] ?>)">
+                                                    <?= __('Add to Cart') ?>
+                                                </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                            <w:hook>WeShop_Catalog::product_list::products_after</w:hook>
+                                    <?php endforeach; ?>
+                                </div>
+                                <w:hook>WeShop_Catalog::product_list::products_after</w:hook>
+                            <?php endif; ?>
                         </if>
                         
                         <!-- Pagination -->
