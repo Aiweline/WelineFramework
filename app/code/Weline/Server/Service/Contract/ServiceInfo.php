@@ -65,6 +65,16 @@ class ServiceInfo
         }
 
         // 最后才使用持久化状态（用于启动中但尚未拿到 PID/port 的短窗口）
+        return $this->isExpectedRunningState();
+    }
+
+    /**
+     * 仅基于实例文件中的持久化状态判断服务是否应视为活跃。
+     *
+     * 用于 CLI/控制面快路径，避免每次都触发 tasklist/PowerShell 级实时探测。
+     */
+    public function isExpectedRunningState(): bool
+    {
         return \in_array($this->state, [
             ServiceInstance::STATE_READY,
             ServiceInstance::STATE_REGISTERED,
