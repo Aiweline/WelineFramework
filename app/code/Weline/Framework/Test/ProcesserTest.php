@@ -329,6 +329,12 @@ class ProcesserTest extends TestCore
         ], $resolved);
     }
 
+    public function testShouldWaitForManagedPidResolutionFollowsBlockOnly(): void
+    {
+        self::assertTrue($this->invokePrivateStatic(Processer::class, 'shouldWaitForManagedPidResolution', [true]));
+        self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldWaitForManagedPidResolution', [false]));
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
