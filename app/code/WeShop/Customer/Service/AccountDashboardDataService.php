@@ -174,7 +174,7 @@ class AccountDashboardDataService
             ],
             [
                 'title' => (string) __('Manage Addresses'),
-                'url' => 'weshop/address',
+                'url' => 'address',
                 'icon' => 'location_on',
             ],
             [
