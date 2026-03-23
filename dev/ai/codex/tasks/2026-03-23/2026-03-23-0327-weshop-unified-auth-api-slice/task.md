@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0327-weshop-unified-auth-api-slice
 - Started: 2026-03-23 03:27
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: continue after commit e2675b90 for WeShop international commerce
 - Follows: `dev/ai/codex/tasks/2026-03-23/2026-03-23-1020-weshop-2fa-self-service-slice/`
@@ -50,3 +50,4 @@
 ## Resume
 
 - Read [plan.md](./plan.md), [progress.md](./progress.md), and [result.md](./result.md).
+- Completed in commit `460dd98a`.

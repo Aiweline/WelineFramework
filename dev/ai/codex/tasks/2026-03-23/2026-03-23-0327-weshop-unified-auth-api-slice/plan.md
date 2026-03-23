@@ -11,7 +11,7 @@
 - [x] Write failing unit coverage for token area persistence and resolution
 - [x] Implement the smallest correct change in the auth token model and service
 - [x] Run focused validation commands
-- [ ] Commit the slice and update result.md with the commit hash
+- [x] Commit the slice and update result.md with the commit hash
 
 ## Verification Targets
 
