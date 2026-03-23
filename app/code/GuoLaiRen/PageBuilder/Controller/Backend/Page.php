@@ -34,6 +34,8 @@ use Weline\I18n\Model\Locals;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\UrlManager\Model\UrlRewrite;
 use Weline\Websites\Model\Website as WebsiteModel;
+use Weline\Websites\Model\WebsiteDomain;
+use Weline\Websites\Model\DomainPool;
 use Weline\Acl\Model\RoleAccess;
 
 #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder', '页面构建器', 'mdi mdi-file-document-edit', '管理和构建页面')]
@@ -51,6 +53,8 @@ class Page extends BackendController
      * 缓存的用户权限列表
      */
     private static ?array $userPermissionsCache = null;
+    private ?array $accessibleWebsiteIdsCache = null;
+    private ?array $accessibleWebsitesCache = null;
 
     public function __construct(
         PageModel $pageModel,
@@ -89,6 +93,7 @@ class Page extends BackendController
         }
         
         // 获取用户角色
+        /** @var mixed $user */
         $user = $this->getLoginUser();
         if (!$user) {
             return false;
@@ -142,6 +147,7 @@ class Page extends BackendController
         $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1); // 超管ID为1
         $hasWebsiteAssignmentPermission = false;
+        $accessibleWebsiteIds = [];
         if ($userId > 0 && !$isSuperAdmin) {
             $hasWebsiteAssignmentPermission = $this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment');
         }
@@ -194,7 +200,6 @@ class Page extends BackendController
             
             // 应用相同的站点权限过滤
             if (!$isSuperAdmin && !$hasWebsiteAssignmentPermission) {
-                $accessibleWebsiteIds = $this->getAccessibleWebsiteIds();
                 if (!empty($accessibleWebsiteIds)) {
                     $childModel->where(PageModel::schema_fields_WEBSITE_ID, $accessibleWebsiteIds, 'in');
                 } else {
@@ -226,8 +231,10 @@ class Page extends BackendController
             }
         }
         
+        $websiteMap = $this->buildWebsiteMap($parentPages, $childPages);
         $this->assign('parent_pages', $parentPages);
         $this->assign('child_pages', $childPages);
+        $this->assign('website_map', $websiteMap);
         $this->assign('pagination', $parentPagesResult->getPagination());
         
         // 获取可用站点列表（用于一键建站功能）
@@ -242,6 +249,10 @@ class Page extends BackendController
      */
     private function getAccessibleWebsites(): array
     {
+        if ($this->accessibleWebsitesCache !== null) {
+            return $this->accessibleWebsitesCache;
+        }
+
         $userId = (int)$this->getLoginUserId();
         $isSuperAdmin = ($userId === 1);
         $hasWebsiteAssignmentPermission = false;
@@ -285,7 +296,99 @@ class Page extends BackendController
                 }
             }
         }
-        return $websites;
+        $this->accessibleWebsitesCache = $websites;
+        return $this->accessibleWebsitesCache;
+    }
+
+    private function buildWebsiteMap(array $parentPages, array $childPages): array
+    {
+        $websiteIds = [];
+        foreach ($parentPages as $page) {
+            $websiteId = (int)($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+            if ($websiteId > 0) {
+                $websiteIds[$websiteId] = true;
+            }
+        }
+        foreach ($childPages as $children) {
+            foreach ($children as $childPage) {
+                $websiteId = (int)($childPage->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+                if ($websiteId > 0) {
+                    $websiteIds[$websiteId] = true;
+                }
+            }
+        }
+
+        if (empty($websiteIds)) {
+            return [];
+        }
+
+        $websiteModel = clone $this->websiteModel;
+        $websiteRows = $websiteModel->clear()
+            ->where(WebsiteModel::schema_fields_ID, array_keys($websiteIds), 'in')
+            ->select()
+            ->fetchArray();
+
+        $websiteMap = [];
+        foreach ($websiteRows as $websiteRow) {
+            $websiteId = (int)($websiteRow[WebsiteModel::schema_fields_ID] ?? 0);
+            if ($websiteId <= 0) {
+                continue;
+            }
+
+            $rawUrl = (string)($websiteRow[WebsiteModel::schema_fields_URL] ?? '');
+            $websiteMap[$websiteId] = [
+                'website_id' => $websiteId,
+                'name' => (string)($websiteRow[WebsiteModel::schema_fields_NAME] ?? ''),
+                'code' => (string)($websiteRow[WebsiteModel::schema_fields_CODE] ?? ''),
+                'url' => $rawUrl,
+                'display_url' => $this->buildWebsiteDisplayUrl($rawUrl),
+            ];
+        }
+
+        return $websiteMap;
+    }
+
+    private function buildWebsiteDisplayUrl(string $rawWebsiteUrl): string
+    {
+        $rawWebsiteUrl = trim($rawWebsiteUrl);
+        if ($rawWebsiteUrl === '') {
+            return '';
+        }
+
+        $requestBaseUrl = $this->request ? (string)$this->request->getDisplayBaseUrl() : '';
+        $requestPort = $requestBaseUrl !== '' ? parse_url($requestBaseUrl, PHP_URL_PORT) : null;
+        $websiteUrls = preg_split('/[\s,;]+/', $rawWebsiteUrl, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        foreach ($websiteUrls as $websiteUrl) {
+            $websiteUrl = rtrim(trim($websiteUrl), '/');
+            if ($websiteUrl === '') {
+                continue;
+            }
+
+            $parsedUrl = parse_url($websiteUrl);
+            if (!is_array($parsedUrl) || empty($parsedUrl['host'])) {
+                continue;
+            }
+
+            $scheme = (string)($parsedUrl['scheme'] ?? 'http');
+            $port = $parsedUrl['port'] ?? null;
+            $path = (string)($parsedUrl['path'] ?? '');
+            $query = isset($parsedUrl['query']) ? ('?' . $parsedUrl['query']) : '';
+            $fragment = isset($parsedUrl['fragment']) ? ('#' . $parsedUrl['fragment']) : '';
+
+            if ($port) {
+                $portString = ':' . $port;
+            } elseif ($requestPort
+                && (($scheme === 'http' && (int)$requestPort !== 80)
+                    || ($scheme === 'https' && (int)$requestPort !== 443))) {
+                $portString = ':' . $requestPort;
+            } else {
+                $portString = '';
+            }
+
+            return $scheme . '://' . $parsedUrl['host'] . $portString . $path . $query . $fragment;
+        }
+
+        return '';
     }
 
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_create', '新建页面', 'mdi mdi-plus', '新建页面', 'GuoLaiRen_PageBuilder::page_builder')]
@@ -486,20 +589,27 @@ class Page extends BackendController
      */
     private function getAccessibleWebsiteIds(): array
     {
+        if ($this->accessibleWebsiteIdsCache !== null) {
+            return $this->accessibleWebsiteIdsCache;
+        }
+
         try {
             $userId = (int)$this->getLoginUserId();
             if ($userId <= 0) {
-                return [];
+                $this->accessibleWebsiteIdsCache = [];
+                return $this->accessibleWebsiteIdsCache;
             }
 
             // 超管（ID为1）可以查看所有站点
             if ($userId === 1) {
-                return [];
+                $this->accessibleWebsiteIdsCache = [];
+                return $this->accessibleWebsiteIdsCache;
             }
 
             // 如果拥有站点分配权限，则不限制站点（查看所有站点）
             if ($this->hasPermission($userId, 'GuoLaiRen_PageBuilder::website_assignment')) {
-                return [];
+                $this->accessibleWebsiteIdsCache = [];
+                return $this->accessibleWebsiteIdsCache;
             }
 
             // 普通用户：查找其被分配到的站点
@@ -514,9 +624,11 @@ class Page extends BackendController
             foreach ($items as $item) {
                 $ids[] = (int)$item->getData(WebsiteUser::schema_fields_WEBSITE_ID);
             }
-            return array_values(array_unique(array_filter($ids)));
+            $this->accessibleWebsiteIdsCache = array_values(array_unique(array_filter($ids)));
+            return $this->accessibleWebsiteIdsCache;
         } catch (\Throwable $e) {
-            return [];
+            $this->accessibleWebsiteIdsCache = [];
+            return $this->accessibleWebsiteIdsCache;
         }
     }
 
@@ -1646,6 +1758,24 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     ->fetch();
                 
                 $deletedCount++;
+            }
+
+            // 站点删除后释放域名绑定：同步域名池 site_created（进而影响“可建站”可选性）
+            $websiteId = (int) ($page->getData(PageModel::schema_fields_WEBSITE_ID) ?? 0);
+            if ($websiteId > 0) {
+                try {
+                    $websiteDomainModel = ObjectManager::getInstance(WebsiteDomain::class);
+                    $websiteDomainModel->clearQuery()
+                        ->where(WebsiteDomain::schema_fields_WEBSITE_ID, $websiteId)
+                        ->delete()
+                        ->fetch();
+
+                    $domainPool = ObjectManager::getInstance(DomainPool::class);
+                    $domainPool->syncSiteCreatedFromWebsiteDomainTable();
+                } catch (\Throwable $e) {
+                    // 页面内容已删除：不阻断返回，但需要排查后台日志
+                    w_log_error('[GuoLaiRen_PageBuilder][postDeleteSite] domain sync failed: ' . $e->getMessage());
+                }
             }
             
             // 清除路由缓存（仅使用框架 CacheManager，不使用不存在的 UrlRewriteCache）
@@ -4836,4 +4966,3 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         return $slug;
     }
 }
-

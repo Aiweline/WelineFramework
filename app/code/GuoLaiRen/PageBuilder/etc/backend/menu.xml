@@ -56,7 +56,7 @@
         <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
              name="ai_site_agent"
              title="AI 建站工作台"
-             action="pagebuilder/backend/aiSiteAgent/index"
+             action="websites/backend/site-builder-agent/index?provider=pagebuilder"
              icon="mdi mdi-robot-outline"
              order="15"/>
     </menu>

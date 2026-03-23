@@ -15,12 +15,7 @@
 "Please enter a new password.","Please enter a new password."
 "The password confirmation does not match.","The password confirmation does not match."
 "Your password has been reset. Please sign in with the new password.","Your password has been reset. Please sign in with the new password."
-请先登录,请先登录
-我的订单,我的订单
-我的收藏,我的收藏
-地址管理,地址管理
-账户设置,账户设置
-我的账户,我的账户
+"Please log in to continue.","Please log in to continue."
 登录,登录
 "Email and password are required.","Email and password are required."
 "Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
@@ -45,6 +40,12 @@
 客户服务,客户服务
 "Storefront account security cards","Storefront account security cards"
 "Inject sign-in security modules into the storefront customer account center.","Inject sign-in security modules into the storefront customer account center."
+"Storefront account discovery cards","Storefront account discovery cards"
+"Inject saved, discovery, and follow-up cards into the storefront customer account center.","Inject saved, discovery, and follow-up cards into the storefront customer account center."
+"My Orders","My Orders"
+"My Wishlist","My Wishlist"
+"Manage Addresses","Manage Addresses"
+"Security Center","Security Center"
 "Password must be at least 8 characters and contain letters and numbers.","Password must be at least 8 characters and contain letters and numbers."
 "An account with this email already exists.","An account with this email already exists."
 "Invalid email or password.","Invalid email or password."
@@ -57,8 +58,11 @@
 "Reset Password","Reset Password"
 "Customer profile is not linked to an auth user.","Customer profile is not linked to an auth user."
 "Unable to locate the auth user for this customer profile.","Unable to locate the auth user for this customer profile."
+我的账户,我的账户
 "您好, %1","您好, %1"
 用户,用户
+我的订单,我的订单
+我的收藏,我的收藏
 退出登录,退出登录
 待支付订单,待支付订单
 查看全部订单,查看全部订单
