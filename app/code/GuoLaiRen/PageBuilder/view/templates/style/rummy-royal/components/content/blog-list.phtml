@@ -1,23 +1,18 @@
 <?php
 /**
  * RummyRoyal - Blog List Component
- * 
- * 博客文章网格展示，含分类过滤和侧边栏支持
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
- * 
+ * @var array $colors
+ * @var array $component_config
+ *
  * @fields_start
- * 
  * group:content => 内容设置
  * content.badge => 徽章文字:text:Blog
  * content.title => 标题:text:Rummy Tips & News
  * content.description => 描述:textarea:Stay updated with the latest rummy strategies, tips, and platform news.
- * 
- * group:posts => 文章列表
- * posts.items => 文章列表:textarea:Mastering Points Rummy: A Beginner's Guide|Learn the fundamentals of Points Rummy and strategies to win consistently.|Strategy|5 min read\r\nTop 10 Rummy Tips from Pro Players|Expert tips that will elevate your rummy game to the next level.|Tips|7 min read\r\nUnderstanding Pool Rummy Variants|Deep dive into 101 Pool and 201 Pool rummy formats.|Guide|6 min read\r\nRummyRoyal Tournament Schedule 2026|Complete schedule of upcoming tournaments with massive prize pools.|News|3 min read\r\nHow to Read Your Opponent's Hand|Advanced strategies for predicting opponent moves in rummy.|Strategy|8 min read\r\nRummy vs Poker: Key Differences|Understanding what makes rummy a unique skill-based card game.|Education|4 min read|格式：标题|描述|分类|阅读时间，一行一个
- * 
+ * group:posts => 文章示例
+ * posts.items => 文章列表:textarea:Mastering Points Rummy: A Beginner's Guide|Learn the fundamentals of Points Rummy and strategies to win consistently.|Strategy|5 min read\r\nTop 10 Rummy Tips from Pro Players|Expert tips that will elevate your rummy game to the next level.|Tips|7 min read\r\nUnderstanding Pool Rummy Variants|Deep dive into 101 Pool and 201 Pool rummy formats.|Guide|6 min read|格式：标题|描述|分类|阅读时长，一行一个
  * @fields_end
  */
 
@@ -38,21 +33,78 @@ $borderLight = $colors['border_light'] ?? 'rgba(234, 179, 8, 0.12)';
 $badge = $config['content.badge'] ?? 'Blog';
 $title = $config['content.title'] ?? 'Rummy Tips & News';
 $description = $config['content.description'] ?? 'Stay updated with the latest rummy strategies, tips, and platform news.';
+$isPreview = (bool)($this->getData('is_preview') ?? false);
+$page = $this->getData('page');
 
-$postsRaw = $config['posts.items'] ?? "Mastering Points Rummy: A Beginner's Guide|Learn the fundamentals of Points Rummy and strategies to win consistently.|Strategy|5 min read\nTop 10 Rummy Tips from Pro Players|Expert tips that will elevate your rummy game to the next level.|Tips|7 min read\nUnderstanding Pool Rummy Variants|Deep dive into 101 Pool and 201 Pool rummy formats.|Guide|6 min read\nRummyRoyal Tournament Schedule 2026|Complete schedule of upcoming tournaments with massive prize pools.|News|3 min read\nHow to Read Your Opponent's Hand|Advanced strategies for predicting opponent moves in rummy.|Strategy|8 min read\nRummy vs Poker: Key Differences|Understanding what makes rummy a unique skill-based card game.|Education|4 min read";
+$blogPosts = $this->getData('blog_posts');
+if ((!is_array($blogPosts) || $blogPosts === []) && $page && method_exists($page, 'getData')) {
+    $blogPosts = $page->getData('blog_posts') ?? [];
+}
+
+$normalizePost = static function (array $post, string $defaultCategory = 'Blog'): array {
+    $title = trim((string)($post['title'] ?? ''));
+    $description = trim((string)($post['description'] ?? $post['excerpt'] ?? $post['summary'] ?? ''));
+    $content = trim(strip_tags((string)($post['content'] ?? '')));
+    if ($description === '' && $content !== '') {
+        $description = function_exists('mb_substr') ? mb_substr($content, 0, 140) : substr($content, 0, 140);
+        $contentLength = function_exists('mb_strlen') ? mb_strlen($content) : strlen($content);
+        $descriptionLength = function_exists('mb_strlen') ? mb_strlen($description) : strlen($description);
+        if ($contentLength > $descriptionLength) {
+            $description .= '...';
+        }
+    }
+
+    $category = trim((string)($post['category_name'] ?? $post['category'] ?? ''));
+    if ($category === '') {
+        $tags = array_values(array_filter(array_map('trim', explode(',', (string)($post['tags'] ?? '')))));
+        $category = $tags[0] ?? $defaultCategory;
+    }
+
+    $readTime = trim((string)($post['read_time'] ?? ''));
+    if ($readTime === '') {
+        $readingSource = trim($content !== '' ? $content : $description);
+        if ($readingSource !== '') {
+            $wordCount = count(preg_split('/\s+/u', $readingSource, -1, PREG_SPLIT_NO_EMPTY));
+            $charCount = function_exists('mb_strlen') ? mb_strlen($readingSource) : strlen($readingSource);
+            $minutes = $wordCount > 0 ? (int)ceil($wordCount / 180) : (int)ceil($charCount / 400);
+            $readTime = max(1, $minutes) . ' min read';
+        }
+    }
+
+    $url = trim((string)($post['url'] ?? '#'));
+    $coverImage = trim((string)($post['cover_image'] ?? ''));
+
+    return [
+        'title' => $title,
+        'description' => $description,
+        'category' => $category,
+        'read_time' => $readTime,
+        'url' => $url !== '' ? $url : '#',
+        'cover_image' => $coverImage,
+    ];
+};
 
 $posts = [];
-$lines = preg_split('/[\r\n]+/', $postsRaw);
-foreach ($lines as $line) {
-    $line = trim($line);
-    if (empty($line)) continue;
-    $parts = explode('|', $line);
-    $pTitle = trim($parts[0] ?? '');
-    $pDesc = trim($parts[1] ?? '');
-    $pCat = trim($parts[2] ?? 'General');
-    $pRead = trim($parts[3] ?? '5 min read');
-    if (!empty($pTitle)) {
-        $posts[] = ['title' => $pTitle, 'description' => $pDesc, 'category' => $pCat, 'read_time' => $pRead];
+if (is_array($blogPosts) && $blogPosts !== []) {
+    foreach ($blogPosts as $post) {
+        if (is_array($post)) {
+            $posts[] = $normalizePost($post, $badge);
+        }
+    }
+} elseif ($isPreview) {
+    $postsRaw = $config['posts.items'] ?? "Mastering Points Rummy: A Beginner's Guide|Learn the fundamentals of Points Rummy and strategies to win consistently.|Strategy|5 min read\nTop 10 Rummy Tips from Pro Players|Expert tips that will elevate your rummy game to the next level.|Tips|7 min read\nUnderstanding Pool Rummy Variants|Deep dive into 101 Pool and 201 Pool rummy formats.|Guide|6 min read\nRummyRoyal Tournament Schedule 2026|Complete schedule of upcoming tournaments with massive prize pools.|News|3 min read\nHow to Read Your Opponent's Hand|Advanced strategies for predicting opponent moves in rummy.|Strategy|8 min read\nRummy vs Poker: Key Differences|Understanding what makes rummy a unique skill-based card game.|Education|4 min read";
+    foreach (preg_split('/[\r\n]+/', $postsRaw) as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        $parts = explode('|', $line);
+        $posts[] = $normalizePost([
+            'title' => trim($parts[0] ?? ''),
+            'description' => trim($parts[1] ?? ''),
+            'category' => trim($parts[2] ?? 'General'),
+            'read_time' => trim($parts[3] ?? '5 min read'),
+        ], $badge);
     }
 }
 
@@ -65,18 +117,18 @@ $instanceId = 'rr-blog-list-' . uniqid();
             background: <?= $sectionBg ?>;
             padding: 100px 0;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 20px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-header {
             text-align: center;
             margin-bottom: 60px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-badge {
             display: inline-flex;
             align-items: center;
@@ -90,25 +142,25 @@ $instanceId = 'rr-blog-list-' . uniqid();
             color: <?= $accentPrimary ?>;
             margin-bottom: 20px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-title {
             font-size: 2.5rem;
             font-weight: 700;
             color: <?= $textPrimary ?>;
             margin-bottom: 16px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-subtitle {
             font-size: 1.125rem;
             color: <?= $textSecondary ?>;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 24px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card {
             background: <?= $cardBg ?>;
             border: 1px solid <?= $borderLight ?>;
@@ -116,38 +168,46 @@ $instanceId = 'rr-blog-list-' . uniqid();
             overflow: hidden;
             transition: all 0.3s ease;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card:hover {
             border-color: rgba(234, 179, 8, 0.3);
             transform: translateY(-4px);
             box-shadow: 0 8px 30px rgba(234, 179, 8, 0.1);
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-thumb {
             height: 180px;
             background: linear-gradient(135deg, rgba(234, 179, 8, 0.08), rgba(220, 38, 38, 0.05));
             display: flex;
             align-items: center;
             justify-content: center;
+            overflow: hidden;
         }
-        
+
+        #<?= $instanceId ?> .rr-bl-card-thumb img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
         #<?= $instanceId ?> .rr-bl-card-thumb svg {
             width: 48px;
             height: 48px;
             fill: rgba(234, 179, 8, 0.3);
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-body {
             padding: 24px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-meta {
             display: flex;
             align-items: center;
             gap: 12px;
             margin-bottom: 12px;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-cat {
             padding: 4px 10px;
             background: rgba(234, 179, 8, 0.1);
@@ -156,12 +216,12 @@ $instanceId = 'rr-blog-list-' . uniqid();
             font-weight: 600;
             color: <?= $accentPrimary ?>;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-time {
             font-size: 0.78rem;
             color: <?= $textMuted ?>;
         }
-        
+
         #<?= $instanceId ?> .rr-bl-card-title {
             font-size: 1.1rem;
             font-weight: 700;
@@ -169,58 +229,84 @@ $instanceId = 'rr-blog-list-' . uniqid();
             margin-bottom: 8px;
             line-height: 1.4;
         }
-        
+
+        #<?= $instanceId ?> .rr-bl-card-title a {
+            color: inherit;
+            text-decoration: none;
+        }
+
         #<?= $instanceId ?> .rr-bl-card-desc {
             font-size: 0.88rem;
             color: <?= $textMuted ?>;
             line-height: 1.6;
         }
-        
+
+        #<?= $instanceId ?> .rr-bl-empty {
+            padding: 56px 32px;
+            text-align: center;
+            color: <?= $textSecondary ?>;
+            background: <?= $cardBg ?>;
+            border: 1px dashed <?= $borderLight ?>;
+            border-radius: 18px;
+        }
+
         @media (max-width: 992px) {
             #<?= $instanceId ?> .rr-bl-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
-        
+
         @media (max-width: 768px) {
             #<?= $instanceId ?> .rr-bl-title {
                 font-size: 1.85rem;
             }
         }
-        
+
         @media (max-width: 576px) {
             #<?= $instanceId ?> .rr-bl-grid {
                 grid-template-columns: 1fr;
             }
         }
     </style>
-    
+
     <div class="rr-bl-container">
         <div class="rr-bl-header">
             <div class="rr-bl-badge">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-                <?= htmlspecialchars($badge) ?>
+                <?= htmlspecialchars($badge, ENT_QUOTES, 'UTF-8') ?>
             </div>
-            <h2 class="rr-bl-title"><?= htmlspecialchars($title) ?></h2>
-            <p class="rr-bl-subtitle"><?= htmlspecialchars($description) ?></p>
+            <h2 class="rr-bl-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
+            <p class="rr-bl-subtitle"><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?></p>
         </div>
-        
+
+        <?php if ($posts === []): ?>
+        <div class="rr-bl-empty"><?= __('No blog posts have been published for this site yet.') ?></div>
+        <?php else: ?>
         <div class="rr-bl-grid">
             <?php foreach ($posts as $post): ?>
             <article class="rr-bl-card">
                 <div class="rr-bl-card-thumb">
+                    <?php if ($post['cover_image'] !== ''): ?>
+                    <img src="<?= htmlspecialchars($post['cover_image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8') ?>">
+                    <?php else: ?>
                     <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    <?php endif; ?>
                 </div>
                 <div class="rr-bl-card-body">
                     <div class="rr-bl-card-meta">
-                        <span class="rr-bl-card-cat"><?= htmlspecialchars($post['category']) ?></span>
-                        <span class="rr-bl-card-time"><?= htmlspecialchars($post['read_time']) ?></span>
+                        <span class="rr-bl-card-cat"><?= htmlspecialchars($post['category'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="rr-bl-card-time"><?= htmlspecialchars($post['read_time'], ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
-                    <h3 class="rr-bl-card-title"><?= htmlspecialchars($post['title']) ?></h3>
-                    <p class="rr-bl-card-desc"><?= htmlspecialchars($post['description']) ?></p>
+                    <h3 class="rr-bl-card-title">
+                        <a href="<?= htmlspecialchars($post['url'], ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8') ?>
+                        </a>
+                    </h3>
+                    <p class="rr-bl-card-desc"><?= htmlspecialchars($post['description'], ENT_QUOTES, 'UTF-8') ?></p>
                 </div>
             </article>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
     </div>
 </section>
