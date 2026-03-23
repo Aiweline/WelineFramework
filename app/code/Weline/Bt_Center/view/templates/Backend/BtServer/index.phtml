@@ -214,17 +214,69 @@ $deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
         });
     });
 
+    document.querySelectorAll('.weline-bt-delete-btn').forEach(function(btn) {
+        var replacement = btn.cloneNode(true);
+        btn.parentNode.replaceChild(replacement, btn);
+        replacement.addEventListener('click', function() {
+            var id = this.dataset.id;
+            if (typeof AdminConfirm !== 'undefined') {
+                AdminConfirm.show('<?= __('纭畾瑕佸垹闄よ繖涓湇鍔″櫒鍚楋紵') ?>', {
+                    title: '<?= __('纭鍒犻櫎') ?>',
+                    confirmText: '<?= __('纭畾鍒犻櫎') ?>',
+                    cancelText: '<?= __('鍙栨秷') ?>',
+                    type: 'danger'
+                }).then(function(confirmed) {
+                    if (confirmed) {
+                        deleteServer(id);
+                    }
+                });
+            } else {
+                deleteServer(id);
+            }
+        });
+    });
+
+    var stableDeleteConfirm = window.BackendConfirm || window.AdminConfirm;
+    var stableDeleteConfirmMessage = <?= json_encode(__('确定要删除这个服务器吗？'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var stableDeleteConfirmTitle = <?= json_encode(__('确认删除'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var stableDeleteConfirmText = <?= json_encode(__('确定删除'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var stableCancelText = <?= json_encode(__('取消'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+    document.querySelectorAll('.weline-bt-delete-btn').forEach(function(btn) {
+        var stableReplacement = btn.cloneNode(true);
+        btn.parentNode.replaceChild(stableReplacement, btn);
+        stableReplacement.addEventListener('click', function() {
+            var id = this.dataset.id;
+            if (stableDeleteConfirm && typeof stableDeleteConfirm.show === 'function') {
+                stableDeleteConfirm.show(stableDeleteConfirmMessage, {
+                    title: stableDeleteConfirmTitle,
+                    confirmText: stableDeleteConfirmText,
+                    cancelText: stableCancelText,
+                    type: 'danger'
+                }).then(function(confirmed) {
+                    if (confirmed) {
+                        deleteServer(id);
+                    }
+                });
+            } else {
+                deleteServer(id);
+            }
+        });
+    });
+
     function deleteServer(id) {
         var formData = new URLSearchParams();
         formData.append('id', id);
 
-        window.Weline.Api.request('<?= $deleteUrl ?>', {
+        fetch('<?= $deleteUrl ?>', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: formData
+            body: formData.toString()
         })
         .then(function(response) {
-            var resp = (response && response.data) || response;
+            return response.json();
+        })
+        .then(function(resp) {
             if (resp.success) {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.success(resp.message);
