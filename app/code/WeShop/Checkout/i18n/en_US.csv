@@ -4,6 +4,10 @@
 订单ID不能为空,订单ID不能为空
 订单不存在,订单不存在
 "Thursday, Oct 24","Thursday, Oct 24"
-购物车为空，无法创建订单,购物车为空，无法创建订单
-订单创建失败,订单创建失败
-"结算数据不完整：缺少 %{1}","结算数据不完整：缺少 %{1}"
+"Available shipping option: %{1}","Available shipping option: %{1}"
+"The cart is empty and cannot be checked out.","The cart is empty and cannot be checked out."
+"Order creation failed.","Order creation failed."
+"A customer account is required to place an order.","A customer account is required to place an order."
+"Shipping address information is required.","Shipping address information is required."
+"Shipping method is required.","Shipping method is required."
+"Payment method is required.","Payment method is required."
