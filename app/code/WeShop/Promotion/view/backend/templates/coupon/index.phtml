@@ -1,0 +1,58 @@
+<?php
+declare(strict_types=1);
+
+$summary = $this->getData('summary') ?? [];
+$recentCoupons = $this->getData('recent_coupons') ?? [];
+?>
+<div class="promotion-coupon-dashboard">
+    <h1><?= __($this->getData('title') ?? 'Coupon dashboard') ?></h1>
+    <div class="promotion-summary-grid">
+        <div class="promotion-summary-card">
+            <h3><?= __('Total coupons') ?></h3>
+            <strong><?= number_format($summary['total_count'] ?? 0) ?></strong>
+        </div>
+        <div class="promotion-summary-card">
+            <h3><?= __('Active coupons') ?></h3>
+            <strong><?= number_format($summary['active_count'] ?? 0) ?></strong>
+        </div>
+        <div class="promotion-summary-card">
+            <h3><?= __('Expired coupons') ?></h3>
+            <strong><?= number_format($summary['expired_count'] ?? 0) ?></strong>
+        </div>
+        <div class="promotion-summary-card">
+            <h3><?= __('Total redemption value') ?></h3>
+            <strong><?= number_format($summary['total_used'] ?? 0, 2) ?></strong>
+        </div>
+    </div>
+    <section class="promotion-recent">
+        <h2><?= __('Recent coupons') ?></h2>
+        <?php if (empty($recentCoupons)): ?>
+            <p><?= __('No coupons yet.') ?></p>
+        <?php else: ?>
+            <table>
+                <thead>
+                <tr>
+                    <th><?= __('Code') ?></th>
+                    <th><?= __('Type') ?></th>
+                    <th><?= __('Value') ?></th>
+                    <th><?= __('Start') ?></th>
+                    <th><?= __('End') ?></th>
+                    <th><?= __('Active') ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($recentCoupons as $coupon): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($coupon['code'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($coupon['discount_type'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($coupon['discount_value'] ?? '0') ?></td>
+                        <td><?= htmlspecialchars($coupon['start_date'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars($coupon['end_date'] ?? '-') ?></td>
+                        <td><?= (int)($coupon['is_active'] ?? 0) ? __('Yes') : __('No') ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </section>
+</div>
