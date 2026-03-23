@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * 建站智能体服务
+ * AI 建站工作台服务
  *
  * 根据描述执行一站式建站：购买域名、DNS 解析、HTTPS 申请、站点创建
  * 通过 onProgress 回调支持 SSE 实时推送进度

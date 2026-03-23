@@ -18,19 +18,19 @@ return [
         'Registrar' => [
             'path' => 'extends/module/Weline_Websites/Registrar',
             'type' => ['module'],
-            'description' => __('域名商适配器扩展点，用于接入第三方域名注册商 API。'),
+            'description' => __('域名注册商适配器扩展点，用于接入第三方域名注册商 API。'),
             'required' => true,
             'interface' => 'Weline\\Websites\\Api\\DomainRegistrarInterface',
             'multiple' => true,
             'details' => [
                 'module_mode' => [
                     'path' => 'extends/module/Weline_Websites/Registrar/{RegistrarName}.php',
-                    'description' => __('域名商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建 PHP 文件。'),
+                    'description' => __('域名注册商适配器实现类，在模块的 extends/module/Weline_Websites/Registrar/ 目录下创建 PHP 文件。'),
                     'example' => 'extends/module/Weline_Websites/Registrar/GoDaddy.php',
                 ],
                 'implementation' => [
                     'interface' => 'Weline\\Websites\\Api\\DomainRegistrarInterface',
-                    'description' => __('实现域名商元数据、可用性检查、购买与管理能力。'),
+                    'description' => __('实现注册商元数据、可用性检查、购买与管理能力。'),
                     'required_methods' => [
                         'getRegistrarCode' => __('返回适配器唯一标识'),
                         'getRegistrarName' => __('返回适配器显示名称'),
@@ -73,6 +73,9 @@ return [
                         'getDescription' => __('返回 provider 描述'),
                         'isEnabled' => __('返回 provider 是否启用'),
                         'getSortOrder' => __('返回 provider 排序值'),
+                    ],
+                    'optional_interfaces' => [
+                        'Weline\\Websites\\Api\\AiSiteBuilderWorkbenchProviderInterface' => __('可选实现，用于声明工作区 scope 初始化、handoff 和 tools。'),
                     ],
                 ],
                 'use_case' => [

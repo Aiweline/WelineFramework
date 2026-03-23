@@ -1,7 +1,7 @@
 // app/code/Weline/Theme/test/e2e/frontend/deferred-immediate-load.spec.js
 // 测试 Weline.declare 的延迟立即加载功能（data-load-order="last" 和 options.loadOrder: 'last'）
 
-const { test, expect } = require('@playwright/test');
+const { test, expect } = require('../../../../../../../tests/e2e/framework');
 
 test.describe('Deferred immediate load behavior', () => {
     test('延迟立即加载：带 data-load-order="last" 的模块应在 DOMContentLoaded 后加载', async ({ page }) => {
