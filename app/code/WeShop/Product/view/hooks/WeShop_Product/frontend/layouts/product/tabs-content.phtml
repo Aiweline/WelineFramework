@@ -1,490 +1,199 @@
 <?php
 /**
- * WeShop Product模块 - 产品详情标签区域Hook
- * 
- * 在产品详情页标签区域渲染产品描述、规格、评价、问答等内容
- * Hook名称：WeShop_Product::frontend::layouts::product::tabs-content
- * 
- * @hook-priority 100      Hook优先级：100
- * @hook-sort-order 1      Hook排序顺序：1
- * @hook-solo false        Hook独享：false（不独占）
+ * Product detail tabs hook for default-theme product layout variants.
  */
 
-/** @var \Weline\Framework\View\Template $this */
+$product = (array) ($this->getData('product') ?? []);
+$reviews = (array) ($this->getData('reviews') ?? []);
+$qa = (array) ($this->getData('qa') ?? []);
+$specifications = (array) ($product['specifications'] ?? []);
+$description = (string) ($product['description'] ?? '');
+$productId = (int) ($product['product_id'] ?? 0);
 
-// 获取产品数据（由控制器传递）
-$product = $this->getData('product');
-$attributes = $this->getData('attributes') ?? [];
-$reviews = $this->getData('reviews') ?? [];
-$qa = $this->getData('qa') ?? [];
-
-// 如果没有产品数据，不渲染任何内容（让fallback显示）
-if (empty($product) || empty($product['product_id'])) {
+if ($productId <= 0) {
     return;
 }
 
-// 获取产品详情
-$description = $product['description'] ?? '';
-$productId = $product['product_id'] ?? 0;
-
-// 构建标签页数据
 $tabs = [
     [
         'id' => 'description',
-        'label' => __('商品详情'),
+        'label' => (string) __('Product Details'),
         'active' => true,
     ],
     [
         'id' => 'specifications',
-        'label' => __('规格参数'),
+        'label' => (string) __('Specifications'),
         'active' => false,
     ],
     [
         'id' => 'reviews',
-        'label' => __('用户评价') . (!empty($reviews) ? ' (' . count($reviews) . ')' : ''),
+        'label' => (string) __('Reviews') . (!empty($reviews) ? ' (' . count($reviews) . ')' : ''),
         'active' => false,
     ],
     [
         'id' => 'qa',
-        'label' => __('问答') . (!empty($qa) ? ' (' . count($qa) . ')' : ''),
+        'label' => (string) __('Q&A') . (!empty($qa) ? ' (' . count($qa) . ')' : ''),
         'active' => false,
     ],
 ];
 ?>
 
-<div class="product-tabs-wrapper" data-product-id="<?= (int)$productId ?>">
-    <!-- 标签导航 -->
-    <div class="tabs-nav">
-        <?php foreach ($tabs as $index => $tab): ?>
-        <button type="button" 
-                class="tab-btn <?= $tab['active'] ? 'active' : '' ?>" 
-                data-tab="<?= htmlspecialchars($tab['id']) ?>">
-            <?= htmlspecialchars($tab['label']) ?>
-        </button>
+<div class="weshop-product-tabs" data-product-id="<?= $productId ?>">
+    <div class="weshop-product-tabs-nav" role="tablist" aria-label="<?= htmlspecialchars((string) __('Product sections'), ENT_QUOTES) ?>">
+        <?php foreach ($tabs as $tab): ?>
+            <button
+                type="button"
+                class="weshop-product-tab-button<?= !empty($tab['active']) ? ' is-active' : '' ?>"
+                data-tab="<?= htmlspecialchars((string) $tab['id'], ENT_QUOTES) ?>"
+            >
+                <?= htmlspecialchars((string) $tab['label'], ENT_QUOTES) ?>
+            </button>
         <?php endforeach; ?>
     </div>
-    
-    <!-- 标签内容 -->
-    <div class="tabs-content">
-        <!-- 商品详情 -->
-        <div class="tab-pane active" id="tab-description">
-            <?php if (!empty($description)): ?>
-            <div class="product-description-content">
-                <?= $description ?>
-            </div>
+
+    <div class="weshop-product-tab-panels">
+        <section class="weshop-product-tab-panel is-active" id="tab-description">
+            <?php if ($description !== ''): ?>
+                <div class="weshop-product-description">
+                    <?= $description ?>
+                </div>
             <?php else: ?>
-            <div class="tab-empty">
-                <span class="empty-icon">📝</span>
-                <span class="empty-text"><?= __('暂无商品详情') ?></span>
-            </div>
+                <div class="weshop-product-tab-empty"><?= __('No product details are available yet.') ?></div>
             <?php endif; ?>
-        </div>
-        
-        <!-- 规格参数 -->
-        <div class="tab-pane" id="tab-specifications">
-            <?php if (!empty($attributes)): ?>
-            <div class="specifications-content">
-                <table class="specs-table">
+        </section>
+
+        <section class="weshop-product-tab-panel" id="tab-specifications">
+            <?php if ($specifications): ?>
+                <table class="weshop-product-specifications">
                     <tbody>
-                        <?php foreach ($attributes as $attr): ?>
+                    <?php foreach ($specifications as $specification): ?>
                         <tr>
-                            <th><?= htmlspecialchars($attr['label'] ?? $attr['code'] ?? '') ?></th>
-                            <td><?= htmlspecialchars($attr['value'] ?? '') ?></td>
+                            <th><?= htmlspecialchars((string) ($specification['label'] ?? ''), ENT_QUOTES) ?></th>
+                            <td><?= htmlspecialchars((string) ($specification['value'] ?? ''), ENT_QUOTES) ?></td>
                         </tr>
-                        <?php endforeach; ?>
+                    <?php endforeach; ?>
                     </tbody>
                 </table>
-            </div>
             <?php else: ?>
-            <div class="tab-empty">
-                <span class="empty-icon">📋</span>
-                <span class="empty-text"><?= __('暂无规格参数') ?></span>
-            </div>
+                <div class="weshop-product-tab-empty"><?= __('No specifications are available yet.') ?></div>
             <?php endif; ?>
-        </div>
-        
-        <!-- 用户评价 -->
-        <div class="tab-pane" id="tab-reviews">
-            <?php if (!empty($reviews)): ?>
-            <div class="reviews-content">
-                <div class="reviews-summary">
-                    <div class="rating-average">
-                        <span class="rating-score">4.8</span>
-                        <span class="rating-stars">★★★★★</span>
-                        <span class="rating-count"><?= count($reviews) ?> <?= __('条评价') ?></span>
-                    </div>
-                </div>
-                <div class="reviews-list">
-                    <?php foreach ($reviews as $review): ?>
-                    <div class="review-item">
-                        <div class="review-header">
-                            <span class="reviewer-name"><?= htmlspecialchars($review['user_name'] ?? __('匿名用户')) ?></span>
-                            <span class="review-date"><?= htmlspecialchars($review['created_at'] ?? '') ?></span>
-                        </div>
-                        <div class="review-rating">
-                            <?php for ($i = 1; $i <= 5; $i++): ?>
-                            <span class="star <?= $i <= ($review['rating'] ?? 5) ? 'filled' : '' ?>">★</span>
-                            <?php endfor; ?>
-                        </div>
-                        <div class="review-content"><?= htmlspecialchars($review['content'] ?? '') ?></div>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php else: ?>
-            <div class="tab-empty">
-                <span class="empty-icon">💬</span>
-                <span class="empty-text"><?= __('暂无用户评价') ?></span>
-                <button type="button" class="btn-write-review" data-product-id="<?= (int)$productId ?>">
-                    <?= __('写评价') ?>
-                </button>
-            </div>
-            <?php endif; ?>
-        </div>
-        
-        <!-- 问答 -->
-        <div class="tab-pane" id="tab-qa">
-            <?php if (!empty($qa)): ?>
-            <div class="qa-content">
-                <div class="qa-list">
-                    <?php foreach ($qa as $item): ?>
-                    <div class="qa-item">
-                        <div class="question">
-                            <span class="qa-icon">Q</span>
-                            <span class="qa-text"><?= htmlspecialchars($item['question'] ?? '') ?></span>
-                        </div>
-                        <?php if (!empty($item['answer'])): ?>
-                        <div class="answer">
-                            <span class="qa-icon">A</span>
-                            <span class="qa-text"><?= htmlspecialchars($item['answer'] ?? '') ?></span>
-                        </div>
-                        <?php endif; ?>
-                    </div>
-                    <?php endforeach; ?>
-                </div>
-            </div>
-            <?php else: ?>
-            <div class="tab-empty">
-                <span class="empty-icon">❓</span>
-                <span class="empty-text"><?= __('暂无问答') ?></span>
-                <button type="button" class="btn-ask-question" data-product-id="<?= (int)$productId ?>">
-                    <?= __('提问') ?>
-                </button>
-            </div>
-            <?php endif; ?>
-        </div>
+        </section>
+
+        <section class="weshop-product-tab-panel" id="tab-reviews">
+            <w:hook name="WeShop_Review::frontend::layouts::product-reviews::content"/>
+        </section>
+
+        <section class="weshop-product-tab-panel" id="tab-qa">
+            <w:hook name="WeShop_QA::frontend::layouts::product-questions::content"/>
+        </section>
     </div>
 </div>
 
 <style>
-/* ========================================
-   产品详情标签区域样式
-   ======================================== */
-.product-tabs-wrapper {
-    width: 100%;
-}
-
-/* 标签导航 */
-.tabs-nav {
+.weshop-product-tabs-nav {
     display: flex;
-    border-bottom: 2px solid var(--color-border-light, #e5e7eb);
-    gap: 0;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+    padding-bottom: 0.75rem;
 }
 
-.tab-btn {
-    padding: 1rem 1.5rem;
+.weshop-product-tab-button {
     border: none;
-    background: none;
-    font-size: 0.95rem;
-    font-weight: 500;
+    background: transparent;
     color: var(--color-text-secondary, #6b7280);
     cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.5rem 0.25rem;
     position: relative;
-    white-space: nowrap;
-    transition: color 0.2s;
 }
 
-.tab-btn:hover {
-    color: var(--color-text-primary, #111827);
+.weshop-product-tab-button.is-active {
+    color: var(--color-accent, #2563eb);
 }
 
-.tab-btn.active {
-    color: var(--color-accent, #3b82f6);
-}
-
-.tab-btn.active::after {
+.weshop-product-tab-button.is-active::after {
+    background: var(--color-accent, #2563eb);
+    bottom: -0.8rem;
     content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    right: 0;
     height: 2px;
-    background: var(--color-accent, #3b82f6);
+    left: 0;
+    position: absolute;
+    right: 0;
 }
 
-/* 标签内容 */
-.tabs-content {
-    padding: 1.5rem 0;
+.weshop-product-tab-panels {
+    padding-top: 1.5rem;
 }
 
-.tab-pane {
+.weshop-product-tab-panel {
     display: none;
 }
 
-.tab-pane.active {
+.weshop-product-tab-panel.is-active {
     display: block;
 }
 
-/* 商品详情内容 */
-.product-description-content {
-    line-height: 1.8;
+.weshop-product-description {
     color: var(--color-text-primary, #111827);
+    line-height: 1.7;
 }
 
-.product-description-content img {
-    max-width: 100%;
+.weshop-product-description img {
     height: auto;
+    max-width: 100%;
 }
 
-/* 规格参数表格 */
-.specs-table {
-    width: 100%;
+.weshop-product-specifications {
     border-collapse: collapse;
+    width: 100%;
 }
 
-.specs-table th,
-.specs-table td {
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
+.weshop-product-specifications th,
+.weshop-product-specifications td {
+    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+    font-size: 0.9rem;
+    padding: 0.85rem 1rem;
     text-align: left;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
 }
 
-.specs-table th {
-    width: 30%;
-    color: var(--color-text-muted, #6c757d);
-    font-weight: 500;
-    background: var(--color-bg-secondary, #f8f9fa);
-}
-
-.specs-table td {
-    color: var(--color-text-primary, #111827);
-}
-
-.specs-table tr:nth-child(even) th {
-    background: var(--color-bg-primary, #fff);
-}
-
-/* 评价区域 */
-.reviews-summary {
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
-}
-
-.rating-average {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.rating-score {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--color-text-primary, #111827);
-}
-
-.rating-stars {
-    font-size: 1.25rem;
-    color: #f59e0b;
-}
-
-.rating-count {
-    font-size: 0.875rem;
-    color: var(--color-text-muted, #6c757d);
-}
-
-.reviews-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.review-item {
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
-}
-
-.review-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 0.5rem;
-}
-
-.reviewer-name {
-    font-weight: 500;
-    color: var(--color-text-primary, #111827);
-}
-
-.review-date {
-    font-size: 0.8rem;
-    color: var(--color-text-muted, #9ca3af);
-}
-
-.review-rating {
-    margin-bottom: 0.5rem;
-}
-
-.review-rating .star {
-    color: #d1d5db;
-}
-
-.review-rating .star.filled {
-    color: #f59e0b;
-}
-
-.review-content {
-    font-size: 0.9rem;
-    line-height: 1.6;
+.weshop-product-specifications th {
     color: var(--color-text-secondary, #6b7280);
-}
-
-/* 问答区域 */
-.qa-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem;
-}
-
-.qa-item {
-    padding-bottom: 1.5rem;
-    border-bottom: 1px solid var(--color-border-light, #e5e7eb);
-}
-
-.question,
-.answer {
-    display: flex;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
-.qa-icon {
-    flex-shrink: 0;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
     font-weight: 600;
+    width: 30%;
 }
 
-.question .qa-icon {
-    background: #fef3c7;
-    color: #b45309;
-}
-
-.answer .qa-icon {
-    background: #d1fae5;
-    color: #047857;
-}
-
-.qa-text {
-    flex: 1;
-    font-size: 0.9rem;
-    line-height: 1.6;
-    color: var(--color-text-primary, #111827);
-}
-
-.answer .qa-text {
+.weshop-product-tab-empty {
     color: var(--color-text-secondary, #6b7280);
-}
-
-/* 空状态 */
-.tab-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 3rem;
-    text-align: center;
-    color: var(--color-text-muted, #9ca3af);
-}
-
-.empty-icon {
-    font-size: 3rem;
-    margin-bottom: 0.75rem;
-}
-
-.empty-text {
     font-size: 0.95rem;
-    margin-bottom: 1rem;
-}
-
-.btn-write-review,
-.btn-ask-question {
-    padding: 0.5rem 1.25rem;
-    border: 1px solid var(--color-accent, #3b82f6);
-    background: transparent;
-    color: var(--color-accent, #3b82f6);
-    border-radius: 6px;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.btn-write-review:hover,
-.btn-ask-question:hover {
-    background: var(--color-accent, #3b82f6);
-    color: #fff;
-}
-
-/* 响应式设计 */
-@media (max-width: 768px) {
-    .tabs-nav {
-        gap: 0;
-    }
-    
-    .tab-btn {
-        padding: 0.75rem 1rem;
-        font-size: 0.875rem;
-    }
-    
-    .specs-table th {
-        width: 40%;
-    }
-    
-    .review-header {
-        flex-direction: column;
-        gap: 0.25rem;
-    }
+    padding: 1rem 0;
 }
 </style>
 
 <script>
-(function() {
-    // 标签切换
-    document.querySelectorAll('.tab-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var tabId = this.dataset.tab;
-            var wrapper = this.closest('.product-tabs-wrapper');
-            
-            // 更新按钮状态
-            wrapper.querySelectorAll('.tab-btn').forEach(function(b) {
-                b.classList.remove('active');
+(function () {
+    document.querySelectorAll('.weshop-product-tabs').forEach(function (wrapper) {
+        var buttons = wrapper.querySelectorAll('.weshop-product-tab-button');
+        var panels = wrapper.querySelectorAll('.weshop-product-tab-panel');
+
+        buttons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var tab = button.dataset.tab;
+
+                buttons.forEach(function (item) {
+                    item.classList.remove('is-active');
+                });
+                panels.forEach(function (panel) {
+                    panel.classList.remove('is-active');
+                });
+
+                button.classList.add('is-active');
+                var panel = wrapper.querySelector('#tab-' + tab);
+                if (panel) {
+                    panel.classList.add('is-active');
+                }
             });
-            this.classList.add('active');
-            
-            // 更新内容显示
-            wrapper.querySelectorAll('.tab-pane').forEach(function(pane) {
-                pane.classList.remove('active');
-            });
-            var targetPane = wrapper.querySelector('#tab-' + tabId);
-            if (targetPane) {
-                targetPane.classList.add('active');
-            }
         });
     });
 })();
