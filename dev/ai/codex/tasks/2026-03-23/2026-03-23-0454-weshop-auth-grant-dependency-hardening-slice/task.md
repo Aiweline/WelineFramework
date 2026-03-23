@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0454-weshop-auth-grant-dependency-hardening-slice
 - Started: 2026-03-23 04:54
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: continue after commit 353577ec
 
@@ -41,3 +41,4 @@
 ## Resume
 
 - Read [plan.md](./plan.md), [progress.md](./progress.md), and [result.md](./result.md).
+- Completed in commit `6d098b75`.
