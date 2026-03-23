@@ -11,7 +11,7 @@
         <menu source="Weline_Bt_Center::bt_server"
               name="bt_server"
               title="服务器管理"
-              action="bt_center/backend/bt_server/index"
+              action="*/backend/bt-server"
               icon="mdi mdi-server"
               order="10"/>
     </menu>
