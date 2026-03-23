@@ -92,7 +92,11 @@ $this->assign('title', $title);
                             <!-- 子分类筛选 -->
                             <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
                             <!-- 不要修改，兼容配置和部件两种方式 -->
-                            {{meta.filter_sidebar ?: filter_sidebar}}
+                            <if condition="meta.filter_sidebar">
+                                {{meta.filter_sidebar}}
+                                <elseif condition="filter_sidebar"/>
+                                {{filter_sidebar}}
+                            </if>
                             <w:widget type="sidebar" name="category-filters"/>
                             <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
                         </div>
@@ -109,8 +113,10 @@ $this->assign('title', $title);
                                 position="content"
                                 class="category-grid-container">
                             <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
-                                <if condition="meta.content || content">
-                                    {{meta.content ?: content}}
+                                <if condition="meta.content">
+                                    {{meta.content}}
+                                    <elseif condition="content"/>
+                                    {{content}}
                                 <else/>
                                     <div class="slot-placeholder" data-placeholder="category-products">
                                         <span class="placeholder-icon">📦</span>
