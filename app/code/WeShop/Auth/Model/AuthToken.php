@@ -27,6 +27,8 @@ class AuthToken extends Model
     public const schema_fields_ACTOR_TYPE = 'actor_type';
     #[Col(type: 'int', nullable: false, comment: 'Actor id')]
     public const schema_fields_ACTOR_ID = 'actor_id';
+    #[Col(type: 'varchar', length: 32, nullable: false, default: 'api', comment: 'Actor area')]
+    public const schema_fields_AREA = 'area';
     #[Col(type: 'varchar', length: 32, nullable: false, comment: 'Token type')]
     public const schema_fields_TOKEN_TYPE = 'token_type';
     #[Col(type: 'varchar', length: 128, nullable: false, comment: 'Token')]
