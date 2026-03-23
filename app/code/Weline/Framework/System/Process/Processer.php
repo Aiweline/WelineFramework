@@ -2038,6 +2038,7 @@ class Processer
                 'process_name' => $processName,
                 'cwd' => BP,
                 'enable_log' => $enableLog,
+                'block' => $block,
                 'foreground' => $foreground,
                 'foreground_script' => $foregroundScript,
             ];
@@ -2159,10 +2160,7 @@ class Processer
         }
 
         $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
-            \array_values(\array_filter(
-                $launchItems,
-                static fn (array $item): bool => (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
-            )),
+            self::collectBlockingLaunchItemsNeedingPidResolution($launchItems, $pidMap),
             5.0
         );
 
@@ -2194,6 +2192,24 @@ class Processer
     {
         unset($foreground);
         return $block;
+    }
+
+    /**
+     * Non-blocking batch launches should not stall on best-effort managed PID
+     * resolution. They can continue and let later IPC register/ready updates
+     * fill in runtime state.
+     *
+     * @param array<int, array{key: string, block?: bool}> $launchItems
+     * @param array<string, int> $pidMap
+     * @return array<int, array<string, mixed>>
+     */
+    private static function collectBlockingLaunchItemsNeedingPidResolution(array $launchItems, array $pidMap): array
+    {
+        return \array_values(\array_filter(
+            $launchItems,
+            static fn (array $item): bool => (bool) ($item['block'] ?? false)
+                && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
+        ));
     }
 
     /**
