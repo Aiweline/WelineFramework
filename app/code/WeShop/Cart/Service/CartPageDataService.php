@@ -1,0 +1,130 @@
+<?php
+
+declare(strict_types=1);
+
+namespace WeShop\Cart\Service;
+
+use WeShop\Cart\Model\Cart;
+use WeShop\Product\Service\ProductRecommendationService;
+
+class CartPageDataService
+{
+    public function __construct(
+        private readonly CartService $cartService,
+        private readonly ProductRecommendationService $productRecommendationService
+    ) {
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function build(int $customerId): array
+    {
+        $cartItems = $this->mapCartItems($this->cartService->getCartItems($customerId));
+        $totals = $this->cartService->calculateTotals($customerId);
+        $cartCount = array_sum(array_map(static fn(array $item): int => (int) ($item['qty'] ?? 0), $cartItems));
+        $summary = [
+            'subtotal' => (float) ($totals['subtotal'] ?? 0),
+            'shipping' => (float) ($totals['shipping'] ?? 0),
+            'discount' => (float) ($totals['discount'] ?? 0),
+            'tax' => (float) ($totals['tax'] ?? 0),
+            'grand_total' => (float) ($totals['total'] ?? 0),
+        ];
+        $recommendations = $this->productRecommendationService->getRecommendations(
+            array_column($cartItems, 'product_id'),
+            6
+        );
+
+        return [
+            'cart_items' => $cartItems,
+            'cart_count' => $cartCount,
+            'item_count' => $cartCount,
+            'cart_total' => $summary['subtotal'],
+            'shipping' => $summary['shipping'],
+            'tax' => $summary['tax'],
+            'cart_summary' => $summary,
+            'recommendations' => $recommendations,
+            'related_products' => $recommendations,
+        ];
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapCartItems(array $items): array
+    {
+        $mapped = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $product = is_array($item['product'] ?? null) ? $item['product'] : [];
+            $qty = (int) ($item[Cart::schema_fields_QUANTITY] ?? $item['qty'] ?? 1);
+            $price = (float) ($item[Cart::schema_fields_PRICE] ?? $item['price'] ?? 0);
+            $originalPrice = (float) ($item['original_price'] ?? $price);
+            $stockQty = (int) ($item['stock_qty'] ?? $product['stock'] ?? 0);
+            $stockStatus = (string) ($item['stock_status'] ?? ($stockQty > 0 ? 'in_stock' : 'out_of_stock'));
+
+            $mapped[] = [
+                'item_id' => (int) ($item[Cart::schema_fields_ID] ?? $item['item_id'] ?? 0),
+                'product_id' => (int) ($item[Cart::schema_fields_PRODUCT_ID] ?? $item['product_id'] ?? 0),
+                'name' => (string) ($product['name'] ?? $item['product_name'] ?? $item['name'] ?? ''),
+                'image' => (string) ($product['image'] ?? $item['product_image'] ?? $item['image'] ?? ''),
+                'price' => $price,
+                'original_price' => $originalPrice,
+                'qty' => $qty,
+                'row_total' => $price * $qty,
+                'stock_status' => $stockStatus,
+                'stock_qty' => $stockQty,
+                'in_stock' => $stockStatus === 'in_stock' || $stockQty > 0,
+                'options' => $this->normalizeOptions($item['options'] ?? $item['option'] ?? null),
+                'seller' => (string) ($item['seller'] ?? $product['seller'] ?? ''),
+            ];
+        }
+
+        return $mapped;
+    }
+
+    /**
+     * @return array<int, array<string, string>>
+     */
+    protected function normalizeOptions(mixed $rawOptions): array
+    {
+        if (is_array($rawOptions)) {
+            $isAssoc = array_keys($rawOptions) !== range(0, count($rawOptions) - 1);
+            if ($isAssoc) {
+                $options = [];
+                foreach ($rawOptions as $label => $value) {
+                    $options[] = [
+                        'label' => (string) $label,
+                        'value' => is_scalar($value) ? (string) $value : '',
+                    ];
+                }
+
+                return $options;
+            }
+
+            return array_values(array_filter(array_map(static function (mixed $option): ?array {
+                if (is_array($option) && isset($option['label'], $option['value'])) {
+                    return [
+                        'label' => (string) $option['label'],
+                        'value' => (string) $option['value'],
+                    ];
+                }
+
+                return null;
+            }, $rawOptions)));
+        }
+
+        if (is_string($rawOptions) && trim($rawOptions) !== '') {
+            return [[
+                'label' => (string) __('Option'),
+                'value' => trim($rawOptions),
+            ]];
+        }
+
+        return [];
+    }
+}
