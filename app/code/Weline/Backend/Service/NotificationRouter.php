@@ -123,6 +123,7 @@ class NotificationRouter
             $channelCode = $channel['channel_code'] ?? '';
             $minType = $channel['min_type'] ?? 'info';
             $subscribedTopics = json_decode($channel['subscribed_topics'] ?? '[]', true) ?: [];
+            $channelConfig = $this->normalizeConfig($channel['channel_config'] ?? []);
 
             if (!empty($subscribedTopics) && !in_array($topicCode, $subscribedTopics, true)) {
                 continue;
@@ -163,7 +164,8 @@ class NotificationRouter
                     $notificationWithContact['recipient_name'] = $user['username'] ?? '';
 
                     try {
-                        $success = $adapter->send($notificationWithContact, $contactItem['channel_config']);
+                        $mergedConfig = array_replace($channelConfig, $contactItem['channel_config']);
+                        $success = $adapter->send($notificationWithContact, $mergedConfig);
                         if ($success && !in_array($channelCode, $notifiedChannels, true)) {
                             $notifiedChannels[] = $channelCode;
                         }
@@ -195,6 +197,16 @@ class NotificationRouter
     private function getChannelAdapter(string $channelCode): ?ChannelAdapterInterface
     {
         return $this->adapterCollector->getAdapterByCode($channelCode);
+    }
+
+    private function normalizeConfig(array|string $config): array
+    {
+        if (is_array($config)) {
+            return $config;
+        }
+
+        $decoded = json_decode((string) $config, true);
+        return is_array($decoded) ? $decoded : [];
     }
 
     /**
