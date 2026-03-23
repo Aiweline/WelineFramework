@@ -1891,8 +1891,9 @@ class ServiceOrchestrator
     private function verifyAndKillRemainingProcesses(): void
     {
         $allInstances = $this->registry->getAllInstances();
-        $runningPids = [];
         $pidToInstance = [];
+        $connectedVerificationPids = [];
+        $immediateForceKillPids = [];
 
         foreach ($allInstances as $instance) {
             if ($instance->pid <= 0) {
@@ -1900,12 +1901,25 @@ class ServiceOrchestrator
             }
 
             $pidToInstance[$instance->pid] = $instance;
-            if ($this->isChildProcessRunning($instance->pid)) {
-                $runningPids[] = $instance->pid;
-            } elseif ($instance->ipcClientId !== null) {
-                $this->closeStopFlowClient($instance->ipcClientId);
+        }
+
+        $initialRunningStatus = $this->batchCheckStopFlowRunning(\array_keys($pidToInstance));
+        foreach ($pidToInstance as $pid => $instance) {
+            if (!($initialRunningStatus[$pid] ?? false)) {
+                if ($instance->ipcClientId !== null) {
+                    $this->closeStopFlowClient($instance->ipcClientId);
+                }
+                continue;
+            }
+
+            if ($this->shouldWaitForStopFlowExitVerification($instance)) {
+                $connectedVerificationPids[] = $pid;
+            } else {
+                $immediateForceKillPids[] = $pid;
             }
         }
+
+        $runningPids = $connectedVerificationPids;
 
         $verificationTimeout = $this->getStopVerificationTimeout();
         if (!empty($runningPids) && $verificationTimeout > 0.0) {
@@ -1945,6 +1959,10 @@ class ServiceOrchestrator
 
                 $this->sleepStopFlow(100000);
             }
+        }
+
+        if ($immediateForceKillPids !== []) {
+            $runningPids = \array_values(\array_unique(\array_merge($runningPids, $immediateForceKillPids)));
         }
 
         $runningPidSet = [];
