@@ -1,6 +1,6 @@
 ---
 name: skill-trigger-reminders
-description: 开发技能映射入口。根据任务关键词匹配 `dev/ai/skills` 中的目标技能；命中后只读取对应技能的 `SKILL.md` 或必要 references，不批量读取全部技能。适用于计划、测试、事件、WLS、Session、前端、ACL、查询、配置、路由、SSE、PageBuilder 等开发场景。
+description: 开发技能映射入口。根据任务关键词匹配 `dev/ai/skills` 中的目标技能；命中后只读取对应技能的 `SKILL.md` 或必要 references，不批量读取全部技能。适用于计划、Codex 任务规范、测试、事件、WLS、Session、前端、ACL、查询、配置、路由、SSE、PageBuilder 等开发场景。
 globs: []
 alwaysApply: false
 ---
@@ -12,6 +12,7 @@ alwaysApply: false
 - 需要先判断应该读取哪个开发技能
 - 想压缩上下文，只在命中后再读取目标技能正文
 - 需要统一维护 `dev/ai/skills` 的开发技能映射
+- 需要处理 `dev/ai/codex`、`ACTIVE.md`、任务状态、任务进度、任务工作目录恢复
 
 ## 使用流程
 
