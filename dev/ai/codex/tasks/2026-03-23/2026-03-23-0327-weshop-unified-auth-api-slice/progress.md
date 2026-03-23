@@ -16,3 +16,4 @@
   - `php bin/w setup:upgrade --yes -m WeShop_Auth`
     - module upgrade succeeded
     - non-blocking repo warnings remain: ACL orphan cleanup sync warning and unrelated empty i18n CSV warnings in other modules
+- 2026-03-23 11:45 Committed the slice as `460dd98a feat(weshop): preserve auth token actor area`.
