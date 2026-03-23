@@ -49,12 +49,30 @@ class Auth extends FrontendRestController
 
     public function postLogin(): string
     {
-        return $this->postToken();
+        try {
+            return (string) $this->success(
+                __('Authentication succeeded.'),
+                $this->authGrantService->issuePasswordToken(
+                    $this->readArea(),
+                    $this->readUsername(),
+                    $this->readPassword()
+                )
+            );
+        } catch (\Throwable $throwable) {
+            return (string) $this->exception($throwable, __('Authentication failed.'));
+        }
     }
 
     public function postRefresh(): string
     {
-        return $this->postToken();
+        try {
+            return (string) $this->success(
+                __('Authentication succeeded.'),
+                $this->authGrantService->refreshToken($this->readRefreshToken())
+            );
+        } catch (\Throwable $throwable) {
+            return (string) $this->exception($throwable, __('Authentication failed.'));
+        }
     }
 
     public function postExchange(): string
@@ -123,5 +141,31 @@ class Auth extends FrontendRestController
             ?: $this->request->getPost('token')
             ?: ''
         );
+    }
+
+    private function readArea(): string
+    {
+        return strtolower((string) ($this->request->getBodyParam('area') ?? $this->request->getPost('area') ?? 'frontend'));
+    }
+
+    private function readUsername(): string
+    {
+        return (string) (
+            $this->request->getBodyParam('username')
+            ?? $this->request->getBodyParam('email')
+            ?? $this->request->getPost('username')
+            ?? $this->request->getPost('email')
+            ?? ''
+        );
+    }
+
+    private function readPassword(): string
+    {
+        return (string) ($this->request->getBodyParam('password') ?? $this->request->getPost('password') ?? '');
+    }
+
+    private function readRefreshToken(): string
+    {
+        return (string) ($this->request->getBodyParam('refresh_token') ?? $this->request->getPost('refresh_token') ?? '');
     }
 }
