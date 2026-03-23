@@ -144,6 +144,86 @@ class WeShopAuthTokenServiceTest extends TestCase
         $this->assertSame($accessData[AuthToken::schema_fields_TOKEN] ?? null, $tokens['access_token']);
     }
 
+    public function testRevokeByAccessTokenRemovesActorTokenPair(): void
+    {
+        $lookupRecord = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['where', 'find', 'fetch'])
+            ->onlyMethods(['getId', 'getData'])
+            ->getMock();
+        $lookupRecord->method('where')->willReturnSelf();
+        $lookupRecord->method('find')->willReturnSelf();
+        $lookupRecord->method('fetch')->willReturnSelf();
+        $lookupRecord->method('getId')->willReturn(88);
+        $lookupRecord->method('getData')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                AuthToken::schema_fields_ACTOR_TYPE => ActorContext::ACTOR_CUSTOMER,
+                AuthToken::schema_fields_ACTOR_ID => 88,
+                default => null,
+            };
+        });
+
+        $deleteRecord = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['where', 'delete', 'fetch'])
+            ->getMock();
+        $deleteRecord->method('where')->willReturnSelf();
+        $deleteRecord->expects($this->once())->method('delete')->willReturnSelf();
+        $deleteRecord->expects($this->once())->method('fetch')->willReturnSelf();
+
+        $authToken = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['reset'])
+            ->getMock();
+        $authToken->expects($this->exactly(2))
+            ->method('reset')
+            ->willReturnOnConsecutiveCalls($lookupRecord, $deleteRecord);
+
+        $service = new WeShopAuthTokenService($authToken);
+
+        $this->assertTrue($service->revoke('access-token-88'));
+    }
+
+    public function testRevokeByRefreshTokenAlsoRemovesActorTokenPair(): void
+    {
+        $lookupRecord = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['where', 'find', 'fetch'])
+            ->onlyMethods(['getId', 'getData'])
+            ->getMock();
+        $lookupRecord->method('where')->willReturnSelf();
+        $lookupRecord->method('find')->willReturnSelf();
+        $lookupRecord->method('fetch')->willReturnSelf();
+        $lookupRecord->method('getId')->willReturn(41);
+        $lookupRecord->method('getData')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                AuthToken::schema_fields_ACTOR_TYPE => ActorContext::ACTOR_BACKEND,
+                AuthToken::schema_fields_ACTOR_ID => 41,
+                default => null,
+            };
+        });
+
+        $deleteRecord = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['where', 'delete', 'fetch'])
+            ->getMock();
+        $deleteRecord->method('where')->willReturnSelf();
+        $deleteRecord->expects($this->once())->method('delete')->willReturnSelf();
+        $deleteRecord->expects($this->once())->method('fetch')->willReturnSelf();
+
+        $authToken = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['reset'])
+            ->getMock();
+        $authToken->expects($this->exactly(2))
+            ->method('reset')
+            ->willReturnOnConsecutiveCalls($lookupRecord, $deleteRecord);
+
+        $service = new WeShopAuthTokenService($authToken);
+
+        $this->assertTrue($service->revoke('refresh-token-41'));
+    }
+
     private function createMutableRecordMock(array &$data): AuthToken
     {
         $record = $this->getMockBuilder(AuthToken::class)
