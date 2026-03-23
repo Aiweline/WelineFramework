@@ -8,23 +8,24 @@ use Weline\Bt_Center\Model\BtServer;
 /** @var BtServer|null $server */
 $server = $server ?? null;
 $platformOptions = $platformOptions ?? [];
+$hasServer = $server && $server->getId();
 
-$id = $server ? (int) $server->getId() : 0;
-$name = $server ? (string) $server->getData(BtServer::schema_fields_NAME) : '';
-$platform = $server ? (string) $server->getData(BtServer::schema_fields_PLATFORM) : BtServer::PLATFORM_AWS;
-$externalUrl = $server ? (string) $server->getData(BtServer::schema_fields_EXTERNAL_URL) : '';
-$internalUrl = $server ? (string) $server->getData(BtServer::schema_fields_INTERNAL_URL) : '';
-$username = $server ? (string) $server->getData(BtServer::schema_fields_USERNAME) : '';
-$password = $server ? (string) $server->getData(BtServer::schema_fields_PASSWORD) : '';
-$port = $server ? (int) $server->getData(BtServer::schema_fields_PORT) : 22248;
-$description = $server ? (string) $server->getData(BtServer::schema_fields_DESCRIPTION) : '';
-$isEnabled = $server ? (bool) $server->getData(BtServer::schema_fields_IS_ENABLED) : true;
-$lastCheckStatus = $server ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_STATUS) : BtServer::CHECK_STATUS_UNKNOWN;
-$lastCheckAt = $server ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_AT) : '';
-$lastHttpCode = $server ? (string) $server->getData(BtServer::schema_fields_LAST_HTTP_CODE) : '';
-$lastResponseTime = $server ? (string) $server->getData(BtServer::schema_fields_LAST_RESPONSE_TIME_MS) : '';
-$lastErrorMessage = $server ? (string) $server->getData(BtServer::schema_fields_LAST_ERROR_MESSAGE) : '';
-$lastStateChangedAt = $server ? (string) $server->getData(BtServer::schema_fields_LAST_STATE_CHANGED_AT) : '';
+$id = $hasServer ? (int) $server->getId() : 0;
+$name = $hasServer ? (string) $server->getData(BtServer::schema_fields_NAME) : '';
+$platform = $hasServer ? (string) $server->getData(BtServer::schema_fields_PLATFORM) : BtServer::PLATFORM_AWS;
+$externalUrl = $hasServer ? (string) $server->getData(BtServer::schema_fields_EXTERNAL_URL) : '';
+$internalUrl = $hasServer ? (string) $server->getData(BtServer::schema_fields_INTERNAL_URL) : '';
+$username = $hasServer ? (string) $server->getData(BtServer::schema_fields_USERNAME) : '';
+$password = $hasServer ? (string) $server->getData(BtServer::schema_fields_PASSWORD) : '';
+$port = $hasServer ? (int) $server->getData(BtServer::schema_fields_PORT) : 22248;
+$description = $hasServer ? (string) $server->getData(BtServer::schema_fields_DESCRIPTION) : '';
+$isEnabled = $hasServer ? (bool) $server->getData(BtServer::schema_fields_IS_ENABLED) : true;
+$lastCheckStatus = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_STATUS) : BtServer::CHECK_STATUS_UNKNOWN;
+$lastCheckAt = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_AT) : '';
+$lastHttpCode = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_HTTP_CODE) : '';
+$lastResponseTime = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_RESPONSE_TIME_MS) : '';
+$lastErrorMessage = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_ERROR_MESSAGE) : '';
+$lastStateChangedAt = $hasServer ? (string) $server->getData(BtServer::schema_fields_LAST_STATE_CHANGED_AT) : '';
 $listUrl = $this->getBackendUrl('*/backend/bt-server');
 $saveUrl = $this->getBackendUrl('*/backend/bt-server/save');
 
@@ -39,7 +40,7 @@ $statusBadgeClass = match ($lastCheckStatus) {
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18">
-                <?= $id ? __('编辑 BT 服务器') . ' #' . $id : __('新增 BT 服务器') ?>
+                <?= $hasServer ? __('编辑 BT 服务器') . ' #' . $id : __('新增 BT 服务器') ?>
             </h4>
             <a href="<?= $listUrl ?>" class="btn btn-secondary">
                 <i class="mdi mdi-arrow-left me-1"></i><?= __('返回列表') ?>
@@ -59,7 +60,7 @@ $statusBadgeClass = match ($lastCheckStatus) {
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4"><?= __('基础信息') ?></h4>
-                <form id="btServerForm">
+                <form id="btServerForm" method="post" action="<?= $saveUrl ?>">
                     <input type="hidden" name="id" value="<?= $id ?>">
 
                     <div class="mb-3">
@@ -222,13 +223,15 @@ $statusBadgeClass = match ($lastCheckStatus) {
             data[key] = value;
         });
 
-        window.Weline.Api.request('<?= $saveUrl ?>', {
+        fetch('<?= $saveUrl ?>', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams(data)
+            body: new URLSearchParams(data).toString()
         })
         .then(function(response) {
-            var resp = (response && response.data) !== undefined ? response.data : response;
+            return response.json();
+        })
+        .then(function(resp) {
             if (resp.success) {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.success(resp.message);

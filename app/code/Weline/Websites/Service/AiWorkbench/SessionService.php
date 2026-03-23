@@ -22,7 +22,13 @@ class SessionService
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $providerState
      */
-    public function createSession(string $providerCode, int $adminUserId, array $scope = [], array $providerState = []): AiSiteBuilderSession
+    public function createSession(
+        string $providerCode,
+        int $adminUserId,
+        array $scope = [],
+        array $providerState = [],
+        string $initialStage = AiSiteBuilderSession::STAGE_BRIEF
+    ): AiSiteBuilderSession
     {
         $providerCode = \trim($providerCode);
         if ($providerCode === '') {
@@ -37,7 +43,10 @@ class SessionService
         $session->setData(AiSiteBuilderSession::schema_fields_PUBLIC_ID, $this->generatePublicId());
         $session->setData(AiSiteBuilderSession::schema_fields_ADMIN_USER_ID, $adminUserId);
         $session->setData(AiSiteBuilderSession::schema_fields_PROVIDER_CODE, $providerCode);
-        $session->setData(AiSiteBuilderSession::schema_fields_CURRENT_STAGE, AiSiteBuilderSession::STAGE_BRIEF);
+        $session->setData(
+            AiSiteBuilderSession::schema_fields_CURRENT_STAGE,
+            \trim($initialStage) !== '' ? \trim($initialStage) : AiSiteBuilderSession::STAGE_BRIEF
+        );
         $session->setData(AiSiteBuilderSession::schema_fields_WEBSITE_ID, 0);
         $session->setData(AiSiteBuilderSession::schema_fields_SELECTED_DOMAIN, '');
         $session->setData(AiSiteBuilderSession::schema_fields_REGISTRAR_ACCOUNT_ID, 0);
@@ -93,6 +102,31 @@ class SessionService
         }
 
         $session->setScopeArray($scope);
+        $session->save();
+
+        return true;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    public function replaceScope(int $sessionId, int $adminUserId, array $scope): bool
+    {
+        return $this->saveScope($sessionId, $adminUserId, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $scopePatch
+     */
+    public function mergeScope(int $sessionId, int $adminUserId, array $scopePatch): bool
+    {
+        $session = $this->loadById($sessionId, $adminUserId);
+        if ($session === null) {
+            return false;
+        }
+
+        $mergedScope = \array_replace($session->getScopeArray(), $scopePatch);
+        $session->setScopeArray($mergedScope);
         $session->save();
 
         return true;
