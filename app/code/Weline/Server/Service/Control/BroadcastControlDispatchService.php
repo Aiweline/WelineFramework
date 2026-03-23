@@ -134,7 +134,7 @@ class BroadcastControlDispatchService
         }
 
         $instances = [];
-        foreach ($this->serverInstanceManager->listInstanceNames() as $name) {
+        foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
             if ($this->serverInstanceManager->isInstanceRunning($name)) {
                 $instances[] = $name;
             }
