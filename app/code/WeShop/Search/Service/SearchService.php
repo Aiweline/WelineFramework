@@ -12,6 +12,8 @@ use WeShop\Search\Model\SearchHistory;
  */
 class SearchService
 {
+    private const SEARCH_ROUTE = '/search';
+
     /**
      * 搜索商品
      *
@@ -132,7 +134,7 @@ class SearchService
                     'text' => $text,
                     'type' => 'history',
                     'icon' => 'fa-history',
-                    'url' => '/search/index?q=' . \urlencode($text),
+                    'url' => $this->buildSearchUrl($text),
                 ];
                 if (\count($suggestions) >= $limit) {
                     break;
@@ -186,5 +188,10 @@ class SearchService
         }
 
         return false;
+    }
+
+    private function buildSearchUrl(string $keyword): string
+    {
+        return self::SEARCH_ROUTE . '?q=' . \urlencode($keyword);
     }
 }
