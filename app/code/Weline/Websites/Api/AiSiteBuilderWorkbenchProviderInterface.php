@@ -22,7 +22,8 @@ interface AiSiteBuilderWorkbenchProviderInterface extends AiSiteBuilderProviderI
      *   initial_stage?:string,
      *   scope?:array<string, mixed>,
      *   provider_state?:array<string, mixed>,
-     *   tools?:list<array<string, mixed>>
+     *   tools?:list<array<string, mixed>>,
+     *   stage_guides?:array<string, array<string, mixed>>
      * }
      */
     public function getWorkbenchConfig(
