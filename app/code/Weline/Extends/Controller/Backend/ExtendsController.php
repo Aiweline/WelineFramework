@@ -164,6 +164,11 @@ class ExtendsController extends BackendController
      */
     public function moduleDetail()
     {
+        // OffCanvas 等 iframe 内嵌加载时使用 blank，避免重复套后台顶栏/侧栏
+        if ($this->request->getGet('isIframe')) {
+            $this->layoutType = 'default.blank';
+        }
+
         try {
             $moduleName = $this->request->getParam('module');
             if (empty($moduleName)) {
