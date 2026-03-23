@@ -1,101 +1,103 @@
 <?php
 /**
- * 宝塔服务器表单（内容模板）
- *
  * @var \Weline\Framework\View\Template $this
  */
 
-/** @var \Weline\Bt_Center\Model\BtServer $server */
+use Weline\Bt_Center\Model\BtServer;
+
+/** @var BtServer|null $server */
 $server = $server ?? null;
-/** @var array $platformOptions */
 $platformOptions = $platformOptions ?? [];
 
-$id = $server ? (int)$server->getId() : 0;
-$name = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_NAME) : '';
-$platform = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PLATFORM) : '';
-$externalUrl = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_EXTERNAL_URL) : '';
-$internalUrl = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_INTERNAL_URL) : '';
-$username = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_USERNAME) : '';
-$password = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PASSWORD) : '';
-$port = $server ? (int)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_PORT) : 8888;
-$description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServer::fields_DESCRIPTION) : '';
+$id = $server ? (int) $server->getId() : 0;
+$name = $server ? (string) $server->getData(BtServer::schema_fields_NAME) : '';
+$platform = $server ? (string) $server->getData(BtServer::schema_fields_PLATFORM) : BtServer::PLATFORM_AWS;
+$externalUrl = $server ? (string) $server->getData(BtServer::schema_fields_EXTERNAL_URL) : '';
+$internalUrl = $server ? (string) $server->getData(BtServer::schema_fields_INTERNAL_URL) : '';
+$username = $server ? (string) $server->getData(BtServer::schema_fields_USERNAME) : '';
+$password = $server ? (string) $server->getData(BtServer::schema_fields_PASSWORD) : '';
+$port = $server ? (int) $server->getData(BtServer::schema_fields_PORT) : 22248;
+$description = $server ? (string) $server->getData(BtServer::schema_fields_DESCRIPTION) : '';
+$isEnabled = $server ? (bool) $server->getData(BtServer::schema_fields_IS_ENABLED) : true;
+$lastCheckStatus = $server ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_STATUS) : BtServer::CHECK_STATUS_UNKNOWN;
+$lastCheckAt = $server ? (string) $server->getData(BtServer::schema_fields_LAST_CHECK_AT) : '';
+$lastHttpCode = $server ? (string) $server->getData(BtServer::schema_fields_LAST_HTTP_CODE) : '';
+$lastResponseTime = $server ? (string) $server->getData(BtServer::schema_fields_LAST_RESPONSE_TIME_MS) : '';
+$lastErrorMessage = $server ? (string) $server->getData(BtServer::schema_fields_LAST_ERROR_MESSAGE) : '';
+$lastStateChangedAt = $server ? (string) $server->getData(BtServer::schema_fields_LAST_STATE_CHANGED_AT) : '';
+
+$statusBadgeClass = match ($lastCheckStatus) {
+    BtServer::CHECK_STATUS_UP => 'bg-success',
+    BtServer::CHECK_STATUS_DOWN => 'bg-danger',
+    default => 'bg-secondary',
+};
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-0">
-                <?php if ($id): ?>
-                    <lang>编辑宝塔服务器</lang> #<?= $id ?>
-                <?php else: ?>
-                    <lang>新增宝塔服务器</lang>
-                <?php endif; ?>
+                <?= $id ? __('编辑 BT 服务器') . ' #' . $id : __('新增 BT 服务器') ?>
             </h4>
         </div>
     </div>
 </div>
 
-<div class='row'>
+<div class="row">
     <template>Weline_Component::message.phtml</template>
 </div>
 
 <div class="row">
-    <div class="col-12">
+    <div class="col-xl-8">
         <div class="card">
             <div class="card-body">
                 <form id="btServerForm">
                     <input type="hidden" name="id" value="<?= $id ?>">
 
                     <div class="mb-3">
-                        <label class="form-label"><lang>服务器名称</lang> <span class="text-danger">*</span></label>
+                        <label class="form-label"><?= __('服务器名称') ?> <span class="text-danger">*</span></label>
                         <input type="text"
                                name="name"
                                class="form-control"
                                value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
-                               placeholder="<lang>请输入服务器名称或标识</lang>"
+                               placeholder="<?= __('请输入服务器名称或标识') ?>"
                                required>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><lang>云平台</lang> <span class="text-danger">*</span></label>
+                        <label class="form-label"><?= __('云平台') ?> <span class="text-danger">*</span></label>
                         <select name="platform" class="form-select" required>
-                            <option value=""><lang>请选择云平台</lang></option>
+                            <option value=""><?= __('请选择云平台') ?></option>
                             <?php foreach ($platformOptions as $key => $label): ?>
-                                <option value="<?= htmlspecialchars($key, ENT_QUOTES) ?>" <?= $platform === $key ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($label, ENT_QUOTES) ?>
+                                <option value="<?= htmlspecialchars((string) $key, ENT_QUOTES) ?>" <?= $platform === $key ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><lang>外网IPv4面板地址</lang> <span class="text-danger">*</span></label>
+                        <label class="form-label"><?= __('外网 IPv4 面板地址') ?> <span class="text-danger">*</span></label>
                         <input type="url"
                                name="external_url"
                                class="form-control"
                                value="<?= htmlspecialchars($externalUrl, ENT_QUOTES) ?>"
                                placeholder="https://3.7.199.83:22248/f9a64fa7"
                                required>
-                        <div class="form-text">
-                            <lang>例如：https://3.7.199.83:22248/f9a64fa7</lang>
-                        </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><lang>内网面板地址</lang></label>
+                        <label class="form-label"><?= __('内网面板地址') ?></label>
                         <input type="url"
                                name="internal_url"
                                class="form-control"
                                value="<?= htmlspecialchars($internalUrl, ENT_QUOTES) ?>"
                                placeholder="https://172.31.37.148:22248/f9a64fa7">
-                        <div class="form-text">
-                            <lang>例如：https://172.31.37.148:22248/f9a64fa7</lang>
-                        </div>
                     </div>
 
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label class="form-label"><lang>用户名</lang> <span class="text-danger">*</span></label>
+                            <label class="form-label"><?= __('用户名') ?> <span class="text-danger">*</span></label>
                             <input type="text"
                                    name="username"
                                    class="form-control"
@@ -103,7 +105,7 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
                                    required>
                         </div>
                         <div class="col-md-6 mb-3">
-                            <label class="form-label"><lang>密码</lang> <span class="text-danger">*</span></label>
+                            <label class="form-label"><?= __('密码') ?> <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <input type="password"
                                        name="password"
@@ -118,36 +120,67 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label"><lang>端口</lang></label>
-                        <input type="number"
-                               name="port"
-                               class="form-control"
-                               value="<?= $port ?>"
-                               placeholder="8888"
-                               min="1"
-                               max="65535">
-                        <div class="form-text">
-                            <lang>默认端口：8888，如果使用自定义端口请填写</lang>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label"><?= __('端口') ?></label>
+                            <input type="number"
+                                   name="port"
+                                   class="form-control"
+                                   value="<?= $port ?>"
+                                   placeholder="22248"
+                                   min="1"
+                                   max="65535">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label d-block"><?= __('监控状态') ?></label>
+                            <div class="form-check form-switch mt-2">
+                                <input class="form-check-input" type="checkbox" role="switch" name="is_enabled" value="1" id="isEnabledSwitch" <?= $isEnabled ? 'checked' : '' ?>>
+                                <label class="form-check-label" for="isEnabledSwitch"><?= __('启用 10 分钟健康检查') ?></label>
+                            </div>
                         </div>
                     </div>
 
                     <div class="mb-3">
-                        <label class="form-label"><lang>备注描述</lang></label>
-                        <textarea name="description" class="form-control" rows="3" placeholder="<lang>请输入备注信息</lang>"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
+                        <label class="form-label"><?= __('备注描述') ?></label>
+                        <textarea name="description" class="form-control" rows="3" placeholder="<?= __('请输入备注信息') ?>"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
                     </div>
 
                     <div class="mt-4">
                         <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-content-save me-1"></i>
-                            <lang>保存</lang>
+                            <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
                         </button>
-                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>"
-                           class="btn btn-secondary ms-2">
-                            <lang>返回列表</lang>
+                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>" class="btn btn-secondary ms-2">
+                            <?= __('返回列表') ?>
                         </a>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title mb-3"><?= __('健康检查摘要') ?></h5>
+                <div class="mb-2">
+                    <span class="badge <?= $statusBadgeClass ?>"><?= htmlspecialchars(BtServer::getHealthStatusLabel($lastCheckStatus), ENT_QUOTES) ?></span>
+                </div>
+                <dl class="row mb-0">
+                    <dt class="col-sm-5"><?= __('最后检测') ?></dt>
+                    <dd class="col-sm-7"><?= $lastCheckAt !== '' ? htmlspecialchars($lastCheckAt, ENT_QUOTES) : '-' ?></dd>
+
+                    <dt class="col-sm-5"><?= __('状态变化时间') ?></dt>
+                    <dd class="col-sm-7"><?= $lastStateChangedAt !== '' ? htmlspecialchars($lastStateChangedAt, ENT_QUOTES) : '-' ?></dd>
+
+                    <dt class="col-sm-5"><?= __('HTTP 状态') ?></dt>
+                    <dd class="col-sm-7"><?= $lastHttpCode !== '' ? htmlspecialchars($lastHttpCode, ENT_QUOTES) : '-' ?></dd>
+
+                    <dt class="col-sm-5"><?= __('响应耗时') ?></dt>
+                    <dd class="col-sm-7"><?= $lastResponseTime !== '' ? htmlspecialchars($lastResponseTime, ENT_QUOTES) . ' ms' : '-' ?></dd>
+
+                    <dt class="col-sm-5"><?= __('错误信息') ?></dt>
+                    <dd class="col-sm-7 small text-muted"><?= $lastErrorMessage !== '' ? htmlspecialchars($lastErrorMessage, ENT_QUOTES) : '-' ?></dd>
+                </dl>
             </div>
         </div>
     </div>
@@ -156,11 +189,11 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
 <script>
 (function() {
     'use strict';
-    
+
     document.getElementById('togglePasswordBtn').addEventListener('click', function() {
         var passwordInput = document.getElementById('password');
         var toggleIcon = document.getElementById('passwordToggleIcon');
-        
+
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
             toggleIcon.classList.remove('mdi-eye');
@@ -174,19 +207,20 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
 
     document.getElementById('btServerForm').addEventListener('submit', function(e) {
         e.preventDefault();
-        var form = this;
-        var formData = new FormData(form);
 
+        var formData = new FormData(this);
         var data = {};
-        for (var entry of formData.entries()) {
-            data[entry[0]] = entry[1];
-        }
+        formData.forEach(function(value, key) {
+            data[key] = value;
+        });
 
-        var btSaveUrl = '<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>';
-        var btSaveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(data) };
-        window.Weline.Api.request(btSaveUrl, btSaveOpts)
-        .then(function(r) {
-            var resp = (r && r.data) !== undefined ? r.data : r;
+        window.Weline.Api.request('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams(data)
+        })
+        .then(function(response) {
+            var resp = (response && response.data) !== undefined ? response.data : response;
             if (resp.success) {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.success(resp.message);
@@ -194,16 +228,13 @@ $description = $server ? (string)$server->getData(\Weline\Bt_Center\Model\BtServ
                 setTimeout(function() {
                     window.location.href = '<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>';
                 }, 800);
-            } else {
-                if (typeof BackendToast !== 'undefined') {
-                    BackendToast.error(resp.message || '<?= __("保存失败") ?>');
-                }
+            } else if (typeof BackendToast !== 'undefined') {
+                BackendToast.error(resp.message || '<?= __('保存失败') ?>');
             }
         })
-        .catch(function(error) {
-            console.error('Error:', error);
+        .catch(function() {
             if (typeof BackendToast !== 'undefined') {
-                BackendToast.error('<?= __("请求失败") ?>');
+                BackendToast.error('<?= __('请求失败') ?>');
             }
         });
     });
