@@ -4,51 +4,81 @@ declare(strict_types=1);
 
 namespace WeShop\RMA\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\RMA\Model\Rma;
+use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 退货服务
- */
 class RmaService
 {
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_APPROVED = 'approved';
+    public const STATUS_REJECTED = 'rejected';
+
     /**
-     * 创建退货申请
-     * 
-     * @param array $rmaData 退货数据
-     * @return Rma
+     * @param array<string,mixed> $rmaData
      */
     public function createRma(array $rmaData): Rma
     {
         /** @var Rma $rma */
         $rma = ObjectManager::getInstance(Rma::class);
-        
+
+        $reason = trim((string) ($rmaData[Rma::schema_fields_REASON] ?? ''));
+        if ($reason === '') {
+            throw new \InvalidArgumentException((string) __('Return reason is required.'));
+        }
+
+        $now = date('Y-m-d H:i:s');
         $rma->clearData()
-            ->setData('order_id', $rmaData['order_id'] ?? 0)
-            ->setData('customer_id', $rmaData['customer_id'] ?? 0)
-            ->setData('reason', $rmaData['reason'] ?? '')
-            ->setData('description', $rmaData['description'] ?? '')
-            ->setData('status', 'pending')
+            ->setData(Rma::schema_fields_ORDER_ID, (int) ($rmaData[Rma::schema_fields_ORDER_ID] ?? 0))
+            ->setData(Rma::schema_fields_CUSTOMER_ID, (int) ($rmaData[Rma::schema_fields_CUSTOMER_ID] ?? 0))
+            ->setData(Rma::schema_fields_REASON, $reason)
+            ->setData(Rma::schema_fields_DESCRIPTION, (string) ($rmaData[Rma::schema_fields_DESCRIPTION] ?? ''))
+            ->setData(Rma::schema_fields_STATUS, (string) ($rmaData[Rma::schema_fields_STATUS] ?? self::STATUS_PENDING))
+            ->setData(Rma::schema_fields_CREATED_AT, $now)
+            ->setData(Rma::schema_fields_UPDATED_AT, $now)
             ->save();
-        
+
         return $rma;
     }
-    
+
     /**
-     * 获取客户退货列表
-     * 
-     * @param int $customerId 客户ID
-     * @return array
+     * @return array<int,array<string,mixed>>
      */
     public function getCustomerRmas(int $customerId): array
     {
         /** @var Rma $rma */
         $rma = ObjectManager::getInstance(Rma::class);
-        
+
         return $rma->clear()
-            ->where('customer_id', $customerId)
-            ->order('created_at', 'DESC')
+            ->where(Rma::schema_fields_CUSTOMER_ID, $customerId)
+            ->order(Rma::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
+    }
+
+    public function approveRma(int $rmaId): Rma
+    {
+        return $this->changeStatus($rmaId, self::STATUS_APPROVED);
+    }
+
+    public function rejectRma(int $rmaId): Rma
+    {
+        return $this->changeStatus($rmaId, self::STATUS_REJECTED);
+    }
+
+    protected function changeStatus(int $rmaId, string $status): Rma
+    {
+        /** @var Rma $rma */
+        $rma = ObjectManager::getInstance(Rma::class);
+        $rma->load($rmaId);
+
+        if (!$rma->getId()) {
+            throw new \RuntimeException((string) __('RMA record not found.'));
+        }
+
+        $rma->setData(Rma::schema_fields_STATUS, $status)
+            ->setData(Rma::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
+            ->save();
+
+        return $rma;
     }
 }
