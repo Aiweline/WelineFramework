@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `dc4ba4f7 docs(weshop): align auth api path contracts`.
 
 ## Changed Files
 

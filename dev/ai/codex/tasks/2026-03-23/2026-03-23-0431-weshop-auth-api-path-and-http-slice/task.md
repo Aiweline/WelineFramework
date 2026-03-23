@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0431-weshop-auth-api-path-and-http-slice
 - Started: 2026-03-23 04:31
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: continue after controller contract commit 7efbf68c
 - Follows: `dev/ai/codex/tasks/2026-03-23/2026-03-23-0415-weshop-auth-controller-contract-slice/`
@@ -46,3 +46,4 @@
 ## Resume
 
 - Read [plan.md](./plan.md), [progress.md](./progress.md), and [result.md](./result.md).
+- Completed in commit `dc4ba4f7`.
