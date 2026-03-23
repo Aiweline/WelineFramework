@@ -27,10 +27,12 @@
     
     <main class="account-logout-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-logout-content" data-layout="account_logout_content">
         <div class="logout-container">
-            <if condition="meta.contentTemplate">
-                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-                <else/>
+            <if condition="meta.content">
                 {{meta.content}}
+                <elseif condition="content"/>
+                {{content}}
+                <elseif condition="meta.contentTemplate"/>
+                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
             </if>
         </div>
     </main>
