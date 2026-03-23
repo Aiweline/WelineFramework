@@ -1,13 +1,20 @@
 # API Contracts
 
-待实现的统一认证端点：
+Framework URL note:
 
-- `POST /api/rest/v1/weshop/auth/token`
-- `POST /api/rest/v1/weshop/auth/challenge/verify`
-- `POST /api/rest/v1/weshop/auth/logout`
-- `GET /api/rest/v1/weshop/auth/me`
+- Weline frontend REST URLs follow `/{rest_frontend_prefix}/{module_router}/rest/v1/...`
+- In the current local environment, `rest_frontend_prefix=api` and `WeShop_Auth.router=weshop`
+- That means the full default auth URLs are `/api/weshop/rest/v1/auth/*`
+- `generated/routers/frontend_rest_api.php` stores route keys without the area prefix, for example `weshop/rest/v1/auth/token`
 
-统一响应：
+Unified auth endpoints:
+
+- `POST /api/weshop/rest/v1/auth/token`
+- `POST /api/weshop/rest/v1/auth/challenge/verify`
+- `POST /api/weshop/rest/v1/auth/logout`
+- `GET /api/weshop/rest/v1/auth/me`
+
+Unified response:
 
 ```json
 {
