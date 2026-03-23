@@ -5,14 +5,17 @@ const path = require('path');
 const Module = require('module');
 const { defineConfig, devices } = require('@playwright/test');
 const { collectAllTests } = require('./collect-tests');
+const { getRuntimeInfo } = require('./framework/runtime');
 
 const rootDir = path.resolve(__dirname, '../..');
 const localNodeModules = path.resolve(__dirname, 'node_modules');
 const moduleFilter = process.env.MODULE_FILTER || process.argv.find(arg => arg.startsWith('--module='))?.split('=')[1];
+const runtimeInfo = getRuntimeInfo({ refresh: true });
+const baseURL = runtimeInfo.proxy.origin;
 
-process.env.NODE_PATH = process.env.NODE_PATH
-  ? `${localNodeModules}${path.delim}${process.env.NODE_PATH}`
-  : localNodeModules;
+process.env.NODE_PATH = [localNodeModules, __dirname, process.env.NODE_PATH]
+  .filter(Boolean)
+  .join(path.delim);
 Module._initPaths();
 
 let testDir = rootDir;
@@ -56,6 +59,8 @@ try {
 console.log('[playwright] rootDir:', rootDir);
 console.log('[playwright] testDir:', testDir);
 console.log('[playwright] testMatch:', testMatch);
+console.log('[playwright] proxy baseURL:', baseURL);
+console.log('[playwright] target origin:', runtimeInfo.runtime.target_origin);
 
 module.exports = defineConfig({
   rootDir,
@@ -68,8 +73,17 @@ module.exports = defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  webServer: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? undefined : {
+    command: 'node framework/proxy-server.js',
+    cwd: __dirname,
+    url: `${baseURL}/.well-known/weline-e2e/health`,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120000,
+    ignoreHTTPSErrors: true,
+  },
   use: {
-    baseURL: 'http://127.0.0.1:9981',
+    baseURL: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? runtimeInfo.runtime.target_origin : baseURL,
+    ignoreHTTPSErrors: true,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure'
   },
