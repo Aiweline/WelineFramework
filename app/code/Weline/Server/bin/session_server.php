@@ -59,6 +59,7 @@ if (!\defined('DS')) {
 }
 
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+(new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;
