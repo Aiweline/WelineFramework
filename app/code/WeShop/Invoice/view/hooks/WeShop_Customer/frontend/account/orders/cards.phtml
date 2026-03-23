@@ -1,0 +1,37 @@
+<?php
+/**
+ * Invoice storefront account-center order card.
+ *
+ * @hook-priority 230
+ * @hook-sort-order 18
+ * @hook-solo false
+ */
+$invoiceCount = (int) ($this->getData('invoice_count') ?? 0);
+$pendingCount = (int) ($this->getData('invoice_pending_count') ?? 0);
+?>
+<article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Billing') ?></p>
+            <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Invoices') ?></h2>
+        </div>
+        <a href="<?= $this->getUrl('invoice') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open Invoices') ?></a>
+    </div>
+
+    <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <div class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+            <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total invoices') ?></p>
+            <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $invoiceCount ?></p>
+        </div>
+        <div class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+            <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Pending issue') ?></p>
+            <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $pendingCount ?></p>
+        </div>
+    </div>
+
+    <div class="mt-6">
+        <a href="<?= $this->getUrl('invoice') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+            <?= __('Manage Billing Documents') ?>
+        </a>
+    </div>
+</article>
