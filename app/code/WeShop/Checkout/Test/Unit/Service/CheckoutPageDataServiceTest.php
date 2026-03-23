@@ -88,10 +88,18 @@ class CheckoutPageDataServiceTest extends TestCase
                 [
                     'code' => 'paypal',
                     'title' => 'PayPal',
+                    'description' => 'Pay online with your PayPal account.',
+                    'is_default' => false,
                 ],
                 [
                     'code' => 'manual_transfer',
                     'title' => 'Manual Transfer',
+                    'description' => 'Pay by bank transfer after the order is created.',
+                    'is_default' => true,
+                    'config' => [
+                        'instructions' => 'Transfer the total to our bank account after the order is created.',
+                        'reference_note' => 'Use the order number as the payment reference.',
+                    ],
                 ],
             ]);
 
@@ -126,6 +134,10 @@ class CheckoutPageDataServiceTest extends TestCase
         $this->assertSame('flat_rate', $result['shipping_methods'][0]['code']);
         $this->assertTrue((bool) ($result['shipping_methods'][0]['is_default'] ?? false));
         $this->assertSame('paypal', $result['payment_methods'][0]['code']);
+        $this->assertSame('redirect', $result['payment_methods'][0]['flow']);
+        $this->assertSame('Redirect after order placement', $result['payment_methods'][0]['flow_label']);
+        $this->assertSame('Offline', $result['payment_methods'][1]['badge']);
+        $this->assertStringContainsString('Use the order number as the payment reference.', $result['payment_methods'][1]['checkout_note']);
         $this->assertSame(
             [
                 ['code' => 'US', 'name' => 'United States'],
