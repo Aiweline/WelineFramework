@@ -16,30 +16,44 @@ const ROOT_DIR = path.resolve(__dirname, '../..');
 const MODULES_JSON = path.join(__dirname, 'modules.json');
 const OUTPUT_FILE = path.join(__dirname, 'collected-tests.json');
 const SHARED_SPECS_DIR = path.join(__dirname, 'specs');
+const TEST_DIR_CANDIDATES = [
+    ['test', 'e2e'],
+    ['Test', 'e2e'],
+    ['test', 'E2E'],
+    ['Test', 'E2E'],
+];
 
 function toRelativeProjectPath(fullPath, baseDir = ROOT_DIR) {
     return path.relative(baseDir, fullPath).replace(/\\/g, '/');
 }
 
 function resolveModuleTestDir(moduleInfo) {
+    const candidateDirs = [];
+
     if (moduleInfo.test_path) {
         if (path.isAbsolute(moduleInfo.test_path)) {
-            return moduleInfo.test_path;
+            candidateDirs.push(moduleInfo.test_path);
+        } else {
+            candidateDirs.push(path.join(ROOT_DIR, moduleInfo.test_path.replace(/\//g, path.sep)));
         }
-        return path.join(ROOT_DIR, moduleInfo.test_path.replace(/\//g, path.sep));
     }
 
     if (!moduleInfo.base_path) {
-        return null;
+        return candidateDirs.find(candidate => fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) || null;
     }
 
     const moduleBasePath = path.isAbsolute(moduleInfo.base_path)
         ? moduleInfo.base_path
         : path.join(ROOT_DIR, moduleInfo.base_path.replace(/\//g, path.sep));
-    const fallbackTestDir = path.join(moduleBasePath, 'test', 'e2e');
 
-    if (fs.existsSync(fallbackTestDir) && fs.statSync(fallbackTestDir).isDirectory()) {
-        return fallbackTestDir;
+    for (const parts of TEST_DIR_CANDIDATES) {
+        candidateDirs.push(path.join(moduleBasePath, ...parts));
+    }
+
+    for (const candidateDir of candidateDirs) {
+        if (fs.existsSync(candidateDir) && fs.statSync(candidateDir).isDirectory()) {
+            return candidateDir;
+        }
     }
 
     return null;
