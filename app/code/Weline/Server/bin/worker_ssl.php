@@ -3109,6 +3109,25 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'uri' => $uriPath,
         'path' => $filename,
     ];
+
+    $validatedCached = null;
+    $cacheHeaderStatus = 'MISS';
+    $now = \time();
+    if (isset($staticFileCache[$filename])) {
+        $cached = $staticFileCache[$filename];
+        if (($cached['mtime'] ?? null) === \filemtime($filename)
+            && ($now - (int)($cached['cached_at'] ?? 0)) < $staticFileCacheMaxAge
+        ) {
+            $validatedCached = $cached;
+            $cacheHeaderStatus = 'HIT';
+            $WLS_LAST_STATIC_CACHE['status'] = 'hit';
+            $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
+            $staticFileCache[$filename]['last_access'] = $now;
+        } else {
+            $staticFileCacheTotalSize -= $cached['size'];
+            unset($staticFileCache[$filename]);
+        }
+    }
     
     // 获取文件修改时间
     $mtime = \filemtime($filename);
@@ -3119,14 +3138,14 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     if (\preg_match('/If-Modified-Since:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
         $ifModifiedSince = \trim($matches[1]);
         if ($ifModifiedSince === $lastModified) {
-            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nConnection: keep-alive\r\n\r\n";
+            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nX-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: keep-alive\r\n\r\n";
         }
     }
     
     if (\preg_match('/If-None-Match:\s*([^\r\n]+)/i', $rawRequest, $matches)) {
         $ifNoneMatch = \trim($matches[1]);
         if ($ifNoneMatch === $etag) {
-            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nConnection: keep-alive\r\n\r\n";
+            return "HTTP/1.1 304 Not Modified\r\nETag: {$etag}\r\nX-WLS-Static-Cache: {$cacheHeaderStatus}\r\nConnection: keep-alive\r\n\r\n";
         }
     }
     
@@ -3140,14 +3159,14 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $maxAge = 86400 * 7; // 7 天
     
     // ========== 内存缓存策略（冷热淘汰） ==========
-    $content = null;
-    $fromCache = false;
-    $now = \time();
+    $content = $validatedCached['content'] ?? null;
+    $fromCache = $validatedCached !== null;
+    $now = $now ?? \time();
     
     // 只有小于配置阈值的文件才缓存到内存
     if ($fileSize <= $maxSize) {
         // 检查缓存是否存在且有效
-        if (isset($staticFileCache[$filename])) {
+        if (!$fromCache && isset($staticFileCache[$filename])) {
             $cached = $staticFileCache[$filename];
             // 验证：文件修改时间一致 且 缓存未过期
             if ($cached['mtime'] === $mtime && ($now - $cached['cached_at']) < $staticFileCacheMaxAge) {

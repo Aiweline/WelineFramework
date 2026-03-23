@@ -22,13 +22,13 @@ interface IpcControlGatewayInterface
     public function reloadAsync(
         string $instanceName,
         string $reloadType,
-        float $timeout = 3.0
+        float $timeout = 0.8
     ): array;
 
     /**
      * @return array{success:bool,message:string,data:array}
      */
-    public function cacheClear(string $instanceName, float $timeout = 3.0): array;
+    public function cacheClear(string $instanceName, float $timeout = 0.8): array;
 
     /**
      * @return array{success:bool,message:string,data:array}
