@@ -556,9 +556,13 @@ SSL,SSL
 "使用账户 ID：%{1}","使用账户 ID：%{1}"
 执行工具：%{1},执行工具：%{1}
 "工具 %{1} 已完成","工具 %{1} 已完成"
+"Local registrar recommendation unavailable","Local registrar recommendation unavailable"
 "Local demo: brief understood","Local demo: brief understood"
+"Local demo: recommended registrar %{registrar}","Local demo: recommended registrar %{registrar}"
 "Local demo: suggested domain %{domain}","Local demo: suggested domain %{domain}"
+"Local demo: simulated availability check passed for %{domain}","Local demo: simulated availability check passed for %{domain}"
 "Local demo: simulated domain purchase and bootstrap resources","Local demo: simulated domain purchase and bootstrap resources"
+"Local demo: simulated DNS resolution and certificate issuance","Local demo: simulated DNS resolution and certificate issuance"
 "Local demo: generated page structure and starter content","Local demo: generated page structure and starter content"
 "Local demo: generated theme direction and virtual theme","Local demo: generated theme direction and virtual theme"
 "Local demo: prepared visual-edit preview","Local demo: prepared visual-edit preview"
@@ -572,6 +576,9 @@ SSL,SSL
 查看此流程,查看此流程
 扩展流程,扩展流程
 已接入,已接入
+第一阶段：信息准备,第一阶段：信息准备
+第二阶段：页面生成,第二阶段：页面生成
+第三阶段：完成,第三阶段：完成
 阶段：建站简报,阶段：建站简报
 阶段：域名与基础设施,阶段：域名与基础设施
 阶段：等待域名就绪,阶段：等待域名就绪
@@ -580,6 +587,39 @@ SSL,SSL
 阶段：内容与文案,阶段：内容与文案
 阶段：预览与可视化微调,阶段：预览与可视化微调
 阶段：发布检查,阶段：发布检查
+"AI 推荐","AI 推荐"
+确认并继续,确认并继续
+返回上一步,返回上一步
+"AI 会先按模拟结果检查 %{domain} 的可用性，再等待你确认供应商。","AI 会先按模拟结果检查 %{domain} 的可用性，再等待你确认供应商。"
+建站描述：%{text},建站描述：%{text}
+推荐域名：%{domains},推荐域名：%{domains}
+推荐服务商：%{name},推荐服务商：%{name}
+"确认后按“购买 -> 解析 -> 证书 -> 可建站”推进","确认后按“购买 -> 解析 -> 证书 -> 可建站”推进"
+"当前更建议先检测 %{domain} 是否可用。","当前更建议先检测 %{domain} 是否可用。"
+"推荐 styles 模板：%{style}","推荐 styles 模板：%{style}"
+推荐原因：%{reason},推荐原因：%{reason}
+"建议先从 styles/%{code} 模板开始。","建议先从 styles/%{code} 模板开始。"
+推荐主题方向：%{theme},推荐主题方向：%{theme}
+"当前更适合先用 %{theme} 的主题方向。","当前更适合先用 %{theme} 的主题方向。"
+推荐页面：%{pages},推荐页面：%{pages}
+"Header / Footer 保持固定，主体内容区交给 AI 生成","Header / Footer 保持固定，主体内容区交给 AI 生成"
+"域名准备：%{domain} 将进入购买、解析和证书状态检查","域名准备：%{domain} 将进入购买、解析和证书状态检查"
+域名仍待最终确认，确认后才会进入上线准备,域名仍待最终确认，确认后才会进入上线准备
+当前已有预览地址，可直接预览关键页面,当前已有预览地址，可直接预览关键页面
+完成后会提供预览地址，方便回看和微调,完成后会提供预览地址，方便回看和微调
+"需要精修时可继续进入 PageBuilder 工作台","需要精修时可继续进入 PageBuilder 工作台"
+如需调整，可直接回到页面生成阶段,如需调整，可直接回到页面生成阶段
+建议先预览首页和关键转化页。,建议先预览首页和关键转化页。
+建议先等待域名环境就绪，再统一预览。,建议先等待域名环境就绪，再统一预览。
+适合突出产品价值、试用入口和功能模块。,适合突出产品价值、试用入口和功能模块。
+适合强调信任感、资质说明和核心流程。,适合强调信任感、资质说明和核心流程。
+适合突出课程、服务卖点和预约入口。,适合突出课程、服务卖点和预约入口。
+适合大多数介绍型、品牌型和轻营销站点。,适合大多数介绍型、品牌型和轻营销站点。
+适合产品介绍、功能亮点和转化按钮型页面。,适合产品介绍、功能亮点和转化按钮型页面。
+适合强调专业感、数据感和信任说明。,适合强调专业感、数据感和信任说明。
+适合课程展示、教练介绍和行动号召。,适合课程展示、教练介绍和行动号召。
+适合强视觉、活动感和竞技氛围更重的站点。,适合强视觉、活动感和竞技氛围更重的站点。
+"适合作为通用起点，再由 AI 替换区域内容。","适合作为通用起点，再由 AI 替换区域内容。"
 "未找到 provider 描述，当前按兼容模式展示。","未找到 provider 描述，当前按兼容模式展示。"
 兼容模式,兼容模式
 "网站 #%{id}","网站 #%{id}"
@@ -734,6 +774,18 @@ SSL,SSL
 "域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。","域名解析结果偏离本站（如 DNS 指向变更）时触发，用于发送通知提醒管理员。"
 "一站式配置 - 绑定 DNS","一站式配置 - 绑定 DNS"
 "一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。","一站式配置执行 DNS 绑定步骤时触发，观察者可在此创建 Zone/记录。"
+网站站点构建场景适配器,网站站点构建场景适配器
+"用于 AI 网站站点构建（site_builder）场景的零改造适配器，支持为该场景配置默认模型。","用于 AI 网站站点构建（site_builder）场景的零改造适配器，支持为该场景配置默认模型。"
+站点构建请求示例,站点构建请求示例
+"输入站点构建目标与期望效果，让 AI 给出方案并执行。","输入站点构建目标与期望效果，让 AI 给出方案并执行。"
+请帮我把一个博客站点搭起来，包含分类页与文章详情页。,请帮我把一个博客站点搭起来，包含分类页与文章详情页。
+系统会输出落地方案与后续构建进度/结果。,系统会输出落地方案与后续构建进度/结果。
+"AI 建站工作台场景适配器","AI 建站工作台场景适配器"
+"用于 AI 建站工作台（website_builder）场景的零改造适配器，支持为该场景配置默认模型。","用于 AI 建站工作台（website_builder）场景的零改造适配器，支持为该场景配置默认模型。"
+建站请求示例,建站请求示例
+"输入建站需求，让 AI 按流程完成建议与落地动作。","输入建站需求，让 AI 按流程完成建议与落地动作。"
+"我想做一个茶叶电商网站，风格偏高级简约，域名优先用 .com。","我想做一个茶叶电商网站，风格偏高级简约，域名优先用 .com。"
+系统会输出域名建议与后续建站进度/结果。,系统会输出域名建议与后续建站进度/结果。
 "根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点。支持理解用户意图并推荐合适域名。","根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点。支持理解用户意图并推荐合适域名。"
 "正在调用 AI...","正在调用 AI..."
 "AI 调用失败：%{1}","AI 调用失败：%{1}"
@@ -828,13 +880,28 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "domain 和 record_id 不能为空","domain 和 record_id 不能为空"
 "无法解析域名的 DNS 管理账户","无法解析域名的 DNS 管理账户"
 "由查询层 DNS 同步自动写入","由查询层 DNS 同步自动写入"
-"Websites 默认建站流程","Websites 默认建站流程"
-"Weline_Websites 内置的 AI 建站工作台默认流程提供者。","Weline_Websites 内置的 AI 建站工作台默认流程提供者。"
-"已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、域名、阶段和备注，再决定继续走极速建站还是更深入的扩展流程。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、域名、阶段和备注，再决定继续走极速建站还是更深入的扩展流程。"
-打开极速建站,打开极速建站
-"回到 Websites 默认的极速建站入口。","回到 Websites 默认的极速建站入口。"
-切到域名准备,切到域名准备
-把工作区重点切换到域名与基础设施准备阶段。,把工作区重点切换到域名与基础设施准备阶段。
+适合想快速完成域名、网站和默认页面方案的建站任务。,适合想快速完成域名、网站和默认页面方案的建站任务。
+使用快速建站,使用快速建站
+返回快速建站入口,返回快速建站入口
+"已为你创建 AI 建站工作区。默认流程会优先帮你整理需求、推荐域名，再生成站点页面方案。","已为你创建 AI 建站工作区。默认流程会优先帮你整理需求、推荐域名，再生成站点页面方案。"
+"先说清楚要做什么站，AI 会推荐域名、购买服务商和自动准备顺序。","先说清楚要做什么站，AI 会推荐域名、购买服务商和自动准备顺序。"
+"默认会先推荐 1 到 3 个可读性更好的域名，并给出优先购买建议。","默认会先推荐 1 到 3 个可读性更好的域名，并给出优先购买建议。"
+确认域名和准备方案,确认域名和准备方案
+"AI 推荐域名","AI 推荐域名"
+"AI 推荐购买服务商","AI 推荐购买服务商"
+确认后进入自动准备,确认后进入自动准备
+默认流程会先给出页面类型、主题方向和内容结构，尽量减少人工配置。,默认流程会先给出页面类型、主题方向和内容结构，尽量减少人工配置。
+"AI 会优先推荐：首页、关于我们、产品或服务、FAQ、联系页，并自动保留固定 Header / Footer。","AI 会优先推荐：首页、关于我们、产品或服务、FAQ、联系页，并自动保留固定 Header / Footer。"
+确认页面方案,确认页面方案
+默认所有核心页面类型,默认所有核心页面类型
+"可选 AI 新主题或复用已有模板","可选 AI 新主题或复用已有模板"
+"Header / Footer 固定不可编辑","Header / Footer 固定不可编辑"
+最后等待域名环境准备完成，再预览站点或回退修改。,最后等待域名环境准备完成，再预览站点或回退修改。
+"AI 会提醒你优先检查首页、转化页和联系方式页，再决定是否返回上一阶段。","AI 会提醒你优先检查首页、转化页和联系方式页，再决定是否返回上一阶段。"
+打开快速建站,打开快速建站
+"回到 Websites 默认的一键建站入口。","回到 Websites 默认的一键建站入口。"
+回到信息准备,回到信息准备
+把当前工作区重新聚焦到域名和准备动作。,把当前工作区重新聚焦到域名和准备动作。
 域名到期提醒,域名到期提醒
 域名管理,域名管理
 域名即将到期的提醒通知,域名即将到期的提醒通知
@@ -918,6 +985,34 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "语言 %{1} 不被当前网站允许","语言 %{1} 不被当前网站允许"
 "已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。"
 "已为你创建兼容模式工作区。后续可继续补充 scope 并接入更完整的 provider 配置。","已为你创建兼容模式工作区。后续可继续补充 scope 并接入更完整的 provider 配置。"
+"兼容 provider","兼容 provider"
+第一阶段,第一阶段
+信息准备,信息准备
+"先让 AI 理清需求、推荐域名和购买服务商，你只需要做确认。","先让 AI 理清需求、推荐域名和购买服务商，你只需要做确认。"
+"AI 会先给你一份建站简报、域名和服务商建议，确认后再进入页面生成。","AI 会先给你一份建站简报、域名和服务商建议，确认后再进入页面生成。"
+确认基础方案，进入页面生成,确认基础方案，进入页面生成
+简单描述你要做什么站,简单描述你要做什么站
+"AI 推荐域名和购买服务商","AI 推荐域名和购买服务商"
+第二阶段,第二阶段
+页面生成,页面生成
+先定页面类型，再定主题方向，再生成内容，尽量做到少点几次就能继续。,先定页面类型，再定主题方向，再生成内容，尽量做到少点几次就能继续。
+"AI 页面建议","AI 页面建议"
+"AI 会先给出默认页面结构、主题方向和关键内容组件，你只需要决定是否采用。","AI 会先给出默认页面结构、主题方向和关键内容组件，你只需要决定是否采用。"
+确认页面方案，进入完成,确认页面方案，进入完成
+返回信息准备,返回信息准备
+"默认页面类型先由 AI 推荐","默认页面类型先由 AI 推荐"
+"可直接用 AI 推荐主题，或换成已有模板","可直接用 AI 推荐主题，或换成已有模板"
+"Header / Footer 固定，主体内容支持 AI 生成","Header / Footer 固定，主体内容支持 AI 生成"
+第三阶段,第三阶段
+完成,完成
+等待域名和证书等准备就绪，然后预览、回退或继续交付。,等待域名和证书等准备就绪，然后预览、回退或继续交付。
+"AI 检查建议","AI 检查建议"
+"AI 建议先预览首页和关键转化页，再决定是否回到上一阶段调整。","AI 建议先预览首页和关键转化页，再决定是否回到上一阶段调整。"
+保留当前方案,保留当前方案
+返回页面生成,返回页面生成
+等待域名购买、解析、证书生成到可用,等待域名购买、解析、证书生成到可用
+可以直接预览,可以直接预览
+不满意时可一键回退,不满意时可一键回退
 "provider_code 不能为空","provider_code 不能为空"
 "admin_user_id 必须大于 0","admin_user_id 必须大于 0"
 "阿里云域名 API HTTP %{code}：%{body}","阿里云域名 API HTTP %{code}：%{body}"
@@ -1737,121 +1832,116 @@ SEO账户管理请前往：,SEO账户管理请前往：
 当前步骤,当前步骤
 错误信息,错误信息
 "共 %{total} 条","共 %{total} 条"
-"先用自然语言讲清楚你要做什么，再决定是走极速建站，还是进入 PageBuilder 的分阶段精修工作台。","先用自然语言讲清楚你要做什么，再决定是走极速建站，还是进入 PageBuilder 的分阶段精修工作台。"
-先聊需求,先聊需求
-再定域名,再定域名
-最后细化页面,最后细化页面
-"当前推荐：PageBuilder 扩展流程","当前推荐：PageBuilder 扩展流程"
-适合希望按阶段打磨页面、主题、预览与发布检查的建站任务。,适合希望按阶段打磨页面、主题、预览与发布检查的建站任务。
-"打开 PageBuilder 工作台","打开 PageBuilder 工作台"
-极速建站,极速建站
-告诉系统你想做什么，它会把流程先跑起来,告诉系统你想做什么，它会把流程先跑起来
-"适合“我要先把站点搭起来”的场景。AI 模式下，域名和账户都可以后补；如果你已经明确好域名，也可以直接关闭 AI，按传统方式一步到位执行。","适合“我要先把站点搭起来”的场景。AI 模式下，域名和账户都可以后补；如果你已经明确好域名，也可以直接关闭 AI，按传统方式一步到位执行。"
-写下业务、受众与目标,写下业务、受众与目标
-"决定是否让 AI 先推荐域名与动作","决定是否让 AI 先推荐域名与动作"
-把结果继续带到高级工作台细化,把结果继续带到高级工作台细化
-什么时候用哪条路,什么时候用哪条路
-想快速得到域名、站点与初步交付结果。,想快速得到域名、站点与初步交付结果。
-"PageBuilder 扩展流程","PageBuilder 扩展流程"
-"想保留会话、逐步补 scope、看预览、做发布前检查。","想保留会话、逐步补 scope、看预览、做发布前检查。"
-扩展工作台,扩展工作台
-"统一入口，按 provider 进入不同流程","统一入口，按 provider 进入不同流程"
-"现在 `Websites` 负责总入口，`PageBuilder` 作为扩展工作台接入。这样入口统一了，能力也不会散落在两个菜单里。","现在 `Websites` 负责总入口，`PageBuilder` 作为扩展工作台接入。这样入口统一了，能力也不会散落在两个菜单里。"
-查看已接入流程,查看已接入流程
-"直接进入 PageBuilder 工作台","直接进入 PageBuilder 工作台"
-可恢复工作区,可恢复工作区
-先把需求存成工作区，再决定何时执行,先把需求存成工作区，再决定何时执行
-"工作区会保留 provider、阶段、Scope、消息和事件流，适合需要多轮推进或中途切换任务的建站工作。","工作区会保留 provider、阶段、Scope、消息和事件流，适合需要多轮推进或中途切换任务的建站工作。"
-创建当前工作区,创建当前工作区
+"先告诉 AI 你想做什么站，它会按 3 个阶段给出推荐。大多数时候，你只需要做几次确认。","先告诉 AI 你想做什么站，它会按 3 个阶段给出推荐。大多数时候，你只需要做几次确认。"
+"AI 推荐页面方案","AI 推荐页面方案"
+预览后完成,预览后完成
+当前运行在本地演示模式，域名购买、解析和证书会用假数据模拟，但流程和交互保持一致。,当前运行在本地演示模式，域名购买、解析和证书会用假数据模拟，但流程和交互保持一致。
+更像对话，不像配置台,更像对话，不像配置台
+"只要先说清楚网站要做什么，AI 就会把域名、页面和上线顺序推荐出来。","只要先说清楚网站要做什么，AI 就会把域名、页面和上线顺序推荐出来。"
+"如果你不确定选哪个流程，先从当前工作台开始。需要精修时，再切到对应 provider 的扩展能力，例如 PageBuilder 的 styles 模板流。","如果你不确定选哪个流程，先从当前工作台开始。需要精修时，再切到对应 provider 的扩展能力，例如 PageBuilder 的 styles 模板流。"
+直接开始,直接开始
 "先看 Provider 流程","先看 Provider 流程"
-还没有历史工作区，会在你创建第一条会话后显示。,还没有历史工作区，会在你创建第一条会话后显示。
-极速建站执行区,极速建站执行区
-"AI 模式默认开启。开启时域名和账户可以稍后再补；关闭后会按照明确输入直接执行。","AI 模式默认开启。开启时域名和账户可以稍后再补；关闭后会按照明确输入直接执行。"
-你想做什么站,你想做什么站
-"先让 AI 帮我理解需求、推荐域名并规划建站动作","先让 AI 帮我理解需求、推荐域名并规划建站动作"
+可恢复工作区,可恢复工作区
+先保存成工作区，稍后继续也不会丢。,先保存成工作区，稍后继续也不会丢。
+"工作区会保留当前 provider、阶段、推荐结果、补充消息和后续 handoff 信息。","工作区会保留当前 provider、阶段、推荐结果、补充消息和后续 handoff 信息。"
+创建当前工作区,创建当前工作区
+最近工作区,最近工作区
+还没有历史工作区，创建后会显示在这里。,还没有历史工作区，创建后会显示在这里。
+快速开始,快速开始
+"默认先开 AI。你只需要描述建站目标，域名和服务商可以由 AI 先推荐。","默认先开 AI。你只需要描述建站目标，域名和服务商可以由 AI 先推荐。"
+你想做什么网站,你想做什么网站
+"先让 AI 推荐域名、服务商和页面方案","先让 AI 推荐域名、服务商和页面方案"
 目标域名,目标域名
-"AI 模式下可选","AI 模式下可选"
-域名商账户,域名商账户
-"AI 模式下可后补","AI 模式下可后补"
-"推荐先用 AI 模式跑出域名和站点方向，再到分阶段工作台做页面、主题和发布检查。","推荐先用 AI 模式跑出域名和站点方向，再到分阶段工作台做页面、主题和发布检查。"
-开始执行,开始执行
-先看看扩展流程,先看看扩展流程
+"AI 模式下可留空","AI 模式下可留空"
+购买服务商账号,购买服务商账号
+稍后再决定,稍后再决定
+"推荐先开 AI，让系统先推荐域名和页面方案，再决定是否进入 provider 的扩展流程。","推荐先开 AI，让系统先推荐域名和页面方案，再决定是否进入 provider 的扩展流程。"
+开始建站,开始建站
+先保存成工作区,先保存成工作区
 执行日志,执行日志
-"这里会实时显示 AI 理解、工具执行、建站动作和错误信息。","这里会实时显示 AI 理解、工具执行、建站动作和错误信息。"
+"这里会实时显示 AI 推荐、工具执行和建站进度。","这里会实时显示 AI 推荐、工具执行和建站进度。"
 "已接入的 AI 建站流程","已接入的 AI 建站流程"
-"`Websites` 负责统一入口；不同 provider 负责不同的专业流程和会话工作区。","`Websites` 负责统一入口；不同 provider 负责不同的专业流程和会话工作区。"
-例如：我想做一个面向海外客户的咖啡豆品牌站，首页要体现产地故事、产品优势、订阅购买和联系方式。,例如：我想做一个面向海外客户的咖啡豆品牌站，首页要体现产地故事、产品优势、订阅购买和联系方式。
-"关闭 AI 后必填","关闭 AI 后必填"
-"你已经关闭 AI 模式，系统将按明确输入直接执行，所以域名和账户都需要现在就确认。","你已经关闭 AI 模式，系统将按明确输入直接执行，所以域名和账户都需要现在就确认。"
-创建工作区失败,创建工作区失败
-网络错误，请稍后重试,网络错误，请稍后重试
-"关闭 AI 模式后，请先填写目标域名。","关闭 AI 模式后，请先填写目标域名。"
-"关闭 AI 模式后，请先选择域名商账户。","关闭 AI 模式后，请先选择域名商账户。"
-"请至少填写需求描述或预期域名，AI 才知道要帮你建什么。","请至少填写需求描述或预期域名，AI 才知道要帮你建什么。"
+"同一个工作台入口，不同 provider 可以扩展自己的专属流程和工具。","同一个工作台入口，不同 provider 可以扩展自己的专属流程和工具。"
+例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口,例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口
+"AI can recommend this for you.","AI can recommend this for you."
+"Please confirm this manually when AI is off.","Please confirm this manually when AI is off."
+"AI will suggest the domain, provider, and page plan first. You only need to confirm the result.","AI will suggest the domain, provider, and page plan first. You only need to confirm the result."
+"Manual mode keeps the same guided flow, but you need to provide the key information yourself.","Manual mode keeps the same guided flow, but you need to provide the key information yourself."
+"Unable to create the workspace right now.","Unable to create the workspace right now."
+"Network request failed. Please try again.","Network request failed. Please try again."
+"Terminal is still loading. Please try again.","Terminal is still loading. Please try again."
+"Please enter a target domain first.","Please enter a target domain first."
+"Please choose a registrar account first.","Please choose a registrar account first."
+"Please describe the site goal or provide a domain first.","Please describe the site goal or provide a domain first."
+"Preparing the guided AI build flow...","Preparing the guided AI build flow..."
+Connecting...,Connecting...
+Connected,Connected
+Disconnected,Disconnected
+"Connection failed. Please try again.","Connection failed. Please try again."
 返回工作台入口,返回工作台入口
 返回入口,返回入口
 "状态 JSON","状态 JSON"
 打开预览,打开预览
-"Public ID","Public ID"
 当前阶段,当前阶段
 Provider,Provider
-切换阶段,切换阶段
-更新阶段,更新阶段
-快照状态,快照状态
-"当前还没有生成快照，保存阶段或 Scope 后会自动生成。","当前还没有生成快照，保存阶段或 Scope 后会自动生成。"
-"Provider Tools","Provider Tools"
-"其他模块可以在这里为自己的 scope 挂接工具入口或预设动作。","其他模块可以在这里为自己的 scope 挂接工具入口或预设动作。"
-"当前 provider 还没有声明额外工具。","当前 provider 还没有声明额外工具。"
-打开,打开
-应用,应用
-工作区简报,工作区简报
-"这里放人能看懂的结构化信息。后面如果切到别的 provider，也能直接接上。","这里放人能看懂的结构化信息。后面如果切到别的 provider，也能直接接上。"
+预览站点,预览站点
+站点简报,站点简报
+"AI 推荐会根据这里的内容持续更新。","AI 推荐会根据这里的内容持续更新。"
 站点标题,站点标题
 一句话定位,一句话定位
 工作区备注,工作区备注
 详细需求,详细需求
+"Header 和 Footer 默认固定，主要编辑和 AI 生成集中在主体内容区域。","Header 和 Footer 默认固定，主要编辑和 AI 生成集中在主体内容区域。"
+榛樿璇█,榛樿璇█
+鍏宠仈璇█,鍏宠仈璇█
 保存简报,保存简报
 刷新工作区,刷新工作区
-消息与补充说明,消息与补充说明
-这里适合记录阶段性结论、对外需求、交接说明或手工补充的信息。,这里适合记录阶段性结论、对外需求、交接说明或手工补充的信息。
-还没有消息，先写下一条补充说明吧。,还没有消息，先写下一条补充说明吧。
-新增一条说明,新增一条说明
+补充说明,补充说明
 写入工作区,写入工作区
-"高级 Scope 编辑","高级 Scope 编辑"
-"当你需要批量修正结构化状态时，可以直接编辑 JSON。普通使用建议优先走上面的简报表单。","当你需要批量修正结构化状态时，可以直接编辑 JSON。普通使用建议优先走上面的简报表单。"
+还没有补充说明。,还没有补充说明。
+"高级设置与原始 Scope","高级设置与原始 Scope"
+手动切换阶段,手动切换阶段
+更新阶段,更新阶段
+"合并 Scope Patch","合并 Scope Patch"
+"合并 Patch","合并 Patch"
 "完整 Scope JSON","完整 Scope JSON"
 "整体替换 Scope","整体替换 Scope"
-"Scope Patch JSON","Scope Patch JSON"
-"合并 Patch","合并 Patch"
-"Provider 兼容信息","Provider 兼容信息"
-"这里记录当前工作区和 provider 原生入口之间的关系，便于后续 handoff。","这里记录当前工作区和 provider 原生入口之间的关系，便于后续 handoff。"
 "当前 Provider","当前 Provider"
+快照状态,快照状态
+当前还没有生成快照。,当前还没有生成快照。
 "Handoff 入口","Handoff 入口"
 "已按默认兼容规则生成 provider 入口。","已按默认兼容规则生成 provider 入口。"
+当前阶段可用工具,当前阶段可用工具
+当前阶段没有额外推荐工具。,当前阶段没有额外推荐工具。
+打开,打开
+应用,应用
+"查看全部 Provider Tools","查看全部 Provider Tools"
+"当前 provider 还没有声明额外工具。","当前 provider 还没有声明额外工具。"
 实时事件流,实时事件流
-"连接 SSE 后，可以持续观察当前工作区的事件变更。","连接 SSE 后，可以持续观察当前工作区的事件变更。"
 连接事件流,连接事件流
-继续其他工作区,继续其他工作区
-如果你要切换上下文，可以从这里跳回其他最近会话。,如果你要切换上下文，可以从这里跳回其他最近会话。
 暂无其他最近会话。,暂无其他最近会话。
-最近事件,最近事件
-这里显示最近写入的工作区事件，便于快速回顾。,这里显示最近写入的工作区事件，便于快速回顾。
+查看最近事件,查看最近事件
 暂无事件。,暂无事件。
-"AI 建站事件流","AI 建站事件流"
 工作区会话无效,工作区会话无效
+待确认,待确认
+例如：首页要更强调信任感和联系方式,例如：首页要更强调信任感和联系方式
 最近快照更新时间：%{time},最近快照更新时间：%{time}
-例如：先定域名，再补主题风格,例如：先定域名，再补主题风格
-"例如：客户确认首页突出产地故事，域名先保留 coffeebeanstories.com 作为备选","例如：客户确认首页突出产地故事，域名先保留 coffeebeanstories.com 作为备选"
-阶段已更新,阶段已更新
-更新阶段失败,更新阶段失败
-简报已保存,简报已保存
-保存简报失败,保存简报失败
-请先写一点内容再保存,请先写一点内容再保存
-说明已写入工作区,说明已写入工作区
-"Scope 已整体替换","Scope 已整体替换"
-"替换 Scope 失败","替换 Scope 失败"
-"Patch 已合并到 Scope","Patch 已合并到 Scope"
-"合并 Scope 失败","合并 Scope 失败"
-"工具配置损坏，无法解析 scope patch","工具配置损坏，无法解析 scope patch"
-应用工具失败,应用工具失败
-"Provider 工具已应用到工作区","Provider 工具已应用到工作区"
+"Failed to apply recommendation","Failed to apply recommendation"
+"Failed to update stage","Failed to update stage"
+"Summary saved","Summary saved"
+"Failed to save summary","Failed to save summary"
+"AI recommendation applied","AI recommendation applied"
+"Recommendation data is invalid","Recommendation data is invalid"
+"Returned to previous stage","Returned to previous stage"
+"Stage updated","Stage updated"
+"Network error","Network error"
+"Please enter a note first","Please enter a note first"
+"Note saved to workspace","Note saved to workspace"
+"Failed to save note","Failed to save note"
+"Scope replaced","Scope replaced"
+"Failed to replace scope","Failed to replace scope"
+"Patch merged into scope","Patch merged into scope"
+"Failed to merge patch","Failed to merge patch"
+"Tool scope patch is invalid","Tool scope patch is invalid"
+"Provider tool applied","Provider tool applied"
+"Failed to apply provider tool","Failed to apply provider tool"
