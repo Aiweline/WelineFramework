@@ -42,3 +42,48 @@
 取消订单,取消订单
 申请退货,申请退货
 不可取消,不可取消
+Pending,Pending
+Processing,Processing
+Paid,Paid
+Fulfilled,Fulfilled
+Completed,Completed
+Cancelled,Cancelled
+Refunded,Refunded
+Unsupported order status.,Unsupported order status.
+Order not found.,Order not found.
+Order ID is required.,Order ID is required.
+Order Management,Order Management
+"Manage order search, review, and status transitions from one place.","Manage order search, review, and status transitions from one place."
+Total Orders,Total Orders
+Completed / Cancelled,Completed / Cancelled
+Order Number,Order Number
+Search by order number,Search by order number
+Customer ID,Customer ID
+Search by customer ID,Search by customer ID
+Status,Status
+All statuses,All statuses
+Apply Filters,Apply Filters
+Reset,Reset
+Payment Status,Payment Status
+Total,Total
+Created At,Created At
+Actions,Actions
+View,View
+No orders found.,No orders found.
+Try adjusting the filters or create a new order flow from the storefront.,Try adjusting the filters or create a new order flow from the storefront.
+Order Detail,Order Detail
+"Review the order payload, items, and current status.","Review the order payload, items, and current status."
+Back to Orders,Back to Orders
+Order Summary,Order Summary
+Grand Total,Grand Total
+Update Status,Update Status
+Save Status,Save Status
+Order Items,Order Items
+Product,Product
+SKU,SKU
+Qty,Qty
+Price,Price
+Row Total,Row Total
+No order items found.,No order items found.
+Order status updated.,Order status updated.
+Order status update failed.,Order status update failed.
