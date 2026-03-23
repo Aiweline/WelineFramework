@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `2d3df085 test(weshop): lock auth token endpoint contracts`.
 
 ## Changed Files
 
@@ -40,4 +40,4 @@
 
 ## Next Resume Step
 
-- Commit this slice, then continue deeper into Google-grant integration or live auth-route verification once the local HTTP server is reachable again.
+- Continue in `2026-03-23-0513-weshop-google-grant-authenticator-slice` to finish extracting the remaining Google grant logic out of `AuthGrantService`.

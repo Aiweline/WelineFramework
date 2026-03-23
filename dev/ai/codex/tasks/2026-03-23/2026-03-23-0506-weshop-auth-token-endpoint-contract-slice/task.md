@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0506-weshop-auth-token-endpoint-contract-slice
 - Started: 2026-03-23 05:06
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: continue after commit 6d098b75
 
@@ -40,3 +40,4 @@
 ## Resume
 
 - Read [plan.md](./plan.md), [progress.md](./progress.md), and [result.md](./result.md).
+- Completed in commit `2d3df085`.
