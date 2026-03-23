@@ -52,10 +52,12 @@ class CheckoutPageDataService
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
             'shipping_methods' => $this->mapShippingMethods($this->shippingService->getAvailableShippingMethods()),
-            'payment_methods' => $this->checkoutService->getCheckoutPaymentMethods($customerId, [
-                'area' => 'frontend',
-                'currency' => 'USD',
-            ]),
+            'payment_methods' => $this->mapPaymentMethods(
+                $this->checkoutService->getCheckoutPaymentMethods($customerId, [
+                    'area' => 'frontend',
+                    'currency' => 'USD',
+                ])
+            ),
             'current_step' => max(1, min(3, $currentStep)),
             'countries' => $this->buildCountries(),
             'states' => [],
@@ -161,5 +163,111 @@ class CheckoutPageDataService
         }
 
         return $countries;
+    }
+
+    /**
+     * @param array<int, mixed> $methods
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapPaymentMethods(array $methods): array
+    {
+        $result = [];
+        $hasExplicitDefault = false;
+
+        foreach ($methods as $method) {
+            if (!\is_array($method)) {
+                continue;
+            }
+
+            $code = (string) ($method['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+
+            $flow = $this->resolvePaymentFlow($code);
+            $isDefault = (bool) ($method['is_default'] ?? false);
+            $hasExplicitDefault = $hasExplicitDefault || $isDefault;
+            $config = \is_array($method['config'] ?? null) ? $method['config'] : [];
+            $title = (string) ($method['title'] ?? $method['name'] ?? $code);
+
+            $result[] = [
+                'code' => $code,
+                'title' => $title,
+                'name' => $title,
+                'description' => (string) ($method['description'] ?? ''),
+                'is_default' => $isDefault,
+                'sort_order' => (int) ($method['sort_order'] ?? 0),
+                'icon' => (string) ($method['icon'] ?? ''),
+                'flow' => $flow,
+                'flow_label' => $this->resolvePaymentFlowLabel($flow),
+                'badge' => $this->resolvePaymentBadge($code, $flow),
+                'checkout_note' => $this->resolvePaymentCheckoutNote($code, $config, $method),
+            ];
+        }
+
+        usort(
+            $result,
+            static fn(array $left, array $right): int => ((int) ($left['sort_order'] ?? 0)) <=> ((int) ($right['sort_order'] ?? 0))
+        );
+
+        if (!$hasExplicitDefault && $result !== []) {
+            $result[0]['is_default'] = true;
+        }
+
+        return $result;
+    }
+
+    protected function resolvePaymentFlow(string $code): string
+    {
+        return match (strtolower($code)) {
+            'paypal', 'alipay', 'wechatpay' => 'redirect',
+            'manual_transfer' => 'offline',
+            'cash_on_delivery' => 'offline_collection',
+            default => 'direct',
+        };
+    }
+
+    protected function resolvePaymentFlowLabel(string $flow): string
+    {
+        return match ($flow) {
+            'redirect' => (string) __('Redirect after order placement'),
+            'offline' => (string) __('Pay after order creation'),
+            'offline_collection' => (string) __('Pay on delivery'),
+            default => (string) __('Pay during checkout'),
+        };
+    }
+
+    protected function resolvePaymentBadge(string $code, string $flow): string
+    {
+        return match (strtolower($code)) {
+            'paypal' => (string) __('Popular'),
+            'manual_transfer' => (string) __('Offline'),
+            'cash_on_delivery' => (string) __('Doorstep'),
+            default => $flow === 'redirect' ? (string) __('Redirect') : '',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $method
+     */
+    protected function resolvePaymentCheckoutNote(string $code, array $config, array $method): string
+    {
+        $instructions = trim((string) ($config['instructions'] ?? ''));
+        $referenceNote = trim((string) ($config['reference_note'] ?? ''));
+
+        if ($instructions !== '' && $referenceNote !== '') {
+            return $instructions . ' ' . $referenceNote;
+        }
+
+        if ($instructions !== '') {
+            return $instructions;
+        }
+
+        return match (strtolower($code)) {
+            'paypal' => (string) __('You will be redirected to PayPal after placing the order to complete payment securely.'),
+            'cash_on_delivery' => (string) __('Prepare the order amount for the courier when your shipment arrives.'),
+            default => trim((string) ($method['description'] ?? '')),
+        };
     }
 }
