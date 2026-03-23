@@ -271,25 +271,8 @@ $countries = $this->getData('countries') ?? [];
 
         <section class="weshop-checkout-card">
             <h2><?= __('Payment Method') ?></h2>
-            <w:hook name="WeShop_Payment::checkout::methods"/>
-            <?php if ($paymentMethods): ?>
-                <div class="weshop-checkout-choice-list">
-                    <?php foreach ($paymentMethods as $method): ?>
-                        <label class="weshop-checkout-choice">
-                            <input type="radio" name="payment_method" value="<?= htmlspecialchars((string) ($method['code'] ?? '')) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> required>
-                            <span>
-                                <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($method['title'] ?? $method['name'] ?? '')) ?></div>
-                                <div class="weshop-checkout-choice-meta"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
-                            </span>
-                        </label>
-                    <?php endforeach; ?>
-                </div>
-                <div style="margin-top: 1rem;">
-                    <w:hook name="WeShop_Payment::checkout::credit_card_form"/>
-                </div>
-            <?php else: ?>
-                <div class="weshop-checkout-empty"><?= __('No payment methods are available for the current checkout context.') ?></div>
-            <?php endif; ?>
+            <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>
+            <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-details"/>
         </section>
 
         <section class="weshop-checkout-card">
