@@ -1,8 +1,43 @@
-﻿"RMA ID不能为空","RMA ID不能为空"
+"RMA ID不能为空","RMA ID不能为空"
 RMA已批准,RMA已批准
-请先登录,请先登录
-无权访问此订单,无权访问此订单
-退换货申请,退换货申请
-订单ID不能为空,订单ID不能为空
-请选择退换货原因,请选择退换货原因
-退换货申请已提交，我们会在24小时内处理,退换货申请已提交，我们会在24小时内处理
+"RMA ID is required.","RMA ID 不能为空。"
+"RMA has been rejected.","RMA 已拒绝。"
+"Order ID is required.","订单 ID 不能为空。"
+"Order and reason are required.","订单和原因不能为空。"
+"You do not have access to this order.","您无权访问该订单。"
+"Please log in to continue.","请先登录后继续。"
+"Returns & Exchanges","退货与换货"
+Return,退货
+Exchange,换货
+"Wrong size","尺码不合适"
+"Damaged in transit","运输损坏"
+"Defective item","商品有缺陷"
+"Item not as described","商品与描述不符"
+"Changed my mind","改变主意"
+Other,其他
+"Return reason is required.","退货原因不能为空。"
+"RMA record not found.","未找到 RMA 记录。"
+"Your return request has been submitted.","您的退换货申请已提交。"
+"Unable to submit your request right now.","当前无法提交申请，请稍后再试。"
+"Back To Orders","返回订单列表"
+"Account Center","账户中心"
+"Returns Center","退换货中心"
+"Submit Return / Exchange","提交退货/换货"
+"New Request","新建申请"
+"Request Type","申请类型"
+"Select a reason","请选择原因"
+"Input your order id","请输入订单 ID"
+"Tell us more details about your request","请补充申请说明"
+"Submit Request","提交申请"
+"Total Requests","申请总数"
+"Selected Order","已选订单"
+"None selected","未选择"
+"Request Timeline","申请时间线"
+"Your Latest RMA Records","最近 RMA 记录"
+"No return requests yet","暂无退换货申请"
+"Submitted at: %1","提交时间：%1"
+"After-Sales","售后服务"
+"Open RMA","打开 RMA"
+"Requests Submitted","已提交申请"
+"Track return and exchange approvals, and submit new requests directly from your account center.","在账户中心追踪退换货审核状态，并直接提交新申请。"
+"Manage Return Requests","管理退换货申请"
