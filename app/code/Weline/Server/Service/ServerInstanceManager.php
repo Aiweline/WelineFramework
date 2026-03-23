@@ -868,7 +868,8 @@ class ServerInstanceManager
         if ($info === null) {
             return false;
         }
-        return $info->isMasterRunning() || $info->getServiceStats()['running'] > 0;
+        $stats = $this->collectRuntimeStatsForInstance($info, false);
+        return $stats['instance_running'];
     }
 
     /**
@@ -880,7 +881,7 @@ class ServerInstanceManager
         if ($info === null) {
             return 0;
         }
-        return $info->getRunningWorkerCount();
+        return $this->collectRuntimeStatsForInstance($info, false)['workers'];
     }
 
     /**
@@ -889,7 +890,7 @@ class ServerInstanceManager
     public function hasRunningWorkers(): bool
     {
         foreach ($this->getAllInstanceInfo() as $info) {
-            if ($info->getRunningWorkerCount() > 0) {
+            if ($this->collectRuntimeStatsForInstance($info, false)['workers'] > 0) {
                 return true;
             }
         }
@@ -899,31 +900,72 @@ class ServerInstanceManager
     /**
      * 获取所有真正运行中的实例统计信息
      *
-     * @return array{instances: int, workers: int, ports: int[]}
+     * 默认走控制面快路径：基于实例文件中的活跃状态统计，而不是逐 Worker 做实时系统探测。
+     *
+     * @return array{instances: int, workers: int, dispatchers: int, ports: int[]}
      */
     public function getRunningStats(): array
     {
         $instances = 0;
         $workers = 0;
+        $dispatchers = 0;
         $ports = [];
 
         foreach ($this->getAllInstanceInfo() as $info) {
-            $runningCount = $info->getRunningWorkerCount();
-            if ($runningCount > 0) {
+            $runtimeStats = $this->collectRuntimeStatsForInstance($info, false);
+            if ($runtimeStats['instance_running']) {
                 $instances++;
-                $workers += $runningCount;
-
-                foreach ($info->getWorkers() as $worker) {
-                    if ($worker->isRunning() && $worker->port !== null) {
-                        $ports[] = $worker->port;
-                    }
-                }
             }
+            $workers += $runtimeStats['workers'];
+            $dispatchers += $runtimeStats['dispatchers'];
+            $ports = \array_merge($ports, $runtimeStats['ports']);
         }
 
         return [
             'instances' => $instances,
             'workers' => $workers,
+            'dispatchers' => $dispatchers,
+            'ports' => $ports,
+        ];
+    }
+
+    /**
+     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[]}
+     */
+    private function collectRuntimeStatsForInstance(ServerInstanceInfo $info, bool $realtime): array
+    {
+        $workers = 0;
+        $dispatchers = 0;
+        $ports = [];
+        $hasActiveService = false;
+
+        foreach ($info->services as $service) {
+            $isRunning = $realtime ? $service->isRunning() : $service->isExpectedRunningState();
+            if (!$isRunning) {
+                continue;
+            }
+
+            $hasActiveService = true;
+
+            if ($service->role === 'worker') {
+                $workers++;
+                if ($service->port !== null) {
+                    $ports[] = $service->port;
+                }
+                continue;
+            }
+
+            if ($service->role === 'dispatcher') {
+                $dispatchers++;
+            }
+        }
+
+        $masterRunning = $realtime ? $info->isMasterRunning() : $info->masterPid > 0;
+
+        return [
+            'instance_running' => $hasActiveService || $masterRunning,
+            'workers' => $workers,
+            'dispatchers' => $dispatchers,
             'ports' => $ports,
         ];
     }
