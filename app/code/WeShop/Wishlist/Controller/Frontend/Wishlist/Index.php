@@ -4,36 +4,36 @@ declare(strict_types=1);
 
 namespace WeShop\Wishlist\Controller\Frontend\Wishlist;
 
-use Weline\Framework\App\Controller\FrontendController;
-use WeShop\Customer\Session\CustomerSession;
-use WeShop\Wishlist\Service\WishlistService;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Frontend\Controller\BaseController;
+use WeShop\Wishlist\Service\WishlistPageDataService;
 
-/**
- * 心愿单列表控制器
- */
-class Index extends FrontendController
+class Index extends BaseController
 {
-    /**
-     * 心愿单列表页
-     */
+    private const LOGIN_ROUTE = 'customer/account/login';
+
+    protected ?string $layoutType = 'account';
+
+    public function __construct(
+        private readonly CustomerContextInterface $customerContext,
+        private readonly WishlistPageDataService $wishlistPageDataService
+    ) {
+    }
+
     public function index(): string
     {
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
-            $this->getMessageManager()->addError(__('请先登录'));
-            return $this->redirect('weshop/customer/account/login');
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            $this->getMessageManager()->addError(__('Please log in to continue.'));
+
+            $this->redirect(self::LOGIN_ROUTE);
+            return '';
         }
-        
-        /** @var WishlistService $wishlistService */
-        $wishlistService = ObjectManager::getInstance(WishlistService::class);
-        $wishlist = $wishlistService->getCustomerWishlist($customer->getId());
-        
-        $this->assign('wishlist', $wishlist);
-        
+
+        foreach ($this->wishlistPageDataService->build($customerId) as $key => $value) {
+            $this->assign($key, $value);
+        }
+
         return $this->fetch();
     }
 }
