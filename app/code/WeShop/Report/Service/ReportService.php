@@ -4,40 +4,35 @@ declare(strict_types=1);
 
 namespace WeShop\Report\Service;
 
-use Weline\Framework\Manager\ObjectManager;
-use WeShop\Order\Model\Order;
+use WeShop\Report\Repository\ReportOrderRepositoryInterface;
 
 /**
- * 报表服务
+ * 鎶ヨ〃鏈嶅姟
  */
 class ReportService
 {
+    public function __construct(private ReportOrderRepositoryInterface $repository)
+    {
+    }
+
     /**
-     * 获取销售报表
-     * 
-     * @param string $startDate 开始日期
-     * @param string $endDate 结束日期
+     * 鑾峰彇閿€鍞姤琛?
+     *
+     * @param string $startDate 寮€濮嬫棩鏈?
+     * @param string $endDate 缁撴潫鏃ユ湡
      * @return array
      */
     public function getSalesReport(string $startDate, string $endDate): array
     {
-        /** @var Order $order */
-        $order = ObjectManager::getInstance(Order::class);
-        
-        $orders = $order->clear()
-            ->where(Order::schema_fields_created_at, ['>=', $startDate])
-            ->where(Order::schema_fields_created_at, ['<=', $endDate])
-            ->where(Order::schema_fields_status, 'completed')
-            ->select()
-            ->fetchArray();
-        
+        $orders = $this->repository->fetchCompletedOrders($startDate, $endDate);
+
         $totalSales = 0;
         $orderCount = count($orders);
-        
+
         foreach ($orders as $orderData) {
             $totalSales += (float)($orderData['total'] ?? 0);
         }
-        
+
         return [
             'total_sales' => $totalSales,
             'order_count' => $orderCount,
