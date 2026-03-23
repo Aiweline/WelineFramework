@@ -329,10 +329,42 @@ class ProcesserTest extends TestCore
         ], $resolved);
     }
 
-    public function testShouldWaitForManagedPidResolutionFollowsBlockOnly(): void
+    public function testBuildWindowsBatchSignalCommandUsesSingleTaskkillInvocation(): void
     {
-        self::assertTrue($this->invokePrivateStatic(Processer::class, 'shouldWaitForManagedPidResolution', [true]));
-        self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldWaitForManagedPidResolution', [false]));
+        $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchSignalCommand', [[101, 202, 303]]);
+
+        self::assertSame('taskkill /F /PID 101 /PID 202 /PID 303 2>NUL', $command);
+    }
+
+    public function testBuildWindowsAsyncBatchSignalCommandUsesDetachedStartWrapper(): void
+    {
+        $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsAsyncBatchSignalCommand', [[101, 202, 303]]);
+
+        self::assertSame(
+            'cmd /d /c start "" /B cmd /d /c "taskkill /F /PID 101 /PID 202 /PID 303 1>NUL 2>NUL"',
+            $command
+        );
+    }
+
+    public function testBatchCheckRunningUsesBatchProcessInfoQueryForLargePidSets(): void
+    {
+        $pids = \range(101, 117);
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->expects(self::once())
+            ->method('batchGetProcessInfo')
+            ->with($pids)
+            ->willReturn(\array_fill_keys($pids, ['exists' => false]));
+        $driver->expects(self::never())
+            ->method('isRunningByPid');
+
+        $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
+        $reflection->setAccessible(true);
+        $reflection->setValue(null, $driver);
+
+        self::assertSame(
+            \array_fill_keys($pids, false),
+            Processer::batchCheckRunning($pids)
+        );
     }
 
     private function invokePrivateStatic(string $class, string $method, array $args): mixed

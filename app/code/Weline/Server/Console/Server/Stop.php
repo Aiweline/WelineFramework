@@ -578,11 +578,7 @@ class Stop extends CommandAbstract
      */
     protected function shouldWaitForMasterExitAfterProgress(string $message, array $exitedPids, int $totalInstances): bool
     {
-        if (\str_contains($message, 'Master 即将退出') || \str_contains($message, '所有子进程已完整退出')) {
-            return true;
-        }
-
-        return $totalInstances > 0 && \count($exitedPids) >= $totalInstances;
+        return \str_contains($message, 'Master 即将退出');
     }
 
     private function getIpcHardTimeout(): int
