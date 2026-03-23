@@ -605,6 +605,13 @@ $area = $themeData['area'] ?? 'frontend';
                 <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::checkout::content-before</w:hook>
                 
+                <if condition="meta.content">
+                    {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                    <else>
                 <div class="weshop-checkout-title">
                     <?php $itemCount = $this->getData('item_count') ?? 0; ?>
                     <?= __('Checkout (%1 item)', $itemCount) ?>
@@ -870,9 +877,7 @@ $area = $themeData['area'] ?? 'frontend';
                     
                 </div>
                 
-                <!-- Content Template -->
-                <if condition="contentTemplate">
-                    <?= $this->fetch($this->getData('contentTemplate')) ?>
+                    </else>
                 </if>
                 
                 <w:hook>Weline_Theme::frontend::layouts::checkout::content-after</w:hook>
