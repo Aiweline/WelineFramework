@@ -1572,9 +1572,9 @@ class ServiceOrchestrator
 
         // ========== 阶段 4：等待所有 IPC 连接断开（短超时）==========
         $this->setStopStage(self::STOP_STAGE_WAIT_EXIT);
-        WlsLogger::info_('[Orchestrator] 阶段4: 等待子进程退出');
-        $this->sendStopProgress('阶段4/6: 等待子进程退出');
-        $this->waitForAllDisconnectedWithProgress(3.0);
+        WlsLogger::info_('[Orchestrator] 阶段4: 收取退出回执（非阻塞）');
+        $this->sendStopProgress('阶段4/6: 收取退出回执（非阻塞）');
+        $this->settleShutdownIpcNonBlocking();
 
         // ========== 阶段 5：校验并强制杀死残留进程 ==========
         $this->setStopStage(self::STOP_STAGE_VERIFY);
@@ -1693,7 +1693,7 @@ class ServiceOrchestrator
     {
         $runningPids = [];
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
+            if ($instance->pid > 0 && $this->isChildProcessRunning($instance->pid)) {
                 $runningPids[$instance->pid] = $instance->pid;
             }
         }
@@ -1702,23 +1702,21 @@ class ServiceOrchestrator
             return;
         }
 
-        $terminateTimeout = (float)($this->context?->getConfig('wls.orchestrator.stop_terminate_timeout_sec', 3.0) ?? 3.0);
-        if ($terminateTimeout < 1.0) {
-            $terminateTimeout = 1.0;
+        $pidList = \array_values($runningPids);
+        WlsLogger::info_('[Orchestrator] 批量下发退出信号: ' . \implode(',', $pidList));
+        $result = $this->sendStopBatchTerminationSignals($pidList);
+        $failed = [];
+        foreach ($pidList as $pid) {
+            if (!($result[$pid] ?? false)) {
+                $failed[] = $pid;
+            }
         }
-        if ($terminateTimeout > 30.0) {
-            $terminateTimeout = 30.0;
+        if (!empty($failed)) {
+            WlsLogger::warning_('[Orchestrator] 批量下发退出信号失败: ' . \implode(',', $failed));
+            return;
         }
 
-        $pidList = \array_values($runningPids);
-        WlsLogger::info_('[Orchestrator] 并行终止子进程: ' . \implode(',', $pidList));
-        $result = Processer::batchGracefulKill($pidList, $terminateTimeout, true);
-        $remaining = $result['remaining'] ?? [];
-        if (!empty($remaining)) {
-            WlsLogger::warning_('[Orchestrator] 并行终止后仍存活: ' . \implode(',', $remaining));
-        } else {
-            WlsLogger::info_('[Orchestrator] 并行终止完成: 所有子进程已退出');
-        }
+        WlsLogger::info_('[Orchestrator] 批量退出信号已下发，阶段5统一校验退出结果');
     }
 
     /**
@@ -1783,6 +1781,11 @@ class ServiceOrchestrator
     /**
      * 等待所有 IPC 连接断开
      */
+    private function settleShutdownIpcNonBlocking(): void
+    {
+        $this->pollStopFlowIpc(0, 50000);
+    }
+
     private function waitForAllDisconnected(float $timeout): void
     {
         $this->waitForAllDisconnectedWithProgress($timeout);
@@ -1871,43 +1874,85 @@ class ServiceOrchestrator
     private function verifyAndKillRemainingProcesses(): void
     {
         $allInstances = $this->registry->getAllInstances();
-
-        // 收集仍在运行的进程 PID
         $runningPids = [];
-        $exitedPids = [];
         $pidToInstance = [];
 
         foreach ($allInstances as $instance) {
-            $provider = $this->registry->getProvider($instance->role);
-            $displayName = $provider?->getDisplayName() ?? $instance->role;
-            
-            if ($instance->pid > 0) {
-                if ($this->isProcessRunning($instance->pid)) {
-                    $runningPids[] = $instance->pid;
-                    $pidToInstance[$instance->pid] = $instance;
-                } else {
-                    $exitedPids[] = $instance->pid;
-                    $msg = "  ✓ {$displayName}(PID:{$instance->pid}) 已退出";
-                    $this->sendStopProgress($msg);
-                }
+            if ($instance->pid <= 0) {
+                continue;
+            }
+
+            $pidToInstance[$instance->pid] = $instance;
+            if ($this->isChildProcessRunning($instance->pid)) {
+                $runningPids[] = $instance->pid;
+            } elseif ($instance->ipcClientId !== null) {
+                $this->closeStopFlowClient($instance->ipcClientId);
             }
         }
-        
-        // 报告校验结果
-        $totalCount = \count($allInstances);
-        $exitedCount = \count($exitedPids);
-        $runningCount = \count($runningPids);
-        
-        if ($runningCount === 0) {
-            $this->sendStopProgress("校验完成: 所有 {$totalCount} 个子进程已正常退出");
-            WlsLogger::info_("[Orchestrator] 校验完成: 所有 {$totalCount} 个子进程已正常退出");
-        } else {
-            $this->sendStopProgress("校验结果: {$exitedCount}/{$totalCount} 已退出，{$runningCount} 个需强制终止");
-            WlsLogger::warning_("[Orchestrator] 校验结果: {$exitedCount}/{$totalCount} 已退出，{$runningCount} 个需强制终止");
+
+        $verificationTimeout = $this->getStopVerificationTimeout();
+        if (!empty($runningPids) && $verificationTimeout > 0.0) {
+            $verificationStartedAt = \microtime(true);
+            $deadline = $verificationStartedAt + $verificationTimeout;
+            $lastHeartbeatAt = 0.0;
+
+            while (!empty($runningPids) && \microtime(true) < $deadline) {
+                $this->pollStopFlowIpc(0, 100000);
+
+                $runningStatus = $this->batchCheckStopFlowRunning($runningPids);
+                $stillRunning = [];
+                foreach ($runningPids as $pid) {
+                    if ($runningStatus[$pid] ?? false) {
+                        $stillRunning[] = $pid;
+                        continue;
+                    }
+
+                    $instance = $pidToInstance[$pid] ?? null;
+                    if ($instance?->ipcClientId !== null) {
+                        $this->closeStopFlowClient($instance->ipcClientId);
+                    }
+                }
+                $runningPids = $stillRunning;
+
+                if ($runningPids === []) {
+                    break;
+                }
+
+                $now = \microtime(true);
+                if (($now - $lastHeartbeatAt) >= 1.0) {
+                    $elapsed = (int) \round($now - $verificationStartedAt);
+                    $remainingCount = \count($runningPids);
+                    $this->sendStopProgress("阶段5校验中: 剩余 {$remainingCount} 个进程 ({$elapsed}s/{$verificationTimeout}s)");
+                    $lastHeartbeatAt = $now;
+                }
+
+                $this->sleepStopFlow(100000);
+            }
         }
 
-        // 批量优雅停止（使用 Processer 的增强方法）
-        if (!empty($runningPids)) {
+        $runningPidSet = [];
+        foreach ($runningPids as $pid) {
+            $runningPidSet[$pid] = true;
+        }
+
+        $totalCount = \count($allInstances);
+        $exitedCount = 0;
+        foreach ($allInstances as $instance) {
+            if ($instance->pid <= 0 || !isset($runningPidSet[$instance->pid])) {
+                $exitedCount++;
+            }
+        }
+        $runningCount = \count($runningPids);
+
+        if ($runningCount === 0) {
+            $this->sendStopProgress("阶段5完成: 全部 {$totalCount} 个子进程已退出");
+            WlsLogger::info_("[Orchestrator] 阶段5完成: 全部 {$totalCount} 个子进程已退出");
+        } else {
+            $this->sendStopProgress("阶段5结果: {$exitedCount}/{$totalCount} 已退出，{$runningCount} 个需强制终止");
+            WlsLogger::warning_("[Orchestrator] 阶段5结果: {$exitedCount}/{$totalCount} 已退出，{$runningCount} 个需强制终止");
+        }
+
+        if ($runningPids !== []) {
             $pidList = [];
             foreach ($runningPids as $pid) {
                 $inst = $pidToInstance[$pid] ?? null;
@@ -1919,23 +1964,29 @@ class ServiceOrchestrator
                     $pidList[] = "PID:{$pid}";
                 }
             }
-            $this->sendStopProgress("强制终止残留进程: " . \implode(', ', $pidList));
-            WlsLogger::warning_("[Orchestrator] 批量终止 " . \count($runningPids) . " 个残留进程：" . \implode(',', $runningPids));
-            
-            $result = Processer::batchGracefulKill($runningPids, 2.0, true); // 2秒超时
+
+            $this->sendStopProgress('强制终止残留进程: ' . \implode(', ', $pidList));
+            WlsLogger::warning_('[Orchestrator] 强制终止残留子进程: ' . \implode(',', $runningPids));
+            $result = $this->forceStopRemainingProcesses($runningPids);
+
+            foreach ($runningPids as $pid) {
+                $instance = $pidToInstance[$pid] ?? null;
+                if ($instance?->ipcClientId !== null) {
+                    $this->closeStopFlowClient($instance->ipcClientId);
+                }
+            }
 
             if ($result['killed'] > 0) {
-                $this->sendStopProgress("  ✓ 成功终止 {$result['killed']} 个残留进程");
-                WlsLogger::info_("[Orchestrator] 批量终止成功 {$result['killed']} 个进程");
+                $this->sendStopProgress("  ✓ 已强制终止 {$result['killed']} 个残留进程");
+                WlsLogger::info_("[Orchestrator] 已强制终止 {$result['killed']} 个残留子进程");
             }
             if (!empty($result['remaining'])) {
                 $remainingCount = \count($result['remaining']);
-                $this->sendStopProgress("  ⚠ 仍有 {$remainingCount} 个进程无法终止: " . \implode(',', $result['remaining']));
-                WlsLogger::warning_("[Orchestrator] 仍有 {$remainingCount} 个进程无法终止：" . \implode(',', $result['remaining']));
+                $this->sendStopProgress('  ! 仍有 ' . $remainingCount . ' 个进程未终止: ' . \implode(',', $result['remaining']));
+                WlsLogger::warning_('[Orchestrator] 仍有 ' . $remainingCount . ' 个进程未终止: ' . \implode(',', $result['remaining']));
             }
         }
 
-        // 清理所有实例状态
         foreach ($allInstances as $instance) {
             $this->cleanupInstancePidFile($instance);
             $instance->state = ServiceInstance::STATE_STOPPED;
@@ -1949,6 +2000,68 @@ class ServiceOrchestrator
     /**
      * 关闭 IPC 服务器
      */
+    protected function isChildProcessRunning(int $pid): bool
+    {
+        return $this->isProcessRunning($pid);
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array<int, bool>
+     */
+    protected function sendStopBatchTerminationSignals(array $pids): array
+    {
+        return Processer::batchSendSignal($pids, 15);
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array<int, bool>
+     */
+    protected function batchCheckStopFlowRunning(array $pids): array
+    {
+        return Processer::batchCheckRunning($pids);
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array{killed: int, failed: int, remaining: int[]}
+     */
+    protected function forceStopRemainingProcesses(array $pids): array
+    {
+        return Processer::batchGracefulKill($pids, 0.0, true);
+    }
+
+    protected function pollStopFlowIpc(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+    {
+        return $this->controlServer?->poll($timeoutSec, $timeoutUsec) ?? 0;
+    }
+
+    protected function closeStopFlowClient(int $clientId): void
+    {
+        $this->controlServer?->closeClient($clientId);
+    }
+
+    protected function sleepStopFlow(int $microseconds): void
+    {
+        if ($microseconds > 0) {
+            SchedulerSystem::usleep($microseconds);
+        }
+    }
+
+    protected function getStopVerificationTimeout(): float
+    {
+        $timeout = (float)($this->context?->getConfig('wls.orchestrator.stop_terminate_timeout_sec', 3.0) ?? 3.0);
+        if ($timeout < 0.0) {
+            $timeout = 0.0;
+        }
+        if ($timeout > 30.0) {
+            $timeout = 30.0;
+        }
+
+        return $timeout;
+    }
+
     private function closeIpcServer(): void
     {
         if ($this->controlServer !== null) {
@@ -3337,8 +3450,8 @@ class ServiceOrchestrator
         $this->broadcastShutdownToAll();
 
         // 阶段 4：等待子进程退出
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段4: 等待子进程退出');
-        $this->waitForAllDisconnectedWithProgress(5.0);
+        WlsLogger::info_('[Orchestrator] 子进程停止阶段4: 收取退出回执（非阻塞）');
+        $this->settleShutdownIpcNonBlocking();
 
         // 阶段 5：强制杀死残留子进程
         WlsLogger::info_('[Orchestrator] 子进程停止阶段5: 校验并杀死残留');
