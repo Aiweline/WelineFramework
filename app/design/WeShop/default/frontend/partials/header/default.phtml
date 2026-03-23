@@ -27,21 +27,38 @@
         
         <!-- Search Bar -->
         <div class="flex flex-1 items-center justify-center px-8">
-            <div class="w-full max-w-lg">
-                <form action="<?= $this->getUrl('search') ?>" method="get" class="relative flex flex-col w-full">
+            <div
+                class="header-search-wrapper w-full max-w-lg"
+                data-weshop-search
+                data-search-url="<?= htmlspecialchars($this->getUrl('search')) ?>"
+                data-search-suggestions-url="<?= htmlspecialchars($this->getUrl('search/suggest')) ?>"
+            >
+                <form action="<?= $this->getUrl('search') ?>" method="get" class="header-search-form relative flex flex-col w-full">
                     <div class="flex w-full flex-1 items-stretch rounded-lg h-11 border border-border-light dark:border-border-dark focus-within:ring-2 focus-within:ring-primary">
                         <w:hook name="WeShop_Frontend::header::search-before"/>
                         <input 
                             type="text" 
                             name="q" 
-                            class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-lg bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-0 focus:ring-0 border-none h-full placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 text-sm font-normal" 
+                            class="search-input form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-l-lg bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark focus:outline-0 focus:ring-0 border-none h-full placeholder:text-text-secondary-light dark:placeholder:text-text-secondary-dark px-4 text-sm font-normal"
                             placeholder="<?= __('Search for products, brands, and more...') ?>" 
                             value="<?= htmlspecialchars($this->request->getParam('q') ?? '') ?>"
+                            autocomplete="off"
+                            aria-controls="header-search-suggestions"
+                            aria-expanded="false"
                         />
                         <w:hook name="WeShop_Frontend::header::search-after"/>
                         <button type="submit" class="flex items-center justify-center px-4 bg-primary text-white rounded-r-lg">
                             <span class="material-symbols-outlined text-xl">search</span>
                         </button>
+                    </div>
+
+                    <div id="header-search-suggestions" class="search-suggestions hidden absolute top-full z-40 mt-2 w-full overflow-hidden rounded-2xl border border-border-light bg-surface-light shadow-xl" aria-hidden="true">
+                        <w:hook name="WeShop_Frontend::header::search-suggestions-before"/>
+                        <div class="search-suggestions-header border-b border-border-light px-4 py-3 text-xs font-bold uppercase tracking-[0.16em] text-text-secondary-light">
+                            <?= __('Search Suggestions') ?>
+                        </div>
+                        <ul class="search-suggestions-list max-h-80 overflow-y-auto px-2 py-2"></ul>
+                        <w:hook name="WeShop_Frontend::header::search-suggestions-after"/>
                     </div>
                 </form>
             </div>
