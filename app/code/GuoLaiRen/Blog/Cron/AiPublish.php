@@ -16,6 +16,7 @@ use GuoLaiRen\Blog\Model\TrendProfile;
 use GuoLaiRen\Blog\Model\TrendingKeywordLog;
 use GuoLaiRen\Blog\Model\TrendsConfig;
 use GuoLaiRen\Blog\Model\TrendSiteQuota;
+use GuoLaiRen\Blog\Service\BlogSiteCacheInvalidator;
 use Weline\Ai\Adapter\ArticleGenerationAdapter;
 use Weline\Ai\Service\ArticleGenerationService;
 use Weline\Cron\CronTaskInterface;
@@ -57,6 +58,7 @@ class AiPublish implements CronTaskInterface
         $published = 0;
         $errors = []; // 收集错误信息
         $skipReasons = []; // 与定时任务日志一致：每次跳过发文的明确原因（供 SSE / 返回文案）
+        $publishedSiteIds = [];
         $asDraft = TrendsConfig::publishAsDraft();
         $modeText = $hasTrendSource ? __('趋势增长词模式') : __('画像关键词兜底模式');
 
@@ -175,6 +177,9 @@ class AiPublish implements CronTaskInterface
                         if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft, $poolForArticle)) {
                             $log->setData(TrendingKeywordLog::schema_fields_USED_AT, date('Y-m-d H:i:s'))->save();
                             $published++;
+                            if (!$asDraft && $siteId > 0) {
+                                $publishedSiteIds[$siteId] = $siteId;
+                            }
                             if ($onProgress) {
                                 $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
                             }
@@ -248,6 +253,9 @@ class AiPublish implements CronTaskInterface
                         $poolForArticle = $this->buildVariationKeywordPool($profileId, $rawKeywords);
                         if ($this->publishByKeyword($keyword, $siteId, $categoryId, $profileId, $locale, $asDraft, $poolForArticle)) {
                             $published++;
+                            if (!$asDraft && $siteId > 0) {
+                                $publishedSiteIds[$siteId] = $siteId;
+                            }
                             if ($onProgress) {
                                 $onProgress('article_done', ['keyword' => $keyword, 'published' => $published]);
                             }
@@ -272,6 +280,7 @@ class AiPublish implements CronTaskInterface
             }
         }
 
+        $cacheWarnings = $this->invalidatePublishedSiteCaches(array_values($publishedSiteIds));
         $result = __('自动发文完成：本次发布 %{count} 篇', ['count' => $published]);
         $skipUnique = array_values(array_unique($skipReasons));
         $errorUnique = array_values(array_unique($errors));
@@ -294,6 +303,13 @@ class AiPublish implements CronTaskInterface
             $hintBlock = __('部分关键词生成失败：') . implode('；', $errorUnique);
             $result .= "\n" . $hintBlock;
         }
+        if ($cacheWarnings !== []) {
+            $cacheWarnings = array_values(array_unique($cacheWarnings));
+            $result .= "\n" . implode("\n", $cacheWarnings);
+            if ($onProgress) {
+                $onProgress('cache_warning', ['messages' => $cacheWarnings]);
+            }
+        }
 
         if ($onProgress) {
             $onProgress('done', [
@@ -312,6 +328,52 @@ class AiPublish implements CronTaskInterface
      *
      * @return array<string, true> 关键词 => true，便于 in_array 判断
      */
+    /**
+     * @param list<int> $siteIds
+     * @return list<string>
+     */
+    private function invalidatePublishedSiteCaches(array $siteIds): array
+    {
+        if ($siteIds === []) {
+            return [];
+        }
+
+        try {
+            $result = $this->getBlogSiteCacheInvalidator()->invalidateSiteIds($siteIds);
+            $warnings = [];
+            if (!(bool)($result['application_cache_cleared'] ?? false)) {
+                $warnings[] = __('AI 发文已完成，但站点缓存清理失败，请检查缓存服务。');
+            }
+            if (!empty($result['errors'])) {
+                $warnings[] = __('AI 发文已完成，但部分 CDN 缓存清理失败，请检查 CDN 配置。');
+                foreach ($result['errors'] as $error) {
+                    $domain = (string)($error['domain_name'] ?? '');
+                    $siteId = (int)($error['site_id'] ?? 0);
+                    $message = (string)($error['message'] ?? '');
+                    trigger_error(
+                        __('Blog AI 发文后清理 CDN 缓存失败：site_id=%{site_id} domain=%{domain} error=%{error}', [
+                            'site_id' => (string)$siteId,
+                            'domain' => $domain,
+                            'error' => $message,
+                        ]),
+                        E_USER_WARNING
+                    );
+                }
+            }
+
+            return $warnings;
+        } catch (\Throwable $throwable) {
+            return [
+                __('AI 发文已完成，但缓存清理发生异常：%{error}', ['error' => $throwable->getMessage()]),
+            ];
+        }
+    }
+
+    private function getBlogSiteCacheInvalidator(): BlogSiteCacheInvalidator
+    {
+        return ObjectManager::getInstance(BlogSiteCacheInvalidator::class);
+    }
+
     private function getUsedKeywordsForQuota(int $siteId, int $profileId): array
     {
         $postModel = ObjectManager::getInstance(PostModel::class);
