@@ -13,4 +13,9 @@ return [
         'description' => __('Inject saved, discovery, and follow-up cards into the storefront customer account center.'),
         'doc' => 'frontend/account/discovery/cards.md',
     ],
+    'WeShop_Customer::frontend::account::orders::cards' => [
+        'name' => __('Storefront account order cards'),
+        'description' => __('Inject order, return, invoice, and after-sales cards into the storefront customer account center.'),
+        'doc' => 'frontend/account/orders/cards.md',
+    ],
 ];

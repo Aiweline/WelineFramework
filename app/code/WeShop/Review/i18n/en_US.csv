@@ -1,9 +1,19 @@
-﻿产品ID不能为空,产品ID不能为空
-用户A,用户A
-非常满意,非常满意
-产品质量很好，物流也很快，非常满意！,产品质量很好，物流也很快，非常满意！
-用户B,用户B
-还不错,还不错
-产品还可以，就是包装有点简单。,产品还可以，就是包装有点简单。
-商品评论,商品评论
+﻿"Please log in to write a review.","Please log in to write a review."
+"Product and content are required.","Product and content are required."
+"Unable to submit your review right now.","Unable to submit your review right now."
+"Thank you for submitting your review.","Thank you for submitting your review."
+"Product ID cannot be empty.","Product ID cannot be empty."
+"Product Reviews","Product Reviews"
+"Product review tab content","Product review tab content"
+"Render the customer review block inside product detail tabs.","Render the customer review block inside product detail tabs."
+"Review Page Hooks","Review Page Hooks"
+"Inject widgets before the review listing on the storefront review page.","Inject widgets before the review listing on the storefront review page."
+"Review Listing Hooks","Review Listing Hooks"
+"Add content around each review item.","Add content around each review item."
+Anonymous,Anonymous
 评价不存在,评价不存在
+"Customer Voices","Customer Voices"
+"Latest Reviews","Latest Reviews"
+"View All Reviews","View All Reviews"
+Rating,Rating
+"No product reviews yet. Be the first to share your experience.","No product reviews yet. Be the first to share your experience."
