@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Customer\Service;
 
+use WeShop\Compare\Service\CompareService;
 use WeShop\Customer\Model\Customer as CustomerProfile;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
@@ -16,6 +17,7 @@ class AccountDashboardDataService
 {
     public function __construct(
         private readonly OrderService $orderService,
+        private readonly CompareService $compareService,
         private readonly WishlistService $wishlistService,
         private readonly RecentlyViewedService $recentlyViewedService,
         private readonly ProductRecommendationService $productRecommendationService
@@ -33,10 +35,13 @@ class AccountDashboardDataService
         $recentOrders = $this->mapOrders(is_array($recentOrdersResult['items'] ?? null) ? $recentOrdersResult['items'] : []);
 
         $wishlistItems = $this->wishlistService->getCustomerWishlist($customerId);
+        $compareItems = $this->compareService->getCompareList($customerId);
         $recentlyViewedItems = $this->recentlyViewedService->getRecentlyViewed($customerId, 4);
+        $comparePreview = $this->mapProductPreviewItems($compareItems, 4);
         $wishlistPreview = $this->mapProductPreviewItems($wishlistItems, 4);
         $recentlyViewed = $this->mapProductPreviewItems($recentlyViewedItems, 4);
         $recommendationSeeds = array_values(array_unique(array_filter(array_merge(
+            array_column($comparePreview, 'product_id'),
             array_column($wishlistPreview, 'product_id'),
             array_column($recentlyViewed, 'product_id')
         ))));
@@ -47,6 +52,8 @@ class AccountDashboardDataService
             'order_count' => (int) ($recentOrdersResult['total'] ?? count($recentOrders)),
             'unpaid_count' => (int) $this->orderService->getUnpaidOrderCount($customerId),
             'quick_links' => $this->buildQuickLinks(),
+            'compare_count' => count($compareItems),
+            'compare_preview' => $comparePreview,
             'wishlist_count' => count($wishlistItems),
             'wishlist_preview' => $wishlistPreview,
             'recently_viewed_count' => count($recentlyViewedItems),
@@ -146,19 +153,24 @@ class AccountDashboardDataService
     {
         return [
             [
+                'title' => (string) __('Compare Products'),
+                'url' => 'compare',
+                'icon' => 'compare_arrows',
+            ],
+            [
                 'title' => (string) __('My Orders'),
                 'url' => 'weshop/order/list',
                 'icon' => 'receipt_long',
             ],
             [
-                'title' => (string) __('My Wishlist'),
-                'url' => 'wishlist',
-                'icon' => 'favorite',
-            ],
-            [
                 'title' => (string) __('Recently Viewed'),
                 'url' => 'recently-viewed',
                 'icon' => 'history',
+            ],
+            [
+                'title' => (string) __('My Wishlist'),
+                'url' => 'wishlist',
+                'icon' => 'favorite',
             ],
             [
                 'title' => (string) __('Manage Addresses'),
