@@ -47,6 +47,7 @@
                                 <div class="col-12"><?= $msg ?></div>
                                 <?php endif; ?>
                             </div>
+                            <w:hook name="Weline_Admin::backend::partials::login::providers"/>
                             <form class="form-horizontal" action="<?= $this->getData('post_url') ?>" method="post">
                                 <?= $this->getFormKey($this->getData('post_url')) ?>
                                 <div class="row">

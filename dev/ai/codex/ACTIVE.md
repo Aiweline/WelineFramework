@@ -1,20 +1,26 @@
 # Active Task
 
-- Updated: 2026-03-22 18:11
-- Task File: dev/ai/codex/tasks/2026-03-22/2026-03-22-1811-wls-frontend-worker-window-and-startup-hardening.md
+- Updated: 2026-03-23 09:31
+- Task File: dev/ai/codex/tasks/2026-03-23/2026-03-23-0931-wls-start-batch-concurrency.md
 - Status: in_progress
 
 ## Current Goal
 
-Make WLS frontend-mode worker startup show visible worker windows reliably on Windows, then harden the remaining startup/reload edge cases so WLS reaches an industrial-grade startup and rolling-reload experience.
+Fix WLS startup concurrency only:
+
+- phase-1 startup must perform real batch concurrent startup instead of serial launch
+- worker startup phase must also launch workers concurrently
+- do not expand this task into unrelated WLS startup hardening or other runtime issues
 
 ## Latest Progress
 
-- Completed workspace startup context required by `AGENTS.md`.
-- Routed repo skill usage through `weline-framework-skill-router` to `runtime-and-process` with `windows-command-quoting` support.
-- Confirmed the workspace is dirty, including pre-existing edits in `app/code/Weline/Server/IPC/MasterControlServer.php`; integration must avoid overwriting unrelated changes.
-- Began tracing the real Windows WLS launch path from `Start.php` through `Processer.php` and `ServiceOrchestrator.php`.
-- Identified an existing comment in `Start.php` that explicitly intends to keep Worker windows visible in frontend mode, which suggests some runtime paths are bypassing or neutralizing that behavior.
+- Completed workspace startup context per `AGENTS.md`.
+- Routed repo skill usage through `weline-framework-skill-router` to `runtime-and-process`, with `windows-command-quoting` loaded because the startup path is Windows-sensitive.
+- Read the prior WLS task logs for:
+  - reload rolling batch concurrency
+  - frontend worker window and startup hardening
+- Confirmed the recent reload fix already has batch concurrency at the reload path, so this task should reuse that capability for initial startup rather than invent a second implementation.
+- Confirmed the worktree is dirty in many unrelated areas, so edits must stay tightly scoped to WLS startup files and task logs.
 
 ## Verification
 
@@ -22,11 +28,11 @@ Make WLS frontend-mode worker startup show visible worker windows reliably on Wi
 
 ## Risks / Notes
 
-- The worktree contains many unrelated modified and untracked files; do not revert them.
-- The user also reported post-startup instability, so the task scope includes both visible window behavior and startup/reload control-plane hardening where needed.
+- Existing unrelated changes in the worktree must not be reverted.
+- Startup verification will interact with the live local WLS runtime and may be influenced by existing running instances.
 
 ## Next
 
-- Inspect the exact Windows process creation code paths used by initial startup, worker resurrection, and rolling reload.
-- Reproduce and fix any path that hides or detaches worker windows even when frontend mode is requested.
-- Validate with lint plus real `server:start` / `server:reload` runtime checks.
+- Trace the exact `server:start` orchestration path and find where phase-1 and worker startup still call serial launch helpers.
+- Patch startup orchestration to use true batch concurrency.
+- Run focused lint/tests and, if feasible, a startup verification pass.
