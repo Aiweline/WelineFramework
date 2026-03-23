@@ -1,417 +1,387 @@
 <?php
-/**
- * WeShop Default Theme - Checkout Page
- * 结算页模板 - 根据UI设计创建
- */
 $cartItems = $this->getData('cart_items') ?? [];
 $cartSummary = $this->getData('cart_summary') ?? [];
 $customer = $this->getData('customer') ?? null;
 $savedAddresses = $this->getData('saved_addresses') ?? [];
 $shippingMethods = $this->getData('shipping_methods') ?? [];
 $paymentMethods = $this->getData('payment_methods') ?? [];
-$currentStep = $this->getData('current_step') ?? 1;
 $countries = $this->getData('countries') ?? [];
-$states = $this->getData('states') ?? [];
 ?>
-<main class="flex-1 w-full max-w-[1200px] mx-auto p-4 md:p-6 lg:p-8">
-    <w:hook name="WeShop_Checkout::page::before"/>
-    
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Checkout (%1 items)', count($cartItems)) ?></h1>
-    </div>
-    
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <!-- Main Checkout Content -->
-        <div class="lg:col-span-8 flex flex-col gap-6">
-            <!-- Progress Steps -->
-            <div class="flex items-center justify-between px-4 mb-2">
-                <!-- Step 1: Shipping -->
-                <div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3 <?= $currentStep >= 1 ? '' : 'opacity-50' ?>">
-                    <div class="flex items-center w-full">
-                        <div class="w-full h-[2px] <?= $currentStep >= 1 ? 'bg-primary' : 'bg-border-light dark:bg-border-dark' ?> rounded-l-full"></div>
-                        <div class="size-8 rounded-full <?= $currentStep >= 1 ? 'bg-primary text-white ring-4 ring-primary/20' : 'bg-border-light dark:bg-border-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark' ?> flex items-center justify-center font-bold text-sm shrink-0">
-                            <?= $currentStep > 1 ? '<span class="material-symbols-outlined text-sm">check</span>' : '1' ?>
-                        </div>
-                        <div class="w-full h-[2px] <?= $currentStep > 1 ? 'bg-primary' : 'bg-border-light dark:bg-border-dark' ?>"></div>
-                    </div>
-                    <span class="text-sm <?= $currentStep >= 1 ? 'font-bold text-primary' : 'font-medium text-text-secondary-light dark:text-text-secondary-dark' ?>"><?= __('Shipping') ?></span>
-                </div>
-                
-                <!-- Step 2: Payment -->
-                <div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3 <?= $currentStep >= 2 ? '' : 'opacity-50' ?>">
-                    <div class="flex items-center w-full">
-                        <div class="w-full h-[2px] <?= $currentStep >= 2 ? 'bg-primary' : 'bg-border-light dark:bg-border-dark' ?>"></div>
-                        <div class="size-8 rounded-full <?= $currentStep >= 2 ? 'bg-primary text-white ring-4 ring-primary/20' : 'bg-border-light dark:bg-border-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark' ?> flex items-center justify-center font-bold text-sm shrink-0">
-                            <?= $currentStep > 2 ? '<span class="material-symbols-outlined text-sm">check</span>' : '2' ?>
-                        </div>
-                        <div class="w-full h-[2px] <?= $currentStep > 2 ? 'bg-primary' : 'bg-border-light dark:bg-border-dark' ?>"></div>
-                    </div>
-                    <span class="text-sm <?= $currentStep >= 2 ? 'font-bold text-primary' : 'font-medium text-text-secondary-light dark:text-text-secondary-dark' ?>"><?= __('Payment') ?></span>
-                </div>
-                
-                <!-- Step 3: Review -->
-                <div class="flex flex-col items-center gap-2 group cursor-pointer w-1/3 <?= $currentStep >= 3 ? '' : 'opacity-50' ?>">
-                    <div class="flex items-center w-full">
-                        <div class="w-full h-[2px] <?= $currentStep >= 3 ? 'bg-primary' : 'bg-border-light dark:bg-border-dark' ?>"></div>
-                        <div class="size-8 rounded-full <?= $currentStep >= 3 ? 'bg-primary text-white ring-4 ring-primary/20' : 'bg-border-light dark:bg-border-dark text-text-secondary-light dark:text-text-secondary-dark border border-border-light dark:border-border-dark' ?> flex items-center justify-center font-bold text-sm shrink-0">3</div>
-                        <div class="w-full h-[2px] bg-border-light dark:bg-border-dark rounded-r-full"></div>
-                    </div>
-                    <span class="text-sm <?= $currentStep >= 3 ? 'font-bold text-primary' : 'font-medium text-text-secondary-light dark:text-text-secondary-dark' ?>"><?= __('Review') ?></span>
-                </div>
-            </div>
-            
-            <!-- Step 1: Shipping Address -->
-            <div id="step-shipping" class="bg-surface-light dark:bg-surface-dark rounded-xl border <?= $currentStep === 1 ? 'border-primary shadow-sm' : 'border-border-light dark:border-border-dark' ?> overflow-hidden">
-                <div class="flex items-center justify-between px-6 py-4 <?= $currentStep === 1 ? 'bg-primary/5 border-b border-primary/20' : '' ?>">
-                    <h3 class="text-lg font-bold <?= $currentStep === 1 ? 'text-primary' : 'text-text-secondary-light dark:text-text-secondary-dark' ?> flex items-center gap-2">
-                        <?= __('1. Shipping Address') ?>
-                    </h3>
-                    <?php if ($currentStep > 1): ?>
-                        <button type="button" class="text-sm text-primary hover:underline step-edit" data-step="1"><?= __('Edit') ?></button>
-                    <?php endif; ?>
-                </div>
-                
-                <?php if ($currentStep === 1): ?>
-                    <div class="p-6">
-                        <w:hook name="WeShop_Checkout::shipping::before"/>
-                        
-                        <?php if (!$customer): ?>
-                            <div class="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg text-sm mb-4">
-                                <span class="material-symbols-outlined text-base">info</span>
-                                <p><?= __('Already a customer?') ?> <a class="font-bold underline" href="<?= $this->getUrl('customer/account/login') ?>"><?= __('Sign in') ?></a> <?= __('for faster checkout.') ?></p>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <!-- Saved Addresses -->
-                        <?php if (!empty($savedAddresses)): ?>
-                            <div class="mb-6">
-                                <h4 class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-3"><?= __('Select a saved address') ?></h4>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <?php foreach ($savedAddresses as $address): ?>
-                                        <label class="relative flex p-4 border border-border-light dark:border-border-dark rounded-lg cursor-pointer hover:border-primary transition-colors">
-                                            <input type="radio" name="shipping_address_id" value="<?= $address['address_id'] ?>" class="mt-1 mr-3 text-primary focus:ring-primary">
-                                            <div>
-                                                <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($address['name']) ?></p>
-                                                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($address['street']) ?></p>
-                                                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($address['city']) ?>, <?= htmlspecialchars($address['state']) ?> <?= htmlspecialchars($address['postcode']) ?></p>
-                                            </div>
-                                        </label>
-                                    <?php endforeach; ?>
+<w:hook name="WeShop_Checkout::page::before"/>
+
+<style>
+    .weshop-checkout-page {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+        gap: 1.5rem;
+    }
+
+    .weshop-checkout-stack {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .weshop-checkout-card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 1rem;
+        padding: 1.25rem;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+    }
+
+    .weshop-checkout-card h2 {
+        margin: 0 0 1rem;
+        font-size: 1.125rem;
+        font-weight: 700;
+    }
+
+    .weshop-checkout-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.875rem;
+    }
+
+    .weshop-checkout-field {
+        display: grid;
+        gap: 0.35rem;
+    }
+
+    .weshop-checkout-field.full {
+        grid-column: 1 / -1;
+    }
+
+    .weshop-checkout-field label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .weshop-checkout-field input,
+    .weshop-checkout-field select {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 0.75rem;
+        padding: 0.75rem 0.9rem;
+        font-size: 0.95rem;
+        background: #fff;
+    }
+
+    .weshop-checkout-choice-list {
+        display: grid;
+        gap: 0.75rem;
+    }
+
+    .weshop-checkout-choice {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        border: 1px solid #dbe2ea;
+        border-radius: 0.85rem;
+        padding: 0.95rem 1rem;
+    }
+
+    .weshop-checkout-choice input {
+        margin-top: 0.25rem;
+    }
+
+    .weshop-checkout-choice-title {
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .weshop-checkout-choice-meta {
+        font-size: 0.875rem;
+        color: #475569;
+        margin-top: 0.25rem;
+    }
+
+    .weshop-checkout-summary-list {
+        display: grid;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .weshop-checkout-summary-item {
+        display: grid;
+        grid-template-columns: 64px minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .weshop-checkout-summary-item img {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: 0.75rem;
+        background: #f8fafc;
+    }
+
+    .weshop-checkout-summary-item-name {
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .weshop-checkout-summary-item-meta {
+        font-size: 0.85rem;
+        color: #64748b;
+        margin-top: 0.25rem;
+    }
+
+    .weshop-checkout-summary-totals {
+        display: grid;
+        gap: 0.55rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .weshop-checkout-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        color: #334155;
+        font-size: 0.95rem;
+    }
+
+    .weshop-checkout-summary-total {
+        font-weight: 700;
+        color: #0f172a;
+        font-size: 1.05rem;
+    }
+
+    .weshop-checkout-submit {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        border: 0;
+        border-radius: 999px;
+        padding: 0.9rem 1.2rem;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #fff;
+        background: #0f766e;
+        cursor: pointer;
+    }
+
+    .weshop-checkout-empty {
+        padding: 0.95rem 1rem;
+        border-radius: 0.85rem;
+        background: #fff7ed;
+        color: #9a3412;
+        font-size: 0.9rem;
+    }
+
+    .weshop-checkout-terms {
+        display: flex;
+        gap: 0.65rem;
+        align-items: flex-start;
+        font-size: 0.9rem;
+        color: #475569;
+    }
+
+    @media (max-width: 991px) {
+        .weshop-checkout-page {
+            grid-template-columns: 1fr;
+        }
+
+        .weshop-checkout-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+<div class="weshop-checkout-page">
+    <form class="weshop-checkout-stack" id="weshop-checkout-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
+        <section class="weshop-checkout-card">
+            <h2><?= __('Shipping Address') ?></h2>
+
+            <?php if ($savedAddresses): ?>
+                <div class="weshop-checkout-choice-list" style="margin-bottom: 1rem;">
+                    <?php foreach ($savedAddresses as $index => $address): ?>
+                        <label class="weshop-checkout-choice">
+                            <input type="radio" name="shipping_address_id" value="<?= (int) ($address['address_id'] ?? 0) ?>" <?= $index === 0 ? 'checked' : '' ?>>
+                            <span>
+                                <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($address['name'] ?? '')) ?></div>
+                                <div class="weshop-checkout-choice-meta">
+                                    <?= htmlspecialchars((string) ($address['street'] ?? '')) ?><br>
+                                    <?= htmlspecialchars((string) ($address['city'] ?? '')) ?>, <?= htmlspecialchars((string) ($address['state'] ?? '')) ?> <?= htmlspecialchars((string) ($address['postcode'] ?? '')) ?>
                                 </div>
-                                <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark mt-3"><?= __('Or enter a new address below') ?></p>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <!-- Address Form -->
-                        <form id="shipping-form" class="space-y-6">
-                            <div class="flex flex-col md:flex-row gap-4">
-                                <label class="flex flex-col flex-1">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('First name') ?></span>
-                                    <input type="text" name="firstname" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="<?= __('e.g. Jane') ?>" required>
-                                </label>
-                                <label class="flex flex-col flex-1">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Last name') ?></span>
-                                    <input type="text" name="lastname" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="<?= __('e.g. Doe') ?>" required>
-                                </label>
-                            </div>
-                            
-                            <label class="flex flex-col w-full">
-                                <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Street Address') ?></span>
-                                <input type="text" name="street" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="<?= __('e.g. 123 Main St, Apt 4B') ?>" required>
-                            </label>
-                            
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <label class="flex flex-col">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('City') ?></span>
-                                    <input type="text" name="city" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" required>
-                                </label>
-                                <label class="flex flex-col">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('State/Province') ?></span>
-                                    <select name="region" class="form-select w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors">
-                                        <option value=""><?= __('Select State') ?></option>
-                                        <?php foreach ($states as $state): ?>
-                                            <option value="<?= $state['code'] ?>"><?= htmlspecialchars($state['name']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </label>
-                                <label class="flex flex-col">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Zip/Postal Code') ?></span>
-                                    <input type="text" name="postcode" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" required>
-                                </label>
-                            </div>
-                            
-                            <label class="flex flex-col w-full">
-                                <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Country') ?></span>
-                                <select name="country_id" class="form-select w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors">
-                                    <?php foreach ($countries as $country): ?>
-                                        <option value="<?= $country['code'] ?>"><?= htmlspecialchars($country['name']) ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </label>
-                            
-                            <label class="flex flex-col w-full">
-                                <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Phone Number') ?></span>
-                                <div class="relative">
-                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary-light dark:text-text-secondary-dark text-lg">call</span>
-                                    <input type="tel" name="telephone" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 pl-10 pr-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" placeholder="<?= __('(555) 123-4567') ?>">
-                                </div>
-                                <span class="text-xs text-text-secondary-light dark:text-text-secondary-dark mt-1"><?= __('May be used for delivery assistance.') ?></span>
-                            </label>
-                            
-                            <?php if (!$customer): ?>
-                                <label class="flex flex-col w-full">
-                                    <span class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark pb-2"><?= __('Email Address') ?></span>
-                                    <input type="email" name="email" class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-white dark:bg-background-dark h-11 px-4 text-base focus:border-primary focus:ring-primary focus:ring-1 transition-colors" required>
-                                </label>
-                            <?php endif; ?>
-                            
-                            <!-- Shipping Methods -->
-                            <div class="pt-4 border-t border-border-light dark:border-border-dark">
-                                <w:hook name="WeShop_Shipping::checkout::methods"/>
-                                <h4 class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-3"><?= __('Shipping Method') ?></h4>
-                                <div class="space-y-3">
-                                    <?php foreach ($shippingMethods as $method): ?>
-                                        <label class="flex items-center justify-between p-4 border border-border-light dark:border-border-dark rounded-lg cursor-pointer hover:border-primary transition-colors">
-                                            <div class="flex items-center gap-3">
-                                                <input type="radio" name="shipping_method" value="<?= $method['code'] ?>" class="text-primary focus:ring-primary" <?= $method['is_default'] ? 'checked' : '' ?>>
-                                                <div>
-                                                    <p class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($method['name']) ?></p>
-                                                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($method['description']) ?></p>
-                                                </div>
-                                            </div>
-                                            <span class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= $method['price'] == 0 ? __('FREE') : $this->formatPrice($method['price']) ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                            
-                            <div class="pt-4 flex justify-end">
-                                <button type="submit" class="bg-primary hover:bg-primary/90 text-white font-medium py-3 px-8 rounded-lg shadow-sm transition-colors text-base flex items-center gap-2">
-                                    <?= __('Continue to Payment') ?>
-                                    <span class="material-symbols-outlined">arrow_forward</span>
-                                </button>
-                            </div>
-                        </form>
-                        
-                        <w:hook name="WeShop_Checkout::shipping::after"/>
-                    </div>
-                <?php endif; ?>
-            </div>
-            
-            <!-- Step 2: Payment Method -->
-            <div id="step-payment" class="bg-surface-light dark:bg-surface-dark rounded-xl border <?= $currentStep === 2 ? 'border-primary shadow-sm' : 'border-border-light dark:border-border-dark' ?> overflow-hidden <?= $currentStep < 2 ? 'opacity-50' : '' ?>">
-                <div class="flex items-center justify-between px-6 py-4 <?= $currentStep === 2 ? 'bg-primary/5 border-b border-primary/20' : '' ?>">
-                    <h3 class="text-lg font-bold <?= $currentStep === 2 ? 'text-primary' : 'text-text-secondary-light dark:text-text-secondary-dark' ?>">
-                        <?= __('2. Payment Method') ?>
-                    </h3>
-                    <?php if ($currentStep > 2): ?>
-                        <button type="button" class="text-sm text-primary hover:underline step-edit" data-step="2"><?= __('Edit') ?></button>
-                    <?php endif; ?>
-                </div>
-                
-                <?php if ($currentStep === 2): ?>
-                    <div class="p-6">
-                        <w:hook name="WeShop_Payment::checkout::methods"/>
-                        <form id="payment-form" class="space-y-6">
-                            <div class="space-y-3">
-                                <?php foreach ($paymentMethods as $method): ?>
-                                    <label class="flex items-center justify-between p-4 border border-border-light dark:border-border-dark rounded-lg cursor-pointer hover:border-primary transition-colors">
-                                        <div class="flex items-center gap-3">
-                                            <input type="radio" name="payment_method" value="<?= $method['code'] ?>" class="text-primary focus:ring-primary" <?= $method['is_default'] ? 'checked' : '' ?>>
-                                            <div class="flex items-center gap-2">
-                                                <?php if ($method['icon']): ?>
-                                                    <img src="<?= $method['icon'] ?>" alt="<?= htmlspecialchars($method['name']) ?>" class="h-6">
-                                                <?php else: ?>
-                                                    <span class="material-symbols-outlined text-text-secondary-light dark:text-text-secondary-dark">payment</span>
-                                                <?php endif; ?>
-                                                <span class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($method['name']) ?></span>
-                                            </div>
-                                        </div>
-                                    </label>
-                                <?php endforeach; ?>
-                            </div>
-                            
-                            <!-- Credit Card Form (shown if credit card selected) -->
-                            <div id="credit-card-form" class="space-y-4 pt-4 border-t border-border-light dark:border-border-dark">
-                                <w:hook name="WeShop_Payment::checkout::credit_card_form"/>
-                            </div>
-                            
-                            <div class="pt-4 flex justify-between">
-                                <button type="button" class="text-text-secondary-light dark:text-text-secondary-dark hover:text-primary transition-colors flex items-center gap-2 step-back" data-step="1">
-                                    <span class="material-symbols-outlined">arrow_back</span>
-                                    <?= __('Back') ?>
-                                </button>
-                                <button type="submit" class="bg-primary hover:bg-primary/90 text-white font-medium py-3 px-8 rounded-lg shadow-sm transition-colors text-base flex items-center gap-2">
-                                    <?= __('Review Order') ?>
-                                    <span class="material-symbols-outlined">arrow_forward</span>
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                <?php endif; ?>
-            </div>
-            
-            <!-- Step 3: Review Order -->
-            <div id="step-review" class="bg-surface-light dark:bg-surface-dark rounded-xl border <?= $currentStep === 3 ? 'border-primary shadow-sm' : 'border-border-light dark:border-border-dark' ?> overflow-hidden <?= $currentStep < 3 ? 'opacity-50' : '' ?>">
-                <div class="flex items-center justify-between px-6 py-4 <?= $currentStep === 3 ? 'bg-primary/5 border-b border-primary/20' : '' ?>">
-                    <h3 class="text-lg font-bold <?= $currentStep === 3 ? 'text-primary' : 'text-text-secondary-light dark:text-text-secondary-dark' ?>">
-                        <?= __('3. Review & Place Order') ?>
-                    </h3>
-                </div>
-                
-                <?php if ($currentStep === 3): ?>
-                    <div class="p-6">
-                        <w:hook name="WeShop_Checkout::review::before"/>
-                        
-                        <!-- Order Items -->
-                        <div class="space-y-4 pb-6 border-b border-border-light dark:border-border-dark">
-                            <?php foreach ($cartItems as $item): ?>
-                                <div class="flex gap-4">
-                                    <img src="<?= $item['image'] ?? '' ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="w-16 h-16 object-cover rounded-lg">
-                                    <div class="flex-1">
-                                        <h4 class="font-medium text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($item['name']) ?></h4>
-                                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Qty: %1', $item['qty']) ?></p>
-                                    </div>
-                                    <span class="font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($item['row_total']) ?></span>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                        
-                        <!-- Terms -->
-                        <div class="py-4">
-                            <label class="flex items-start gap-3">
-                                <input type="checkbox" name="agree_terms" class="mt-1 rounded text-primary focus:ring-primary" required>
-                                <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
-                                    <?= __('I agree to the') ?> <a href="<?= $this->getUrl('cms/page/terms') ?>" class="text-primary hover:underline"><?= __('Terms of Service') ?></a> <?= __('and') ?> <a href="<?= $this->getUrl('cms/page/privacy') ?>" class="text-primary hover:underline"><?= __('Privacy Policy') ?></a>
-                                </span>
-                            </label>
-                        </div>
-                        
-                        <div class="pt-4 flex justify-between">
-                            <button type="button" class="text-text-secondary-light dark:text-text-secondary-dark hover:text-primary transition-colors flex items-center gap-2 step-back" data-step="2">
-                                <span class="material-symbols-outlined">arrow_back</span>
-                                <?= __('Back') ?>
-                            </button>
-                            <form id="place-order-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
-                                <w:hook name="WeShop_Checkout::review::place_order_button"/>
-                                <button type="submit" class="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-8 rounded-lg shadow-sm transition-colors text-base flex items-center gap-2">
-                                    <span class="material-symbols-outlined">lock</span>
-                                    <?= __('Place Order') ?>
-                                </button>
-                            </form>
-                        </div>
-                        
-                        <w:hook name="WeShop_Checkout::review::after"/>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <!-- Order Summary Sidebar -->
-        <div class="lg:col-span-4">
-            <div class="sticky top-24 bg-surface-light dark:bg-surface-dark rounded-xl border border-border-light dark:border-border-dark p-6 shadow-sm">
-                <w:hook name="WeShop_Checkout::summary::before"/>
-                <h2 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Order Summary') ?></h2>
-                
-                <!-- Mini Cart Items -->
-                <div class="space-y-4 pb-4 border-b border-border-light dark:border-border-dark max-h-[300px] overflow-y-auto">
-                    <?php foreach ($cartItems as $item): ?>
-                        <div class="flex gap-3">
-                            <img src="<?= $item['image'] ?? '' ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="w-12 h-12 object-cover rounded">
-                            <div class="flex-1 min-w-0">
-                                <p class="text-sm font-medium text-text-primary-light dark:text-text-primary-dark truncate"><?= htmlspecialchars($item['name']) ?></p>
-                                <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= __('Qty: %1', $item['qty']) ?></p>
-                            </div>
-                            <span class="text-sm font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($item['row_total']) ?></span>
-                        </div>
+                            </span>
+                        </label>
                     <?php endforeach; ?>
                 </div>
-                
-                <!-- Summary -->
-                <div class="space-y-3 py-4">
-                    <div class="flex justify-between text-sm">
-                        <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Subtotal:') ?></span>
-                        <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['subtotal'] ?? 0) ?></span>
-                    </div>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Shipping:') ?></span>
-                        <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['shipping'] ?? 0) ?></span>
-                    </div>
-                    <?php if (($cartSummary['discount'] ?? 0) > 0): ?>
-                        <div class="flex justify-between text-sm">
-                            <span class="text-green-600"><?= __('Discount:') ?></span>
-                            <span class="text-green-600 font-medium">-<?= $this->formatPrice($cartSummary['discount']) ?></span>
-                        </div>
-                    <?php endif; ?>
-                    <div class="flex justify-between text-sm">
-                        <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Tax:') ?></span>
-                        <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['tax'] ?? 0) ?></span>
-                    </div>
+            <?php endif; ?>
+
+            <div class="weshop-checkout-grid" id="weshop-new-address-grid">
+                <div class="weshop-checkout-field">
+                    <label for="shipping-firstname"><?= __('First Name') ?></label>
+                    <input id="shipping-firstname" name="shipping_address[firstname]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
                 </div>
-                
-                <div class="pt-4 border-t border-border-light dark:border-border-dark flex justify-between items-center">
-                    <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Total:') ?></span>
-                    <span class="text-2xl font-bold text-primary"><?= $this->formatPrice($cartSummary['grand_total'] ?? 0) ?></span>
+                <div class="weshop-checkout-field">
+                    <label for="shipping-lastname"><?= __('Last Name') ?></label>
+                    <input id="shipping-lastname" name="shipping_address[lastname]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
                 </div>
-                
-                <w:hook name="WeShop_Checkout::summary::after"/>
+                <div class="weshop-checkout-field full">
+                    <label for="shipping-street"><?= __('Street Address') ?></label>
+                    <input id="shipping-street" name="shipping_address[street]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="weshop-checkout-field">
+                    <label for="shipping-city"><?= __('City') ?></label>
+                    <input id="shipping-city" name="shipping_address[city]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="weshop-checkout-field">
+                    <label for="shipping-region"><?= __('State / Province') ?></label>
+                    <input id="shipping-region" name="shipping_address[region]" type="text" data-new-address-field>
+                </div>
+                <div class="weshop-checkout-field">
+                    <label for="shipping-postcode"><?= __('Zip / Postal Code') ?></label>
+                    <input id="shipping-postcode" name="shipping_address[postcode]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="weshop-checkout-field">
+                    <label for="shipping-telephone"><?= __('Phone Number') ?></label>
+                    <input id="shipping-telephone" name="shipping_address[telephone]" type="tel" data-new-address-field>
+                </div>
+                <div class="weshop-checkout-field full">
+                    <label for="shipping-country"><?= __('Country') ?></label>
+                    <select id="shipping-country" name="shipping_address[country_id]" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                        <option value=""><?= __('Select Country') ?></option>
+                        <?php foreach ($countries as $country): ?>
+                            <option value="<?= htmlspecialchars((string) ($country['code'] ?? '')) ?>"><?= htmlspecialchars((string) ($country['name'] ?? '')) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="weshop-checkout-card">
+            <h2><?= __('Shipping Method') ?></h2>
+            <w:hook name="WeShop_Shipping::checkout::methods"/>
+            <div class="weshop-checkout-choice-list">
+                <?php foreach ($shippingMethods as $method): ?>
+                    <label class="weshop-checkout-choice">
+                        <input type="radio" name="shipping_method" value="<?= htmlspecialchars((string) ($method['code'] ?? '')) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> required>
+                        <span>
+                            <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($method['name'] ?? '')) ?></div>
+                            <div class="weshop-checkout-choice-meta"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
+                        </span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <section class="weshop-checkout-card">
+            <h2><?= __('Payment Method') ?></h2>
+            <w:hook name="WeShop_Payment::checkout::methods"/>
+            <?php if ($paymentMethods): ?>
+                <div class="weshop-checkout-choice-list">
+                    <?php foreach ($paymentMethods as $method): ?>
+                        <label class="weshop-checkout-choice">
+                            <input type="radio" name="payment_method" value="<?= htmlspecialchars((string) ($method['code'] ?? '')) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> required>
+                            <span>
+                                <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($method['title'] ?? $method['name'] ?? '')) ?></div>
+                                <div class="weshop-checkout-choice-meta"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
+                            </span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+                <div style="margin-top: 1rem;">
+                    <w:hook name="WeShop_Payment::checkout::credit_card_form"/>
+                </div>
+            <?php else: ?>
+                <div class="weshop-checkout-empty"><?= __('No payment methods are available for the current checkout context.') ?></div>
+            <?php endif; ?>
+        </section>
+
+        <section class="weshop-checkout-card">
+            <h2><?= __('Review and Submit') ?></h2>
+            <w:hook name="WeShop_Checkout::review::before"/>
+            <label class="weshop-checkout-terms">
+                <input type="checkbox" name="agree_terms" required>
+                <span>
+                    <?= __('I agree to the') ?>
+                    <a href="<?= $this->getUrl('cms/page/terms') ?>"><?= __('Terms of Service') ?></a>
+                    <?= __('and') ?>
+                    <a href="<?= $this->getUrl('cms/page/privacy') ?>"><?= __('Privacy Policy') ?></a>.
+                </span>
+            </label>
+            <div style="margin-top: 1rem;">
+                <w:hook name="WeShop_Checkout::review::place_order_button"/>
+                <button class="weshop-checkout-submit" type="submit"><?= __('Place Order') ?></button>
+            </div>
+            <w:hook name="WeShop_Checkout::review::after"/>
+        </section>
+    </form>
+
+    <aside class="weshop-checkout-card">
+        <w:hook name="WeShop_Checkout::summary::before"/>
+        <h2><?= __('Order Summary') ?></h2>
+        <div class="weshop-checkout-summary-list">
+            <?php foreach ($cartItems as $item): ?>
+                <div class="weshop-checkout-summary-item">
+                    <img src="<?= htmlspecialchars((string) ($item['image'] ?? '')) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? '')) ?>">
+                    <div>
+                        <div class="weshop-checkout-summary-item-name"><?= htmlspecialchars((string) ($item['name'] ?? '')) ?></div>
+                        <div class="weshop-checkout-summary-item-meta"><?= __('Qty: %1', (int) ($item['qty'] ?? 0)) ?></div>
+                    </div>
+                    <div><?= $this->formatPrice((float) ($item['row_total'] ?? 0)) ?></div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="weshop-checkout-summary-totals">
+            <div class="weshop-checkout-summary-row">
+                <span><?= __('Subtotal') ?></span>
+                <span><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
+            </div>
+            <div class="weshop-checkout-summary-row">
+                <span><?= __('Shipping') ?></span>
+                <span><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
+            </div>
+            <div class="weshop-checkout-summary-row">
+                <span><?= __('Tax') ?></span>
+                <span><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
+            </div>
+            <?php if ((float) ($cartSummary['discount'] ?? 0) > 0): ?>
+                <div class="weshop-checkout-summary-row">
+                    <span><?= __('Discount') ?></span>
+                    <span>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
+                </div>
+            <?php endif; ?>
+            <div class="weshop-checkout-summary-row weshop-checkout-summary-total">
+                <span><?= __('Grand Total') ?></span>
+                <span><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
             </div>
         </div>
-    </div>
-    
-    <w:hook name="WeShop_Checkout::page::after"/>
-</main>
+        <w:hook name="WeShop_Checkout::summary::after"/>
+    </aside>
+</div>
 
 <script>
-// Checkout step navigation will be handled by AJAX in production
-document.addEventListener('DOMContentLoaded', function() {
-    // Form submissions
-    document.getElementById('shipping-form')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        // Ajax submit and go to next step
-        var formData = new FormData(this);
-        fetch('<?= $this->getUrl('checkout/save-shipping') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.location.href = '<?= $this->getUrl('checkout') ?>?step=2';
-            } else {
-                alert(data.message || '<?= __('Please check your shipping information') ?>');
-            }
+    (function () {
+        var radios = document.querySelectorAll('input[name="shipping_address_id"]');
+        var newAddressFields = document.querySelectorAll('[data-new-address-field]');
+
+        function syncNewAddressRequirement() {
+            var hasSavedAddress = false;
+            radios.forEach(function (radio) {
+                if (radio.checked) {
+                    hasSavedAddress = true;
+                }
+            });
+
+            newAddressFields.forEach(function (field) {
+                if (hasSavedAddress) {
+                    field.removeAttribute('required');
+                }
+            });
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', syncNewAddressRequirement);
         });
-    });
-    
-    document.getElementById('payment-form')?.addEventListener('submit', function(e) {
-        e.preventDefault();
-        var formData = new FormData(this);
-        fetch('<?= $this->getUrl('checkout/save-payment') ?>', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.location.href = '<?= $this->getUrl('checkout') ?>?step=3';
-            } else {
-                alert(data.message || '<?= __('Please check your payment information') ?>');
-            }
-        });
-    });
-    
-    // Step navigation
-    document.querySelectorAll('.step-edit').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            window.location.href = '<?= $this->getUrl('checkout') ?>?step=' + this.dataset.step;
-        });
-    });
-    
-    document.querySelectorAll('.step-back').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            window.location.href = '<?= $this->getUrl('checkout') ?>?step=' + this.dataset.step;
-        });
-    });
-});
+
+        syncNewAddressRequirement();
+    })();
 </script>
+
+<w:hook name="WeShop_Checkout::page::after"/>
