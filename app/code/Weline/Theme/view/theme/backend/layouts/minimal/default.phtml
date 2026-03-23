@@ -25,11 +25,7 @@
     <w:hook>Weline_Theme::backend::layouts::minimal::body-start</w:hook>
     
     <main class="backend-main-content backend-main-content--minimal" id="main-content">
-        <if condition="contentTemplate">
-            <?php echo $this->fetch($this->getData("contentTemplate")); ?>
-            <else/>
-            {{meta.content}}
-        </if>
+        <?php echo $this->fetch('theme/backend/partials/layout/content.phtml'); ?>
     </main>
     
     <w:hook>Weline_Theme::backend::layouts::minimal::body-end</w:hook>
