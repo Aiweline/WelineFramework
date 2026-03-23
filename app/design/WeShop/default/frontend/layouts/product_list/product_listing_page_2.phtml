@@ -681,7 +681,14 @@ $area = $themeData['area'] ?? 'frontend';
                             <if condition="meta.filters">
                                 {{meta.filters}}
                             <else/>
+                                <?php $legacyFilterSidebar = trim((string) $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar')); ?>
+                                <?php $canonicalFilterContainer = trim((string) $this->getHook('WeShop_Filters::frontend::partials::filters::container')); ?>
+                                <?= $legacyFilterSidebar ?>
+                                <?= $canonicalFilterContainer ?>
+                                <?php if ($legacyFilterSidebar === '' && $canonicalFilterContainer === ''): ?>
                                 <w:hook>WeShop_Catalog::product_list::filters_before</w:hook>
+                                <w:hook>WeShop_Filters::frontend::partials::filters::header</w:hook>
+                                <w:hook>WeShop_Filters::frontend::partials::filters::applied</w:hook>
                                 <div class="weshop-filters-list">
                                     <!-- Category Filter -->
                                     <details class="weshop-filter-group" open>
@@ -757,7 +764,9 @@ $area = $themeData['area'] ?? 'frontend';
                                     </details>
                                 </div>
                                 <a href="<?= $this->getUrl('catalog/category') ?>" class="weshop-clear-filters"><?= __('Clear All Filters') ?></a>
+                                <w:hook>WeShop_Filters::frontend::partials::filters::footer</w:hook>
                                 <w:hook>WeShop_Catalog::product_list::filters_after</w:hook>
+                                <?php endif; ?>
                             </if>
                         </div>
                     </aside>
@@ -824,6 +833,9 @@ $area = $themeData['area'] ?? 'frontend';
                         <if condition="meta.products">
                             {{meta.products}}
                         <else/>
+                            <?php $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::frontend::layouts::category::products-content')); ?>
+                            <?= $canonicalCategoryProducts ?>
+                            <?php if ($canonicalCategoryProducts === ''): ?>
                             <w:hook>WeShop_Catalog::product_list::products_before</w:hook>
                             <div class="weshop-products-grid">
                                 <?php $products = $this->getData('products') ?? []; ?>
@@ -854,6 +866,7 @@ $area = $themeData['area'] ?? 'frontend';
                                 <?php endforeach; ?>
                             </div>
                             <w:hook>WeShop_Catalog::product_list::products_after</w:hook>
+                            <?php endif; ?>
                         </if>
                         
                         <!-- Pagination -->
