@@ -1,0 +1,19 @@
+<?php
+/**
+ * Promotion page preface hook.
+ *
+ * @hook-priority 220
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+$pageType = (string) ($this->getData('page_type') ?? 'index');
+?>
+<div class="mt-6 rounded-2xl border border-primary/25 bg-primary/5 p-4 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+    <?php if ($pageType === 'sale'): ?>
+        <?= __('Sale view prioritizes the strongest discount opportunities available now.') ?>
+    <?php elseif ($pageType === 'deals'): ?>
+        <?= __('Deals view surfaces the latest low-price entries for fast comparison.') ?>
+    <?php else: ?>
+        <?= __('Promotion hub combines campaign highlights and product-level savings in one flow.') ?>
+    <?php endif; ?>
+</div>
