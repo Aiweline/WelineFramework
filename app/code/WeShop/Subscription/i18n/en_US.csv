@@ -16,9 +16,19 @@
 暂停失败：%{error},"Pause failed: %{error}"
 订阅已恢复,"Subscription has been resumed"
 恢复失败：%{error},"Resume failed: %{error}"
-请先登录,"Please login first"
-我的订阅,"My Subscriptions"
-无权查看此订阅,"No permission to view this subscription"
+"Please login first.","Please login first."
+"Subscription ID is required.","Subscription ID is required."
+"Unable to cancel this subscription right now.","Unable to cancel this subscription right now."
+"Subscription cancelled.","Subscription cancelled."
+"My Subscriptions","My Subscriptions"
+"Subscription paused.","Subscription paused."
+"Unable to resume this subscription right now.","Unable to resume this subscription right now."
+"Subscription resumed.","Subscription resumed."
+"Subscription Details","Subscription Details"
+"Subscription page before content","Subscription page before content"
+"Inject content before the subscription list on the storefront subscription page.","Inject content before the subscription list on the storefront subscription page."
+"Subscription item after content","Subscription item after content"
+"Inject content after each subscription item card.","Inject content after each subscription item card."
 试用中,Trialing
 生效中,Active
 已暂停,Paused
@@ -42,6 +52,10 @@
 年,Year
 每%{interval}%{cycle},"Every %{interval} %{cycle}"
 每%{cycle},"Every %{cycle}"
+"Subscription does not exist.","Subscription does not exist."
+"You do not have permission to view this subscription.","You do not have permission to view this subscription."
+"Every %1 %2","Every %1 %2"
+"Every %1","Every %1"
 订阅计划不存在,"Subscription plan not found"
 订阅计划已停用,"Subscription plan is disabled"
 创建订阅：%{plan},"Subscription created: %{plan}"
@@ -54,15 +68,33 @@
 当前订阅状态不允许恢复,"Current subscription status does not allow resume"
 支付失败，订阅已逾期,"Payment failed, subscription is past due"
 订阅已过期,"Subscription has expired"
-查看全部,查看全部
-暂无订阅,"No subscriptions yet"
-订阅,订阅
-订阅价格,"Subscription Price"
-查看详情,查看详情
+Subscriptions,Subscriptions
+"Manage recurring plans","Manage recurring plans"
+Open,Open
+"Recurring Orders","Recurring Orders"
+"Open Subscriptions","Open Subscriptions"
+"Active and historical plans","Active and historical plans"
+"Manage recurring purchases, adjust plan status, and check your next billing windows from one place.","Manage recurring purchases, adjust plan status, and check your next billing windows from one place."
+"Total Subscriptions","Total Subscriptions"
+"Includes active, paused, and historical plans for this account.","Includes active, paused, and historical plans for this account."
+"Apply","Apply"
+"Subscription","Subscription"
+"View Details","View Details"
+"Cancellation reason (optional)","Cancellation reason (optional)"
+"Cancel Subscription","Cancel Subscription"
+"Recurring plans will appear here once you place products with subscription-enabled checkout options.","Recurring plans will appear here once you place products with subscription-enabled checkout options."
+"Back To Subscriptions","Back To Subscriptions"
+"Billing Summary","Billing Summary"
+"Plan Information","Plan Information"
+"Plan details are unavailable for this subscription.","Plan details are unavailable for this subscription."
+"History","History"
+"No history records yet.","No history records yet."
+"Review billing cycles, pause or resume plans, and manage renewals from one place.","Review billing cycles, pause or resume plans, and manage renewals from one place."
 返回,Back
 计划名称,"Plan Name"
 关联产品,"Associated Product"
 计划描述,"Plan Description"
+订阅价格,"Subscription Price"
 原价,"Original Price"
 计费周期,"Billing Cycle"
 计费间隔,"Billing Interval"
@@ -85,6 +117,7 @@
 逾期订阅,"Past Due Subscriptions"
 订阅列表,"Subscription List"
 全部,All
+暂无订阅,"No subscriptions yet"
 客户ID,"Customer ID"
 订阅计划,"Subscription Plans"
 下次计费,"Next Billing"
@@ -111,3 +144,4 @@
 确认暂停此订阅？,确认暂停此订阅？
 确认恢复,确认恢复
 确认恢复此订阅？,确认恢复此订阅？
+我的订阅,"My Subscriptions"
