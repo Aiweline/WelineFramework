@@ -310,6 +310,25 @@ class ProcesserTest extends TestCore
         );
     }
 
+    public function testCollectBlockingLaunchItemsNeedingPidResolutionSkipsNonBlockingEntries(): void
+    {
+        $items = [
+            ['key' => 'phase-one-visible', 'block' => false],
+            ['key' => 'worker-hidden', 'block' => true],
+            ['key' => 'worker-already-has-pid', 'block' => true],
+        ];
+        $resolved = $this->invokePrivateStatic(Processer::class, 'collectBlockingLaunchItemsNeedingPidResolution', [
+            $items,
+            [
+                'worker-already-has-pid' => 4321,
+            ],
+        ]);
+
+        self::assertSame([
+            ['key' => 'worker-hidden', 'block' => true],
+        ], $resolved);
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
