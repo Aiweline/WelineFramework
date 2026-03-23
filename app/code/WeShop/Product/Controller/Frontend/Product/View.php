@@ -7,6 +7,7 @@ namespace WeShop\Product\Controller\Frontend\Product;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Service\ProductEavService;
 use WeShop\Product\Service\ProductService;
+use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 use WeShop\Review\Service\ReviewService;
 use WeShop\QA\Service\QAService;
 use Weline\Framework\Manager\ObjectManager;
@@ -34,6 +35,11 @@ class View extends BaseController
      * Theme模块会根据此类型从主题配置中加载对应的布局
      */
     protected ?string $layoutType = 'product';
+
+    public function __construct(
+        private readonly StorefrontRecentlyViewedRecorder $storefrontRecentlyViewedRecorder
+    ) {
+    }
     
     /**
      * 产品详情页
@@ -66,6 +72,8 @@ class View extends BaseController
         }
         
         // 格式化产品数据
+        $this->storefrontRecentlyViewedRecorder->recordProductView($productId);
+
         $productData = [
             'product_id' => $product->getId(),
             'name' => $product->getData(\WeShop\Product\Model\Product::schema_fields_name) ?? '',
