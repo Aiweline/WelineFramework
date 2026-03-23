@@ -1,23 +1,18 @@
 <?php
 /**
  * LudoEmpire - Blog List Component
- * 
- * 博客文章列表，支持分类筛选和网格布局
- * 
+ *
  * @var \Weline\Framework\View\Template $this
- * @var array $colors 颜色配置
- * @var array $component_config 组件配置
- * 
+ * @var array $colors
+ * @var array $component_config
+ *
  * @fields_start
- * 
  * group:content => 内容设置
  * content.badge => 徽章文字:text:Blog
  * content.title => 标题:text:Latest from LudoEmpire
  * content.description => 描述:textarea:Tips, strategies, and news from the world of Ludo gaming.
- * 
  * group:categories => 分类设置
  * categories.items => 分类列表:textarea:All|all\r\nStrategies|strategies\r\nTournaments|tournaments\r\nUpdates|updates\r\nTips & Tricks|tips|格式：名称|slug，一行一个
- * 
  * @fields_end
  */
 
@@ -31,7 +26,6 @@ $sectionBg = $colors['section_bg_1'] ?? '#0d0020';
 $textPrimary = $colors['text_primary'] ?? '#f5f3ff';
 $textSecondary = $colors['text_secondary'] ?? '#c4b5fd';
 $textMuted = $colors['text_muted'] ?? '#7c6fad';
-$accentPrimary = $colors['accent_primary'] ?? '#8b5cf6';
 $accentPrimaryLight = $colors['accent_primary_light'] ?? '#a78bfa';
 $accentSecondary = $colors['accent_secondary'] ?? '#ec4899';
 $buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%)';
@@ -41,26 +35,104 @@ $borderLight = $colors['border_light'] ?? 'rgba(139, 92, 246, 0.12)';
 $badge = $config['content.badge'] ?? 'Blog';
 $title = $config['content.title'] ?? 'Latest from LudoEmpire';
 $description = $config['content.description'] ?? 'Tips, strategies, and news from the world of Ludo gaming.';
+$isPreview = (bool)($this->getData('is_preview') ?? false);
+$page = $this->getData('page');
 
 $catsRaw = $config['categories.items'] ?? "All|all\nStrategies|strategies\nTournaments|tournaments\nUpdates|updates\nTips & Tricks|tips";
 $categories = [];
-$catLines = preg_split('/[\r\n]+/', $catsRaw);
-foreach ($catLines as $line) {
+foreach (preg_split('/[\r\n]+/', $catsRaw) as $line) {
     $line = trim($line);
-    if (empty($line)) continue;
+    if ($line === '') {
+        continue;
+    }
     $parts = explode('|', $line, 2);
-    $categories[] = ['name' => trim($parts[0] ?? ''), 'slug' => trim($parts[1] ?? '')];
+    $categories[] = [
+        'name' => trim($parts[0] ?? ''),
+        'slug' => trim($parts[1] ?? ''),
+    ];
 }
 
-// Default blog posts for display
-$posts = [
+$blogPosts = $this->getData('blog_posts');
+if ((!is_array($blogPosts) || $blogPosts === []) && $page && method_exists($page, 'getData')) {
+    $blogPosts = $page->getData('blog_posts') ?? [];
+}
+
+$samplePosts = [
     ['title' => '10 Winning Strategies for Ludo Tournaments', 'excerpt' => 'Master these proven strategies to dominate any Ludo tournament and climb the leaderboard.', 'category' => 'Strategies', 'date' => 'Feb 1, 2026', 'read_time' => '5 min read'],
-    ['title' => 'February Tournament Schedule Released', 'excerpt' => 'Check out the exciting lineup of tournaments this month with prize pools up to ₹1,00,000!', 'category' => 'Tournaments', 'date' => 'Jan 28, 2026', 'read_time' => '3 min read'],
+    ['title' => 'February Tournament Schedule Released', 'excerpt' => 'Check out the exciting lineup of tournaments this month with prize pools up to $100,000!', 'category' => 'Tournaments', 'date' => 'Jan 28, 2026', 'read_time' => '3 min read'],
     ['title' => 'New Team Battle Mode Now Live!', 'excerpt' => 'Team up with friends in our brand new 2v2 Team Battle mode. Coordinate, strategize, and win together!', 'category' => 'Updates', 'date' => 'Jan 25, 2026', 'read_time' => '4 min read'],
     ['title' => 'How to Use Safe Zones Effectively', 'excerpt' => 'Learn the art of positioning your tokens in safe zones to protect them while maintaining offensive pressure.', 'category' => 'Tips & Tricks', 'date' => 'Jan 20, 2026', 'read_time' => '6 min read'],
     ['title' => 'Top Players of January 2026', 'excerpt' => 'Congratulations to our top performers this month! See who made it to the Hall of Fame.', 'category' => 'Tournaments', 'date' => 'Jan 18, 2026', 'read_time' => '3 min read'],
     ['title' => 'Understanding Dice Probability in Ludo', 'excerpt' => 'A deep dive into dice probabilities and how to make better decisions based on statistical odds.', 'category' => 'Strategies', 'date' => 'Jan 15, 2026', 'read_time' => '7 min read'],
 ];
+
+$resolveBlogCard = static function (array $post, string $defaultCategory = 'Blog'): array {
+    $title = trim((string)($post['title'] ?? ''));
+    $excerpt = trim((string)($post['excerpt'] ?? $post['summary'] ?? $post['description'] ?? ''));
+    $content = trim(strip_tags((string)($post['content'] ?? '')));
+    if ($excerpt === '' && $content !== '') {
+        $excerpt = function_exists('mb_substr') ? mb_substr($content, 0, 140) : substr($content, 0, 140);
+        $contentLength = function_exists('mb_strlen') ? mb_strlen($content) : strlen($content);
+        $excerptLength = function_exists('mb_strlen') ? mb_strlen($excerpt) : strlen($excerpt);
+        if ($contentLength > $excerptLength) {
+            $excerpt .= '...';
+        }
+    }
+
+    $category = trim((string)($post['category_name'] ?? $post['category'] ?? ''));
+    if ($category === '') {
+        $tags = array_values(array_filter(array_map('trim', explode(',', (string)($post['tags'] ?? '')))));
+        $category = $tags[0] ?? $defaultCategory;
+    }
+
+    $dateLabel = trim((string)($post['date'] ?? ''));
+    if ($dateLabel === '') {
+        $publishedAt = trim((string)($post['published_at'] ?? ''));
+        if ($publishedAt !== '') {
+            $timestamp = strtotime($publishedAt);
+            $dateLabel = $timestamp ? date('M d, Y', $timestamp) : $publishedAt;
+        }
+    }
+
+    $readTime = trim((string)($post['read_time'] ?? ''));
+    if ($readTime === '') {
+        $readingSource = trim($content !== '' ? $content : $excerpt);
+        if ($readingSource !== '') {
+            $wordCount = count(preg_split('/\s+/u', $readingSource, -1, PREG_SPLIT_NO_EMPTY));
+            $charCount = function_exists('mb_strlen') ? mb_strlen($readingSource) : strlen($readingSource);
+            $minutes = $wordCount > 0 ? (int)ceil($wordCount / 180) : (int)ceil($charCount / 400);
+            $readTime = max(1, $minutes) . ' min read';
+        }
+    }
+
+    $coverImage = trim((string)($post['cover_image'] ?? ''));
+    $url = trim((string)($post['url'] ?? '#'));
+    $placeholder = function_exists('mb_substr') ? mb_substr($category, 0, 1) : substr($category, 0, 1);
+
+    return [
+        'title' => $title,
+        'excerpt' => $excerpt,
+        'category' => $category,
+        'date' => $dateLabel,
+        'read_time' => $readTime,
+        'cover_image' => $coverImage,
+        'url' => $url !== '' ? $url : '#',
+        'placeholder' => strtoupper((string)$placeholder),
+    ];
+};
+
+$posts = [];
+if (is_array($blogPosts) && $blogPosts !== []) {
+    foreach ($blogPosts as $post) {
+        if (is_array($post)) {
+            $posts[] = $resolveBlogCard($post, $badge);
+        }
+    }
+} elseif ($isPreview) {
+    foreach ($samplePosts as $post) {
+        $posts[] = $resolveBlogCard($post, $badge);
+    }
+}
 
 $instanceId = 'le-blog-list-' . uniqid();
 ?>
@@ -71,18 +143,18 @@ $instanceId = 'le-blog-list-' . uniqid();
             background: <?= $sectionBg ?>;
             padding: 100px 0;
         }
-        
+
         #<?= $instanceId ?> .le-bl-container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 0 20px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-header {
             text-align: center;
             margin-bottom: 40px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-badge {
             display: inline-flex;
             align-items: center;
@@ -96,19 +168,19 @@ $instanceId = 'le-blog-list-' . uniqid();
             color: <?= $accentPrimaryLight ?>;
             margin-bottom: 20px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-title {
             font-size: 2.5rem;
             font-weight: 800;
             color: <?= $textPrimary ?>;
             margin-bottom: 16px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-subtitle {
             font-size: 1.125rem;
             color: <?= $textSecondary ?>;
         }
-        
+
         #<?= $instanceId ?> .le-bl-filters {
             display: flex;
             justify-content: center;
@@ -116,7 +188,7 @@ $instanceId = 'le-blog-list-' . uniqid();
             flex-wrap: wrap;
             margin-bottom: 48px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-filter {
             padding: 8px 20px;
             font-size: 0.9rem;
@@ -128,20 +200,20 @@ $instanceId = 'le-blog-list-' . uniqid();
             cursor: pointer;
             transition: all 0.3s ease;
         }
-        
+
         #<?= $instanceId ?> .le-bl-filter:hover,
         #<?= $instanceId ?> .le-bl-filter.active {
             background: <?= $buttonPrimaryBg ?>;
             border-color: transparent;
             color: #ffffff;
         }
-        
+
         #<?= $instanceId ?> .le-bl-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 24px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card {
             background: <?= $cardBg ?>;
             border: 1px solid <?= $borderLight ?>;
@@ -151,26 +223,46 @@ $instanceId = 'le-blog-list-' . uniqid();
             text-decoration: none;
             display: block;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card:hover {
             transform: translateY(-6px);
             box-shadow: 0 12px 40px rgba(139, 92, 246, 0.15);
             border-color: rgba(236, 72, 153, 0.3);
         }
-        
+
         #<?= $instanceId ?> .le-bl-card-image {
             height: 180px;
             background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.1));
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 3rem;
+            overflow: hidden;
         }
-        
+
+        #<?= $instanceId ?> .le-bl-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        #<?= $instanceId ?> .le-bl-card-image-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 72px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            color: <?= $textPrimary ?>;
+            font-size: 1.75rem;
+            font-weight: 800;
+        }
+
         #<?= $instanceId ?> .le-bl-card-body {
             padding: 24px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card-cat {
             font-size: 0.8rem;
             font-weight: 700;
@@ -179,7 +271,7 @@ $instanceId = 'le-blog-list-' . uniqid();
             letter-spacing: 1px;
             margin-bottom: 8px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card-title {
             font-size: 1.15rem;
             font-weight: 700;
@@ -187,69 +279,88 @@ $instanceId = 'le-blog-list-' . uniqid();
             margin-bottom: 8px;
             line-height: 1.4;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card-excerpt {
             font-size: 0.9rem;
             color: <?= $textMuted ?>;
             line-height: 1.6;
             margin-bottom: 16px;
         }
-        
+
         #<?= $instanceId ?> .le-bl-card-meta {
             display: flex;
             justify-content: space-between;
+            gap: 12px;
             font-size: 0.8rem;
             color: <?= $textMuted ?>;
         }
-        
+
+        #<?= $instanceId ?> .le-bl-empty {
+            padding: 56px 32px;
+            text-align: center;
+            color: <?= $textSecondary ?>;
+            background: <?= $cardBg ?>;
+            border: 1px dashed <?= $borderLight ?>;
+            border-radius: 20px;
+        }
+
         @media (max-width: 992px) {
             #<?= $instanceId ?> .le-bl-grid {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
-        
+
         @media (max-width: 576px) {
             #<?= $instanceId ?> .le-bl-grid {
                 grid-template-columns: 1fr;
             }
-            
+
             #<?= $instanceId ?> .le-bl-title {
                 font-size: 1.75rem;
             }
         }
     </style>
-    
+
     <div class="le-bl-container">
         <div class="le-bl-header">
-            <div class="le-bl-badge"><?= htmlspecialchars($badge) ?></div>
-            <h2 class="le-bl-title"><?= htmlspecialchars($title) ?></h2>
-            <p class="le-bl-subtitle"><?= htmlspecialchars($description) ?></p>
+            <div class="le-bl-badge"><?= htmlspecialchars($badge, ENT_QUOTES, 'UTF-8') ?></div>
+            <h2 class="le-bl-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
+            <p class="le-bl-subtitle"><?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?></p>
         </div>
-        
+
         <?php if (!empty($categories)): ?>
         <div class="le-bl-filters">
-            <?php foreach ($categories as $i => $cat): ?>
-            <button class="le-bl-filter<?= $i === 0 ? ' active' : '' ?>"><?= htmlspecialchars($cat['name']) ?></button>
+            <?php foreach ($categories as $index => $category): ?>
+            <button class="le-bl-filter<?= $index === 0 ? ' active' : '' ?>"><?= htmlspecialchars($category['name'], ENT_QUOTES, 'UTF-8') ?></button>
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
-        
+
+        <?php if ($posts === []): ?>
+        <div class="le-bl-empty"><?= __('No blog posts have been published for this site yet.') ?></div>
+        <?php else: ?>
         <div class="le-bl-grid">
-            <?php $icons = ['📋', '🏆', '🚀', '🎯', '⭐', '🎲']; ?>
-            <?php foreach ($posts as $i => $post): ?>
-            <a href="#" class="le-bl-card">
-                <div class="le-bl-card-image"><?= $icons[$i % count($icons)] ?></div>
+            <?php foreach ($posts as $post): ?>
+            <a href="<?= htmlspecialchars($post['url'], ENT_QUOTES, 'UTF-8') ?>" class="le-bl-card">
+                <div class="le-bl-card-image">
+                    <?php if ($post['cover_image'] !== ''): ?>
+                    <img src="<?= htmlspecialchars($post['cover_image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8') ?>">
+                    <?php else: ?>
+                    <span class="le-bl-card-image-badge"><?= htmlspecialchars($post['placeholder'], ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                </div>
                 <div class="le-bl-card-body">
-                    <div class="le-bl-card-cat"><?= htmlspecialchars($post['category']) ?></div>
-                    <h3 class="le-bl-card-title"><?= htmlspecialchars($post['title']) ?></h3>
-                    <p class="le-bl-card-excerpt"><?= htmlspecialchars($post['excerpt']) ?></p>
+                    <div class="le-bl-card-cat"><?= htmlspecialchars($post['category'], ENT_QUOTES, 'UTF-8') ?></div>
+                    <h3 class="le-bl-card-title"><?= htmlspecialchars($post['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+                    <p class="le-bl-card-excerpt"><?= htmlspecialchars($post['excerpt'], ENT_QUOTES, 'UTF-8') ?></p>
                     <div class="le-bl-card-meta">
-                        <span><?= htmlspecialchars($post['date']) ?></span>
-                        <span><?= htmlspecialchars($post['read_time']) ?></span>
+                        <span><?= htmlspecialchars($post['date'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span><?= htmlspecialchars($post['read_time'], ENT_QUOTES, 'UTF-8') ?></span>
                     </div>
                 </div>
             </a>
             <?php endforeach; ?>
         </div>
+        <?php endif; ?>
     </div>
 </section>
