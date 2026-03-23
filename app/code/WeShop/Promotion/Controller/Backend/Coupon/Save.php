@@ -5,54 +5,53 @@ declare(strict_types=1);
 namespace WeShop\Promotion\Controller\Backend\Coupon;
 
 use Weline\Framework\App\Controller\BackendController;
-use WeShop\Promotion\Model\Coupon;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Promotion\Service\PromotionCouponManagementService;
 
 /**
- * 保存优惠券控制器
+ * Coupon save backend controller.
  */
 class Save extends BackendController
 {
-    /**
-     * 保存优惠券
-     */
     public function index(): string
     {
         try {
-            /** @var Coupon $coupon */
-            $coupon = ObjectManager::getInstance(Coupon::class);
-            
             $couponId = (int)($this->request->getParam('coupon_id') ?? 0);
-            if ($couponId) {
-                $coupon->load($couponId);
-            }
-            
-            $couponData = [
-                Coupon::schema_fields_code => $this->request->getParam('code') ?? '',
-                Coupon::schema_fields_name => $this->request->getParam('name') ?? '',
-                Coupon::schema_fields_type => $this->request->getParam('type') ?? 'fixed',
-                Coupon::schema_fields_discount_amount => (float)($this->request->getParam('discount_amount') ?? 0),
-                Coupon::schema_fields_discount_percent => (float)($this->request->getParam('discount_percent') ?? 0),
-                Coupon::schema_fields_minimum_amount => (float)($this->request->getParam('minimum_amount') ?? 0),
-                Coupon::schema_fields_maximum_discount => (float)($this->request->getParam('maximum_discount') ?? 0),
-                Coupon::schema_fields_start_date => $this->request->getParam('start_date') ?? '',
-                Coupon::schema_fields_end_date => $this->request->getParam('end_date') ?? '',
-                Coupon::schema_fields_usage_limit => (int)($this->request->getParam('usage_limit') ?? 0),
-                Coupon::schema_fields_is_active => (int)($this->request->getParam('is_active') ?? 1),
-                Coupon::schema_fields_updated_at => date('Y-m-d H:i:s'),
-            ];
-            
-            $coupon->setData($couponData);
-            
-            if (!$coupon->getId()) {
-                $coupon->setCreatedAt(date('Y-m-d H:i:s'));
-            }
-            
-            $coupon->save();
-            
-            return $this->fetchJson(['success' => true, 'message' => __('优惠券保存成功')]);
-        } catch (\Exception $e) {
+            $payload = $this->getCouponPayload();
+
+            $coupon = $this->getCouponService()->saveCoupon($payload, $couponId);
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('Coupon saved successfully.'),
+                'coupon_id' => $coupon->getId(),
+            ]);
+        } catch (\InvalidArgumentException $e) {
             return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        } catch (\Throwable $e) {
+            return $this->fetchJson(['success' => false, 'message' => __('Failed to save coupon.')]);
         }
+    }
+
+    private function getCouponPayload(): array
+    {
+        $type = $this->request->getParam('discount_type') ?? 'fixed';
+        $value = $this->request->getParam('discount_value');
+
+        return [
+            'code' => (string)$this->request->getParam('code'),
+            'name' => (string)$this->request->getParam('name'),
+            'discount_type' => (string)$type,
+            'discount_value' => is_numeric($value) ? (float)$value : 0.0,
+            'min_amount' => (float)($this->request->getParam('min_amount') ?? 0.0),
+            'max_discount' => (float)($this->request->getParam('max_discount') ?? 0.0),
+            'start_date' => (string)($this->request->getParam('start_date') ?? ''),
+            'end_date' => (string)($this->request->getParam('end_date') ?? ''),
+            'is_active' => (int)($this->request->getParam('is_active') ?? 1),
+        ];
+    }
+
+    private function getCouponService(): PromotionCouponManagementService
+    {
+        return new PromotionCouponManagementService();
     }
 }
