@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `7efbf68c test(weshop): lock auth controller grant contracts`.
 
 ## Changed Files
 
@@ -30,6 +30,7 @@
 - This slice stays at unit-test level; no `http:req` or browser-level verification was run here.
 - `AuthGrantService` still contains compatibility-layer `ObjectManager` usage for backend and Google flows, which should be reduced in a later service-level cleanup slice.
 - Broader unified auth API work remains, especially endpoint response contract tests and cross-module API authentication middleware behavior.
+- The commit includes unrelated pre-staged `Weline_Server` changes from the dirty repository index; they were not authored as part of this WeShop task and should not be interpreted as part of the intended WeShop white-list.
 
 ## Next Resume Step
 
