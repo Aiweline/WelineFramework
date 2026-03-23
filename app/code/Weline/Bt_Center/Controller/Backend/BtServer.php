@@ -199,7 +199,13 @@ class BtServer extends BackendController
                 ]);
             }
 
-            $server->delete();
+            $deleted = $server->delete()->fetch();
+            if (!$deleted) {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('删除失败'),
+                ]);
+            }
 
             return $this->jsonResponse([
                 'success' => true,
