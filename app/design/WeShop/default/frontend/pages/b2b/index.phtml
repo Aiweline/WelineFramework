@@ -1,0 +1,137 @@
+﻿<?php
+$summary = (array) ($this->getData('company_summary') ?? []);
+$totalCompanies = (int) ($summary['total'] ?? 0);
+$primaryStatusValue = (string) ($summary['primary_status'] ?? '');
+$primaryStatus = $totalCompanies > 0
+    ? ucfirst($primaryStatusValue)
+    : (string) __('Awaiting link');
+$statusBreakdown = (array) ($summary['status_breakdown'] ?? []);
+$companies = (array) ($this->getData('company_list') ?? []);
+$contactEmail = (string) ($this->getData('company_contact_email') ?? '');
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-10 px-4 py-8 sm:px-6 lg:px-8">
+    <w:hook name="WeShop_B2B::frontend::layouts::business::page-before"/>
+
+    <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-8 p-8 lg:grid-cols-[1.1fr_0.9fr] lg:p-10">
+            <div class="space-y-4">
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Corporate storefront hub') ?></p>
+                <h1 class="text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Connected B2B programs') ?></h1>
+                <p class="text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark"><?= __('Monitor the company records currently linked to your account email, track corporate status, and keep account administrators informed in one place.') ?></p>
+                <?php if ($contactEmail !== ''): ?>
+                    <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Linked contact email: %1', htmlspecialchars($contactEmail, ENT_QUOTES)) ?>
+                    </p>
+                <?php endif; ?>
+                <div class="flex flex-wrap gap-3 text-sm">
+                    <a href="<?= $this->getUrl('customer/account/index') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Back to Account') ?>
+                    </a>
+                    <a href="<?= $this->getUrl('b2b') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Refresh company data') ?>
+                    </a>
+                </div>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 text-center dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Linked companies') ?></p>
+                    <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $totalCompanies ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Companies currently matched to this account.') ?></p>
+                </article>
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 text-center dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Primary status') ?></p>
+                    <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars($primaryStatus, ENT_QUOTES) ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Most common status across your linked company records.') ?></p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+        <article class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-border-light px-6 py-5 text-sm font-semibold uppercase tracking-[0.25em] text-primary dark:border-border-dark">
+                <span><?= __('Company summary') ?></span>
+                <span class="text-xs font-normal text-text-secondary-light dark:text-text-secondary-dark"><?= __('Statuses with counts') ?></span>
+            </div>
+            <div class="grid grid-cols-2 gap-4 p-6 sm:grid-cols-3">
+                <?php foreach ($statusBreakdown as $status => $count): ?>
+                    <article class="rounded-2xl border border-border-light bg-background-light p-4 text-center dark:border-border-dark dark:bg-background-dark">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark">
+                            <?= htmlspecialchars(ucfirst($status), ENT_QUOTES) ?>
+                        </p>
+                        <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= (int) $count ?></p>
+                        <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= __('registrations') ?></p>
+                    </article>
+                <?php endforeach; ?>
+                <?php if (empty($statusBreakdown)): ?>
+                    <p class="col-span-full text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Statuses will appear once companies are registered.') ?></p>
+                <?php endif; ?>
+            </div>
+        </article>
+        <article class="rounded-[2rem] border border-border-light bg-background-light p-6 shadow-sm dark:border-border-dark dark:bg-background-dark">
+            <h2 class="text-base font-semibold uppercase tracking-[0.15em] text-text-secondary-light dark:text-text-secondary-dark"><?= __('Next steps') ?></h2>
+            <p class="mt-3 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark"><?= __('Invite your procurement team, confirm the correct company contact email is on file, and keep your B2B dashboard active for smooth corporate order flows.') ?></p>
+            <div class="mt-6 space-y-3 text-sm">
+                <a href="<?= $this->getUrl('profile') ?>" class="flex items-center justify-between rounded-2xl border border-border-light px-4 py-3 dark:border-border-dark">
+                    <span><?= __('Update account administrators') ?></span>
+                    <span class="material-symbols-rounded text-primary">arrow_forward</span>
+                </a>
+                <a href="<?= $this->getUrl('b2b') ?>" class="flex items-center justify-between rounded-2xl border border-border-light px-4 py-3 dark:border-border-dark">
+                    <span><?= __('Refresh linked companies') ?></span>
+                    <span class="material-symbols-rounded text-primary">article</span>
+                </a>
+            </div>
+        </article>
+    </section>
+
+    <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="flex items-center justify-between gap-4 border-b border-border-light px-6 py-5 dark:border-border-dark">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Linked company records') ?></p>
+                <h2 class="text-2xl font-black text-text-primary-light dark:text-text-primary-dark"><?= __('Matched companies') ?></h2>
+            </div>
+            <a href="<?= $this->getUrl('customer/account/index') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View account') ?></a>
+        </div>
+        <?php if ($companies): ?>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-xs uppercase tracking-[0.2em] text-text-secondary-light dark:text-text-secondary-dark">
+                        <tr>
+                            <th class="px-6 py-3"><?= __('Company') ?></th>
+                            <th class="px-6 py-3"><?= __('Status') ?></th>
+                            <th class="px-6 py-3"><?= __('Tax ID') ?></th>
+                            <th class="px-6 py-3"><?= __('Registered') ?></th>
+                            <th class="px-6 py-3"><?= __('Actions') ?></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($companies as $company): ?>
+                            <?php
+                            $createdAt = (string) ($company['created_at'] ?? '');
+                            $createdLabel = __('—');
+                            if ($createdAt && ($timestamp = strtotime($createdAt))) {
+                                $createdLabel = htmlspecialchars(date('Y-m-d', $timestamp), ENT_QUOTES);
+                            }
+                            ?>
+                            <tr class="border-t border-border-light dark:border-border-dark">
+                                <td class="px-6 py-4 font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($company['name'] ?? ''), ENT_QUOTES) ?></td>
+                                <td class="px-6 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars(ucfirst((string) ($company['status'] ?? '')), ENT_QUOTES) ?></td>
+                                <td class="px-6 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($company['tax_id'] ?? __('Not provided')), ENT_QUOTES) ?></td>
+                                <td class="px-6 py-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= $createdLabel ?></td>
+                                <td class="px-6 py-4 text-sm font-semibold text-primary"><?= __('Visit') ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php else: ?>
+            <div class="p-10 text-center text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                <span class="material-symbols-outlined text-4xl text-primary">business</span>
+                <p class="mt-3 font-semibold"><?= __('No linked companies yet') ?></p>
+                <p class="mt-1"><?= __('Ask your company administrator to register this account email on the B2B company profile to see it listed here.') ?></p>
+            </div>
+        <?php endif; ?>
+    </section>
+
+    <w:hook name="WeShop_B2B::frontend::partials::company::list-after"/>
+</main>
