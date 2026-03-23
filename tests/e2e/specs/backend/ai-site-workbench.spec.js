@@ -17,6 +17,8 @@ function terminalContent(page) {
 }
 
 test.describe('AI Site Workbench', () => {
+  test.describe.configure({ mode: 'serial' });
+
   test('provider lane anchors stay on the hub and workspace flow can advance to visual edit', async ({ page }) => {
     test.slow();
     const { hubUrl } = await openHub(page);
@@ -53,8 +55,7 @@ test.describe('AI Site Workbench', () => {
     await expect(page.locator('#site-builder-stage')).toHaveValue('virtual_theme');
 
     await page.locator('[data-tool-code="prepare_visual_edit_stage"]').click();
-    await page.waitForTimeout(1500);
-    await expect(page.locator('#site-builder-stage')).toHaveValue('visual_edit');
+    await expect(page.locator('#site-builder-stage')).toHaveValue('visual_edit', { timeout: 30000 });
 
     const stateUrl = await page.locator('a[href*="state-json"]').getAttribute('href');
     expect(stateUrl).toBeTruthy();

@@ -1,189 +1,146 @@
-# Playwright E2E 测试 - 模块化测试用例
+# Playwright E2E
 
-## 📋 概述
+`tests/e2e` 现在提供一层统一的 E2E 封包，目标是让用例尽量只关心业务行为，不再手写运行时地址、后台前缀、API 前缀、协议差异或当前 WLS 端口。
 
-本目录包含 Playwright E2E 测试的配置和运行脚本。测试用例采用**模块化结构**，每个模块的测试用例存放在模块目录下的 `test/e2e/` 目录中。
+## 设计目标
 
-## 🎯 设计理念
+- 自动收集所有模块下的 E2E 用例
+- 用统一代理入口屏蔽框架运行时差异
+- 在封包层统一处理前后台地址、API 地址、认证和主题预览信息
+- 保持 Playwright 用法尽量原生
+- 仍然允许用例直接访问外部绝对地址
 
-- **测试用例就近原则**：测试用例与模块代码放在一起，便于维护
-- **自动收集**：通过 JS 脚本自动收集所有模块的测试用例
-- **统一运行**：收集后的测试用例统一通过 Playwright 运行
+## 自动收集规则
 
-## 📁 目录结构
+收集脚本会扫描：
 
-```
-项目根目录/
-├── app/code/
-│   └── Weline/Theme/
-│       └── test/e2e/          # 模块测试用例目录
-│           └── frontend/
-│               └── theme-override.spec.js
-└── tests/e2e/                  # 测试配置和运行目录
-    ├── collect-tests.js        # 测试用例收集脚本
-    ├── playwright.config.js    # Playwright 配置（支持动态测试收集）
-    ├── package.json
-    ├── modules.json            # 模块信息（由系统命令生成）
-    └── collected-tests.json    # 收集结果（由收集脚本生成）
-```
+- `tests/e2e/specs/**`
+- 模块目录下的 `test/e2e/**`
+- 模块目录下的 `Test/e2e/**`
+- `e2e` / `E2E` 大小写变体
 
-## 🚀 快速开始
-
-### 一键运行（推荐）⭐
-
-一条命令完成所有操作：检查 modules.json → 收集测试用例 → 运行测试
+运行：
 
 ```bash
 cd tests/e2e
-npm start
+node collect-tests.js
 ```
 
-**支持传递参数给 Playwright**：
+## 统一入口
 
-```bash
-# 运行特定模块的测试
-npm start -- --module=Weline_Theme
+Playwright `baseURL` 不再直接指向真实服务，而是指向本地反向代理：
 
-# 使用 UI 模式（推荐，可以交互式调试）
-npm start -- --ui
+- 代理入口：`https://localhost:3999`
+- 真实目标：由 `tests/e2e/framework/runtime-info.php` 在运行时自动解析
 
-# 使用有头模式（可以看到浏览器窗口）
-npm start -- --headed
+代理会统一转发：
 
-# 运行特定测试文件
-npm start -- app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js
+- `/` 前台请求
+- `/@backend/...` 后台请求
+- `/@api/...` 前台 API
+- `/@backend-api/...` 后台 API
+
+这样测试不需要知道：
+
+- 当前是 `http` 还是 `https`
+- WLS 实际监听哪个端口
+- 后台随机前缀是什么
+- 后台 API 前缀是什么
+
+## 封包入口
+
+推荐所有 E2E 用例统一从下面入口导入：
+
+```js
+const {
+  test,
+  expect,
+  gotoFrontend,
+  gotoBackend,
+  gotoApi,
+  gotoThemePreview,
+  loginAsAdmin,
+  getRuntimeInfo,
+  getActiveTheme,
+} = require('../../../../../../../tests/e2e/framework');
 ```
 
-### 分步操作
+可用 helper 包括：
 
-#### 1. 生成 modules.json
+- `getRuntimeInfo()`：读取当前真实运行时信息
+- `gotoFrontend(page, path)`
+- `gotoBackend(page, route)`
+- `gotoApi(page, route)`
+- `loginAsAdmin(page)`
+- `getActiveTheme('frontend' | 'backend')`
+- `gotoThemePreview(page, { themeId?, pageType?, previewMode?, status? })`
 
-系统升级时会自动生成 `modules.json`：
+如果传入的是绝对 URL，例如 `https://example.com/path`，封包不会改写，仍会直接访问外部地址。
 
-```bash
-php bin/w setup:upgrade
+## 主题预览能力
+
+`runtime-info.php` 会额外读取当前数据库中的活主题信息，封包会优先使用：
+
+- `themes.active.frontend`
+- 若前台未单独激活，则回退到 `themes.active.global`
+
+因此主题类 E2E 不需要再硬编码 `theme_id`，通常直接：
+
+```js
+await gotoThemePreview(page, { pageType: 'homepage' });
 ```
 
-#### 2. 收集测试用例（可选）
-
-测试用例收集会在运行 Playwright 时自动执行，也可以手动运行：
+## 运行测试
 
 ```bash
 cd tests/e2e
-npm run test:collect
+npx playwright test
 ```
 
-#### 3. 运行测试
+只跑某个用例：
 
 ```bash
 cd tests/e2e
-
-# 运行所有模块的测试（自动收集）
-npm test
-
-# 运行特定模块的测试
-npm run test:module -- --module=Weline_Theme
-
-# 使用 UI 模式运行（推荐，可以交互式调试）
-npm run test:ui
-
-# 使用有头模式运行（可以看到浏览器窗口）
-npm run test:headed
+npx playwright test app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js --project=chromium --workers=1
 ```
 
-## 📝 创建模块测试用例
+列出当前收集结果：
 
-### 目录结构
-
-在模块目录下创建测试用例：
-
-```
-app/code/YourModule/
-└── test/
-    └── e2e/
-        └── frontend/          # 或 backend/
-            └── your-test.spec.js
+```bash
+cd tests/e2e
+npx playwright test --list
 ```
 
-### 测试文件命名规范
+## 编写模块用例
 
-- 测试文件必须以 `.spec.js` 结尾
-- 建议使用描述性的文件名，如 `theme-override.spec.js`
+模块内建议结构：
 
-### 示例测试用例
+```text
+app/code/Vendor/Module/
+└─ test/
+   └─ e2e/
+      ├─ frontend/
+      └─ backend/
+```
 
-```javascript
-// app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js
-const { test, expect } = require('@playwright/test');
+示例：
 
-test.describe('Theme frontend override behavior', () => {
-  test('should override parent theme files', async ({ page }) => {
-    await page.goto('/');
-    // 你的测试代码
-  });
+```js
+const { test, expect, gotoBackend, loginAsAdmin } = require('../../../../../../../tests/e2e/framework');
+
+test('admin page renders', async ({ page }) => {
+  await loginAsAdmin(page);
+  await gotoBackend(page, 'system/cache');
+  await expect(page.locator('body')).toContainText('Cache');
 });
 ```
 
-## 🔧 配置说明
+## 故障排查
 
-### modules.json 格式
+如果发现地址不对，优先检查：
 
-```json
-{
-  "generated_at": "2024-01-15T10:30:00+08:00",
-  "modules": {
-    "Weline_Theme": {
-      "name": "Weline_Theme",
-      "base_path": "app/code/Weline/Theme",
-      "test_path": "app/code/Weline/Theme/test/e2e",
-      "status": true,
-      "version": "1.0.1",
-      "has_tests": true
-    }
-  }
-}
-```
+1. `php tests/e2e/framework/runtime-info.php`
+2. `node tests/e2e/collect-tests.js`
+3. `npx playwright test --list`
 
-### Playwright 配置
-
-`playwright.config.js` 会自动：
-1. 读取 `modules.json`
-2. 调用 `collect-tests.js` 收集所有测试用例
-3. 动态设置 `testMatch` 指向收集到的测试文件
-
-## 📊 测试报告
-
-运行测试后，会生成 HTML 测试报告：
-
-```bash
-# 查看测试报告
-npx playwright show-report
-```
-
-## 🐛 故障排除
-
-### modules.json 不存在
-
-**错误**: `modules.json 不存在！`
-
-**解决**: 运行 `php bin/w setup:upgrade` 生成 modules.json
-
-### 测试用例未收集到
-
-**检查**:
-1. 确认模块目录下有 `test/e2e/` 目录
-2. 确认测试文件以 `.spec.js` 结尾
-3. 检查 `modules.json` 中该模块的 `has_tests` 是否为 `true`
-
-### 服务器连接失败
-
-**错误**: `net::ERR_CONNECTION_REFUSED`
-
-**解决**: 
-1. 确保服务器正在运行：`php bin/w server:start`
-2. 检查服务器是否在 `http://127.0.0.1:81` 上运行
-
-## 📚 相关文档
-
-- [E2E测试用例模块化方案](../../docs/dev/E2E测试用例模块化方案.md)
-- [Playwright E2E测试指南](../../app/code/Weline/Ai/doc/开发/Playwright测试指南.md)
+如果主题预览或后台地址异常，通常不是用例本身的问题，而是运行时信息、随机前缀或主题上下文没有被统一 helper 接管。
