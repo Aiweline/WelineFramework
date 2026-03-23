@@ -100,8 +100,8 @@ class Index extends BaseController
             ],
             [
                 'title' => __('账户设置'),
-                'url' => $this->getUrl('weshop/customer/account/edit'),
-                'icon' => 'settings',
+                'url' => $this->getUrl('weshop/customer/account/forgot-password'),
+                'icon' => 'shield',
             ],
         ]);
         
