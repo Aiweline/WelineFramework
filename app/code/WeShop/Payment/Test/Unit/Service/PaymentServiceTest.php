@@ -38,4 +38,31 @@ class PaymentServiceTest extends TestCase
         $this->assertSame('alipay', $method['code']);
         $this->assertFalse((bool) ($method['enabled'] ?? true));
     }
+
+    public function testRuntimeOverridesAreMergedIntoMethodMetadata(): void
+    {
+        $service = new class() extends PaymentService {
+            protected function getMethodOverrides(): array
+            {
+                return [
+                    'paypal' => [
+                        'enabled' => false,
+                        'sort_order' => 5,
+                        'config' => [
+                            'sandbox' => false,
+                            'client_id' => 'live-client-id',
+                        ],
+                    ],
+                ];
+            }
+        };
+
+        $method = $service->getPaymentMethod('paypal');
+
+        $this->assertIsArray($method);
+        $this->assertFalse((bool) ($method['enabled'] ?? true));
+        $this->assertSame(5, $method['sort_order']);
+        $this->assertFalse((bool) ($method['config']['sandbox'] ?? true));
+        $this->assertSame('live-client-id', $method['config']['client_id'] ?? '');
+    }
 }
