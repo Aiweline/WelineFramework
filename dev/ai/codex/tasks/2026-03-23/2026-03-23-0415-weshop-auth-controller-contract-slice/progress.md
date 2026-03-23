@@ -16,3 +16,5 @@
   - focused controller PHPUnit passed: `5 tests, 15 assertions`
   - full `app/code/WeShop/Auth/Test/Unit` suite passed: `16 tests, 72 assertions`
   - non-blocking: PHPUnit still reports `1` deprecation warning in this repo
+- 2026-03-23 12:23 Committed the slice as `7efbf68c test(weshop): lock auth controller grant contracts`.
+- 2026-03-23 12:25 Noted a workspace hygiene issue: the commit also carried previously staged `Weline_Server` files (`Maintenance.php`, `ServiceOrchestrator.php`, `ServiceOrchestratorControlQueueTest.php`) from the dirty index. They were not part of this WeShop slice's intended white-list and should be treated as unrelated carry-over when reading commit history.
