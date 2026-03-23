@@ -39,3 +39,11 @@
 - 完整开发技能映射：`skills/skill-trigger-reminders/references/development-skill-map.md`
 - 常驻压缩：`skills/context-compression/SKILL.md`
 - 规则/技能/计划仓定位：`skills/cursor-as-reference/SKILL.md`
+- Codex 任务工作区：`skills/codex-task-workspace/SKILL.md`
+
+## 新增技能
+
+1. 在 `dev/ai/skills/<skill-slug>/SKILL.md` 创建技能，目录名使用小写英文加连字符。
+2. 在 `skills/skill-trigger-reminders/references/development-skill-map.md` 增加场景关键词映射。
+3. 如需让规则层也能更快命中，同步更新 `rules/skill-trigger-reminders.mdc`。
+4. 如果技能描述的是 `dev/ai` 仓自身的规则、技能、计划结构，先阅读 `skills/cursor-as-reference/SKILL.md` 再修改。

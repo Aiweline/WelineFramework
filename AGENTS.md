@@ -14,7 +14,7 @@ Before doing anything else:
 2. Read `USER.md` — this is who you're helping
 3. Read `memory/YYYY-MM-DD.md` (today + yesterday) for recent context
 4. **If in MAIN SESSION** (direct chat with your human): Also read `MEMORY.md`
-5. Read `dev/ai/codex/ACTIVE.md` if it exists, then create or update the current task record under `dev/ai/codex/tasks/`
+5. Read `dev/ai/codex/README.md` if it exists, then create or resume the current task workspace under `dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/`
 
 Don't ask permission. Just do it.
 
@@ -43,12 +43,20 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - "Mental notes" don't survive session restarts. Files do.
 - When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file
 - Every Codex task must have a written progress log in `dev/ai/codex/`
-- At task start: create/update `dev/ai/codex/ACTIVE.md` and a task file in `dev/ai/codex/tasks/YYYY-MM-DD/`
-- During the task: keep the task file updated with progress, decisions, blockers, and next steps
-- At task end: record outcome, changed files, verification, and any resume notes
+- At task start: create or resume a dedicated task workspace in `dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/`
+- During the task: keep that workspace updated with `task.md`, `plan.md`, `progress.md`, decisions, blockers, and next steps
+- At task end: record outcome, changed files, verification, risks, and resume notes in that same workspace
+- Never use a shared mutable status file for task state; keep all mutable task state inside the current task workspace only
 - When you learn a lesson → update AGENTS.md, TOOLS.md, or the relevant skill
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
+
+### Codex Task Workspaces
+
+- `dev/ai/codex/ACTIVE.md` is deprecated for mutable task state
+- Every new Codex task uses its own workspace directory under `dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/`
+- Store `task.md`, `plan.md`, `progress.md`, `result.md`, and optional `artifacts/` only inside that task workspace
+- Do not edit another task's workspace unless the user explicitly asks for it
 
 ## Red Lines
 
