@@ -1,9 +1,19 @@
-﻿产品ID不能为空,产品ID不能为空
-用户A,用户A
-非常满意,非常满意
-产品质量很好，物流也很快，非常满意！,产品质量很好，物流也很快，非常满意！
-用户B,用户B
-还不错,还不错
-产品还可以，就是包装有点简单。,产品还可以，就是包装有点简单。
-商品评论,商品评论
+﻿"Please log in to write a review.",请先登录后再评价。
+"Product and content are required.",商品和评论内容不能为空。
+"Unable to submit your review right now.",暂时无法提交您的评价。
+"Thank you for submitting your review.",感谢您提交评论。
+"Product ID cannot be empty.",产品ID不能为空。
+"Product Reviews",商品评论
+"Product review tab content",商品评论标签内容
+"Render the customer review block inside product detail tabs.",在商品详情标签中渲染客户评论模块。
+"Review Page Hooks",评论页面扩展位
+"Inject widgets before the review listing on the storefront review page.",在前台评论列表前注入扩展内容。
+"Review Listing Hooks",评论列表扩展位
+"Add content around each review item.",在每条评论周围注入扩展内容。
+Anonymous,匿名用户
 评价不存在,评价不存在
+"Customer Voices",买家声音
+"Latest Reviews",最新评论
+"View All Reviews",查看全部评论
+Rating,评分
+"No product reviews yet. Be the first to share your experience.",暂无商品评论，欢迎成为第一个分享体验的用户。

@@ -10,6 +10,7 @@
   - compare page-data mapping plus compare add/index/remove controller guest/auth flows
   - recently viewed page-data mapping, current-customer recorder, and remove controller guest/auth flows
   - shared product-detail tab/hook coverage for review and QA rendering
+  - shared account-center order/discovery/security hook coverage for post-purchase module rendering
 - HTTP/API:
   - unified auth endpoints
   - compatibility proxies

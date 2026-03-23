@@ -1,0 +1,185 @@
+<?php
+$product = (array) ($this->getData('product') ?? []);
+$reviews = (array) ($this->getData('reviews') ?? []);
+$total = (int) ($this->getData('total') ?? 0);
+$averageRating = (float) ($this->getData('average_rating') ?? 0);
+$page = (int) ($this->getData('page') ?? 1);
+$pageSize = (int) max(1, ($this->getData('page_size') ?? 20));
+$pageCount = max(1, (int) ($this->getData('page_count') ?? 1));
+$hasPrevious = (bool) ($this->getData('has_previous') ?? false);
+$hasNext = (bool) ($this->getData('has_next') ?? false);
+$reviewUrl = (string) ($this->getData('review_url') ?? $this->getUrl('review'));
+$createUrl = (string) ($this->getData('create_url') ?? $this->getUrl('review/create'));
+$productId = (int) ($product['product_id'] ?? 0);
+$buildPaginationUrl = function (int $targetPage) use ($reviewUrl, $productId, $pageSize): string {
+    $params = [
+        'product_id' => $productId,
+        'page' => max(1, $targetPage),
+        'page_size' => $pageSize,
+    ];
+
+    $query = http_build_query($params);
+
+    return $reviewUrl . ($query !== '' ? '?' . $query : '');
+};
+$productName = (string) ($product['name'] ?? __('Product Reviews'));
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Customer Reviews') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= htmlspecialchars($productName, ENT_QUOTES) ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Read what others say, and share your own experience with this product after purchase.') ?>
+                </p>
+            </div>
+            <div class="rounded-3xl border border-border-light bg-background-light p-6 text-center dark:border-border-dark dark:bg-background-dark">
+                <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Average Rating') ?></p>
+                <p class="mt-3 text-5xl font-black text-primary"><?= number_format($averageRating, 1) ?></p>
+                <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Based on %1 verified reviews', $total) ?></p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <w:hook name="WeShop_Review::frontend::layouts::review-page::before"/>
+            <?php if ($reviews): ?>
+                <div class="space-y-4">
+                    <?php foreach ($reviews as $review): ?>
+                        <article class="rounded-3xl border border-border-light bg-background-light p-4 shadow-sm dark:border-border-dark dark:bg-background-dark">
+                            <div class="flex items-center justify-between">
+                                <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($review['title'] ?: __('Rating')), ENT_QUOTES) ?></h2>
+                                <div class="flex items-center gap-1 text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark">
+                                    <span><?= number_format((float) ($review['rating'] ?? 0), 1) ?></span>
+                                    <span class="material-symbols-outlined text-xs text-primary">star</span>
+                                </div>
+                            </div>
+                            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($review['content'] ?? ''), ENT_QUOTES) ?></p>
+                            <div class="mt-3 flex items-center justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark">
+                                <span><?= htmlspecialchars((string) ($review['customer_name'] ?? __('Anonymous')), ENT_QUOTES) ?></span>
+                                <span><?= htmlspecialchars((string) ($review['created_at'] ?? ''), ENT_QUOTES) ?></span>
+                            </div>
+                            <?php if (!empty($review['verified_purchase'])): ?>
+                                <span class="mt-2 inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.2em] text-emerald-600 dark:text-emerald-400">
+                                    <span class="material-symbols-outlined text-sm">verified</span>
+                                    <?= __('Verified purchase') ?>
+                                </span>
+                            <?php endif; ?>
+                            <w:hook name="WeShop_Review::frontend::partials::review-item::after"/>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">reviews</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No reviews yet') ?></h3>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Be the first to review this product and help other shoppers.') ?></p>
+                </div>
+            <?php endif; ?>
+
+            <nav class="mt-6 flex flex-col gap-3 text-sm text-text-secondary-light dark:text-text-secondary-dark sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex flex-wrap items-center gap-3">
+                    <span><?= __('Page %1 of %2', $page, $pageCount) ?></span>
+                    <span><?= __('Per page: %1', $pageSize) ?></span>
+                </div>
+                <?php if ($pageCount > 1): ?>
+                    <div class="flex flex-wrap gap-3">
+                        <a
+                            href="<?= $hasPrevious ? htmlspecialchars($buildPaginationUrl($page - 1), ENT_QUOTES) : '#' ?>"
+                            class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasPrevious ? '' : 'pointer-events-none opacity-40' ?>"
+                            aria-disabled="<?= $hasPrevious ? 'false' : 'true' ?>"
+                        >
+                            <?= __('Previous page') ?>
+                        </a>
+                        <a
+                            href="<?= $hasNext ? htmlspecialchars($buildPaginationUrl($page + 1), ENT_QUOTES) : '#' ?>"
+                            class="rounded-full border border-border-light bg-background-light px-4 py-2 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark <?= $hasNext ? '' : 'pointer-events-none opacity-40' ?>"
+                            aria-disabled="<?= $hasNext ? 'false' : 'true' ?>"
+                        >
+                            <?= __('Next page') ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </nav>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Share your view') ?></h2>
+            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Submit a rating and tell other shoppers what you loved or what can be improved.') ?></p>
+            <form id="review-form" class="mt-4 space-y-4" method="post" action="<?= htmlspecialchars($createUrl, ENT_QUOTES) ?>">
+                <?= $this->getFormKey($createUrl) ?>
+                <input type="hidden" name="product_id" value="<?= htmlspecialchars((string) ($product['product_id'] ?? ''), ENT_QUOTES) ?>">
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Rating') ?>
+                    <select name="rating" class="form-select rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary">
+                        <?php for ($i = 5; $i >= 1; $i--): ?>
+                            <option value="<?= $i ?>"><?= $i ?> <?= __('star', $i) ?></option>
+                        <?php endfor; ?>
+                    </select>
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Title') ?>
+                    <input type="text" name="title" class="form-input rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('Write a headline for your review') ?>">
+                </label>
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Review') ?>
+                    <textarea name="content" rows="4" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('Describe your experience with this product') ?>"></textarea>
+                </label>
+                <button type="button" id="review-submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                    <?= __('Submit review') ?>
+                </button>
+            </form>
+            <div id="review-feedback" class="mt-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"></div>
+        </article>
+    </section>
+    <script>
+        (function () {
+            var form = document.getElementById('review-form');
+            var submit = document.getElementById('review-submit');
+            var feedback = document.getElementById('review-feedback');
+
+            if (!form || !submit) {
+                return;
+            }
+
+            submit.addEventListener('click', function () {
+                var payload = {};
+                new FormData(form).forEach(function (value, key) {
+                    payload[key] = value;
+                });
+
+                fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(payload)
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (result) {
+                    if (result && result.success) {
+                        feedback.textContent = result.message || '<?= __('Thank you for your review.') ?>';
+                        feedback.classList.remove('text-red-500');
+                        feedback.classList.add('text-emerald-500');
+                        form.reset();
+                        return;
+                    }
+                    if (result && result.data && result.data.redirect_url) {
+                        window.location.href = result.data.redirect_url;
+                        return;
+                    }
+                    feedback.textContent = result.message || '<?= __('Unable to submit your review right now.') ?>';
+                    feedback.classList.remove('text-emerald-500');
+                    feedback.classList.add('text-red-500');
+                }).catch(function () {
+                    feedback.textContent = '<?= __('Unable to submit your review right now.') ?>';
+                    feedback.classList.remove('text-emerald-500');
+                    feedback.classList.add('text-red-500');
+                });
+            });
+        })();
+    </script>
+</main>

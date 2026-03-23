@@ -33,6 +33,7 @@
 - `Compare` should now follow the same storefront slice pattern as `Wishlist` and `RecentlyViewed`: clean route, guest-safe add/remove responses, dedicated page-data service, and account-center discovery/quick-link entry.
 - `default` theme category cards need reusable product-card hooks and action slots so compare, affiliate, membership, and badge-like modules can enter the card without editing theme modules.
 - `default` product detail should keep first-class tab slots for both `Review` and `QA`, with module-owned hook rendering instead of hardcoding those modules into theme packages.
+- `default` account center should keep a dedicated order/after-sales card slot so `RMA`, `Invoice`, `Subscription`, and similar modules can inject follow-up actions without editing theme packages.
 - When a theme layout is missing required hooks or slots, WeShop should patch the `default` theme where possible and later surface compatibility warnings rather than coupling modules to one theme implementation.
 - Payment wave priority is:
   - `manual_transfer`
