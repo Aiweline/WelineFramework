@@ -9,12 +9,14 @@ $relatedProducts = $this->getData('related_products') ?? [];
 ?>
 <main class="max-w-[1440px] mx-auto px-4 lg:px-8 py-8">
     <w:hook name="WeShop_Cart::page::before"/>
+    <w:hook name="WeShop_Cart::frontend::layouts::cart::content-before"/>
     
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         <!-- Cart Items -->
         <div class="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
             <!-- Page Heading -->
             <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-sm border border-border-light dark:border-border-dark">
+                <w:hook name="WeShop_Cart::frontend::partials::cart::header-before"/>
                 <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 border-b border-border-light dark:border-border-dark pb-4 mb-4">
                     <div>
                         <h1 class="text-3xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark mb-1"><?= __('Shopping Cart') ?></h1>
@@ -26,9 +28,11 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Price') ?></span>
                     </div>
                 </div>
+                <w:hook name="WeShop_Cart::frontend::partials::cart::header-after"/>
                 
                 <!-- Cart Items List -->
                 <?php if (empty($cartItems)): ?>
+                    <w:hook name="WeShop_Cart::frontend::partials::cart::empty"/>
                     <div class="py-12 text-center">
                         <span class="material-symbols-outlined text-6xl text-text-secondary-light dark:text-text-secondary-dark mb-4">shopping_cart</span>
                         <p class="text-xl text-text-secondary-light dark:text-text-secondary-dark mb-4"><?= __('Your cart is empty') ?></p>
@@ -38,6 +42,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         </a>
                     </div>
                 <?php else: ?>
+                    <w:hook name="WeShop_Cart::frontend::partials::cart::items-before"/>
                     <div class="flex flex-col gap-6">
                         <?php foreach ($cartItems as $index => $item): ?>
                             <div class="cart-item flex flex-col sm:flex-row gap-4 py-2" data-item-id="<?= $item['item_id'] ?>">
@@ -96,11 +101,13 @@ $relatedProducts = $this->getData('related_products') ?? [];
                                     </div>
                                 </div>
                             </div>
+                            <w:hook name="WeShop_Cart::frontend::partials::cart::item-after"/>
                             <?php if ($index < count($cartItems) - 1): ?>
                                 <hr class="border-border-light dark:border-border-dark"/>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </div>
+                    <w:hook name="WeShop_Cart::frontend::partials::cart::items-after"/>
                 <?php endif; ?>
             </div>
             
@@ -114,6 +121,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                     <!-- Summary Card -->
                     <div class="bg-surface-light dark:bg-surface-dark p-6 rounded-lg shadow-sm border border-border-light dark:border-border-dark">
                         <w:hook name="WeShop_Cart::summary::before"/>
+                        <w:hook name="WeShop_Cart::frontend::partials::cart::summary-before"/>
                         <h2 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Order Summary') ?></h2>
                         <div class="space-y-3 pb-4 border-b border-border-light dark:border-border-dark">
                             <div class="flex justify-between text-sm">
@@ -124,12 +132,14 @@ $relatedProducts = $this->getData('related_products') ?? [];
                                 <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Shipping & handling:') ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['shipping'] ?? 0) ?></span>
                             </div>
+                            <w:hook name="WeShop_Cart::frontend::partials::cart::shipping-options"/>
                             <?php if (($cartSummary['discount'] ?? 0) > 0): ?>
                                 <div class="flex justify-between text-sm">
                                     <span class="text-green-600 dark:text-green-500"><?= __('Discount:') ?></span>
                                     <span class="text-green-600 dark:text-green-500 font-medium">-<?= $this->formatPrice($cartSummary['discount']) ?></span>
                                 </div>
                             <?php endif; ?>
+                            <w:hook name="WeShop_Cart::frontend::partials::cart::discount-display"/>
                             <div class="flex justify-between text-sm">
                                 <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Estimated tax:') ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['tax'] ?? 0) ?></span>
@@ -141,6 +151,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         </div>
                         
                         <!-- Promo Code -->
+                        <w:hook name="WeShop_Cart::frontend::partials::cart::coupon-input"/>
                         <w:hook name="WeShop_Promotion::cart::coupon"/>
                         <div class="mb-4">
                             <label for="promo-code" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Have a promo code?') ?></label>
@@ -149,14 +160,19 @@ $relatedProducts = $this->getData('related_products') ?? [];
                                 <button type="button" id="apply-promo" class="px-4 py-2 bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark text-sm font-medium rounded-lg hover:bg-primary/20 transition-colors"><?= __('Apply') ?></button>
                             </div>
                         </div>
+                        <w:hook name="WeShop_Cart::frontend::partials::cart::express-checkout"/>
+                        <w:hook name="WeShop_Cart::frontend::partials::cart::security-badges"/>
                         
                         <a href="<?= $this->getUrl('checkout') ?>" class="w-full block text-center bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-colors">
                             <?= __('Proceed to Checkout') ?>
                         </a>
+                        <w:hook name="WeShop_Cart::frontend::partials::cart::summary-after"/>
                         <w:hook name="WeShop_Cart::summary::after"/>
                     </div>
+                    <w:hook name="WeShop_Cart::frontend::partials::cart::sidebar"/>
                     
                     <!-- Continue Shopping -->
+                    <w:hook name="WeShop_Cart::frontend::partials::cart::continue-shopping"/>
                     <a href="<?= $this->getUrl('catalog') ?>" class="flex items-center justify-center gap-2 text-sm text-primary hover:underline">
                         <span class="material-symbols-outlined !text-lg">arrow_back</span>
                         <?= __('Continue Shopping') ?>
@@ -186,6 +202,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
         </div>
     <?php endif; ?>
     
+    <w:hook name="WeShop_Cart::frontend::layouts::cart::content-after"/>
     <w:hook name="WeShop_Cart::page::after"/>
 </main>
 
