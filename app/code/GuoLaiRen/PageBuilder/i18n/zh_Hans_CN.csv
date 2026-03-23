@@ -560,11 +560,29 @@ PageBuilder网站管理,PageBuilder网站管理
 "按 page_id 清除该页 URL 重写、router 统一缓存并通知 WLS；不传 page_id 时全量清理","按 page_id 清除该页 URL 重写、router 统一缓存并通知 WLS；不传 page_id 时全量清理"
 "PageBuilder 页面构建器 Sitemap 生成器，为所有站点的已发布页面生成 sitemap.xml","PageBuilder 页面构建器 Sitemap 生成器，为所有站点的已发布页面生成 sitemap.xml"
 "PageBuilder 页面构建器 Sitemap URL 提供者，为所有站点的已发布页面提供 URL 数据","PageBuilder 页面构建器 Sitemap URL 提供者，为所有站点的已发布页面提供 URL 数据"
-"PageBuilder 分阶段工作台","PageBuilder 分阶段工作台"
-"适合需要会话恢复、阶段推进、页面预览、主题绑定与发布前检查的 AI 建站任务。","适合需要会话恢复、阶段推进、页面预览、主题绑定与发布前检查的 AI 建站任务。"
+"AI 建站工作台 · PageBuilder 扩展","AI 建站工作台 · PageBuilder 扩展"
+"适合需要走 PageBuilder styles 模板、页面组件和可视化精修的建站任务。","适合需要走 PageBuilder styles 模板、页面组件和可视化精修的建站任务。"
+扩展流程,扩展流程
+"进入 PageBuilder 扩展流程","进入 PageBuilder 扩展流程"
+创建兼容工作区,创建兼容工作区
+"继续到 PageBuilder 工作台","继续到 PageBuilder 工作台"
+"已为你创建兼容 PageBuilder 的 AI 建站工作区。这里会先给出 AI 建议，再把 styles 模板和可视化编辑入口交给 PageBuilder。","已为你创建兼容 PageBuilder 的 AI 建站工作区。这里会先给出 AI 建议，再把 styles 模板和可视化编辑入口交给 PageBuilder。"
+"先让 AI 整理建站需求和域名建议，后面再进入 PageBuilder 的 styles 模板流程。","先让 AI 整理建站需求和域名建议，后面再进入 PageBuilder 的 styles 模板流程。"
+"AI 会先帮你决定更适合走哪个 PageBuilder 风格方向，减少后面模板试错。","AI 会先帮你决定更适合走哪个 PageBuilder 风格方向，减少后面模板试错。"
+确认基础信息，进入模板与页面生成,确认基础信息，进入模板与页面生成
+页面生成（PageBuilder）,页面生成（PageBuilder）
+"PageBuilder 的主题不是 Websites 通用主题，而是 `styles` 目录里的风格模板。建议先选最接近的 styles 模板，再替换页面区域和内容组件。","PageBuilder 的主题不是 Websites 通用主题，而是 `styles` 目录里的风格模板。建议先选最接近的 styles 模板，再替换页面区域和内容组件。"
+"AI 模板建议","AI 模板建议"
+"AI 会优先推荐一个 `styles` 模板方向，再给出页面类型和组件建议。Header / Footer 默认固定，不建议在这一步随意改。","AI 会优先推荐一个 `styles` 模板方向，再给出页面类型和组件建议。Header / Footer 默认固定，不建议在这一步随意改。"
+"确认 styles 模板与页面方案","确认 styles 模板与页面方案"
+"先选 styles 模板","先选 styles 模板"
+再替换内容区域和页面组件,再替换内容区域和页面组件
+"Header / Footer 固定不可编辑","Header / Footer 固定不可编辑"
+最后以预览和可视化精修为主，确认域名环境准备好后再交付。,最后以预览和可视化精修为主，确认域名环境准备好后再交付。
+"AI 建议先从 PageBuilder 预览页检查首页首屏、导航和页脚，再决定是否回退到模板阶段。","AI 建议先从 PageBuilder 预览页检查首页首屏、导航和页脚，再决定是否回退到模板阶段。"
 "打开 PageBuilder 工作台","打开 PageBuilder 工作台"
-"进入 PageBuilder 原生 AI 建站工作台，继续旧版精修流程。","进入 PageBuilder 原生 AI 建站工作台，继续旧版精修流程。"
-"打开 QuickBuild 向导","打开 QuickBuild 向导"
+"进入 PageBuilder 原生 AI 建站工作台，继续 styles 模板与精修流程。","进入 PageBuilder 原生 AI 建站工作台，继续 styles 模板与精修流程。"
+打开快速建站向导,打开快速建站向导
 "直接进入 PageBuilder 的站点初始化向导。","直接进入 PageBuilder 的站点初始化向导。"
 管理域名,管理域名
 "查看或处理 PageBuilder 侧的域名相关任务。","查看或处理 PageBuilder 侧的域名相关任务。"
@@ -572,13 +590,8 @@ PageBuilder网站管理,PageBuilder网站管理
 "跳到 PageBuilder 的站点管理列表。","跳到 PageBuilder 的站点管理列表。"
 打开页面列表,打开页面列表
 "进入 PageBuilder 页面管理界面。","进入 PageBuilder 页面管理界面。"
-切到可视精修,切到可视精修
-"把工作区切到 PageBuilder 更擅长的可视化编辑阶段。","把工作区切到 PageBuilder 更擅长的可视化编辑阶段。"
-扩展流程,扩展流程
-进入分阶段工作台,进入分阶段工作台
-创建兼容工作区,创建兼容工作区
-"继续到 PageBuilder 旧工作台","继续到 PageBuilder 旧工作台"
-"已为你创建一个兼容 PageBuilder 的 AI 建站工作区。你可以先在这里整理需求、阶段与 scope，再切换到 PageBuilder 的原生精修工作台。","已为你创建一个兼容 PageBuilder 的 AI 建站工作区。你可以先在这里整理需求、阶段与 scope，再切换到 PageBuilder 的原生精修工作台。"
+"应用 PageBuilder 模板流","应用 PageBuilder 模板流"
+"把工作区切换成 PageBuilder styles 模板优先的生成方式，并进入页面生成阶段。","把工作区切换成 PageBuilder styles 模板优先的生成方式，并进入页面生成阶段。"
 头部组件,头部组件
 底部组件,底部组件
 内容组件,内容组件
@@ -674,6 +687,8 @@ Terms,Terms
 站点标题,站点标题
 一句话定位,一句话定位
 详细需求,详细需求
+榛樿璇█,榛樿璇█
+鍏宠仈璇█,鍏宠仈璇█
 "AI 生成简报","AI 生成简报"
 根据「详细需求」调用模型，自动填充标题与定位（可先保存或直接使用当前输入框内容）。,根据「详细需求」调用模型，自动填充标题与定位（可先保存或直接使用当前输入框内容）。
 "未检测到 Weline_Ai 模块，AI 生成简报不可用。","未检测到 Weline_Ai 模块，AI 生成简报不可用。"

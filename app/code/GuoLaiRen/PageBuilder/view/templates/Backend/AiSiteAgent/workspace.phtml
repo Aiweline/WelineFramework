@@ -44,6 +44,36 @@ $wv = static function (array $sc, string $key, string $default = ''): string {
     $v = $sc[$key] ?? $default;
     return \is_string($v) ? $v : (\is_scalar($v) ? (string) $v : $default);
 };
+$parseLanguageValues = static function ($raw): array {
+    if (\is_array($raw)) {
+        $values = $raw;
+    } elseif (\is_string($raw) && $raw !== '') {
+        $decoded = \json_decode($raw, true);
+        $values = \is_array($decoded) ? $decoded : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+    } else {
+        $values = [];
+    }
+
+    $result = [];
+    foreach ($values as $value) {
+        if (!\is_scalar($value)) {
+            continue;
+        }
+        $value = \trim((string)$value);
+        if ($value === '' || \in_array($value, $result, true)) {
+            continue;
+        }
+        $result[] = $value;
+    }
+
+    return $result;
+};
+$wizardDefaultLocale = $wv($scope, 'default_locale');
+$wizardLocales = $parseLanguageValues($scope['locales'] ?? []);
+if ($wizardDefaultLocale !== '' && !\in_array($wizardDefaultLocale, $wizardLocales, true)) {
+    $wizardLocales[] = $wizardDefaultLocale;
+}
+$wizardReadonlyLocales = $wizardDefaultLocale !== '' ? [$wizardDefaultLocale] : [];
 $pageTypesStr = '';
 if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
     $pageTypesStr = \implode(', ', \array_map(static fn($x) => (string) $x, $scope['page_types']));
@@ -135,6 +165,31 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
                         <div class="mb-2">
                             <label class="form-label" for="wiz-brief-desc"><lang>详细需求</lang></label>
                             <textarea class="form-control" id="wiz-brief-desc" rows="4" placeholder="<?= htmlspecialchars(__('产品、受众、风格、必做页面等'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($wv($scope, 'brief_description', $wv($scope, 'user_description')), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="wiz-default-locale"><lang>榛樿璇█</lang></label>
+                                <w:i18n:language:select
+                                    id="pb_ai_default_locale_selector"
+                                    name="default_locale"
+                                    input-id="wiz-default-locale"
+                                    value="wizardDefaultLocale"
+                                    allow-empty="true"
+                                    class="w-100"
+                                />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="wiz-locales"><lang>鍏宠仈璇█</lang></label>
+                                <w:i18n:language:select
+                                    id="pb_ai_related_locales_selector"
+                                    name="locales[]"
+                                    input-id="wiz-locales"
+                                    value="wizardLocales"
+                                    multiple="true"
+                                    readonly-values="wizardReadonlyLocales"
+                                    class="w-100"
+                                />
+                            </div>
                         </div>
                         <?php if ($ai_module_available) { ?>
                             <div class="mb-3">
@@ -455,6 +510,14 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
     var queryDomainUrl = <?= json_encode($query_domain_status_url, JSON_THROW_ON_ERROR) ?>;
     var aiBriefUrl = <?= json_encode($ai_generate_brief_url, JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= json_encode($publish_check_url, JSON_THROW_ON_ERROR) ?>;
+    var languageUtils = window.WelineLanguageSelectUtils || null;
+
+    if (languageUtils && typeof languageUtils.bindDefaultToMultiple === 'function') {
+        languageUtils.bindDefaultToMultiple({
+            singleId: 'pb_ai_default_locale_selector',
+            multipleId: 'pb_ai_related_locales_selector'
+        });
+    }
 
     function setDomainStatusPre(text) {
         ['pb-ai-domain-status-out', 'pb-ai-domain-status-out-wait'].forEach(function (id) {
@@ -735,9 +798,17 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
                 var t = document.getElementById('wiz-site-title');
                 var g = document.getElementById('wiz-site-tagline');
                 var d = document.getElementById('wiz-brief-desc');
+                var defaultLocaleSelector = languageUtils && typeof languageUtils.get === 'function'
+                    ? languageUtils.get('pb_ai_default_locale_selector')
+                    : null;
+                var relatedLocalesSelector = languageUtils && typeof languageUtils.get === 'function'
+                    ? languageUtils.get('pb_ai_related_locales_selector')
+                    : null;
                 patch.site_title = t ? t.value.trim() : '';
                 patch.site_tagline = g ? g.value.trim() : '';
                 patch.brief_description = d ? d.value.trim() : '';
+                patch.default_locale = defaultLocaleSelector ? defaultLocaleSelector.getValue() : '';
+                patch.locales = relatedLocalesSelector ? relatedLocalesSelector.getValues() : [];
             } else if (step === 'domain') {
                 var dom = document.getElementById('wiz-target-domain');
                 var n = document.getElementById('wiz-domain-notes');

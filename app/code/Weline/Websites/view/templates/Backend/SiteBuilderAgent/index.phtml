@@ -4,6 +4,8 @@
  * @var list<array{account_id:int,account_name:string,registrar_name:string,registrar_code:string}> $accounts
  * @var list<array{code:string,name:string,description:string,badge:string,target_url:string,target_label:string,workspace_label:string,selected:bool}> $provider_cards
  * @var list<array{public_id:string,provider_name:string,stage_label:string,summary:string,update_time:string,workspace_url:string,native_entry_url:string}> $recent_sessions
+ * @var array{code:string,name:string,description:string,badge:string} $selected_provider_context
+ * @var list<array{code:string,label:string,title:string,description:string,ai_recommendation_title:string,ai_recommendation:string,confirm_label:string,previous_label:string,next_stage:string,previous_stage:string,tool_codes:list<string>,scope_patch:array<string,mixed>,key_points:list<string>}> $selected_stage_guides
  * @var string $selected_provider
  * @var string $create_session_url
  * @var string $current_entry_url
@@ -16,6 +18,10 @@ $provider_cards = $this->getData('provider_cards');
 $provider_cards = \is_array($provider_cards) ? $provider_cards : [];
 $recent_sessions = $this->getData('recent_sessions');
 $recent_sessions = \is_array($recent_sessions) ? $recent_sessions : [];
+$selected_provider_context = $this->getData('selected_provider_context');
+$selected_provider_context = \is_array($selected_provider_context) ? $selected_provider_context : ['code' => 'websites_default', 'name' => 'AI 建站工作台', 'description' => '', 'badge' => ''];
+$selected_stage_guides = $this->getData('selected_stage_guides');
+$selected_stage_guides = \is_array($selected_stage_guides) ? $selected_stage_guides : [];
 $selected_provider = (string)($this->getData('selected_provider') ?? 'websites_default');
 $create_session_url = (string)($this->getData('create_session_url') ?? '');
 $current_entry_url = (string)($this->getData('current_entry_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => $selected_provider]));
@@ -23,6 +29,7 @@ $fake_mode = (bool)($this->getData('fake_mode') ?? false);
 $quick_build_url = $current_entry_url . '#quick-build';
 $provider_lane_url = $current_entry_url . '#provider-lane';
 ?>
+
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
@@ -32,83 +39,63 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                     <lang>AI 建站工作台</lang>
                 </h4>
                 <p class="text-muted mb-0 mt-2 site-workbench-subtitle">
-                    <lang>先用自然语言讲清楚你要做什么，再决定是走极速建站，还是进入 PageBuilder 的分阶段精修工作台。</lang>
+                    <lang>先告诉 AI 你想做什么站，它会按 3 个阶段给出推荐。大多数时候，你只需要做几次确认。</lang>
                 </p>
             </div>
-            <div class="site-workbench-badges d-flex flex-wrap gap-2 mt-3 mt-sm-0">
-                <span class="badge text-bg-light border"><lang>先聊需求</lang></span>
-                <span class="badge text-bg-light border"><lang>再定域名</lang></span>
-                <span class="badge text-bg-light border"><lang>最后细化页面</lang></span>
+            <div class="site-workbench-pill-row d-flex flex-wrap gap-2 mt-3 mt-sm-0">
+                <span class="site-workbench-pill"><lang>AI 推荐域名</lang></span>
+                <span class="site-workbench-pill"><lang>AI 推荐页面方案</lang></span>
+                <span class="site-workbench-pill"><lang>预览后完成</lang></span>
             </div>
         </div>
     </div>
 </div>
 
-<?php if ($selected_provider === 'pagebuilder') { ?>
-    <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert">
-        <div>
-            <strong><lang>当前推荐：PageBuilder 扩展流程</lang></strong>
-            <span class="ms-2"><lang>适合希望按阶段打磨页面、主题、预览与发布检查的建站任务。</lang></span>
-        </div>
-        <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($this->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]), ENT_QUOTES, 'UTF-8') ?>">
-            <i class="mdi mdi-open-in-new me-1"></i>
-            <lang>打开 PageBuilder 工作台</lang>
-        </a>
-    </div>
-<?php } ?>
-
 <?php if ($fake_mode) { ?>
-    <div class="alert alert-warning d-flex flex-wrap align-items-center justify-content-between gap-2" role="alert">
-        <div>
-            <strong>Local demo mode</strong>
-            <span class="ms-2"><lang>褰撳墠宸插惎鐢ㄦ湰鍦板亣鏁版嵁婕旂ず娴佺▼锛屽煙鍚嶈喘涔般€佷富棰樼敓鎴愪笌棰勮閾捐矾浼氫娇鐢ㄥ彲閲嶅鐨勬祴璇曠粨鏋溿€?/lang></span>
-        </div>
-        <a class="btn btn-sm btn-outline-dark" href="<?= htmlspecialchars($current_entry_url, ENT_QUOTES, 'UTF-8') ?>">
-            <i class="mdi mdi-refresh me-1"></i>
-            <lang>淇濇寔褰撳墠鍏ュ彛</lang>
-        </a>
+    <div class="alert alert-warning border-0 shadow-sm" role="alert">
+        <strong>Local demo mode</strong>
+        <span class="ms-2"><lang>当前运行在本地演示模式，域名购买、解析和证书会用假数据模拟，但流程和交互保持一致。</lang></span>
     </div>
 <?php } ?>
 
 <div class="row g-3">
     <div class="col-xl-8">
-        <div class="card site-workbench-hero border-0 shadow-sm">
-            <div class="card-body p-4">
+        <div class="card border-0 shadow-sm site-workbench-hero">
+            <div class="card-body p-4 p-xl-5">
                 <div class="row g-4 align-items-start">
                     <div class="col-lg-7">
-                        <span class="site-workbench-chip">
-                            <i class="mdi mdi-lightning-bolt-outline me-1"></i>
-                            <lang>极速建站</lang>
-                        </span>
-                        <h5 class="mt-3 mb-2"><lang>告诉系统你想做什么，它会把流程先跑起来</lang></h5>
-                        <p class="text-muted mb-3">
-                            <lang>适合“我要先把站点搭起来”的场景。AI 模式下，域名和账户都可以后补；如果你已经明确好域名，也可以直接关闭 AI，按传统方式一步到位执行。</lang>
+                        <div class="site-workbench-chip">
+                            <i class="mdi mdi-sparkles me-1"></i>
+                            <lang>更像对话，不像配置台</lang>
+                        </div>
+                        <h5 class="mt-3 mb-2"><lang>只要先说清楚网站要做什么，AI 就会把域名、页面和上线顺序推荐出来。</lang></h5>
+                        <p class="text-muted mb-4">
+                            <lang>如果你不确定选哪个流程，先从当前工作台开始。需要精修时，再切到对应 provider 的扩展能力，例如 PageBuilder 的 styles 模板流。</lang>
                         </p>
-                        <div class="site-workbench-steps">
-                            <div class="site-workbench-step">
-                                <span>1</span>
-                                <lang>写下业务、受众与目标</lang>
-                            </div>
-                            <div class="site-workbench-step">
-                                <span>2</span>
-                                <lang>决定是否让 AI 先推荐域名与动作</lang>
-                            </div>
-                            <div class="site-workbench-step">
-                                <span>3</span>
-                                <lang>把结果继续带到高级工作台细化</lang>
-                            </div>
+                        <div class="site-stage-preview-grid">
+                            <?php foreach ($selected_stage_guides as $guide) { ?>
+                                <div class="site-stage-preview-card">
+                                    <div class="site-stage-preview-label"><?= htmlspecialchars((string)($guide['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                                    <h6 class="mb-2"><?= htmlspecialchars((string)($guide['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h6>
+                                    <p class="mb-0 text-muted"><?= htmlspecialchars((string)($guide['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                                </div>
+                            <?php } ?>
                         </div>
                     </div>
                     <div class="col-lg-5">
-                        <div class="site-workbench-sidecard">
-                            <h6 class="mb-3"><lang>什么时候用哪条路</lang></h6>
-                            <div class="site-workbench-sideitem">
-                                <strong><lang>极速建站</lang></strong>
-                                <p class="mb-0"><lang>想快速得到域名、站点与初步交付结果。</lang></p>
-                            </div>
-                            <div class="site-workbench-sideitem">
-                                <strong><lang>PageBuilder 扩展流程</lang></strong>
-                                <p class="mb-0"><lang>想保留会话、逐步补 scope、看预览、做发布前检查。</lang></p>
+                        <div class="site-provider-focus h-100">
+                            <div class="site-provider-focus-badge"><?= htmlspecialchars((string)($selected_provider_context['badge'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                            <h5 class="mt-3 mb-2"><?= htmlspecialchars((string)($selected_provider_context['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h5>
+                            <p class="mb-3 text-muted"><?= htmlspecialchars((string)($selected_provider_context['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                            <div class="d-grid gap-2">
+                                <a class="btn btn-primary" href="<?= htmlspecialchars($quick_build_url, ENT_QUOTES, 'UTF-8') ?>">
+                                    <i class="mdi mdi-rocket-launch-outline me-1"></i>
+                                    <lang>直接开始</lang>
+                                </a>
+                                <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($provider_lane_url, ENT_QUOTES, 'UTF-8') ?>">
+                                    <i class="mdi mdi-view-grid-plus-outline me-1"></i>
+                                    <lang>先看 Provider 流程</lang>
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -116,45 +103,17 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
             </div>
         </div>
     </div>
+
     <div class="col-xl-4">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-body p-4">
-                <span class="site-workbench-chip site-workbench-chip-soft">
-                    <i class="mdi mdi-puzzle-outline me-1"></i>
-                    <lang>扩展工作台</lang>
-                </span>
-                <h5 class="mt-3 mb-2"><lang>统一入口，按 provider 进入不同流程</lang></h5>
-                <p class="text-muted mb-3">
-                    <lang>现在 `Websites` 负责总入口，`PageBuilder` 作为扩展工作台接入。这样入口统一了，能力也不会散落在两个菜单里。</lang>
-                </p>
+                <div class="site-workbench-chip site-workbench-chip-soft">
+                    <i class="mdi mdi-restore me-1"></i>
+                    <lang>可恢复工作区</lang>
+                </div>
+                <h5 class="mt-3 mb-2"><lang>先保存成工作区，稍后继续也不会丢。</lang></h5>
+                <p class="text-muted mb-3"><lang>工作区会保留当前 provider、阶段、推荐结果、补充消息和后续 handoff 信息。</lang></p>
                 <div class="d-grid gap-2">
-                    <a class="btn btn-outline-primary" href="<?= htmlspecialchars($provider_lane_url, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-view-grid-plus-outline me-1"></i>
-                        <lang>查看已接入流程</lang>
-                    </a>
-                    <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($this->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]), ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-application-brackets-outline me-1"></i>
-                        <lang>直接进入 PageBuilder 工作台</lang>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mt-1">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body p-4 d-flex flex-wrap justify-content-between align-items-start gap-3">
-                <div>
-                    <span class="site-workbench-chip site-workbench-chip-soft">
-                        <i class="mdi mdi-clipboard-text-clock-outline me-1"></i>
-                        <lang>可恢复工作区</lang>
-                    </span>
-                    <h5 class="mt-3 mb-2"><lang>先把需求存成工作区，再决定何时执行</lang></h5>
-                    <p class="text-muted mb-0"><lang>工作区会保留 provider、阶段、Scope、消息和事件流，适合需要多轮推进或中途切换任务的建站工作。</lang></p>
-                </div>
-                <div class="site-workbench-actions d-flex flex-column gap-2">
                     <button type="button" class="btn btn-primary" id="site-agent-create-workspace" data-provider-code="<?= htmlspecialchars($selected_provider, ENT_QUOTES, 'UTF-8') ?>">
                         <i class="mdi mdi-plus-circle-outline me-1"></i>
                         <lang>创建当前工作区</lang>
@@ -164,21 +123,23 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                         <lang>先看 Provider 流程</lang>
                     </a>
                 </div>
-            </div>
-            <div class="card-body pt-0 px-4 pb-4">
-                <?php if ($recent_sessions === []) { ?>
-                    <div class="site-workbench-recent-empty"><lang>还没有历史工作区，会在你创建第一条会话后显示。</lang></div>
-                <?php } else { ?>
-                    <div class="site-workbench-recent-list">
-                        <?php foreach (\array_slice($recent_sessions, 0, 3) as $recent) { ?>
-                            <a class="site-workbench-recent-item" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                                <span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                <small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
-                            </a>
-                        <?php } ?>
-                    </div>
-                <?php } ?>
+
+                <div class="site-recent-block mt-4">
+                    <div class="site-recent-title"><lang>最近工作区</lang></div>
+                    <?php if ($recent_sessions === []) { ?>
+                        <div class="site-recent-empty"><lang>还没有历史工作区，创建后会显示在这里。</lang></div>
+                    <?php } else { ?>
+                        <div class="site-recent-list">
+                            <?php foreach (\array_slice($recent_sessions, 0, 3) as $recent) { ?>
+                                <a class="site-recent-item" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                                    <span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
+                                </a>
+                            <?php } ?>
+                        </div>
+                    <?php } ?>
+                </div>
             </div>
         </div>
     </div>
@@ -189,37 +150,39 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
                 <h5 class="card-title mb-1">
-                    <i class="mdi mdi-rocket-launch-outline me-1"></i>
-                    <lang>极速建站执行区</lang>
+                    <i class="mdi mdi-magic-staff me-1"></i>
+                    <lang>快速开始</lang>
                 </h5>
-                <p class="text-muted mb-0"><lang>AI 模式默认开启。开启时域名和账户可以稍后再补；关闭后会按照明确输入直接执行。</lang></p>
+                <p class="text-muted mb-0"><lang>默认先开 AI。你只需要描述建站目标，域名和服务商可以由 AI 先推荐。</lang></p>
             </div>
             <div class="card-body p-4">
                 <div class="mb-3">
-                    <label class="form-label" for="site-agent-description"><lang>你想做什么站</lang></label>
-                    <textarea class="form-control" id="site-agent-description" rows="4" placeholder="<?= htmlspecialchars(__('例如：我想做一个面向海外客户的咖啡豆品牌站，首页要体现产地故事、产品优势、订阅购买和联系方式。'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                    <label class="form-label" for="site-agent-description"><lang>你想做什么网站</lang></label>
+                    <textarea class="form-control" id="site-agent-description" rows="4" placeholder="<?= htmlspecialchars((string)__('例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
                 </div>
+
                 <div class="form-check form-switch mb-3">
                     <input class="form-check-input" type="checkbox" role="switch" id="site-agent-use-ai" checked>
                     <label class="form-check-label" for="site-agent-use-ai">
-                        <lang>先让 AI 帮我理解需求、推荐域名并规划建站动作</lang>
+                        <lang>先让 AI 推荐域名、服务商和页面方案</lang>
                     </label>
                 </div>
+
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label" for="site-agent-domain">
                             <lang>目标域名</lang>
-                            <span class="text-muted small" id="site-agent-domain-hint"><lang>AI 模式下可选</lang></span>
+                            <span class="text-muted small" id="site-agent-domain-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
                         <input type="text" class="form-control" id="site-agent-domain" placeholder="example.com">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="site-agent-account">
-                            <lang>域名商账户</lang>
-                            <span class="text-muted small" id="site-agent-account-hint"><lang>AI 模式下可后补</lang></span>
+                            <lang>购买服务商账号</lang>
+                            <span class="text-muted small" id="site-agent-account-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
                         <select class="form-select" id="site-agent-account">
-                            <option value=""><lang>请选择域名商账户</lang></option>
+                            <option value=""><lang>稍后再决定</lang></option>
                             <?php foreach ($accounts as $acc) { ?>
                                 <option value="<?= (int)($acc['account_id'] ?? 0) ?>">
                                     <?= htmlspecialchars((string)(($acc['registrar_name'] ?? '') . ' - ' . ($acc['account_name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
@@ -228,23 +191,26 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                         </select>
                     </div>
                 </div>
-                <div class="site-workbench-tip mt-3 mb-4" id="site-agent-mode-tip">
+
+                <div class="site-mode-note mt-3 mb-4" id="site-agent-mode-tip">
                     <i class="mdi mdi-information-outline me-1"></i>
-                    <span><lang>推荐先用 AI 模式跑出域名和站点方向，再到分阶段工作台做页面、主题和发布检查。</lang></span>
+                    <span><lang>推荐先开 AI，让系统先推荐域名和页面方案，再决定是否进入 provider 的扩展流程。</lang></span>
                 </div>
+
                 <div class="d-flex flex-wrap gap-2">
                     <button type="button" class="btn btn-primary" id="site-agent-start-btn">
                         <i class="mdi mdi-play-circle-outline me-1"></i>
-                        <lang>开始执行</lang>
+                        <lang>开始建站</lang>
                     </button>
-                    <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($provider_lane_url, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-arrow-down-circle-outline me-1"></i>
-                        <lang>先看看扩展流程</lang>
-                    </a>
+                    <button type="button" class="btn btn-outline-primary" id="site-agent-create-workspace-inline" data-provider-code="<?= htmlspecialchars($selected_provider, ENT_QUOTES, 'UTF-8') ?>">
+                        <i class="mdi mdi-content-save-outline me-1"></i>
+                        <lang>先保存成工作区</lang>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
+
     <div class="col-xl-5">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
@@ -252,7 +218,7 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                     <i class="mdi mdi-console-line me-1"></i>
                     <lang>执行日志</lang>
                 </h5>
-                <p class="text-muted mb-0"><lang>这里会实时显示 AI 理解、工具执行、建站动作和错误信息。</lang></p>
+                <p class="text-muted mb-0"><lang>这里会实时显示 AI 推荐、工具执行和建站进度。</lang></p>
             </div>
             <div class="card-body px-4 pb-4">
                 <w:theme:sse-terminal
@@ -275,7 +241,7 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                     <i class="mdi mdi-view-grid-plus-outline me-1"></i>
                     <lang>已接入的 AI 建站流程</lang>
                 </h5>
-                <p class="text-muted mb-0"><lang>`Websites` 负责统一入口；不同 provider 负责不同的专业流程和会话工作区。</lang></p>
+                <p class="text-muted mb-0"><lang>同一个工作台入口，不同 provider 可以扩展自己的专属流程和工具。</lang></p>
             </div>
             <div class="card-body p-4">
                 <div class="row g-3">
@@ -314,149 +280,112 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
 </div>
 
 <style>
-.site-workbench-subtitle {
-    max-width: 760px;
+.site-workbench-subtitle { max-width: 760px; }
+.site-workbench-pill-row { justify-content: flex-end; }
+.site-workbench-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.85rem;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    color: #334155;
+    font-size: 0.82rem;
+    font-weight: 600;
 }
-
 .site-workbench-hero {
     background:
-        radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 32%),
-        radial-gradient(circle at bottom left, rgba(249, 115, 22, 0.14), transparent 30%),
-        linear-gradient(135deg, #fff9f4 0%, #ffffff 45%, #f5fbfb 100%);
+        radial-gradient(circle at top right, rgba(20, 184, 166, 0.16), transparent 30%),
+        radial-gradient(circle at bottom left, rgba(249, 115, 22, 0.16), transparent 28%),
+        linear-gradient(135deg, #fffaf5 0%, #ffffff 48%, #f4fbfb 100%);
 }
-
 .site-workbench-chip {
     display: inline-flex;
     align-items: center;
-    padding: 0.45rem 0.8rem;
+    padding: 0.42rem 0.8rem;
     border-radius: 999px;
     background: rgba(249, 115, 22, 0.12);
     color: #9a3412;
     font-size: 0.8rem;
-    font-weight: 600;
-}
-
-.site-workbench-chip-soft {
-    background: rgba(20, 184, 166, 0.12);
-    color: #115e59;
-}
-
-.site-workbench-steps {
-    display: grid;
-    gap: 0.75rem;
-}
-
-.site-workbench-step {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.9rem 1rem;
-    border-radius: 16px;
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.site-workbench-step span {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.9rem;
-    height: 1.9rem;
-    border-radius: 999px;
-    background: #0f766e;
-    color: #fff;
     font-weight: 700;
 }
-
-.site-workbench-sidecard {
-    border-radius: 20px;
-    background: rgba(15, 23, 42, 0.88);
-    color: #f8fafc;
-    padding: 1.15rem;
+.site-workbench-chip-soft {
+    background: rgba(14, 165, 233, 0.12);
+    color: #0f766e;
 }
-
-.site-workbench-sidecard h6,
-.site-workbench-sidecard strong {
-    color: #fff;
-}
-
-.site-workbench-sideitem + .site-workbench-sideitem {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.site-workbench-sideitem p {
-    color: rgba(248, 250, 252, 0.8);
-}
-
-.site-workbench-tip {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.4rem;
-    padding: 0.85rem 1rem;
-    border-radius: 14px;
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    color: #334155;
-}
-
-.site-workbench-recent-list {
+.site-stage-preview-grid {
     display: grid;
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.85rem;
 }
-
-.site-workbench-recent-item {
-    display: grid;
-    gap: 0.2rem;
-    padding: 0.9rem 1rem;
-    border-radius: 16px;
-    border: 1px solid rgba(148, 163, 184, 0.24);
-    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-    color: inherit;
-    text-decoration: none;
-}
-
-.site-workbench-recent-item:hover {
-    border-color: rgba(14, 116, 144, 0.35);
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-
-.site-workbench-recent-item span,
-.site-workbench-recent-item small,
-.site-workbench-recent-empty {
-    color: #64748b;
-}
-
-.site-provider-card {
-    height: 100%;
-    padding: 1.25rem;
+.site-stage-preview-card,
+.site-provider-focus,
+.site-provider-card,
+.site-recent-item {
     border-radius: 18px;
-    border: 1px solid rgba(148, 163, 184, 0.28);
-    background: #fff;
-    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    border: 1px solid rgba(148, 163, 184, 0.22);
+    background: rgba(255, 255, 255, 0.92);
 }
-
-.site-provider-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+.site-stage-preview-card { padding: 1rem; }
+.site-stage-preview-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.06);
+    color: #475569;
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-bottom: 0.65rem;
 }
-
-.site-provider-card.is-selected {
-    border-color: rgba(14, 116, 144, 0.5);
-    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.08);
-    background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%);
-}
-
+.site-provider-focus { padding: 1.1rem; }
+.site-provider-focus-badge,
 .site-provider-badge {
     display: inline-flex;
     align-items: center;
     padding: 0.32rem 0.65rem;
     border-radius: 999px;
-    background: rgba(14, 165, 233, 0.1);
+    background: rgba(14, 165, 233, 0.12);
     color: #0f766e;
     font-size: 0.76rem;
-    font-weight: 600;
+    font-weight: 700;
+}
+.site-mode-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    padding: 0.9rem 1rem;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #334155;
+}
+.site-recent-block { border-top: 1px solid rgba(148, 163, 184, 0.18); padding-top: 1rem; }
+.site-recent-title { font-weight: 700; margin-bottom: 0.75rem; }
+.site-recent-list { display: grid; gap: 0.75rem; }
+.site-recent-item {
+    display: grid;
+    gap: 0.2rem;
+    padding: 0.85rem 0.95rem;
+    text-decoration: none;
+    color: inherit;
+}
+.site-recent-item:hover,
+.site-provider-card:hover {
+    border-color: rgba(14, 116, 144, 0.35);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+.site-recent-item span,
+.site-recent-item small,
+.site-recent-empty { color: #64748b; }
+.site-provider-card {
+    padding: 1.2rem;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.site-provider-card.is-selected {
+    border-color: rgba(14, 116, 144, 0.45);
+    box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.08);
+    background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%);
 }
 </style>
 
@@ -466,6 +395,7 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
 
     var startBtn = document.getElementById('site-agent-start-btn');
     var createWorkspaceBtn = document.getElementById('site-agent-create-workspace');
+    var inlineCreateWorkspaceBtn = document.getElementById('site-agent-create-workspace-inline');
     var descInput = document.getElementById('site-agent-description');
     var domainInput = document.getElementById('site-agent-domain');
     var accountSelect = document.getElementById('site-agent-account');
@@ -473,10 +403,31 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
     var domainHint = document.getElementById('site-agent-domain-hint');
     var accountHint = document.getElementById('site-agent-account-hint');
     var modeTip = document.getElementById('site-agent-mode-tip');
-    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['site-builder-agent-terminal'] : null;
+    var terminal = null;
+    var fallbackTerminal = null;
+    var terminalEventsBound = false;
+    var terminalBoundTarget = null;
     var terminalUnlocked = true;
     var createSessionUrl = <?= json_encode($create_session_url, JSON_THROW_ON_ERROR) ?>;
+    var startSseUrl = <?= json_encode((string)$this->getBackendUrl('websites/backend/site-builder-agent/trigger-sse'), JSON_THROW_ON_ERROR) ?>;
     var fakeMode = <?= $fake_mode ? 'true' : 'false' ?>;
+    var messages = {
+        aiOptional: <?= json_encode((string)__('AI can recommend this for you.'), JSON_THROW_ON_ERROR) ?>,
+        manualRequired: <?= json_encode((string)__('Please confirm this manually when AI is off.'), JSON_THROW_ON_ERROR) ?>,
+        aiModeTip: <?= json_encode((string)__('AI will suggest the domain, provider, and page plan first. You only need to confirm the result.'), JSON_THROW_ON_ERROR) ?>,
+        manualModeTip: <?= json_encode((string)__('Manual mode keeps the same guided flow, but you need to provide the key information yourself.'), JSON_THROW_ON_ERROR) ?>,
+        createWorkspaceFailed: <?= json_encode((string)__('Unable to create the workspace right now.'), JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= json_encode((string)__('Network request failed. Please try again.'), JSON_THROW_ON_ERROR) ?>,
+        terminalLoading: <?= json_encode((string)__('Terminal is still loading. Please try again.'), JSON_THROW_ON_ERROR) ?>,
+        domainRequired: <?= json_encode((string)__('Please enter a target domain first.'), JSON_THROW_ON_ERROR) ?>,
+        registrarRequired: <?= json_encode((string)__('Please choose a registrar account first.'), JSON_THROW_ON_ERROR) ?>,
+        briefRequired: <?= json_encode((string)__('Please describe the site goal or provide a domain first.'), JSON_THROW_ON_ERROR) ?>,
+        loadingLog: <?= json_encode((string)__('Preparing the guided AI build flow...'), JSON_THROW_ON_ERROR) ?>,
+        connecting: <?= json_encode((string)__('Connecting...'), JSON_THROW_ON_ERROR) ?>,
+        connected: <?= json_encode((string)__('Connected'), JSON_THROW_ON_ERROR) ?>,
+        disconnected: <?= json_encode((string)__('Disconnected'), JSON_THROW_ON_ERROR) ?>,
+        connectionFailed: <?= json_encode((string)__('Connection failed. Please try again.'), JSON_THROW_ON_ERROR) ?>
+    };
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -492,17 +443,18 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
         if (!useAiToggle) {
             return;
         }
+
         var useAi = !!useAiToggle.checked;
         if (domainHint) {
-            domainHint.textContent = useAi ? <?= json_encode((string)__('AI 模式下可选'), JSON_THROW_ON_ERROR) ?> : <?= json_encode((string)__('关闭 AI 后必填'), JSON_THROW_ON_ERROR) ?>;
+            domainHint.textContent = useAi ? messages.aiOptional : messages.manualRequired;
         }
         if (accountHint) {
-            accountHint.textContent = useAi ? <?= json_encode((string)__('AI 模式下可后补'), JSON_THROW_ON_ERROR) ?> : <?= json_encode((string)__('关闭 AI 后必填'), JSON_THROW_ON_ERROR) ?>;
+            accountHint.textContent = useAi ? messages.aiOptional : messages.manualRequired;
         }
         if (modeTip) {
             modeTip.innerHTML = useAi
-                ? '<i class="mdi mdi-information-outline me-1"></i><span>' + <?= json_encode((string)__('推荐先用 AI 模式跑出域名和站点方向，再到分阶段工作台做页面、主题和发布检查。'), JSON_THROW_ON_ERROR) ?> + '</span>'
-                : '<i class="mdi mdi-shield-check-outline me-1"></i><span>' + <?= json_encode((string)__('你已经关闭 AI 模式，系统将按明确输入直接执行，所以域名和账户都需要现在就确认。'), JSON_THROW_ON_ERROR) ?> + '</span>';
+                ? '<i class="mdi mdi-information-outline me-1"></i><span>' + messages.aiModeTip + '</span>'
+                : '<i class="mdi mdi-shield-check-outline me-1"></i><span>' + messages.manualModeTip + '</span>';
         }
     }
 
@@ -532,42 +484,204 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
             credentials: 'same-origin'
-        }).then(function (r) {
-            return r.json();
+        }).then(function (response) {
+            return response.json();
         }).then(function (data) {
             if (data && data.success && data.workspace_url) {
                 window.location.href = data.workspace_url;
                 return;
             }
-            toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('创建工作区失败'), JSON_THROW_ON_ERROR) ?>);
+            toast('error', (data && data.message) ? data.message : messages.createWorkspaceFailed);
         }).catch(function () {
-            toast('error', <?= json_encode((string)__('网络错误，请稍后重试'), JSON_THROW_ON_ERROR) ?>);
+            toast('error', messages.networkError);
         });
     }
 
-    if (useAiToggle) {
-        useAiToggle.addEventListener('change', syncModeUi);
-        syncModeUi();
-    }
+    function bindCreateButton(button) {
+        if (!button) {
+            return;
+        }
 
-    if (createWorkspaceBtn) {
-        createWorkspaceBtn.addEventListener('click', function () {
-            postCreateWorkspace(createWorkspaceBtn.getAttribute('data-provider-code') || 'websites_default');
+        button.addEventListener('click', function () {
+            postCreateWorkspace(button.getAttribute('data-provider-code') || 'websites_default');
         });
     }
 
-    document.querySelectorAll('.site-create-session-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            postCreateWorkspace(btn.getAttribute('data-provider-code') || 'websites_default');
-        });
-    });
+    function createFallbackTerminal() {
+        var terminalBody = document.getElementById('site-builder-agent-terminal_body');
+        var terminalContent = document.getElementById('site-builder-agent-terminal_content');
+        var terminalStatus = document.getElementById('site-builder-agent-terminal_status');
+        var eventSource = null;
+        var currentUrl = '';
+        var running = false;
+        var callbacks = {};
 
-    if (!startBtn || !terminal) {
-        return;
+        if (!terminalContent) {
+            return null;
+        }
+
+        function formatTime() {
+            return new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        }
+
+        function setStatus(text) {
+            if (terminalStatus) {
+                terminalStatus.textContent = text;
+            }
+        }
+
+        function appendLine(text, type) {
+            var safeText = (text === undefined || text === null) ? '' : String(text);
+            safeText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').forEach(function (lineText) {
+                var line = document.createElement('div');
+                line.className = 'weline-sse-terminal-line ' + (type || 'info');
+
+                var time = document.createElement('span');
+                time.className = 'weline-sse-terminal-time';
+                time.textContent = '[' + formatTime() + ']';
+                line.appendChild(time);
+
+                var textEl = document.createElement('span');
+                textEl.className = 'weline-sse-terminal-text';
+                textEl.textContent = lineText;
+                line.appendChild(textEl);
+
+                terminalContent.appendChild(line);
+            });
+
+            if (terminalBody) {
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+            }
+        }
+
+        function parsePayload(event) {
+            if (!event || typeof event.data !== 'string' || event.data === '') {
+                return {};
+            }
+
+            try {
+                return JSON.parse(event.data);
+            } catch (err) {
+                return { message: event.data };
+            }
+        }
+
+        function payloadToMessage(payload, fallbackMessage) {
+            if (payload && typeof payload.message === 'string' && payload.message !== '') {
+                return payload.message;
+            }
+            if (payload && typeof payload.content === 'string' && payload.content !== '') {
+                return payload.content;
+            }
+            return fallbackMessage || '';
+        }
+
+        function stop() {
+            if (eventSource) {
+                var currentEventSource = eventSource;
+                eventSource = null;
+                currentEventSource.close();
+            }
+
+            running = false;
+            setStatus(messages.disconnected);
+            if (typeof callbacks.stop === 'function') {
+                callbacks.stop();
+            }
+        }
+
+        function dispatch(eventName, payload) {
+            if (typeof callbacks[eventName] === 'function') {
+                callbacks[eventName]({ data: JSON.stringify(payload || {}) });
+                return;
+            }
+
+            var fallbackMessage = eventName === 'error' ? messages.connectionFailed : eventName;
+            var message = payloadToMessage(payload, fallbackMessage);
+            if (message) {
+                appendLine(message, eventName === 'error' ? 'error' : eventName);
+            }
+        }
+
+        return {
+            start: function (url) {
+                if (url) {
+                    currentUrl = url;
+                }
+                if (!currentUrl || running) {
+                    return;
+                }
+
+                running = true;
+                setStatus(messages.connecting);
+                appendLine(messages.connecting, 'info');
+                eventSource = new EventSource(currentUrl);
+
+                eventSource.onopen = function () {
+                    setStatus(messages.connected);
+                    appendLine(messages.connected, 'success');
+                    if (typeof callbacks.open === 'function') {
+                        callbacks.open();
+                    }
+                };
+
+                ['start', 'progress', 'warning', 'info', 'done', 'error'].forEach(function (eventName) {
+                    eventSource.addEventListener(eventName, function (event) {
+                        var payload = parsePayload(event);
+                        dispatch(eventName, payload);
+                        if (eventName === 'done' || eventName === 'error') {
+                            stop();
+                        }
+                    });
+                });
+
+                eventSource.onerror = function () {
+                    if (!running) {
+                        return;
+                    }
+
+                    dispatch('error', { message: messages.connectionFailed });
+                    stop();
+                };
+            },
+            stop: stop,
+            clear: function () {
+                terminalContent.innerHTML = '';
+            },
+            log: function (text, type) {
+                appendLine(text, type || 'info');
+            },
+            setUrl: function (url) {
+                currentUrl = url;
+            },
+            getUrl: function () {
+                return currentUrl;
+            },
+            isRunning: function () {
+                return running;
+            },
+            on: function (eventName, callback) {
+                callbacks[eventName] = callback;
+            }
+        };
+    }
+
+    function resolveTerminal() {
+        if (window.WelineSseTerminal && window.WelineSseTerminal['site-builder-agent-terminal']) {
+            return window.WelineSseTerminal['site-builder-agent-terminal'];
+        }
+
+        if (!fallbackTerminal) {
+            fallbackTerminal = createFallbackTerminal();
+        }
+
+        return fallbackTerminal;
     }
 
     function finalizeTerminalRun() {
-        startBtn.disabled = false;
+        if (startBtn) {
+            startBtn.disabled = false;
+        }
         terminalUnlocked = true;
     }
 
@@ -575,6 +689,7 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
         if (!event || typeof event.data !== 'string' || event.data === '') {
             return null;
         }
+
         try {
             return JSON.parse(event.data);
         } catch (err) {
@@ -582,63 +697,95 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
         }
     }
 
-    terminal.on('done', function (event) {
-        var payload = parseTerminalPayload(event);
-        finalizeTerminalRun();
-        if (payload && payload.message) {
-            terminal.log(payload.message, 'done');
+    function ensureTerminal() {
+        terminal = resolveTerminal();
+        if (!terminal) {
+            return null;
         }
-    });
-    terminal.on('error', function (event) {
-        var payload = parseTerminalPayload(event);
-        finalizeTerminalRun();
-        if (payload && payload.message) {
-            terminal.log(payload.message, 'error');
+        if (terminalEventsBound && terminalBoundTarget === terminal) {
+            return terminal;
         }
-    });
+
+        terminal.on('done', function (event) {
+            var payload = parseTerminalPayload(event);
+            finalizeTerminalRun();
+            if (payload && payload.message) {
+                terminal.log(payload.message, 'done');
+            }
+        });
+
+        terminal.on('error', function (event) {
+            var payload = parseTerminalPayload(event);
+            finalizeTerminalRun();
+            if (payload && payload.message) {
+                terminal.log(payload.message, 'error');
+            }
+        });
+
+        terminalEventsBound = true;
+        terminalBoundTarget = terminal;
+        return terminal;
+    }
+
+    if (useAiToggle) {
+        useAiToggle.addEventListener('change', syncModeUi);
+        syncModeUi();
+    }
+
+    bindCreateButton(createWorkspaceBtn);
+    bindCreateButton(inlineCreateWorkspaceBtn);
+    document.querySelectorAll('.site-create-session-btn').forEach(bindCreateButton);
+
+    if (!startBtn) {
+        return;
+    }
 
     startBtn.addEventListener('click', function () {
-        var useAi = useAiToggle ? !!useAiToggle.checked : true;
-        var domain = domainInput && domainInput.value ? domainInput.value.trim() : '';
-        var accountId = accountSelect && accountSelect.value ? parseInt(accountSelect.value, 10) : 0;
-        var description = descInput && descInput.value ? descInput.value.trim() : '';
+        var formState = readFormState();
 
-        if (!useAi && !fakeMode) {
-            if (!domain) {
-                toast('warning', <?= json_encode((string)__('关闭 AI 模式后，请先填写目标域名。'), JSON_THROW_ON_ERROR) ?>);
+        if (!formState.useAi) {
+            if (!formState.domain) {
+                toast('warning', messages.domainRequired);
                 return;
             }
-            if (!accountId) {
-                toast('warning', <?= json_encode((string)__('关闭 AI 模式后，请先选择域名商账户。'), JSON_THROW_ON_ERROR) ?>);
+            if (!formState.accountId) {
+                toast('warning', messages.registrarRequired);
                 return;
             }
-        } else if (!description && !domain) {
-            toast('warning', <?= json_encode((string)__('请至少填写需求描述或预期域名，AI 才知道要帮你建什么。'), JSON_THROW_ON_ERROR) ?>);
+        } else if (!formState.description && !formState.domain) {
+            toast('warning', messages.briefRequired);
             return;
         }
 
-        var finalDescription = description || domain;
-        var baseUrl = <?= json_encode((string)$this->getBackendUrl('websites/backend/site-builder-agent/trigger-sse'), JSON_THROW_ON_ERROR) ?>;
-        var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
-        var url = baseUrl + separator + 'description=' + encodeURIComponent(finalDescription)
-            + '&domain=' + encodeURIComponent(domain)
-            + '&account_id=' + encodeURIComponent(accountId > 0 ? String(accountId) : '')
-            + '&use_ai=' + (useAi ? '1' : '0');
+        var activeTerminal = ensureTerminal();
+        if (!activeTerminal) {
+            toast('warning', messages.terminalLoading);
+            return;
+        }
+
+        var finalDescription = formState.description || formState.domain;
+        var separator = startSseUrl.indexOf('?') >= 0 ? '&' : '?';
+        var url = startSseUrl + separator + 'description=' + encodeURIComponent(finalDescription)
+            + '&domain=' + encodeURIComponent(formState.domain)
+            + '&account_id=' + encodeURIComponent(formState.accountId > 0 ? String(formState.accountId) : '')
+            + '&use_ai=' + (formState.useAi ? '1' : '0');
         if (fakeMode) {
             url += '&fake_mode=1';
         }
 
         if (terminalUnlocked) {
-            terminal.clear();
+            activeTerminal.clear();
+            activeTerminal.log(messages.loadingLog, 'info');
             terminalUnlocked = false;
         }
-        terminal.setUrl(url);
+
+        activeTerminal.setUrl(url);
         startBtn.disabled = true;
-        terminal.start();
+        activeTerminal.start();
 
         var terminalWrap = document.getElementById('site-builder-agent-terminal');
         if (terminalWrap && typeof terminalWrap.scrollIntoView === 'function') {
-            terminalWrap.scrollIntoView({behavior: 'smooth', block: 'center'});
+            terminalWrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     });
 })();
