@@ -10,6 +10,7 @@ Register::register(
     'WeShop浏览历史模块',
     [
         'Weline_Framework',
+        'WeShop_Customer',
         'WeShop_Product',
     ]
 );
