@@ -530,7 +530,7 @@ class Stop extends CommandAbstract
                                 $exitedPids[(int) $pidMatch[1]] = true;
                             }
                             // 只在 Orchestrator 明确发送 "Master 即将退出" 时才结束等待
-                            if (\str_contains($message, 'Master 即将退出') || \str_contains($message, '所有子进程已完整退出')) {
+                            if ($this->shouldWaitForMasterExitAfterProgress($message, $exitedPids, $totalInstances)) {
                                 $masterAboutToExit = true;
                             }
                         }
@@ -571,6 +571,18 @@ class Stop extends CommandAbstract
         
         $this->ipcMsg("Wait timeout (hard {$hardTimeout}s)", 'error');
         return false;
+    }
+
+    /**
+     * @param array<int, bool> $exitedPids
+     */
+    protected function shouldWaitForMasterExitAfterProgress(string $message, array $exitedPids, int $totalInstances): bool
+    {
+        if (\str_contains($message, 'Master 即将退出') || \str_contains($message, '所有子进程已完整退出')) {
+            return true;
+        }
+
+        return $totalInstances > 0 && \count($exitedPids) >= $totalInstances;
     }
 
     private function getIpcHardTimeout(): int
