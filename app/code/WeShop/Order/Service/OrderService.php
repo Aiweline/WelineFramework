@@ -27,6 +27,24 @@ class OrderService
     public const PAYMENT_STATUS_FAILED = 'failed';
     public const PAYMENT_STATUS_PARTIAL = 'partial';
     public const PAYMENT_STATUS_REFUNDED = 'refunded';
+
+    public function getAvailableStatuses(): array
+    {
+        return [
+            self::STATUS_PENDING => (string) __('Pending'),
+            self::STATUS_PROCESSING => (string) __('Processing'),
+            self::STATUS_PAID => (string) __('Paid'),
+            self::STATUS_FULFILLED => (string) __('Fulfilled'),
+            self::STATUS_COMPLETED => (string) __('Completed'),
+            self::STATUS_CANCELLED => (string) __('Cancelled'),
+            self::STATUS_REFUNDED => (string) __('Refunded'),
+        ];
+    }
+
+    public function isValidStatus(string $status): bool
+    {
+        return isset($this->getAvailableStatuses()[$status]);
+    }
     
     /**
      * 创建订单
@@ -132,6 +150,59 @@ class OrderService
             'pagination' => $order->getPagination(),
         ];
     }
+
+    public function getOrders(int $page = 1, int $pageSize = 20, array $filters = []): array
+    {
+        /** @var Order $order */
+        $order = ObjectManager::getInstance(Order::class);
+
+        $order->clear();
+
+        if (!empty($filters['status'])) {
+            $order->where(Order::schema_fields_status, (string) $filters['status']);
+        }
+
+        if (!empty($filters['increment_id'])) {
+            $order->where(Order::schema_fields_increment_id, '%' . $filters['increment_id'] . '%', 'LIKE');
+        }
+
+        if (!empty($filters['customer_id'])) {
+            $order->where(Order::schema_fields_customer_id, (int) $filters['customer_id']);
+        }
+
+        $order->order(Order::schema_fields_created_at, 'DESC')
+            ->pagination($page, $pageSize);
+
+        $items = $order->select()->fetchArray();
+
+        return [
+            'items' => $items,
+            'total' => $order->getTotalCount(),
+            'pagination' => $order->getPagination(),
+        ];
+    }
+
+    public function getOrderSummary(): array
+    {
+        /** @var Order $order */
+        $order = ObjectManager::getInstance(Order::class);
+
+        $summary = [
+            'total' => $order->clear()->count(),
+            self::STATUS_PENDING => 0,
+            self::STATUS_PROCESSING => 0,
+            self::STATUS_COMPLETED => 0,
+            self::STATUS_CANCELLED => 0,
+        ];
+
+        foreach ([self::STATUS_PENDING, self::STATUS_PROCESSING, self::STATUS_COMPLETED, self::STATUS_CANCELLED] as $status) {
+            $summary[$status] = $order->clear()
+                ->where(Order::schema_fields_status, $status)
+                ->count();
+        }
+
+        return $summary;
+    }
     
     /**
      * 获取客户未支付订单数量
@@ -189,6 +260,10 @@ class OrderService
      */
     public function updateOrderStatus(int $orderId, string $status): Order
     {
+        if (!$this->isValidStatus($status)) {
+            throw new \InvalidArgumentException((string) __('Unsupported order status.'));
+        }
+
         /** @var Order $order */
         $order = ObjectManager::getInstance(Order::class);
         $order->load($orderId);
