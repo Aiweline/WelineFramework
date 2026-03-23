@@ -152,8 +152,13 @@ class AccountDashboardDataService
             ],
             [
                 'title' => (string) __('My Wishlist'),
-                'url' => 'weshop/wishlist',
+                'url' => 'wishlist',
                 'icon' => 'favorite',
+            ],
+            [
+                'title' => (string) __('Recently Viewed'),
+                'url' => 'recently-viewed',
+                'icon' => 'history',
             ],
             [
                 'title' => (string) __('Manage Addresses'),

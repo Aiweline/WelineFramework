@@ -1,3 +1,26 @@
 # Progress - weshop recently viewed storefront slice
 
 - 2026-03-23 13:50 Created the task workspace.
+- 2026-03-23 13:56 Reviewed workspace policy, WeShop roadmap docs, current dirty worktree constraints, and the existing `RecentlyViewed` implementation.
+- 2026-03-23 13:59 Confirmed the slice gap: account dashboard already expects recently viewed data, but the module still lacks a storefront page, short route, recording integration, and targeted tests.
+- 2026-03-23 14:07 Added Red-phase unit tests for page-data mapping, guest/login-gated storefront access, AJAX remove flow, and current-customer product-view recording.
+- 2026-03-23 14:08 Targeted PHPUnit for `WeShop/RecentlyViewed/Test/Unit` failed as expected because the new services/controllers did not exist yet.
+- 2026-03-23 14:23 Implemented the slice:
+  - `WeShop_RecentlyViewed` now has `etc/env.php` router metadata for `recently-viewed`
+  - added storefront `Index` and `Remove` controllers plus short-route bridge controllers
+  - added `RecentlyViewedPageDataService` and `StorefrontRecentlyViewedRecorder`
+  - extended `RecentlyViewedService` with `viewed_at` persistence, count, and remove operations
+  - wired `WeShop\Product\Controller\Frontend\Product\View` to record logged-in product views
+  - added `default` theme page `app/design/WeShop/default/frontend/pages/recently-viewed/index.phtml`
+  - updated account quick links and account-center page links to use `wishlist` / `recently-viewed`
+- 2026-03-23 14:31 Re-ran syntax checks on the touched PHP files; all passed.
+- 2026-03-23 14:33 Re-ran `php vendor/bin/phpunit app/code/WeShop/RecentlyViewed/Test/Unit`; assertions passed (`7 tests / 28 assertions`) but PHPUnit still exited with the repo-wide `No code coverage driver available` warning.
+- 2026-03-23 14:35 Ran the touched product/account tests to guard the integration edges:
+  - `WeShop/Product/Test/Unit/Controller/Frontend/Product/ViewTest.php` now avoids its old typed-property teardown failure; it still contains 3 pre-existing `Incomplete` markers
+  - `WeShop/Customer` dashboard/controller targeted tests passed, again with the same coverage warning
+- 2026-03-23 14:41 Ran `php bin/w setup:upgrade -m WeShop_RecentlyViewed -m WeShop_Product --yes`; module upgrade and route refresh succeeded.
+- 2026-03-23 14:49 Live smoke verification on `9982` while WLS was up:
+  - `generated/routers/frontend_pc.php` contains `recently-viewed`, `recently-viewed/remove`, and legacy `recently-viewed/frontend/recently-viewed/*`
+  - `GET https://127.0.0.1:9982/recently-viewed` returned `301` to the localized login page for guests
+  - `POST https://127.0.0.1:9982/recently-viewed/remove` with AJAX headers returned JSON redirect payload for guests
+- 2026-03-23 14:52 Updated `dev/ai/codex/WeShop国际电商/{roadmap,acceptance-matrix,test-matrix}.md` so the recently-viewed slice is reflected in execution guidance and acceptance coverage.
