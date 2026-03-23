@@ -41,6 +41,11 @@ class ServiceOrchestrator
     private const STOP_STAGE_VERIFY = 'verify';
     private const STOP_STAGE_CLOSE_IPC = 'close_ipc';
     private const STOP_STAGE_COMPLETE = 'complete';
+    private const CONTROL_OPERATION_STATE_QUEUED = 'queued';
+    private const CONTROL_OPERATION_STATE_RUNNING = 'running';
+    private const CONTROL_OPERATION_STATE_ABORTING = 'aborting';
+    private const CONTROL_OPERATION_STATE_COMPLETED = 'completed';
+    private const CONTROL_OPERATION_STATE_CANCELLED = 'cancelled';
 
     private ServiceRegistry $registry;
     private ?MasterControlServer $controlServer = null;
@@ -84,6 +89,38 @@ class ServiceOrchestrator
 
     /** @var array<string, array{role: string, instanceId: int, maxRestarts: int, restartDelay: float}> 等待复活的实例 */
     private array $resurrectQueue = [];
+
+    /**
+     * 控制面排队操作。子进程协议消息（register/ready/disconnect 等）不进入该队列。
+     *
+     * @var list<array{
+     *     id:string,
+     *     action:string,
+     *     clientId:int,
+     *     payload:array<string, mixed>,
+     *     state:string,
+     *     queuedAt:float,
+     *     startedAt:?float
+     * }>
+     */
+    private array $pendingControlOperations = [];
+
+    /**
+     * 当前唯一活跃的控制面操作。
+     *
+     * @var array{
+     *     id:string,
+     *     action:string,
+     *     clientId:int,
+     *     payload:array<string, mixed>,
+     *     state:string,
+     *     queuedAt:float,
+     *     startedAt:?float
+     * }|null
+     */
+    private ?array $activeControlOperation = null;
+
+    private int $nextControlOperationId = 1;
 
     /** 启动时等待服务就绪的超时时间（秒） */
     private float $startupTimeout = 30.0;
@@ -328,6 +365,328 @@ class ServiceOrchestrator
         $this->stopAll($reason, $progressClientId);
 
         return true;
+    }
+
+    private function isQueuedControlCommand(string $action): bool
+    {
+        return \in_array($action, [
+            ControlMessage::ACTION_RELOAD,
+            ControlMessage::ACTION_RELOAD_WAIT,
+            ControlMessage::ACTION_STOP,
+            ControlMessage::ACTION_CACHE_CLEAR,
+            ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE,
+            ControlMessage::ACTION_SSL_CERT_RELOAD,
+            ControlMessage::ACTION_MAINTENANCE_ENABLE,
+            ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            ControlMessage::ACTION_ROLLING_RESTART,
+            ControlMessage::ACTION_SECURITY_UNBLOCK,
+            ControlMessage::ACTION_FIBER_SET_CONFIG,
+            ControlMessage::ACTION_FIBER_RELEASE_IDLE,
+        ], true);
+    }
+
+    /**
+     * @param array<string, mixed> $msg
+     */
+    private function queueControlOperation(string $action, array $msg, int $clientId): array
+    {
+        $operation = [
+            'id' => 'ctrl_op_' . $this->nextControlOperationId++,
+            'action' => $action,
+            'clientId' => $clientId,
+            'payload' => $msg,
+            'state' => self::CONTROL_OPERATION_STATE_QUEUED,
+            'queuedAt' => \microtime(true),
+            'startedAt' => null,
+        ];
+        $this->pendingControlOperations[] = $operation;
+
+        WlsLogger::info_(
+            "[Orchestrator] 控制操作已入队 id={$operation['id']} action={$action} client={$clientId} pending="
+            . \count($this->pendingControlOperations)
+        );
+
+        return $operation;
+    }
+
+    /**
+     * @param array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation
+     */
+    private function getControlOperationQueuePosition(array $operation): int
+    {
+        $position = $this->activeControlOperation === null ? 0 : 1;
+        foreach ($this->pendingControlOperations as $index => $queuedOperation) {
+            if ($queuedOperation['id'] === $operation['id']) {
+                return $position + $index + 1;
+            }
+        }
+
+        return $position + 1;
+    }
+
+    /**
+     * @return array{id:string,action:string}|null
+     */
+    private function getCurrentControlOperationSummary(): ?array
+    {
+        if ($this->activeControlOperation !== null) {
+            return [
+                'id' => $this->activeControlOperation['id'],
+                'action' => $this->activeControlOperation['action'],
+            ];
+        }
+
+        if ($this->pendingStopReason !== null || $this->stopAllInProgress || $this->shuttingDown) {
+            return [
+                'id' => 'stop',
+                'action' => ControlMessage::ACTION_STOP,
+            ];
+        }
+
+        if ($this->fullRestartRequested) {
+            return [
+                'id' => 'full_restart',
+                'action' => 'full_restart',
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation
+     */
+    private function sendQueuedControlOperationAck(array $operation): void
+    {
+        $queuePosition = $this->getControlOperationQueuePosition($operation);
+        $current = $this->getCurrentControlOperationSummary();
+        $message = $this->buildQueuedControlOperationAckMessage($operation['action']);
+        $data = [
+            'async' => true,
+            'accepted' => true,
+            'operation_id' => $operation['id'],
+            'state' => self::CONTROL_OPERATION_STATE_QUEUED,
+            'queue_position' => $queuePosition,
+            'active_operation' => $current,
+        ];
+
+        $this->controlServer?->sendTo(
+            $operation['clientId'],
+            ControlMessage::commandResult(true, $data, $message)
+        );
+    }
+
+    private function buildQueuedControlOperationAckMessage(string $action): string
+    {
+        return match ($action) {
+            ControlMessage::ACTION_RELOAD => 'Reload initiated',
+            ControlMessage::ACTION_RELOAD_WAIT => 'Reload initiated',
+            ControlMessage::ACTION_ROLLING_RESTART => 'Rolling restart initiated',
+            ControlMessage::ACTION_STOP => 'Stopping',
+            ControlMessage::ACTION_MAINTENANCE_ENABLE => 'Maintenance enable queued',
+            ControlMessage::ACTION_MAINTENANCE_DISABLE => 'Maintenance disable queued',
+            ControlMessage::ACTION_CACHE_CLEAR => 'Cache clear queued',
+            ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE => 'PageBuilder page invalidate queued',
+            ControlMessage::ACTION_SSL_CERT_RELOAD => 'SSL cert reload queued',
+            ControlMessage::ACTION_SECURITY_UNBLOCK => 'Security unblock queued',
+            ControlMessage::ACTION_FIBER_SET_CONFIG => 'Fiber config update queued',
+            ControlMessage::ACTION_FIBER_RELEASE_IDLE => 'Fiber release queued',
+            default => 'Control operation queued',
+        };
+    }
+
+    private function clearPendingControlOperations(string $reason): void
+    {
+        foreach ($this->pendingControlOperations as $operation) {
+            $this->controlServer?->sendTo(
+                $operation['clientId'],
+                ControlMessage::commandResult(false, [
+                    'operation_id' => $operation['id'],
+                    'state' => self::CONTROL_OPERATION_STATE_CANCELLED,
+                ], $reason)
+            );
+        }
+        $this->pendingControlOperations = [];
+    }
+
+    private function preemptActiveControlOperationForStop(): void
+    {
+        if ($this->activeControlOperation === null) {
+            return;
+        }
+
+        $this->activeControlOperation['state'] = self::CONTROL_OPERATION_STATE_ABORTING;
+        WlsLogger::warning_(
+            "[Orchestrator] stop 请求到达，标记活跃控制操作中止 id={$this->activeControlOperation['id']} action={$this->activeControlOperation['action']}"
+        );
+    }
+
+    private function processNextQueuedControlOperation(): bool
+    {
+        if ($this->activeControlOperation !== null || $this->pendingControlOperations === []) {
+            return false;
+        }
+
+        /** @var array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation */
+        $operation = \array_shift($this->pendingControlOperations);
+        $operation['state'] = self::CONTROL_OPERATION_STATE_RUNNING;
+        $operation['startedAt'] = \microtime(true);
+        $this->activeControlOperation = $operation;
+
+        WlsLogger::info_(
+            "[Orchestrator] 开始执行控制操作 id={$operation['id']} action={$operation['action']} client={$operation['clientId']}"
+        );
+
+        try {
+            $this->executeQueuedControlOperation($operation);
+            if ($this->activeControlOperation !== null
+                && $this->activeControlOperation['id'] === $operation['id']
+                && $this->activeControlOperation['state'] !== self::CONTROL_OPERATION_STATE_ABORTING) {
+                $this->activeControlOperation['state'] = self::CONTROL_OPERATION_STATE_COMPLETED;
+            }
+        } catch (\Throwable $throwable) {
+            WlsLogger::error_(
+                "[Orchestrator] 控制操作执行异常 id={$operation['id']} action={$operation['action']} error={$throwable->getMessage()}"
+            );
+            $this->controlServer?->sendTo(
+                $operation['clientId'],
+                ControlMessage::commandResult(false, [
+                    'operation_id' => $operation['id'],
+                    'state' => 'failed',
+                ], $throwable->getMessage())
+            );
+        } finally {
+            if ($this->activeControlOperation !== null && $this->activeControlOperation['id'] === $operation['id']) {
+                $this->activeControlOperation = null;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array{id:string,action:string,clientId:int,payload:array<string,mixed>,state:string,queuedAt:float,startedAt:?float} $operation
+     */
+    private function executeQueuedControlOperation(array $operation): void
+    {
+        $action = $operation['action'];
+        $clientId = $operation['clientId'];
+        $payload = $operation['payload'];
+
+        switch ($action) {
+            case ControlMessage::ACTION_RELOAD:
+                $type = (string)($payload['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
+                if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
+                    $this->broadcastCacheClear();
+                    return;
+                }
+                $this->reloadAll($type, $this->ipcImperialEpoch);
+                return;
+
+            case ControlMessage::ACTION_RELOAD_WAIT:
+                $type = (string)($payload['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
+                if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
+                    $this->broadcastCacheClear();
+                    return;
+                }
+                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_RELOAD_WAIT);
+                $snap = $this->ipcImperialEpoch;
+                try {
+                    $this->rollingRestartClientId = $clientId;
+                    $this->reloadAll($type, $snap);
+                } finally {
+                    $this->rollingRestartClientId = null;
+                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
+                        $this->ipcReleaseExclusive();
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_CACHE_CLEAR:
+                $this->broadcastCacheClear();
+                return;
+
+            case ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE:
+                $this->broadcastPageBuilderPageInvalidate(
+                    (int)($payload['website_id'] ?? 0),
+                    (string)($payload['handle'] ?? ''),
+                    (bool)($payload['is_home_page'] ?? false)
+                );
+                return;
+
+            case ControlMessage::ACTION_SSL_CERT_RELOAD:
+                $domains = isset($payload['domains']) && \is_array($payload['domains']) ? $payload['domains'] : [];
+                $this->broadcastSslCertReload($domains);
+                return;
+
+            case ControlMessage::ACTION_MAINTENANCE_ENABLE:
+                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_ENABLE);
+                $snap = $this->ipcImperialEpoch;
+                try {
+                    $this->enableMaintenanceMode();
+                } finally {
+                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
+                        $this->ipcReleaseExclusive();
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_MAINTENANCE_DISABLE:
+                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_DISABLE);
+                $snap = $this->ipcImperialEpoch;
+                try {
+                    $this->disableMaintenanceMode();
+                } finally {
+                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
+                        $this->ipcReleaseExclusive();
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_ROLLING_RESTART:
+                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_ROLLING_RESTART);
+                $snap = $this->ipcImperialEpoch;
+                try {
+                    $this->startRollingRestart($clientId);
+                } finally {
+                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
+                        $this->ipcReleaseExclusive();
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_SECURITY_UNBLOCK:
+                $ip = $payload['ip'] ?? null;
+                $clearAll = !empty($payload['clear_all']);
+                $dispatchers = $this->registry->getInstancesByRole('dispatcher');
+                foreach ($dispatchers as $dispatcher) {
+                    if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo(
+                            $dispatcher->ipcClientId,
+                            ControlMessage::securityUnblock($ip !== null && $ip !== '' ? $ip : null, $clearAll)
+                        );
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_FIBER_SET_CONFIG:
+                $idleTtlSec = (int)($payload['idle_ttl_sec'] ?? 0);
+                $maxActive = (int)($payload['max_active'] ?? 0);
+                foreach ($this->getFiberEligibleInstances() as $instance) {
+                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberSetConfig($idleTtlSec, $maxActive));
+                    }
+                }
+                return;
+
+            case ControlMessage::ACTION_FIBER_RELEASE_IDLE:
+                foreach ($this->getFiberEligibleInstances() as $instance) {
+                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
+                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberReleaseIdle());
+                    }
+                }
+                return;
+        }
     }
 
     /**
@@ -2492,9 +2851,13 @@ class ServiceOrchestrator
                 break;
             }
 
-            // 故障统一策略：整组重启
-            if ($this->fullRestartRequested) {
+            // 故障统一策略：整组重启。仅在没有活跃控制操作时推进，避免与命令流叠加。
+            if ($this->fullRestartRequested && $this->activeControlOperation === null) {
                 $this->performFullRestart();
+                continue;
+            }
+
+            if ($this->processNextQueuedControlOperation()) {
                 continue;
             }
 
@@ -2875,20 +3238,6 @@ class ServiceOrchestrator
         WlsLogger::warning_(
             "[Orchestrator] 帝王指令发起端 IPC 已断开 ({$label})，已打断本轮并重开控制面"
         );
-    }
-
-    /**
-     * @param array<string, mixed> $msg
-     */
-    private function isImperialIpcCommand(string $action, array $msg): bool
-    {
-        return \in_array($action, [
-            ControlMessage::ACTION_STOP,
-            ControlMessage::ACTION_RELOAD_WAIT,
-            ControlMessage::ACTION_ROLLING_RESTART,
-            ControlMessage::ACTION_MAINTENANCE_ENABLE,
-            ControlMessage::ACTION_MAINTENANCE_DISABLE,
-        ], true);
     }
 
     /**
@@ -3360,6 +3709,20 @@ class ServiceOrchestrator
             'rolling_restart_in_progress' => $this->rollingRestartInProgress,
             'rolling_restart_progress' => $this->rollingRestartProgress,
             'rolling_restart_total' => $this->rollingRestartTotal,
+            'control_operation' => [
+                'active' => $this->activeControlOperation === null ? null : [
+                    'id' => $this->activeControlOperation['id'],
+                    'action' => $this->activeControlOperation['action'],
+                    'state' => $this->activeControlOperation['state'],
+                    'client_id' => $this->activeControlOperation['clientId'],
+                ],
+                'queued' => \array_map(static fn(array $operation): array => [
+                    'id' => (string)$operation['id'],
+                    'action' => (string)$operation['action'],
+                    'state' => (string)$operation['state'],
+                    'client_id' => (int)$operation['clientId'],
+                ], $this->pendingControlOperations),
+            ],
             'services' => $this->registry->getStatusSnapshot(),
             'resurrect_queue' => \count($this->resurrectQueue),
             'metrics' => [
@@ -4188,13 +4551,23 @@ class ServiceOrchestrator
     private function handleCommand(array $msg, int $clientId): void
     {
         $action = $msg['action'] ?? '';
-        $imperial = $this->isImperialIpcCommand($action, $msg);
-        if (!$imperial && $this->ipcExclusiveCommand !== null) {
-            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                false,
-                [],
-                (string)__('控制面正执行独占指令(%{1})，请稍后再试', [$this->ipcExclusiveCommand])
-            ));
+        if (!\is_string($action) || $action === '') {
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command'));
+
+            return;
+        }
+
+        if ($this->isQueuedControlCommand($action)) {
+            if ($action === ControlMessage::ACTION_STOP) {
+                $this->clearPendingControlOperations('Control operation cancelled by stop');
+                $this->preemptActiveControlOperationForStop();
+                $this->requestStop('command', $clientId, true);
+
+                return;
+            }
+
+            $operation = $this->queueControlOperation($action, $msg, $clientId);
+            $this->sendQueuedControlOperationAck($operation);
 
             return;
         }
@@ -4205,137 +4578,6 @@ class ServiceOrchestrator
                 $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, $status, 'Status retrieved'));
                 break;
 
-            case ControlMessage::ACTION_RELOAD:
-                $type = (string)($msg['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
-                if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
-                    $this->broadcastCacheClear();
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Cache clear broadcast sent'));
-                    break;
-                }
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, ['async' => true], 'Reload initiated'));
-                $this->reloadAll($type);
-                break;
-
-            case ControlMessage::ACTION_RELOAD_WAIT:
-                $type = (string)($msg['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
-                if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Reload initiated'));
-                    $this->broadcastCacheClear();
-                    break;
-                }
-                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_RELOAD_WAIT);
-                $snap = $this->ipcImperialEpoch;
-                try {
-                    $this->rollingRestartClientId = $clientId;
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Reload initiated'));
-                    $this->reloadAll($type, $snap);
-                } finally {
-                    $this->rollingRestartClientId = null;
-                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
-                        $this->ipcReleaseExclusive();
-                    }
-                }
-                break;
-
-            case ControlMessage::ACTION_STOP:
-                $this->requestStop('command', $clientId, true);
-                break;
-
-            case ControlMessage::ACTION_CACHE_CLEAR:
-                $this->broadcastCacheClear();
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'Cache clear broadcast sent'));
-                break;
-
-            case ControlMessage::ACTION_PAGEBUILDER_PAGE_INVALIDATE:
-                $this->broadcastPageBuilderPageInvalidate(
-                    (int)($msg['website_id'] ?? 0),
-                    (string)($msg['handle'] ?? ''),
-                    (bool)($msg['is_home_page'] ?? false)
-                );
-                $this->controlServer?->sendTo(
-                    $clientId,
-                    ControlMessage::commandResult(true, [], 'PageBuilder page invalidate broadcast sent')
-                );
-                break;
-
-            case ControlMessage::ACTION_SSL_CERT_RELOAD:
-                $sslReloadDomains = isset($msg['domains']) && \is_array($msg['domains'])
-                    ? $msg['domains']
-                    : [];
-                $this->broadcastSslCertReload($sslReloadDomains);
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(true, [], 'SSL cert reload broadcast sent'));
-                break;
-
-            case ControlMessage::ACTION_MAINTENANCE_ENABLE:
-                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_ENABLE);
-                $snap = $this->ipcImperialEpoch;
-                try {
-                    $result = $this->enableMaintenanceMode();
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                        $result['success'],
-                        $result,
-                        $result['message']
-                    ));
-                } finally {
-                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
-                        $this->ipcReleaseExclusive();
-                    }
-                }
-                break;
-
-            case ControlMessage::ACTION_MAINTENANCE_DISABLE:
-                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_DISABLE);
-                $snap = $this->ipcImperialEpoch;
-                try {
-                    $result = $this->disableMaintenanceMode();
-                    $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                        $result['success'],
-                        $result,
-                        $result['message']
-                    ));
-                } finally {
-                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
-                        $this->ipcReleaseExclusive();
-                    }
-                }
-                break;
-
-            case ControlMessage::ACTION_ROLLING_RESTART:
-                $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_ROLLING_RESTART);
-                $snap = $this->ipcImperialEpoch;
-                try {
-                    $result = $this->startRollingRestart($clientId);
-                    if (!$result['success']) {
-                        $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, $result, $result['message']));
-                    }
-                } finally {
-                    if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
-                        $this->ipcReleaseExclusive();
-                    }
-                }
-                break;
-
-            case ControlMessage::ACTION_SECURITY_UNBLOCK:
-                $ip = $msg['ip'] ?? null;
-                $clearAll = !empty($msg['clear_all']);
-                $dispatchers = $this->registry->getInstancesByRole('dispatcher');
-                $sent = 0;
-                foreach ($dispatchers as $dispatcher) {
-                    if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
-                        $this->controlServer->sendTo(
-                            $dispatcher->ipcClientId,
-                            ControlMessage::securityUnblock($ip !== null && $ip !== '' ? $ip : null, $clearAll)
-                        );
-                        $sent++;
-                    }
-                }
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                    true,
-                    ['dispatchers_notified' => $sent],
-                    $clearAll ? __('已通知 %{1} 个 Dispatcher 清空封禁列表', [$sent])
-                        : ($ip !== null && $ip !== '' ? __('已通知 %{1} 个 Dispatcher 解封 IP %{2}', [$sent, $ip]) : __('未指定 ip 或 clear_all'))
-                ));
-                break;
             case ControlMessage::ACTION_TELEMETRY_QUERY:
                 $instance = (string)($msg['instance'] ?? ($this->context?->instanceName ?? 'default'));
                 $windowSec = (int)($msg['window_sec'] ?? 300);
@@ -4355,36 +4597,8 @@ class ServiceOrchestrator
                 $this->requestFiberPoolStats($clientId);
                 break;
 
-            case ControlMessage::ACTION_FIBER_SET_CONFIG:
-                $idleTtlSec = (int)($msg['idle_ttl_sec'] ?? 0);
-                $maxActive = (int)($msg['max_active'] ?? 0);
-                $sent = 0;
-                foreach ($this->getFiberEligibleInstances() as $instance) {
-                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
-                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberSetConfig($idleTtlSec, $maxActive));
-                        $sent++;
-                    }
-                }
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                    true,
-                    ['workers_notified' => $sent, 'idle_ttl_sec' => $idleTtlSec, 'max_active' => $maxActive],
-                    __('已向 %{1} 个 Worker 下发 Fiber 池配置', [$sent])
-                ));
-                break;
-
-            case ControlMessage::ACTION_FIBER_RELEASE_IDLE:
-                $sent = 0;
-                foreach ($this->getFiberEligibleInstances() as $instance) {
-                    if ($instance->ipcClientId !== null && $this->controlServer !== null) {
-                        $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::fiberReleaseIdle());
-                        $sent++;
-                    }
-                }
-                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(
-                    true,
-                    ['workers_notified' => $sent],
-                    __('已通知 %{1} 个 Worker 释放闲置 Fiber', [$sent])
-                ));
+            default:
+                $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command'));
                 break;
         }
     }
