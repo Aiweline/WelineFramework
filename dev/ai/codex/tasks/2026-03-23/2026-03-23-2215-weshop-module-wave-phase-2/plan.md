@@ -8,8 +8,8 @@
 
 - [x] Clarify scope, affected files, and risks
 - [ ] Implement the `WeShop_Order` backend/admin slice locally
-- [ ] Review and integrate the `WeShop_Promotion` backend sidecar result
-- [ ] Review and integrate the `WeShop_Report` backend sidecar result
+- [x] Review and integrate the `WeShop_Promotion` backend sidecar result
+- [x] Review and integrate the `WeShop_Report` backend sidecar result
 - [ ] Run validation commands
 - [ ] Update result.md and memory if needed
 
