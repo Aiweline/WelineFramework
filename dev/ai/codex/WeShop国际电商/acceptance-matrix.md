@@ -9,4 +9,6 @@
 - Checkout `default` layout variants render controller/page `content` first so dynamic payment UI works across all checkout variants.
 - Place-order flow no longer calls missing methods; it validates checkout data, creates an order, and returns structured payment result data.
 - `default` account center renders recent orders, wishlist preview, recently viewed preview, and guess-you-may-like recommendations from service-driven data.
+- `recently-viewed` storefront route exists, redirects guests to login, and its AJAX remove endpoint returns a structured redirect payload when unauthenticated.
+- Logged-in product detail views feed the recently-viewed history service so account-center previews and the dedicated history page stay in sync.
 - `WeShop_Customer::frontend::account::security::cards` and `WeShop_Customer::frontend::account::discovery::cards` remain available for cross-module injection.

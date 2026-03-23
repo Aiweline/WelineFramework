@@ -27,7 +27,9 @@
 - New frontend-facing slices should avoid adding extra `Frontend` path layers when new route files are introduced; existing legacy controllers can be refactored in place.
 - `default` theme checkout, account center, recommendations, and related storefront layouts should prefer rendering controller/page `content` through shared layout shells instead of duplicating module business UI in the layout file.
 - Storefront account-center slices should aggregate `orders + wishlist + recently viewed + guess-you-may-like` through dedicated services, not inline controller queries.
+- `RecentlyViewed` should own a clean storefront route (`/recently-viewed`), a removable history page, and a logged-in product-view recorder instead of relying on account-center-only summaries.
 - `default` theme account center must keep the security-card hook and discovery-card hook so Google login, 2FA, membership, wishlist, and recommendation modules can inject safely.
+- Account-center quick links should prefer clean storefront routes such as `wishlist` and `recently-viewed` whenever those slices already provide bridge controllers.
 - When a theme layout is missing required hooks or slots, WeShop should patch the `default` theme where possible and later surface compatibility warnings rather than coupling modules to one theme implementation.
 - Payment wave priority is:
   - `manual_transfer`
