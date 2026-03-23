@@ -1,0 +1,18 @@
+<?php
+/**
+ * @meta.name {default="Backend Layout Content",name="Backend Layout Content",description="Resolve prepared backend layout content by key with compatibility fallbacks."}
+ * @meta.description {default="Reads prepared backend layout content from request storage and falls back to legacy content variables when needed.",name="Backend Layout Content",description="Reads prepared backend layout content from request storage and falls back to legacy content variables when needed."}
+ */
+
+use Weline\Theme\Service\PreparedContentStore;
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo PreparedContentStore::resolveLayoutContent(
+    $contentRenderKey ?? $this->getData('contentRenderKey'),
+    $content ?? null,
+    $meta ?? $this->getData('meta'),
+    $child_html ?? $this->getData('child_html'),
+    $this->getData('contentTemplate'),
+    fn(string $contentTemplate): string => (string)$this->fetch($contentTemplate)
+);

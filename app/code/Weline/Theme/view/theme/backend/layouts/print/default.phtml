@@ -25,11 +25,7 @@
     <w:hook>Weline_Theme::backend::layouts::print::body-start</w:hook>
     
     <div class="backend-layout-print">
-        <if condition="contentTemplate">
-            <?php echo $this->fetch($this->getData("contentTemplate")); ?>
-            <else/>
-            {{meta.content}}
-        </if>
+        <?php echo $this->fetch('theme/backend/partials/layout/content.phtml'); ?>
     </div>
     <div class="no-print" style="text-align: center; margin-top: 20px;">
         <button onclick="window.print()" class="backend-print-btn">
