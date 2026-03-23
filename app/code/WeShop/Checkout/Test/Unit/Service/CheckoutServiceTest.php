@@ -15,6 +15,13 @@ class CheckoutServiceTest extends TestCase
         $order = new class extends Order {
             public function __construct()
             {
+                $this->setData('weshop_checkout_summary', [
+                    'subtotal' => 58.5,
+                    'shipping' => 5.0,
+                    'discount' => 0.0,
+                    'tax' => 0.0,
+                    'grand_total' => 63.5,
+                ]);
             }
 
             public function getId(mixed $default = 0)
@@ -69,6 +76,7 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame('pending', $result['payment']['status']);
         $this->assertSame('paypal', $result['payment_method']['code']);
         $this->assertSame('WS202603230088', $result['order_increment_id']);
+        $this->assertSame(63.5, $result['order_summary']['grand_total']);
         $this->assertCount(2, $queries);
         $this->assertSame(['createOrderFromCart', 5, 'paypal'], $queries[0]);
         $this->assertSame('payment', $queries[1][0]);

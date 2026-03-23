@@ -7,6 +7,7 @@ $order = $this->getData('order') ?? [];
 $orderItems = $this->getData('order_items') ?? [];
 $shippingAddress = $this->getData('shipping_address') ?? [];
 $paymentMethod = $this->getData('payment_method') ?? [];
+$recommendations = $this->getData('recommendations') ?? [];
 ?>
 <main class="flex-1 w-full max-w-[1000px] mx-auto p-4 md:p-6 lg:p-8">
     <w:hook name="WeShop_Checkout::success::before"/>
@@ -160,6 +161,27 @@ $paymentMethod = $this->getData('payment_method') ?? [];
             </div>
         </div>
     </div>
+
+    <w:hook name="WeShop_Checkout::success::recommendations_before"/>
+    <?php if (!empty($recommendations)): ?>
+        <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark p-6 mb-8">
+            <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark mb-6"><?= __('Customers who bought this also bought') ?></h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <?php foreach ($recommendations as $product): ?>
+                    <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group flex flex-col gap-3 rounded-xl border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark p-3 hover:border-primary/40 hover:shadow-md transition-all">
+                        <div class="aspect-square rounded-lg overflow-hidden bg-surface-light dark:bg-surface-dark">
+                            <img src="<?= $product['image'] ?? '' ?>" alt="<?= htmlspecialchars($product['name'] ?? '') ?>" class="w-full h-full object-cover group-hover:scale-[1.02] transition-transform">
+                        </div>
+                        <div class="space-y-1">
+                            <p class="font-medium text-sm text-text-primary-light dark:text-text-primary-dark line-clamp-2"><?= htmlspecialchars($product['name'] ?? '') ?></p>
+                            <p class="text-primary font-bold"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
+                        </div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+    <w:hook name="WeShop_Checkout::success::recommendations_after"/>
     
     <!-- Actions -->
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
