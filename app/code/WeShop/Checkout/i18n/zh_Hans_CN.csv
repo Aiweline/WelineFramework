@@ -10,3 +10,19 @@
 "Shipping address information is required.","Shipping address information is required."
 "Shipping method is required.","Shipping method is required."
 "Payment method is required.","Payment method is required."
+"Redirect after order placement",下单后跳转支付
+"Pay after order creation",订单创建后支付
+"Pay on delivery",货到付款
+"Pay during checkout",结账时支付
+"Popular",常用
+"Offline",线下
+"Doorstep",送达收款
+"You will be redirected to PayPal after placing the order to complete payment securely.",提交订单后将跳转到 PayPal 安全完成支付。
+"Prepare the order amount for the courier when your shipment arrives.",请在包裹送达时准备好订单金额以便签收付款。
+"Checkout payment method list",结账支付方式列表
+"Render the dynamic list of checkout payment methods gathered from the payment query provider.",渲染通过支付查询提供器获取的结账支付方式动态列表。
+"Checkout payment method details",结账支付方式说明
+"Render the selected payment method guidance panel for the checkout page.",为结账页面渲染当前选中支付方式的引导说明面板。
+"Checkout layout payment content",结账布局支付内容
+"Render the payment method section inside checkout layout variants so payment providers can remain theme-compatible.",在结账布局变体中渲染支付方式区域，确保支付提供器与主题保持兼容。
+"Payment flow: %1","支付流程：%1"

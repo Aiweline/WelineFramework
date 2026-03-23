@@ -788,14 +788,7 @@ $area = $themeData['area'] ?? 'frontend';
                         
                         <!-- Payment Method -->
                         <w:hook>WeShop_Checkout::checkout::payment_before</w:hook>
-                        <div class="weshop-checkout-section disabled">
-                            <button class="weshop-checkout-section-collapsed-button">
-                                <h3 class="weshop-checkout-section-collapsed-title">
-                                    <?= __('2. Payment Method') ?>
-                                </h3>
-                                <span class="material-symbols-outlined" style="color: var(--weshop-text-secondary);">expand_more</span>
-                            </button>
-                        </div>
+                        <w:hook>WeShop_Checkout::frontend::layouts::checkout::payment-content</w:hook>
                         <w:hook>WeShop_Checkout::checkout::payment_after</w:hook>
                         
                         <!-- Review -->
