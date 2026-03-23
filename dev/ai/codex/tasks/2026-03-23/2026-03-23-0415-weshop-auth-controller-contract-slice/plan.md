@@ -10,7 +10,7 @@
 - [x] Write failing controller tests for the route-specific auth contract
 - [x] Implement the smallest correct controller fix
 - [x] Run validation commands
-- [ ] Commit the slice and update result.md with the commit hash
+- [x] Commit the slice and update result.md with the commit hash
 
 ## Verification Targets
 
