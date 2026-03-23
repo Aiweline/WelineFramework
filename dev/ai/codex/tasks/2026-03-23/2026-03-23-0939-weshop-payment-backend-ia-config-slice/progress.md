@@ -1,0 +1,29 @@
+# Progress - weshop payment backend ia config slice
+
+- 2026-03-23 17:39 Created the task workspace after checkpoint commit `87ffd2cd` (`feat(weshop): add dynamic checkout payment flow`).
+- 2026-03-23 17:42 Scoped this follow-up slice to `WeShop_Payment` backend IA/config only:
+  - add backend menu under `Weline_Backend::payment_group`
+  - add backend management controller/page
+  - persist runtime payment method overrides without touching theme modules
+  - keep default-theme frontend files out of this slice unless absolutely necessary
+- 2026-03-23 17:46 Audited repo patterns to reuse:
+  - `WeShop_ImportExport` for a thin backend page + menu entry pattern
+  - `Weline_Backend` menu hierarchy for `payment_group`
+  - backend ACL/controller attribute usage from `Weline_Api` / `Weline_Backend`
+  - config persistence options (`Env::getConfig()/setConfig()`, backend config model, and module-owned config model patterns)
+- 2026-03-23 17:58 Implemented the backend payment management slice:
+  - added `WeShop\Payment\Service\PaymentManagementService` to prepare backend management data and persist normalized runtime overrides into `payment.methods`
+  - added `WeShop_Payment` backend menu entry under `Weline_Backend::payment_group`
+  - added `Backend\Payment` index controller and `Backend\Payment\Save` POST controller as thin adapters over the management service
+  - added `view/templates/Backend/Payment/index.phtml` with method cards, enable/default/sort controls, and provider-specific config fields
+  - extended `PaymentService` so runtime checkout/admin reads merge effective overrides from `Env::getConfig('payment.methods')`
+- 2026-03-23 18:06 Added focused tests for the slice:
+  - updated `PaymentServiceTest` to cover runtime metadata override merge
+  - added `PaymentManagementServiceTest` for summary building and config normalization/persistence behavior
+  - added `SaveTest` for thin backend POST controller flow and redirect/message handling
+- 2026-03-23 18:11 Re-ran validation:
+  - `php -l` passed for `PaymentService.php`, `PaymentManagementService.php`, `Controller/Backend/Payment.php`, and `Controller/Backend/Payment/Save.php`
+  - `php vendor/bin/phpunit ...PaymentServiceTest.php ...PaymentManagementServiceTest.php ...SaveTest.php` completed with `6` tests / `35` assertions
+  - PHPUnit still exits with warning status in this repo because no code coverage driver is available and one existing deprecation warning remains
+  - `php bin/w server:status --all` reported no running server instances, so live route smoke on `9982` is currently blocked by environment state
+  - confirmed the generated backend router contains `payment/backend/payment` and `payment/backend/payment/save::POST`
