@@ -270,7 +270,7 @@ class View extends BaseController
         
         // 直接返回内容模板，Theme 的 ControllerFetchFileAfter 观察者会自动将内容渲染到 meta.content 中
         // Theme模块会根据 layoutType 和主题配置自动加载对应的布局，并将此模板内容放入布局的 {{meta.content}} 中
-        return $this->fetch('WeShop_Catalog::Frontend/Category/content.phtml');
+        return $this->fetch('WeShop_Catalog::templates/Frontend/Category/content.phtml');
     }
     
     /**

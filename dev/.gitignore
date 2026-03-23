@@ -13,3 +13,6 @@
 # 保留 ai 目录及其所有内容（必须按顺序）
 !ai/
 !ai/**
+
+# Codex 任务过程产物保留在本地
+ai/codex/tasks/**/artifacts/*

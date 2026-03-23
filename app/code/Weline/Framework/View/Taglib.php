@@ -1430,9 +1430,14 @@ class Taglib
                                 return $else_content;
                             }
                         } else {
-                            // 单标签情况：支持 @hook() 和 @hook{} 两种格式
-                            // 处理方式与其他标签一致（如 @var(), @lang() 等）
-                            if ($tag_key === '@tag()' || $tag_key === '@tag{}') {
+                            // 单标签情况：支持 @hook()、@hook{}，以及 <w:hook name="Module::..."/>（自闭合时 rawContent 为空，名称在属性上）
+                            if ($tag_key === 'tag-self-close-with-attrs' && isset($attributes['name']) && (string)$attributes['name'] !== '') {
+                                $hook_name = trim((string)$attributes['name']);
+                                $hook_name = preg_replace('/<[^>]+>/', '', $hook_name);
+                                $hook_name = preg_replace('/<\?[^?]+\?>/', '', $hook_name);
+                                $hook_name = preg_replace('/[^a-zA-Z0-9_\-:].*$/', '', $hook_name);
+                                $hook_name = trim($hook_name);
+                            } elseif ($tag_key === '@tag()' || $tag_key === '@tag{}') {
                                 $hook_name = trim($tag_data[1] ?? '');
                                 
                                 // 对于 @hook() 或 @hook{} 格式，括号/花括号内的内容应该就是 hook 名称

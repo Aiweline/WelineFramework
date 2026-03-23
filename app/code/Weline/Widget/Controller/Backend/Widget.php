@@ -88,7 +88,7 @@ class Widget extends BackendController
         $this->assign('widgets', $filteredWidgets);
         $this->assign('allWidgets', $allWidgets);
         $this->assign('modules', $modules);
-        $this->assign('allowedTypes', $this->widgetScanner->getAllowedTypes());
+        $this->assign('allowedTypes', $this->widgetData->getAllowedTypes());
         $this->assign('moduleFilter', $moduleFilter);
         $this->assign('typeFilter', $typeFilter);
         $this->assign('search', $search);
