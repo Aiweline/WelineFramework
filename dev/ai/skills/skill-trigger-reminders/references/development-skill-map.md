@@ -18,8 +18,10 @@
 | 场景/关键词 | 技能 | 读取目标 |
 |---|---|---|
 | 计划、拆任务、pre-plan、plan.md、task.md、审计、都做完了 | planning | `dev/ai/skills/planning/SKILL.md` |
+| dev/ai/codex、ACTIVE.md、任务状态、任务进度、任务工作目录、resume、result.md | codex-task-workspace | `dev/ai/skills/codex-task-workspace/SKILL.md` |
 | PHPUnit、http:req、e2e、QA、Browser MCP、Playwright、路由验证 | testing | `dev/ai/skills/testing/SKILL.md` |
 | 事件、dispatch、event.xml、Hook、Extends、extends.php | extension-points | `dev/ai/skills/extension-points/SKILL.md` |
+| Sticker、Weline_Sticker、w:sticker、贴纸、非侵入改模板、sticker:collect、sticker:refresh | weline-sticker | `dev/ai/skills/weline-sticker/SKILL.md` |
 | WLS、Worker、server:start、reload、restart、static、State、Processer | runtime-and-process | `dev/ai/skills/runtime-and-process/SKILL.md` |
 | Session、登录态、认证、SessionFactory、AreaConfig | session-development | `dev/ai/skills/session-development/SKILL.md` |
 | 主题、前端、phtml、CSS、JS、模板、静态标签、暗色适配 | theme-development | `dev/ai/skills/theme-development/SKILL.md` |

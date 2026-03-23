@@ -1,5 +1,5 @@
 ---
-description: 开发场景→技能映射入口。先按关键词命中技能，再只读取对应 `dev/ai/skills/<skill>/SKILL.md`，禁止批量读取全部技能。计划/审计→planning；测试/http:req/e2e→testing；事件/Hook/Extends→extension-points；WLS/进程/static/State→runtime-and-process；Session→session-development；CSS/JS/phtml/主题→theme-development；通知/确认→friendly-notifications；查询/w_query→unified-query-provider；路由/URL→weline-routing；SSE/流式/EventSource→sse-streaming；规则/技能/计划仓→cursor-as-reference。
+description: 开发场景→技能映射入口。先按关键词命中技能，再只读取对应 `dev/ai/skills/<skill>/SKILL.md`，禁止批量读取全部技能。计划/审计→planning；Codex 任务规范/ACTIVE.md/任务状态/任务进度→codex-task-workspace；测试/http:req/e2e→testing；事件/Hook/Extends→extension-points；WLS/进程/static/State→runtime-and-process；Session→session-development；CSS/JS/phtml/主题→theme-development；通知/确认→friendly-notifications；查询/w_query→unified-query-provider；路由/URL→weline-routing；SSE/流式/EventSource→sse-streaming；规则/技能/计划仓→cursor-as-reference。
 alwaysApply: true
 ---
 

@@ -1,38 +1,47 @@
-# Task: <title>
+# Task Workspace Template
 
-- Started: <YYYY-MM-DD HH:MM>
-- Status: in_progress
-- Owner: Codex
-- Source: <user request / issue / note>
+推荐直接使用脚手架创建：
 
-## Goal
+```bash
+php dev/ai/codex/scripts/init-task.php "short title" --source="user request"
+```
 
-<任务目标>
+创建后的目录结构：
 
-## Context
+```text
+dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/
+├── task.md
+├── plan.md
+├── progress.md
+├── result.md
+└── artifacts/
+```
 
-<背景、约束、假设>
+## 文件职责
 
-## Progress
+- `task.md`
+  记录任务标题、状态、目标、范围、约束、相关文件、恢复入口。
+- `plan.md`
+  记录本任务的执行步骤和验证目标；步骤状态建议使用 `- [ ]`、`- [x]`。
+- `progress.md`
+  记录按时间追加的过程日志，不要只在结束时补写。
+- `result.md`
+  记录结果、验证命令、变更文件、遗留风险和下一次恢复入口。
+- `artifacts/`
+  保存截图、日志、导出材料等补充证据。
 
-- <时间> 创建任务记录
+## 状态建议
 
-## Files
+- `planned`
+- `in_progress`
+- `blocked`
+- `review`
+- `done`
+- `cancelled`
 
-- <related file>
+## 使用规则
 
-## Risks / Blockers
-
-- <none / detail>
-
-## Next
-
-- <下一步>
-
-## Result
-
-<任务结束后填写>
-
-## Verification
-
-- <已做验证 / 未验证原因>
+1. 每个任务只写自己的目录。
+2. 不再把共享状态写入 `dev/ai/codex/ACTIVE.md`。
+3. 大计划写 `dev/ai/codex/plans/*.plan.md`，执行状态写当前任务目录。
+4. 完成后记得同步 `memory/YYYY-MM-DD.md`。

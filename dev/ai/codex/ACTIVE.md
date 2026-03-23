@@ -1,26 +1,37 @@
+# ACTIVE.md (Deprecated)
+
+Do not write new mutable task state here.
+Use dedicated task workspaces under `dev/ai/codex/tasks/YYYY-MM-DD/YYYY-MM-DD-HHMM-short-slug/` instead.
+The legacy snapshot below is preserved only for backward context.
+
+---
+
 # Active Task
 
-- Updated: 2026-03-23 09:31
-- Task File: dev/ai/codex/tasks/2026-03-23/2026-03-23-0931-wls-start-batch-concurrency.md
+- Updated: 2026-03-23 09:53
+- Task File: dev/ai/codex/tasks/2026-03-23/2026-03-23-0953-websites-ai-workbench-pagebuilder-bridge.md
 - Status: in_progress
 
 ## Current Goal
 
-Fix WLS startup concurrency only:
+Close the gap between the planned `Weline_Websites` AI site-building workbench and the currently live entrypoints:
 
-- phase-1 startup must perform real batch concurrent startup instead of serial launch
-- worker startup phase must also launch workers concurrently
-- do not expand this task into unrelated WLS startup hardening or other runtime issues
+- confirm what is already finished under `dev/ai/codex/AI工作台/`
+- make the Websites AI workbench entry more human-friendly
+- let PageBuilder's AI site-agent workspace act as an extension of the Websites workbench
+- clean up the duplicated `Weline_Websites::site_builder_agent_pagebuilder` menu entry if the unified workbench now covers that path
 
 ## Latest Progress
 
 - Completed workspace startup context per `AGENTS.md`.
-- Routed repo skill usage through `weline-framework-skill-router` to `runtime-and-process`, with `windows-command-quoting` loaded because the startup path is Windows-sensitive.
-- Read the prior WLS task logs for:
-  - reload rolling batch concurrency
-  - frontend worker window and startup hardening
-- Confirmed the recent reload fix already has batch concurrency at the reload path, so this task should reuse that capability for initial startup rather than invent a second implementation.
-- Confirmed the worktree is dirty in many unrelated areas, so edits must stay tightly scoped to WLS startup files and task logs.
+- Routed repo skill usage through `weline-framework-skill-router`, then loaded `extension-points` and `theme-development`.
+- Confirmed the planning docs under `dev/ai/codex/AI工作台/` are not fully implemented yet:
+  - Epic 1 and Epic 2 are completed
+  - Epic 3+ (controller/UI/provider integration/PageBuilder provider) are still pending
+- Compared current live code paths:
+  - `Weline_Websites` still uses the older one-shot `SiteBuilderAgent` form + SSE flow
+  - `GuoLaiRen_PageBuilder` already has the richer session-based `AiSiteAgent` workspace
+- Confirmed `Weline_Websites::site_builder_agent_pagebuilder` exists only as a duplicated menu node in `app/code/Weline/Websites/etc/backend/menu.xml`
 
 ## Verification
 
@@ -28,11 +39,14 @@ Fix WLS startup concurrency only:
 
 ## Risks / Notes
 
-- Existing unrelated changes in the worktree must not be reverted.
-- Startup verification will interact with the live local WLS runtime and may be influenced by existing running instances.
+- The worktree is dirty in many unrelated files; edits must remain tightly scoped.
+- `app/code/GuoLaiRen/PageBuilder/view/templates/Backend/AiSiteAgent/workspace.phtml` and `app/code/GuoLaiRen/PageBuilder/Service/AiSiteAgentSessionService.php` already contain local modifications and must be patched carefully.
+- Avoid forcing historical PageBuilder session migration in this pass.
 
 ## Next
 
-- Trace the exact `server:start` orchestration path and find where phase-1 and worker startup still call serial launch helpers.
-- Patch startup orchestration to use true batch concurrency.
-- Run focused lint/tests and, if feasible, a startup verification pass.
+- Upgrade the Websites AI workbench entry into a friendlier hub that exposes PageBuilder as an extension path.
+- Register a PageBuilder provider under the Websites extension point.
+- Update PageBuilder menu/workbench links to point back to the Websites hub.
+- Remove the duplicated Websites PageBuilder-group menu entry.
+- Run focused lint and setup verification.
