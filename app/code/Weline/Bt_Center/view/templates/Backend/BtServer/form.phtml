@@ -25,6 +25,8 @@ $lastHttpCode = $server ? (string) $server->getData(BtServer::schema_fields_LAST
 $lastResponseTime = $server ? (string) $server->getData(BtServer::schema_fields_LAST_RESPONSE_TIME_MS) : '';
 $lastErrorMessage = $server ? (string) $server->getData(BtServer::schema_fields_LAST_ERROR_MESSAGE) : '';
 $lastStateChangedAt = $server ? (string) $server->getData(BtServer::schema_fields_LAST_STATE_CHANGED_AT) : '';
+$listUrl = $this->getBackendUrl('*/backend/bt-server');
+$saveUrl = $this->getBackendUrl('*/backend/bt-server/save');
 
 $statusBadgeClass = match ($lastCheckStatus) {
     BtServer::CHECK_STATUS_UP => 'bg-success',
@@ -36,21 +38,27 @@ $statusBadgeClass = match ($lastCheckStatus) {
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-0">
+            <h4 class="mb-sm-0 font-size-18">
                 <?= $id ? __('编辑 BT 服务器') . ' #' . $id : __('新增 BT 服务器') ?>
             </h4>
+            <a href="<?= $listUrl ?>" class="btn btn-secondary">
+                <i class="mdi mdi-arrow-left me-1"></i><?= __('返回列表') ?>
+            </a>
         </div>
     </div>
 </div>
 
 <div class="row">
-    <template>Weline_Component::message.phtml</template>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
 </div>
 
 <div class="row">
-    <div class="col-xl-8">
+    <div class="col-lg-8">
         <div class="card">
             <div class="card-body">
+                <h4 class="card-title mb-4"><?= __('基础信息') ?></h4>
                 <form id="btServerForm">
                     <input type="hidden" name="id" value="<?= $id ?>">
 
@@ -149,8 +157,8 @@ $statusBadgeClass = match ($lastCheckStatus) {
                         <button type="submit" class="btn btn-primary">
                             <i class="mdi mdi-content-save me-1"></i><?= __('保存') ?>
                         </button>
-                        <a href="<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>" class="btn btn-secondary ms-2">
-                            <?= __('返回列表') ?>
+                        <a href="<?= $listUrl ?>" class="btn btn-secondary ms-2">
+                            <i class="mdi mdi-arrow-left me-1"></i><?= __('返回列表') ?>
                         </a>
                     </div>
                 </form>
@@ -158,7 +166,7 @@ $statusBadgeClass = match ($lastCheckStatus) {
         </div>
     </div>
 
-    <div class="col-xl-4">
+    <div class="col-lg-4">
         <div class="card">
             <div class="card-body">
                 <h5 class="card-title mb-3"><?= __('健康检查摘要') ?></h5>
@@ -214,7 +222,7 @@ $statusBadgeClass = match ($lastCheckStatus) {
             data[key] = value;
         });
 
-        window.Weline.Api.request('<?= $this->getBackendUrl('bt_center/backend/bt_server/save') ?>', {
+        window.Weline.Api.request('<?= $saveUrl ?>', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams(data)
@@ -226,7 +234,7 @@ $statusBadgeClass = match ($lastCheckStatus) {
                     BackendToast.success(resp.message);
                 }
                 setTimeout(function() {
-                    window.location.href = '<?= $this->getBackendUrl('bt_center/backend/bt_server/index') ?>';
+                    window.location.href = '<?= $listUrl ?>';
                 }, 800);
             } else if (typeof BackendToast !== 'undefined') {
                 BackendToast.error(resp.message || '<?= __('保存失败') ?>');
