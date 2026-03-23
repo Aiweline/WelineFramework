@@ -15,7 +15,6 @@ class Start extends FrontendController
         private readonly GoogleOAuthService $googleOAuthService,
         private readonly Url $url
     ) {
-        parent::__construct();
     }
 
     public function index(): void
