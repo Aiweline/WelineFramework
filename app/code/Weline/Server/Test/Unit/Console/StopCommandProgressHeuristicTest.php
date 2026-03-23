@@ -15,20 +15,33 @@ final class StopCommandProgressHeuristicTest extends TestCase
         self::assertTrue($this->invokeProtected(
             $stop,
             'shouldWaitForMasterExitAfterProgress',
-            '所有子进程已完整退出，Master 即将结束主循环',
+            '所有子进程已完整退出，Master 即将退出进程',
             [],
             0
         ));
     }
 
-    public function testWaitsForMasterExitWhenAllChildProcessesAlreadyReportedExit(): void
+    public function testWaitsForMasterExitWhenLegacyExplicitMasterExitMessageArrives(): void
     {
         $stop = new Stop();
 
         self::assertTrue($this->invokeProtected(
             $stop,
             'shouldWaitForMasterExitAfterProgress',
-            '  ✓ Dispatcher(PID:5332) 已断开连接',
+            '所有子进程已完整退出，Master 即将退出主循环',
+            [],
+            0
+        ));
+    }
+
+    public function testDoesNotWaitForMasterExitOnlyBecauseChildrenAlreadyReportedExit(): void
+    {
+        $stop = new Stop();
+
+        self::assertFalse($this->invokeProtected(
+            $stop,
+            'shouldWaitForMasterExitAfterProgress',
+            '  ✓ HTTP Worker(PID:55448) 已退出',
             [5332 => true, 54540 => true, 27176 => true, 55448 => true, 38624 => true],
             5
         ));
