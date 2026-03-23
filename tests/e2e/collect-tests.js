@@ -15,6 +15,35 @@ const path = require('path');
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const MODULES_JSON = path.join(__dirname, 'modules.json');
 const OUTPUT_FILE = path.join(__dirname, 'collected-tests.json');
+const SHARED_SPECS_DIR = path.join(__dirname, 'specs');
+
+function toRelativeProjectPath(fullPath, baseDir = ROOT_DIR) {
+    return path.relative(baseDir, fullPath).replace(/\\/g, '/');
+}
+
+function resolveModuleTestDir(moduleInfo) {
+    if (moduleInfo.test_path) {
+        if (path.isAbsolute(moduleInfo.test_path)) {
+            return moduleInfo.test_path;
+        }
+        return path.join(ROOT_DIR, moduleInfo.test_path.replace(/\//g, path.sep));
+    }
+
+    if (!moduleInfo.base_path) {
+        return null;
+    }
+
+    const moduleBasePath = path.isAbsolute(moduleInfo.base_path)
+        ? moduleInfo.base_path
+        : path.join(ROOT_DIR, moduleInfo.base_path.replace(/\//g, path.sep));
+    const fallbackTestDir = path.join(moduleBasePath, 'test', 'e2e');
+
+    if (fs.existsSync(fallbackTestDir) && fs.statSync(fallbackTestDir).isDirectory()) {
+        return fallbackTestDir;
+    }
+
+    return null;
+}
 
 /**
  * 递归扫描目录，收集所有 .spec.js 文件
@@ -39,7 +68,7 @@ function collectTestFiles(dir, baseDir = ROOT_DIR) {
             testFiles.push(...collectTestFiles(fullPath, baseDir));
         } else if (entry.isFile() && entry.name.endsWith('.spec.js')) {
             // 生成相对路径（从项目根目录开始）
-            const relativePath = path.relative(baseDir, fullPath).replace(/\\/g, '/');
+            const relativePath = toRelativeProjectPath(fullPath, baseDir);
             testFiles.push(relativePath);
         }
     }
@@ -73,31 +102,42 @@ function collectAllTests() {
     
     const allTestFiles = [];
     const moduleTestMap = {};
+
+    const sharedSpecs = collectTestFiles(SHARED_SPECS_DIR);
+    if (sharedSpecs.length > 0) {
+        moduleTestMap.Shared_E2E_Specs = {
+            module: 'Shared_E2E_Specs',
+            base_path: toRelativeProjectPath(SHARED_SPECS_DIR),
+            test_path: toRelativeProjectPath(SHARED_SPECS_DIR),
+            test_files: sharedSpecs,
+            count: sharedSpecs.length,
+            shared: true
+        };
+        allTestFiles.push(...sharedSpecs);
+
+        console.log(`✓ Shared_E2E_Specs: 发现 ${sharedSpecs.length} 个测试文件`);
+        sharedSpecs.forEach(file => {
+            console.log(`  - ${file}`);
+        });
+    }
     
     // 遍历所有模块
     for (const [moduleName, moduleInfo] of Object.entries(modulesData.modules || {})) {
-        // 只处理有测试目录的模块
-        if (!moduleInfo.has_tests || !moduleInfo.test_path) {
+        const testDir = resolveModuleTestDir(moduleInfo);
+        if (!testDir) {
             continue;
         }
-        
-        // 处理路径：支持相对路径和绝对路径
-        let testDir;
-        if (path.isAbsolute(moduleInfo.test_path)) {
-            testDir = moduleInfo.test_path;
-        } else {
-            testDir = path.join(ROOT_DIR, moduleInfo.test_path.replace(/\//g, path.sep));
-        }
-        
+
         const testFiles = collectTestFiles(testDir);
         
         if (testFiles.length > 0) {
             moduleTestMap[moduleName] = {
                 module: moduleName,
                 base_path: moduleInfo.base_path,
-                test_path: moduleInfo.test_path,
+                test_path: moduleInfo.test_path || toRelativeProjectPath(testDir),
                 test_files: testFiles,
-                count: testFiles.length
+                count: testFiles.length,
+                autodiscovered: !moduleInfo.test_path
             };
             allTestFiles.push(...testFiles);
             
