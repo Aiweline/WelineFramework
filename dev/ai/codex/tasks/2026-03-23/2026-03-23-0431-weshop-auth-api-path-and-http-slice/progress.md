@@ -12,3 +12,4 @@
   - `php bin/w http:req "api/rest/v1/weshop/auth/me" ...` timed out
   - `php bin/w http:req "weshop/rest/v1/auth/me" ...` failed to connect
   - these probes were not reliable enough to serve as passing runtime verification, but they do confirm the local runtime remains unstable for this slice
+- 2026-03-23 12:48 Committed the slice as `dc4ba4f7 docs(weshop): align auth api path contracts`.

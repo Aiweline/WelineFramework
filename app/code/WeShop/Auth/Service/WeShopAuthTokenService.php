@@ -78,7 +78,12 @@ class WeShopAuthTokenService
             return false;
         }
 
-        return (bool) $record->setData(AuthToken::schema_fields_REVOKED_AT, date('Y-m-d H:i:s'))->save();
+        $this->revokeActorTokens(
+            (string) $record->getData(AuthToken::schema_fields_ACTOR_TYPE),
+            (int) $record->getData(AuthToken::schema_fields_ACTOR_ID)
+        );
+
+        return true;
     }
 
     public function revokeActorTokens(string $actorType, int $actorId): void
