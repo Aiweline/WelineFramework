@@ -201,7 +201,7 @@ class DeliveryAddressService
             throw new \Exception(__('无权操作此地址'));
         }
         
-        return $model->delete();
+        return (bool) $model->delete()->fetch();
     }
 
     /**
@@ -321,7 +321,8 @@ class DeliveryAddressService
         // 验证电话号码格式
         if (!empty($data[DeliveryAddress::schema_fields_CONTACT_PHONE])) {
             $phone = $data[DeliveryAddress::schema_fields_CONTACT_PHONE];
-            if (!preg_match('/^1[3-9]\d{9}$|^0\d{2,3}-?\d{7,8}$/', $phone)) {
+            $digits = preg_replace('/\D+/', '', (string) $phone);
+            if ($digits === null || strlen($digits) < 6 || strlen($digits) > 20 || !preg_match('/^[0-9+\-\s()]+$/', (string) $phone)) {
                 throw new \Exception(__('电话号码格式不正确'));
             }
         }
@@ -329,7 +330,7 @@ class DeliveryAddressService
         // 验证邮政编码格式（如果提供）
         if (!empty($data[DeliveryAddress::schema_fields_POSTAL_CODE])) {
             $postalCode = $data[DeliveryAddress::schema_fields_POSTAL_CODE];
-            if (!preg_match('/^\d{6}$/', $postalCode)) {
+            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9\-\s]{1,11}$/', (string) $postalCode)) {
                 throw new \Exception(__('邮政编码格式不正确，应为6位数字'));
             }
         }

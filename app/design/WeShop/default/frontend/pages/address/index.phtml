@@ -1,0 +1,332 @@
+<?php
+$addresses = (array) ($this->getData('addresses') ?? []);
+$addressCount = (int) ($this->getData('address_count') ?? count($addresses));
+$defaultAddress = is_array($this->getData('default_address')) ? $this->getData('default_address') : [];
+$countries = (array) ($this->getData('countries') ?? []);
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <w:hook name="WeShop_Address::frontend::layouts::address-page::before"/>
+
+    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-6 p-8 lg:grid-cols-[1.15fr_0.85fr] lg:p-10">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Address Book') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Manage Delivery Destinations') ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Save, update, and reuse delivery addresses so checkout stays fast for repeat orders and international shipping flows.') ?>
+                </p>
+
+                <div class="mt-8 flex flex-wrap gap-3 text-sm">
+                    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Back to Account') ?>
+                    </a>
+                    <a href="<?= $this->getUrl('checkout') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Continue to Checkout') ?>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Saved Addresses') ?></p>
+                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $addressCount ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Reusable shipping destinations available to checkout.') ?></p>
+                </article>
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Default Destination') ?></p>
+                    <p class="mt-2 text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                        <?= htmlspecialchars((string) (($defaultAddress['name'] ?? '') ?: __('Not set')), ENT_QUOTES) ?>
+                    </p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= htmlspecialchars((string) (($defaultAddress['full_address'] ?? '') ?: __('Choose one address as the default shipping destination.')), ENT_QUOTES) ?>
+                    </p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Saved Destinations') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Address List') ?></h2>
+                </div>
+                <span class="material-symbols-outlined text-4xl text-primary">location_on</span>
+            </div>
+
+            <div id="weshop-address-feedback" class="mt-4 hidden rounded-2xl border px-4 py-3 text-sm"></div>
+
+            <?php if ($addresses): ?>
+                <div class="mt-6 space-y-4">
+                    <?php foreach ($addresses as $address): ?>
+                        <article
+                            class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark"
+                            data-address-card
+                            data-address-id="<?= (int) ($address['address_id'] ?? 0) ?>"
+                            data-firstname="<?= htmlspecialchars((string) ($address['firstname'] ?? ''), ENT_QUOTES) ?>"
+                            data-lastname="<?= htmlspecialchars((string) ($address['lastname'] ?? ''), ENT_QUOTES) ?>"
+                            data-telephone="<?= htmlspecialchars((string) ($address['telephone'] ?? ''), ENT_QUOTES) ?>"
+                            data-country-id="<?= htmlspecialchars((string) ($address['country_id'] ?? ''), ENT_QUOTES) ?>"
+                            data-region="<?= htmlspecialchars((string) ($address['region'] ?? ''), ENT_QUOTES) ?>"
+                            data-city="<?= htmlspecialchars((string) ($address['city'] ?? ''), ENT_QUOTES) ?>"
+                            data-district="<?= htmlspecialchars((string) ($address['district'] ?? ''), ENT_QUOTES) ?>"
+                            data-street="<?= htmlspecialchars((string) ($address['street'] ?? ''), ENT_QUOTES) ?>"
+                            data-postcode="<?= htmlspecialchars((string) ($address['postcode'] ?? ''), ENT_QUOTES) ?>"
+                            data-is-default="<?= !empty($address['is_default']) ? '1' : '0' ?>"
+                        >
+                            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                <div class="space-y-3">
+                                    <div class="flex flex-wrap items-center gap-3">
+                                        <h3 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark">
+                                            <?= htmlspecialchars((string) (($address['name'] ?? '') ?: trim(($address['firstname'] ?? '') . ' ' . ($address['lastname'] ?? ''))), ENT_QUOTES) ?>
+                                        </h3>
+                                        <?php if (!empty($address['is_default'])): ?>
+                                            <span class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Default') ?></span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <p class="text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                                        <?= htmlspecialchars((string) ($address['full_address'] ?? ''), ENT_QUOTES) ?>
+                                    </p>
+                                    <div class="flex flex-wrap gap-4 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                                        <span><?= __('Contact: %1', htmlspecialchars((string) ($address['contact_name'] ?? ''), ENT_QUOTES)) ?></span>
+                                        <span><?= __('Phone: %1', htmlspecialchars((string) ($address['telephone'] ?? ''), ENT_QUOTES)) ?></span>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap gap-3">
+                                    <button type="button" data-address-edit class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                        <?= __('Edit') ?>
+                                    </button>
+                                    <?php if (empty($address['is_default'])): ?>
+                                        <button type="button" data-address-default="<?= (int) ($address['address_id'] ?? 0) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                            <?= __('Set Default') ?>
+                                        </button>
+                                    <?php endif; ?>
+                                    <button type="button" data-address-delete="<?= (int) ($address['address_id'] ?? 0) ?>" class="inline-flex items-center justify-center rounded-2xl border border-red-200 px-4 py-3 text-sm font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50">
+                                        <?= __('Delete') ?>
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">map</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No addresses yet') ?></h3>
+                    <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Create your first delivery destination so checkout can reuse it across future orders.') ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+
+            <w:hook name="WeShop_Address::frontend::partials::address-list::after"/>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Edit Form') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Add Or Update Address') ?></h2>
+                </div>
+                <button type="button" id="weshop-address-reset" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                    <?= __('New Address') ?>
+                </button>
+            </div>
+
+            <form id="weshop-address-form" class="mt-6 grid gap-4 sm:grid-cols-2" data-save-url="<?= $this->getUrl('address/save') ?>">
+                <input type="hidden" name="address_id" id="weshop-address-id" value="">
+                <div class="space-y-2">
+                    <label for="weshop-address-firstname" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('First Name') ?></label>
+                    <input id="weshop-address-firstname" name="firstname" type="text" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-lastname" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Last Name') ?></label>
+                    <input id="weshop-address-lastname" name="lastname" type="text" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2 sm:col-span-2">
+                    <label for="weshop-address-telephone" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Phone Number') ?></label>
+                    <input id="weshop-address-telephone" name="telephone" type="tel" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-country" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Country') ?></label>
+                    <select id="weshop-address-country" name="country_id" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                        <option value=""><?= __('Select Country') ?></option>
+                        <?php foreach ($countries as $country): ?>
+                            <option value="<?= htmlspecialchars((string) ($country['code'] ?? ''), ENT_QUOTES) ?>"><?= htmlspecialchars((string) ($country['name'] ?? ''), ENT_QUOTES) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-region" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('State / Province') ?></label>
+                    <input id="weshop-address-region" name="region" type="text" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-city" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('City') ?></label>
+                    <input id="weshop-address-city" name="city" type="text" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-district" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('District') ?></label>
+                    <input id="weshop-address-district" name="district" type="text" class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2 sm:col-span-2">
+                    <label for="weshop-address-street" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Street Address') ?></label>
+                    <input id="weshop-address-street" name="street" type="text" required class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <div class="space-y-2">
+                    <label for="weshop-address-postcode" class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Zip / Postal Code') ?></label>
+                    <input id="weshop-address-postcode" name="postcode" type="text" class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-sm text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark">
+                </div>
+                <label class="mt-7 inline-flex items-center gap-3 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <input type="checkbox" name="is_default" id="weshop-address-default" value="1" class="h-4 w-4 rounded border-border-light text-primary focus:ring-primary dark:border-border-dark">
+                    <span><?= __('Use as default shipping address') ?></span>
+                </label>
+                <div class="sm:col-span-2">
+                    <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Save Address') ?>
+                    </button>
+                </div>
+            </form>
+
+            <w:hook name="WeShop_Address::frontend::partials::address-form::after"/>
+        </article>
+    </section>
+</main>
+
+<script>
+    (function () {
+        var form = document.getElementById('weshop-address-form');
+        var resetButton = document.getElementById('weshop-address-reset');
+        var feedback = document.getElementById('weshop-address-feedback');
+        var idField = document.getElementById('weshop-address-id');
+        var fieldMap = {
+            firstname: document.getElementById('weshop-address-firstname'),
+            lastname: document.getElementById('weshop-address-lastname'),
+            telephone: document.getElementById('weshop-address-telephone'),
+            country_id: document.getElementById('weshop-address-country'),
+            region: document.getElementById('weshop-address-region'),
+            city: document.getElementById('weshop-address-city'),
+            district: document.getElementById('weshop-address-district'),
+            street: document.getElementById('weshop-address-street'),
+            postcode: document.getElementById('weshop-address-postcode'),
+            is_default: document.getElementById('weshop-address-default')
+        };
+
+        function showFeedback(message, isError) {
+            if (!feedback) {
+                return;
+            }
+
+            feedback.classList.remove('hidden', 'border-green-200', 'bg-green-50', 'text-green-700', 'border-red-200', 'bg-red-50', 'text-red-700');
+            if (isError) {
+                feedback.classList.add('border-red-200', 'bg-red-50', 'text-red-700');
+            } else {
+                feedback.classList.add('border-green-200', 'bg-green-50', 'text-green-700');
+            }
+            feedback.textContent = message || '';
+        }
+
+        function resetForm() {
+            form.reset();
+            idField.value = '';
+        }
+
+        function assignCardToForm(card) {
+            idField.value = card.getAttribute('data-address-id') || '';
+            fieldMap.firstname.value = card.getAttribute('data-firstname') || '';
+            fieldMap.lastname.value = card.getAttribute('data-lastname') || '';
+            fieldMap.telephone.value = card.getAttribute('data-telephone') || '';
+            fieldMap.country_id.value = card.getAttribute('data-country-id') || '';
+            fieldMap.region.value = card.getAttribute('data-region') || '';
+            fieldMap.city.value = card.getAttribute('data-city') || '';
+            fieldMap.district.value = card.getAttribute('data-district') || '';
+            fieldMap.street.value = card.getAttribute('data-street') || '';
+            fieldMap.postcode.value = card.getAttribute('data-postcode') || '';
+            fieldMap.is_default.checked = card.getAttribute('data-is-default') === '1';
+            form.scrollIntoView({behavior: 'smooth', block: 'start'});
+        }
+
+        function postAction(url, body) {
+            return fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams(body).toString()
+            }).then(function (response) {
+                return response.json();
+            });
+        }
+
+        document.querySelectorAll('[data-address-edit]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var card = this.closest('[data-address-card]');
+                if (card) {
+                    assignCardToForm(card);
+                }
+            });
+        });
+
+        document.querySelectorAll('[data-address-default]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                postAction('<?= $this->getUrl('address/default-address') ?>', {
+                    address_id: this.getAttribute('data-address-default') || ''
+                }).then(function (payload) {
+                    if (payload && payload.success) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to update the default address.')) ?>', true);
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-address-delete]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                postAction('<?= $this->getUrl('address/delete') ?>', {
+                    address_id: this.getAttribute('data-address-delete') || ''
+                }).then(function (payload) {
+                    if (payload && payload.success) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to remove the address.')) ?>', true);
+                });
+            });
+        });
+
+        resetButton.addEventListener('click', function () {
+            resetForm();
+            form.scrollIntoView({behavior: 'smooth', block: 'start'});
+        });
+
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var formData = new FormData(form);
+
+            fetch(form.getAttribute('data-save-url') || '', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: new URLSearchParams(formData).toString()
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (payload && payload.success) {
+                    window.location.reload();
+                    return;
+                }
+
+                showFeedback((payload && payload.message) || '<?= addslashes((string) __('Unable to save the address.')) ?>', true);
+            }).catch(function () {
+                showFeedback('<?= addslashes((string) __('Unable to save the address.')) ?>', true);
+            });
+        });
+    })();
+</script>
