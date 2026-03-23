@@ -1,0 +1,93 @@
+<?php
+/**
+ * Google auth storefront account-center security card.
+ *
+ * @hook-priority 200
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+$customerContext = w_obj(\WeShop\Customer\Service\CustomerContext::class);
+$googleLoginService = w_obj(\WeShop\GoogleAuth\Service\GoogleLoginService::class);
+$oauthService = w_obj(\WeShop\GoogleAuth\Service\GoogleOAuthService::class);
+$url = w_obj(\Weline\Framework\Http\Url::class);
+
+$userId = (int) ($customerContext->getUserId() ?? 0);
+$binding = $userId > 0 ? $googleLoginService->getBinding('frontend', $userId) : null;
+$configured = $oauthService->isConfigured();
+$accountUrl = $url->getFrontendUrl('weshop/customer/account/index');
+$bindUrl = $url->getFrontendUrl('weshop_googleauth/frontend/auth/start', [
+    'area' => 'frontend',
+    'mode' => 'bind',
+    'redirect_url' => $accountUrl,
+]);
+$postUrl = $url->getFrontendUrl('weshop_googleauth/frontend/auth/binding');
+?>
+<article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Google Sign-In') ?></p>
+            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Connected Account') ?></h3>
+            <p class="mt-2 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                <?= __('Link Google to this customer account so future sign-ins can reuse the same storefront identity without creating a second profile.') ?>
+            </p>
+        </div>
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined text-3xl">verified_user</span>
+        </div>
+    </div>
+
+    <?php if (!$configured): ?>
+        <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong><?= __('Google auth is not configured yet.') ?></strong>
+            <p class="mt-1"><?= __('Set the Google client credentials before enabling customer account binding.') ?></p>
+        </div>
+    <?php elseif ($binding): ?>
+        <div class="mt-6 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-900">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-xl">verified_user</span>
+                <strong><?= __('Google is connected to this storefront account.') ?></strong>
+            </div>
+            <dl class="space-y-2">
+                <div class="flex items-start justify-between gap-4">
+                    <dt class="font-medium"><?= __('Email') ?></dt>
+                    <dd class="text-right"><?= htmlspecialchars((string) $binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_EMAIL), ENT_QUOTES) ?></dd>
+                </div>
+                <div class="flex items-start justify-between gap-4">
+                    <dt class="font-medium"><?= __('Bound At') ?></dt>
+                    <dd class="text-right"><?= htmlspecialchars((string) $binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_BOUND_AT), ENT_QUOTES) ?></dd>
+                </div>
+                <div class="flex items-start justify-between gap-4">
+                    <dt class="font-medium"><?= __('Last Google Login') ?></dt>
+                    <dd class="text-right">
+                        <?= htmlspecialchars((string) ($binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_LAST_LOGIN_AT) ?: __('Never')), ENT_QUOTES) ?>
+                    </dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="mt-6 flex flex-wrap gap-3">
+            <a href="<?= htmlspecialchars($bindUrl, ENT_QUOTES) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                <?= __('Rebind Google Account') ?>
+            </a>
+            <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="inline-flex">
+                <?= $this->getFormKey($postUrl) ?>
+                <input type="hidden" name="form_action" value="unbind">
+                <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($accountUrl, ENT_QUOTES) ?>">
+                <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700">
+                    <?= __('Unbind Google') ?>
+                </button>
+            </form>
+        </div>
+    <?php else: ?>
+        <div class="mt-6 rounded-2xl border border-border-light bg-background-light px-4 py-4 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+            <?= __('No Google account is currently connected. Binding keeps Google sign-in attached to this exact customer record and still respects future two-factor policies when enabled.') ?>
+        </div>
+
+        <div class="mt-6">
+            <a href="<?= htmlspecialchars($bindUrl, ENT_QUOTES) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90">
+                <?= __('Bind Google Account') ?>
+            </a>
+        </div>
+    <?php endif; ?>
+</article>
