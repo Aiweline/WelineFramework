@@ -52,8 +52,8 @@ Alipay,Alipay
 "Unsupported payment method: %{1}","Unsupported payment method: %{1}"
 "Payment provider is not configured for %{1}.","Payment provider is not configured for %{1}."
 "Payment provider is invalid for %{1}.","Payment provider is invalid for %{1}."
-支付管理,Payment Management
-支付方式,Payment Methods
+支付管理,"Payment Management"
+支付方式,"Payment Methods"
 "Total Methods","Total Methods"
 "Enabled At Checkout","Enabled At Checkout"
 "Reserved / Disabled","Reserved / Disabled"
