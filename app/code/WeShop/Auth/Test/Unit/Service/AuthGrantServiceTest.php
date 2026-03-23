@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Auth\Data\ActorContext;
 use WeShop\Auth\Service\AuthGrantService;
 use WeShop\Auth\Service\BackendPasswordAuthenticator;
+use WeShop\Auth\Service\GoogleCodeAuthenticator;
 use WeShop\Auth\Service\IntegrationCredentialAuthenticator;
 use WeShop\Auth\Service\WeShopAuth2FAOrchestrator;
 use WeShop\Auth\Service\WeShopAuthTokenService;
@@ -21,6 +22,7 @@ class AuthGrantServiceTest extends TestCase
     {
         $customerAccountService = $this->createMock(CustomerAccountService::class);
         $backendAuthenticator = $this->createMock(BackendPasswordAuthenticator::class);
+        $googleCodeAuthenticator = $this->createMock(GoogleCodeAuthenticator::class);
         $integrationAuthenticator = $this->createMock(IntegrationCredentialAuthenticator::class);
         $twoFactorOrchestrator = $this->createMock(WeShopAuth2FAOrchestrator::class);
         $tokenService = $this->createMock(WeShopAuthTokenService::class);
@@ -68,6 +70,7 @@ class AuthGrantServiceTest extends TestCase
         $service = new AuthGrantService(
             $customerAccountService,
             $backendAuthenticator,
+            $googleCodeAuthenticator,
             $integrationAuthenticator,
             $twoFactorOrchestrator,
             $tokenService
@@ -86,6 +89,7 @@ class AuthGrantServiceTest extends TestCase
     {
         $customerAccountService = $this->createMock(CustomerAccountService::class);
         $backendAuthenticator = $this->createMock(BackendPasswordAuthenticator::class);
+        $googleCodeAuthenticator = $this->createMock(GoogleCodeAuthenticator::class);
         $integrationAuthenticator = $this->createMock(IntegrationCredentialAuthenticator::class);
         $twoFactorOrchestrator = $this->createMock(WeShopAuth2FAOrchestrator::class);
         $tokenService = $this->createMock(WeShopAuthTokenService::class);
@@ -121,6 +125,7 @@ class AuthGrantServiceTest extends TestCase
         $service = new AuthGrantService(
             $customerAccountService,
             $backendAuthenticator,
+            $googleCodeAuthenticator,
             $integrationAuthenticator,
             $twoFactorOrchestrator,
             $tokenService
@@ -132,6 +137,72 @@ class AuthGrantServiceTest extends TestCase
         $this->assertSame('integration', $result['actor_type'] ?? null);
         $this->assertSame('access-token-88', $result['access_token'] ?? null);
         $this->assertSame('integration', $result['actor']['area'] ?? null);
+        $this->assertTrue((bool) ($result['actor']['is_2fa_verified'] ?? false));
+    }
+
+    public function testIssueGoogleCodeTokenDelegatesGoogleAuthenticator(): void
+    {
+        $customerAccountService = $this->createMock(CustomerAccountService::class);
+        $backendAuthenticator = $this->createMock(BackendPasswordAuthenticator::class);
+        $googleCodeAuthenticator = $this->createMock(GoogleCodeAuthenticator::class);
+        $integrationAuthenticator = $this->createMock(IntegrationCredentialAuthenticator::class);
+        $twoFactorOrchestrator = $this->createMock(WeShopAuth2FAOrchestrator::class);
+        $tokenService = $this->createMock(WeShopAuthTokenService::class);
+
+        $googleCodeAuthenticator->expects($this->once())
+            ->method('authenticate')
+            ->with('backend', 'google-code-1')
+            ->willReturn(new ActorContext(
+                ActorContext::ACTOR_BACKEND,
+                51,
+                'backend',
+                ['backend']
+            ));
+
+        $twoFactorOrchestrator->expects($this->once())
+            ->method('beginPrimaryAuth')
+            ->with(
+                $this->callback(static function (ActorContext $context): bool {
+                    return $context->getActorType() === ActorContext::ACTOR_BACKEND
+                        && $context->getActorId() === 51
+                        && $context->getArea() === 'backend'
+                        && $context->getScopes() === ['backend']
+                        && !$context->is2faVerified();
+                }),
+                'google',
+                'backend',
+                ['flow' => 'google']
+            )
+            ->willReturn(['status' => 'authenticated']);
+
+        $tokenService->expects($this->once())
+            ->method('createTokenPair')
+            ->with($this->callback(static function (ActorContext $context): bool {
+                return $context->getActorType() === ActorContext::ACTOR_BACKEND
+                    && $context->getActorId() === 51
+                    && $context->is2faVerified();
+            }))
+            ->willReturn([
+                'access_token' => 'google-access-token-51',
+                'refresh_token' => 'google-refresh-token-51',
+                'expires_at' => '2026-03-24 00:00:00',
+            ]);
+
+        $service = new AuthGrantService(
+            $customerAccountService,
+            $backendAuthenticator,
+            $googleCodeAuthenticator,
+            $integrationAuthenticator,
+            $twoFactorOrchestrator,
+            $tokenService
+        );
+
+        $result = $service->issueGoogleCodeToken('backend', 'google-code-1');
+
+        $this->assertSame('authenticated', $result['status'] ?? null);
+        $this->assertSame('backend', $result['actor_type'] ?? null);
+        $this->assertSame('google-access-token-51', $result['access_token'] ?? null);
+        $this->assertSame('backend', $result['actor']['area'] ?? null);
         $this->assertTrue((bool) ($result['actor']['is_2fa_verified'] ?? false));
     }
 }
