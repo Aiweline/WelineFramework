@@ -148,7 +148,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Saved For Later') ?></p>
                     <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Wishlist') ?></h2>
                 </div>
-                <span class="material-symbols-outlined text-4xl text-primary">favorite</span>
+                <a href="<?= $this->getUrl('wishlist') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View All') ?></a>
             </div>
 
             <?php if ($wishlistPreview): ?>
@@ -178,7 +178,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Keep Exploring') ?></p>
                     <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recently Viewed') ?></h2>
                 </div>
-                <span class="material-symbols-outlined text-4xl text-primary">history</span>
+                <a href="<?= $this->getUrl('recently-viewed') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('View History') ?></a>
             </div>
 
             <?php if ($recentlyViewed): ?>
@@ -208,7 +208,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Guess You May Like') ?></p>
                     <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recommended For You') ?></h2>
                 </div>
-                <span class="material-symbols-outlined text-4xl text-primary">auto_awesome</span>
+                <a href="<?= $this->getUrl('catalog/category') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Keep Shopping') ?></a>
             </div>
 
             <?php if ($recommendations): ?>

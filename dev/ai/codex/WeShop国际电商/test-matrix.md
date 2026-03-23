@@ -7,14 +7,17 @@
   - password reset
   - theme compatibility checks
   - storefront account dashboard aggregation for recent orders, wishlist, recently viewed, and recommendations
+  - recently viewed page-data mapping, current-customer recorder, and remove controller guest/auth flows
 - HTTP/API:
   - unified auth endpoints
   - compatibility proxies
   - backend menu-resource alignment
   - route verification for `/api/weshop/rest/v1/auth/*`
+  - storefront route verification for `/recently-viewed` and `/recently-viewed/remove`
 - E2E:
   - storefront and backend login flows
   - Google login
   - 2FA
   - `default` theme baseline pages
   - storefront account center rendering security cards and discovery cards
+  - storefront recently-viewed history open/remove flow once stable customer login fixtures are available
