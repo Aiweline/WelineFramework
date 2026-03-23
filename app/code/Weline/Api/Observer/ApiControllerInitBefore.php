@@ -21,6 +21,7 @@ use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\App\Env as FrameworkEnv;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\PublicApiAuthRouteMatcher;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -36,19 +37,22 @@ class ApiControllerInitBefore implements ObserverInterface
     private IpWhitelistService $ipWhitelistService;
     private UserAgentRestrictionService $userAgentRestrictionService;
     private TokenService $tokenService;
+    private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
 
     public function __construct(
         Request $request,
         ApiSecurityService $apiSecurityService,
         IpWhitelistService $ipWhitelistService,
         UserAgentRestrictionService $userAgentRestrictionService,
-        TokenService $tokenService
+        TokenService $tokenService,
+        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher
     ) {
         $this->request = $request;
         $this->apiSecurityService = $apiSecurityService;
         $this->ipWhitelistService = $ipWhitelistService;
         $this->userAgentRestrictionService = $userAgentRestrictionService;
         $this->tokenService = $tokenService;
+        $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
     }
 
     /**
@@ -59,6 +63,9 @@ class ApiControllerInitBefore implements ObserverInterface
         // WLS 兼容：从 ObjectManager 获取当前请求的 Request 实例
         // Observer 实例在 WLS 中是单例，$this->request 可能指向旧请求
         $this->request = ObjectManager::getInstance(Request::class);
+        if ($this->publicApiAuthRouteMatcher->matches($this->request)) {
+            return;
+        }
         // 只处理API请求（后台和前台）
         if (!$this->request->isApiBackend() && !$this->request->isApiFrontend()) {
             return;
@@ -81,6 +88,16 @@ class ApiControllerInitBefore implements ObserverInterface
             'api/rest/v1/auth/token-info',
             'api/rest/v1/auth/logout',
             'api/rest/v1/auth/me',
+            // WeShop 统一认证接口：生成路由键仍是 weshop/rest/v1/auth/*，
+            // 但运行时前端 REST 前缀会形成 /api/weshop/rest/v1/auth/*。
+            'api/weshop/rest/v1/auth/token',
+            'api/weshop/rest/v1/auth/challenge/verify',
+            'api/weshop/rest/v1/auth/login',
+            'api/weshop/rest/v1/auth/exchange',
+            'api/weshop/rest/v1/auth/refresh',
+            'api/weshop/rest/v1/auth/token-info',
+            'api/weshop/rest/v1/auth/logout',
+            'api/weshop/rest/v1/auth/me',
             'api/rest/v1/weshop/auth/token',
             'api/rest/v1/weshop/auth/challenge/verify',
             'api/rest/v1/weshop/auth/login',
@@ -106,9 +123,9 @@ class ApiControllerInitBefore implements ObserverInterface
         ];
         
         // 认证控制器和方法白名单
-        $authControllers = ['Auth'];
+        $authControllers = ['Auth', 'Challenge'];
         // 前端API方法名
-        $frontendAuthActions = ['postLogin', 'postExchange', 'postRefresh', 'getTokenInfo', 'postLogout', 'getMe'];
+        $frontendAuthActions = ['postToken', 'postLogin', 'postExchange', 'postRefresh', 'postVerify', 'getTokenInfo', 'postLogout', 'getMe'];
         // 后端API方法名（后端API使用不同的方法名）
         $backendAuthActions = ['login', 'refresh', 'logout', 'me', 'tokenInfo'];
         // 合并所有方法名
