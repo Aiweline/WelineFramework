@@ -1,0 +1,123 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Framework\Http;
+
+class PublicApiAuthRouteMatcher
+{
+    private const AUTH_PATH_PATTERNS = [
+        'api/rest/v1/auth/login',
+        'api/rest/v1/auth/exchange',
+        'api/rest/v1/auth/refresh',
+        'api/rest/v1/auth/token-info',
+        'api/rest/v1/auth/logout',
+        'api/rest/v1/auth/me',
+        'api/rest/v1/backend/auth/login',
+        'api/rest/v1/backend/auth/refresh',
+        'api/rest/v1/backend/auth/logout',
+        'api/rest/v1/backend/auth/me',
+        'api/rest/v1/backend/auth/token-info',
+        'api/weshop/rest/v1/auth/token',
+        'api/weshop/rest/v1/auth/challenge/verify',
+        'api/weshop/rest/v1/auth/login',
+        'api/weshop/rest/v1/auth/exchange',
+        'api/weshop/rest/v1/auth/refresh',
+        'api/weshop/rest/v1/auth/token-info',
+        'api/weshop/rest/v1/auth/logout',
+        'api/weshop/rest/v1/auth/me',
+        'api/rest/v1/weshop/auth/token',
+        'api/rest/v1/weshop/auth/challenge/verify',
+        'api/rest/v1/weshop/auth/login',
+        'api/rest/v1/weshop/auth/exchange',
+        'api/rest/v1/weshop/auth/refresh',
+        'api/rest/v1/weshop/auth/token-info',
+        'api/rest/v1/weshop/auth/logout',
+        'api/rest/v1/weshop/auth/me',
+        'weshop/rest/v1/auth/token',
+        'weshop/rest/v1/auth/challenge/verify',
+        'weshop/rest/v1/auth/login',
+        'weshop/rest/v1/auth/exchange',
+        'weshop/rest/v1/auth/refresh',
+        'weshop/rest/v1/auth/token-info',
+        'weshop/rest/v1/auth/logout',
+        'weshop/rest/v1/auth/me',
+    ];
+
+    private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
+
+    private const AUTH_ACTIONS = [
+        'postToken',
+        'postLogin',
+        'postExchange',
+        'postRefresh',
+        'postVerify',
+        'getTokenInfo',
+        'postLogout',
+        'getMe',
+        'login',
+        'refresh',
+        'logout',
+        'me',
+        'tokenInfo',
+    ];
+
+    public function matches(Request $request): bool
+    {
+        $controller = (string) $request->getController();
+        $action = (string) $request->getAction();
+        $controllerClass = (string) ($request->getRouterData('controller') ?? '');
+
+        if ($controller !== '' && $action !== '') {
+            if (in_array($controller, self::AUTH_CONTROLLERS, true) && in_array($action, self::AUTH_ACTIONS, true)) {
+                return true;
+            }
+
+            if (
+                $controllerClass !== ''
+                && (str_contains($controllerClass, '\\Auth') || str_ends_with($controllerClass, '\\Auth'))
+                && in_array($action, self::AUTH_ACTIONS, true)
+            ) {
+                return true;
+            }
+
+            if (stripos($controller, 'auth') !== false && in_array($action, self::AUTH_ACTIONS, true)) {
+                return true;
+            }
+        }
+
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesPath(string $path): bool
+    {
+        $normalizedPath = ltrim($path, '/');
+
+        foreach (self::AUTH_PATH_PATTERNS as $pattern) {
+            if (
+                $normalizedPath === $pattern
+                || str_ends_with($normalizedPath, '/' . $pattern)
+                || str_ends_with($normalizedPath, $pattern)
+                || str_contains($normalizedPath, '/' . $pattern . '/')
+                || str_contains($normalizedPath, '/' . $pattern)
+                || preg_match('/[\/\-_]' . preg_quote($pattern, '/') . '(\/|$)/', $normalizedPath) === 1
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
