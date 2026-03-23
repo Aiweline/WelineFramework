@@ -11,7 +11,7 @@
 - [x] Implement the smallest correct change
 - [x] Add or update tests / verification
 - [x] Run validation commands
-- [ ] Update result.md and memory if needed
+- [x] Update result.md and memory if needed
 
 ## Verification Targets
 

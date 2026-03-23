@@ -22,3 +22,4 @@
   - `php vendor/phpunit/phpunit/phpunit --no-coverage --configuration phpunit.xml app/code/WeShop/Auth/Test/Unit`
     - result: `24 tests, 100 assertions`
   - non-blocking: PHPUnit still reports `1` repository deprecation warning
+- 2026-03-23 13:21 Committed the slice as `6d098b75 refactor(weshop): extract auth grant credential authenticators`.

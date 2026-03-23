@@ -50,6 +50,33 @@ class ChallengeControllerTest extends TestCase
         $this->assertSame('challenge-ok', $controller->postVerify());
     }
 
+    public function testPostVerifyRequiresChallengeTokenAndCode(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->never())->method('verifyChallenge');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturn(null);
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Challenge::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->never())->method('success');
+        $controller->expects($this->once())
+            ->method('exception')
+            ->with(
+                $this->callback(static fn (\Throwable $throwable): bool => $throwable instanceof \InvalidArgumentException),
+                $this->stringContains('Challenge verification failed')
+            )
+            ->willReturn('challenge-error');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('challenge-error', $controller->postVerify());
+    }
+
     private function setProtectedProperty(object $target, string $property, mixed $value): void
     {
         $reflection = new \ReflectionObject($target);
