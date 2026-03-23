@@ -1,36 +1,15 @@
 <?php
-/**
- * @var \Weline\Framework\View\Template $this
- * @var \Weline\Websites\Model\AiSiteBuilderSession|null $session
- * @var array{code:string,name:string,description:string,badge:string} $provider_context
- * @var array<string, mixed> $scope
- * @var string $scope_preview
- * @var list<array{message_id:int,role:string,content:string,message_type:string,tool_payload:array<string,mixed>,create_time:string}> $messages
- * @var list<array{event_id:int,stage_code:string,event_type:string,level:string,payload:array<string,mixed>,create_time:string}> $events
- * @var list<array{value:string,label:string}> $stage_options
- * @var string $preview_full_url
- * @var string $state_json_url
- * @var string $back_url
- * @var string $merge_scope_url
- * @var string $replace_scope_url
- * @var string $set_stage_url
- * @var string $append_message_url
- * @var string $provider_native_url
- * @var string $provider_handoff_label
- * @var list<array{code:string,label:string,description:string,type:string,icon:string,button_class:string,url:string,target:string,stage:string,scope_patch:array<string,mixed>,enabled:bool}> $provider_tools
- * @var list<array{public_id:string,provider_name:string,stage_label:string,summary:string,update_time:string,workspace_url:string}> $recent_sessions
- * @var array<string,mixed>|null $snapshot_artifact
- * @var array<string,mixed>|null $handoff_artifact
- * @var string $error_message
- * @var int $last_event_id
- */
-
 $session = $this->getData('session');
 $provider_context = $this->getData('provider_context');
-$provider_context = \is_array($provider_context) ? $provider_context : ['code' => 'websites_default', 'name' => 'websites_default', 'description' => '', 'badge' => ''];
+$provider_context = \is_array($provider_context) ? $provider_context : ['code' => 'websites_default', 'name' => 'AI 建站工作台', 'description' => '', 'badge' => ''];
+$stage_guides = $this->getData('stage_guides');
+$stage_guides = \is_array($stage_guides) ? $stage_guides : [];
+$current_stage = (string)($this->getData('current_stage') ?? 'prepare');
 $scope = $this->getData('scope');
 $scope = \is_array($scope) ? $scope : [];
 $scope_preview = (string)($this->getData('scope_preview') ?? '{}');
+$accounts = $this->getData('accounts');
+$accounts = \is_array($accounts) ? $accounts : [];
 $messages = $this->getData('messages');
 $messages = \is_array($messages) ? $messages : [];
 $events = $this->getData('events');
@@ -57,66 +36,85 @@ $handoff_artifact = \is_array($handoff_artifact) ? $handoff_artifact : null;
 $error_message = (string)($this->getData('error_message') ?? '');
 $last_event_id = (int)($this->getData('last_event_id') ?? 0);
 $site_builder_sse_path = (string)($this->getData('stream_sse_path') ?? 'websites/backend/site-builder-agent/stream-sse');
-$site_builder_sse_title = (string)__('AI 建站事件流');
 
 if (!$session instanceof \Weline\Websites\Model\AiSiteBuilderSession) {
     ?>
-    <div class="row">
-        <div class="col-12">
-            <div class="alert alert-danger" role="alert">
-                <?= htmlspecialchars($error_message !== '' ? $error_message : (string)__('工作区会话无效'), ENT_QUOTES, 'UTF-8') ?>
-            </div>
-            <a class="btn btn-primary" href="<?= htmlspecialchars($back_url, ENT_QUOTES, 'UTF-8') ?>">
-                <i class="mdi mdi-arrow-left me-1"></i>
-                <lang>返回工作台入口</lang>
-            </a>
-        </div>
-    </div>
+    <div class="alert alert-danger"><?= htmlspecialchars($error_message !== '' ? $error_message : (string)__('工作区会话无效'), ENT_QUOTES, 'UTF-8') ?></div>
+    <a class="btn btn-primary" href="<?= htmlspecialchars($back_url, ENT_QUOTES, 'UTF-8') ?>"><lang>返回工作台入口</lang></a>
     <?php
     return;
 }
 
 $publicId = $session->getPublicId();
-$currentStage = $session->getCurrentStage();
 $siteTitle = (string)($scope['site_title'] ?? '');
 $siteTagline = (string)($scope['site_tagline'] ?? '');
 $briefDescription = (string)($scope['brief_description'] ?? $scope['user_description'] ?? '');
 $targetDomain = (string)($scope['target_domain'] ?? $session->getSelectedDomain());
+$preferredRegistrarAccountId = (int)($scope['preferred_registrar_account_id'] ?? $scope['registrar_account_id'] ?? $session->getRegistrarAccountId());
+$recommendedRegistrarLabel = (string)($scope['recommended_registrar_label'] ?? '');
 $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
+$parseLanguageValues = static function ($raw): array {
+    if (\is_array($raw)) {
+        $values = $raw;
+    } elseif (\is_string($raw) && $raw !== '') {
+        $decoded = \json_decode($raw, true);
+        $values = \is_array($decoded) ? $decoded : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+    } else {
+        $values = [];
+    }
+
+    $result = [];
+    foreach ($values as $value) {
+        if (!\is_scalar($value)) {
+            continue;
+        }
+        $value = \trim((string)$value);
+        if ($value === '' || \in_array($value, $result, true)) {
+            continue;
+        }
+        $result[] = $value;
+    }
+
+    return $result;
+};
+$siteBuilderDefaultLanguage = (string)($scope['default_language'] ?? '');
+$siteBuilderLanguageCodes = $parseLanguageValues($scope['language_codes'] ?? []);
+if ($siteBuilderDefaultLanguage !== '' && !\in_array($siteBuilderDefaultLanguage, $siteBuilderLanguageCodes, true)) {
+    $siteBuilderLanguageCodes[] = $siteBuilderDefaultLanguage;
+}
+$siteBuilderReadonlyLanguages = $siteBuilderDefaultLanguage !== '' ? [$siteBuilderDefaultLanguage] : [];
+$currentGuide = null;
+foreach ($stage_guides as $guide) {
+    if (!empty($guide['is_current'])) {
+        $currentGuide = $guide;
+        break;
+    }
+}
+if ($currentGuide === null && $stage_guides !== []) {
+    $currentGuide = $stage_guides[0];
+}
+$currentGuidePatchJson = '{}';
+if (\is_array($currentGuide)) {
+    try {
+        $currentGuidePatchJson = (string)\json_encode($currentGuide['recommendation_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    } catch (\JsonException) {
+        $currentGuidePatchJson = '{}';
+    }
+}
+$currentStageTools = \is_array($currentGuide['tools'] ?? null) ? $currentGuide['tools'] : [];
 ?>
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <div>
-                <h4 class="mb-sm-0">
-                    <i class="mdi mdi-view-dashboard-outline me-1"></i>
-                    <lang>AI 建站工作区</lang>
-                </h4>
-                <p class="text-muted mb-0 mt-2">
-                    <?= htmlspecialchars((string)($provider_context['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                </p>
+                <h4 class="mb-sm-0"><i class="mdi mdi-view-dashboard-outline me-1"></i><lang>AI 建站工作区</lang></h4>
+                <p class="text-muted mb-0 mt-2"><?= htmlspecialchars((string)($provider_context['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
             <div class="d-flex flex-wrap gap-2 mt-3 mt-sm-0">
-                <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars($back_url, ENT_QUOTES, 'UTF-8') ?>">
-                    <i class="mdi mdi-arrow-left me-1"></i>
-                    <lang>返回入口</lang>
-                </a>
-                <a class="btn btn-soft-info btn-sm" href="<?= htmlspecialchars($state_json_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                    <i class="mdi mdi-code-json me-1"></i>
-                    <lang>状态 JSON</lang>
-                </a>
-                <?php if ($preview_full_url !== '') { ?>
-                    <a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars($preview_full_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                        <i class="mdi mdi-open-in-new me-1"></i>
-                        <lang>打开预览</lang>
-                    </a>
-                <?php } ?>
-                <?php if ($provider_native_url !== '') { ?>
-                    <a class="btn btn-primary btn-sm" href="<?= htmlspecialchars($provider_native_url, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-transfer-right me-1"></i>
-                        <?= htmlspecialchars($provider_handoff_label, ENT_QUOTES, 'UTF-8') ?>
-                    </a>
-                <?php } ?>
+                <a class="btn btn-soft-secondary btn-sm" href="<?= htmlspecialchars($back_url, ENT_QUOTES, 'UTF-8') ?>"><lang>返回入口</lang></a>
+                <a class="btn btn-soft-info btn-sm" href="<?= htmlspecialchars($state_json_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>状态 JSON</lang></a>
+                <?php if ($preview_full_url !== '') { ?><a class="btn btn-soft-primary btn-sm" href="<?= htmlspecialchars($preview_full_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>打开预览</lang></a><?php } ?>
+                <?php if ($provider_native_url !== '') { ?><a class="btn btn-primary btn-sm" href="<?= htmlspecialchars($provider_native_url, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($provider_handoff_label, ENT_QUOTES, 'UTF-8') ?></a><?php } ?>
             </div>
         </div>
     </div>
@@ -126,456 +124,255 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
     <div class="col-xl-8">
         <div class="card border-0 shadow-sm">
             <div class="card-body p-4">
-                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
                     <div>
-                        <span class="workspace-provider-badge"><?= htmlspecialchars((string)($provider_context['badge'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="wb-badge"><?= htmlspecialchars((string)($provider_context['badge'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
                         <h5 class="mt-3 mb-1"><?= htmlspecialchars((string)($provider_context['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h5>
-                        <div class="workspace-meta-line">
-                            <span><lang>Public ID</lang>: <code><?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8') ?></code></span>
-                            <span><lang>当前阶段</lang>: <strong id="site-builder-current-stage"><?= htmlspecialchars($currentStage, ENT_QUOTES, 'UTF-8') ?></strong></span>
-                            <span><lang>域名</lang>: <strong><?= htmlspecialchars($session->getSelectedDomain() !== '' ? $session->getSelectedDomain() : (string)__('未绑定'), ENT_QUOTES, 'UTF-8') ?></strong></span>
+                        <div class="wb-meta">
+                            <span>Public ID: <code><?= htmlspecialchars($publicId, ENT_QUOTES, 'UTF-8') ?></code></span>
+                            <span><lang>当前阶段</lang>: <strong id="site-builder-current-stage"><?= htmlspecialchars((string)($currentGuide['title'] ?? $current_stage), ENT_QUOTES, 'UTF-8') ?></strong></span>
+                            <span><lang>域名</lang>: <strong><?= htmlspecialchars($session->getSelectedDomain() !== '' ? $session->getSelectedDomain() : (string)__('待确认'), ENT_QUOTES, 'UTF-8') ?></strong></span>
                         </div>
                     </div>
-                    <div class="workspace-summary-grid">
-                        <div class="workspace-summary-item">
-                            <span><lang>网站 ID</lang></span>
-                            <strong><?= (int)$session->getWebsiteId() ?></strong>
-                        </div>
-                        <div class="workspace-summary-item">
-                            <span><lang>Provider</lang></span>
-                            <strong><?= htmlspecialchars((string)($provider_context['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                        </div>
+                    <div class="wb-summary">
+                        <div><span><lang>网站 ID</lang></span><strong><?= (int)$session->getWebsiteId() ?></strong></div>
+                        <div><span><lang>Provider</lang></span><strong><?= htmlspecialchars((string)($provider_context['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></div>
                     </div>
                 </div>
 
-                <div class="row g-3">
-                    <div class="col-lg-6">
-                        <label class="form-label" for="site-builder-stage"><lang>切换阶段</lang></label>
-                        <div class="d-flex gap-2">
-                            <select class="form-select" id="site-builder-stage">
-                                <?php foreach ($stage_options as $option) { ?>
-                                    <option value="<?= htmlspecialchars((string)($option['value'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"<?= ($option['value'] ?? '') === $currentStage ? ' selected' : '' ?>>
-                                        <?= htmlspecialchars((string)($option['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
-                                <?php } ?>
-                            </select>
-                            <button type="button" class="btn btn-primary" id="site-builder-save-stage">
-                                <i class="mdi mdi-content-save-outline me-1"></i>
-                                <lang>更新阶段</lang>
-                            </button>
+                <div class="wb-stages">
+                    <?php foreach ($stage_guides as $guide) { ?>
+                        <div class="wb-stage status-<?= htmlspecialchars((string)($guide['status'] ?? 'upcoming'), ENT_QUOTES, 'UTF-8') ?>">
+                            <div class="wb-stage-pill"><?= htmlspecialchars((string)($guide['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
+                            <h6 class="mb-2"><?= htmlspecialchars((string)($guide['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h6>
+                            <p class="mb-0 text-muted"><?= htmlspecialchars((string)($guide['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
                         </div>
-                    </div>
-                    <div class="col-lg-6">
-                        <div class="workspace-card-note h-100">
-                            <strong><lang>快照状态</lang></strong>
-                            <p class="mb-0 text-muted small">
-                                <?php if ($snapshot_artifact !== null) { ?>
-                                    <?= htmlspecialchars((string)__('最近快照更新时间：%{time}', ['time' => (string)($snapshot_artifact['update_time'] ?? '')]), ENT_QUOTES, 'UTF-8') ?>
-                                <?php } else { ?>
-                                    <lang>当前还没有生成快照，保存阶段或 Scope 后会自动生成。</lang>
-                                <?php } ?>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-tools me-1"></i>
-                    <lang>Provider Tools</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>其他模块可以在这里为自己的 scope 挂接工具入口或预设动作。</lang></p>
-            </div>
-            <div class="card-body p-4">
-                <?php if ($provider_tools === []) { ?>
-                    <div class="workspace-empty-inline"><lang>当前 provider 还没有声明额外工具。</lang></div>
-                <?php } else { ?>
-                    <div class="workspace-tool-list">
-                        <?php foreach ($provider_tools as $tool) { ?>
-                            <?php
-                            $toolType = (string)($tool['type'] ?? 'link');
-                            $toolTarget = (string)($tool['target'] ?? '_self');
-                            $toolStage = (string)($tool['stage'] ?? '');
-                            $toolPatchJson = '{}';
-                            try {
-                                $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-                            } catch (\JsonException) {
-                                $toolPatchJson = '{}';
-                            }
-                            ?>
-                            <div class="workspace-tool-item">
-                                <div class="workspace-tool-copy">
-                                    <strong>
-                                        <i class="<?= htmlspecialchars((string)($tool['icon'] ?? 'mdi mdi-hammer-wrench'), ENT_QUOTES, 'UTF-8') ?> me-1"></i>
-                                        <?= htmlspecialchars((string)($tool['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                                    </strong>
-                                    <?php if ((string)($tool['description'] ?? '') !== '') { ?>
-                                        <p class="mb-0 text-muted small"><?= htmlspecialchars((string)($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                                    <?php } ?>
-                                </div>
-                                <?php if ($toolType === 'link') { ?>
-                                    <a
-                                        class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-secondary'), ENT_QUOTES, 'UTF-8') ?>"
-                                        href="<?= htmlspecialchars((string)($tool['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                        target="<?= htmlspecialchars($toolTarget, ENT_QUOTES, 'UTF-8') ?>"
-                                        <?= $toolTarget === '_blank' ? 'rel="noopener"' : '' ?>
-                                    >
-                                        <lang>打开</lang>
-                                    </a>
-                                <?php } else { ?>
-                                    <button
-                                        type="button"
-                                        class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-primary'), ENT_QUOTES, 'UTF-8') ?> site-builder-provider-tool"
-                                        data-tool-code="<?= htmlspecialchars((string)($tool['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                        data-tool-stage="<?= htmlspecialchars($toolStage, ENT_QUOTES, 'UTF-8') ?>"
-                                        data-tool-patch="<?= htmlspecialchars($toolPatchJson, ENT_QUOTES, 'UTF-8') ?>"
-                                    >
-                                        <lang>应用</lang>
-                                    </button>
-                                <?php } ?>
-                            </div>
-                        <?php } ?>
-                    </div>
-                <?php } ?>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-form-textbox me-1"></i>
-                    <lang>工作区简报</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>这里放人能看懂的结构化信息。后面如果切到别的 provider，也能直接接上。</lang></p>
-            </div>
-            <div class="card-body p-4">
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label" for="site-builder-title"><lang>站点标题</lang></label>
-                        <input type="text" class="form-control" id="site-builder-title" value="<?= htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') ?>">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label" for="site-builder-tagline"><lang>一句话定位</lang></label>
-                        <input type="text" class="form-control" id="site-builder-tagline" value="<?= htmlspecialchars($siteTagline, ENT_QUOTES, 'UTF-8') ?>">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label" for="site-builder-domain"><lang>目标域名</lang></label>
-                        <input type="text" class="form-control" id="site-builder-domain" value="<?= htmlspecialchars($targetDomain, ENT_QUOTES, 'UTF-8') ?>" placeholder="example.com">
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label" for="site-builder-notes"><lang>工作区备注</lang></label>
-                        <input type="text" class="form-control" id="site-builder-notes" value="<?= htmlspecialchars($workbenchNotes, ENT_QUOTES, 'UTF-8') ?>" placeholder="<?= htmlspecialchars((string)__('例如：先定域名，再补主题风格'), ENT_QUOTES, 'UTF-8') ?>">
-                    </div>
-                    <div class="col-12">
-                        <label class="form-label" for="site-builder-brief"><lang>详细需求</lang></label>
-                        <textarea class="form-control" id="site-builder-brief" rows="5"><?= htmlspecialchars($briefDescription, ENT_QUOTES, 'UTF-8') ?></textarea>
-                    </div>
-                </div>
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                    <button type="button" class="btn btn-primary" id="site-builder-save-summary">
-                        <i class="mdi mdi-content-save-outline me-1"></i>
-                        <lang>保存简报</lang>
-                    </button>
-                    <button type="button" class="btn btn-outline-secondary" id="site-builder-reload-page">
-                        <i class="mdi mdi-refresh me-1"></i>
-                        <lang>刷新工作区</lang>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-message-text-outline me-1"></i>
-                    <lang>消息与补充说明</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>这里适合记录阶段性结论、对外需求、交接说明或手工补充的信息。</lang></p>
-            </div>
-            <div class="card-body p-4">
-                <div class="workspace-message-list mb-3">
-                    <?php if ($messages === []) { ?>
-                        <div class="workspace-empty-inline"><lang>还没有消息，先写下一条补充说明吧。</lang></div>
-                    <?php } else { ?>
-                        <?php foreach ($messages as $message) { ?>
-                            <div class="workspace-message-item role-<?= htmlspecialchars((string)($message['role'] ?? 'user'), ENT_QUOTES, 'UTF-8') ?>">
-                                <div class="workspace-message-head">
-                                    <strong><?= htmlspecialchars((string)($message['role'] ?? 'user'), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    <span><?= htmlspecialchars((string)($message['message_type'] ?? 'message'), ENT_QUOTES, 'UTF-8') ?></span>
-                                    <span><?= htmlspecialchars((string)($message['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                </div>
-                                <div class="workspace-message-body"><?= nl2br(htmlspecialchars((string)($message['content'] ?? ''), ENT_QUOTES, 'UTF-8')) ?></div>
-                            </div>
-                        <?php } ?>
                     <?php } ?>
                 </div>
-                <label class="form-label" for="site-builder-message"><lang>新增一条说明</lang></label>
-                <textarea class="form-control" id="site-builder-message" rows="3" placeholder="<?= htmlspecialchars((string)__('例如：客户确认首页突出产地故事，域名先保留 coffeebeanstories.com 作为备选'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+            </div>
+        </div>
+
+        <?php if (\is_array($currentGuide)) { ?>
+            <div class="card border-0 shadow-sm mt-3 wb-ai-card">
+                <div class="card-body p-4">
+                    <span class="wb-ai-pill"><?= htmlspecialchars((string)($currentGuide['ai_recommendation_title'] ?? __('AI 推荐')), ENT_QUOTES, 'UTF-8') ?></span>
+                    <h5 class="mt-3 mb-2"><?= htmlspecialchars((string)($currentGuide['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h5>
+                    <p class="text-muted mb-3"><?= htmlspecialchars((string)($currentGuide['ai_recommendation'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php if (!empty($currentGuide['recommendation_items']) && \is_array($currentGuide['recommendation_items'])) { ?>
+                        <div class="wb-ai-list mb-3">
+                            <?php foreach ($currentGuide['recommendation_items'] as $item) { ?>
+                                <div class="wb-ai-item"><i class="mdi mdi-check-circle-outline"></i><span><?= htmlspecialchars((string)$item, ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <?php } ?>
+                        </div>
+                    <?php } ?>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-primary site-builder-stage-apply" id="site-builder-apply-stage-recommendation" data-next-stage="<?= htmlspecialchars((string)($currentGuide['next_stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-patch="<?= htmlspecialchars($currentGuidePatchJson, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($currentGuide['confirm_label'] ?? __('确认并继续')), ENT_QUOTES, 'UTF-8') ?></button>
+                        <?php if ((string)($currentGuide['previous_stage'] ?? '') !== '') { ?><button type="button" class="btn btn-outline-secondary site-builder-stage-back" id="site-builder-go-back-stage" data-stage="<?= htmlspecialchars((string)($currentGuide['previous_stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($currentGuide['previous_label'] ?? __('返回上一步')), ENT_QUOTES, 'UTF-8') ?></button><?php } ?>
+                        <?php if ($preview_full_url !== '') { ?><a class="btn btn-outline-primary" href="<?= htmlspecialchars($preview_full_url, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><lang>预览站点</lang></a><?php } ?>
+                    </div>
+                </div>
+            </div>
+        <?php } ?>
+
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
+                <h5 class="card-title mb-1"><lang>站点简报</lang></h5>
+                <p class="text-muted mb-0"><lang>AI 推荐会根据这里的内容持续更新。</lang></p>
+            </div>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-6"><label class="form-label" for="site-builder-title"><lang>站点标题</lang></label><input type="text" class="form-control" id="site-builder-title" value="<?= htmlspecialchars($siteTitle, ENT_QUOTES, 'UTF-8') ?>"></div>
+                    <div class="col-md-6"><label class="form-label" for="site-builder-tagline"><lang>一句话定位</lang></label><input type="text" class="form-control" id="site-builder-tagline" value="<?= htmlspecialchars($siteTagline, ENT_QUOTES, 'UTF-8') ?>"></div>
+                    <div class="col-md-6"><label class="form-label" for="site-builder-domain"><lang>目标域名</lang></label><input type="text" class="form-control" id="site-builder-domain" value="<?= htmlspecialchars($targetDomain, ENT_QUOTES, 'UTF-8') ?>" placeholder="example.com"></div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="site-builder-registrar-account"><lang>购买服务商</lang></label>
+                        <select class="form-select" id="site-builder-registrar-account">
+                            <option value=""><lang>让 AI 继续推荐</lang></option>
+                            <?php foreach ($accounts as $account) { ?>
+                                <?php $accountId = (int)($account['account_id'] ?? 0); ?>
+                                <option value="<?= $accountId ?>"<?= $accountId === $preferredRegistrarAccountId ? ' selected' : '' ?>>
+                                    <?= htmlspecialchars((string)(($account['registrar_name'] ?? '') . ' - ' . ($account['account_name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>
+                                </option>
+                            <?php } ?>
+                        </select>
+                        <input type="hidden" id="site-builder-registrar-label" value="<?= htmlspecialchars($recommendedRegistrarLabel, ENT_QUOTES, 'UTF-8') ?>">
+                        <div class="form-text" id="site-builder-registrar-help">
+                            <?php if ($recommendedRegistrarLabel !== '') { ?>
+                                <?= htmlspecialchars((string)__('AI 当前推荐：%{label}', ['label' => $recommendedRegistrarLabel]), ENT_QUOTES, 'UTF-8') ?>
+                            <?php } else { ?>
+                                <lang>如果你不确定选谁，先让 AI 推荐，再点确认就行。</lang>
+                            <?php } ?>
+                        </div>
+                    </div>
+                    <div class="col-12"><label class="form-label" for="site-builder-notes"><lang>工作区备注</lang></label><input type="text" class="form-control" id="site-builder-notes" value="<?= htmlspecialchars($workbenchNotes, ENT_QUOTES, 'UTF-8') ?>"></div>
+                    <div class="col-12"><label class="form-label" for="site-builder-brief"><lang>详细需求</lang></label><textarea class="form-control" id="site-builder-brief" rows="5"><?= htmlspecialchars($briefDescription, ENT_QUOTES, 'UTF-8') ?></textarea></div>
+                </div>
+                <div class="wb-note mt-3"><lang>Header 和 Footer 默认固定，主要编辑和 AI 生成集中在主体内容区域。</lang></div>
+                <div class="row g-3 mt-1">
+                    <div class="col-md-6">
+                        <label class="form-label" for="site-builder-default-language"><lang>默认语言</lang></label>
+                        <w:i18n:language:select
+                            id="site_builder_default_language_selector"
+                            name="default_language"
+                            input-id="site-builder-default-language"
+                            value="siteBuilderDefaultLanguage"
+                            allow-empty="true"
+                            class="w-100"
+                        />
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="site-builder-language-codes"><lang>关联语言</lang></label>
+                        <w:i18n:language:select
+                            id="site_builder_related_languages_selector"
+                            name="language_codes[]"
+                            input-id="site-builder-language-codes"
+                            value="siteBuilderLanguageCodes"
+                            multiple="true"
+                            readonly-values="siteBuilderReadonlyLanguages"
+                            class="w-100"
+                        />
+                    </div>
+                </div>
                 <div class="d-flex flex-wrap gap-2 mt-3">
-                    <button type="button" class="btn btn-primary" id="site-builder-add-message">
-                        <i class="mdi mdi-send-outline me-1"></i>
-                        <lang>写入工作区</lang>
-                    </button>
+                    <button type="button" class="btn btn-primary" id="site-builder-save-summary"><lang>保存简报</lang></button>
+                    <button type="button" class="btn btn-outline-secondary" id="site-builder-reload-page"><lang>刷新工作区</lang></button>
                 </div>
             </div>
         </div>
 
         <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-code-json me-1"></i>
-                    <lang>高级 Scope 编辑</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>当你需要批量修正结构化状态时，可以直接编辑 JSON。普通使用建议优先走上面的简报表单。</lang></p>
-            </div>
+            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>补充说明</lang></h5></div>
             <div class="card-body p-4">
-                <div class="row g-3">
-                    <div class="col-lg-6">
-                        <label class="form-label" for="site-builder-scope-full"><lang>完整 Scope JSON</lang></label>
-                        <textarea class="form-control font-monospace" id="site-builder-scope-full" rows="14"><?= htmlspecialchars($scope_preview, ENT_QUOTES, 'UTF-8') ?></textarea>
-                        <button type="button" class="btn btn-outline-danger btn-sm mt-3" id="site-builder-replace-scope">
-                            <i class="mdi mdi-database-edit-outline me-1"></i>
-                            <lang>整体替换 Scope</lang>
-                        </button>
-                    </div>
-                    <div class="col-lg-6">
-                        <label class="form-label" for="site-builder-scope-patch"><lang>Scope Patch JSON</lang></label>
-                        <textarea class="form-control font-monospace" id="site-builder-scope-patch" rows="14" placeholder='{"target_domain":"example.com","workbench_notes":"先做首页"}'></textarea>
-                        <button type="button" class="btn btn-outline-primary btn-sm mt-3" id="site-builder-merge-scope">
-                            <i class="mdi mdi-database-plus-outline me-1"></i>
-                            <lang>合并 Patch</lang>
-                        </button>
-                    </div>
+                <div class="row g-2 mb-3">
+                    <div class="col-md-9"><input type="text" class="form-control" id="site-builder-message" placeholder="<?= htmlspecialchars((string)__('例如：首页要更强调信任感和联系方式'), ENT_QUOTES, 'UTF-8') ?>"></div>
+                    <div class="col-md-3 d-grid"><button type="button" class="btn btn-outline-primary" id="site-builder-add-message"><lang>写入工作区</lang></button></div>
+                </div>
+                <div class="wb-list">
+                    <?php if ($messages === []) { ?>
+                        <div class="wb-empty"><lang>还没有补充说明。</lang></div>
+                    <?php } else { foreach ($messages as $message) { ?>
+                        <div class="wb-message role-<?= htmlspecialchars((string)($message['role'] ?? 'user'), ENT_QUOTES, 'UTF-8') ?>">
+                            <div class="wb-head"><strong><?= htmlspecialchars((string)($message['role'] ?? 'user'), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($message['message_type'] ?? 'message'), ENT_QUOTES, 'UTF-8') ?></span><span><?= htmlspecialchars((string)($message['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></div>
+                            <div><?= nl2br(htmlspecialchars((string)($message['content'] ?? ''), ENT_QUOTES, 'UTF-8')) ?></div>
+                        </div>
+                    <?php }} ?>
                 </div>
             </div>
         </div>
+
+        <details class="mt-3">
+            <summary class="wb-summary-link"><lang>高级设置与原始 Scope</lang></summary>
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-body p-4">
+                    <div class="row g-3">
+                        <div class="col-lg-6">
+                            <label class="form-label" for="site-builder-stage"><lang>手动切换阶段</lang></label>
+                            <div class="d-flex gap-2">
+                                <select class="form-select" id="site-builder-stage"><?php foreach ($stage_options as $option) { ?><option value="<?= htmlspecialchars((string)($option['value'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"<?= ($option['value'] ?? '') === $current_stage ? ' selected' : '' ?>><?= htmlspecialchars((string)($option['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></option><?php } ?></select>
+                                <button type="button" class="btn btn-outline-primary" id="site-builder-save-stage"><lang>更新阶段</lang></button>
+                            </div>
+                        </div>
+                        <div class="col-lg-6">
+                            <label class="form-label" for="site-builder-scope-patch"><lang>合并 Scope Patch</lang></label>
+                            <textarea class="form-control wb-code" id="site-builder-scope-patch" rows="6">{}</textarea>
+                            <button type="button" class="btn btn-outline-primary mt-2" id="site-builder-merge-scope"><lang>合并 Patch</lang></button>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="site-builder-scope-full"><lang>完整 Scope JSON</lang></label>
+                            <textarea class="form-control wb-code" id="site-builder-scope-full" rows="12"><?= htmlspecialchars($scope_preview, ENT_QUOTES, 'UTF-8') ?></textarea>
+                            <button type="button" class="btn btn-outline-secondary mt-2" id="site-builder-replace-scope"><lang>整体替换 Scope</lang></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </details>
     </div>
 
     <div class="col-xl-4">
         <div class="card border-0 shadow-sm">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-connection me-1"></i>
-                    <lang>Provider 兼容信息</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>这里记录当前工作区和 provider 原生入口之间的关系，便于后续 handoff。</lang></p>
-            </div>
             <div class="card-body p-4">
-                <div class="workspace-card-note mb-3">
-                    <strong><lang>当前 Provider</lang></strong>
-                    <p class="mb-0 text-muted small"><?= htmlspecialchars((string)($provider_context['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
-                </div>
-                <div class="workspace-card-note mb-3">
-                    <strong><lang>Handoff 入口</lang></strong>
-                    <p class="mb-0 text-muted small">
-                        <?php if ($handoff_artifact !== null) { ?>
-                            <?= htmlspecialchars((string)($handoff_artifact['title'] ?? __('Provider 兼容入口')), ENT_QUOTES, 'UTF-8') ?>
-                        <?php } else { ?>
-                            <lang>已按默认兼容规则生成 provider 入口。</lang>
-                        <?php } ?>
-                    </p>
-                </div>
-                <?php if ($provider_native_url !== '') { ?>
-                    <a class="btn btn-primary w-100" href="<?= htmlspecialchars($provider_native_url, ENT_QUOTES, 'UTF-8') ?>">
-                        <i class="mdi mdi-transfer-right me-1"></i>
-                        <?= htmlspecialchars($provider_handoff_label, ENT_QUOTES, 'UTF-8') ?>
-                    </a>
-                <?php } ?>
+                <div class="wb-note-box mb-3"><strong><lang>当前 Provider</lang></strong><p class="mb-0 text-muted small"><?= htmlspecialchars((string)($provider_context['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p></div>
+                <div class="wb-note-box mb-3"><strong><lang>当前推荐服务商</lang></strong><p class="mb-0 text-muted small" id="site-builder-registrar-sidebar"><?php if ($recommendedRegistrarLabel !== '') { ?><?= htmlspecialchars($recommendedRegistrarLabel, ENT_QUOTES, 'UTF-8') ?><?php } else { ?><lang>还没有推荐，确认当前阶段建议后会自动补齐。</lang><?php } ?></p></div>
+                <div class="wb-note-box mb-3"><strong><lang>快照状态</lang></strong><p class="mb-0 text-muted small"><?php if ($snapshot_artifact !== null) { ?><?= htmlspecialchars((string)__('最近快照更新时间：%{time}', ['time' => (string)($snapshot_artifact['update_time'] ?? '')]), ENT_QUOTES, 'UTF-8') ?><?php } else { ?><lang>当前还没有生成快照。</lang><?php } ?></p></div>
+                <div class="wb-note-box mb-3"><strong><lang>Handoff 入口</lang></strong><p class="mb-0 text-muted small"><?php if ($handoff_artifact !== null) { ?><?= htmlspecialchars((string)($handoff_artifact['title'] ?? __('Provider 兼容入口')), ENT_QUOTES, 'UTF-8') ?><?php } else { ?><lang>已按默认兼容规则生成 provider 入口。</lang><?php } ?></p></div>
+                <?php if ($provider_native_url !== '') { ?><a class="btn btn-primary w-100" href="<?= htmlspecialchars($provider_native_url, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($provider_handoff_label, ENT_QUOTES, 'UTF-8') ?></a><?php } ?>
             </div>
         </div>
 
         <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-flash-outline me-1"></i>
-                    <lang>实时事件流</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>连接 SSE 后，可以持续观察当前工作区的事件变更。</lang></p>
-            </div>
-            <div class="card-body p-0">
-                <div class="px-4 pt-3">
-                    <button type="button" class="btn btn-primary btn-sm mb-3" id="site-builder-start-sse">
-                        <i class="mdi mdi-play me-1"></i>
-                        <lang>连接事件流</lang>
-                    </button>
-                </div>
-                <w:theme:sse-terminal
-                    id="site-builder-workspace-terminal"
-                    path="site_builder_sse_path"
-                    title="site_builder_sse_title"
-                    height="260px"
-                    events="start,snapshot,log,done,error,warning,info"
-                />
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-history me-1"></i>
-                    <lang>继续其他工作区</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>如果你要切换上下文，可以从这里跳回其他最近会话。</lang></p>
-            </div>
+            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>当前阶段可用工具</lang></h5></div>
             <div class="card-body p-4">
-                <?php if ($recent_sessions === []) { ?>
-                    <div class="workspace-empty-inline"><lang>暂无其他最近会话。</lang></div>
+                <?php if ($currentStageTools === []) { ?>
+                    <div class="wb-empty"><lang>当前阶段没有额外推荐工具。</lang></div>
                 <?php } else { ?>
-                    <div class="workspace-side-list">
-                        <?php foreach ($recent_sessions as $recent) { ?>
-                            <a class="workspace-side-link" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                                <span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                <small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
-                            </a>
-                        <?php } ?>
-                    </div>
-                <?php } ?>
-            </div>
-        </div>
-
-        <div class="card border-0 shadow-sm mt-3">
-            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
-                <h5 class="card-title mb-1">
-                    <i class="mdi mdi-format-list-bulleted me-1"></i>
-                    <lang>最近事件</lang>
-                </h5>
-                <p class="text-muted mb-0"><lang>这里显示最近写入的工作区事件，便于快速回顾。</lang></p>
-            </div>
-            <div class="card-body p-4">
-                <?php if ($events === []) { ?>
-                    <div class="workspace-empty-inline"><lang>暂无事件。</lang></div>
-                <?php } else { ?>
-                    <div class="workspace-event-list">
-                        <?php foreach ($events as $event) { ?>
-                            <div class="workspace-event-item">
-                                <div class="workspace-event-head">
-                                    <strong><?= htmlspecialchars((string)($event['event_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    <span><?= htmlspecialchars((string)($event['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                </div>
-                                <div class="workspace-event-body"><?= htmlspecialchars((string)\json_encode($event['payload'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="wb-list">
+                        <?php foreach ($currentStageTools as $tool) {
+                            $toolType = (string)($tool['type'] ?? 'link');
+                            $toolTarget = (string)($tool['target'] ?? '_self');
+                            $toolPatchJson = '{}';
+                            try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
+                            ?>
+                            <div class="wb-tool">
+                                <div><strong><?= htmlspecialchars((string)($tool['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><p class="mb-0 text-muted small"><?= htmlspecialchars((string)($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p></div>
+                                <?php if ($toolType === 'link') { ?><a class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-secondary'), ENT_QUOTES, 'UTF-8') ?>" href="<?= htmlspecialchars((string)($tool['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" target="<?= htmlspecialchars($toolTarget, ENT_QUOTES, 'UTF-8') ?>" <?= $toolTarget === '_blank' ? 'rel="noopener"' : '' ?>><lang>打开</lang></a><?php } else { ?><button type="button" class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-primary'), ENT_QUOTES, 'UTF-8') ?> site-builder-provider-tool" data-tool-code="<?= htmlspecialchars((string)($tool['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tool-stage="<?= htmlspecialchars((string)($tool['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tool-patch="<?= htmlspecialchars($toolPatchJson, ENT_QUOTES, 'UTF-8') ?>"><lang>应用</lang></button><?php } ?>
                             </div>
                         <?php } ?>
                     </div>
                 <?php } ?>
             </div>
         </div>
+
+        <details class="mt-3">
+            <summary class="wb-summary-link"><lang>查看全部 Provider Tools</lang></summary>
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-body p-4">
+                    <?php if ($provider_tools === []) { ?><div class="wb-empty"><lang>当前 provider 还没有声明额外工具。</lang></div><?php } else { ?>
+                        <div class="wb-list">
+                            <?php foreach ($provider_tools as $tool) {
+                                $toolType = (string)($tool['type'] ?? 'link');
+                                $toolTarget = (string)($tool['target'] ?? '_self');
+                                $toolPatchJson = '{}';
+                                try { $toolPatchJson = (string)\json_encode($tool['scope_patch'] ?? [], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR); } catch (\JsonException) {}
+                                ?>
+                                <div class="wb-tool">
+                                    <div><strong><?= htmlspecialchars((string)($tool['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><p class="mb-0 text-muted small"><?= htmlspecialchars((string)($tool['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p></div>
+                                    <?php if ($toolType === 'link') { ?><a class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-secondary'), ENT_QUOTES, 'UTF-8') ?>" href="<?= htmlspecialchars((string)($tool['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" target="<?= htmlspecialchars($toolTarget, ENT_QUOTES, 'UTF-8') ?>" <?= $toolTarget === '_blank' ? 'rel="noopener"' : '' ?>><lang>打开</lang></a><?php } else { ?><button type="button" class="btn btn-sm <?= htmlspecialchars((string)($tool['button_class'] ?? 'btn-outline-primary'), ENT_QUOTES, 'UTF-8') ?> site-builder-provider-tool" data-tool-code="<?= htmlspecialchars((string)($tool['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tool-stage="<?= htmlspecialchars((string)($tool['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-tool-patch="<?= htmlspecialchars($toolPatchJson, ENT_QUOTES, 'UTF-8') ?>"><lang>应用</lang></button><?php } ?>
+                                </div>
+                            <?php } ?>
+                        </div>
+                    <?php } ?>
+                </div>
+            </div>
+        </details>
+
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>实时事件流</lang></h5></div>
+            <div class="card-body p-0">
+                <div class="px-4 pt-3"><button type="button" class="btn btn-primary btn-sm mb-3" id="site-builder-start-sse"><lang>连接事件流</lang></button></div>
+                <w:theme:sse-terminal id="site-builder-workspace-terminal" path="site_builder_sse_path" title="site_builder_sse_title" height="260px" events="start,snapshot,log,done,error,warning,info" />
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mt-3">
+            <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>最近工作区</lang></h5></div>
+            <div class="card-body p-4">
+                <?php if ($recent_sessions === []) { ?><div class="wb-empty"><lang>暂无其他最近会话。</lang></div><?php } else { ?><div class="wb-list"><?php foreach ($recent_sessions as $recent) { ?><a class="wb-link" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small></a><?php } ?></div><?php } ?>
+            </div>
+        </div>
+
+        <details class="mt-3">
+            <summary class="wb-summary-link"><lang>查看最近事件</lang></summary>
+            <div class="card border-0 shadow-sm mt-3">
+                <div class="card-body p-4">
+                    <?php if ($events === []) { ?><div class="wb-empty"><lang>暂无事件。</lang></div><?php } else { ?><div class="wb-list"><?php foreach ($events as $event) { ?><div class="wb-event"><div class="wb-head"><strong><?= htmlspecialchars((string)($event['event_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($event['create_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></div><div class="wb-code"><?= htmlspecialchars((string)\json_encode($event['payload'] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></div></div><?php } ?></div><?php } ?>
+                </div>
+            </div>
+        </details>
     </div>
 </div>
 
 <style>
-.workspace-provider-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 0.35rem 0.7rem;
-    border-radius: 999px;
-    background: rgba(14, 165, 233, 0.1);
-    color: #0f766e;
-    font-size: 0.78rem;
-    font-weight: 600;
-}
-.workspace-meta-line {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    color: #64748b;
-    font-size: 0.85rem;
-}
-.workspace-summary-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
-    gap: 0.75rem;
-}
-.workspace-summary-item,
-.workspace-card-note,
-.workspace-message-item,
-.workspace-event-item,
-.workspace-side-link {
-    border-radius: 16px;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: #fff;
-}
-.workspace-summary-item { padding: 0.85rem 1rem; }
-.workspace-summary-item span {
-    display: block;
-    color: #64748b;
-    font-size: 0.78rem;
-    margin-bottom: 0.35rem;
-}
-.workspace-card-note {
-    padding: 0.95rem 1rem;
-    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-}
-.workspace-message-list,
-.workspace-event-list,
-.workspace-side-list,
-.workspace-tool-list {
-    display: grid;
-    gap: 0.85rem;
-}
-.workspace-message-item,
-.workspace-event-item,
-.workspace-side-link { padding: 0.9rem 1rem; }
-.workspace-tool-item {
-    display: grid;
-    gap: 0.9rem;
-    padding: 0.95rem 1rem;
-    border-radius: 16px;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);
-}
-.workspace-tool-copy {
-    display: grid;
-    gap: 0.35rem;
-}
-.workspace-message-item.role-assistant { background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 100%); }
-.workspace-message-item.role-system { background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%); }
-.workspace-message-head,
-.workspace-event-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.6rem;
-    color: #64748b;
-    font-size: 0.78rem;
-    margin-bottom: 0.5rem;
-}
-.workspace-message-body,
-.workspace-event-body {
-    color: #0f172a;
-    font-size: 0.92rem;
-    line-height: 1.6;
-    word-break: break-word;
-}
-.workspace-event-body {
-    font-family: Consolas, Monaco, monospace;
-    font-size: 0.8rem;
-}
-.workspace-side-link {
-    display: grid;
-    gap: 0.2rem;
-    color: inherit;
-    text-decoration: none;
-}
-.workspace-side-link:hover {
-    border-color: rgba(14, 116, 144, 0.35);
-    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
-}
-@media (min-width: 576px) {
-    .workspace-tool-item {
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-    }
-}
-.workspace-empty-inline {
-    padding: 1rem 1.1rem;
-    border-radius: 16px;
-    background: #f8fafc;
-    border: 1px dashed #cbd5e1;
-    color: #64748b;
-}
+.wb-badge,.wb-ai-pill,.wb-stage-pill{display:inline-flex;align-items:center;padding:.34rem .7rem;border-radius:999px;font-size:.76rem;font-weight:700}.wb-badge{background:rgba(14,165,233,.12);color:#0f766e}.wb-ai-pill{background:rgba(249,115,22,.12);color:#9a3412}.wb-stage-pill{background:rgba(15,23,42,.06);color:#475569}.wb-meta{display:flex;flex-wrap:wrap;gap:.75rem;color:#64748b;font-size:.85rem}.wb-summary{display:grid;grid-template-columns:repeat(2,minmax(120px,1fr));gap:.75rem}.wb-summary div,.wb-stage,.wb-tool,.wb-message,.wb-event,.wb-link,.wb-note-box{border-radius:18px;border:1px solid rgba(148,163,184,.22);background:#fff}.wb-summary div,.wb-stage,.wb-tool,.wb-note-box{padding:.95rem 1rem}.wb-summary span{display:block;color:#64748b;font-size:.78rem;margin-bottom:.35rem}.wb-stages,.wb-list{display:grid;gap:.85rem}.wb-stages{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.wb-stage.status-current{border-color:rgba(14,116,144,.4);box-shadow:0 0 0 3px rgba(14,116,144,.08);background:linear-gradient(180deg,#f0fdfa 0%,#fff 100%)}.wb-stage.status-done{background:linear-gradient(180deg,#f8fafc 0%,#fff 100%)}.wb-ai-card{background:radial-gradient(circle at top right,rgba(249,115,22,.12),transparent 28%),radial-gradient(circle at bottom left,rgba(14,165,233,.12),transparent 26%),linear-gradient(180deg,#fffdf9 0%,#fff 100%)}.wb-ai-list{display:grid;gap:.75rem}.wb-ai-item,.wb-note{display:flex;gap:.55rem;padding:.85rem .95rem;border-radius:16px;background:#fff;border:1px solid rgba(249,115,22,.14);color:#334155}.wb-ai-item i{color:#ea580c;margin-top:.1rem}.wb-note{background:#f8fafc;border-color:#e2e8f0}.wb-message,.wb-event,.wb-link{padding:.9rem 1rem}.wb-message.role-assistant{background:linear-gradient(180deg,#f0fdfa 0%,#fff 100%)}.wb-head{display:flex;flex-wrap:wrap;gap:.6rem;color:#64748b;font-size:.78rem;margin-bottom:.5rem}.wb-link{display:grid;gap:.2rem;color:inherit;text-decoration:none}.wb-link:hover,.wb-tool:hover{border-color:rgba(14,116,144,.35);box-shadow:0 10px 24px rgba(15,23,42,.06)}.wb-empty{padding:1rem 1.1rem;border-radius:16px;background:#f8fafc;border:1px dashed #cbd5e1;color:#64748b}.wb-tool{display:grid;gap:.9rem}.wb-code{font-family:Consolas,Monaco,monospace;font-size:.8rem}.wb-summary-link{cursor:pointer;color:#0f766e;font-weight:700}@media (min-width:576px){.wb-tool{grid-template-columns:minmax(0,1fr) auto;align-items:center}}
 </style>
 
 <script>
@@ -589,6 +386,28 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
     var appendMessageUrl = <?= json_encode($append_message_url, JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= json_encode((string)$this->getBackendUrl($site_builder_sse_path), JSON_THROW_ON_ERROR) ?>;
     var lastEventId = <?= (int)$last_event_id ?>;
+    var languageUtils = window.WelineLanguageSelectUtils || null;
+    var messages = {
+        applyRecommendationFailed: <?= json_encode((string)__('Failed to apply recommendation'), JSON_THROW_ON_ERROR) ?>,
+        stageUpdateFailed: <?= json_encode((string)__('Failed to update stage'), JSON_THROW_ON_ERROR) ?>,
+        summarySaved: <?= json_encode((string)__('Summary saved'), JSON_THROW_ON_ERROR) ?>,
+        summarySaveFailed: <?= json_encode((string)__('Failed to save summary'), JSON_THROW_ON_ERROR) ?>,
+        recommendationApplied: <?= json_encode((string)__('AI recommendation applied'), JSON_THROW_ON_ERROR) ?>,
+        recommendationDataBroken: <?= json_encode((string)__('Recommendation data is invalid'), JSON_THROW_ON_ERROR) ?>,
+        returnedToPreviousStage: <?= json_encode((string)__('Returned to previous stage'), JSON_THROW_ON_ERROR) ?>,
+        stageUpdated: <?= json_encode((string)__('Stage updated'), JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= json_encode((string)__('Network error'), JSON_THROW_ON_ERROR) ?>,
+        messageRequired: <?= json_encode((string)__('Please enter a note first'), JSON_THROW_ON_ERROR) ?>,
+        noteSaved: <?= json_encode((string)__('Note saved to workspace'), JSON_THROW_ON_ERROR) ?>,
+        noteSaveFailed: <?= json_encode((string)__('Failed to save note'), JSON_THROW_ON_ERROR) ?>,
+        scopeReplaced: <?= json_encode((string)__('Scope replaced'), JSON_THROW_ON_ERROR) ?>,
+        scopeReplaceFailed: <?= json_encode((string)__('Failed to replace scope'), JSON_THROW_ON_ERROR) ?>,
+        patchMerged: <?= json_encode((string)__('Patch merged into scope'), JSON_THROW_ON_ERROR) ?>,
+        patchMergeFailed: <?= json_encode((string)__('Failed to merge patch'), JSON_THROW_ON_ERROR) ?>,
+        toolPatchBroken: <?= json_encode((string)__('Tool scope patch is invalid'), JSON_THROW_ON_ERROR) ?>,
+        toolApplied: <?= json_encode((string)__('Provider tool applied'), JSON_THROW_ON_ERROR) ?>,
+        toolApplyFailed: <?= json_encode((string)__('Failed to apply provider tool'), JSON_THROW_ON_ERROR) ?>
+    };
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -602,53 +421,231 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
 
     function postForm(url, fields) {
         var fd = new FormData();
-        Object.keys(fields).forEach(function (key) { fd.append(key, fields[key]); });
+        Object.keys(fields || {}).forEach(function (key) {
+            fd.append(key, fields[key]);
+        });
+
         return fetch(url, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
             credentials: 'same-origin'
-        }).then(function (r) { return r.json(); });
+        }).then(function (response) {
+            return response.json();
+        });
+    }
+
+    function getLanguageSelector(selectorId) {
+        if (!languageUtils || typeof languageUtils.get !== 'function') {
+            return null;
+        }
+
+        return languageUtils.get(selectorId);
+    }
+
+    function compactPatch(patch) {
+        var compacted = {};
+
+        Object.keys(patch || {}).forEach(function (key) {
+            var value = patch[key];
+
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    compacted[key] = value;
+                }
+                return;
+            }
+
+            if (typeof value === 'number') {
+                if (value > 0) {
+                    compacted[key] = value;
+                }
+                return;
+            }
+
+            if (value !== null && value !== undefined && value !== '') {
+                compacted[key] = value;
+            }
+        });
+
+        return compacted;
+    }
+
+    function readSelectedRegistrarLabel() {
+        var registrarSelect = document.getElementById('site-builder-registrar-account');
+        var registrarLabel = document.getElementById('site-builder-registrar-label');
+
+        if (registrarSelect && registrarSelect.value) {
+            var selectedOption = registrarSelect.options[registrarSelect.selectedIndex];
+            return selectedOption ? selectedOption.text.trim() : '';
+        }
+
+        return registrarLabel ? registrarLabel.value.trim() : '';
+    }
+
+    function syncRegistrarUi() {
+        var registrarSelect = document.getElementById('site-builder-registrar-account');
+        var registrarLabel = document.getElementById('site-builder-registrar-label');
+        var registrarHelp = document.getElementById('site-builder-registrar-help');
+        var registrarSidebar = document.getElementById('site-builder-registrar-sidebar');
+        var label = readSelectedRegistrarLabel();
+
+        if (registrarLabel) {
+            registrarLabel.value = label;
+        }
+        if (registrarHelp) {
+            registrarHelp.textContent = label
+                ? '当前将使用：' + label
+                : '如果你不确定选谁，先让 AI 推荐，再点确认就行。';
+        }
+        if (registrarSidebar) {
+            registrarSidebar.textContent = label || '还没有推荐，确认当前阶段建议后会自动补齐。';
+        }
+    }
+
+    function readSummaryPatch() {
+        var defaultLanguageSelector = getLanguageSelector('site_builder_default_language_selector');
+        var relatedLanguagesSelector = getLanguageSelector('site_builder_related_languages_selector');
+        var registrarSelect = document.getElementById('site-builder-registrar-account');
+        var registrarAccountId = registrarSelect && registrarSelect.value ? parseInt(registrarSelect.value, 10) : 0;
+        var registrarLabel = readSelectedRegistrarLabel();
+
+        return {
+            site_title: document.getElementById('site-builder-title') ? document.getElementById('site-builder-title').value.trim() : '',
+            site_tagline: document.getElementById('site-builder-tagline') ? document.getElementById('site-builder-tagline').value.trim() : '',
+            brief_description: document.getElementById('site-builder-brief') ? document.getElementById('site-builder-brief').value.trim() : '',
+            target_domain: document.getElementById('site-builder-domain') ? document.getElementById('site-builder-domain').value.trim() : '',
+            workbench_notes: document.getElementById('site-builder-notes') ? document.getElementById('site-builder-notes').value.trim() : '',
+            preferred_registrar_account_id: registrarAccountId,
+            registrar_account_id: registrarAccountId,
+            recommended_registrar_label: registrarLabel,
+            default_language: defaultLanguageSelector && typeof defaultLanguageSelector.getValue === 'function' ? defaultLanguageSelector.getValue() : '',
+            language_codes: relatedLanguagesSelector && typeof relatedLanguagesSelector.getValues === 'function' ? relatedLanguagesSelector.getValues() : []
+        };
+    }
+
+    function applyScopeThenMaybeStage(patch, nextStage, successMessage) {
+        var mergedPatch = Object.assign({}, patch || {}, compactPatch(readSummaryPatch()));
+
+        return postForm(mergeScopeUrl, {
+            public_id: publicId,
+            scope_patch: JSON.stringify(mergedPatch)
+        }).then(function (data) {
+            if (!data || !data.success) {
+                throw new Error((data && data.message) ? data.message : messages.applyRecommendationFailed);
+            }
+
+            if (!nextStage) {
+                return null;
+            }
+
+            return postForm(setStageUrl, {
+                public_id: publicId,
+                stage: nextStage
+            }).then(function (stageData) {
+                if (!stageData || !stageData.success) {
+                    throw new Error((stageData && stageData.message) ? stageData.message : messages.stageUpdateFailed);
+                }
+            });
+        }).then(function () {
+            toast('success', successMessage);
+            window.location.reload();
+        });
+    }
+
+    if (languageUtils && typeof languageUtils.bindDefaultToMultiple === 'function') {
+        languageUtils.bindDefaultToMultiple({
+            singleId: 'site_builder_default_language_selector',
+            multipleId: 'site_builder_related_languages_selector'
+        });
+    }
+
+    var registrarSelect = document.getElementById('site-builder-registrar-account');
+    if (registrarSelect) {
+        registrarSelect.addEventListener('change', syncRegistrarUi);
+    }
+    syncRegistrarUi();
+
+    var saveSummaryBtn = document.getElementById('site-builder-save-summary');
+    if (saveSummaryBtn) {
+        saveSummaryBtn.addEventListener('click', function () {
+            applyScopeThenMaybeStage(compactPatch(readSummaryPatch()), '', messages.summarySaved).catch(function (error) {
+                toast('error', error && error.message ? error.message : messages.summarySaveFailed);
+            });
+        });
+    }
+
+    var applyStageBtn = document.getElementById('site-builder-apply-stage-recommendation');
+    if (applyStageBtn) {
+        applyStageBtn.addEventListener('click', function () {
+            var patch = {};
+
+            try {
+                patch = JSON.parse(applyStageBtn.getAttribute('data-patch') || '{}');
+            } catch (error) {
+                toast('error', messages.recommendationDataBroken);
+                return;
+            }
+
+            applyStageBtn.disabled = true;
+            applyScopeThenMaybeStage(
+                patch,
+                (applyStageBtn.getAttribute('data-next-stage') || '').trim(),
+                messages.recommendationApplied
+            ).catch(function (error) {
+                toast('error', error && error.message ? error.message : messages.applyRecommendationFailed);
+            }).finally(function () {
+                applyStageBtn.disabled = false;
+            });
+        });
+    }
+
+    var goBackBtn = document.getElementById('site-builder-go-back-stage');
+    if (goBackBtn) {
+        goBackBtn.addEventListener('click', function () {
+            var stage = (goBackBtn.getAttribute('data-stage') || '').trim();
+            if (!stage) {
+                return;
+            }
+
+            postForm(setStageUrl, {
+                public_id: publicId,
+                stage: stage
+            }).then(function (data) {
+                if (data && data.success) {
+                    toast('success', messages.returnedToPreviousStage);
+                    window.location.reload();
+                    return;
+                }
+
+                toast('error', (data && data.message) ? data.message : messages.stageUpdateFailed);
+            }).catch(function () {
+                toast('error', messages.networkError);
+            });
+        });
     }
 
     var saveStageBtn = document.getElementById('site-builder-save-stage');
     var stageSelect = document.getElementById('site-builder-stage');
     if (saveStageBtn && stageSelect) {
         saveStageBtn.addEventListener('click', function () {
-            postForm(setStageUrl, { public_id: publicId, stage: stageSelect.value }).then(function (data) {
+            postForm(setStageUrl, {
+                public_id: publicId,
+                stage: stageSelect.value
+            }).then(function (data) {
                 if (data && data.success) {
                     var stageLabel = document.getElementById('site-builder-current-stage');
-                    if (stageLabel) stageLabel.textContent = data.stage || stageSelect.value;
-                    toast('success', <?= json_encode((string)__('阶段已更新'), JSON_THROW_ON_ERROR) ?>);
+                    if (stageLabel) {
+                        stageLabel.textContent = data.stage_label || data.stage || stageSelect.value;
+                    }
+                    toast('success', messages.stageUpdated);
                     window.location.reload();
                     return;
                 }
-                toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('更新阶段失败'), JSON_THROW_ON_ERROR) ?>);
-            }).catch(function () {
-                toast('error', <?= json_encode((string)__('网络错误'), JSON_THROW_ON_ERROR) ?>);
-            });
-        });
-    }
 
-    var saveSummaryBtn = document.getElementById('site-builder-save-summary');
-    if (saveSummaryBtn) {
-        saveSummaryBtn.addEventListener('click', function () {
-            var patch = {
-                site_title: document.getElementById('site-builder-title') ? document.getElementById('site-builder-title').value.trim() : '',
-                site_tagline: document.getElementById('site-builder-tagline') ? document.getElementById('site-builder-tagline').value.trim() : '',
-                brief_description: document.getElementById('site-builder-brief') ? document.getElementById('site-builder-brief').value.trim() : '',
-                target_domain: document.getElementById('site-builder-domain') ? document.getElementById('site-builder-domain').value.trim() : '',
-                workbench_notes: document.getElementById('site-builder-notes') ? document.getElementById('site-builder-notes').value.trim() : ''
-            };
-            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: JSON.stringify(patch) }).then(function (data) {
-                if (data && data.success) {
-                    toast('success', <?= json_encode((string)__('简报已保存'), JSON_THROW_ON_ERROR) ?>);
-                    window.location.reload();
-                    return;
-                }
-                toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('保存简报失败'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', (data && data.message) ? data.message : messages.stageUpdateFailed);
             }).catch(function () {
-                toast('error', <?= json_encode((string)__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', messages.networkError);
             });
         });
     }
@@ -659,9 +656,10 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
         addMessageBtn.addEventListener('click', function () {
             var content = messageInput.value.trim();
             if (!content) {
-                toast('warning', <?= json_encode((string)__('请先写一点内容再保存'), JSON_THROW_ON_ERROR) ?>);
+                toast('warning', messages.messageRequired);
                 return;
             }
+
             postForm(appendMessageUrl, {
                 public_id: publicId,
                 content: content,
@@ -669,13 +667,14 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
                 message_type: 'note'
             }).then(function (data) {
                 if (data && data.success) {
-                    toast('success', <?= json_encode((string)__('说明已写入工作区'), JSON_THROW_ON_ERROR) ?>);
+                    toast('success', messages.noteSaved);
                     window.location.reload();
                     return;
                 }
-                toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('保存消息失败'), JSON_THROW_ON_ERROR) ?>);
+
+                toast('error', (data && data.message) ? data.message : messages.noteSaveFailed);
             }).catch(function () {
-                toast('error', <?= json_encode((string)__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', messages.networkError);
             });
         });
     }
@@ -687,66 +686,60 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
 
     if (replaceScopeBtn && fullScopeEl) {
         replaceScopeBtn.addEventListener('click', function () {
-            postForm(replaceScopeUrl, { public_id: publicId, scope: fullScopeEl.value }).then(function (data) {
+            postForm(replaceScopeUrl, {
+                public_id: publicId,
+                scope: fullScopeEl.value
+            }).then(function (data) {
                 if (data && data.success) {
-                    toast('success', <?= json_encode((string)__('Scope 已整体替换'), JSON_THROW_ON_ERROR) ?>);
+                    toast('success', messages.scopeReplaced);
                     window.location.reload();
                     return;
                 }
-                toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('替换 Scope 失败'), JSON_THROW_ON_ERROR) ?>);
+
+                toast('error', (data && data.message) ? data.message : messages.scopeReplaceFailed);
             }).catch(function () {
-                toast('error', <?= json_encode((string)__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', messages.networkError);
             });
         });
     }
 
     if (mergeScopeBtn && patchScopeEl) {
         mergeScopeBtn.addEventListener('click', function () {
-            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: patchScopeEl.value }).then(function (data) {
+            postForm(mergeScopeUrl, {
+                public_id: publicId,
+                scope_patch: patchScopeEl.value
+            }).then(function (data) {
                 if (data && data.success) {
-                    toast('success', <?= json_encode((string)__('Patch 已合并到 Scope'), JSON_THROW_ON_ERROR) ?>);
+                    toast('success', messages.patchMerged);
                     window.location.reload();
                     return;
                 }
-                toast('error', (data && data.message) ? data.message : <?= json_encode((string)__('合并 Scope 失败'), JSON_THROW_ON_ERROR) ?>);
+
+                toast('error', (data && data.message) ? data.message : messages.patchMergeFailed);
             }).catch(function () {
-                toast('error', <?= json_encode((string)__('网络错误'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', messages.networkError);
             });
         });
     }
 
     document.querySelectorAll('.site-builder-provider-tool').forEach(function (button) {
         button.addEventListener('click', function () {
-            var patchRaw = button.getAttribute('data-tool-patch') || '{}';
-            var stage = (button.getAttribute('data-tool-stage') || '').trim();
-            var patch;
+            var patch = {};
 
             try {
-                patch = JSON.parse(patchRaw);
+                patch = JSON.parse(button.getAttribute('data-tool-patch') || '{}');
             } catch (error) {
-                toast('error', <?= json_encode((string)__('工具配置损坏，无法解析 scope patch'), JSON_THROW_ON_ERROR) ?>);
+                toast('error', messages.toolPatchBroken);
                 return;
             }
 
             button.disabled = true;
-            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: JSON.stringify(patch) }).then(function (data) {
-                if (!data || !data.success) {
-                    throw new Error((data && data.message) ? data.message : <?= json_encode((string)__('应用工具失败'), JSON_THROW_ON_ERROR) ?>);
-                }
-                if (!stage) {
-                    return null;
-                }
-                return postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (stageData) {
-                    if (!stageData || !stageData.success) {
-                        throw new Error((stageData && stageData.message) ? stageData.message : <?= json_encode((string)__('更新阶段失败'), JSON_THROW_ON_ERROR) ?>);
-                    }
-                    return stageData;
-                });
-            }).then(function () {
-                toast('success', <?= json_encode((string)__('Provider 工具已应用到工作区'), JSON_THROW_ON_ERROR) ?>);
-                window.location.reload();
-            }).catch(function (error) {
-                toast('error', error && error.message ? error.message : <?= json_encode((string)__('应用工具失败'), JSON_THROW_ON_ERROR) ?>);
+            applyScopeThenMaybeStage(
+                patch,
+                (button.getAttribute('data-tool-stage') || '').trim(),
+                messages.toolApplied
+            ).catch(function (error) {
+                toast('error', error && error.message ? error.message : messages.toolApplyFailed);
             }).finally(function () {
                 button.disabled = false;
             });
@@ -763,15 +756,22 @@ $workbenchNotes = (string)($scope['workbench_notes'] ?? '');
     var sseBtn = document.getElementById('site-builder-start-sse');
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['site-builder-workspace-terminal'] : null;
     if (sseBtn && terminal) {
+        terminal.on('done', function () {
+            sseBtn.disabled = false;
+        });
+        terminal.on('error', function () {
+            sseBtn.disabled = false;
+        });
+
         sseBtn.addEventListener('click', function () {
-            var sep = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
-            var url = streamBaseUrl + sep + 'public_id=' + encodeURIComponent(publicId) + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+            var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
+            var url = streamBaseUrl + separator + 'public_id=' + encodeURIComponent(publicId)
+                + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+
             terminal.clear();
             terminal.setUrl(url);
             sseBtn.disabled = true;
             terminal.start();
-            terminal.on('done', function () { sseBtn.disabled = false; });
-            terminal.on('error', function () { sseBtn.disabled = false; });
         });
     }
 })();

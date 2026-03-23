@@ -16,7 +16,7 @@ use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Model\DomainPool;
 
-#[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理')]
+#[Acl('Weline_Websites::website', '网站管理', 'mdi mdi-web', '网站管理', 'Weline_Websites::website_service')]
 class Website extends BackendController
 {
     private \Weline\Websites\Model\Website $website;
