@@ -1,8 +1,43 @@
-﻿"RMA ID不能为空","RMA ID不能为空"
+"RMA ID不能为空","RMA ID不能为空"
 RMA已批准,RMA已批准
-请先登录,请先登录
-无权访问此订单,无权访问此订单
-退换货申请,退换货申请
-订单ID不能为空,订单ID不能为空
-请选择退换货原因,请选择退换货原因
-退换货申请已提交，我们会在24小时内处理,退换货申请已提交，我们会在24小时内处理
+"RMA ID is required.","RMA ID is required."
+"RMA has been rejected.","RMA has been rejected."
+"Order ID is required.","Order ID is required."
+"Order and reason are required.","Order and reason are required."
+"You do not have access to this order.","You do not have access to this order."
+"Please log in to continue.","Please log in to continue."
+"Returns & Exchanges","Returns & Exchanges"
+Return,Return
+Exchange,Exchange
+"Wrong size","Wrong size"
+"Damaged in transit","Damaged in transit"
+"Defective item","Defective item"
+"Item not as described","Item not as described"
+"Changed my mind","Changed my mind"
+Other,Other
+"Return reason is required.","Return reason is required."
+"RMA record not found.","RMA record not found."
+"Your return request has been submitted.","Your return request has been submitted."
+"Unable to submit your request right now.","Unable to submit your request right now."
+"Back To Orders","Back To Orders"
+"Account Center","Account Center"
+"Returns Center","Returns Center"
+"Submit Return / Exchange","Submit Return / Exchange"
+"New Request","New Request"
+"Request Type","Request Type"
+"Select a reason","Select a reason"
+"Input your order id","Input your order id"
+"Tell us more details about your request","Tell us more details about your request"
+"Submit Request","Submit Request"
+"Total Requests","Total Requests"
+"Selected Order","Selected Order"
+"None selected","None selected"
+"Request Timeline","Request Timeline"
+"Your Latest RMA Records","Your Latest RMA Records"
+"No return requests yet","No return requests yet"
+"Submitted at: %1","Submitted at: %1"
+"After-Sales","After-Sales"
+"Open RMA","Open RMA"
+"Requests Submitted","Requests Submitted"
+"Track return and exchange approvals, and submit new requests directly from your account center.","Track return and exchange approvals, and submit new requests directly from your account center."
+"Manage Return Requests","Manage Return Requests"
