@@ -23,6 +23,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\HeaderCollector;
+use Weline\Framework\Http\PublicApiAuthRouteMatcher;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -53,14 +54,17 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      * @var AclServiceInterface
      */
     private AclServiceInterface $aclService;
+    private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
 
     public function __construct(
         WhiteAclSource $whiteAclSource,
-        AclService     $aclService
+        AclService     $aclService,
+        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher
     ) {
         $this->whiteAclSource = $whiteAclSource;
         $this->aclCache = w_cache('acl');
         $this->aclService = $aclService;
+        $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
     }
 
     /** 获取当前请求的后台 Session，延迟创建；同请求内复用，WLS 下由 StateManager 在请求结束时清空 */
@@ -125,6 +129,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         }
         
         $request = $route->getRequest();
+        if (($request->isApiFrontend() || $request->isApiBackend()) && $this->publicApiAuthRouteMatcher->matches($request)) {
+            return;
+        }
         
         // HEAD 请求跳过权限检查和重定向逻辑
         // HEAD 请求只是为了获取响应头信息（如 Content-Length），不应该触发业务逻辑重定向
