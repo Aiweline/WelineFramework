@@ -152,6 +152,7 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
                 <nav aria-label="Tabs" class="-mb-px flex space-x-8">
                     <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-primary border-primary" href="#description" data-tab="description"><?= __('Product Description') ?></a>
                     <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#specifications" data-tab="specifications"><?= __('Specifications') ?></a>
+                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#qa" data-tab="qa"><?= __('Q&A') ?></a>
                     <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#reviews" data-tab="reviews"><?= __('Reviews') ?></a>
                 </nav>
             </div>
@@ -177,6 +178,11 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Q&A Tab -->
+            <div class="tab-content py-10 hidden" id="qa-content">
+                <w:hook name="WeShop_QA::product::questions"/>
             </div>
             
             <!-- Reviews Tab -->
