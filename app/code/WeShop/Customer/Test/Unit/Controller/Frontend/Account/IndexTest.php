@@ -5,31 +5,53 @@ declare(strict_types=1);
 namespace WeShop\Customer\Test\Unit\Controller\Frontend\Account;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Customer\Controller\Frontend\Account\Index;
+use WeShop\Customer\Model\Customer as CustomerProfile;
+use WeShop\Customer\Service\AccountDashboardDataService;
+use Weline\Customer\Model\Customer as AuthCustomer;
 
-/**
- * 用户账户首页控制器单元测试
- */
 class IndexTest extends TestCase
 {
-    /**
-     * 测试：控制器类存在
-     */
-    public function testControllerClassExists(): void
+    public function testIndexAssignsDashboardDataForLoggedInCustomer(): void
     {
-        $this->assertTrue(class_exists(Index::class));
-    }
+        $authUser = $this->getMockBuilder(AuthCustomer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $authUser->method('getId')->willReturn(21);
 
-    /**
-     * 测试：layoutType 属性设置为 'account'
-     */
-    public function testLayoutTypeIsAccount(): void
-    {
-        $reflection = new \ReflectionClass(Index::class);
-        $property = $reflection->getProperty('layoutType');
-        $property->setAccessible(true);
-        
-        $controller = new Index();
-        $this->assertEquals('account', $property->getValue($controller));
+        $profile = $this->getMockBuilder(CustomerProfile::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())
+            ->method('getAuthUser')
+            ->willReturn($authUser);
+        $customerContext->expects($this->once())
+            ->method('getProfile')
+            ->willReturn($profile);
+
+        $dashboardDataService = $this->createMock(AccountDashboardDataService::class);
+        $dashboardDataService->expects($this->once())
+            ->method('build')
+            ->with($authUser, $profile)
+            ->willReturn([
+                'customer' => ['email' => 'ada@example.com'],
+                'wishlist_count' => 2,
+                'recommendations' => [['product_id' => 7]],
+            ]);
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerContext, $dashboardDataService])
+            ->onlyMethods(['assign', 'fetch', 'redirect'])
+            ->getMock();
+
+        $controller->expects($this->never())->method('redirect');
+        $controller->expects($this->exactly(3))->method('assign');
+        $controller->expects($this->once())->method('fetch')->willReturn('page');
+
+        $this->assertSame('page', $controller->index());
     }
 }

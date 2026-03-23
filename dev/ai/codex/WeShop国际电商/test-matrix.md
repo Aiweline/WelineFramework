@@ -1,5 +1,20 @@
 # Test Matrix
 
-- Unit: 认证状态机、Google 绑定、2FA 编排、密码重置、主题兼容检查
-- HTTP/API: 统一 auth、兼容代理、后台菜单资源、作用域拒绝，完整 URL 按 `/api/weshop/rest/v1/auth/*` 验证
-- E2E: 前后台登录、Google、2FA、default 主题基线页面
+- Unit:
+  - auth state machine
+  - Google binding and callback logic
+  - 2FA orchestration
+  - password reset
+  - theme compatibility checks
+  - storefront account dashboard aggregation for recent orders, wishlist, recently viewed, and recommendations
+- HTTP/API:
+  - unified auth endpoints
+  - compatibility proxies
+  - backend menu-resource alignment
+  - route verification for `/api/weshop/rest/v1/auth/*`
+- E2E:
+  - storefront and backend login flows
+  - Google login
+  - 2FA
+  - `default` theme baseline pages
+  - storefront account center rendering security cards and discovery cards

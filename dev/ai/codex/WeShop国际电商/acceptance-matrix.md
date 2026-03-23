@@ -1,10 +1,12 @@
 # Acceptance Matrix
 
-- 前台密码登录、Google 登录、2FA 登录通过
-- 后台密码登录、Google 登录、2FA 登录通过
-- 统一认证 API 可发 token、刷新、校验 challenge、登出，按 `/api/weshop/rest/v1/auth/*` 验证
-- `default` 主题下登录、购物车、结账、订单、RMA、Review、QA 可访问
-- 缺失 hook 或 slot 时编辑器和 `w_msg()` 有告警
-- Checkout page gets payment methods from `w_query('payment', 'getCheckoutPaymentMethods', ...)`
-- Checkout `default` layout variants render controller/page `content` first so dynamic payment UI works across all checkout variants
-- Place-order flow no longer calls missing methods; it validates checkout data, creates an order, and returns structured payment result data
+- Storefront password login, Google login, and 2FA login pass end-to-end.
+- Backend password login, Google login, and 2FA login pass end-to-end.
+- Unified auth API can issue tokens, refresh, verify challenges, logout, and read `/me` under `/api/weshop/rest/v1/auth/*`.
+- `default` theme storefront pages for login, cart, checkout, order success, review, QA, RMA, and customer account are accessible and render correctly.
+- Missing hook or slot situations surface warnings in the editor and through `w_msg()`.
+- Checkout page gets payment methods from `w_query('payment', 'getCheckoutPaymentMethods', ...)`.
+- Checkout `default` layout variants render controller/page `content` first so dynamic payment UI works across all checkout variants.
+- Place-order flow no longer calls missing methods; it validates checkout data, creates an order, and returns structured payment result data.
+- `default` account center renders recent orders, wishlist preview, recently viewed preview, and guess-you-may-like recommendations from service-driven data.
+- `WeShop_Customer::frontend::account::security::cards` and `WeShop_Customer::frontend::account::discovery::cards` remain available for cross-module injection.
