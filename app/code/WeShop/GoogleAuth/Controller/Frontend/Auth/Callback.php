@@ -24,7 +24,6 @@ class Callback extends FrontendController
         private readonly BackendUser $backendUser,
         private readonly Url $url
     ) {
-        parent::__construct();
     }
 
     public function index(): void
