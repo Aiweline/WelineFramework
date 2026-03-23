@@ -43,12 +43,20 @@ class FixAiSiteAgentEventIdIdentity20260323V100 extends AbstractMigration
         /** @var AiSiteAgentSessionEvent $model */
         $model = ObjectManager::getInstance(AiSiteAgentSessionEvent::class);
 
+        // 注意：AiSiteAgentSessionEvent::getTable() 对 PostgreSQL 会返回带 schema/引号的格式
+        // 例如 public."m_guolairen_page_builder_ai_site_agent_event"
+        $qualifiedTable = $model->getTable();
         $schema = 'public';
-        $table = $model->getTable(); // 例如 m_guolairen_page_builder_ai_site_agent_event
+        $rawTable = $qualifiedTable;
+
+        if (\preg_match('/^([^\.]+)\."([^"]+)"$/', (string) $qualifiedTable, $m) === 1) {
+            $schema = \trim((string) $m[1], '"');
+            $rawTable = (string) $m[2];
+        }
+
         $col = AiSiteAgentSessionEvent::schema_fields_ID; // ai_site_agent_event_id
 
-        $qualifiedTable = $schema . '."' . $table . '"';
-        $seqName = $table . '_' . $col . '_seq';
+        $seqName = $rawTable . '_' . $col . '_seq';
         $qualifiedSeq = $schema . '."' . $seqName . '"';
 
         // 以当前表最大 id 作为序列起点，避免主键重复
@@ -82,11 +90,15 @@ class FixAiSiteAgentEventIdIdentity20260323V100 extends AbstractMigration
         /** @var AiSiteAgentSessionEvent $model */
         $model = ObjectManager::getInstance(AiSiteAgentSessionEvent::class);
 
+        $qualifiedTable = $model->getTable();
         $schema = 'public';
-        $table = $model->getTable();
-        $col = AiSiteAgentSessionEvent::schema_fields_ID;
+        $rawTable = $qualifiedTable;
+        if (\preg_match('/^([^\.]+)\."([^"]+)"$/', (string) $qualifiedTable, $m) === 1) {
+            $schema = \trim((string) $m[1], '"');
+            $rawTable = (string) $m[2];
+        }
 
-        $qualifiedTable = $schema . '."' . $table . '"';
+        $col = AiSiteAgentSessionEvent::schema_fields_ID;
 
         // 回滚仅移除 DEFAULT；不删除序列（避免影响其他依赖/手动使用）
         $connection->query(
