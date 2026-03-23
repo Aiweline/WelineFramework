@@ -4,61 +4,64 @@ declare(strict_types=1);
 
 namespace WeShop\Analytics\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Analytics\Interface\PixelProviderInterface;
+use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 像素分发服务
- */
 class PixelDispatcher
 {
     /**
-     * 分发像素事件
-     * 
-     * @param string $eventName 事件名称
-     * @param array $eventData 事件数据
-     * @return void
+     * @param array<string, mixed> $eventData
+     */
+    public function track(string $eventName, array $eventData): void
+    {
+        $this->dispatch($eventName, $eventData);
+    }
+
+    /**
+     * @param array<string, mixed> $eventData
      */
     public function dispatch(string $eventName, array $eventData): void
     {
-        // 获取所有启用的像素提供者
-        $providers = $this->getActiveProviders();
-        
-        foreach ($providers as $provider) {
+        foreach ($this->getActiveProviders() as $provider) {
             try {
                 $provider->sendEvent($eventName, $eventData);
-            } catch (\Exception $e) {
-                // 记录错误但继续处理其他提供者
-                w_log_warning(__('像素事件发送失败: %{1}', [$e->getMessage()]), [], 'pixel_dispatcher.log');
+            } catch (\Throwable $e) {
+                w_log_warning('Pixel event dispatch failed: ' . $e->getMessage(), [
+                    'event' => $eventName,
+                    'provider' => $provider::class,
+                ], 'pixel_dispatcher.log');
             }
         }
     }
-    
+
     /**
-     * 获取所有启用的像素提供者
-     * 
-     * @return PixelProviderInterface[]
+     * @return array<int, PixelProviderInterface>
      */
     protected function getActiveProviders(): array
     {
         $providers = [];
-        
-        // 获取配置的提供者列表
-        $providerClasses = [
-            \WeShop\Analytics\Provider\FacebookPixel::class,
-        ];
-        
-        foreach ($providerClasses as $providerClass) {
+
+        foreach ($this->getProviderClasses() as $providerClass) {
             try {
                 $provider = ObjectManager::getInstance($providerClass);
-                if ($provider instanceof PixelProviderInterface) {
+                if ($provider instanceof PixelProviderInterface && $provider->isEnabled()) {
                     $providers[] = $provider;
                 }
-            } catch (\Exception $e) {
-                // 忽略错误
+            } catch (\Throwable) {
             }
         }
-        
+
         return $providers;
+    }
+
+    /**
+     * @return array<int, class-string<PixelProviderInterface>>
+     */
+    protected function getProviderClasses(): array
+    {
+        return [
+            \WeShop\Analytics\Provider\FacebookPixel::class,
+            \WeShop\Analytics\Provider\GoogleAnalytics::class,
+        ];
     }
 }
