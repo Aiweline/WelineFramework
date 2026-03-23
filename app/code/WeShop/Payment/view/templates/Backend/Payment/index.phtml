@@ -1,0 +1,168 @@
+<?php
+$pageTitle = (string) ($this->getData('page_title') ?? 'Payment Methods');
+$saveUrl = (string) ($this->getData('save_url') ?? '');
+$methods = $this->getData('methods') ?? [];
+$stats = $this->getData('stats') ?? [];
+?>
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= htmlspecialchars($pageTitle) ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><?= __('支付管理') ?></li>
+                        <li class="breadcrumb-item active"><?= __('支付方式') ?></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Total Methods') ?></div>
+                    <div class="display-6 fw-semibold"><?= (int) ($stats['total_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Enabled At Checkout') ?></div>
+                    <div class="display-6 fw-semibold text-success"><?= (int) ($stats['enabled_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Reserved / Disabled') ?></div>
+                    <div class="display-6 fw-semibold text-warning"><?= (int) ($stats['reserved_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Default Method') ?></div>
+                    <div class="fw-semibold fs-5"><?= htmlspecialchars((string) ($stats['default_method_title'] ?? '')) ?></div>
+                    <div class="small text-muted"><?= htmlspecialchars((string) ($stats['default_method_code'] ?? '')) ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form action="<?= htmlspecialchars($saveUrl) ?>" method="post" class="d-grid gap-4">
+        <?php foreach ($methods as $method): ?>
+            <?php
+            if (!is_array($method)) {
+                continue;
+            }
+            $code = (string) ($method['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $config = is_array($method['config'] ?? null) ? $method['config'] : [];
+            $configFields = is_array($method['config_fields'] ?? null) ? $method['config_fields'] : [];
+            ?>
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3 mb-4">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <h5 class="mb-0"><?= htmlspecialchars((string) ($method['title'] ?? $code)) ?></h5>
+                                <?php if (!empty($method['enabled'])): ?>
+                                    <span class="badge bg-success-subtle text-success"><?= __('Enabled') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning-subtle text-warning"><?= __('Disabled') ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($method['is_default'])): ?>
+                                    <span class="badge bg-primary-subtle text-primary"><?= __('Default') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-muted mb-2"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
+                            <div class="small text-muted">
+                                <span class="me-3"><?= __('Code') ?>: <code><?= htmlspecialchars($code) ?></code></span>
+                                <span class="me-3"><?= __('Areas') ?>: <?= htmlspecialchars(implode(', ', (array) ($method['areas'] ?? []))) ?></span>
+                                <span class="me-3"><?= __('Currencies') ?>: <?= htmlspecialchars(implode(', ', (array) ($method['currencies'] ?? []))) ?></span>
+                                <span><?= __('Countries') ?>: <?= htmlspecialchars(implode(', ', (array) ($method['countries'] ?? []))) ?></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 w-100 w-lg-auto" style="min-width: 320px; max-width: 420px;">
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Enabled') ?></label>
+                                <input type="hidden" name="methods[<?= htmlspecialchars($code) ?>][enabled]" value="0">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" name="methods[<?= htmlspecialchars($code) ?>][enabled]" value="1" <?= !empty($method['enabled']) ? 'checked' : '' ?>>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Default') ?></label>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="default_method" value="<?= htmlspecialchars($code) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?>>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Sort Order') ?></label>
+                                <input class="form-control" type="number" name="methods[<?= htmlspecialchars($code) ?>][sort_order]" value="<?= (int) ($method['sort_order'] ?? 0) ?>">
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php if ($configFields !== []): ?>
+                        <div class="row g-3">
+                            <?php foreach ($configFields as $field): ?>
+                                <?php
+                                if (!is_array($field)) {
+                                    continue;
+                                }
+                                $fieldKey = (string) ($field['key'] ?? '');
+                                if ($fieldKey === '') {
+                                    continue;
+                                }
+                                $fieldType = (string) ($field['type'] ?? 'text');
+                                $fieldLabel = (string) ($field['label'] ?? $fieldKey);
+                                $fieldHelp = (string) ($field['help'] ?? '');
+                                $fieldValue = $config[$fieldKey] ?? '';
+                                $inputName = 'methods[' . $code . '][config][' . $fieldKey . ']';
+                                ?>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold"><?= htmlspecialchars($fieldLabel) ?></label>
+                                    <?php if ($fieldType === 'textarea'): ?>
+                                        <textarea class="form-control" rows="3" name="<?= htmlspecialchars($inputName) ?>"><?= htmlspecialchars((string) $fieldValue) ?></textarea>
+                                    <?php elseif ($fieldType === 'checkbox'): ?>
+                                        <input type="hidden" name="<?= htmlspecialchars($inputName) ?>" value="0">
+                                        <div class="form-check form-switch mt-2">
+                                            <input class="form-check-input" type="checkbox" role="switch" name="<?= htmlspecialchars($inputName) ?>" value="1" <?= !empty($fieldValue) ? 'checked' : '' ?>>
+                                        </div>
+                                    <?php else: ?>
+                                        <input
+                                            class="form-control"
+                                            type="<?= htmlspecialchars($fieldType) ?>"
+                                            name="<?= htmlspecialchars($inputName) ?>"
+                                            value="<?= htmlspecialchars((string) $fieldValue) ?>"
+                                            <?php if (!empty($field['step'])): ?>step="<?= htmlspecialchars((string) $field['step']) ?>"<?php endif; ?>
+                                        >
+                                    <?php endif; ?>
+                                    <?php if ($fieldHelp !== ''): ?>
+                                        <div class="form-text"><?= htmlspecialchars($fieldHelp) ?></div>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-primary btn-lg" type="submit">
+                <i class="mdi mdi-content-save-outline me-1"></i><?= __('Save Payment Settings') ?>
+            </button>
+        </div>
+    </form>
+</div>
