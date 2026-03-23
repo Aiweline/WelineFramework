@@ -307,7 +307,7 @@ class MasterControlServer
             ];
 
             $peerName = @\stream_socket_get_name($conn, true) ?: 'unknown';
-            $this->ipcLog("[IPC-Master] CONNECT 鏂板鎴风杩炴帴 #{$clientId} from {$peerName}");
+            $this->ipcLog("[IPC-Master] CONNECT 新客户端连接 #{$clientId} from {$peerName}");
             $accepted[] = $clientId;
         }
 
