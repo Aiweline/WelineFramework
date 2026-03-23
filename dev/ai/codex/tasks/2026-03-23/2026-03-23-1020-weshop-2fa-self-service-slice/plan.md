@@ -5,4 +5,4 @@
 - [x] Implement the next usable self-service slice with storefront and backend self-service controls.
 - [x] Add focused tests and verification for the new 2FA management behavior.
 - [x] Align backend IA so Google binding and 2FA both live under the shared `WeShop_Auth::security` menu group.
-- [ ] Commit the slice and record the commit hash in `result.md`.
+- [x] Commit the slice and record the commit hash in `result.md`.

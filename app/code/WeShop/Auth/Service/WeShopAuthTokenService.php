@@ -44,7 +44,7 @@ class WeShopAuthTokenService
         return new ActorContext(
             (string) $record->getData(AuthToken::schema_fields_ACTOR_TYPE),
             (int) $record->getData(AuthToken::schema_fields_ACTOR_ID),
-            'api',
+            (string) ($record->getData(AuthToken::schema_fields_AREA) ?: 'api'),
             $record->getScopes(),
             (bool) $record->getData(AuthToken::schema_fields_IS_2FA_VERIFIED)
         );
@@ -60,7 +60,7 @@ class WeShopAuthTokenService
         $context = new ActorContext(
             (string) $record->getData(AuthToken::schema_fields_ACTOR_TYPE),
             (int) $record->getData(AuthToken::schema_fields_ACTOR_ID),
-            'api',
+            (string) ($record->getData(AuthToken::schema_fields_AREA) ?: 'api'),
             $record->getScopes(),
             (bool) $record->getData(AuthToken::schema_fields_IS_2FA_VERIFIED)
         );
@@ -92,16 +92,20 @@ class WeShopAuthTokenService
 
     private function createTokenRecord(ActorContext $actorContext, string $tokenType, int $ttl): AuthToken
     {
-        return $this->authToken->reset()
+        $record = $this->authToken->reset()
             ->clearData()
             ->setData(AuthToken::schema_fields_ACTOR_TYPE, $actorContext->getActorType())
             ->setData(AuthToken::schema_fields_ACTOR_ID, $actorContext->getActorId())
+            ->setData(AuthToken::schema_fields_AREA, $actorContext->getArea())
             ->setData(AuthToken::schema_fields_TOKEN_TYPE, $tokenType)
             ->setData(AuthToken::schema_fields_TOKEN, bin2hex(random_bytes(32)))
             ->setScopes($actorContext->getScopes())
             ->setData(AuthToken::schema_fields_IS_2FA_VERIFIED, $actorContext->is2faVerified() ? 1 : 0)
-            ->setData(AuthToken::schema_fields_EXPIRES_AT, time() + max(60, $ttl))
-            ->save();
+            ->setData(AuthToken::schema_fields_EXPIRES_AT, time() + max(60, $ttl));
+
+        $record->save();
+
+        return $record;
     }
 
     private function getValidTokenRecord(string $token, string $tokenType): ?AuthToken

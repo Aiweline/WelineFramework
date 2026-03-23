@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-1020-weshop-2fa-self-service-slice
 - Started: 2026-03-23 10:20
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: user request
 - Follows: `dev/ai/codex/tasks/2026-03-23/2026-03-23-0951-weshop-google-account-center-slice/`
@@ -43,4 +43,4 @@
 
 ## Resume
 
-- Start with [`plan.md`](./plan.md) and [`progress.md`](./progress.md).
+- Completed in commit `e2675b90`. Start with [`result.md`](./result.md) if this slice needs to be revisited.

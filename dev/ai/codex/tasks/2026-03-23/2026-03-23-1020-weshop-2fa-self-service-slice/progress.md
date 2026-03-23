@@ -28,3 +28,4 @@
 - 2026-03-23 11:23 Re-ran `php bin/w setup:upgrade --yes -m WeShop_Auth -m WeShop_GoogleAuth` successfully after the menu fix.
   - generated routers still contain `weshop/frontend/auth/two-factor` and `weshop/backend/security/two-factor`
   - non-blocking repo warnings remain during setup: ACL orphan cleanup sync warning and unrelated empty i18n CSV warnings in other modules
+- 2026-03-23 11:26 Committed the slice as `e2675b90 feat(weshop): add storefront and backend 2fa settings`.
