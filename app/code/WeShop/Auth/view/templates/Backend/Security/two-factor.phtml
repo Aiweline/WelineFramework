@@ -1,0 +1,186 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$postUrl = (string) ($this->getData('post_url') ?? '');
+$isEnabled = (bool) ($this->getData('is_enabled') ?? false);
+$config = (array) ($this->getData('config') ?? []);
+$setup = (array) ($this->getData('setup') ?? []);
+$flashBackupCodes = (array) ($this->getData('flash_backup_codes') ?? []);
+$flowStatus = (array) ($this->getData('flow_status') ?? []);
+$backupCodes = $flashBackupCodes ?: (array) ($setup['backup_codes'] ?? []);
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Two-Factor Authentication') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('Dashboard') ?></a></li>
+                    <li class="breadcrumb-item"><?= __('Account Security') ?></li>
+                    <li class="breadcrumb-item active"><?= __('Two-Factor Authentication') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<?php if ($flashBackupCodes): ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-warning">
+                <strong><?= __('New backup codes were generated.') ?></strong><br>
+                <?= __('Store them securely. The previous set is no longer valid and each code can be used only once.') ?>
+                <div class="row g-2 mt-3">
+                    <?php foreach ($flashBackupCodes as $backupCode): ?>
+                        <div class="col-sm-6 col-xl-3">
+                            <code class="d-block rounded bg-white p-3 text-center"><?= htmlspecialchars((string) $backupCode, ENT_QUOTES) ?></code>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<?php if (!(bool) ($flowStatus['password'] ?? false) || !(bool) ($flowStatus['google'] ?? false)): ?>
+    <div class="row">
+        <div class="col-12">
+            <div class="alert alert-info">
+                <strong><?= __('Challenge policy reminder') ?></strong><br>
+                <?= __('Your backend authenticator can be configured now, while enforcement stays off until the password or Google login flow is enabled in configuration.') ?><br>
+                <?= __('Password login') ?>: <?= (bool) ($flowStatus['password'] ?? false) ? __('Enabled') : __('Disabled by default') ?>,
+                <?= __('Google login') ?>: <?= (bool) ($flowStatus['google'] ?? false) ? __('Enabled') : __('Disabled by default') ?>
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
+<div class="row">
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Current Status') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-4">
+                    <span class="badge <?= $isEnabled ? 'bg-success' : 'bg-secondary' ?>">
+                        <?= $isEnabled ? __('Enabled') : __('Not Enabled Yet') ?>
+                    </span>
+                </div>
+
+                <?php if ($isEnabled): ?>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-5"><?= __('Created At') ?></dt>
+                        <dd class="col-sm-7"><?= htmlspecialchars((string) ($config['created_at'] ?? __('Unknown')), ENT_QUOTES) ?></dd>
+
+                        <dt class="col-sm-5"><?= __('Last Used At') ?></dt>
+                        <dd class="col-sm-7"><?= htmlspecialchars((string) (($config['last_used_at'] ?? '') ?: __('Never')), ENT_QUOTES) ?></dd>
+
+                        <dt class="col-sm-5"><?= __('Backup Codes') ?></dt>
+                        <dd class="col-sm-7"><?= (int) ($config['backup_codes_count'] ?? 0) ?></dd>
+                    </dl>
+                <?php else: ?>
+                    <p class="text-muted mb-0">
+                        <?= __('Enable an authenticator app for this backend account so future password and Google sign-ins can require a second verification step.') ?>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-8">
+        <?php if ($isEnabled): ?>
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><?= __('Regenerate Backup Codes') ?></h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted"><?= __('Generating a new set immediately invalidates the previous backup codes. Confirm with the latest authenticator code before rotating them.') ?></p>
+                    <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="row g-3">
+                        <?= $this->getFormKey($postUrl) ?>
+                        <input type="hidden" name="form_action" value="regenerate_backup_codes">
+                        <div class="col-md-8">
+                            <label class="form-label"><?= __('Authenticator Code') ?></label>
+                            <input type="text" name="code" class="form-control" autocomplete="one-time-code" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary w-100"><?= __('Generate New Backup Codes') ?></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card border-danger">
+                <div class="card-header bg-danger-subtle">
+                    <h5 class="card-title mb-0 text-danger-emphasis"><?= __('Disable Two-Factor Authentication') ?></h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted"><?= __('Disabling two-factor authentication removes the second verification step for future backend sign-ins. Use this only if you are rotating to another device or method.') ?></p>
+                    <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="row g-3">
+                        <?= $this->getFormKey($postUrl) ?>
+                        <input type="hidden" name="form_action" value="disable">
+                        <div class="col-md-8">
+                            <label class="form-label"><?= __('Authenticator Code') ?></label>
+                            <input type="text" name="code" class="form-control" autocomplete="one-time-code" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-outline-danger w-100"><?= __('Disable 2FA') ?></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0"><?= __('Set Up an Authenticator App') ?></h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            <div class="border rounded-3 bg-white p-3 text-center">
+                                <img src="<?= htmlspecialchars((string) ($setup['qr_code_url'] ?? ''), ENT_QUOTES) ?>" alt="<?= __('Two-factor QR code') ?>" class="img-fluid" style="max-height: 260px;">
+                            </div>
+                            <div class="mt-3">
+                                <strong><?= __('Manual Setup Secret') ?></strong>
+                                <code class="d-block mt-2"><?= htmlspecialchars((string) ($setup['formatted_secret'] ?? ''), ENT_QUOTES) ?></code>
+                            </div>
+                        </div>
+                        <div class="col-lg-7">
+                            <p class="text-muted">
+                                <?= __('Scan the QR code with Google Authenticator, Microsoft Authenticator, 1Password, or another TOTP-compatible app. Then confirm the current 6-digit code to finish setup.') ?>
+                            </p>
+
+                            <div class="row g-2 mb-4">
+                                <?php foreach ($backupCodes as $backupCode): ?>
+                                    <div class="col-sm-6 col-xl-4">
+                                        <code class="d-block rounded bg-light p-3 text-center"><?= htmlspecialchars((string) $backupCode, ENT_QUOTES) ?></code>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+
+                            <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="row g-3">
+                                <?= $this->getFormKey($postUrl) ?>
+                                <input type="hidden" name="form_action" value="enable">
+                                <input type="hidden" name="secret" value="<?= htmlspecialchars((string) ($setup['secret'] ?? ''), ENT_QUOTES) ?>">
+                                <input type="hidden" name="backup_codes" value='<?= htmlspecialchars(json_encode($backupCodes, JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'>
+
+                                <div class="col-12">
+                                    <label class="form-label"><?= __('Authenticator Code') ?></label>
+                                    <input type="text" name="code" class="form-control" autocomplete="one-time-code" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                                </div>
+                                <div class="col-12">
+                                    <button type="submit" class="btn btn-primary"><?= __('Enable Two-Factor Authentication') ?></button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
