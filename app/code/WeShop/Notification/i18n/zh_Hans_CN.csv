@@ -1,3 +1,10 @@
-﻿请先登录,请先登录
-通知ID不能为空,通知ID不能为空
-已标记为已读,已标记为已读
+﻿"Please log in to continue.","Please log in to continue."
+"Notification ID is required.",通知ID不能为空。
+"Notification could not be marked as read.",通知标记已读失败。
+"Notification marked as read.",通知已标记为已读。
+"Customer ID is required.",客户ID不能为空。
+"Stay Updated",实时更新
+"Notification Center",通知中心
+"Open Center",打开中心
+"Alerts and updates in one place",提醒和更新集中在一处
+"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.",订单更新、付款跟进和会员通知都可以在通知中心统一查看。
