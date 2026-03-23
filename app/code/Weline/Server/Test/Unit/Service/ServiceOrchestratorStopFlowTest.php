@@ -175,7 +175,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
 
-        self::assertSame([[101, 202], [101]], $orchestrator->batchCheckCalls);
+        self::assertSame([[101, 202], [101], [101]], $orchestrator->batchCheckCalls);
         self::assertSame([[202]], $orchestrator->forceKillCalls);
         self::assertSame(1, $orchestrator->sleepCalls);
     }
