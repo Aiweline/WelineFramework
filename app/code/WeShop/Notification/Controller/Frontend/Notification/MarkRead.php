@@ -4,34 +4,76 @@ declare(strict_types=1);
 
 namespace WeShop\Notification\Controller\Frontend\Notification;
 
-use Weline\Framework\App\Controller\FrontendController;
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Notification\Service\NotificationService;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Http\Url;
 
-/**
- * 标记通知已读控制器
- */
 class MarkRead extends FrontendController
 {
-    /**
-     * 标记已读
-     */
+    private const LOGIN_ROUTE = 'customer/account/login';
+
+    public function __construct(
+        private readonly CustomerContextInterface $customerContext,
+        private readonly NotificationService $notificationService,
+        private readonly Url $url
+    ) {
+    }
+
     public function index(): string
     {
-        try {
-            $notificationId = (int)($this->request->getParam('notification_id') ?? 0);
-            
-            if (!$notificationId) {
-                return $this->fetchJson(['success' => false, 'message' => __('通知ID不能为空')]);
-            }
-            
-            /** @var NotificationService $notificationService */
-            $notificationService = ObjectManager::getInstance(NotificationService::class);
-            $notificationService->markAsRead($notificationId);
-            
-            return $this->fetchJson(['success' => true, 'message' => __('已标记为已读')]);
-        } catch (\Exception $e) {
-            return $this->fetchJson(['success' => false, 'message' => $e->getMessage()]);
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Please log in to continue.'),
+                'data' => [
+                    'redirect_url' => $this->url->getUrl(self::LOGIN_ROUTE),
+                ],
+            ]);
         }
+
+        $notificationId = $this->readNotificationId();
+        if ($notificationId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Notification ID is required.'),
+            ]);
+        }
+
+        $marked = $this->notificationService->markAsRead($notificationId, $customerId);
+        if (!$marked) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Notification could not be marked as read.'),
+            ]);
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('Notification marked as read.'),
+            'data' => [
+                'notification_id' => $notificationId,
+                'unread_count' => $this->notificationService->getUnreadCount($customerId),
+            ],
+        ]);
+    }
+
+    public function post(): string
+    {
+        return $this->index();
+    }
+
+    protected function readNotificationId(): int
+    {
+        return (int) (
+            $this->request->body('notification_id')
+            ?? $this->request->body('item_id')
+            ?? $this->request->getPost('notification_id')
+            ?? $this->request->getPost('item_id')
+            ?? $this->request->getParam('notification_id')
+            ?? $this->request->getParam('item_id')
+            ?? 0
+        );
     }
 }
