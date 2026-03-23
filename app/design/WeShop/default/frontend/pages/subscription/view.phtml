@@ -1,0 +1,99 @@
+<?php
+$subscription = (array) ($this->getData('subscription') ?? []);
+$plan = (array) ($this->getData('plan') ?? []);
+$history = (array) ($this->getData('history') ?? []);
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <section class="rounded-[2rem] border border-border-light bg-surface-light p-8 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Subscription') ?></p>
+                <h1 class="mt-2 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark">
+                    #<?= (int) ($subscription['subscription_id'] ?? 0) ?>
+                </h1>
+                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= htmlspecialchars((string) ($subscription['status_label'] ?? ''), ENT_QUOTES) ?>
+                </p>
+            </div>
+            <a href="<?= $this->getUrl('subscription') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                <?= __('Back To Subscriptions') ?>
+            </a>
+        </div>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-2">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Billing Summary') ?></h2>
+            <dl class="mt-4 space-y-3 text-sm">
+                <div class="flex items-center justify-between">
+                    <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Amount') ?></dt>
+                    <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark">
+                        <?= htmlspecialchars((string) ($subscription['currency'] ?? 'USD'), ENT_QUOTES) ?> <?= number_format((float) ($subscription['price'] ?? 0), 2) ?>
+                    </dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Billing Cycle') ?></dt>
+                    <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($subscription['billing_label'] ?? ''), ENT_QUOTES) ?></dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Current Period') ?></dt>
+                    <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark">
+                        <?= htmlspecialchars((string) ($subscription['current_period_start'] ?? ''), ENT_QUOTES) ?> - <?= htmlspecialchars((string) ($subscription['current_period_end'] ?? ''), ENT_QUOTES) ?>
+                    </dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Next Billing') ?></dt>
+                    <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($subscription['next_billing_at'] ?? ''), ENT_QUOTES) ?></dd>
+                </div>
+                <div class="flex items-center justify-between">
+                    <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Renewal Count') ?></dt>
+                    <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= (int) ($subscription['renewal_count'] ?? 0) ?></dd>
+                </div>
+            </dl>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Plan Information') ?></h2>
+            <?php if ($plan): ?>
+                <dl class="mt-4 space-y-3 text-sm">
+                    <div class="flex items-center justify-between">
+                        <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Plan Name') ?></dt>
+                        <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($plan['name'] ?? ''), ENT_QUOTES) ?></dd>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <dt class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Trial Days') ?></dt>
+                        <dd class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= (int) ($plan['trial_days'] ?? 0) ?></dd>
+                    </div>
+                </dl>
+                <?php if (!empty($plan['description'])): ?>
+                    <p class="mt-4 rounded-2xl border border-border-light bg-background-light p-4 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+                        <?= htmlspecialchars((string) $plan['description'], ENT_QUOTES) ?>
+                    </p>
+                <?php endif; ?>
+            <?php else: ?>
+                <p class="mt-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Plan details are unavailable for this subscription.') ?></p>
+            <?php endif; ?>
+        </article>
+    </section>
+
+    <section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <h2 class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('History') ?></h2>
+        <?php if ($history): ?>
+            <div class="mt-5 space-y-3">
+                <?php foreach ($history as $item): ?>
+                    <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+                        <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['action_label'] ?? ''), ENT_QUOTES) ?></p>
+                            <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($item['created_at'] ?? ''), ENT_QUOTES) ?></p>
+                        </div>
+                        <?php if (!empty($item['note'])): ?>
+                            <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($item['note'] ?? ''), ENT_QUOTES) ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <p class="mt-4 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('No history records yet.') ?></p>
+        <?php endif; ?>
+    </section>
+</main>
