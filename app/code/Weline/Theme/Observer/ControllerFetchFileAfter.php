@@ -8,19 +8,25 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\View\Template;
+use Weline\Theme\Service\PreparedContentStore;
 
 /**
  * Keep layout rendering lifecycle unified for controller template fetch.
  *
  * Flow:
  * 1) render original content template
- * 2) inject `meta.content` / `meta.contentTemplate` + `child_html.content`
+ * 2) inject backend content by request-scoped key, frontend content by direct HTML
  * 3) render layout template
  * 4) if layout requested wrapper via `$this->setLayout(...)`, continue wrapping
  */
 class ControllerFetchFileAfter implements ObserverInterface
 {
     private const MAX_LAYOUT_WRAP_DEPTH = 4;
+
+    protected function getTemplateInstance(): Template
+    {
+        return Template::getInstance();
+    }
 
     public function execute(Event &$event): void
     {
@@ -32,12 +38,12 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         $layoutType = (string)$eventData->getData('layoutType');
         $contentTemplate = (string)$eventData->getData('contentTemplate');
-        $layoutTemplate = (string)$eventData->getData('fileName');
+        $layoutTemplate = (string)($eventData->getData('layoutTemplate') ?: $eventData->getData('fileName'));
         if ($layoutType === '' || $contentTemplate === '' || $layoutTemplate === '') {
             return;
         }
 
-        $template = Template::getInstance();
+        $template = $this->getTemplateInstance();
         $fallbackContent = (string)$eventData->getData('content');
 
         try {
@@ -58,6 +64,10 @@ class ControllerFetchFileAfter implements ObserverInterface
 
     private function renderContentTemplate(Template $template, string $contentTemplate, string $fallbackContent): string
     {
+        if ($fallbackContent !== '') {
+            return $fallbackContent;
+        }
+
         try {
             $rendered = (string)$template->fetch($contentTemplate);
             if ($rendered !== '') {
@@ -84,13 +94,19 @@ class ControllerFetchFileAfter implements ObserverInterface
         $renderedHtml = $contentHtml;
 
         for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
-            $this->primeTemplateData($template, $currentContentTemplate, $currentContentHtml);
+            $contentRenderKey = $this->primeTemplateData(
+                $template,
+                $currentLayoutTemplate,
+                $currentContentTemplate,
+                $currentContentHtml
+            );
 
             // Clear previous layout directive before rendering.
             $template->setData('layout', null);
-            $renderedHtml = (string)$template->fetch($currentLayoutTemplate, [
-                'content' => $currentContentHtml,
-            ]);
+            $renderedHtml = (string)$template->fetch(
+                $currentLayoutTemplate,
+                $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
+            );
 
             $nextLayout = trim((string)$template->getData('layout'));
             if ($nextLayout === '') {
@@ -111,26 +127,71 @@ class ControllerFetchFileAfter implements ObserverInterface
         return [$renderedHtml, $currentLayoutTemplate];
     }
 
-    private function primeTemplateData(Template $template, string $contentTemplate, string $contentHtml): void
+    private function primeTemplateData(
+        Template $template,
+        string $layoutTemplate,
+        string $contentTemplate,
+        string $contentHtml
+    ): string
     {
+        $isBackendLayout = $this->isBackendLayoutTemplate($layoutTemplate);
+        $contentRenderKey = $isBackendLayout ? PreparedContentStore::put($contentHtml) : '';
+
         $metaData = $template->getData('meta');
         if (!is_array($metaData)) {
             $metaData = [];
         }
-        $metaData['content'] = $contentHtml;
         $metaData['contentTemplate'] = $contentTemplate;
+        if ($contentRenderKey !== '') {
+            unset($metaData['content']);
+            $metaData['contentRenderKey'] = $contentRenderKey;
+        } else {
+            unset($metaData['contentRenderKey']);
+            $metaData['content'] = $contentHtml;
+        }
         $template->setData('meta', $metaData);
 
         $childHtml = $template->getData('child_html');
         if (!is_array($childHtml)) {
             $childHtml = [];
         }
-        $childHtml['content'] = $contentHtml;
+        if ($contentRenderKey !== '') {
+            unset($childHtml['content']);
+            $childHtml['contentRenderKey'] = $contentRenderKey;
+        } else {
+            unset($childHtml['contentRenderKey']);
+            $childHtml['content'] = $contentHtml;
+        }
         $template->setData('child_html', $childHtml);
 
-        // Keep compatibility for templates that read plain vars instead of meta.
-        $template->setData('content', $contentHtml);
+        if ($contentRenderKey !== '') {
+            $template->setData('content', null);
+            $template->setData('contentRenderKey', $contentRenderKey);
+        } else {
+            $template->setData('content', $contentHtml);
+            $template->setData('contentRenderKey', null);
+        }
         $template->setData('contentTemplate', $contentTemplate);
+
+        return $contentRenderKey;
+    }
+
+    private function buildLayoutFetchData(string $layoutTemplate, string $contentHtml, string $contentRenderKey): array
+    {
+        if ($this->isBackendLayoutTemplate($layoutTemplate)) {
+            return [
+                'contentRenderKey' => $contentRenderKey,
+            ];
+        }
+
+        return [
+            'content' => $contentHtml,
+        ];
+    }
+
+    private function isBackendLayoutTemplate(string $layoutTemplate): bool
+    {
+        return $this->detectAreaFromTemplatePath($layoutTemplate) === 'backend';
     }
 
     private function resolveNextLayoutTemplate(string $currentLayoutTemplate, string $layoutSpec): string
