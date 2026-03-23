@@ -39,6 +39,15 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $pageLocales)) {
 if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
     $selectedLocales[] = $pageDefaultLocale;
 }
+$pageSelectedLanguageValues = array_values(array_filter(array_map(
+    static function ($value): string {
+        return is_scalar($value) ? trim((string)$value) : '';
+    },
+    array_unique($selectedLocales)
+), static function (string $value): bool {
+    return $value !== '';
+}));
+$pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 ?>
 
 <!-- CSS控制local翻译标签显示 -->
@@ -1136,6 +1145,15 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         ?>
                         
                         <!-- 当前选中的默认语言显示 -->
+                        <w:i18n:language:select
+                            id="pagebuilder_page_default_locale_selector"
+                            name="default_locale"
+                            input-id="default_locale"
+                            value="pageDefaultLocale"
+                            required="true"
+                            class="w-100"
+                        />
+                        <?php if (false): ?>
                         <div class="input-group">
                             <input type="text" 
                                    class="form-control" 
@@ -1172,6 +1190,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         
                         <!-- 隐藏的input用于表单提交 -->
                         <input type="hidden" id="default_locale" name="default_locale" value="<?= $currentDefaultLocale ?>" required>
+                        <?php endif; ?>
                         
                         <div class="form-text"><?= __('选择页面的主要语言版本') ?></div>
                     </div>
@@ -1183,6 +1202,16 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                         <label class="form-label"><?= __('支持的语言翻译') ?></label>
                         
                         <!-- 已选中的语言标签 -->
+                        <w:i18n:language:select
+                            id="pagebuilder_page_related_locales_selector"
+                            name="locales[]"
+                            input-id="locales"
+                            value="pageSelectedLanguageValues"
+                            multiple="true"
+                            readonly-values="pageReadonlyLocales"
+                            class="w-100"
+                        />
+                        <?php if (false): ?>
                         <div id="selectedLocalesTags" class="mb-2" style="min-height: 38px; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f8f9fa;">
                             <?php 
                             $hasSelectedLocales = false;
@@ -1256,6 +1285,7 @@ if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales)) {
                                        <?= in_array($locale->getData('code'), $selectedLocales) ? 'checked' : '' ?>>
                             <?php endforeach; ?>
                         </div>
+                        <?php endif; ?>
                         
                         <div class="form-text"><?= __('选择后可点击字段旁边的翻译按钮进行翻译') ?></div>
                     </div>
@@ -2749,6 +2779,19 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // 延迟执行以确保所有DOM元素已加载
             setTimeout(() => {
+                const defaultLocaleSelector = window.WelineLanguageSelect && window.WelineLanguageSelect['pagebuilder_page_default_locale_selector'];
+                const relatedLocalesSelector = window.WelineLanguageSelect && window.WelineLanguageSelect['pagebuilder_page_related_locales_selector'];
+
+                if (defaultLocaleSelector) {
+                    defaultLocaleSelector.setValue(parentDefaultLocale);
+                    defaultLocaleSelector.setDisplayOnly(true);
+                }
+
+                if (relatedLocalesSelector) {
+                    relatedLocalesSelector.setValues(parentLocales);
+                    relatedLocalesSelector.setReadonlyValues(parentDefaultLocale ? [parentDefaultLocale] : []);
+                    relatedLocalesSelector.setDisplayOnly(true);
+                }
                 // 3.1 锁定默认语言选择
                 const defaultLocaleInput = document.getElementById('default_locale');
                 if (defaultLocaleInput) {
@@ -3052,6 +3095,18 @@ document.addEventListener('DOMContentLoaded', function() {
 /**
  * 选择默认语言
  */
+document.addEventListener('DOMContentLoaded', function() {
+    var utils = window.WelineLanguageSelectUtils;
+    if (!utils || typeof utils.bindDefaultToMultiple !== 'function') {
+        return;
+    }
+
+    utils.bindDefaultToMultiple({
+        singleId: 'pagebuilder_page_default_locale_selector',
+        multipleId: 'pagebuilder_page_related_locales_selector'
+    });
+});
+
 function selectDefaultLocale(localeCode, localeName) {
     // 更新搜索框显示
     document.getElementById('defaultLocaleSearch').value = `${localeName} (${localeCode})`;

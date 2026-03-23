@@ -14,7 +14,7 @@ use Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService;
 
 class ProviderWorkbenchServiceTest extends TestCore
 {
-    public function testWorkbenchConfigUsesProviderOverridesAndNormalizesTools(): void
+    public function testWorkbenchConfigUsesProviderOverridesAndNormalizesToolsAndStages(): void
     {
         $service = new ProviderWorkbenchService(
             new ProviderRegistry(
@@ -42,7 +42,7 @@ class ProviderWorkbenchServiceTest extends TestCore
         $this->assertSame('Rich Provider', $config['name']);
         $this->assertSame('Provider Badge', $config['badge']);
         $this->assertSame('https://example.test/workbench', $config['native_entry_url']);
-        $this->assertSame('visual_edit', $config['initial_stage']);
+        $this->assertSame('generate', $config['initial_stage']);
         $this->assertSame(
             [
                 'requested_key' => 'requested_value',
@@ -62,8 +62,14 @@ class ProviderWorkbenchServiceTest extends TestCore
         $this->assertSame('link', $config['tools'][0]['type']);
         $this->assertSame('prepare_visual_edit', $config['tools'][1]['code']);
         $this->assertSame('scope_patch', $config['tools'][1]['type']);
-        $this->assertSame('visual_edit', $config['tools'][1]['stage']);
+        $this->assertSame('generate', $config['tools'][1]['stage']);
         $this->assertSame(['preferred_editor' => 'rich'], $config['tools'][1]['scope_patch']);
+
+        $this->assertCount(3, $config['stage_guides']);
+        $this->assertSame('prepare', $config['stage_guides'][0]['code']);
+        $this->assertSame('Custom generate title', $config['stage_guides'][1]['title']);
+        $this->assertSame('Rich generate recommendation', $config['stage_guides'][1]['ai_recommendation']);
+        $this->assertSame(['open_workspace'], $config['stage_guides'][2]['tool_codes']);
     }
 
     public function testWorkbenchConfigFallsBackForBasicProvider(): void
@@ -85,11 +91,14 @@ class ProviderWorkbenchServiceTest extends TestCore
 
         $this->assertSame('provider_basic', $config['code']);
         $this->assertSame('Basic Provider', $config['name']);
-        $this->assertSame('已接入', $config['badge']);
-        $this->assertSame('brief', $config['initial_stage']);
+        $this->assertNotSame('', $config['badge']);
+        $this->assertSame('prepare', $config['initial_stage']);
         $this->assertSame([], $config['tools']);
         $this->assertSame('', $config['native_entry_url']);
         $this->assertNotSame('', $config['welcome_message']);
+        $this->assertCount(3, $config['stage_guides']);
+        $this->assertSame('prepare', $config['stage_guides'][0]['code']);
+        $this->assertSame('complete', $config['stage_guides'][2]['code']);
     }
 }
 
@@ -169,6 +178,15 @@ final class ProviderWorkbenchRichProvider implements AiSiteBuilderWorkbenchProvi
             ],
             'provider_state' => [
                 'provider' => ['mode' => 'rich'],
+            ],
+            'stage_guides' => [
+                'generate' => [
+                    'title' => 'Custom generate title',
+                    'ai_recommendation' => 'Rich generate recommendation',
+                ],
+                'complete' => [
+                    'tool_codes' => ['open_workspace'],
+                ],
             ],
             'tools' => [
                 [
