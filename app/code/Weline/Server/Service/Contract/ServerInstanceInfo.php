@@ -108,9 +108,20 @@ class ServerInstanceInfo
      */
     public function getRunningWorkerCount(): int
     {
+        return $this->countRunningServicesByRole('worker', true);
+    }
+
+    /**
+     * 获取按角色统计的活跃服务数量。
+     *
+     * @param bool $realtime true=实时探测，false=仅使用持久化状态快路径
+     */
+    public function countRunningServicesByRole(string $role, bool $realtime = true): int
+    {
         $count = 0;
-        foreach ($this->getWorkers() as $worker) {
-            if ($worker->isRunning()) {
+        foreach ($this->getServicesByRole($role) as $service) {
+            $running = $realtime ? $service->isRunning() : $service->isExpectedRunningState();
+            if ($running) {
                 $count++;
             }
         }

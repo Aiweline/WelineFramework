@@ -32,14 +32,28 @@ class IpcControlGateway implements IpcControlGatewayInterface
     public function reloadAsync(
         string $instanceName,
         string $reloadType,
-        float $timeout = 3.0
+        float $timeout = 0.8
     ): array {
-        return $this->command($instanceName, ControlMessage::ACTION_RELOAD, $reloadType, [], $timeout);
+        return $this->commandAsync(
+            $instanceName,
+            ControlMessage::ACTION_RELOAD,
+            $reloadType,
+            [],
+            $timeout,
+            'Reload initiated'
+        );
     }
 
-    public function cacheClear(string $instanceName, float $timeout = 3.0): array
+    public function cacheClear(string $instanceName, float $timeout = 0.8): array
     {
-        return $this->command($instanceName, ControlMessage::ACTION_CACHE_CLEAR, '', [], $timeout);
+        return $this->commandAsync(
+            $instanceName,
+            ControlMessage::ACTION_CACHE_CLEAR,
+            '',
+            [],
+            $timeout,
+            'Cache clear queued'
+        );
     }
 
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
@@ -86,8 +100,39 @@ class IpcControlGateway implements IpcControlGatewayInterface
     }
 
     /**
-     * @param resource $conn
+     * 异步控制命令：写入成功后优先等待短 ACK；若 Master 忙于主循环导致超时，则按“已接受”返回。
+     *
      * @return array{success:bool,message:string,data:array}
+     */
+    protected function commandAsync(
+        string $instanceName,
+        string $action,
+        string $reloadType = '',
+        array $payload = [],
+        float $timeout = 0.8,
+        string $acceptedMessage = 'Command queued'
+    ): array {
+        $controlPort = $this->resolveControlPort($instanceName);
+        if ($controlPort <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('实例 %{1} 的 Master 未运行，无法通过 IPC 控制。', [$instanceName]),
+                'data' => [],
+            ];
+        }
+
+        return $this->sendCommand(
+            $controlPort,
+            ControlMessage::command($action, $reloadType, $payload),
+            $timeout,
+            true,
+            $acceptedMessage
+        );
+    }
+
+    /**
+     * @param resource $conn
+     * @return array{success:bool,message:string,data:array,timed_out?:bool}
      */
     private function readCommandResult($conn, float $timeout): array
     {
@@ -122,7 +167,12 @@ class IpcControlGateway implements IpcControlGatewayInterface
             }
 
             if (\feof($conn)) {
-                break;
+                return [
+                    'success' => false,
+                    'message' => (string)__('读取控制命令响应失败。'),
+                    'data' => [],
+                    'timed_out' => false,
+                ];
             }
 
             SchedulerSystem::usleep(50000);
@@ -132,13 +182,20 @@ class IpcControlGateway implements IpcControlGatewayInterface
             'success' => false,
             'message' => (string)__('等待控制命令响应超时（%{1}s）。', [\round($timeout, 1)]),
             'data' => [],
+            'timed_out' => true,
         ];
     }
 
     /**
      * @return array{success:bool,message:string,data:array}
      */
-    private function sendCommand(int $controlPort, string $command, float $timeout): array
+    private function sendCommand(
+        int $controlPort,
+        string $command,
+        float $timeout,
+        bool $acceptWriteTimeoutAsAsyncAck = false,
+        string $acceptedMessage = ''
+    ): array
     {
         $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, $timeout);
         if (!$conn) {
@@ -159,7 +216,24 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 ];
             }
 
-            return $this->readCommandResult($conn, $timeout);
+            $result = $this->readCommandResult($conn, $timeout);
+            if ($acceptWriteTimeoutAsAsyncAck && !empty($result['timed_out'])) {
+                return [
+                    'success' => true,
+                    'message' => $acceptedMessage !== '' ? $acceptedMessage : (string)__('控制命令已发送'),
+                    'data' => [
+                        'async' => true,
+                        'accepted' => true,
+                        'accepted_via' => 'write_timeout_fallback',
+                    ],
+                ];
+            }
+
+            return [
+                'success' => (bool)($result['success'] ?? false),
+                'message' => (string)($result['message'] ?? ''),
+                'data' => \is_array($result['data'] ?? null) ? $result['data'] : [],
+            ];
         } finally {
             @\fclose($conn);
         }
