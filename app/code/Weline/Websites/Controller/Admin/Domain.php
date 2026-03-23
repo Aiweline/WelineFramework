@@ -38,7 +38,7 @@ use Weline\Websites\Service\DomainResolveService;
 use Weline\Websites\Service\DomainSyncService;
 use Weline\Websites\Service\ServerIpService;
 
-#[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理')]
+#[Acl('Weline_Websites::domain_service', '域名服务', 'mdi mdi-domain', '域名服务管理', 'Weline_Websites::website_service')]
 class Domain extends BackendController
 {
     private const CRON_MODULE = 'Weline_Cron';

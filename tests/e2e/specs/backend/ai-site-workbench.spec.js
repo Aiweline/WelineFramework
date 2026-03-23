@@ -19,7 +19,7 @@ function terminalContent(page) {
 test.describe('AI Site Workbench', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('provider lane anchors stay on the hub and workspace flow can advance to visual edit', async ({ page }) => {
+  test('provider lane anchors stay on the hub and workspace flow advances through guided stages', async ({ page }) => {
     test.slow();
     const { hubUrl } = await openHub(page);
 
@@ -48,14 +48,15 @@ test.describe('AI Site Workbench', () => {
 
     await expect(page.locator('#site-builder-title')).toHaveValue('Demo Coffee Roasters');
     await expect(page.locator('#site-builder-domain')).toHaveValue('demo-coffee.local.test');
+    await expect(page.locator('#site-builder-current-stage')).toContainText('信息准备');
 
-    await page.selectOption('#site-builder-stage', 'virtual_theme');
-    await page.click('#site-builder-save-stage');
-    await page.waitForTimeout(1500);
-    await expect(page.locator('#site-builder-stage')).toHaveValue('virtual_theme');
+    await page.click('#site-builder-apply-stage-recommendation');
+    await expect(page.locator('#site-builder-current-stage')).toContainText('页面生成', { timeout: 30000 });
+    await expect(page.locator('body')).toContainText('styles', { timeout: 30000 });
+    await expect(page.locator('body')).toContainText(/Header\s*(\/|和)\s*Footer/, { timeout: 30000 });
 
-    await page.locator('[data-tool-code="prepare_visual_edit_stage"]').click();
-    await expect(page.locator('#site-builder-stage')).toHaveValue('visual_edit', { timeout: 30000 });
+    await page.click('#site-builder-apply-stage-recommendation');
+    await expect(page.locator('#site-builder-current-stage')).toContainText('完成', { timeout: 30000 });
 
     const stateUrl = await page.locator('a[href*="state-json"]').getAttribute('href');
     expect(stateUrl).toBeTruthy();
@@ -69,9 +70,10 @@ test.describe('AI Site Workbench', () => {
     await statePage.close();
 
     expect(state.success).toBeTruthy();
-    expect(state.data.session.current_stage).toBe('visual_edit');
+    expect(state.data.session.current_stage).toBe('complete');
     expect(state.data.session.scope.site_title).toBe('Demo Coffee Roasters');
     expect(state.data.session.scope.preferred_editor).toBe('pagebuilder');
+    expect(state.data.session.scope.pagebuilder_theme_source).toBe('styles');
   });
 
   test('fake AI quick build emits domain, theme, and visual preview milestones', async ({ page }) => {
@@ -82,6 +84,9 @@ test.describe('AI Site Workbench', () => {
     await page.fill('#site-agent-description', 'Launch a polished outdoor gear storefront with seasonal landing pages.');
     await page.click('#site-agent-start-btn');
 
+    await expect(terminal).toContainText('Local demo: recommended registrar', {
+      timeout: 20000,
+    });
     await expect(terminal).toContainText('Local demo: suggested domain', {
       timeout: 20000,
     });
@@ -100,13 +105,16 @@ test.describe('AI Site Workbench', () => {
     await expect(page.locator('#site-agent-start-btn')).toBeEnabled({ timeout: 20000 });
   });
 
-  test('fake manual quick build can run without selecting a registrar account', async ({ page }) => {
+  test('fake manual quick build requires a registrar and then runs the simulated purchase flow', async ({ page }) => {
     test.slow();
     await openHub(page, 'websites_default', true);
     const terminal = terminalContent(page);
 
     await page.uncheck('#site-agent-use-ai');
     await page.fill('#site-agent-domain', 'manual-demo.local.test');
+    const registrarValue = await page.locator('#site-agent-account option:not([value=""])').first().getAttribute('value');
+    expect(registrarValue).toBeTruthy();
+    await page.selectOption('#site-agent-account', registrarValue);
     await page.click('#site-agent-start-btn');
 
     await expect(terminal).toContainText('Local demo: simulated domain purchase and bootstrap resources', {

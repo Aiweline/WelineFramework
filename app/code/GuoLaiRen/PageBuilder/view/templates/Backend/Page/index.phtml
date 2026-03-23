@@ -5,6 +5,7 @@
  *
  * @var \Weline\Framework\View\Template $this
  */
+$quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_CN';
 ?>
 
 <!-- start page title -->
@@ -941,11 +942,20 @@
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label for="siteDefaultLocale" class="form-label"><?= __('默认语言') ?></label>
+                                <w:i18n:language:select
+                                    id="quick_site_default_locale_selector"
+                                    name="default_locale"
+                                    input-id="siteDefaultLocale"
+                                    value="quickSiteDefaultLocale"
+                                    class="w-100"
+                                />
+                                <?php if (false): ?>
                                 <select class="form-select" id="siteDefaultLocale" name="default_locale">
                                     <option value="zh_Hans_CN"><?= __('简体中文') ?></option>
                                     <option value="en_US"><?= __('英语') ?></option>
                                     <option value="hi_IN"><?= __('印地语') ?></option>
                                 </select>
+                                <?php endif; ?>
                             </div>
                             <div class="col-md-6 mb-3">
                                 <label class="form-label"><?= __('已选择') ?></label>
