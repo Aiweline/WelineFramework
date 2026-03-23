@@ -26,6 +26,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\LongRunningPhpRuntime;
 
 class MasterProcess
 {
@@ -222,6 +223,7 @@ class MasterProcess
      */
     public function run(): void
     {
+        (new LongRunningPhpRuntime())->apply();
         $this->log(__('启动 Master 进程...'));
         try {
             // 注册 Master PID 到索引（用于快速检测 Master 是否退出）

@@ -48,6 +48,7 @@ if (!\defined('DS')) {
 
 // 统一自动加载
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+(new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 解析 --frontend 参数
 $isFrontend = \in_array('--frontend', $argv, true);
