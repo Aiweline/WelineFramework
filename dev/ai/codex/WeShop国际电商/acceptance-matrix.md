@@ -14,5 +14,6 @@
 - `compare` storefront route exists, redirects guests to login, and its AJAX add/remove endpoints return structured redirect payloads when unauthenticated.
 - `default` theme renders compare entry points on product detail, category cards, and customer account center without modifying `WeShop_Theme` or `Weline_Theme`.
 - `default` product detail exposes stable review and Q&A tab slots so module slices can render user content without editing theme modules.
+- `default` customer account center exposes stable security, discovery, and order/after-sales card hooks so post-purchase modules can inject entry points without editing theme modules.
 - Customer account center quick links and discovery cards can surface compare data through WeShop-owned hooks and aggregated dashboard services.
 - `WeShop_Customer::frontend::account::security::cards` and `WeShop_Customer::frontend::account::discovery::cards` remain available for cross-module injection.
