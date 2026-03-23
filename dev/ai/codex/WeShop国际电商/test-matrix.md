@@ -9,6 +9,7 @@
   - storefront account dashboard aggregation for recent orders, wishlist, recently viewed, and recommendations
   - compare page-data mapping plus compare add/index/remove controller guest/auth flows
   - recently viewed page-data mapping, current-customer recorder, and remove controller guest/auth flows
+  - shared product-detail tab/hook coverage for review and QA rendering
 - HTTP/API:
   - unified auth endpoints
   - compatibility proxies
