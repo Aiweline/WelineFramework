@@ -7,14 +7,14 @@ namespace WeShop\Auth\Service;
 use WeShop\Auth\Data\ActorContext;
 use WeShop\Auth\Model\PendingAuthChallenge;
 use WeShop\Customer\Service\CustomerAccountService;
-use Weline\Api\Model\ApiUser;
-use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Manager\ObjectManager;
 
 class AuthGrantService
 {
     public function __construct(
         private readonly CustomerAccountService $customerAccountService,
+        private readonly BackendPasswordAuthenticator $backendPasswordAuthenticator,
+        private readonly IntegrationCredentialAuthenticator $integrationCredentialAuthenticator,
         private readonly WeShopAuth2FAOrchestrator $twoFactorOrchestrator,
         private readonly WeShopAuthTokenService $tokenService
     ) {
@@ -32,27 +32,7 @@ class AuthGrantService
                 ['customer']
             );
         } elseif ($area === 'backend') {
-            /** @var BackendUser $backendUser */
-            $backendUser = ObjectManager::getInstance(BackendUser::class);
-            $backendUser->reset()
-                ->where(BackendUser::schema_fields_username, trim($username))
-                ->find()
-                ->fetch();
-
-            if (!$backendUser->getId() && str_contains($username, '@')) {
-                $backendUser->reset()
-                    ->where(BackendUser::schema_fields_email, trim($username))
-                    ->find()
-                    ->fetch();
-            }
-
-            if (
-                !$backendUser->getId()
-                || !$backendUser->getIsEnabled()
-                || !password_verify($password, (string) $backendUser->getPassword())
-            ) {
-                throw new \RuntimeException((string) __('Invalid credentials.'));
-            }
+            $backendUser = $this->backendPasswordAuthenticator->authenticate($username, $password);
 
             $context = new ActorContext(
                 ActorContext::ACTOR_BACKEND,
@@ -77,22 +57,13 @@ class AuthGrantService
             return $this->buildChallengeResponse($context, $challenge);
         }
 
-        return $this->buildTokenResponse($context, $this->tokenService->createTokenPair($context->withTwoFactorVerified()));
+        $verifiedContext = $context->withTwoFactorVerified();
+        return $this->buildTokenResponse($verifiedContext, $this->tokenService->createTokenPair($verifiedContext));
     }
 
     public function issueApiCredentialsToken(string $apiKey, string $apiSecret): array
     {
-        /** @var ApiUser $apiUser */
-        $apiUser = ObjectManager::getInstance(ApiUser::class);
-        $apiUser->reset()
-            ->where(ApiUser::schema_fields_api_key, trim($apiKey))
-            ->where(ApiUser::schema_fields_is_deleted, 0)
-            ->find()
-            ->fetch();
-
-        if (!$apiUser->getId() || !$apiUser->verifySecret($apiSecret) || !$apiUser->getIsEnabled()) {
-            throw new \RuntimeException((string) __('Invalid integration credentials.'));
-        }
+        $apiUser = $this->integrationCredentialAuthenticator->authenticate($apiKey, $apiSecret);
 
         $context = new ActorContext(
             ActorContext::ACTOR_INTEGRATION,
@@ -101,7 +72,8 @@ class AuthGrantService
             ['integration']
         );
 
-        return $this->buildTokenResponse($context, $this->tokenService->createTokenPair($context->withTwoFactorVerified()));
+        $verifiedContext = $context->withTwoFactorVerified();
+        return $this->buildTokenResponse($verifiedContext, $this->tokenService->createTokenPair($verifiedContext));
     }
 
     public function issueGoogleCodeToken(string $area, string $code): array
@@ -140,7 +112,8 @@ class AuthGrantService
             return $this->buildChallengeResponse($context, $challenge);
         }
 
-        return $this->buildTokenResponse($context, $this->tokenService->createTokenPair($context->withTwoFactorVerified()));
+        $verifiedContext = $context->withTwoFactorVerified();
+        return $this->buildTokenResponse($verifiedContext, $this->tokenService->createTokenPair($verifiedContext));
     }
 
     public function refreshToken(string $refreshToken): array

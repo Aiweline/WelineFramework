@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0442-weshop-auth-logout-revocation-slice
 - Started: 2026-03-23 04:42
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: continue after auth api path contract commit dc4ba4f7
 - Follows: `dev/ai/codex/tasks/2026-03-23/2026-03-23-0431-weshop-auth-api-path-and-http-slice/`
@@ -39,3 +39,4 @@
 ## Resume
 
 - Read [plan.md](./plan.md), [progress.md](./progress.md), and [result.md](./result.md).
+- Completed in commit `353577ec`.
