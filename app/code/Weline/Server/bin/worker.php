@@ -86,6 +86,7 @@ unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
 // 统一自动加载：app/code 优先于 vendor（与 app/bootstrap.php 共用 app/autoload.php）
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+(new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
 use Weline\Server\Log\Error\ErrorBootstrap;

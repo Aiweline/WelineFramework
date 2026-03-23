@@ -3684,6 +3684,11 @@ CMD;
 
         $cmdLine = self::getProcessCommandLine($pid);
         if ($cmdLine !== '') {
+            $expectedCommandLineHash = (string) ($record['command_line_hash'] ?? '');
+            if ($expectedCommandLineHash !== '' && \sha1($cmdLine) === $expectedCommandLineHash) {
+                return true;
+            }
+
             if ($expectedProcessName !== '') {
                 $actualProcessName = self::extractCommandLineArg($cmdLine, 'name');
                 if ($actualProcessName !== '') {
