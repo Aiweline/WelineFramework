@@ -5,7 +5,8 @@
 - In progress. Completed checkpoints so far:
 - committed default-theme host normalization as `a16ff32e`
 - completed the local `WeShop_Order` backend/admin slice and prepared it for commit
-- launched parallel worker slices for `WeShop_Promotion` backend and `WeShop_Report` backend
+- completed the parallel worker slices for `WeShop_Promotion` backend (`583ae1c4`) and `WeShop_Report` backend (`b76c9f04`)
+- completed the local `WeShop_Logistics` backend/admin slice and prepared it for commit
 
 ## Changed Files
 
@@ -18,9 +19,8 @@
 
 ## Remaining Risks
 
-- Parallel worker results still need review/integration.
 - Repo-wide `setup:upgrade` remains partially blocked by unrelated/global schema issues.
 
 ## Next Resume Step
 
-- Commit the local `WeShop_Order` slice, then integrate the `Promotion` and `Report` worker outputs as separate follow-up slices.
+- Commit the local `WeShop_Logistics` slice, then continue the next backend/module gap with the same small-slice workflow.

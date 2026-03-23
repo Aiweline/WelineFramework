@@ -13,5 +13,9 @@
 - confirmed existing Order unit coverage only handled frontend controllers
 - 2026-03-24 10:xx Implemented `OrderService` admin-query/status helpers, added `OrderAdminPageDataService`, added backend controllers/menu/templates/tests, and passed targeted syntax + PHPUnit checks.
 - 2026-03-24 10:xx `php bin/w setup:upgrade -m WeShop_Order --yes` progressed through module refresh but still failed later on an unrelated/global schema issue (`未知的索引类型：BTREE`) outside the local controller/template slice.
+- 2026-03-24 11:xx Both backend sidecar workers completed and landed directly on `master`:
+- `583ae1c4` `feat(weshop): finalize promotion backend slice`
+- `b76c9f04` `feat(weshop): build report backend dashboard`
+- 2026-03-24 11:xx Started and completed the next local `WeShop_Logistics` backend/admin slice with router/menu/controller/template/tests; targeted syntax and PHPUnit passed, and `setup:upgrade -m WeShop_Logistics --yes` later hit the same repo-wide/global `BTREE` schema blocker.
 
 - 2026-03-23 22:15 Created the task workspace.
