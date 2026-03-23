@@ -272,4 +272,6 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
             </div>
         <?php endif; ?>
     </section>
+
+    <w:hook name="WeShop_Customer::frontend::account::orders::cards"/>
 </main>
