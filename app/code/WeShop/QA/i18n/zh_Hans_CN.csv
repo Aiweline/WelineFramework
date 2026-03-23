@@ -1,9 +1,21 @@
-﻿产品ID不能为空,产品ID不能为空
-这个产品有保修吗？,这个产品有保修吗？
-是的，我们提供一年质保服务。,是的，我们提供一年质保服务。
-用户A,用户A
-商家,商家
-支持哪些支付方式？,支持哪些支付方式？
-我们支持支付宝、微信支付、信用卡等多种支付方式。,我们支持支付宝、微信支付、信用卡等多种支付方式。
-用户B,用户B
-商品问答,商品问答
+﻿"Please log in to ask a question.",请先登录后再提问。
+"Product ID and question text are required.",商品ID和问题内容不能为空。
+"Your question has been submitted and is pending review.",您的问题已提交，等待审核后展示。
+"Product ID cannot be empty.",商品ID不能为空。
+"Product Q&A",商品问答
+"Please log in to manage your questions.",请先登录后再管理您的问题。
+"Question ID is required.",问题ID不能为空。
+"Cannot remove this question.",无法删除该问题。
+"Question removed.",问题已删除。
+"Product Q&A tab content",商品问答标签内容
+"Render the Q&A block inside product detail tabs.",在商品详情标签中渲染问答模块。
+"QA Page Hooks",问答页面扩展位
+"Inject widgets before the storefront Q&A listing.",在前台问答列表前注入扩展内容。
+"QA Question Item Hooks",问答条目扩展位
+"Add badges or metadata around each storefront question card.",在前台问题卡片周围注入徽标或附加信息。
+"Store team",店铺团队
+"Questions & Answers",问答
+"Community Q&A",社区问答
+"Open Full Q&A",查看完整问答
+"Awaiting a verified answer from the store team.",等待店铺团队审核回复。
+"No questions yet. Start the first question to help future buyers.",还没有问题，欢迎提出第一个问题帮助后续买家。
