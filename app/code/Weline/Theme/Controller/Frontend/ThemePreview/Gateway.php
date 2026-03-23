@@ -15,7 +15,7 @@ use Weline\Theme\Service\ThemePreviewEntryApplication;
  */
 class Gateway extends FrontendController
 {
-    public function index(): string
+    public function index(): array|string
     {
         $editorArea = (string)$this->request->getParam(
             'editor_area',
