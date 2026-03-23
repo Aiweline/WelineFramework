@@ -2,30 +2,32 @@
 
 ## Wave 1
 
-- 统一认证对象与 challenge 流程
-- GoogleAuth 模块骨架
-- 前台客户密码登录、注册、找回密码重构
-- 统一 API 认证入口
+- Unified auth actor model and challenge flow
+- GoogleAuth module foundation
+- Storefront customer password login, registration, and password reset hardening
+- Unified auth API entrypoints
 
 ## Wave 2
 
-- 后台登录扩展点
-- 后台 Google 绑定与登录
-- 2FA 编排接入前后台与 API
-- 兼容旧 API 代理
+- Backend login extension point
+- Backend Google binding and login
+- 2FA orchestration for storefront, backend, and API token issuance
+- Legacy API compatibility proxies
 
 ## Wave 3
 
-- 主题兼容检查与告警
-- 后台 IA 与菜单资源
-- 代表性交易链模块补齐
-- 测试矩阵完善
+- Theme compatibility checks and warnings
+- Backend IA and menu-resource completion
+- Core commerce transaction-chain completion
+- Test-matrix expansion and CI hardening
 
 ## Current Execution Notes
 
 - Checkout payment methods must be provided through `w_query`, not hardcoded in controllers or theme layouts.
 - New frontend-facing slices should avoid adding extra `Frontend` path layers when new route files are introduced; existing legacy controllers can be refactored in place.
 - `default` theme checkout, account center, recommendations, and related storefront layouts should prefer rendering controller/page `content` through shared layout shells instead of duplicating module business UI in the layout file.
+- Storefront account-center slices should aggregate `orders + wishlist + recently viewed + guess-you-may-like` through dedicated services, not inline controller queries.
+- `default` theme account center must keep the security-card hook and discovery-card hook so Google login, 2FA, membership, wishlist, and recommendation modules can inject safely.
 - When a theme layout is missing required hooks or slots, WeShop should patch the `default` theme where possible and later surface compatibility warnings rather than coupling modules to one theme implementation.
 - Payment wave priority is:
   - `manual_transfer`
