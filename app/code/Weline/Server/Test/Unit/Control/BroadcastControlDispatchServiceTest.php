@@ -28,7 +28,7 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         };
 
         $manager = new class extends ServerInstanceManager {
-            public function listInstanceNames(): array
+            public function listPersistedInstanceNames(): array
             {
                 return ['alpha', 'beta', 'stopped'];
             }
