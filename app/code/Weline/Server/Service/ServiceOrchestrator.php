@@ -864,9 +864,8 @@ class ServiceOrchestrator
             }
             $instance->pid = $pid > 0 ? $pid : 0;
             $instance->state = ServiceInstance::STATE_STARTING;
-            // Use the real post-spawn time as the startup baseline. On Windows,
-            // batchCreate still starts children sequentially, so precomputed
-            // timestamps can make later workers look 60s older than they are.
+            // Use the real post-spawn time as the startup baseline so
+            // acceptance timing tracks the actual batch launch completion.
             $instance->startedAt = \microtime(true);
             $this->registry->addInstance($instance);
             $provider->onStarted($instance);

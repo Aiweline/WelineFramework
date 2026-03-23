@@ -473,7 +473,7 @@ class Processer
         
         // 阻塞模式 + 后台：先快速检测进程是否已在运行
         // 使用 getData + isRunningByPid 快速路径，避免慢的系统搜索
-        if ($block && !$foreground) {
+        if (self::shouldTryManagedProcessReuse((bool) $block, $foreground)) {
             $existingPid = (int) self::getData($pname, 'pid');
             if ($existingPid > 0 && self::isManagedProcessRunning($existingPid, null, '', $pname)) {
                 return $existingPid;
@@ -1970,13 +1970,6 @@ class Processer
      */
     private static function batchCreateWindows(array $commands): ?array
     {
-        foreach ($commands as $config) {
-            if (!empty($config['foreground'])) {
-                // Foreground workers need the visible cmd/start path from create().
-                return null;
-            }
-        }
-
         $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
         $procOpenAvailable = \function_exists('proc_open') && !\in_array('proc_open', $disabledFunctions, true);
         $execAvailable = \function_exists('exec') && !\in_array('exec', $disabledFunctions, true);
@@ -2002,8 +1995,9 @@ class Processer
             $processInfo = self::ensureProcessName($command);
             $processCommand = $processInfo['command'];
             $block = (bool) ($config['block'] ?? false);
+            $foreground = (bool) ($config['foreground'] ?? false);
 
-            if ($block) {
+            if (self::shouldTryManagedProcessReuse($block, $foreground)) {
                 $existingPid = (int) self::getData($processCommand, 'pid');
                 if ($existingPid > 0 && self::isManagedProcessRunning($existingPid, null, '', $processCommand)) {
                     $results[$key] = $existingPid;
@@ -2020,15 +2014,32 @@ class Processer
             }
 
             [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($processCommand);
+            $processName = self::extractCommandLineArg($processCommand, 'name');
+            $foregroundScript = null;
+            if ($foreground) {
+                $foregroundScript = self::writeWindowsForegroundLauncherScript($phpBinary, $arguments, BP);
+                if ($foregroundScript === null) {
+                    if ($enableLog) {
+                        self::setOutput(
+                            $processCommand,
+                            "[ERROR] failed to prepare windows foreground batch launcher" . PHP_EOL,
+                            true
+                        );
+                    }
+                    $results[$key] = 0;
+                    continue;
+                }
+            }
             $launchItems[] = [
                 'key' => (string) $key,
                 'command' => $processCommand,
                 'php' => $phpBinary,
                 'arguments' => $arguments,
-                'process_name' => self::extractCommandLineArg($processCommand, 'name'),
+                'process_name' => $processName,
                 'cwd' => BP,
                 'enable_log' => $enableLog,
-                'foreground' => (bool) ($config['foreground'] ?? false),
+                'foreground' => $foreground,
+                'foreground_script' => $foregroundScript,
             ];
         }
 
@@ -2039,10 +2050,12 @@ class Processer
         $resultPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-result-');
         $errorPath = \tempnam(\sys_get_temp_dir(), 'weline-batch-error-');
         if ($resultPath === false || $resultPath === '' || $errorPath === false || $errorPath === '') {
+            self::cleanupWindowsForegroundLaunchers($launchItems);
             return null;
         }
         $scriptPath = self::writeWindowsBatchCreateScript($launchItems, $resultPath, $errorPath);
         if ($scriptPath === null) {
+            self::cleanupWindowsForegroundLaunchers($launchItems);
             @\unlink($resultPath);
             @\unlink($errorPath);
             return null;
@@ -2078,6 +2091,7 @@ class Processer
             }
 
             if (!\is_resource($psProcess)) {
+                self::cleanupWindowsForegroundLaunchers($launchItems);
                 @\unlink($scriptPath);
                 @\unlink($resultPath);
                 @\unlink($errorPath);
@@ -2104,6 +2118,7 @@ class Processer
             }
 
             if ($lastError !== null) {
+                self::cleanupWindowsForegroundLaunchers($launchItems);
                 @\unlink($scriptPath);
                 @\unlink($resultPath);
                 @\unlink($errorPath);
@@ -2143,8 +2158,16 @@ class Processer
             }
         }
 
+        $resolvedPidMap = self::waitForManagedProcessLaunchBatch(
+            \array_values(\array_filter(
+                $launchItems,
+                static fn (array $item): bool => (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
+            )),
+            5.0
+        );
+
         foreach ($launchItems as $item) {
-            $pid = (int) ($pidMap[$item['key']] ?? 0);
+            $pid = (int) ($pidMap[$item['key']] ?? $resolvedPidMap[$item['key']] ?? 0);
             if ($pid <= 0 && !empty($item['enable_log'])) {
                 if ($diagnostic !== '') {
                     self::setOutput($item['command'], "[ERROR] batchCreate(raw output) {$diagnostic}" . PHP_EOL, true);
@@ -2164,7 +2187,17 @@ class Processer
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
+     * Display flags such as foreground must not change whether a managed
+     * process can be reused. Reuse follows block semantics only.
+     */
+    private static function shouldTryManagedProcessReuse(bool $block, bool $foreground): bool
+    {
+        unset($foreground);
+        return $block;
+    }
+
+    /**
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
      */
     private static function writeWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2187,6 +2220,84 @@ class Processer
         }
 
         return $scriptPath;
+    }
+
+    /**
+     * @param array<int, array{foreground_script?: string|null}> $launchItems
+     */
+    private static function cleanupWindowsForegroundLaunchers(array $launchItems): void
+    {
+        foreach ($launchItems as $item) {
+            $foregroundScript = (string) ($item['foreground_script'] ?? '');
+            if ($foregroundScript !== '' && \is_file($foregroundScript)) {
+                @\unlink($foregroundScript);
+            }
+        }
+    }
+
+    /**
+     * @param array<int, array{key: string, command: string, process_name: string}> $launchItems
+     * @return array<string, int>
+     */
+    private static function waitForManagedProcessLaunchBatch(array $launchItems, float $timeoutSeconds = 5.0): array
+    {
+        if ($launchItems === []) {
+            return [];
+        }
+
+        $pending = [];
+        foreach ($launchItems as $item) {
+            $key = (string) ($item['key'] ?? '');
+            $command = (string) ($item['command'] ?? '');
+            $processName = (string) ($item['process_name'] ?? '');
+            if ($key === '' || $command === '' || $processName === '') {
+                continue;
+            }
+
+            $pending[$key] = [
+                'command' => $command,
+                'process_name' => $processName,
+                'launch_id' => self::extractCommandLineArg($command, 'launch-id'),
+            ];
+        }
+
+        if ($pending === []) {
+            return [];
+        }
+
+        $resolved = [];
+        $deadline = \microtime(true) + \max(0.1, $timeoutSeconds);
+        do {
+            foreach ($pending as $key => $item) {
+                foreach (self::getProcessIdsByName($item['process_name']) as $candidatePid) {
+                    $candidatePid = (int) $candidatePid;
+                    if ($candidatePid <= 0) {
+                        continue;
+                    }
+
+                    if (!self::isManagedProcessRunning(
+                        $candidatePid,
+                        $item['process_name'],
+                        (string) $item['launch_id'],
+                        $item['command']
+                    )) {
+                        continue;
+                    }
+
+                    $resolved[$key] = self::setPid($item['command'], $candidatePid);
+                    unset($pending[$key]);
+                    break;
+                }
+            }
+
+            if ($pending === []) {
+                break;
+            }
+
+            \usleep(100_000);
+        } while (\microtime(true) < $deadline);
+
+        return $resolved;
     }
 
     /**
@@ -2465,7 +2576,7 @@ CMD;
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2482,6 +2593,7 @@ CMD;
             $cwd = \str_replace("'", "''", (string) ($item['cwd'] ?? BP));
             $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
             $foreground = !empty($item['foreground']);
+            $foregroundScript = self::escapePowerShellLiteral((string) ($item['foreground_script'] ?? ''));
             $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
             $redirectBase = \preg_replace('/[^A-Za-z0-9._-]+/', '-', $redirectBase) ?: 'process';
             $stdoutPath = self::escapePowerShellLiteral(
@@ -2491,27 +2603,33 @@ CMD;
                 \sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'weline-batch-' . $redirectBase . '.err.log'
             );
 
-            if ($key === '' || $php === '') {
+            if ($key === '' || (!$foreground && $php === '') || ($foreground && $foregroundScript === '')) {
                 return null;
             }
 
             $lines[] = 'try {';
             $lines[] = '    $startArgs = @{';
-            $lines[] = "        FilePath = '{$php}'";
+            $lines[] = "        FilePath = '" . ($foreground ? 'cmd.exe' : $php) . "'";
             $lines[] = "        WorkingDirectory = '{$cwd}'";
             $lines[] = "        WindowStyle = '" . ($foreground ? 'Normal' : 'Hidden') . "'";
-            $lines[] = '        PassThru = $true';
             $lines[] = "        ErrorAction = 'Stop'";
-            $lines[] = '    }';
             if (!$foreground) {
+                $lines[] = '        PassThru = $true';
+            }
+            $lines[] = '    }';
+            if ($foreground) {
+                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c','\"{$foregroundScript}\"')";
+                $lines[] = '    Start-Process @startArgs | Out-Null';
+                $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
+            } else {
                 $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
                 $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
+                if ($arguments !== '') {
+                    $lines[] = "    \$startArgs.ArgumentList = '{$arguments}'";
+                }
+                $lines[] = '    $p = Start-Process @startArgs';
+                $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
             }
-            if ($arguments !== '') {
-                $lines[] = "    \$startArgs.ArgumentList = '{$arguments}'";
-            }
-            $lines[] = '    $p = Start-Process @startArgs';
-            $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
             $lines[] = '} catch {';
             $lines[] = '    [System.IO.File]::AppendAllText($errorPath, $_.Exception.Message + [Environment]::NewLine)';
             $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
