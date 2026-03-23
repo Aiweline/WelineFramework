@@ -10,37 +10,43 @@ use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
 /**
- * 分销联盟模型
+ * Affiliate account model.
  */
-#[Table(comment: 'WeShop分销联盟表')]
-#[Index(name: 'idx_customer_id', columns: ['customer_id'], type: 'UNIQUE', comment: '客户ID唯一索引')]
-#[Index(name: 'idx_referral_code', columns: ['referral_code'], type: 'UNIQUE', comment: '推荐码唯一索引')]
+#[Table(comment: 'WeShop affiliate account table')]
+#[Index(name: 'idx_customer_id', columns: [self::schema_fields_CUSTOMER_ID], type: 'UNIQUE', comment: 'Unique customer affiliate account')]
+#[Index(name: 'idx_referral_code', columns: [self::schema_fields_REFERRAL_CODE], type: 'UNIQUE', comment: 'Unique referral code')]
 class Affiliate extends Model
 {
     public const schema_table = 'weshop_affiliate';
     public const schema_primary_key = 'affiliate_id';
-    public string $indexer = 'affiliate_indexer';
 
-    #[Col('integer', 0, primaryKey: true, autoIncrement: true, nullable: false, comment: '分销ID')]
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Affiliate ID')]
     public const schema_fields_ID = 'affiliate_id';
-    #[Col('integer', 0, nullable: false, unique: true, comment: '客户ID')]
+
+    #[Col(type: 'int', nullable: false, comment: 'Customer ID')]
     public const schema_fields_CUSTOMER_ID = 'customer_id';
-    #[Col('varchar', 50, nullable: false, unique: true, comment: '推荐码')]
+
+    #[Col(type: 'varchar', length: 50, nullable: false, comment: 'Referral code')]
     public const schema_fields_REFERRAL_CODE = 'referral_code';
-    #[Col('decimal', '5,2', nullable: false, default: 0.00, comment: '佣金比例')]
+
+    #[Col(type: 'decimal', length: '5,2', nullable: false, default: 0.10, comment: 'Commission rate')]
     public const schema_fields_COMMISSION_RATE = 'commission_rate';
-    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '总佣金')]
+
+    #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: 'Total commission amount')]
     public const schema_fields_TOTAL_COMMISSION = 'total_commission';
-    #[Col('decimal', '10,2', nullable: false, default: 0.00, comment: '已支付佣金')]
+
+    #[Col(type: 'decimal', length: '10,2', nullable: false, default: 0.00, comment: 'Paid commission amount')]
     public const schema_fields_PAID_COMMISSION = 'paid_commission';
-    #[Col('varchar', 20, nullable: true, default: 'active', comment: '状态')]
+
+    #[Col(type: 'varchar', length: 20, nullable: false, default: 'active', comment: 'Affiliate status')]
     public const schema_fields_STATUS = 'status';
-    #[Col('datetime', 0, nullable: false, comment: '创建时间')]
+
+    #[Col(type: 'datetime', nullable: false, comment: 'Created at')]
     public const schema_fields_CREATED_AT = 'created_at';
-    #[Col('datetime', 0, nullable: false, comment: '更新时间')]
+
+    #[Col(type: 'datetime', nullable: false, comment: 'Updated at')]
     public const schema_fields_UPDATED_AT = 'updated_at';
 
-
-    public array $_unit_primary_keys = ['affiliate_id'];
-    public array $_index_sort_keys = ['customer_id', 'referral_code'];
+    public array $_unit_primary_keys = [self::schema_fields_ID];
+    public array $_index_sort_keys = [self::schema_fields_CUSTOMER_ID, self::schema_fields_CREATED_AT];
 }
