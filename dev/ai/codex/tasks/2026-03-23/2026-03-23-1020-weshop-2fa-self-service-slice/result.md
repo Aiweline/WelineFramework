@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- Implementation complete and ready to commit.
+- Completed in commit `e2675b90 feat(weshop): add storefront and backend 2fa settings`.
 
 ## Delivered
 
@@ -51,5 +51,4 @@
 
 ## Resume Notes
 
-- Record the commit hash here once the slice is committed.
 - The next WeShop auth slice should move from self-service management into API token / challenge endpoints or theme-compatibility notifications, using a fresh task workspace rather than reusing this one for mutable state.
