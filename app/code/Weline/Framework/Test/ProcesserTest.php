@@ -367,6 +367,35 @@ class ProcesserTest extends TestCore
         );
     }
 
+    public function testDoesPidMatchRecordedIdentityAcceptsForegroundMasterByCommandLineHash(): void
+    {
+        $pid = 654321;
+        $commandLine = '"C:\php\php.exe" bin/w s:start -r -f -frontend -p 9982';
+
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->expects(self::once())
+            ->method('isRunningByPid')
+            ->with($pid)
+            ->willReturn(true);
+        $driver->expects(self::once())
+            ->method('getProcessCommandLine')
+            ->with($pid)
+            ->willReturn($commandLine);
+
+        $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
+        $reflection->setAccessible(true);
+        $reflection->setValue(null, $driver);
+
+        self::assertTrue($this->invokePrivateStatic(Processer::class, 'doesPidMatchRecordedIdentity', [
+            $pid,
+            [
+                'pname' => '--name=weline-wls-master-default',
+                'process_name' => 'weline-wls-master-default',
+                'command_line_hash' => \sha1($commandLine),
+            ],
+        ]));
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
