@@ -501,8 +501,8 @@ class Processer
             // On Windows, non-interactive PowerShell Start-Process can create headless
             // conhost instances. Use cmd/start so frontend workers get a real console.
             if (IS_WIN) {
-                $pid = self::createWindowsForeground($pname, (bool) $block, $enableLog, $availableFunctions);
-                if ($pid !== null) {
+                $pid = self::createWindowsForeground($pname, $enableLog, $availableFunctions);
+                if ($pid > 0) {
                     return $pid;
                 }
             }
@@ -2207,14 +2207,9 @@ class Processer
     {
         return \array_values(\array_filter(
             $launchItems,
-            static fn (array $item): bool => self::shouldWaitForManagedPidResolution((bool) ($item['block'] ?? false))
+            static fn (array $item): bool => (bool) ($item['block'] ?? false)
                 && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
         ));
-    }
-
-    private static function shouldWaitForManagedPidResolution(bool $block): bool
-    {
-        return $block;
     }
 
     /**
@@ -2325,14 +2320,14 @@ class Processer
      * Launch a visible Windows console for frontend workers, then poll by
      * command line identity because cmd/start does not expose the child PID.
      */
-    private static function createWindowsForeground(string $pname, bool $block, bool $enableLog, array $availableFunctions): ?int
+    private static function createWindowsForeground(string $pname, bool $enableLog, array $availableFunctions): int
     {
         if (empty($availableFunctions['popen']) && empty($availableFunctions['exec'])) {
             if ($enableLog) {
                 self::setOutput($pname, "[ERROR] windows foreground launch requires popen or exec" . PHP_EOL, true);
             }
 
-            return null;
+            return 0;
         }
 
         [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($pname);
@@ -2342,7 +2337,7 @@ class Processer
                 self::setOutput($pname, "[ERROR] failed to prepare windows foreground launcher" . PHP_EOL, true);
             }
 
-            return null;
+            return 0;
         }
 
         $windowTitle = self::extractCommandLineArg($pname, 'name');
@@ -2390,10 +2385,6 @@ class Processer
                 self::setOutput($pname, "[ERROR] windows foreground launch failed: {$lastError}" . PHP_EOL, true);
             }
 
-            return null;
-        }
-
-        if (!self::shouldWaitForManagedPidResolution($block)) {
             return 0;
         }
 
@@ -2731,6 +2722,13 @@ CMD;
         if (empty($pids)) {
             return [];
         }
+
+        if (IS_WIN) {
+            $batched = self::batchSendSignalWindows($pids, $signal);
+            if ($batched !== null) {
+                return $batched;
+            }
+        }
         
         $results = [];
         $driver = self::getDriver();
@@ -2784,6 +2782,142 @@ CMD;
         
         return $results;
     }
+
+    /**
+     * 批量派发信号但不等待子进程真正退出。
+     *
+     * stopAll 阶段 3 只负责把终止意图尽快派发出去，实际退出校验统一交给后续阶段，
+     * 避免 Master 在 Windows 上同步等待 taskkill 完成而阻塞控制面。
+     *
+     * @param int[] $pids
+     * @return array<int, bool>
+     */
+    public static function dispatchBatchSignal(array $pids, int $signal = 15): array
+    {
+        if (empty($pids)) {
+            return [];
+        }
+
+        if (IS_WIN) {
+            $dispatched = self::dispatchBatchSignalWindows($pids, $signal);
+            if ($dispatched !== null) {
+                return $dispatched;
+            }
+        }
+
+        return self::batchSendSignal($pids, $signal);
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array<int, bool>|null
+     */
+    private static function batchSendSignalWindows(array $pids, int $signal): ?array
+    {
+        if (!\in_array($signal, [9, 15], true)) {
+            return null;
+        }
+
+        $validPids = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $validPids[$pid] = $pid;
+            }
+        }
+
+        if ($validPids === []) {
+            return [];
+        }
+
+        $results = [];
+        foreach (\array_chunk(\array_values($validPids), 32) as $chunk) {
+            $command = self::buildWindowsBatchSignalCommand($chunk);
+            $output = [];
+            $returnCode = 0;
+            self::execute($command, $output, $returnCode);
+            \usleep(200000);
+
+            $running = self::batchCheckRunning($chunk);
+            foreach ($chunk as $pid) {
+                $results[$pid] = !($running[$pid] ?? false);
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param int[] $pids
+     * @return array<int, bool>|null
+     */
+    private static function dispatchBatchSignalWindows(array $pids, int $signal): ?array
+    {
+        if (!\in_array($signal, [9, 15], true)) {
+            return null;
+        }
+
+        $validPids = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $validPids[$pid] = $pid;
+            }
+        }
+
+        if ($validPids === []) {
+            return [];
+        }
+
+        $results = [];
+        foreach (\array_chunk(\array_values($validPids), 32) as $chunk) {
+            $command = self::buildWindowsAsyncBatchSignalCommand($chunk);
+            $output = [];
+            $returnCode = 0;
+            self::execute($command, $output, $returnCode);
+
+            $chunkSucceeded = ($returnCode === 0);
+            foreach ($chunk as $pid) {
+                $results[$pid] = $chunkSucceeded;
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildWindowsBatchSignalCommand(array $pids): string
+    {
+        $pidArgs = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pidArgs[] = '/PID ' . $pid;
+            }
+        }
+
+        return 'taskkill /F ' . \implode(' ', $pidArgs) . ' 2>NUL';
+    }
+
+    /**
+     * @param int[] $pids
+     */
+    private static function buildWindowsAsyncBatchSignalCommand(array $pids): string
+    {
+        $pidArgs = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid > 0) {
+                $pidArgs[] = '/PID ' . $pid;
+            }
+        }
+
+        return 'cmd /d /c start "" /B cmd /d /c "taskkill /F '
+            . \implode(' ', $pidArgs)
+            . ' 1>NUL 2>NUL"';
+    }
     
     /**
      * 批量检查多个进程的运行状态
@@ -2794,13 +2928,75 @@ CMD;
     public static function batchCheckRunning(array $pids): array
     {
         $result = [];
+        $validPids = [];
         foreach ($pids as $pid) {
             $pid = (int) $pid;
             if ($pid > 0) {
-                $result[$pid] = self::isRunningByPid($pid);
+                $validPids[$pid] = $pid;
             }
         }
+
+        if ($validPids === []) {
+            return $result;
+        }
+
+        if (IS_WIN) {
+            $fastResult = self::batchCheckRunningWindows(\array_values($validPids));
+            if ($fastResult !== null) {
+                return $fastResult;
+            }
+        }
+
+        $processInfo = self::batchGetProcessInfo(\array_values($validPids));
+        foreach ($validPids as $pid) {
+            $result[$pid] = (bool) ($processInfo[$pid]['exists'] ?? false);
+        }
+
         return $result;
+    }
+
+    /**
+     * Windows 下小批量 PID 查询优先走 tasklist /FI，避免每次 stop 都扫描全量进程表。
+     *
+     * @param int[] $pids
+     * @return array<int, bool>|null
+     */
+    private static function batchCheckRunningWindows(array $pids): ?array
+    {
+        if (\count($pids) === 0) {
+            return [];
+        }
+
+        if (\count($pids) > 16) {
+            return null;
+        }
+
+        $results = [];
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $output = [];
+            $returnCode = 0;
+            self::execute("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $returnCode);
+
+            $results[$pid] = false;
+            foreach ($output as $line) {
+                $parts = \str_getcsv(\trim($line), ',', '"', '');
+                if (\count($parts) < 2) {
+                    continue;
+                }
+
+                if ((int) \preg_replace('/[^\d]/', '', (string) $parts[1]) === $pid) {
+                    $results[$pid] = true;
+                    break;
+                }
+            }
+        }
+
+        return $results;
     }
     
     /**
