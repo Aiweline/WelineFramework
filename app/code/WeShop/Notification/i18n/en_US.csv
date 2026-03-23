@@ -1,3 +1,10 @@
-﻿请先登录,请先登录
-通知ID不能为空,通知ID不能为空
-已标记为已读,已标记为已读
+﻿"Please log in to continue.","Please log in to continue."
+"Notification ID is required.","Notification ID is required."
+"Notification could not be marked as read.","Notification could not be marked as read."
+"Notification marked as read.","Notification marked as read."
+"Customer ID is required.","Customer ID is required."
+"Stay Updated","Stay Updated"
+"Notification Center","Notification Center"
+"Open Center","Open Center"
+"Alerts and updates in one place","Alerts and updates in one place"
+"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.","Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center."

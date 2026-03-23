@@ -6,6 +6,7 @@ namespace WeShop\Product\Test\Unit\Controller\Frontend\Product;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Product\Controller\Frontend\Product\View;
+use WeShop\Product\Service\ProductViewPageDataService;
 use WeShop\RecentlyViewed\Service\StorefrontRecentlyViewedRecorder;
 
 /**
@@ -71,7 +72,10 @@ class ViewTest extends TestCase
         $property = $reflection->getProperty('layoutType');
         $property->setAccessible(true);
         
-        $controller = new View($this->createMock(StorefrontRecentlyViewedRecorder::class));
+        $controller = new View(
+            $this->createMock(StorefrontRecentlyViewedRecorder::class),
+            $this->createMock(ProductViewPageDataService::class)
+        );
         $this->assertEquals('product', $property->getValue($controller));
     }
 

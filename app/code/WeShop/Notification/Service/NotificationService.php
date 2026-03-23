@@ -4,57 +4,78 @@ declare(strict_types=1);
 
 namespace WeShop\Notification\Service;
 
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Notification\Model\Notification;
+use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 通知服务
- */
 class NotificationService
 {
-    /**
-     * 发送通知
-     * 
-     * @param array $notificationData 通知数据
-     * @return Notification
-     */
     public function sendNotification(array $notificationData): Notification
     {
         /** @var Notification $notification */
         $notification = ObjectManager::getInstance(Notification::class);
-        
+        $customerId = (int) ($notificationData['customer_id'] ?? 0);
+        if ($customerId <= 0) {
+            throw new \InvalidArgumentException((string) __('Customer ID is required.'));
+        }
+
         $notification->clearData()
-            ->setData('customer_id', $notificationData['customer_id'] ?? 0)
-            ->setData('type', $notificationData['type'] ?? 'info')
-            ->setData('title', $notificationData['title'] ?? '')
-            ->setData('content', $notificationData['content'] ?? '')
-            ->setData('is_read', 0)
+            ->setData(Notification::schema_fields_CUSTOMER_ID, $customerId)
+            ->setData(Notification::schema_fields_TYPE, (string) ($notificationData['type'] ?? 'info'))
+            ->setData(Notification::schema_fields_TITLE, (string) ($notificationData['title'] ?? ''))
+            ->setData(Notification::schema_fields_CONTENT, (string) ($notificationData['content'] ?? ''))
+            ->setData(Notification::schema_fields_IS_READ, 0)
+            ->setData(Notification::schema_fields_CREATED_AT, date('Y-m-d H:i:s'))
             ->save();
-        
+
         return $notification;
     }
-    
+
     /**
-     * 获取客户通知列表
-     * 
-     * @param int $customerId 客户ID
-     * @param bool $unreadOnly 仅未读
-     * @return array
+     * @return array<int, array<string, mixed>>
      */
-    public function getCustomerNotifications(int $customerId, bool $unreadOnly = false): array
+    public function getCustomerNotifications(int $customerId, int $limit = 20, bool $unreadOnly = false): array
     {
         /** @var Notification $notification */
         $notification = ObjectManager::getInstance(Notification::class);
-        
-        $notification->clear()
-            ->where('customer_id', $customerId);
-        
+
+        $query = $notification->clear()
+            ->where(Notification::schema_fields_CUSTOMER_ID, $customerId);
         if ($unreadOnly) {
-            $notification->where('is_read', 0);
+            $query->where(Notification::schema_fields_IS_READ, 0);
         }
-        
-        return $notification->order('created_at', 'DESC')
+        if ($limit > 0) {
+            $query->limit($limit);
+        }
+
+        return $query->order(Notification::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
+    }
+
+    public function getUnreadCount(int $customerId): int
+    {
+        return count($this->getCustomerNotifications($customerId, 0, true));
+    }
+
+    public function markAsRead(int $notificationId, int $customerId = 0): bool
+    {
+        /** @var Notification $notification */
+        $notification = ObjectManager::getInstance(Notification::class);
+        $notification->load($notificationId);
+
+        if (!$notification->getId()) {
+            return false;
+        }
+
+        if ($customerId > 0 && (int) $notification->getData(Notification::schema_fields_CUSTOMER_ID) !== $customerId) {
+            return false;
+        }
+
+        if ((int) $notification->getData(Notification::schema_fields_IS_READ) === 1) {
+            return true;
+        }
+
+        $notification->setData(Notification::schema_fields_IS_READ, 1)->save();
+        return true;
     }
 }
