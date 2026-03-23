@@ -122,12 +122,14 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
                             <?= __('Add to Cart') ?>
                         </button>
                         <w:hook name="WeShop_Product::detail::after_add_to_cart"/>
+                        <w:hook name="WeShop_Product::frontend::product::detail::after-add-to-cart"/>
                         <button type="button" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary/20 text-primary gap-2 text-base font-bold leading-normal tracking-wide hover:bg-primary/30 transition-colors add-to-wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
                             <span class="material-symbols-outlined">favorite</span>
                             <?= __('Add to Wishlist') ?>
                         </button>
                     </div>
                 </form>
+                <w:hook name="WeShop_Product::frontend::product::add-to-cart::options-popup"/>
                 
                 <!-- Highlights -->
                 <?php if ($product['highlights'] ?? null): ?>
@@ -182,12 +184,12 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
 
             <!-- Q&A Tab -->
             <div class="tab-content py-10 hidden" id="qa-content">
-                <w:hook name="WeShop_QA::product::questions"/>
+                <w:hook name="WeShop_QA::frontend::layouts::product-questions::content"/>
             </div>
             
             <!-- Reviews Tab -->
             <div class="tab-content py-10 hidden" id="reviews-content">
-                <w:hook name="WeShop_Review::product::reviews"/>
+                <w:hook name="WeShop_Review::frontend::layouts::product-reviews::content"/>
             </div>
             <w:hook name="WeShop_Product::detail::tabs_after"/>
         </div>
