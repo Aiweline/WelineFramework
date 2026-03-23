@@ -38,14 +38,18 @@
 北京市朝阳区xxx街道xxx号,北京市朝阳区xxx街道xxx号
 "周一至周五 9:00-18:00","周一至周五 9:00-18:00"
 客户服务,客户服务
-"Storefront account security cards","Storefront account security cards"
-"Inject sign-in security modules into the storefront customer account center.","Inject sign-in security modules into the storefront customer account center."
-"Storefront account discovery cards","Storefront account discovery cards"
-"Inject saved, discovery, and follow-up cards into the storefront customer account center.","Inject saved, discovery, and follow-up cards into the storefront customer account center."
-"My Orders","My Orders"
-"My Wishlist","My Wishlist"
-"Manage Addresses","Manage Addresses"
-"Security Center","Security Center"
+"Storefront account security cards",前台账户安全卡片
+"Inject sign-in security modules into the storefront customer account center.",在前台客户账户中心注入登录安全模块。
+"Storefront account discovery cards",前台账户发现卡片
+"Inject saved, discovery, and follow-up cards into the storefront customer account center.",在前台客户账户中心注入收藏、发现和后续动作卡片。
+"Storefront account order cards",前台账户订单卡片
+"Inject order, return, invoice, and after-sales cards into the storefront customer account center.",在前台客户账户中心注入订单、退换、发票和售后卡片。
+"Compare Products",对比商品
+"My Orders",我的订单
+"Recently Viewed",最近浏览
+"My Wishlist",我的心愿单
+"Manage Addresses",管理地址
+"Security Center",安全中心
 "Password must be at least 8 characters and contain letters and numbers.","Password must be at least 8 characters and contain letters and numbers."
 "An account with this email already exists.","An account with this email already exists."
 "Invalid email or password.","Invalid email or password."

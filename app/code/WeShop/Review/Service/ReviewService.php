@@ -84,4 +84,30 @@ class ReviewService
         
         return $review;
     }
+
+    /**
+     * @return float
+     */
+    public function getAverageRating(int $productId): float
+    {
+        /** @var Review $review */
+        $review = ObjectManager::getInstance(Review::class);
+        $review->clear()
+            ->where(Review::schema_fields_PRODUCT_ID, $productId)
+            ->where(Review::schema_fields_STATUS, Review::STATUS_APPROVED);
+
+        $rows = $review->select([Review::schema_fields_RATING])->fetchArray();
+        if (!$rows) {
+            return 0.0;
+        }
+
+        $sum = 0;
+        $count = 0;
+        foreach ($rows as $row) {
+            $sum += (float) ($row[Review::schema_fields_RATING] ?? 0);
+            ++$count;
+        }
+
+        return $count > 0 ? $sum / $count : 0.0;
+    }
 }
