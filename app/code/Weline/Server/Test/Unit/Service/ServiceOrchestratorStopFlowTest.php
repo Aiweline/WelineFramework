@@ -29,13 +29,7 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
     public function testTerminateAllAfterDrainOnlyDispatchesBatchSignal(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
-            public array $runningByPid = [];
             public array $batchSignalCalls = [];
-
-            protected function isChildProcessRunning(int $pid): bool
-            {
-                return $this->runningByPid[$pid] ?? false;
-            }
 
             protected function sendStopBatchTerminationSignals(array $pids): array
             {
@@ -45,13 +39,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         };
 
         $registry = $orchestrator->getRegistry();
-        $registry->addInstance(new ServiceInstance(role: 'dispatcher', instanceId: 1, pid: 101));
+        $registry->addInstance(new ServiceInstance(role: 'dispatcher', instanceId: 1, pid: 101, ipcClientId: 11));
         $registry->addInstance(new ServiceInstance(role: 'worker', instanceId: 1, pid: 202));
-        $orchestrator->runningByPid = [101 => true, 202 => true];
 
         $this->invokePrivate($orchestrator, 'terminateAllAfterDrain');
 
-        self::assertSame([[101, 202]], $orchestrator->batchSignalCalls);
+        self::assertSame([[202]], $orchestrator->batchSignalCalls);
     }
 
     public function testSettleShutdownIpcNonBlockingPollsOnlyOnce(): void
@@ -179,6 +172,45 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $worker);
         self::assertNull($worker->ipcClientId);
         self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
+    }
+
+    public function testStopAllFinalizesMasterExitAfterNormalStopFlow(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public bool $finalizeCalled = false;
+            public array $runningByPid = [];
+
+            protected function finalizeStopAllMasterExit(): void
+            {
+                $this->finalizeCalled = true;
+            }
+
+            protected function isChildProcessRunning(int $pid): bool
+            {
+                return $this->runningByPid[$pid] ?? false;
+            }
+
+            protected function getStopVerificationTimeout(): float
+            {
+                return 0.0;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: 202,
+            state: ServiceInstance::STATE_READY
+        ));
+
+        $orchestrator->stopAll('test');
+
+        self::assertTrue($orchestrator->finalizeCalled);
+
+        $worker = $registry->getInstance('worker', 1);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
+        self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
     }
 
     private function invokePrivate(object $object, string $method): mixed
