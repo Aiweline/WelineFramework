@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `460dd98a feat(weshop): preserve auth token actor area`.
 
 ## Changed Files
 
