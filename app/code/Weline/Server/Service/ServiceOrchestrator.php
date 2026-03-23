@@ -2866,24 +2866,36 @@ class ServiceOrchestrator
             if ($now - $this->lastHealthCheck >= $this->healthCheckInterval) {
                 $this->performHealthChecks();
                 $this->lastHealthCheck = $now;
+                if ($this->shouldYieldPeriodicWork(false)) {
+                    continue;
+                }
             }
 
             if ($this->haMode && $now - $this->lastReconcileAt >= $this->reconcileInterval) {
                 $this->reconcileDesiredState();
                 $this->syncDispatcherFullWorkerPoolFromRegistry();
                 $this->lastReconcileAt = $now;
+                if ($this->shouldYieldPeriodicWork(false)) {
+                    continue;
+                }
             } elseif (!$this->haMode
                 && $this->reconcileWorkersWithoutHa
                 && $now - $this->lastWorkerSlotReconcileAt >= $this->reconcileInterval) {
                 $this->reconcileWorkerSlotsWithoutHa();
                 $this->syncDispatcherFullWorkerPoolFromRegistry();
                 $this->lastWorkerSlotReconcileAt = $now;
+                if ($this->shouldYieldPeriodicWork(false)) {
+                    continue;
+                }
             }
 
             if ($this->workerLivenessIntervalSec > 0
                 && ($now - $this->lastWorkerLivenessAt) >= $this->workerLivenessIntervalSec) {
                 $this->lastWorkerLivenessAt = $now;
                 $this->runWorkerLivenessAudit();
+                if ($this->shouldYieldPeriodicWork(false)) {
+                    continue;
+                }
             }
 
             if ($this->haMode && $this->periodicOrphanSweepEnabled && $now - $this->lastSweepAt >= $this->sweeperInterval) {
@@ -2893,6 +2905,9 @@ class ServiceOrchestrator
 
             // 处理复活队列
             $this->processResurrectQueue();
+            if ($this->shouldYieldPeriodicWork(false)) {
+                continue;
+            }
 
             // 稳定期过期
             if ($this->rollingRestartStabilizingUntil > 0 && $now >= $this->rollingRestartStabilizingUntil) {
@@ -2903,6 +2918,9 @@ class ServiceOrchestrator
                 && ($now - $this->lastMasterSelfAuditAt) >= $this->masterSelfAuditIntervalSec) {
                 $this->lastMasterSelfAuditAt = $now;
                 $this->performMasterSelfAudit();
+                if ($this->shouldYieldPeriodicWork(false)) {
+                    continue;
+                }
             }
 
             // 短暂休眠避免 CPU 空转
@@ -2910,6 +2928,49 @@ class ServiceOrchestrator
         }
 
         WlsLogger::info_('[Orchestrator] 退出主循环');
+    }
+
+    /**
+     * 周期性维护任务的抢占点。
+     *
+     * 周期任务运行时也要顺手 poll 一次控制面，这样 reload/stop 一类帝王指令不用等整段维护逻辑跑完。
+     */
+    private function shouldYieldPeriodicWork(bool $pollControlPlane = true): bool
+    {
+        if (!$this->running || $this->shuttingDown || $this->stopAllInProgress || $this->pendingStopReason !== null) {
+            return true;
+        }
+
+        if ($pollControlPlane && $this->controlServer !== null) {
+            $this->controlServer->poll(0, 0);
+        }
+
+        if (!$this->running || $this->shuttingDown || $this->stopAllInProgress || $this->pendingStopReason !== null) {
+            return true;
+        }
+
+        return $this->activeControlOperation !== null
+            || $this->pendingControlOperations !== []
+            || $this->fullRestartRequested;
+    }
+
+    private function sleepInterruptiblyForPeriodicWork(int $microseconds, int $sliceMicroseconds = 50000): bool
+    {
+        if ($microseconds <= 0) {
+            return !$this->shouldYieldPeriodicWork(true);
+        }
+
+        $deadline = \microtime(true) + ($microseconds / 1000000);
+        while (\microtime(true) < $deadline) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return false;
+            }
+
+            $remainingUsec = (int)\max(1, ($deadline - \microtime(true)) * 1000000);
+            SchedulerSystem::usleep(\min($sliceMicroseconds, $remainingUsec));
+        }
+
+        return !$this->shouldYieldPeriodicWork(true);
     }
 
     /**
@@ -2943,8 +3004,14 @@ class ServiceOrchestrator
         $providers = $this->registry->getAllProviders();
 
         foreach ($providers as $provider) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             $instances = $this->registry->getInstancesByRole($provider->getRole());
             foreach ($instances as $instance) {
+                if ($this->shouldYieldPeriodicWork(true)) {
+                    return;
+                }
                 if ($instance->state === ServiceInstance::STATE_FAILED ||
                     $instance->state === ServiceInstance::STATE_STOPPED) {
                     continue;
@@ -3050,7 +3117,9 @@ class ServiceOrchestrator
 
         if ($instance->pid > 0 && $this->isProcessRunning($instance->pid)) {
             $this->killInstanceProcess($instance);
-            SchedulerSystem::usleep(200000);
+            if (!$this->sleepInterruptiblyForPeriodicWork(200000)) {
+                return;
+            }
         }
         $this->scheduleResurrection($instance);
     }
@@ -3366,6 +3435,9 @@ class ServiceOrchestrator
         }
 
         foreach ($this->desiredState as $role => $desiredCount) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             $provider = $this->registry->getProvider($role);
             if ($provider === null || !$provider->isEnabled($this->context)) {
                 continue;
@@ -3373,6 +3445,9 @@ class ServiceOrchestrator
 
             // 缺失实例补齐
             for ($slot = 1; $slot <= $desiredCount; $slot++) {
+                if ($this->shouldYieldPeriodicWork(true)) {
+                    return;
+                }
                 $queueKey = "{$role}:{$slot}";
                 if (isset($this->resurrectQueue[$queueKey])) {
                     // 已在复活队列（含延迟执行）：勿在此再拉起，否则与 processResurrectQueue 重复 fork 同槽位双进程
@@ -3397,6 +3472,9 @@ class ServiceOrchestrator
 
             // 超额实例回收
             foreach ($this->registry->getInstancesByRole($role) as $instanceId => $instance) {
+                if ($this->shouldYieldPeriodicWork(true)) {
+                    return;
+                }
                 if ($instanceId <= $desiredCount) {
                     continue;
                 }
@@ -3467,6 +3545,9 @@ class ServiceOrchestrator
 
         $now = \microtime(true);
         foreach ($this->resurrectQueue as $key => $entry) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             if ($now < $entry['scheduledAt']) {
                 continue;
             }
@@ -3682,11 +3763,16 @@ class ServiceOrchestrator
 
         $deadline = \microtime(true) + $timeout;
         do {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return false;
+            }
             Processer::clearPortCache($port);
             if (!Processer::isPortInUse($port)) {
                 return true;
             }
-            SchedulerSystem::usleep(100000);
+            if (!$this->sleepInterruptiblyForPeriodicWork(100000)) {
+                return false;
+            }
         } while (\microtime(true) < $deadline);
 
         Processer::clearPortCache($port);
@@ -4185,6 +4271,9 @@ class ServiceOrchestrator
 
         $workers = $this->registry->getInstancesByRole('worker');
         foreach ($workers as $inst) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             if ($this->controlServer === null) {
                 break;
             }
@@ -4243,6 +4332,9 @@ class ServiceOrchestrator
         $alive = 0;
         if ($this->controlServer !== null) {
             foreach ($this->registry->getInstancesByRole('worker') as $w) {
+                if ($this->shouldYieldPeriodicWork(true)) {
+                    return;
+                }
                 if ($w->ipcClientId !== null
                     && $this->controlServer->clientExists($w->ipcClientId)
                     && $w->state === ServiceInstance::STATE_READY
@@ -4300,7 +4392,9 @@ class ServiceOrchestrator
         $desired = (int) ($this->desiredState['worker'] ?? 0);
         $prefix = WorkerProvider::PROCESS_NAME_PREFIX . '-' . $this->context->instanceName . '-';
         Processer::killByProcessNamePrefix($prefix);
-        \Weline\Framework\Runtime\SchedulerSystem::usleep(600000);
+        if (!$this->sleepInterruptiblyForPeriodicWork(600000)) {
+            return;
+        }
 
         foreach (\array_keys($this->resurrectQueue) as $key) {
             if (\str_starts_with((string) $key, 'worker:')) {
@@ -4309,6 +4403,9 @@ class ServiceOrchestrator
         }
 
         for ($slot = 1; $slot <= $desired; $slot++) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             $old = $this->registry->getInstance('worker', $slot);
             if ($old !== null) {
                 $this->cleanupInstancePidFile($old);
@@ -4851,6 +4948,9 @@ class ServiceOrchestrator
         }
 
         foreach (['worker', 'dispatcher', 'redirect', 'session_server'] as $role) {
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
             $desired = (int) ($this->desiredState[$role] ?? 0);
             if ($desired <= 0) {
                 continue;
