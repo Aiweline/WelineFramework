@@ -2,18 +2,11 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    <menu source="WeShop_GoogleAuth::security"
-          name="weshop_google_auth_security"
-          title="账号安全"
-          action=""
-          parent="Weline_Backend::user_management"
-          icon="mdi mdi-shield-account-outline"
-          order="90">
-        <menu source="WeShop_GoogleAuth::google_binding"
-              name="google_binding"
-              title="Google 绑定"
-              action="weshop_googleauth/backend/auth/binding"
-              icon="mdi mdi-google"
-              order="10"/>
-    </menu>
+    <menu source="WeShop_GoogleAuth::google_binding"
+          name="google_binding"
+          title="Google Binding"
+          action="weshop_googleauth/backend/auth/binding"
+          parent="WeShop_Auth::security"
+          icon="mdi mdi-google"
+          order="20"/>
 </menus>
