@@ -158,8 +158,16 @@ function readActiveThemes(array $env): array
         }
 
         $tableName = quoteSqlIdentifier($prefix . 'weline_theme', $type);
-        $sql = "SELECT id, name, path, is_active, is_active_frontend, is_active_backend FROM {$tableName} WHERE is_active = 1 OR is_active_frontend = 1 OR is_active_backend = 1 ORDER BY id ASC";
-        $rows = $pdo->query($sql)->fetchAll();
+        $supportsAreaFlags = true;
+
+        try {
+            $sql = "SELECT id, name, path, is_active, is_active_frontend, is_active_backend FROM {$tableName} WHERE is_active = 1 OR is_active_frontend = 1 OR is_active_backend = 1 ORDER BY id ASC";
+            $rows = $pdo->query($sql)->fetchAll();
+        } catch (\Throwable) {
+            $supportsAreaFlags = false;
+            $fallbackSql = "SELECT id, name, path, is_active FROM {$tableName} WHERE is_active = 1 ORDER BY id ASC";
+            $rows = $pdo->query($fallbackSql)->fetchAll();
+        }
 
         foreach ((array)$rows as $row) {
             if (!\is_array($row)) {
@@ -171,8 +179,8 @@ function readActiveThemes(array $env): array
                 'name' => (string)($row['name'] ?? ''),
                 'path' => (string)($row['path'] ?? ''),
                 'is_active' => (int)($row['is_active'] ?? 0),
-                'is_active_frontend' => (int)($row['is_active_frontend'] ?? 0),
-                'is_active_backend' => (int)($row['is_active_backend'] ?? 0),
+                'is_active_frontend' => $supportsAreaFlags ? (int)($row['is_active_frontend'] ?? 0) : (int)($row['is_active'] ?? 0),
+                'is_active_backend' => $supportsAreaFlags ? (int)($row['is_active_backend'] ?? 0) : (int)($row['is_active'] ?? 0),
             ];
 
             if ($theme['is_active'] === 1) {

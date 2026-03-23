@@ -69,9 +69,18 @@ class WelineTheme extends Model
         }
         $field = $area === 'frontend' ? self::schema_fields_IS_ACTIVE_FRONTEND
             : ($area === 'backend' ? self::schema_fields_IS_ACTIVE_BACKEND : self::schema_fields_IS_ACTIVE);
-        $this->load($field, 1);
+        try {
+            $this->load($field, 1);
+        } catch (\Throwable $throwable) {
+            if ($area !== null && $field !== self::schema_fields_IS_ACTIVE && $this->isMissingAreaActivationFieldError($throwable)) {
+                $this->clearData()->clearQuery();
+                $this->load(self::schema_fields_IS_ACTIVE, 1);
+            } else {
+                throw $throwable;
+            }
+        }
         if (!$this->getId() && $area !== null) {
-            $this->clearQuery();
+            $this->clearData()->clearQuery();
             $this->load(self::schema_fields_IS_ACTIVE, 1);
         }
         if ($this->getId()) {
@@ -83,6 +92,14 @@ class WelineTheme extends Model
         }
         return $this;
     }
+
+    private function isMissingAreaActivationFieldError(\Throwable $throwable): bool
+    {
+        $message = \strtolower($throwable->getMessage());
+        return \str_contains($message, \strtolower(self::schema_fields_IS_ACTIVE_FRONTEND))
+            || \str_contains($message, \strtolower(self::schema_fields_IS_ACTIVE_BACKEND));
+    }
+
     public function getName()
     {
         return $this->getData(self::schema_fields_NAME);
