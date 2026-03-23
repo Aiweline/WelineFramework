@@ -205,6 +205,7 @@ class ProcesserTest extends TestCore
                     'cwd' => 'C:\repo',
                     'enable_log' => true,
                     'foreground' => true,
+                    'foreground_script' => 'C:\temp\weline-worker-visible.cmd',
                 ],
                 [
                     'key' => 'worker-hidden',
@@ -224,20 +225,43 @@ class ProcesserTest extends TestCore
         self::assertIsString($script);
         self::assertStringContainsString("WindowStyle = 'Normal'", $script);
         self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
+        self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
+        self::assertStringContainsString('ArgumentList = @(\'/d\',\'/c\',\'"C:\temp\weline-worker-visible.cmd"\')', $script);
+        self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
         self::assertSame(1, \substr_count($script, 'RedirectStandardOutput'));
         self::assertSame(1, \substr_count($script, 'RedirectStandardError'));
+        self::assertSame(1, \substr_count($script, 'PassThru = $true'));
     }
 
-    public function testBatchCreateWindowsFallsBackWhenForegroundLaunchRequested(): void
+    public function testBuildWindowsBatchCreateScriptMarksForegroundPidForLaterResolution(): void
     {
-        $result = $this->invokePrivateStatic(Processer::class, 'batchCreateWindows', [[
-            'worker-foreground' => [
+        $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
+            [[
+                'key' => 'worker-foreground',
                 'command' => '"C:\php\php.exe" worker.php --name=weline-worker-visible --launch-id=launch-visible',
+                'php' => 'C:\php\php.exe',
+                'arguments' => 'worker.php --name=weline-worker-visible --launch-id=launch-visible',
+                'process_name' => 'weline-worker-visible',
+                'cwd' => 'C:\repo',
+                'enable_log' => true,
                 'foreground' => true,
-            ],
-        ]]);
+                'foreground_script' => 'C:\temp\weline-worker-visible.cmd',
+            ]],
+            'C:\temp\batch-result.txt',
+            'C:\temp\batch-error.txt',
+        ]);
 
-        self::assertNull($result);
+        self::assertIsString($script);
+        self::assertStringContainsString('$results.Add("worker-foreground`t0")', $script);
+        self::assertStringContainsString('Start-Process @startArgs | Out-Null', $script);
+    }
+
+    public function testShouldTryManagedProcessReuseIgnoresForegroundFlag(): void
+    {
+        self::assertTrue($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [true, false]));
+        self::assertTrue($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [true, true]));
+        self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, false]));
+        self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, true]));
     }
 
     public function testBuildWindowsForegroundStartCommandUsesCmdStartLauncher(): void
