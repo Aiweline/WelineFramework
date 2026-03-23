@@ -10,7 +10,7 @@
 - [x] Verify the framework's actual frontend REST URL structure from docs, env, router output, and parser code
 - [x] Update the WeShop planning docs to the correct URL shape
 - [x] Run lightweight runtime probes and record the result
-- [ ] Commit the slice and update result.md with the commit hash
+- [x] Commit the slice and update result.md with the commit hash
 
 ## Verification Targets
 
