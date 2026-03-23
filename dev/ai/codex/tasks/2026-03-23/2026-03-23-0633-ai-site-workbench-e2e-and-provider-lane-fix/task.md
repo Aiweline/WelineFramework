@@ -2,7 +2,7 @@
 
 - Task ID: 2026-03-23-0633-ai-site-workbench-e2e-and-provider-lane-fix
 - Started: 2026-03-23 06:33
-- Status: in_progress
+- Status: completed
 - Owner: Codex
 - Source: fix provider-lane anchor and add AI workbench e2e coverage with fake domain purchase
 
@@ -10,6 +10,7 @@
 
 - Fix the Websites AI workbench provider-lane link so it stays on the current hub page.
 - Add stable local E2E coverage for the unified AI site workbench, including fake quick-build flows that cannot call real registrar or build infrastructure locally.
+- Make the standard `tests/e2e/start.js` wrapper path stable and human-friendly enough to pass the AI workbench flow without extra environment overrides.
 
 ## Scope
 
@@ -34,6 +35,8 @@
 
 - `app/code/Weline/Websites/Controller/Backend/SiteBuilderAgent.php`
 - `app/code/Weline/Websites/view/templates/Backend/SiteBuilderAgent/index.phtml`
+- `tests/e2e/start.js`
+- `tests/e2e/framework/runtime.js`
 - `tests/e2e/specs/backend/helpers/ai-workbench.js`
 - `tests/e2e/specs/backend/ai-site-workbench.spec.js`
 
