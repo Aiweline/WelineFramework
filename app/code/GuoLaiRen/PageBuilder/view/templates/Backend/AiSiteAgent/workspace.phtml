@@ -596,24 +596,8 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
         btn.addEventListener('click', function () {
             var st = btn.getAttribute('data-wizard-stage');
             if (!st) return;
-            var idxRaw = btn.getAttribute('data-wizard-index');
-            var idx = parseInt(idxRaw, 10);
-            if (isNaN(idx)) idx = -1;
-            document.querySelectorAll('.pb-ai-wizard-step').forEach(function (step) {
-                step.classList.remove('is-active');
-                step.classList.remove('is-completed');
-            });
-            var clickedStep = btn.closest('.pb-ai-wizard-step');
-            if (clickedStep) clickedStep.classList.add('is-active');
-            if (idx >= 0) {
-                document.querySelectorAll('.pb-ai-wizard-step-btn').forEach(function (b) {
-                    var biRaw = b.getAttribute('data-wizard-index');
-                    var bi = parseInt(biRaw, 10);
-                    var step = b.closest('.pb-ai-wizard-step');
-                    if (!step || isNaN(bi)) return;
-                    if (bi < idx) step.classList.add('is-completed');
-                });
-            }
+            document.querySelectorAll('.pb-ai-wizard-tab').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
             document.querySelectorAll('.pb-ai-wizard-panel').forEach(function (p) {
                 var match = p.getAttribute('data-wizard-panel') === st;
                 p.classList.toggle('d-none', !match);
@@ -632,6 +616,15 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
                     if (el) el.textContent = st;
                     if (stageSelect) stageSelect.value = st;
                     if (window.BackendToast && BackendToast.success) BackendToast.success(<?= json_encode(__('阶段已更新'), JSON_THROW_ON_ERROR) ?>);
+                    // 同步切换步骤 UI，避免只改了 scope 但界面仍停留在旧面板
+                    document.querySelectorAll('.pb-ai-wizard-tab').forEach(function (b) {
+                        var bs = b.getAttribute('data-wizard-stage');
+                        b.classList.toggle('active', bs === st);
+                    });
+                    document.querySelectorAll('.pb-ai-wizard-panel').forEach(function (p) {
+                        var match = p.getAttribute('data-wizard-panel') === st;
+                        p.classList.toggle('d-none', !match);
+                    });
                     return;
                 }
                 showErr((data && data.message) ? data.message : <?= json_encode(__('保存失败'), JSON_THROW_ON_ERROR) ?>);
