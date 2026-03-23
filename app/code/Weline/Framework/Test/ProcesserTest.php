@@ -228,6 +228,64 @@ class ProcesserTest extends TestCore
         self::assertSame(1, \substr_count($script, 'RedirectStandardError'));
     }
 
+    public function testBatchCreateWindowsFallsBackWhenForegroundLaunchRequested(): void
+    {
+        $result = $this->invokePrivateStatic(Processer::class, 'batchCreateWindows', [[
+            'worker-foreground' => [
+                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-visible --launch-id=launch-visible',
+                'foreground' => true,
+            ],
+        ]]);
+
+        self::assertNull($result);
+    }
+
+    public function testBuildWindowsForegroundStartCommandUsesCmdStartLauncher(): void
+    {
+        $command = $this->invokePrivateStatic(Processer::class, 'buildWindowsForegroundStartCommand', [
+            'C:\temp\weline-worker-visible.cmd',
+            'C:\repo',
+            'weline-worker-visible',
+        ]);
+
+        self::assertIsString($command);
+        self::assertStringContainsString('start "weline-worker-visible"', $command);
+        self::assertStringContainsString('cmd.exe /d /c', $command);
+        self::assertStringContainsString('weline-worker-visible.cmd', $command);
+    }
+
+    public function testWriteWindowsForegroundLauncherScriptBuildsSelfDeletingCmdFile(): void
+    {
+        $scriptPath = $this->invokePrivateStatic(Processer::class, 'writeWindowsForegroundLauncherScript', [
+            'C:\php\php.exe',
+            'worker.php --name=weline-worker-visible --launch-id=launch-visible',
+            'C:\repo',
+        ]);
+
+        self::assertIsString($scriptPath);
+        self::assertFileExists($scriptPath);
+
+        try {
+            $script = (string) \file_get_contents($scriptPath);
+            self::assertStringContainsString('cd /d "C:\repo"', $script);
+            self::assertStringContainsString('"C:\php\php.exe" worker.php --name=weline-worker-visible --launch-id=launch-visible', $script);
+            self::assertStringContainsString('del "%~f0"', $script);
+        } finally {
+            @\unlink($scriptPath);
+        }
+    }
+
+    public function testNormalizeWindowsForegroundArgumentsUnquotesStableIdentityFlags(): void
+    {
+        $arguments = '"C:\repo\worker.php" "127.0.0.1" "9982" --launch-id="worker-1-abc123" --name="weline-worker-1" --epoch="1" --label="needs space"';
+        $normalized = $this->invokePrivateStatic(Processer::class, 'normalizeWindowsForegroundArguments', [$arguments]);
+
+        self::assertSame(
+            '"C:\repo\worker.php" "127.0.0.1" "9982" --launch-id=worker-1-abc123 --name=weline-worker-1 --epoch=1 --label="needs space"',
+            $normalized
+        );
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
