@@ -1,0 +1,3 @@
+return [
+    'router' => 'extends'
+];

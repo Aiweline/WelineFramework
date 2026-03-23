@@ -15,7 +15,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * PageBuilder AI 建站工作台：会话入口与 scope 工作台（与 Weline_Websites 建站智能体互补）
+ * PageBuilder AI 建站工作台：会话入口与 scope 工作台（与 Weline_Websites AI 建站工作台互补）
  */
 #[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'AI 建站工作台', 'mdi-robot-outline', 'PageBuilder AI 建站会话与流水线', 'Weline_Backend::page_builder_group')]
 class AiSiteAgent extends BaseController
@@ -28,11 +28,21 @@ class AiSiteAgent extends BaseController
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_index', 'AI 建站工作台', 'mdi-robot-outline', '进入 AI 建站工作台', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function index(): string
     {
+        $legacy = ((int) $this->request->getGet('legacy', 0) === 1);
+        /** @var Url $urlHelper */
+        $urlHelper = ObjectManager::getInstance(Url::class);
+        $workbenchHomeUrl = $urlHelper->getBackendUrl('*/backend/site-builder-agent/index', ['provider' => 'pagebuilder']);
+        if (!$legacy) {
+            $this->redirect($workbenchHomeUrl);
+            return '';
+        }
+
         $adminId = (int) $this->getLoginUserId();
         $recent = $adminId > 0 ? $this->sessionService->listRecentSessionsForAdmin($adminId, 30) : [];
 
         $this->assign('title', __('AI 建站工作台'));
         $this->assign('recent_sessions', $recent);
+        $this->assign('workbench_home_url', $workbenchHomeUrl);
 
         return $this->fetch();
     }
@@ -86,7 +96,7 @@ class AiSiteAgent extends BaseController
             'domain_management' => $urlHelper->getBackendUrl('pagebuilder/backend/domainManagement/index'),
             'website_management' => $urlHelper->getBackendUrl('pagebuilder/backend/websiteManagement/index'),
             'page_builder' => $urlHelper->getBackendUrl('pagebuilder/backend/page/index'),
-            'site_builder_agent' => $urlHelper->getBackendUrl('*/backend/site-builder-agent/index'),
+            'site_builder_agent' => $urlHelper->getBackendUrl('*/backend/site-builder-agent/index', ['provider' => 'pagebuilder']),
         ]);
         $this->assign('ai_module_available', \class_exists(\Weline\Ai\Service\AiService::class));
         $this->assign('query_domain_status_url', $urlHelper->getBackendUrl('pagebuilder/backend/aiSiteAgent/post-query-domain-status'));

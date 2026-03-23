@@ -248,11 +248,13 @@ class ControllerFetchFileBefore implements ObserverInterface
                         $existingMeta
                     ));
                     $eventData->setData('contentTemplate', $fileName);
-                    $eventData->setData('fileName', $resolvedLayoutPath);
+                    $eventData->setData('layoutTemplate', $resolvedLayoutPath);
+                    $eventData->setData('fileName', $fileName);
                     $eventData->setData('layoutType', $layoutType);
                     $eventData->setData('layoutOption', $layoutOption);
                     $template->setData('contentTemplate', $fileName);
-                    $template->setData('fileName', $resolvedLayoutPath);
+                    $template->setData('layoutTemplate', $resolvedLayoutPath);
+                    $template->setData('fileName', $fileName);
                     if (!$template->getData('title') && !empty(self::$layoutParamsRequestCache[$paramsCacheKey]['title'])) {
                         $template->assign('title', self::$layoutParamsRequestCache[$paramsCacheKey]['title']);
                     }
@@ -269,13 +271,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 布局模板可以通过 $this->getData('contentTemplate') 获取原模板路径
                 // 然后使用 $this->fetch($contentTemplate) 渲染原模板内容
                 $eventData->setData('contentTemplate', $fileName);
-                $eventData->setData('fileName', $resolvedLayoutPath);
+                $eventData->setData('layoutTemplate', $resolvedLayoutPath);
+                $eventData->setData('fileName', $fileName);
                 $eventData->setData('layoutType', $layoutType);
                 $eventData->setData('layoutOption', $layoutOption);
                 
                 // 同时将 contentTemplate 传递给模板数据，方便布局模板直接使用
                 $template->setData('contentTemplate', $fileName);
-                $template->setData('fileName', $resolvedLayoutPath);
+                $template->setData('layoutTemplate', $resolvedLayoutPath);
+                $template->setData('fileName', $fileName);
 
                 // 加载布局文件的参数配置（自动读取 @param 定义的参数）
                 // 构建 meta_identify：layouts.{layoutType} 或 layouts.{layoutType}.{layoutOption}

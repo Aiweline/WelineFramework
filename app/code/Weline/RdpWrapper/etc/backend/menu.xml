@@ -8,7 +8,7 @@
          name="rdp_management"
          title="远程桌面管理"
          action="rdpWrapper/backend/index"
-         parent="Weline_Backend::system_config_group"
+         parent="Weline_Backend::other_tools_group"
          icon="mdi mdi-remote-desktop"
          order="9000"/>
 
