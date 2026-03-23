@@ -7,3 +7,41 @@
 活动优惠,活动优惠
 优惠券不存在,优惠券不存在
 优惠券不可用,优惠券不可用
+"Coupon code is required.",优惠券代码不能为空。
+"Coupon is not available.",优惠券当前不可用。
+"Coupon applied successfully.",优惠券已成功应用。
+"Coupon verification failed, please retry.",优惠券校验失败，请重试。
+"Estimated discount:",预计优惠：
+"Promotion Hub",优惠中心
+"Today Deals",今日特惠
+"Seasonal Sale",季节促销
+"Promotion Center",促销中心
+"Explore campaign products, compare discounts, and move directly into checkout-ready offers.",探索促销商品、比较折扣并直接进入可结账优惠。
+"Hub",总览
+"Deals",特惠
+"Sale",促销
+"Matched Products",匹配商品
+"Campaign candidates currently available for this storefront view.",当前该视图可用的活动候选商品。
+"Flash Deal Spotlight",限时特惠焦点
+"Prices update daily based on inventory and campaign windows.",价格会根据库存与活动窗口每日更新。
+"Browse Deals",浏览特惠
+"Seasonal Sale Picks",季节促销精选
+"Curated sale products chosen for checkout-ready savings.",为结账场景精选的促销商品。
+"Open Sale",打开促销
+"Promotion Products",促销商品
+"No promotion products yet",暂无促销商品
+"This campaign view has no eligible products right now. Check again soon for refreshed deals.",当前活动视图暂无可用商品，请稍后查看最新优惠。
+"Promo Quick Apply",优惠券快速验证
+"Use your coupon code now to preview discount eligibility before checkout.",在结账前先验证优惠券是否可用并预览优惠。
+"Coupon code",优惠券代码
+"Verify",验证
+"Promotion page before content",促销页前置内容
+"Inject content before the promotion product grid on storefront promotion pages.",在前台促销页商品网格前注入内容。
+"Promotion page after content",促销页后置内容
+"Inject content after the promotion product grid on storefront promotion pages.",在前台促销页商品网格后注入内容。
+"Sale view prioritizes the strongest discount opportunities available now.",促销视图优先展示当前折扣力度最高的机会。
+"Deals view surfaces the latest low-price entries for fast comparison.",特惠视图展示最新低价商品以便快速比价。
+"Promotion hub combines campaign highlights and product-level savings in one flow.",优惠中心在同一流程中整合活动亮点与商品级优惠。
+"Need help choosing between offers? Add candidates to wishlist and compare before checkout.",如果你在优惠之间犹豫，可先加入收藏并在结账前对比。
+"Open Wishlist",打开收藏夹
+"Open Compare",打开对比
