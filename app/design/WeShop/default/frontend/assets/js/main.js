@@ -29,6 +29,7 @@
         this.initProductTabs();
         this.initAddToCart();
         this.initWishlist();
+        this.initCompare();
         this.initSearch();
         this.initDarkMode();
         this.initScrollToTop();
@@ -231,6 +232,16 @@
         });
     };
 
+    WeShop.handleRedirectPayload = function(payload) {
+        var redirectUrl = payload && payload.data && payload.data.redirect_url ? payload.data.redirect_url : '';
+        if (!redirectUrl) {
+            return false;
+        }
+
+        window.location.href = redirectUrl;
+        return true;
+    };
+
     // ============================================
     // Wishlist
     // ============================================
@@ -247,11 +258,20 @@
                 
                 WeShop.addToWishlist(productId)
                     .then(function(data) {
-                        if (data.success) {
-                            icon.style.fontVariationSettings = "'FILL' 1";
-                            icon.classList.add('text-red-500');
-                            WeShop.showNotification(data.message || 'Added to wishlist', 'success');
+                        if (WeShop.handleRedirectPayload(data)) {
+                            return;
                         }
+
+                        if (data.success) {
+                            if (icon) {
+                                icon.style.fontVariationSettings = "'FILL' 1";
+                                icon.classList.add('text-red-500');
+                            }
+                            WeShop.showNotification(data.message || 'Added to wishlist', 'success');
+                            return;
+                        }
+
+                        WeShop.showNotification(data.message || 'Unable to add to wishlist', 'warning');
                     })
                     .catch(function(error) {
                         console.error('Wishlist error:', error);
@@ -262,6 +282,57 @@
 
     WeShop.addToWishlist = function(productId) {
         return fetch('/wishlist/add', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ product_id: productId })
+        }).then(function(response) {
+            return response.json();
+        });
+    };
+
+    // ============================================
+    // Compare
+    // ============================================
+    WeShop.initCompare = function() {
+        document.querySelectorAll('.add-to-compare').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var productId = this.dataset.productId;
+                if (!productId) return;
+
+                var button = this;
+                var icon = button.querySelector('.material-symbols-outlined');
+
+                WeShop.addToCompare(productId)
+                    .then(function(data) {
+                        if (WeShop.handleRedirectPayload(data)) {
+                            return;
+                        }
+
+                        if (data.success) {
+                            if (icon) {
+                                icon.style.fontVariationSettings = "'FILL' 1";
+                            }
+                            button.classList.add('ring-2', 'ring-primary/30');
+                            WeShop.showNotification(data.message || 'Added to compare', 'success');
+                            return;
+                        }
+
+                        WeShop.showNotification(data.message || 'Unable to add to compare', 'warning');
+                    })
+                    .catch(function(error) {
+                        console.error('Compare error:', error);
+                    });
+            });
+        });
+    };
+
+    WeShop.addToCompare = function(productId) {
+        return fetch('/compare/add', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

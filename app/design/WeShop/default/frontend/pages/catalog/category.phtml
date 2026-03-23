@@ -125,21 +125,30 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
             <w:hook name="WeShop_Catalog::listing::products_before"/>
             <div id="product-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 <?php foreach ($products as $product): ?>
+                    <w:hook name="WeShop_Catalog::listing::product_card_before"/>
                     <div class="product-card group flex flex-col gap-3 bg-surface-light dark:bg-surface-dark rounded-lg overflow-hidden border border-border-light dark:border-border-dark hover:shadow-lg transition-shadow">
                         <!-- Product Image -->
                         <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="relative">
                             <div class="w-full bg-center bg-no-repeat aspect-square bg-cover" style='background-image: url("<?= $product['image'] ?? '' ?>");' data-alt="<?= htmlspecialchars($product['name']) ?>"></div>
+                            <w:hook name="WeShop_Catalog::listing::product_card_badges"/>
                             <?php if ($product['discount_percent'] ?? null): ?>
                                 <span class="absolute top-2 left-2 text-xs font-bold px-2 py-1 bg-red-500 text-white rounded"><?= $product['discount_percent'] ?>% <?= __('OFF') ?></span>
                             <?php endif; ?>
-                            <button type="button" class="absolute top-2 right-2 p-2 bg-white/80 dark:bg-black/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity add-to-wishlist" data-product-id="<?= $product['product_id'] ?>">
-                                <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark">favorite</span>
-                            </button>
+                            <div class="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button type="button" class="p-2 bg-white/80 dark:bg-black/50 rounded-full add-to-wishlist" data-product-id="<?= $product['product_id'] ?>">
+                                    <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark">favorite</span>
+                                </button>
+                                <button type="button" class="p-2 bg-white/80 dark:bg-black/50 rounded-full add-to-compare" data-product-id="<?= $product['product_id'] ?>">
+                                    <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark">compare_arrows</span>
+                                </button>
+                                <w:hook name="WeShop_Catalog::listing::product_card_actions"/>
+                            </div>
                         </a>
                         
                         <!-- Product Info -->
                         <div class="flex flex-col gap-2 p-4 pt-0">
                             <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="font-medium text-text-primary-light dark:text-text-primary-dark hover:text-primary transition-colors line-clamp-2"><?= htmlspecialchars($product['name']) ?></a>
+                            <w:hook name="WeShop_Catalog::listing::product_card_meta"/>
                             
                             <!-- Rating -->
                             <?php $rating = $product['rating'] ?? 0; ?>
@@ -171,6 +180,7 @@ $viewMode = $this->getData('view_mode') ?? 'grid';
                             </button>
                         </div>
                     </div>
+                    <w:hook name="WeShop_Catalog::listing::product_card_after"/>
                 <?php endforeach; ?>
             </div>
             <w:hook name="WeShop_Catalog::listing::products_after"/>
@@ -191,65 +201,4 @@ function setViewMode(mode) {
     url.searchParams.set('view', mode);
     window.location.href = url.toString();
 }
-
-// Quick Add to Cart
-document.querySelectorAll('.add-to-cart').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        var productId = this.dataset.productId;
-        // Ajax add to cart
-        fetch('<?= $this->getUrl('cart/add') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({product_id: productId, qty: 1})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Show success message
-                alert(data.message || '<?= __('Added to cart') ?>');
-                // Update cart count
-                if (data.cart_count) {
-                    document.querySelectorAll('.cart-count').forEach(function(el) {
-                        el.textContent = data.cart_count;
-                    });
-                }
-            } else {
-                alert(data.message || '<?= __('Error adding to cart') ?>');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    });
-});
-
-// Quick Add to Wishlist
-document.querySelectorAll('.add-to-wishlist').forEach(function(btn) {
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        var productId = this.dataset.productId;
-        // Ajax add to wishlist
-        fetch('<?= $this->getUrl('wishlist/add') ?>', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({product_id: productId})
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                this.querySelector('.material-symbols-outlined').style.fontVariationSettings = "'FILL' 1";
-                this.querySelector('.material-symbols-outlined').classList.add('text-red-500');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-        });
-    });
-});
 </script>
