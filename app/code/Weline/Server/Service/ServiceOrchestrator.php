@@ -1649,8 +1649,10 @@ class ServiceOrchestrator
             $instance->state = ServiceInstance::STATE_DRAINING;
             $this->registry->updateInstance($instance);
             $connectedClients[] = "{$instance->role}#{$instance->instanceId}(ipc:{$instance->ipcClientId})";
-            $ports = $instance->port !== null ? [$instance->port] : [];
-            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain($ports));
+            // stopAll / stopChildProcesses use a global drain. Passing per-instance ports here
+            // causes Dispatcher to interpret the request as a selective worker drain and never
+            // report global draining_complete.
+            $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::drain([]));
         }
         
         if (!empty($connectedClients)) {
@@ -6108,6 +6110,10 @@ class ServiceOrchestrator
 
         // 停机态下的断开一律视为预期行为，不再触发自愈/整组重启
         if ($this->isStopFlowActive()) {
+            if ($instance->state !== ServiceInstance::STATE_STOPPED) {
+                $instance->state = ServiceInstance::STATE_STOPPING;
+                $this->registry->updateInstance($instance);
+            }
             $this->sendStopProgress("  ✓ {$displayName}(PID:{$instance->pid}) 已断开连接");
             return;
         }
