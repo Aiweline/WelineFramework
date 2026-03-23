@@ -129,6 +129,7 @@ API响应为空,"API response is empty"
 模型不存在或模型代码无效,"The model does not exist or the model code is invalid."
 "模型未配置API密钥，且无可用供应商账户，无法激活。请先在供应商账户中添加可用账号或在配置中填写 api_key。","The model is not configured with an API key, and there are no available vendor accounts to activate. Please first add an available account in the vendor account or fill in the api_key in the configuration."
 模型连通性测试未通过，无法激活。请先进行连通性测试。,"The model connectivity test failed and cannot be activated. Please perform the connectivity test first."
+"供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。","供应商 %{1} 不支持模型 %{2}，不允许切换。请先同步供应商支持模型或更换模型代码。"
 模型保存成功,"Model saved successfully"
 "模型保存失败: %{1}","Model save failed: %{1}"
 原始模型不存在,"The original model does not exist."
@@ -601,6 +602,8 @@ ID,ID
 自配置连通性,"Self-configuring connectivity"
 供应商连通性,"Supplier connectivity"
 默认,Default
+自定义,自定义
+自定义供应商,自定义供应商
 复制,Copy
 原始,Original
 已自配置,Self-configured
@@ -608,6 +611,7 @@ ID,ID
 通过,Through
 无配置,"No configuration"
 模型名称或代码,"Model name or code"
+自定义模型,自定义模型
 已配置自配置密钥,"Self-configuration key has been configured."
 未配置自配置密钥,"Self-configuration key is not configured."
 自配置连通性测试通过,"Self-configuration connectivity test passed"
@@ -658,6 +662,9 @@ ID,ID
 留空使用默认账户，或选择指定账户,留空使用默认账户，或选择指定账户
 例如：gpt-3.5-turbo,"For example: gpt-3.5-turbo"
 模型的唯一标识符,"The unique identifier of the model"
+供应商模型代码,供应商模型代码
+留空默认使用模型代码,留空默认使用模型代码
+"用于映射供应商真实模型 code，切换供应商时会按此值做支持校验","用于映射供应商真实模型 code，切换供应商时会按此值做支持校验"
 "例如：GPT-3.5 Turbo","For example: GPT-3.5 Turbo"
 模型的显示名称,"Model Display Name"
 版本号,"Version number"
@@ -718,6 +725,8 @@ API密钥将被加密存储,API密钥将被加密存储
 "使用流程：先在本页添加账户 → 填写 API 密钥并保存 → 点击「连通性测试」→ 测试通过后激活账户 → 在「模型」Tab 中选择使用该供应商账户的模型进行配置和启用。","使用流程：先在本页添加账户 → 填写 API 密钥并保存 → 点击「连通性测试」→ 测试通过后激活账户 → 在「模型」Tab 中选择使用该供应商账户的模型进行配置和启用。"
 确定要删除此账户吗？此操作不可恢复！,确定要删除此账户吗？此操作不可恢复！
 新建供应商账户,新建供应商账户
+"或输入自定义供应商代码（如 my-provider）","或输入自定义供应商代码（如 my-provider）"
+当下拉中没有目标供应商时可直接输入自定义代码,当下拉中没有目标供应商时可直接输入自定义代码
 导出,导出
 总请求数,总请求数
 总令牌数,总令牌数

@@ -551,7 +551,7 @@ SQL;
             $seqRef = $schema . '.' . $seqName;
             $parts[] = "ALTER COLUMN {$c} SET DEFAULT nextval('" . str_replace("'", "''", $seqRef) . "'::regclass)";
             $createSeq = 'CREATE SEQUENCE IF NOT EXISTS ' . $d->quoteIdentifier($schema) . '.' . $d->quoteIdentifier($seqName);
-            return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts);
+            return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts) . ';';
         }
         if (isset($col['default']) && $col['default'] !== null) {
             $defVal = $col['default'];
@@ -562,7 +562,7 @@ SQL;
         } else {
             $parts[] = "ALTER COLUMN {$c} DROP DEFAULT";
         }
-        return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts);
+        return $prefix . "ALTER TABLE {$t} " . implode(', ', $parts) . ';';
     }
 
     /** 用于 MODIFY 时填充 NULL 的默认值（按类型）。UPDATE 只能用字面量，不能用 nextval 等表达式。 */
@@ -768,15 +768,29 @@ SQL;
         }
         $pdo = $this->getWrappedConnection()->getPdo();
         try {
-            $sql = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default
+            $sqlWithIdentity = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default, is_identity
                 FROM information_schema.columns
                 WHERE table_schema = :schema AND table_name = :tbl
                 ORDER BY ordinal_position";
-            $stmt = $pdo->prepare($sql);
+            $stmt = $pdo->prepare($sqlWithIdentity);
             $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (\Throwable) {
-            return [];
+            try {
+                $sqlLegacy = "SELECT column_name, data_type, character_maximum_length, numeric_precision, is_nullable, column_default
+                    FROM information_schema.columns
+                    WHERE table_schema = :schema AND table_name = :tbl
+                    ORDER BY ordinal_position";
+                $stmt = $pdo->prepare($sqlLegacy);
+                $stmt->execute([':schema' => $schema, ':tbl' => $tableName]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rows as &$legacyRow) {
+                    $legacyRow['is_identity'] = 'NO';
+                }
+                unset($legacyRow);
+            } catch (\Throwable) {
+                return [];
+            }
         }
         if ($rows === []) {
             return [];
@@ -822,15 +836,21 @@ SQL;
             $dataType = $row['data_type'] ?? '';
             $charLen = $row['character_maximum_length'] ?? null;
             $numPrec = $row['numeric_precision'] ?? null;
-            $length = $charLen !== null ? (int) $charLen : ($numPrec !== null ? (int) $numPrec : null);
+            $pgType = strtolower($dataType);
+            // 整型的 numeric_precision（如 32）是内部精度，不是 MySQL 风格 display width；与 #[Col] 声明的 length=null 对齐，避免误判列不等导致 SchemaDiff 异常
+            if (in_array($pgType, ['integer', 'bigint', 'smallint'], true)) {
+                $length = $charLen !== null ? (int) $charLen : null;
+            } else {
+                $length = $charLen !== null ? (int) $charLen : ($numPrec !== null ? (int) $numPrec : null);
+            }
             $nullable = strtoupper($row['is_nullable'] ?? 'YES') !== 'NO';
             $default = $row['column_default'] ?? null;
-            $autoIncrement = $default !== null && stripos((string) $default, 'nextval') !== false;
+            $isIdentity = strtoupper((string) ($row['is_identity'] ?? '')) === 'YES';
+            $autoIncrement = $isIdentity || ($default !== null && stripos((string) $default, 'nextval') !== false);
             $comment = $comments[$field] ?? '';
             $primaryKey = isset($pkCols[$field]);
             $unique = isset($uniqueCols[$field]);
 
-            $pgType = strtolower($dataType);
             $baseType = $pgType;
             if ($pgType === 'character varying') {
                 $baseType = 'varchar';
@@ -844,9 +864,6 @@ SQL;
                 $baseType = 'datetime';
             } elseif ($pgType === 'text') {
                 $baseType = 'text';
-            }
-            if ($length === null && $charLen === null && $numPrec !== null) {
-                $length = (int) $numPrec;
             }
 
             $list[] = [

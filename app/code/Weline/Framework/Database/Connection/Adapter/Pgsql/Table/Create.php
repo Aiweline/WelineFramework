@@ -62,12 +62,25 @@ class Create extends AbstractTable implements CreateInterface
         $pgType = $this->mapTypeToPostgres($type, $length);
         
         // 处理 AUTO_INCREMENT (PostgreSQL 使用 SERIAL)
+        // 声明式 Schema 中 #[Col(type: 'int')] 传入的是 int，与 TableInterface::column_type_INTEGER（'integer'）不一致，须同时识别
         if (str_contains(strtolower($options), 'auto_increment')) {
             $options = preg_replace('/\bauto_increment\b/i', '', $options);
             $options = trim($options);
-            if ($type === TableInterface::column_type_INTEGER || $type === TableInterface::column_type_SMALLINT || $type === TableInterface::column_type_BIGINT) {
-                if ($type === TableInterface::column_type_BIGINT) {
+            if (in_array($type, [
+                TableInterface::column_type_INTEGER,
+                'int',
+                TableInterface::column_type_SMALLINT,
+                'smallint',
+                TableInterface::column_type_TINYINT,
+                'tinyint',
+                TableInterface::column_type_BIGINT,
+                'bigint',
+            ], true)) {
+                if ($type === TableInterface::column_type_BIGINT || $type === 'bigint') {
                     $pgType = 'BIGSERIAL';
+                } elseif ($type === TableInterface::column_type_SMALLINT || $type === 'smallint'
+                    || $type === TableInterface::column_type_TINYINT || $type === 'tinyint') {
+                    $pgType = 'SMALLSERIAL';
                 } else {
                     $pgType = 'SERIAL';
                 }

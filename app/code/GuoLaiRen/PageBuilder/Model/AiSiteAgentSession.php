@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /*
  * GuoLaiRen PageBuilder Module
- * AI 建站智能体会话：持久化 scope、阶段、站点/虚拟主题关联与发布状态
+ * AI 建站工作台会话：持久化 scope、阶段、站点/虚拟主题关联与发布状态
  */
 
 namespace GuoLaiRen\PageBuilder\Model;
@@ -14,7 +14,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
-#[Table(comment: 'PageBuilder AI建站智能体会话')]
+#[Table(comment: 'PageBuilder AI建站工作台会话')]
 #[Index(name: 'idx_public_id', columns: ['public_id'], comment: '对外令牌')]
 #[Index(name: 'idx_admin_user', columns: ['admin_user_id'], comment: '后台用户')]
 #[Index(name: 'idx_website', columns: ['website_id'], comment: '站点')]
