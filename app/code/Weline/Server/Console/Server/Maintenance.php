@@ -102,6 +102,16 @@ class Maintenance extends CommandAbstract
             $this->printer->warning(__('发送命令失败'));
             return;
         }
+
+        $state = (string)($result['data']['state'] ?? '');
+        if (\in_array($state, ['queued', 'running'], true)) {
+            $this->printer->note($result['message'] ?? __('维护模式命令已进入控制队列'));
+            $queuePosition = (int)($result['data']['queue_position'] ?? 0);
+            if ($queuePosition > 0) {
+                $this->printer->note(__('  队列位置：%{1}', [$queuePosition]));
+            }
+            return;
+        }
         
         if ($result['success'] ?? false) {
             $workerCount = $result['data']['maintenance_workers'] ?? 0;
@@ -125,6 +135,16 @@ class Maintenance extends CommandAbstract
         
         if ($result === null) {
             $this->printer->warning(__('发送命令失败'));
+            return;
+        }
+
+        $state = (string)($result['data']['state'] ?? '');
+        if (\in_array($state, ['queued', 'running'], true)) {
+            $this->printer->note($result['message'] ?? __('维护模式命令已进入控制队列'));
+            $queuePosition = (int)($result['data']['queue_position'] ?? 0);
+            if ($queuePosition > 0) {
+                $this->printer->note(__('  队列位置：%{1}', [$queuePosition]));
+            }
             return;
         }
         
