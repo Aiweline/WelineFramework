@@ -4,68 +4,46 @@ declare(strict_types=1);
 
 namespace WeShop\Subscription\Controller\Frontend\Subscription;
 
-use Weline\Framework\App\Controller\FrontendController;
-use WeShop\Subscription\Model\Subscription;
-use WeShop\Subscription\Model\SubscriptionPlan;
-use WeShop\Subscription\Service\SubscriptionService;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Frontend\Controller\BaseController;
+use WeShop\Subscription\Service\SubscriptionDetailPageDataService;
 
-/**
- * @DESC | 前台查看订阅详情
- */
-class View extends FrontendController
+class View extends BaseController
 {
-    private Subscription $subscription;
-    private SubscriptionPlan $subscriptionPlan;
-    private SubscriptionService $subscriptionService;
+    protected ?string $layoutType = 'subscription';
 
     public function __construct(
-        Subscription        $subscription,
-        SubscriptionPlan    $subscriptionPlan,
-        SubscriptionService $subscriptionService
+        private readonly CustomerContextInterface $customerContext,
+        private readonly SubscriptionDetailPageDataService $pageDataService
     ) {
-        $this->subscription = $subscription;
-        $this->subscriptionPlan = $subscriptionPlan;
-        $this->subscriptionService = $subscriptionService;
     }
 
     public function index(): string
     {
-        $customerId = (int)$this->session->getLoginCustomerId();
-
-        if (!$customerId) {
-            $this->redirect($this->getUrl('customer/account/login'));
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            $this->redirect('customer/account/login');
             return '';
         }
 
-        $id = (int)$this->request->getGet('id');
-
-        $this->subscription->load($id);
-
-        if (!$this->subscription->getId()) {
-            $this->getMessageManager()->addError(__('订阅不存在'));
-            $this->redirect($this->getUrl('*/subscription/subscriptionList'));
+        $subscriptionId = (int) ($this->request->getParam('id') ?? 0);
+        if ($subscriptionId <= 0) {
+            $this->getMessageManager()->addError(__('Subscription ID is required.'));
+            $this->redirect('subscription');
             return '';
         }
 
-        // 验证客户权限
-        if ((int)$this->subscription->getData(Subscription::schema_fields_CUSTOMER_ID) !== $customerId) {
-            $this->getMessageManager()->addError(__('无权查看此订阅'));
-            $this->redirect($this->getUrl('*/subscription/subscriptionList'));
+        try {
+            foreach ($this->pageDataService->build($customerId, $subscriptionId) as $key => $value) {
+                $this->assign($key, $value);
+            }
+        } catch (\RuntimeException $exception) {
+            $this->getMessageManager()->addError($exception->getMessage());
+            $this->redirect('subscription');
             return '';
         }
 
-        // 加载订阅计划
-        $planId = (int)$this->subscription->getData(Subscription::schema_fields_PLAN_ID);
-        $this->subscriptionPlan->load($planId);
-
-        // 获取历史记录
-        $history = $this->subscriptionService->getSubscriptionHistory($id, 1, 20);
-
-        $this->assign('title', __('订阅详情'));
-        $this->assign('subscription', $this->subscription);
-        $this->assign('plan', $this->subscriptionPlan);
-        $this->assign('history', $history);
-
+        $this->assign('title', __('Subscription Details'));
         return $this->fetch();
     }
 }
