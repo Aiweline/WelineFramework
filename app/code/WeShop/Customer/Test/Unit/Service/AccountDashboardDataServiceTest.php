@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Customer\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Compare\Service\CompareService;
 use WeShop\Customer\Model\Customer as CustomerProfile;
 use WeShop\Customer\Service\AccountDashboardDataService;
 use WeShop\Order\Service\OrderService;
@@ -59,6 +60,22 @@ class AccountDashboardDataServiceTest extends TestCase
             ->with(42)
             ->willReturn(2);
 
+        $compareService = $this->createMock(CompareService::class);
+        $compareService->expects($this->once())
+            ->method('getCompareList')
+            ->with(42)
+            ->willReturn([
+                [
+                    'compare_id' => 9,
+                    'product_id' => 401,
+                    'product' => [
+                        'name' => 'Carry-On Spinner',
+                        'image' => '/media/spinner.jpg',
+                        'price' => 199.0,
+                    ],
+                ],
+            ]);
+
         $wishlistService = $this->createMock(WishlistService::class);
         $wishlistService->expects($this->once())
             ->method('getCustomerWishlist')
@@ -102,13 +119,14 @@ class AccountDashboardDataServiceTest extends TestCase
         $recommendationService = $this->createMock(ProductRecommendationService::class);
         $recommendationService->expects($this->once())
             ->method('getRecommendations')
-            ->with([501, 502, 601], 4)
+            ->with([401, 501, 502, 601], 4)
             ->willReturn([
                 ['product_id' => 701, 'name' => 'Luggage Tag', 'price' => 12.5],
             ]);
 
         $service = new AccountDashboardDataService(
             $orderService,
+            $compareService,
             $wishlistService,
             $recentlyViewedService,
             $recommendationService
@@ -119,8 +137,10 @@ class AccountDashboardDataServiceTest extends TestCase
         $this->assertSame('Lovelace', $result['customer']['lastname']);
         $this->assertSame(6, $result['order_count']);
         $this->assertSame(2, $result['unpaid_count']);
+        $this->assertSame(1, $result['compare_count']);
         $this->assertSame(2, $result['wishlist_count']);
         $this->assertSame(1, $result['recently_viewed_count']);
+        $this->assertSame('Carry-On Spinner', $result['compare_preview'][0]['name']);
         $this->assertSame('Travel Backpack', $result['wishlist_preview'][0]['name']);
         $this->assertSame('Passport Holder', $result['recently_viewed'][0]['name']);
         $this->assertSame(701, $result['recommendations'][0]['product_id']);
