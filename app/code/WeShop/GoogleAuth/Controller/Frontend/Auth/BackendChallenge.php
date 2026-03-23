@@ -15,7 +15,6 @@ class BackendChallenge extends FrontendController
         private readonly BackendWebAuthService $backendWebAuthService,
         private readonly Url $url
     ) {
-        parent::__construct();
     }
 
     public function index(): string
