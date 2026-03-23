@@ -26,10 +26,18 @@ class CheckoutService
             throw new \Exception((string) __('The cart is empty and cannot be checked out.'));
         }
 
+        $summary = [
+            'subtotal' => (float) ($totals['subtotal'] ?? 0),
+            'shipping' => (float) ($totals['shipping'] ?? 0),
+            'discount' => (float) ($totals['discount'] ?? 0),
+            'tax' => (float) ($totals['tax'] ?? 0),
+            'grand_total' => (float) ($totals['total'] ?? 0),
+        ];
+
         $orderData = [
             'customer_id' => $customerId,
             'status' => 'pending',
-            'total' => (float) ($totals['total'] ?? 0),
+            'total' => $summary['grand_total'],
         ];
 
         $orderSummary = $this->query('order', 'createOrder', [
@@ -82,6 +90,7 @@ class CheckoutService
                 ->setData(Order::schema_fields_created_at, (string) ($orderSummary['created_at'] ?? ''))
                 ->setData(Order::schema_fields_updated_at, (string) ($orderSummary['updated_at'] ?? ''));
         }
+        $order->setData('weshop_checkout_summary', $summary);
 
         EventsManager::getInstance()->dispatch('WeShop_Checkout::order_created', [
             'order' => $order,
@@ -117,6 +126,7 @@ class CheckoutService
             'order' => $order,
             'order_id' => (int) $order->getId(),
             'order_increment_id' => $this->readOrderIncrementId($order),
+            'order_summary' => $this->readOrderSummary($order),
             'payment' => $payment,
             'payment_method' => [
                 'code' => (string) ($payment['payment_method'] ?? $checkoutData['payment_method'] ?? ''),
@@ -181,5 +191,32 @@ class CheckoutService
         }
 
         return (string) ($order->getData(Order::schema_fields_increment_id) ?? '');
+    }
+
+    /**
+     * @return array<string, float>
+     */
+    protected function readOrderSummary(Order $order): array
+    {
+        $summary = $order->getData('weshop_checkout_summary');
+        if (is_array($summary)) {
+            return [
+                'subtotal' => (float) ($summary['subtotal'] ?? 0),
+                'shipping' => (float) ($summary['shipping'] ?? 0),
+                'discount' => (float) ($summary['discount'] ?? 0),
+                'tax' => (float) ($summary['tax'] ?? 0),
+                'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
+            ];
+        }
+
+        $grandTotal = (float) ($order->getData(Order::schema_fields_total) ?? 0);
+
+        return [
+            'subtotal' => $grandTotal,
+            'shipping' => 0.0,
+            'discount' => 0.0,
+            'tax' => 0.0,
+            'grand_total' => $grandTotal,
+        ];
     }
 }
