@@ -10,7 +10,7 @@
 - [x] Write failing unit coverage for logout revocation semantics
 - [x] Implement the smallest correct service fix
 - [x] Run validation commands
-- [ ] Commit the slice and update result.md with the commit hash
+- [x] Commit the slice and update result.md with the commit hash
 
 ## Verification Targets
 
