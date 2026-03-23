@@ -2035,6 +2035,13 @@ class ServiceOrchestrator
     /**
      * 关闭 IPC 服务器
      */
+    protected function shouldWaitForStopFlowExitVerification(ServiceInstance $instance): bool
+    {
+        // IPC 连接仍在时，说明子进程仍处于协议管理内，阶段 5 可以给一小段优雅退出窗口。
+        // 一旦 IPC 已断开，继续长时间等待通常只会放大 stop 尾延迟，直接进入残留清理更合适。
+        return $instance->ipcClientId !== null;
+    }
+
     protected function isChildProcessRunning(int $pid): bool
     {
         return $this->isProcessRunning($pid);

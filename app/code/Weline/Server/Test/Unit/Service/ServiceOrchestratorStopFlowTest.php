@@ -71,9 +71,14 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
             public array $forceKillCalls = [];
             public array $closedClientIds = [];
 
-            protected function isChildProcessRunning(int $pid): bool
+            protected function batchCheckStopFlowRunning(array $pids): array
             {
-                return $this->runningByPid[$pid] ?? false;
+                $status = [];
+                foreach ($pids as $pid) {
+                    $status[$pid] = $this->runningByPid[$pid] ?? false;
+                }
+
+                return $status;
             }
 
             protected function getStopVerificationTimeout(): float
@@ -116,6 +121,63 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertInstanceOf(ServiceInstance::class, $worker);
         self::assertSame(ServiceInstance::STATE_STOPPED, $dispatcher->state);
         self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
+    }
+
+    public function testVerifyAndKillRemainingProcessesSkipsGraceWaitForDisconnectedResiduals(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $runningByPid = [];
+            public array $batchCheckCalls = [];
+            public array $forceKillCalls = [];
+            public int $sleepCalls = 0;
+
+            protected function batchCheckStopFlowRunning(array $pids): array
+            {
+                $this->batchCheckCalls[] = \array_values($pids);
+                $status = [];
+                foreach ($pids as $pid) {
+                    $status[$pid] = $this->runningByPid[$pid] ?? false;
+                }
+
+                if ($pids === [101]) {
+                    $this->runningByPid[101] = false;
+                }
+
+                return $status;
+            }
+
+            protected function getStopVerificationTimeout(): float
+            {
+                return 2.0;
+            }
+
+            protected function sleepStopFlow(int $microseconds): void
+            {
+                $this->sleepCalls++;
+            }
+
+            protected function forceStopRemainingProcesses(array $pids): array
+            {
+                $this->forceKillCalls[] = \array_values($pids);
+
+                return [
+                    'killed' => \count($pids),
+                    'failed' => 0,
+                    'remaining' => [],
+                ];
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(role: 'dispatcher', instanceId: 1, pid: 101, ipcClientId: 11, state: ServiceInstance::STATE_READY));
+        $registry->addInstance(new ServiceInstance(role: 'worker', instanceId: 1, pid: 202, ipcClientId: null, state: ServiceInstance::STATE_STOPPING));
+        $orchestrator->runningByPid = [101 => true, 202 => true];
+
+        $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
+
+        self::assertSame([[101, 202], [101]], $orchestrator->batchCheckCalls);
+        self::assertSame([[202]], $orchestrator->forceKillCalls);
+        self::assertSame(1, $orchestrator->sleepCalls);
     }
 
     public function testBroadcastDrainToAllUsesGlobalDrainWithoutPorts(): void
@@ -178,16 +240,15 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
     {
         $orchestrator = new class extends ServiceOrchestrator {
             public bool $finalizeCalled = false;
-            public array $runningByPid = [];
 
             protected function finalizeStopAllMasterExit(): void
             {
                 $this->finalizeCalled = true;
             }
 
-            protected function isChildProcessRunning(int $pid): bool
+            protected function batchCheckStopFlowRunning(array $pids): array
             {
-                return $this->runningByPid[$pid] ?? false;
+                return \array_fill_keys($pids, false);
             }
 
             protected function getStopVerificationTimeout(): float
