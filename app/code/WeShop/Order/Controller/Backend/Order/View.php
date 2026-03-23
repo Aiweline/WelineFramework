@@ -4,38 +4,42 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Controller\Backend\Order;
 
-use Weline\Framework\App\Controller\BackendController;
-use WeShop\Order\Service\OrderService;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Order\Service\OrderAdminPageDataService;
+use Weline\Admin\Controller\BaseController;
 
-/**
- * 订单详情管理控制器
- */
-class View extends BackendController
+class View extends BaseController
 {
-    /**
-     * 订单详情
-     */
+    public function __construct(
+        private readonly OrderAdminPageDataService $orderAdminPageDataService
+    ) {
+    }
+
     public function index(): string
     {
-        $orderId = (int)($this->request->getParam('id') ?? 0);
-        
+        $orderId = (int) $this->request->getParam('id', 0);
         if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            return $this->redirect('weshop/backend/order/index');
+            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->redirect('*/backend/order');
+            return '';
         }
-        
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        $order = $orderService->getOrder($orderId);
-        
-        if (!$order) {
-            $this->getMessageManager()->addError(__('订单不存在'));
-            return $this->redirect('weshop/backend/order/index');
+
+        try {
+            $detailData = $this->orderAdminPageDataService->getDetailData($orderId);
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage() ?: __('Order not found.'));
+            $this->redirect('*/backend/order');
+            return '';
         }
-        
-        $this->assign('order', $order);
-        
-        return $this->fetch();
+
+        $this->assign(array_merge(
+            [
+                'title' => (string) __('Order Detail'),
+                'orderIndexUrl' => $this->getBackendUrl('*/backend/order'),
+                'updateStatusUrl' => $this->getBackendUrl('*/backend/order/update-status'),
+            ],
+            $detailData
+        ));
+
+        return $this->fetchBase();
     }
 }
