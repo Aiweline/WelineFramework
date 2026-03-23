@@ -97,6 +97,7 @@
                 // 获取控制器传递的父页面和子页面数据
                 $parentPages = $this->getData('parent_pages') ?: [];
                 $childPages = $this->getData('child_pages') ?: [];
+                $websiteMap = $this->getData('website_map') ?: [];
                 $pagination = $this->getData('pagination');
                 ?>
                 
@@ -182,7 +183,7 @@
                                                 $websiteId = (int)($page->getData('website_id') ?? 0);
                                                 $websiteName = '';
                                                 $websiteUrl = '';
-                                                if ($websiteId > 0) {
+                                                if (false && $websiteId > 0) {
                                                     try {
                                                         $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
                                                         $website = clone $websiteModel;
@@ -220,6 +221,9 @@
                                                         // 忽略错误
                                                     }
                                                 }
+                                                $websiteMeta = $websiteMap[$websiteId] ?? [];
+                                                $websiteName = (string)($websiteMeta['name'] ?? '');
+                                                $websiteUrl = (string)($websiteMeta['display_url'] ?? '');
                                                 ?>
                                                 <?php if ($websiteName): ?>
                                                     <span class="badge badge-website">
@@ -335,7 +339,7 @@
                                                         <?php
                                                         // 生成 Sitemap URL
                                                         $websiteCode = '';
-                                                        if ($websiteId > 0) {
+                                                        if (false && $websiteId > 0) {
                                                             try {
                                                                 $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
                                                                 $website = clone $websiteModel;
@@ -347,6 +351,7 @@
                                                                 $websiteCode = 'website_' . $websiteId;
                                                             }
                                                         }
+                                                        $websiteCode = (string)($websiteMeta['code'] ?? ($websiteId > 0 ? 'website_' . $websiteId : ''));
                                                         $sitemapUrl = $websiteCode ? ($baseUrl . '/sitemaps/' . $websiteCode . '/sitemap.xml') : '';
                                                         ?>
                                                         <?php if ($sitemapUrl && $isPublished): ?>
@@ -501,7 +506,7 @@
                                                                 $childWebsiteId = (int)($childPage->getData('website_id') ?? 0);
                                                                 $childWebsiteName = '';
                                                                 $childWebsiteUrl = '';
-                                                                if ($childWebsiteId > 0) {
+                                                                if (false && $childWebsiteId > 0) {
                                                                     try {
                                                                         $websiteModel = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Websites\Model\Website::class);
                                                                         $website = clone $websiteModel;
@@ -537,6 +542,9 @@
                                                                         // 忽略错误
                                                                     }
                                                                 }
+                                                                $childWebsiteMeta = $websiteMap[$childWebsiteId] ?? [];
+                                                                $childWebsiteName = (string)($childWebsiteMeta['name'] ?? '');
+                                                                $childWebsiteUrl = (string)($childWebsiteMeta['display_url'] ?? '');
                                                                 if ($childWebsiteName): ?>
                                                                     <div>
                                                                         <span class="badge bg-secondary">
@@ -603,11 +611,11 @@
                                                                 <!-- 更多操作下拉菜单 -->
                                                                 <div class="btn-group" role="group">
                                                                     <button type="button" 
-                                                                            class="btn btn-sm btn-secondary dropdown-toggle d-inline-flex align-items-center" 
+                                                                            class="btn btn-sm text-info dropdown-toggle d-inline-flex align-items-center"
                                                                             data-bs-toggle="dropdown" 
                                                                             aria-expanded="false"
                                                                             style="min-width: 85px; white-space: nowrap;">
-                                                                        <i class="mdi mdi-dots-horizontal me-1"></i><?= __('更多操作') ?>
+                                                                        <i class="mdi mdi-dots-horizontal me-1 text-info"></i><?= __('更多操作') ?>
                                                                     </button>
                                                                     <ul class="dropdown-menu dropdown-menu-end">
                                                                         <!-- 预览、查看、拷贝 -->

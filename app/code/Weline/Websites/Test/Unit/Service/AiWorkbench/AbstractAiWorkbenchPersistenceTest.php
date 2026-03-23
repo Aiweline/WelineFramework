@@ -44,9 +44,15 @@ abstract class AbstractAiWorkbenchPersistenceTest extends TestCore
         parent::tearDown();
     }
 
-    protected function createTrackedSession(string $providerCode = 'websites_default', int $adminUserId = 1, array $scope = []): AiSiteBuilderSession
+    protected function createTrackedSession(
+        string $providerCode = 'websites_default',
+        int $adminUserId = 1,
+        array $scope = [],
+        array $providerState = [],
+        string $initialStage = AiSiteBuilderSession::STAGE_BRIEF
+    ): AiSiteBuilderSession
     {
-        $session = $this->sessionService->createSession($providerCode, $adminUserId, $scope);
+        $session = $this->sessionService->createSession($providerCode, $adminUserId, $scope, $providerState, $initialStage);
         $this->createdSessionIds[] = $session->getId();
         return $session;
     }

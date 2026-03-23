@@ -182,9 +182,9 @@ class LayoutSlotRenderer implements ObserverInterface
         $warningItems = [];
         $orphanSlotIds = []; // 鏀堕泦鎵€鏈夊鍎块儴浠剁殑 slot_id
         foreach ($orphans as $orphan) {
-            $widgetName = htmlspecialchars((string)($orphan['widget_name'] ?? '鏈煡閮ㄤ欢'));
-            $slotId = htmlspecialchars((string)($orphan['slot_id'] ?? '鏈煡鎻掓Ы'));
-            $warningItems[] = "<li><strong>{$widgetName}</strong> - 鎵句笉鍒版彃妲?<code>{$slotId}</code></li>";
+            $widgetName = htmlspecialchars((string)($orphan['widget_name'] ?? '未知组件'));
+            $slotId = htmlspecialchars((string)($orphan['slot_id'] ?? '未知插槽'));
+            $warningItems[] = "<li><strong>{$widgetName}</strong> - 找不到插槽 <code>{$slotId}</code></li>";
             if (!empty($orphan['slot_id'])) {
                 $orphanSlotIds[] = $orphan['slot_id'];
             }
@@ -212,7 +212,7 @@ class LayoutSlotRenderer implements ObserverInterface
     font-size: 14px;
 ">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-        <strong style="color: #856404;">鈿狅笍 閮ㄤ欢璀﹀憡</strong>
+        <strong style="color: #856404;">组件警告</strong>
         <button onclick="this.parentElement.parentElement.remove()" style="
             background: none;
             border: none;
@@ -221,14 +221,14 @@ class LayoutSlotRenderer implements ObserverInterface
             color: #856404;
         ">&times;</button>
     </div>
-    <p style="margin: 0 0 10px 0; color: #856404;">浠ヤ笅閮ㄤ欢鏃犳硶鍦ㄥ綋鍓嶅竷灞€涓敓鏁堬紙閰嶇疆宸蹭繚鐣欙級锛?/p>
+    <p style="margin: 0 0 10px 0; color: #856404;">以下组件无法在当前布局中生效（配置已保留）：</p>
     <ul style="margin: 0; padding-left: 20px; color: #856404;">
 HTML;
         $warningHtml .= implode("\n", $warningItems);
         $warningHtml .= <<<HTML
     </ul>
     <p style="margin: 10px 0 5px 0; font-size: 12px; color: #856404;">
-        鎻愮ず锛氳繖浜涢儴浠跺彲鑳介渶瑕侀噸鏂伴厤缃埌鏂扮殑鎻掓Ы浣嶇疆銆?
+        提示：这些组件可能需要重新配置到新的插槽位置。
     </p>
     <div id="orphan-actions" style="display: flex; gap: 8px; margin-top: 10px;">
         <button id="btnConfirmDelete" data-orphan-slots='{$orphanSlotIdsJson}' style="
@@ -241,7 +241,7 @@ HTML;
             cursor: pointer;
             font-size: 13px;
         " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
-            鍒犻櫎杩欎簺閮ㄤ欢
+            删除这些组件
         </button>
         <button onclick="document.getElementById('orphan-widgets-warning').remove()" style="
             flex: 1;
@@ -253,12 +253,12 @@ HTML;
             cursor: pointer;
             font-size: 13px;
         " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
-            绋嶅悗澶勭悊
+            稍后处理
         </button>
     </div>
     <div id="confirm-message" style="display: none; margin-top: 10px; padding: 10px; background: #f8d7da; border-radius: 4px; color: #721c24; font-size: 13px;">
-        <strong>鈿狅笍 纭鍒犻櫎锛?/strong>
-        <p style="margin: 5px 0;">姝ゆ搷浣滃皢姘镐箙鍒犻櫎杩欎簺鏃犳晥閮ㄤ欢閰嶇疆锛屼笉鍙仮澶嶃€?/p>
+        <strong>确认删除</strong>
+        <p style="margin: 5px 0;">此操作将永久删除这些无效组件配置，不可恢复。</p>
         <div style="display: flex; gap: 8px; margin-top: 8px;">
             <button id="btnConfirmYes" style="
                 flex: 1;
@@ -270,7 +270,7 @@ HTML;
                 cursor: pointer;
                 font-size: 12px;
             " onmouseover="this.style.background='#c82333'" onmouseout="this.style.background='#dc3545'">
-                纭鍒犻櫎
+                确认删除
             </button>
             <button id="btnConfirmNo" style="
                 flex: 1;
@@ -282,7 +282,7 @@ HTML;
                 cursor: pointer;
                 font-size: 12px;
             " onmouseover="this.style.background='#5a6268'" onmouseout="this.style.background='#6c757d'">
-                鍙栨秷
+                取消
             </button>
         </div>
     </div>
@@ -328,7 +328,7 @@ HTML;
             deleteStatus.style.display = 'block';
             deleteStatus.style.background = '#d1ecf1';
             deleteStatus.style.color = '#0c5460';
-            deleteStatus.textContent = '姝ｅ湪鍒犻櫎...';
+            deleteStatus.textContent = '正在删除...';
             
             // 闃叉閲嶅鐐瑰嚮
             btnConfirmYes.disabled = true;
@@ -349,7 +349,7 @@ HTML;
                 if (data.success) {
                     deleteStatus.style.background = '#d4edda';
                     deleteStatus.style.color = '#155724';
-                    deleteStatus.textContent = '鉁?' + (data.message || '鍒犻櫎鎴愬姛') + '锛屽嵆灏嗗埛鏂?..';
+                    deleteStatus.textContent = '✓ ' + (data.message || '删除成功') + '，即将刷新...';
                     // 绔嬪嵆闅愯棌鏁翠釜璀﹀憡闈㈡澘
                     const panel = document.getElementById('orphan-widgets-warning');
                     if (panel) {
@@ -361,15 +361,15 @@ HTML;
                 } else {
                     deleteStatus.style.background = '#f8d7da';
                     deleteStatus.style.color = '#721c24';
-                    deleteStatus.textContent = '鉁?' + (data.message || '鍒犻櫎澶辫触');
+                    deleteStatus.textContent = '✗ ' + (data.message || '删除失败');
                     btnConfirmYes.disabled = false;
                 }
             })
             .catch(error => {
-                console.error('鍒犻櫎澶辫触:', error);
+                console.error('删除失败:', error);
                 deleteStatus.style.background = '#f8d7da';
                 deleteStatus.style.color = '#721c24';
-                deleteStatus.textContent = '鉁?鍒犻櫎澶辫触锛岃鏌ョ湅鎺у埗鍙?;
+                deleteStatus.textContent = '✗ 删除失败，请查看控制台';
                 btnConfirmYes.disabled = false;
             });
         });
@@ -673,7 +673,7 @@ HTML;
             <circle cx="12" cy="12" r="10"/>
             <path d="M12 16v-4M12 8h.01"/>
         </svg>
-        <span style="font-weight: 600; font-size: 14px;">棰勮妯″紡</span>
+        <span style="font-weight: 600; font-size: 14px;">预览模式</span>
     </div>
     <div style="display: flex; flex-direction: column; gap: 8px;">
         <button id="weline-preview-exit-btn" style="
@@ -689,7 +689,7 @@ HTML;
             width: 100%;
         " onmouseover="this.style.background='#fff';this.style.transform='translateY(-1px)'" 
            onmouseout="this.style.background='rgba(255,255,255,0.95)';this.style.transform='translateY(0)'">
-            閫€鍑洪瑙?
+            退出预览
         </button>
         <button id="weline-preview-publish-btn" style="
             padding: 8px 16px;
@@ -704,7 +704,7 @@ HTML;
             width: 100%;
         " onmouseover="this.style.background='rgba(255,255,255,0.3)'" 
            onmouseout="this.style.background='rgba(255,255,255,0.2)'">
-            鍙戝竷骞堕€€鍑?
+            发布并退出
         </button>
     </div>
     <div style="
@@ -784,7 +784,7 @@ HTML;
     // 閫€鍑洪瑙堟寜閽?
     exitBtn.addEventListener('click', function() {
         exitBtn.disabled = true;
-        exitBtn.textContent = '澶勭悊涓?..';
+        exitBtn.textContent = '处理中...';
         
         fetch(exitUrl, {
             method: 'POST',
@@ -803,26 +803,26 @@ HTML;
                 localStorage.removeItem('weline_preview_float_pos');
                 window.location.href = editorUrl;
             } else {
-                alert(data.message || '閫€鍑洪瑙堝け璐?);
+                alert(data.message || '退出预览失败');
                 exitBtn.disabled = false;
-                exitBtn.textContent = '閫€鍑洪瑙?;
+                exitBtn.textContent = '退出预览';
             }
         })
         .catch(function(err) {
-            alert('缃戠粶閿欒锛岃閲嶈瘯');
+            alert('网络错误，请重试');
             exitBtn.disabled = false;
-            exitBtn.textContent = '閫€鍑洪瑙?;
+            exitBtn.textContent = '退出预览';
         });
     });
     
     // 鍙戝竷骞堕€€鍑烘寜閽?
     publishBtn.addEventListener('click', function() {
-        if (!confirm('纭鍙戝竷褰撳墠棰勮鍐呭骞堕€€鍑猴紵\\n\\n鍙戝竷鍚庯紝鎵€鏈夎瀹㈠皢鐪嬪埌鏈€鏂扮殑鏇存敼銆?)) {
+        if (!confirm('确认发布当前预览内容并退出？\\n\\n发布后，所有访客将看到最新更改。')) {
             return;
         }
         
         publishBtn.disabled = true;
-        publishBtn.textContent = '鍙戝竷涓?..';
+        publishBtn.textContent = '发布中...';
         
         fetch(publishUrl, {
             method: 'POST',
@@ -841,15 +841,15 @@ HTML;
                 // 璺宠浆鍒板墠鍙伴椤碉紙闈為瑙堟ā寮忥級
                 window.location.href = data.redirect_url || '/';
             } else {
-                alert(data.message || '鍙戝竷澶辫触');
+                alert(data.message || '发布失败');
                 publishBtn.disabled = false;
-                publishBtn.textContent = '鍙戝竷骞堕€€鍑?;
+                publishBtn.textContent = '发布并退出';
             }
         })
         .catch(function(err) {
-            alert('缃戠粶閿欒锛岃閲嶈瘯');
+            alert('网络错误，请重试');
             publishBtn.disabled = false;
-            publishBtn.textContent = '鍙戝竷骞堕€€鍑?;
+            publishBtn.textContent = '发布并退出';
         });
     });
 })();

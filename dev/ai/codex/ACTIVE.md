@@ -8,9 +8,9 @@ The legacy snapshot below is preserved only for backward context.
 
 # Active Task
 
-- Updated: 2026-03-23 09:53
+- Updated: 2026-03-23 10:24
 - Task File: dev/ai/codex/tasks/2026-03-23/2026-03-23-0953-websites-ai-workbench-pagebuilder-bridge.md
-- Status: in_progress
+- Status: completed
 
 ## Current Goal
 
@@ -35,7 +35,10 @@ Close the gap between the planned `Weline_Websites` AI site-building workbench a
 
 ## Verification
 
-- Pending.
+- `php -l` passed for all touched PHP and `.phtml` files.
+- `app/code/Weline/Websites/etc/backend/menu.xml` parses successfully after rewrite.
+- `php bin/w setup:upgrade -m GuoLaiRen_PageBuilder -m Weline_Websites --yes` completed successfully.
+- `generated/extends.php` now contains `AiSiteBuilderProvider/PageBuilderProvider.php`.
 
 ## Risks / Notes
 
@@ -45,8 +48,7 @@ Close the gap between the planned `Weline_Websites` AI site-building workbench a
 
 ## Next
 
-- Upgrade the Websites AI workbench entry into a friendlier hub that exposes PageBuilder as an extension path.
-- Register a PageBuilder provider under the Websites extension point.
-- Update PageBuilder menu/workbench links to point back to the Websites hub.
-- Remove the duplicated Websites PageBuilder-group menu entry.
-- Run focused lint and setup verification.
+- If we continue this initiative, the next meaningful slice is to move from entry unification into true platform-level session/workspace unification:
+  - Websites-controlled session/message/event/artifact workspace
+  - deeper PageBuilder provider adaptation away from its legacy private session tables
+  - default provider conversation/domain/theme/draft flow completion

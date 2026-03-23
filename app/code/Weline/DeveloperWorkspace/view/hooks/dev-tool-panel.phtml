@@ -1468,6 +1468,9 @@ const DevToolPanel = (function() {
         // 性能统计相关
         pageLoadStartTime: performance.timing ? performance.timing.navigationStart : Date.now(),
         apiRequests: [], // 存储API请求记录
+
+        // 请求链路「编码」视图：tree=常规树形，duration=按耗时倒序平铺
+        traceCodeLayout: 'tree',
     };
 
     // ========== LocalStorage 管理 ==========
@@ -1484,6 +1487,7 @@ const DevToolPanel = (function() {
             currentDocScrollPos: state.currentDocScrollPos,
             panelX: state.panelX,
             panelY: state.panelY,
+            traceCodeLayout: state.traceCodeLayout,
         };
         localStorage.setItem('dev-panel-state', JSON.stringify(dataToSave));
     }
@@ -2898,6 +2902,26 @@ const DevToolPanel = (function() {
         return html;
     }
 
+    /** 请求链路「编码」视图：常规树 / 耗时倒序 子 Tab 的 UI 同步 */
+    function syncTraceCodeLayoutUI(mode) {
+        var treeBtn = document.getElementById('trace-layout-tree');
+        var durBtn = document.getElementById('trace-layout-duration');
+        var treePanel = document.getElementById('trace-code-tree-panel');
+        var durPanel = document.getElementById('trace-code-duration-panel');
+        if (!treeBtn || !durBtn || !treePanel || !durPanel) {
+            return;
+        }
+        var isTree = mode !== 'duration';
+        treeBtn.classList.toggle('active', isTree);
+        durBtn.classList.toggle('active', !isTree);
+        treeBtn.style.background = isTree ? '#f7f7ff' : '#fafafa';
+        treeBtn.style.borderColor = isTree ? '#667eea' : '#ddd';
+        durBtn.style.background = !isTree ? '#f7f7ff' : '#fafafa';
+        durBtn.style.borderColor = !isTree ? '#667eea' : '#ddd';
+        treePanel.style.display = isTree ? 'block' : 'none';
+        durPanel.style.display = isTree ? 'none' : 'block';
+    }
+
     function renderRequestTrace() {
         const content = document.getElementById('dev-tool-content');
         if (!content) return;
@@ -2917,10 +2941,10 @@ const DevToolPanel = (function() {
 
         // 编码视图
         html += '<div id="trace-code-view" class="performance-section">';
-        html += '<div class="performance-section-title">';
-        html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（编码阶段）';
-        html += '</div>';
         if (codeSpans.length === 0) {
+            html += '<div class="performance-section-title">';
+            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（编码阶段）';
+            html += '</div>';
             html += '<div class="dev-tool-empty">当前页面无请求链路数据。</div>';
             html += '<div style="margin-top:8px;padding:8px;font-size:11px;color:#888;background:#f5f5f5;border-radius:4px;">';
             html += '请确认：<br>1) 已开启开发模式（env.php 中 system.deploy 为 dev）或开启 DEBUG；<br>';
@@ -2928,12 +2952,45 @@ const DevToolPanel = (function() {
             html += '</div>';
         } else {
             var allSpans = codeSpans.concat(dbSpans);
+            html += '<div id="trace-code-layout-tabs" style="display:flex;gap:4px;margin-bottom:8px;">';
+            html += '<button type="button" id="trace-layout-tree" class="dev-tool-trace-layout-btn active" data-layout="tree" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #667eea;background:#f7f7ff;color:#333;cursor:pointer;">常规</button>';
+            html += '<button type="button" id="trace-layout-duration" class="dev-tool-trace-layout-btn" data-layout="duration" style="flex:1;font-size:11px;padding:4px 6px;border-radius:4px;border:1px solid #ddd;background:#fafafa;color:#555;cursor:pointer;">耗时倒序</button>';
+            html += '</div>';
+
+            html += '<div id="trace-code-tree-panel">';
+            html += '<div class="performance-section-title" style="margin-top:0;border-bottom:none;padding-bottom:4px;">';
+            html += '<i class="fa fa-list-alt"></i> 请求生命周期链路（树形，发生顺序）';
+            html += '</div>';
             var roots = buildTraceTree(allSpans);
             var totalMsRef = { value: 0 };
             roots.forEach(function(node) { html += renderTraceNode(node, 0, totalMsRef, true); });
             html += '<div class="performance-item" style="border-top:1px solid #eee;margin-top:6px;padding-top:6px;">';
-            html += '<span class="performance-label">合计</span>';
+            html += '<span class="performance-label">合计（根阶段）</span>';
             html += '<span class="performance-value">' + formatTime(totalMsRef.value) + '</span>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div id="trace-code-duration-panel" style="display:none;">';
+            html += '<div class="performance-section-title" style="margin-top:0;border-bottom:none;padding-bottom:4px;">';
+            html += '<i class="fa fa-sort-amount-desc"></i> 按耗时倒序（含编码与 DB，平铺）';
+            html += '</div>';
+            var sortedSpans = allSpans.slice().sort(function(a, b) {
+                return (Number(b.duration_ms) || 0) - (Number(a.duration_ms) || 0);
+            });
+            sortedSpans.forEach(function(s) {
+                var dm = Number(s.duration_ms) || 0;
+                var tc = getTimeClass(dm);
+                var cat = (s.category || '') ? ' <span style="opacity:0.7;font-size:10px;">[' + escapeHtml(String(s.category)) + ']</span>' : '';
+                var parent = s.parent ? String(s.parent) : '';
+                html += '<div class="performance-item trace-sorted-row" style="align-items:flex-start;flex-wrap:nowrap;">';
+                html += '<span class="performance-label" style="flex:1;min-width:0;word-break:break-word;">' + escapeHtml(String(s.name)) + cat;
+                if (parent) {
+                    html += '<br><span style="font-size:10px;color:#888;">父：' + escapeHtml(parent) + '</span>';
+                }
+                html += '</span>';
+                html += '<span class="performance-value ' + tc + '" style="flex-shrink:0;margin-left:8px;white-space:nowrap;">' + formatTime(dm) + '</span>';
+                html += '</div>';
+            });
             html += '</div>';
         }
         html += '</div>';
@@ -3025,6 +3082,7 @@ const DevToolPanel = (function() {
                     dbBtn.style.background = '#fafafa';
                     codeView.style.display = 'block';
                     dbView.style.display = 'none';
+                    syncTraceCodeLayoutUI((state.traceCodeLayout === 'duration') ? 'duration' : 'tree');
                 });
                 dbBtn.addEventListener('click', function () {
                     dbBtn.classList.add('active');
@@ -3036,6 +3094,22 @@ const DevToolPanel = (function() {
                     codeView.style.display = 'none';
                     dbView.style.display = 'block';
                 });
+            }
+
+            var layoutTreeBtn = document.getElementById('trace-layout-tree');
+            var layoutDurBtn = document.getElementById('trace-layout-duration');
+            if (layoutTreeBtn && layoutDurBtn) {
+                layoutTreeBtn.addEventListener('click', function () {
+                    state.traceCodeLayout = 'tree';
+                    saveState();
+                    syncTraceCodeLayoutUI('tree');
+                });
+                layoutDurBtn.addEventListener('click', function () {
+                    state.traceCodeLayout = 'duration';
+                    saveState();
+                    syncTraceCodeLayoutUI('duration');
+                });
+                syncTraceCodeLayoutUI((state.traceCodeLayout === 'duration') ? 'duration' : 'tree');
             }
 
             // DB 表 + 编码内嵌 DB：行展开（手风琴）、复制 SQL、EXPLAIN（统一委托到 content）

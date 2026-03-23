@@ -548,7 +548,7 @@ class Core
      */
     public function Api(string $url)
     {
-        $url = strtolower($url);
+        $url = $this->normalizeRouterUrlPathSegments($url);
         $is_api_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_api_BACKEND;
 
         if ($is_api_admin) {
@@ -588,6 +588,31 @@ class Core
     }
 
     /**
+     * 将 path 各段规范为与路由表一致的「小写 + 连字符」形式（PC 与 REST API 路由表均如此注册）。
+     *
+     * 路由注册（Module\Helper\Data）把控制器/动作从 PascalCase、camelCase 转为连字符；
+     * 若对整段 URL 先 strtolower，会抹掉 aiSiteAgent 中的大写边界，无法匹配 ai-site-agent。
+     */
+    private function normalizeRouterUrlPathSegments(string $url): string
+    {
+        $url = trim($url, '/');
+        if ($url === '') {
+            return '';
+        }
+        $segments = explode('/', $url);
+        foreach ($segments as $i => $segment) {
+            if ($segment === '') {
+                continue;
+            }
+            $s = preg_replace('/([a-z0-9])([A-Z])/', '$1-$2', $segment) ?? $segment;
+            $s = preg_replace('/([A-Z]+)([A-Z][a-z])/', '$1-$2', $s) ?? $s;
+            $segments[$i] = strtolower($s);
+        }
+
+        return implode('/', $segments);
+    }
+
+    /**
      * @DESC         |方法描述
      *
      * 参数区：
@@ -600,7 +625,7 @@ class Core
      */
     public function Pc(string $url)
     {
-        $url = strtolower($url);
+        $url = $this->normalizeRouterUrlPathSegments($url);
         $is_pc_admin = $this->request_area === \Weline\Framework\Controller\Data\DataInterface::type_pc_BACKEND;
         // 检测api路由区域
         if ($is_pc_admin) {

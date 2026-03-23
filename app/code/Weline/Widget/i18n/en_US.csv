@@ -131,15 +131,26 @@ FAQ部件,FAQ部件
 画布,Canvas
 从左侧拖放部件到这里,"Drag widgets from left panel here"
 属性配置,Properties
+快速查看、筛选并预览部件详情,快速查看、筛选并预览部件详情
+部件详情,部件详情
+关闭,关闭
+加载中...,加载中...
+操作失败,操作失败
+类型,Type
+模块,模块
+版本,Version
+参数配置,参数配置
+总部件数,总部件数
+部件类型,部件类型
+来源模块,"Source Module"
+关键字,关键字
 所有模块,"All Modules"
 所有类型,"All Types"
 筛选,Filter
+重置筛选,重置筛选
 部件列表,"Widget List"
 没有找到部件,"No widgets found"
 部件名称,"Widget Name"
-类型,Type
-来源模块,"Source Module"
 描述,Description
-版本,Version
 操作,Actions
 详情,Details

@@ -38,4 +38,12 @@ class SessionServiceTest extends AbstractAiWorkbenchPersistenceTest
         $this->assertNotEmpty($recentSessions);
         $this->assertSame($session->getId(), $recentSessions[0]['session_id']);
     }
+
+    public function testCreateSessionSupportsInitialStage(): void
+    {
+        $session = $this->createTrackedSession('websites_default', 1, ['site_title' => 'Stage Demo'], [], 'visual_edit');
+
+        $this->assertGreaterThan(0, $session->getId());
+        $this->assertSame('visual_edit', $session->getCurrentStage());
+    }
 }

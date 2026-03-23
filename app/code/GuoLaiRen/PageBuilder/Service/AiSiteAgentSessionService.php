@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 /*
  * GuoLaiRen PageBuilder Module
- * AI 建站智能体会话：创建、读写 scope、事件流、站点/主题/发布状态
+ * AI 建站工作台会话：创建、读写 scope、事件流、站点/主题/发布状态
  */
 
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
+use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteAgentSessionService
 {
@@ -39,7 +42,16 @@ class AiSiteAgentSessionService
         $session->setData(AiSiteAgentSession::schema_fields_STAGE, AiSiteAgentSession::STAGE_BRIEF);
         $session->setData(AiSiteAgentSession::schema_fields_PUBLISH_STATUS, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
         $session->setScopeArray($initialScope);
-        $session->save();
+        try {
+            $session->save();
+        } catch (\Throwable $e) {
+            if (!$this->isPgsqlAiSessionPrimaryKeySerialMissing($e)) {
+                throw $e;
+            }
+            $this->repairPgsqlAiSessionPrimaryKeySerial();
+            $session->clearQuery();
+            $session->save();
+        }
         return $session;
     }
 
@@ -310,5 +322,74 @@ class AiSiteAgentSessionService
             ];
         }
         return $out;
+    }
+
+    private function isPgsqlAiSessionPrimaryKeySerialMissing(\Throwable $e): bool
+    {
+        $chain = $e;
+        while ($chain !== null) {
+            $msg = $chain->getMessage();
+            if (\str_contains($msg, '23502')
+                && \str_contains($msg, 'ai_site_agent_session_id')
+                && \str_contains($msg, 'guolairen_page_builder_ai_site_agent_session')) {
+                return true;
+            }
+            $chain = $chain->getPrevious();
+        }
+        return false;
+    }
+
+    /**
+     * 历史库表在 PG 上曾建成无序列的 INTEGER 主键，INSERT 省略主键时会违反 NOT NULL。
+     * 与 SchemaDiff 的 MODIFY 逻辑一致：CREATE SEQUENCE + SET DEFAULT nextval。
+     */
+    private function repairPgsqlAiSessionPrimaryKeySerial(): void
+    {
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        if (!$connector instanceof PgsqlConnector) {
+            return;
+        }
+        $pk = AiSiteAgentSession::schema_fields_ID;
+        $declared = [
+            'name' => $pk,
+            'type' => 'int',
+            'length' => null,
+            'nullable' => false,
+            'primaryKey' => true,
+            'autoIncrement' => true,
+            'default' => null,
+            'comment' => '',
+            'unique' => false,
+        ];
+        $existingCol = null;
+        foreach ($connector->getTableColumns($this->sessionModel->getTable()) as $row) {
+            if (!\is_array($row) || (string) ($row['name'] ?? '') !== $pk) {
+                continue;
+            }
+            $existingCol = [
+                'name' => (string) ($row['name'] ?? ''),
+                'type' => (string) ($row['type'] ?? ''),
+                'length' => \array_key_exists('length', $row) ? $row['length'] : null,
+                'nullable' => (bool) ($row['nullable'] ?? true),
+                'primaryKey' => (bool) ($row['primary_key'] ?? false),
+                'autoIncrement' => (bool) ($row['auto_increment'] ?? false),
+                'default' => $row['default'] ?? null,
+                'comment' => (string) ($row['comment'] ?? ''),
+                'unique' => (bool) ($row['unique'] ?? false),
+            ];
+            break;
+        }
+        $quotedTable = $connector->quoteTable($this->sessionModel->getTable());
+        $ddl = $connector->buildAlterModifyColumnSql($quotedTable, $declared, $existingCol);
+        foreach (\preg_split('/;\s*\R/m', \trim($ddl)) ?: [] as $piece) {
+            $sql = \trim((string) $piece);
+            if ($sql === '') {
+                continue;
+            }
+            if (!\str_ends_with($sql, ';')) {
+                $sql .= ';';
+            }
+            $connector->query($sql)->fetch();
+        }
     }
 }
