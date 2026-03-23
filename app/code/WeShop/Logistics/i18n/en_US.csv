@@ -1,1 +1,33 @@
-﻿订单ID不能为空,订单ID不能为空
+订单ID不能为空,订单ID不能为空
+Pending,Pending
+Picked Up,Picked Up
+In Transit,In Transit
+Out for Delivery,Out for Delivery
+Delivered,Delivered
+Exception,Exception
+Order ID is required.,Order ID is required.
+Tracking number is required.,Tracking number is required.
+Carrier is required.,Carrier is required.
+Unsupported tracking status.,Unsupported tracking status.
+Tracking Management,Tracking Management
+Maintain shipment events and let customer-facing tracking stay up to date.,Maintain shipment events and let customer-facing tracking stay up to date.
+Edit Tracking Event,Edit Tracking Event
+Create Tracking Event,Create Tracking Event
+Order ID,Order ID
+Tracking Number,Tracking Number
+Carrier,Carrier
+Status,Status
+Location,Location
+Description,Description
+Save Tracking Event,Save Tracking Event
+All carriers,All carriers
+All statuses,All statuses
+Apply Filters,Apply Filters
+Reset,Reset
+Tracked At,Tracked At
+Actions,Actions
+Edit,Edit
+No tracking events found.,No tracking events found.
+Create the first tracking event to start the logistics timeline.,Create the first tracking event to start the logistics timeline.
+Tracking saved.,Tracking saved.
+Tracking save failed.,Tracking save failed.
