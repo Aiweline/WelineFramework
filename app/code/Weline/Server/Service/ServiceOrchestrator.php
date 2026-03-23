@@ -1530,8 +1530,9 @@ class ServiceOrchestrator
             WlsLogger::info_('[Orchestrator] 无运行中的实例');
             $this->sendStopProgress('无运行中的实例');
             $this->setStopStage(self::STOP_STAGE_COMPLETE);
-            $this->closeIpcServer();
             $this->running = false;
+            $this->closeIpcServer();
+            $this->finalizeStopAllMasterExit();
             return;
         }
 
@@ -1589,7 +1590,7 @@ class ServiceOrchestrator
         
         // 不提前移除 Master PID 索引，避免外部将“索引消失”误判为“进程已退出”。
         // 索引交由 Master 进程最终退出阶段统一清理。
-        $this->sendStopProgress('所有子进程已完整退出，Master 即将结束主循环');
+        $this->sendStopProgress('所有子进程已完整退出，Master 即将退出进程');
         
         // 先设置状态，再关闭 IPC（关闭后无法再发送消息）
         $this->running = false;
@@ -1598,6 +1599,14 @@ class ServiceOrchestrator
         
         // 最后关闭 IPC
         $this->closeIpcServer();
+        $this->finalizeStopAllMasterExit();
+    }
+
+    protected function finalizeStopAllMasterExit(): void
+    {
+        WlsLogger::info_('[Orchestrator] Stop flow complete, Master exiting immediately');
+        $this->cleanupMasterPidIndex();
+        exit(0);
     }
     
     /**
@@ -1693,18 +1702,24 @@ class ServiceOrchestrator
      */
     private function terminateAllAfterDrain(): void
     {
-        $runningPids = [];
+        $candidatePids = [];
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->pid > 0 && $this->isChildProcessRunning($instance->pid)) {
-                $runningPids[$instance->pid] = $instance->pid;
+            if ($instance->pid <= 0) {
+                continue;
+            }
+
+            // stopAll 第 3 阶段只兜底处理已经脱离 IPC 管理的残留进程。
+            // 仍保持 IPC 连接的服务已收到 SHUTDOWN，后续阶段统一异步收取回执并校验退出。
+            if ($instance->ipcClientId === null) {
+                $candidatePids[$instance->pid] = $instance->pid;
             }
         }
 
-        if ($runningPids === []) {
+        if ($candidatePids === []) {
             return;
         }
 
-        $pidList = \array_values($runningPids);
+        $pidList = \array_values($candidatePids);
         WlsLogger::info_('[Orchestrator] 批量下发退出信号: ' . \implode(',', $pidList));
         $result = $this->sendStopBatchTerminationSignals($pidList);
         $failed = [];
@@ -2013,7 +2028,7 @@ class ServiceOrchestrator
      */
     protected function sendStopBatchTerminationSignals(array $pids): array
     {
-        return Processer::batchSendSignal($pids, 15);
+        return Processer::dispatchBatchSignal($pids, 15);
     }
 
     /**
