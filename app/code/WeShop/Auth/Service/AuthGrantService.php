@@ -7,13 +7,13 @@ namespace WeShop\Auth\Service;
 use WeShop\Auth\Data\ActorContext;
 use WeShop\Auth\Model\PendingAuthChallenge;
 use WeShop\Customer\Service\CustomerAccountService;
-use Weline\Framework\Manager\ObjectManager;
 
 class AuthGrantService
 {
     public function __construct(
         private readonly CustomerAccountService $customerAccountService,
         private readonly BackendPasswordAuthenticator $backendPasswordAuthenticator,
+        private readonly GoogleCodeAuthenticator $googleCodeAuthenticator,
         private readonly IntegrationCredentialAuthenticator $integrationCredentialAuthenticator,
         private readonly WeShopAuth2FAOrchestrator $twoFactorOrchestrator,
         private readonly WeShopAuthTokenService $tokenService
@@ -78,31 +78,11 @@ class AuthGrantService
 
     public function issueGoogleCodeToken(string $area, string $code): array
     {
-        $serviceClass = 'WeShop\\GoogleAuth\\Service\\GoogleLoginService';
-        if (!class_exists($serviceClass)) {
-            throw new \RuntimeException((string) __('Google auth module is not installed.'));
-        }
-
-        /** @var object $service */
-        $service = ObjectManager::getInstance($serviceClass);
-        if (!method_exists($service, 'authenticateByCode')) {
-            throw new \RuntimeException((string) __('Google auth service is unavailable.'));
-        }
-
-        $result = $service->authenticateByCode($area, $code);
-        $actorType = (string) ($result['actor_type'] ?? '');
-        $actorId = (int) ($result['actor_id'] ?? 0);
-        $scopes = (array) ($result['scopes'] ?? []);
-
-        if ($actorId <= 0 || $actorType === '') {
-            throw new \RuntimeException((string) __('Google login failed.'));
-        }
-
-        $context = new ActorContext($actorType, $actorId, strtolower($area), $scopes);
+        $context = $this->googleCodeAuthenticator->authenticate($area, $code);
         $primaryAuth = $this->twoFactorOrchestrator->beginPrimaryAuth(
             $context,
             'google',
-            strtolower($area),
+            $context->getArea(),
             ['flow' => 'google']
         );
 
