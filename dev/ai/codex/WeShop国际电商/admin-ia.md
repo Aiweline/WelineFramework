@@ -9,3 +9,7 @@
 - `shipping_group`: Shipping, Logistics, Compliance
 - `payment_group`: Payment, Tax
 - `data_tools_group`: ImportExport, Report
+
+Execution note:
+
+- `Payment` backend IA should own payment method registry/config, provider status, callback audit, and future gateway credentials under `payment_group`.

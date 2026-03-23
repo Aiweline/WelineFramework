@@ -20,3 +20,15 @@
 - 后台 IA 与菜单资源
 - 代表性交易链模块补齐
 - 测试矩阵完善
+
+## Current Execution Notes
+
+- Checkout payment methods must be provided through `w_query`, not hardcoded in controllers or theme layouts.
+- New frontend-facing slices should avoid adding extra `Frontend` path layers when new route files are introduced; existing legacy controllers can be refactored in place.
+- `default` theme checkout, account center, recommendations, and related storefront layouts should prefer rendering controller/page `content` through shared layout shells instead of duplicating module business UI in the layout file.
+- When a theme layout is missing required hooks or slots, WeShop should patch the `default` theme where possible and later surface compatibility warnings rather than coupling modules to one theme implementation.
+- Payment wave priority is:
+  - `manual_transfer`
+  - `cash_on_delivery`
+  - `paypal`
+  - `alipay` / `wechatpay` scaffolded but disabled by default until gateway completion

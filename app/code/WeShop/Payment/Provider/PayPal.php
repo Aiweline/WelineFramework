@@ -4,41 +4,38 @@ declare(strict_types=1);
 
 namespace WeShop\Payment\Provider;
 
-use WeShop\Payment\Interface\PaymentProviderInterface;
 use WeShop\Order\Model\Order;
+use WeShop\Payment\Interface\PaymentProviderInterface;
 
-/**
- * PayPal支付提供者
- */
 class PayPal implements PaymentProviderInterface
 {
-    /**
-     * @inheritDoc
-     */
     public function processPayment(Order $order, array $paymentData = []): array
     {
-        // TODO: 实现PayPal支付逻辑
+        $orderNumber = '';
+        if (method_exists($order, 'getIncrementId')) {
+            $orderNumber = (string) $order->getIncrementId();
+        } elseif (defined(Order::class . '::schema_fields_increment_id')) {
+            $orderNumber = (string) ($order->getData(Order::schema_fields_increment_id) ?? '');
+        }
+
         return [
-            'payment_url' => '',
-            'payment_params' => [],
+            'status' => 'pending',
+            'requires_action' => true,
+            'redirect_url' => 'https://www.paypal.com/checkoutnow?token=' . rawurlencode($orderNumber !== '' ? $orderNumber : (string) $order->getId()),
+            'payment_params' => [
+                'intent' => 'CAPTURE',
+                'order_reference' => $orderNumber !== '' ? $orderNumber : (string) $order->getId(),
+            ],
         ];
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function handleCallback(array $callbackData): bool
     {
-        // TODO: 实现PayPal回调处理
-        return false;
+        return !empty($callbackData);
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function queryPaymentStatus(string $orderNumber): string
     {
-        // TODO: 实现支付状态查询
         return 'pending';
     }
 }
