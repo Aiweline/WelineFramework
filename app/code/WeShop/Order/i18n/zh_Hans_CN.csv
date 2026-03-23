@@ -42,3 +42,48 @@
 取消订单,取消订单
 申请退货,申请退货
 不可取消,不可取消
+Pending,待处理
+Processing,处理中
+Paid,已支付
+Fulfilled,已发货
+Completed,已完成
+Cancelled,已取消
+Refunded,已退款
+Unsupported order status.,不支持的订单状态。
+Order not found.,订单不存在。
+Order ID is required.,订单ID不能为空。
+Order Management,订单管理
+"Manage order search, review, and status transitions from one place.",在一个页面内完成订单检索、查看与状态流转。
+Total Orders,订单总数
+Completed / Cancelled,已完成 / 已取消
+Order Number,订单号
+Search by order number,按订单号搜索
+Customer ID,客户ID
+Search by customer ID,按客户ID搜索
+Status,状态
+All statuses,全部状态
+Apply Filters,应用筛选
+Reset,重置
+Payment Status,支付状态
+Total,总额
+Created At,创建时间
+Actions,操作
+View,查看
+No orders found.,暂无订单。
+Try adjusting the filters or create a new order flow from the storefront.,请调整筛选条件，或先从前台创建订单流程。
+Order Detail,订单详情
+"Review the order payload, items, and current status.",查看订单信息、商品明细和当前状态。
+Back to Orders,返回订单列表
+Order Summary,订单摘要
+Grand Total,订单总额
+Update Status,更新状态
+Save Status,保存状态
+Order Items,订单商品
+Product,商品
+SKU,SKU
+Qty,数量
+Price,价格
+Row Total,小计
+No order items found.,未找到订单商品。
+Order status updated.,订单状态已更新。
+Order status update failed.,订单状态更新失败。
