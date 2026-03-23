@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `6d098b75 refactor(weshop): extract auth grant credential authenticators`.
 
 ## Changed Files
 
@@ -42,4 +42,4 @@
 
 ## Next Resume Step
 
-- Commit this slice, then continue upward into HTTP-level auth route verification for `/api/weshop/rest/v1/auth/*`.
+- Continue in `2026-03-23-0506-weshop-auth-token-endpoint-contract-slice` to harden the controller-level contract for `/api/weshop/rest/v1/auth/*`.
