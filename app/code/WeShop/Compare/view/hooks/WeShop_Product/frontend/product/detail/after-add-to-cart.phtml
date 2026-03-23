@@ -1,11 +1,18 @@
 <?php
 /**
- * WeShop_Compare模块 - Hook实现
- * 
- * Hook文件：after-add-to-cart.phtml
-
- * 
- * @hook-priority 200   Hook优先级：200（默认值）
- * @hook-sort-order 0  Hook排序顺序：0（默认值）
- * @hook-solo false    Hook独享：false（不独占）
+ * Compare CTA for storefront product detail pages.
+ *
+ * @hook-priority 200
+ * @hook-sort-order 0
+ * @hook-solo false
  */
+$product = (array) ($this->getData('product') ?? []);
+$productId = (int) ($product['product_id'] ?? $this->getData('product_id') ?? 0);
+if ($productId <= 0) {
+    return;
+}
+?>
+<button type="button" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark gap-2 text-base font-bold leading-normal tracking-wide hover:border-primary hover:text-primary transition-colors add-to-compare" data-product-id="<?= $productId ?>">
+    <span class="material-symbols-outlined">compare_arrows</span>
+    <?= __('Add to Compare') ?>
+</button>

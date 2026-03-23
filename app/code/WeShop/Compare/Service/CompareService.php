@@ -44,6 +44,11 @@ class CompareService
         
         return $compare;
     }
+
+    public function getCompareCount(int $customerId): int
+    {
+        return count($this->getCompareList($customerId));
+    }
     
     /**
      * 从对比移除
@@ -62,7 +67,7 @@ class CompareService
             return false;
         }
         
-        return $compare->delete();
+        return (bool) $compare->delete()->fetch();
     }
     
     /**
@@ -87,7 +92,7 @@ class CompareService
             if (!empty($item['product_id'])) {
                 /** @var Product $product */
                 $product = ObjectManager::getInstance(Product::class);
-                $product->load($item['product_id']);
+                $product->load((int) $item['product_id']);
                 if ($product->getId()) {
                     $item['product'] = $product->getData();
                 }
