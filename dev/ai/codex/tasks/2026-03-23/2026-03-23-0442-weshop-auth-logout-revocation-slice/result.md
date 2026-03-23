@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `353577ec fix(weshop): revoke actor token pair on logout`.
 
 ## Changed Files
 
@@ -30,4 +30,4 @@
 
 ## Next Resume Step
 
-- Commit this slice, then continue upward into grant-service behavior or HTTP-level auth verification.
+- Continue in `2026-03-23-0454-weshop-auth-grant-dependency-hardening-slice` to remove direct `ObjectManager` usage from the remaining auth grant flows.
