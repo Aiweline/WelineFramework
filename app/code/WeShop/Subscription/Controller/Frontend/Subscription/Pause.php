@@ -4,80 +4,120 @@ declare(strict_types=1);
 
 namespace WeShop\Subscription\Controller\Frontend\Subscription;
 
-use Weline\Framework\App\Controller\FrontendController;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Frontend\Controller\BaseController;
 use WeShop\Subscription\Service\SubscriptionService;
 
-/**
- * @DESC | 前台暂停/恢复订阅
- */
-class Pause extends FrontendController
+class Pause extends BaseController
 {
-    private SubscriptionService $subscriptionService;
-
-    public function __construct(SubscriptionService $subscriptionService)
-    {
-        $this->subscriptionService = $subscriptionService;
+    public function __construct(
+        private readonly CustomerContextInterface $customerContext,
+        private readonly SubscriptionService $subscriptionService
+    ) {
     }
 
-    /**
-     * 暂停订阅
-     */
     public function postIndex(): string
     {
-        try {
-            $customerId = (int)$this->session->getLoginCustomerId();
-
-            if (!$customerId) {
-                return $this->fetchJson([
-                    'code' => 401,
-                    'msg'  => __('请先登录'),
-                ]);
-            }
-
-            $id = (int)$this->request->getPost('id');
-
-            $this->subscriptionService->pauseSubscription($id, $customerId);
-
-            return $this->fetchJson([
-                'code' => 200,
-                'msg'  => __('订阅已暂停'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'code' => 400,
-                'msg'  => __('暂停失败：%{error}', ['error' => $e->getMessage()]),
-            ]);
-        }
+        return $this->handlePause();
     }
 
-    /**
-     * 恢复订阅
-     */
     public function postResume(): string
     {
+        return $this->handleResume();
+    }
+
+    protected function handlePause(): string
+    {
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            return $this->unauthorizedResponse();
+        }
+
+        $id = $this->readId();
+        if ($id <= 0) {
+            return $this->errorResponse(__('Subscription ID is required.'));
+        }
+
         try {
-            $customerId = (int)$this->session->getLoginCustomerId();
+            $this->subscriptionService->pauseSubscription($id, $customerId);
+        } catch (\Throwable $exception) {
+            return $this->errorResponse((string) __('Unable to pause this subscription right now.'));
+        }
 
-            if (!$customerId) {
-                return $this->fetchJson([
-                    'code' => 401,
-                    'msg'  => __('请先登录'),
-                ]);
-            }
+        return $this->successResponse(__('Subscription paused.'));
+    }
 
-            $id = (int)$this->request->getPost('id');
+    protected function handleResume(): string
+    {
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            return $this->unauthorizedResponse();
+        }
 
+        $id = $this->readId();
+        if ($id <= 0) {
+            return $this->errorResponse(__('Subscription ID is required.'));
+        }
+
+        try {
             $this->subscriptionService->resumeSubscription($id, $customerId);
+        } catch (\Throwable $exception) {
+            return $this->errorResponse((string) __('Unable to resume this subscription right now.'));
+        }
 
+        return $this->successResponse(__('Subscription resumed.'));
+    }
+
+    protected function readId(): int
+    {
+        return (int) (
+            $this->request->body('id')
+            ?? $this->request->getPost('id')
+            ?? $this->request->getParam('id')
+            ?? 0
+        );
+    }
+
+    protected function unauthorizedResponse(): string
+    {
+        if ($this->request->isAjax()) {
             return $this->fetchJson([
-                'code' => 200,
-                'msg'  => __('订阅已恢复'),
-            ]);
-        } catch (\Exception $e) {
-            return $this->fetchJson([
-                'code' => 400,
-                'msg'  => __('恢复失败：%{error}', ['error' => $e->getMessage()]),
+                'code' => 401,
+                'msg' => __('Please login first.'),
+                'data' => ['redirect_url' => $this->getUrl('customer/account/login')],
             ]);
         }
+
+        $this->getMessageManager()->addError(__('Please login first.'));
+        $this->redirect('customer/account/login');
+        return '';
+    }
+
+    protected function successResponse(string $message): string
+    {
+        if ($this->request->isAjax()) {
+            return $this->fetchJson([
+                'code' => 200,
+                'msg' => $message,
+            ]);
+        }
+
+        $this->getMessageManager()->addSuccess($message);
+        $this->redirect('subscription');
+        return '';
+    }
+
+    protected function errorResponse(string $message): string
+    {
+        if ($this->request->isAjax()) {
+            return $this->fetchJson([
+                'code' => 400,
+                'msg' => $message,
+            ]);
+        }
+
+        $this->getMessageManager()->addError($message);
+        $this->redirect('subscription');
+        return '';
     }
 }

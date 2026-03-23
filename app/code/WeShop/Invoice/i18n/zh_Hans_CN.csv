@@ -1,1 +1,25 @@
-﻿
+﻿"Please log in to continue.",请先登录后继续。
+"Invoice page hooks",发票页面钩子
+"Inject storefront content above the invoice list.",在前台发票列表上方注入扩展内容。
+"Invoice list hooks",发票列表钩子
+"Inject storefront content next to each invoice list item.",在每条发票记录旁注入扩展内容。
+Billing,账单
+Invoices,发票
+"Open Invoices",查看发票
+"Total invoices",发票总数
+"Pending issue",待开具
+"Manage Billing Documents",管理账单文件
+"Billing Documents","账单文件"
+"My Invoices","我的发票"
+"Review issued invoices, pending requests, and billing references for your recent orders.","查看已开具发票、待开票申请以及近期订单的账单参考信息。"
+"Invoice","发票"
+"Order","订单"
+"Amount","金额"
+"Status","状态"
+"Created At","创建时间"
+"No invoices yet","暂无发票"
+"Your issued billing documents will appear here once order invoicing is complete.","订单完成开票后，相关账单文件会展示在这里。"
+"Issued: %1","已开具：%1"
+"Page %1 of %2","第 %1 / %2 页"
+"Previous page","上一页"
+"Next page","下一页"
