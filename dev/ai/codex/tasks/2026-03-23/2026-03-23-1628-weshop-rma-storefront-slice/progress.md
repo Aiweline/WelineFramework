@@ -1,0 +1,21 @@
+# Progress - weshop-rma-storefront-slice
+
+- 2026-03-23 16:28 Created the task workspace.
+- 2026-03-24 Initial audit confirmed `Controller/Frontend/RMA/Index.php` still contains storefront TODO/sample-data behavior and lacks a finished `default`-theme page surface, which keeps `WeShop_RMA` on the critical storefront chain.
+- 2026-03-24 The user explicitly approved more parallelism, so a dedicated worker now owns the `WeShop_RMA` module and `app/design/WeShop/default/frontend/pages/rma/**` write scope while the main thread keeps task coordination, shared-theme checks, and later integration.
+- 2026-03-24 Replaced storefront RMA TODO/sample-data flow with thin controllers and service-backed logic:
+- `Controller/Frontend/RMA/Index.php` now only enforces customer auth and assigns `RmaPageDataService` output.
+- `Controller/Frontend/RMA/Create.php` now provides compatible GET redirect + POST create request flow, supporting JSON redirect payloads for AJAX clients.
+- `Service/RmaService.php` now validates required reason data, uses model constants, and includes approve/reject status transitions for backend compatibility.
+- 2026-03-24 Added `Service/RmaPageDataService.php` for normalized storefront view data (customer RMA list, owned-order summary, request type/reason options).
+- 2026-03-24 Added `default` theme page `app/design/WeShop/default/frontend/pages/rma/index.phtml` with customer-facing request form and records panel.
+- 2026-03-24 Integrated main-thread shared context update by adding a module-owned account-center card hook:
+- `app/code/WeShop/RMA/view/hooks/WeShop_Customer/frontend/account/orders/cards.phtml`
+- This injects RMA entry in `WeShop_Customer::frontend::account::orders::cards` without touching shared theme files.
+- 2026-03-24 Added/updated targeted RMA tests:
+- `Test/Unit/Controller/Frontend/RMA/IndexTest.php`
+- `Test/Unit/Controller/Frontend/RMA/CreateTest.php`
+- `Test/Unit/Service/RmaPageDataServiceTest.php`
+- 2026-03-24 Verification executed:
+- `php vendor/bin/phpunit app/code/WeShop/RMA/Test/Unit` (assertions passed; command exits non-zero due existing repo warning: no code coverage driver)
+- `php bin/w setup:upgrade -m WeShop_RMA --yes` succeeded (with unrelated repo-wide warnings outside RMA scope)
