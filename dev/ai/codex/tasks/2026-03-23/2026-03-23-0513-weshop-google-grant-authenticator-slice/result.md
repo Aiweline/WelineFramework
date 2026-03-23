@@ -2,7 +2,7 @@
 
 ## Outcome
 
-- Implementation complete and ready to commit.
+- Completed in commit `391ec807` (`refactor(weshop): extract google grant authenticator`).
 
 ## Changed Files
 
@@ -40,4 +40,4 @@
 
 ## Next Resume Step
 
-- Commit this slice, then return to live auth-route verification or broader Google/frontend login acceptance once the local HTTP server is reachable.
+- Continue the live auth-route verification slice on port `9982`, then return to broader Google/frontend login acceptance.
