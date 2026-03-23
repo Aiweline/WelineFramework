@@ -62,7 +62,10 @@
     
     <!-- 主题CSS -->
     <link rel="stylesheet" href="<?= $this->getStaticUrl('frontend/assets/css/main.css') ?>">
-    
+
+    <!-- Hook: module-declarations -->
+    <w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>
+
     <!-- Hook: head-after -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
 </head>
