@@ -67,7 +67,7 @@ class WishlistService
             throw new \Exception(__('无权移除此愿望清单项'));
         }
         
-        return $wishlist->delete();
+        return (bool) $wishlist->delete()->fetch();
     }
     
     /**
