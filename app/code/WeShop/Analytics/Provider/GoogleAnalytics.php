@@ -7,184 +7,199 @@ namespace WeShop\Analytics\Provider;
 use WeShop\Analytics\Interface\PixelProviderInterface;
 use Weline\Framework\App\Env;
 
-/**
- * Google Analytics像素统计提供商
- */
 class GoogleAnalytics implements PixelProviderInterface
 {
-    private string $measurementId;
-    private bool $enabled;
-    
-    public function __construct()
-    {
-        $this->measurementId = Env::getInstance()->getConfig('analytics.google.measurement_id', '');
-        $this->enabled = (bool)Env::getInstance()->getConfig('analytics.google.enabled', false);
+    public function __construct(
+        private readonly ?string $measurementId = null,
+        private readonly ?string $apiSecret = null,
+        private readonly ?bool $enabled = null
+    ) {
     }
-    
+
     public function isEnabled(): bool
     {
-        return $this->enabled && !empty($this->measurementId);
+        return $this->readEnabled() && $this->readMeasurementId() !== '' && $this->readApiSecret() !== '';
     }
-    
-    public function track(string $event, array $data): void
+
+    public function sendEvent(string $eventName, array $eventData): bool
     {
         if (!$this->isEnabled()) {
-            return;
+            return false;
         }
-        
+
         try {
-            // Google Analytics 4 (GA4) 事件追踪
-            $eventData = [
-                'client_id' => $data['client_id'] ?? $this->generateClientId(),
+            $payload = [
+                'client_id' => (string) ($eventData['client_id'] ?? $this->generateClientId()),
                 'events' => [
                     [
-                        'name' => $this->mapEventName($event),
-                        'params' => $this->mapEventParams($event, $data),
+                        'name' => $this->mapEventName($eventName),
+                        'params' => $this->mapEventParams($eventName, $eventData),
                     ],
                 ],
             ];
-            
-            $endpoint = 'https://www.google-analytics.com/mp/collect';
-            $endpoint .= '?measurement_id=' . $this->measurementId;
-            $endpoint .= '&api_secret=' . Env::getInstance()->getConfig('analytics.google.api_secret', '');
-            
-            $this->httpPost($endpoint, json_encode($eventData));
-            
-            w_log_info('Google Analytics事件追踪', [
-                'event' => $event,
-                'measurement_id' => $this->measurementId,
+
+            $success = $this->postJson($this->buildEndpoint(), $payload);
+
+            w_log_info('Google Analytics event tracked', [
+                'event' => $eventName,
+                'measurement_id' => $this->readMeasurementId(),
+                'success' => $success,
             ], 'weshop_analytics');
-        } catch (\Exception $e) {
-            w_log_error('Google Analytics追踪失败', [
+
+            return $success;
+        } catch (\Throwable $e) {
+            w_log_error('Google Analytics tracking failed', [
                 'error' => $e->getMessage(),
-                'event' => $event,
-                'data' => $data,
+                'event' => $eventName,
+                'data' => $eventData,
             ], 'weshop_analytics');
+
+            return false;
         }
     }
-    
-    public function getName(): string
+
+    public function track(string $eventName, array $eventData): void
     {
-        return __('Google Analytics');
+        $this->sendEvent($eventName, $eventData);
     }
-    
-    /**
-     * 获取前端追踪代码
-     */
-    public function getFrontendCode(): string
+
+    public function getPixelCode(): string
     {
         if (!$this->isEnabled()) {
             return '';
         }
-        
+
+        $measurementId = $this->readMeasurementId();
+
         return <<<HTML
 <!-- Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id={$this->measurementId}"></script>
+<script async src="https://www.googletagmanager.com/gtag/js?id={$measurementId}"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-  gtag('config', '{$this->measurementId}');
+  gtag('config', '{$measurementId}');
 </script>
 HTML;
     }
-    
-    private function mapEventName(string $event): string
+
+    public function getFrontendCode(): string
     {
-        $eventMap = [
-            'add_to_cart' => 'add_to_cart',
-            'remove_from_cart' => 'remove_from_cart',
-            'view_item' => 'view_item',
-            'begin_checkout' => 'begin_checkout',
-            'purchase' => 'purchase',
-            'add_to_wishlist' => 'add_to_wishlist',
-        ];
-        
-        return $eventMap[$event] ?? $event;
+        return $this->getPixelCode();
     }
-    
-    private function mapEventParams(string $event, array $data): array
+
+    private function mapEventName(string $eventName): string
     {
-        $params = [];
-        
-        switch ($event) {
-            case 'add_to_cart':
-            case 'remove_from_cart':
-                $params = [
-                    'currency' => $data['currency'] ?? 'USD',
-                    'value' => (float)($data['value'] ?? 0),
-                    'items' => $this->formatItems($data['items'] ?? []),
-                ];
-                break;
-                
-            case 'view_item':
-                $params = [
-                    'currency' => $data['currency'] ?? 'USD',
-                    'value' => (float)($data['value'] ?? 0),
-                    'items' => $this->formatItems($data['items'] ?? []),
-                ];
-                break;
-                
-            case 'begin_checkout':
-                $params = [
-                    'currency' => $data['currency'] ?? 'USD',
-                    'value' => (float)($data['value'] ?? 0),
-                    'items' => $this->formatItems($data['items'] ?? []),
-                ];
-                break;
-                
-            case 'purchase':
-                $params = [
-                    'transaction_id' => $data['transaction_id'] ?? '',
-                    'value' => (float)($data['value'] ?? 0),
-                    'currency' => $data['currency'] ?? 'USD',
-                    'items' => $this->formatItems($data['items'] ?? []),
-                ];
-                break;
-                
-            case 'add_to_wishlist':
-                $params = [
-                    'currency' => $data['currency'] ?? 'USD',
-                    'value' => (float)($data['value'] ?? 0),
-                    'items' => $this->formatItems($data['items'] ?? []),
-                ];
-                break;
+        return match ($eventName) {
+            'register' => 'sign_up',
+            'login' => 'login',
+            default => $eventName,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $eventData
+     * @return array<string, mixed>
+     */
+    private function mapEventParams(string $eventName, array $eventData): array
+    {
+        $params = [
+            'currency' => (string) ($eventData['currency'] ?? 'USD'),
+            'value' => (float) ($eventData['value'] ?? 0),
+        ];
+
+        if (!empty($eventData['transaction_id'])) {
+            $params['transaction_id'] = (string) $eventData['transaction_id'];
         }
-        
+
+        if (!empty($eventData['items']) && is_array($eventData['items'])) {
+            $params['items'] = $this->formatItems($eventData['items']);
+        }
+
+        if ($eventName === 'view_item' && !empty($eventData['item_list_name'])) {
+            $params['item_list_name'] = (string) $eventData['item_list_name'];
+        }
+
         return $params;
     }
-    
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, array<string, mixed>>
+     */
     private function formatItems(array $items): array
     {
         $formatted = [];
         foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
             $formatted[] = [
-                'item_id' => (string)($item['product_id'] ?? ''),
-                'item_name' => $item['name'] ?? '',
-                'price' => (float)($item['price'] ?? 0),
-                'quantity' => (int)($item['qty'] ?? 1),
+                'item_id' => (string) ($item['product_id'] ?? $item['item_id'] ?? ''),
+                'item_name' => (string) ($item['name'] ?? ''),
+                'price' => (float) ($item['price'] ?? 0),
+                'quantity' => (int) ($item['qty'] ?? $item['quantity'] ?? 1),
             ];
         }
+
         return $formatted;
     }
-    
+
     private function generateClientId(): string
     {
-        return md5($_SERVER['REMOTE_ADDR'] . $_SERVER['HTTP_USER_AGENT'] . time());
+        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+        $userAgent = (string) ($_SERVER['HTTP_USER_AGENT'] ?? 'cli');
+
+        return md5($ip . '|' . $userAgent);
     }
-    
-    private function httpPost(string $url, string $data): void
+
+    protected function buildEndpoint(): string
     {
-        $ch = curl_init();
-        curl_setopt($ch, CURLOPT_URL, $url);
+        return 'https://www.google-analytics.com/mp/collect'
+            . '?measurement_id=' . rawurlencode($this->readMeasurementId())
+            . '&api_secret=' . rawurlencode($this->readApiSecret());
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    protected function postJson(string $url, array $payload): bool
+    {
+        $data = json_encode($payload, JSON_UNESCAPED_SLASHES);
+        if ($data === false) {
+            return false;
+        }
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return false;
+        }
+
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_HTTPHEADER, [
-            'Content-Type: application/json',
-        ]);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_exec($ch);
+        $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
+
+        return $statusCode === 0 || ($statusCode >= 200 && $statusCode < 300);
+    }
+
+    protected function readMeasurementId(): string
+    {
+        return trim((string) ($this->measurementId ?? Env::getInstance()->getConfig('analytics.google.measurement_id', '')));
+    }
+
+    protected function readApiSecret(): string
+    {
+        return trim((string) ($this->apiSecret ?? Env::getInstance()->getConfig('analytics.google.api_secret', '')));
+    }
+
+    protected function readEnabled(): bool
+    {
+        return $this->enabled ?? (bool) Env::getInstance()->getConfig('analytics.google.enabled', false);
     }
 }
