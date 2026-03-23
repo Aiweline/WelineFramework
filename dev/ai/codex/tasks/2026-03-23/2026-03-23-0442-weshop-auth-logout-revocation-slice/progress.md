@@ -12,3 +12,5 @@
   - `php vendor/phpunit/phpunit/phpunit --no-coverage --configuration phpunit.xml app/code/WeShop/Auth/Test/Unit`
     - result: `18 tests, 78 assertions`
   - non-blocking: PHPUnit still reports `1` deprecation warning in this repo
+- 2026-03-23 12:58 Re-ran the focused service and module unit suites before staging to confirm the working tree still matched the handoff verification.
+- 2026-03-23 12:59 Committed the slice as `353577ec fix(weshop): revoke actor token pair on logout`.
