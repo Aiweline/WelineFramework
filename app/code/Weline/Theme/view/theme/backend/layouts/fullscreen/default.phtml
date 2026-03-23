@@ -34,11 +34,7 @@
     
     <div class="backend-layout-fullscreen <?= htmlspecialchars($meta['class'] ?? '') ?>">
         <main class="backend-main-content" id="main-content">
-            <if condition="contentTemplate">
-                <?php echo $this->fetch($this->getData("contentTemplate")); ?>
-                <else/>
-                {{meta.content}}
-            </if>
+            <?php echo $this->fetch('theme/backend/partials/layout/content.phtml'); ?>
         </main>
     </div>
     
