@@ -5,50 +5,57 @@ declare(strict_types=1);
 namespace WeShop\Search\Controller\Frontend\Search;
 
 use WeShop\Frontend\Controller\BaseController;
-use WeShop\Search\Service\SearchService;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Search\Service\SearchPageDataService;
 
-/**
- * 搜索页面控制器
- */
 class Index extends BaseController
 {
     protected ?string $layoutType = 'search';
 
-    /**
-     * 搜索页面
-     */
+    public function __construct(
+        private readonly SearchPageDataService $searchPageDataService
+    ) {
+    }
+
     public function index(): string
     {
-        $keyword = $this->request->getParam('q') ?? '';
-        $page = (int)($this->request->getParam('page') ?? 1);
-        $pageSize = (int)($this->request->getParam('page_size') ?? 20);
-        
-        $filters = [
-            'category_id' => $this->request->getParam('category_id'),
-            'price_min' => $this->request->getParam('price_min'),
-            'price_max' => $this->request->getParam('price_max'),
-            'order_by' => $this->request->getParam('order_by'),
-            'order_dir' => $this->request->getParam('order_dir'),
-        ];
-        
-        /** @var SearchService $searchService */
-        $searchService = ObjectManager::getInstance(SearchService::class);
-        
-        $result = [];
-        if (!empty($keyword)) {
-            $result = $searchService->searchProducts($keyword, $filters, $page, $pageSize);
+        $pageData = $this->searchPageDataService->build(
+            $this->readKeyword(),
+            $this->collectFilters(),
+            $this->readPositiveInt('page', 1),
+            $this->readPositiveInt('page_size', 20)
+        );
+
+        foreach ($pageData as $key => $value) {
+            $this->assign($key, $value);
         }
-        
-        // 获取热门搜索词
-        $popularKeywords = $searchService->getPopularKeywords(10);
-        
-        $this->assign('keyword', $keyword);
-        $this->assign('products', $result['items'] ?? []);
-        $this->assign('pagination', $result['pagination'] ?? '');
-        $this->assign('popularKeywords', $popularKeywords);
-        $this->assign('filters', $filters);
-        
+
         return $this->fetch();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function collectFilters(): array
+    {
+        $filters = [];
+        foreach (['category_id', 'price_min', 'price_max', 'order_by', 'order_dir'] as $field) {
+            $value = $this->request->getParam($field);
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $filters[$field] = $value;
+        }
+
+        return $filters;
+    }
+
+    private function readKeyword(): string
+    {
+        return trim((string) ($this->request->getParam('q') ?? ''));
+    }
+
+    private function readPositiveInt(string $field, int $default): int
+    {
+        return max(1, (int) ($this->request->getParam($field) ?? $default));
     }
 }
