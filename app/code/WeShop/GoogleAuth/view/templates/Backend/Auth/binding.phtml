@@ -1,0 +1,91 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$binding = $this->getData('binding');
+$bindUrl = (string) ($this->getData('bind_url') ?? '');
+$postUrl = (string) ($this->getData('post_url') ?? '');
+/** @var \WeShop\GoogleAuth\Service\GoogleOAuthService $oauthService */
+$oauthService = w_obj(\WeShop\GoogleAuth\Service\GoogleOAuthService::class);
+$configured = $oauthService->isConfigured();
+$callbackUrl = $oauthService->getCallbackUrl();
+?>
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Google Account Security') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="@backend-url('admin')"><?= __('Dashboard') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('Google Binding') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Backend Google Sign-In') ?></h5>
+            </div>
+            <div class="card-body">
+                <?php if (!$configured): ?>
+                    <div class="alert alert-warning mb-0">
+                        <strong><?= __('Google auth is not configured yet.') ?></strong><br>
+                        <?= __('Set `google_auth.client_id` and `google_auth.client_secret` in environment configuration first.') ?><br>
+                        <small><?= __('Callback URL: %{1}', [$callbackUrl]) ?></small>
+                    </div>
+                <?php elseif ($binding): ?>
+                    <div class="alert alert-success">
+                        <strong><?= __('A Google account is currently bound to this backend user.') ?></strong>
+                    </div>
+                    <dl class="row mb-4">
+                        <dt class="col-sm-3"><?= __('Email') ?></dt>
+                        <dd class="col-sm-9"><?= htmlspecialchars((string) $binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_EMAIL)) ?></dd>
+
+                        <dt class="col-sm-3"><?= __('Google Subject') ?></dt>
+                        <dd class="col-sm-9"><code><?= htmlspecialchars((string) $binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_GOOGLE_SUBJECT)) ?></code></dd>
+
+                        <dt class="col-sm-3"><?= __('Bound At') ?></dt>
+                        <dd class="col-sm-9"><?= htmlspecialchars((string) $binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_BOUND_AT)) ?></dd>
+
+                        <dt class="col-sm-3"><?= __('Last Google Login') ?></dt>
+                        <dd class="col-sm-9"><?= htmlspecialchars((string) ($binding->getData(\WeShop\GoogleAuth\Model\GoogleBinding::schema_fields_LAST_LOGIN_AT) ?: __('Never'))) ?></dd>
+                    </dl>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="<?= htmlspecialchars($bindUrl, ENT_QUOTES) ?>" class="btn btn-outline-primary"><?= __('Rebind Google Account') ?></a>
+                        <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="d-inline">
+                            <?= $this->getFormKey($postUrl) ?>
+                            <input type="hidden" name="form_action" value="unbind">
+                            <button type="submit" class="btn btn-outline-danger"><?= __('Unbind') ?></button>
+                        </form>
+                    </div>
+                <?php else: ?>
+                    <p class="text-muted"><?= __('Backend Google sign-in requires an existing administrator account to bind a Google identity first. No backend user will ever be auto-created from Google login.') ?></p>
+                    <a href="<?= htmlspecialchars($bindUrl, ENT_QUOTES) ?>" class="btn btn-primary"><?= __('Bind Google Account') ?></a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Policy') ?></h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0 ps-3">
+                    <li><?= __('Backend Google login only works for pre-bound administrator accounts.') ?></li>
+                    <li><?= __('ACL and role checks still run after Google identity verification.') ?></li>
+                    <li><?= __('If you rotate Google credentials, rebind the account and verify the callback URL again.') ?></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

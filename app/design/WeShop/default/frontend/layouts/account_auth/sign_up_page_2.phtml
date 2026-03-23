@@ -355,7 +355,7 @@ $area = $themeData['area'] ?? 'frontend';
                 </div>
                 
                 <w:hook>WeShop_Customer::register::form_before</w:hook>
-                <form action="<?= $this->getUrl('customer/account/createPost') ?>" method="post" class="weshop-signup-form" onsubmit="return validateSignupForm(this);">
+                <form action="<?= $this->getUrl('weshop/customer/account/register') ?>" method="post" class="weshop-signup-form" onsubmit="return validateSignupForm(this);">
                     <div class="weshop-signup-field">
                         <label for="firstname" class="weshop-signup-label">
                             <?= __('First name') ?>
