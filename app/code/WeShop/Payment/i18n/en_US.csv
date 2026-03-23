@@ -1,4 +1,8 @@
-﻿"Payment method is required.","Payment method is required."
+﻿"Invalid request method.","Invalid request method."
+"Payment settings saved successfully.","Payment settings saved successfully."
+"Payment settings save failed: %{1}","Payment settings save failed: %{1}"
+"Payment Methods","Payment Methods"
+"Payment method is required.","Payment method is required."
 "Payment callback handled.","Payment callback handled."
 "Order ID is required.","Order ID is required."
 "Order does not exist.","Order does not exist."
@@ -16,14 +20,50 @@
 "Please complete a manual bank transfer after the order is placed.","Please complete a manual bank transfer after the order is placed."
 "Manual Transfer","Manual Transfer"
 "Pay by bank transfer after the order is created.","Pay by bank transfer after the order is created."
+"Use the order number as the payment reference.","Use the order number as the payment reference."
+Instructions,Instructions
+"Shown to the customer after the order is created.","Shown to the customer after the order is created."
+"Account Name","Account Name"
+"Bank Name","Bank Name"
+"Account Number","Account Number"
+"Reference Note","Reference Note"
 "Cash on Delivery","Cash on Delivery"
 "Pay in cash when the shipment is delivered.","Pay in cash when the shipment is delivered."
+"Collect the payment from the customer when the shipment is delivered.","Collect the payment from the customer when the shipment is delivered."
+"COD Fee","COD Fee"
 PayPal,PayPal
 "Pay online with your PayPal account.","Pay online with your PayPal account."
+"Sandbox Mode","Sandbox Mode"
+"Keep enabled until the production PayPal credentials are ready.","Keep enabled until the production PayPal credentials are ready."
+"Client ID","Client ID"
+"Client Secret","Client Secret"
+"Merchant Email","Merchant Email"
+"Webhook ID","Webhook ID"
 Alipay,Alipay
 "Reserved for future Alipay gateway rollout.","Reserved for future Alipay gateway rollout."
+"App ID","App ID"
+"Merchant ID","Merchant ID"
+"Public Key","Public Key"
+"Private Key","Private Key"
 "WeChat Pay","WeChat Pay"
 "Reserved for future WeChat Pay gateway rollout.","Reserved for future WeChat Pay gateway rollout."
+"API v3 Key","API v3 Key"
+"Merchant Certificate Path","Merchant Certificate Path"
 "Unsupported payment method: %{1}","Unsupported payment method: %{1}"
 "Payment provider is not configured for %{1}.","Payment provider is not configured for %{1}."
 "Payment provider is invalid for %{1}.","Payment provider is invalid for %{1}."
+支付管理,Payment Management
+支付方式,Payment Methods
+"Total Methods","Total Methods"
+"Enabled At Checkout","Enabled At Checkout"
+"Reserved / Disabled","Reserved / Disabled"
+"Default Method","Default Method"
+Enabled,Enabled
+Disabled,Disabled
+Default,Default
+Code,Code
+Areas,Areas
+Currencies,Currencies
+Countries,Countries
+"Sort Order","Sort Order"
+"Save Payment Settings","Save Payment Settings"

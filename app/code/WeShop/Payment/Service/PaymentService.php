@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Payment\Service;
 
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
@@ -33,6 +34,20 @@ class PaymentService
                 'areas' => ['frontend', 'backend', 'api'],
                 'currencies' => [],
                 'countries' => [],
+                'config' => [
+                    'instructions' => (string) __('Please transfer the order amount to the configured bank account and use the order number as the payment reference.'),
+                    'account_name' => '',
+                    'bank_name' => '',
+                    'account_number' => '',
+                    'reference_note' => (string) __('Use the order number as the payment reference.'),
+                ],
+                'config_fields' => [
+                    ['key' => 'instructions', 'label' => (string) __('Instructions'), 'type' => 'textarea', 'help' => (string) __('Shown to the customer after the order is created.')],
+                    ['key' => 'account_name', 'label' => (string) __('Account Name'), 'type' => 'text'],
+                    ['key' => 'bank_name', 'label' => (string) __('Bank Name'), 'type' => 'text'],
+                    ['key' => 'account_number', 'label' => (string) __('Account Number'), 'type' => 'text'],
+                    ['key' => 'reference_note', 'label' => (string) __('Reference Note'), 'type' => 'text'],
+                ],
             ],
             'cash_on_delivery' => [
                 'code' => 'cash_on_delivery',
@@ -46,6 +61,14 @@ class PaymentService
                 'areas' => ['frontend', 'backend', 'api'],
                 'currencies' => [],
                 'countries' => [],
+                'config' => [
+                    'instructions' => (string) __('Collect the payment from the customer when the shipment is delivered.'),
+                    'fee' => '0',
+                ],
+                'config_fields' => [
+                    ['key' => 'instructions', 'label' => (string) __('Instructions'), 'type' => 'textarea'],
+                    ['key' => 'fee', 'label' => (string) __('COD Fee'), 'type' => 'number', 'step' => '0.01'],
+                ],
             ],
             'paypal' => [
                 'code' => 'paypal',
@@ -59,6 +82,20 @@ class PaymentService
                 'areas' => ['frontend', 'backend', 'api'],
                 'currencies' => ['USD', 'EUR', 'GBP'],
                 'countries' => [],
+                'config' => [
+                    'sandbox' => true,
+                    'client_id' => '',
+                    'client_secret' => '',
+                    'merchant_email' => '',
+                    'webhook_id' => '',
+                ],
+                'config_fields' => [
+                    ['key' => 'sandbox', 'label' => (string) __('Sandbox Mode'), 'type' => 'checkbox', 'help' => (string) __('Keep enabled until the production PayPal credentials are ready.')],
+                    ['key' => 'client_id', 'label' => (string) __('Client ID'), 'type' => 'text'],
+                    ['key' => 'client_secret', 'label' => (string) __('Client Secret'), 'type' => 'password'],
+                    ['key' => 'merchant_email', 'label' => (string) __('Merchant Email'), 'type' => 'text'],
+                    ['key' => 'webhook_id', 'label' => (string) __('Webhook ID'), 'type' => 'text'],
+                ],
             ],
             'alipay' => [
                 'code' => 'alipay',
@@ -72,6 +109,20 @@ class PaymentService
                 'areas' => ['frontend', 'backend', 'api'],
                 'currencies' => ['CNY'],
                 'countries' => ['CN'],
+                'config' => [
+                    'sandbox' => true,
+                    'app_id' => '',
+                    'merchant_id' => '',
+                    'public_key' => '',
+                    'private_key' => '',
+                ],
+                'config_fields' => [
+                    ['key' => 'sandbox', 'label' => (string) __('Sandbox Mode'), 'type' => 'checkbox'],
+                    ['key' => 'app_id', 'label' => (string) __('App ID'), 'type' => 'text'],
+                    ['key' => 'merchant_id', 'label' => (string) __('Merchant ID'), 'type' => 'text'],
+                    ['key' => 'public_key', 'label' => (string) __('Public Key'), 'type' => 'textarea'],
+                    ['key' => 'private_key', 'label' => (string) __('Private Key'), 'type' => 'textarea'],
+                ],
             ],
             'wechatpay' => [
                 'code' => 'wechatpay',
@@ -85,6 +136,20 @@ class PaymentService
                 'areas' => ['frontend', 'backend', 'api'],
                 'currencies' => ['CNY'],
                 'countries' => ['CN'],
+                'config' => [
+                    'sandbox' => true,
+                    'app_id' => '',
+                    'mch_id' => '',
+                    'api_v3_key' => '',
+                    'merchant_cert_path' => '',
+                ],
+                'config_fields' => [
+                    ['key' => 'sandbox', 'label' => (string) __('Sandbox Mode'), 'type' => 'checkbox'],
+                    ['key' => 'app_id', 'label' => (string) __('App ID'), 'type' => 'text'],
+                    ['key' => 'mch_id', 'label' => (string) __('Merchant ID'), 'type' => 'text'],
+                    ['key' => 'api_v3_key', 'label' => (string) __('API v3 Key'), 'type' => 'password'],
+                    ['key' => 'merchant_cert_path', 'label' => (string) __('Merchant Certificate Path'), 'type' => 'text'],
+                ],
             ],
         ];
     }
@@ -128,7 +193,7 @@ class PaymentService
             return null;
         }
 
-        return $this->normalizeMethod($registry[$code]);
+        return $this->applyRuntimeOverrides($this->normalizeMethod($registry[$code]));
     }
 
     public function getAvailablePaymentMethods(array $context = []): array
@@ -141,6 +206,11 @@ class PaymentService
         return $this->filterAndSortMethods($context, true);
     }
 
+    public function getManagementPaymentMethods(): array
+    {
+        return $this->filterAndSortMethods(['area' => 'backend'], false);
+    }
+
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -149,6 +219,7 @@ class PaymentService
         $methods = [];
         foreach ($this->getMethodRegistry() as $method) {
             $method = $this->normalizeMethod($method);
+            $method = $this->applyRuntimeOverrides($method);
             if ($enabledOnly && !$this->isEnabled($method)) {
                 continue;
             }
@@ -239,7 +310,64 @@ class PaymentService
             'areas' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['areas'] ?? []))),
             'currencies' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['currencies'] ?? []))),
             'countries' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['countries'] ?? []))),
+            'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
+            'config_fields' => \is_array($method['config_fields'] ?? null) ? $method['config_fields'] : [],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @return array<string, mixed>
+     */
+    protected function applyRuntimeOverrides(array $method): array
+    {
+        $code = (string) ($method['code'] ?? '');
+        if ($code === '') {
+            return $method;
+        }
+
+        $override = $this->getMethodOverrides()[$code] ?? null;
+        if (!\is_array($override)) {
+            return $method;
+        }
+
+        foreach (['title', 'description', 'icon'] as $key) {
+            if (array_key_exists($key, $override)) {
+                $method[$key] = (string) $override[$key];
+            }
+        }
+        foreach (['enabled', 'is_default'] as $key) {
+            if (array_key_exists($key, $override)) {
+                $method[$key] = (bool) $override[$key];
+            }
+        }
+        if (array_key_exists('sort_order', $override)) {
+            $method['sort_order'] = (int) $override['sort_order'];
+        }
+        foreach (['areas', 'currencies', 'countries'] as $key) {
+            if (\is_array($override[$key] ?? null)) {
+                $method[$key] = array_values($override[$key]);
+            }
+        }
+        if (\is_array($override['config'] ?? null)) {
+            $method['config'] = array_replace((array) ($method['config'] ?? []), $override['config']);
+        }
+
+        return $method;
+    }
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    protected function getMethodOverrides(): array
+    {
+        try {
+            $config = Env::getInstance()->getConfig('payment.methods', []);
+        } catch (\Throwable) {
+            return [];
+        }
+
+        return \is_array($config) ? $config : [];
     }
 
     /**
