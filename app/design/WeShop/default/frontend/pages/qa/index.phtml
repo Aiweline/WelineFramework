@@ -1,0 +1,192 @@
+<?php
+$product = (array) ($this->getData('product') ?? []);
+$qaList = (array) ($this->getData('qa_list') ?? []);
+$questionCount = (int) ($this->getData('question_count') ?? count($qaList));
+$canAsk = (bool) ($this->getData('can_ask') ?? false);
+$askAction = (string) ($this->getData('ask_action') ?? $this->getUrl('qa/add'));
+$removeAction = (string) ($this->getData('remove_action') ?? $this->getUrl('qa/remove'));
+$loginUrl = (string) ($this->getData('login_url') ?? $this->getUrl('customer/account/login'));
+$productId = (int) ($this->getData('product_id') ?? $product['product_id'] ?? 0);
+$productName = (string) ($product['name'] ?? __('Product Q&A'));
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Product Q&A') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= htmlspecialchars($productName, ENT_QUOTES) ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Browse common product questions, ask for clarification, and review answers from the store team.') ?>
+                </p>
+                <?php if ($productId > 0): ?>
+                    <div class="mt-8">
+                        <a href="<?= $this->getUrl('product/view', ['id' => $productId]) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                            <?= __('Back To Product') ?>
+                        </a>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="rounded-3xl border border-border-light bg-background-light p-6 dark:border-border-dark dark:bg-background-dark">
+                <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total Questions') ?></p>
+                <p class="mt-2 text-4xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $questionCount ?></p>
+                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Visible and approved Q&A entries for this product.') ?></p>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 lg:grid-cols-[1.25fr_0.75fr]">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <w:hook name="WeShop_QA::frontend::layouts::qa-page::before"/>
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Question Feed') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Latest Approved Questions') ?></h2>
+                </div>
+            </div>
+
+            <?php if ($qaList): ?>
+                <div class="mt-6 space-y-4">
+                    <?php foreach ($qaList as $qaItem): ?>
+                        <article class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark" data-question-card="<?= (int) ($qaItem['question_id'] ?? 0) ?>">
+                            <p class="font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($qaItem['question'] ?? ''), ENT_QUOTES) ?></p>
+                            <?php if (!empty($qaItem['answer'])): ?>
+                                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($qaItem['answer'] ?? ''), ENT_QUOTES) ?></p>
+                                <p class="mt-2 text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= __('Answered by %1', (string) ($qaItem['answered_by'] ?? __('Store team'))) ?></p>
+                            <?php else: ?>
+                                <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Awaiting a verified answer from the store team.') ?></p>
+                            <?php endif; ?>
+                            <div class="mt-3 flex items-center justify-between gap-3">
+                                <p class="text-xs text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($qaItem['created_at'] ?? ''), ENT_QUOTES) ?></p>
+                                <?php if (!empty($qaItem['is_owner'])): ?>
+                                    <button type="button" data-remove-question="<?= (int) ($qaItem['question_id'] ?? 0) ?>" class="rounded-full border border-border-light px-3 py-1 text-xs font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                        <?= __('Remove') ?>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                            <w:hook name="WeShop_QA::frontend::partials::question-item::after"/>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">forum</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No questions yet') ?></h3>
+                    <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Ask the first question to help other buyers make better decisions.') ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <h2 class="text-lg font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Ask a question') ?></h2>
+            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Questions are reviewed before public display to keep product discussions clear and accurate.') ?></p>
+            <form id="qa-form" class="mt-4 space-y-4" method="post" action="<?= htmlspecialchars($askAction, ENT_QUOTES) ?>">
+                <?= $this->getFormKey($askAction) ?>
+                <input type="hidden" name="product_id" value="<?= $productId ?>">
+                <label class="flex flex-col gap-1 text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Your question') ?>
+                    <textarea name="question" rows="5" class="form-textarea rounded-lg border-border-light bg-background-light p-3 text-sm text-text-primary-light focus:border-primary focus:ring-primary" placeholder="<?= __('Type your product question here') ?>"></textarea>
+                </label>
+                <button type="button" id="qa-submit" class="w-full rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                    <?= __('Submit question') ?>
+                </button>
+                <p id="qa-feedback" class="text-sm text-text-secondary-light dark:text-text-secondary-dark"></p>
+            </form>
+        </article>
+    </section>
+</main>
+
+<script>
+    (function () {
+        var form = document.getElementById('qa-form');
+        var submit = document.getElementById('qa-submit');
+        var feedback = document.getElementById('qa-feedback');
+        var removeButtons = document.querySelectorAll('[data-remove-question]');
+
+        function setFeedback(message, ok) {
+            if (!feedback) {
+                return;
+            }
+
+            feedback.textContent = message || '';
+            feedback.classList.remove('text-red-500', 'text-emerald-500');
+            feedback.classList.add(ok ? 'text-emerald-500' : 'text-red-500');
+        }
+
+        if (form && submit && <?= $canAsk ? 'true' : 'false' ?>) {
+            submit.addEventListener('click', function () {
+                var payload = {};
+                new FormData(form).forEach(function (value, key) {
+                    payload[key] = value;
+                });
+
+                fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(payload)
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (result) {
+                    if (result && result.success) {
+                        setFeedback(result.message || '<?= __('Your question has been submitted and is pending review.') ?>', true);
+                        form.reset();
+                        return;
+                    }
+
+                    if (result && result.data && result.data.redirect_url) {
+                        window.location.href = result.data.redirect_url;
+                        return;
+                    }
+
+                    setFeedback((result && result.message) || '<?= __('Unable to submit your question right now.') ?>', false);
+                }).catch(function () {
+                    setFeedback('<?= __('Unable to submit your question right now.') ?>', false);
+                });
+            });
+        }
+
+        removeButtons.forEach(function (button) {
+            button.addEventListener('click', function () {
+                var questionId = this.getAttribute('data-remove-question');
+                if (!questionId) {
+                    return;
+                }
+
+                fetch('<?= htmlspecialchars($removeAction, ENT_QUOTES) ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ question_id: questionId })
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (result) {
+                    if (result && result.success) {
+                        var card = document.querySelector('[data-question-card=\"' + questionId + '\"]');
+                        if (card) {
+                            card.remove();
+                        } else {
+                            window.location.reload();
+                        }
+                        return;
+                    }
+
+                    if (result && result.data && result.data.redirect_url) {
+                        window.location.href = result.data.redirect_url;
+                    }
+                });
+            });
+        });
+
+        if (!<?= $canAsk ? 'true' : 'false' ?> && submit) {
+            submit.addEventListener('click', function () {
+                window.location.href = '<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>';
+            });
+        }
+    })();
+</script>
