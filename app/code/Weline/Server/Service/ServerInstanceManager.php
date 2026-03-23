@@ -124,6 +124,18 @@ class ServerInstanceManager
     }
 
     /**
+     * 控制面快路径：仅列出实例文件名，不做陈旧实例实时校验。
+     *
+     * 用于 reload/cache-clear 这类 CLI/IPC 调度前置判断，避免被 Windows 进程探测拖慢。
+     *
+     * @return string[]
+     */
+    public function listPersistedInstanceNames(): array
+    {
+        return $this->listRawInstanceNames();
+    }
+
+    /**
      * 清理所有陈旧的实例记录
      */
     public function cleanupStaleInstances(): int
@@ -864,7 +876,7 @@ class ServerInstanceManager
      */
     public function isInstanceRunning(string $name): bool
     {
-        $info = $this->getInstanceInfo($name);
+        $info = $this->getPersistedInstanceInfo($name);
         if ($info === null) {
             return false;
         }
@@ -877,7 +889,7 @@ class ServerInstanceManager
      */
     public function countRunningWorkers(string $name): int
     {
-        $info = $this->getInstanceInfo($name);
+        $info = $this->getPersistedInstanceInfo($name);
         if ($info === null) {
             return 0;
         }
@@ -889,7 +901,7 @@ class ServerInstanceManager
      */
     public function hasRunningWorkers(): bool
     {
-        foreach ($this->getAllInstanceInfo() as $info) {
+        foreach ($this->getAllPersistedInstanceInfo() as $info) {
             if ($this->collectRuntimeStatsForInstance($info, false)['workers'] > 0) {
                 return true;
             }
@@ -911,7 +923,7 @@ class ServerInstanceManager
         $dispatchers = 0;
         $ports = [];
 
-        foreach ($this->getAllInstanceInfo() as $info) {
+        foreach ($this->getAllPersistedInstanceInfo() as $info) {
             $runtimeStats = $this->collectRuntimeStatsForInstance($info, false);
             if ($runtimeStats['instance_running']) {
                 $instances++;
@@ -927,6 +939,32 @@ class ServerInstanceManager
             'dispatchers' => $dispatchers,
             'ports' => $ports,
         ];
+    }
+
+    private function getPersistedInstanceInfo(string $name): ?ServerInstanceInfo
+    {
+        $rawData = $this->getRawInstanceData($name);
+        if ($rawData === null) {
+            return null;
+        }
+
+        return $this->buildInstanceInfo($name, $rawData);
+    }
+
+    /**
+     * @return array<string, ServerInstanceInfo>
+     */
+    private function getAllPersistedInstanceInfo(): array
+    {
+        $instances = [];
+        foreach ($this->listPersistedInstanceNames() as $name) {
+            $info = $this->getPersistedInstanceInfo($name);
+            if ($info !== null) {
+                $instances[$name] = $info;
+            }
+        }
+
+        return $instances;
     }
 
     /**
