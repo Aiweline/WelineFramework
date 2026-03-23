@@ -13,6 +13,7 @@ use GuoLaiRen\Blog\Cron\AiPublish;
 use GuoLaiRen\Blog\Model\Category;
 use GuoLaiRen\Blog\Model\Post as PostModel;
 use GuoLaiRen\Blog\Model\TrendsConfig;
+use GuoLaiRen\Blog\Service\BlogSiteCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Manager\MessageManager;
@@ -25,11 +26,13 @@ class Post extends BackendController
 {
     private PostModel $postModel;
     private Website $websiteModel;
+    private BlogSiteCacheInvalidator $blogSiteCacheInvalidator;
 
     public function __construct(PostModel $postModel)
     {
         $this->postModel = $postModel;
         $this->websiteModel = ObjectManager::getInstance(Website::class);
+        $this->blogSiteCacheInvalidator = ObjectManager::getInstance(BlogSiteCacheInvalidator::class);
     }
 
     /**
@@ -173,6 +176,10 @@ class Post extends BackendController
                 ->setData(PostModel::schema_fields_PUBLISHED_AT, $published_at)
                 ->save();
 
+            $this->invalidateBlogFrontendCache(
+                $this->collectAffectedSiteIds(0, PostModel::STATUS_DRAFT, $websiteId, $status)
+            );
+
             MessageManager::success(__('博客文章已创建'));
 
             $this->redirect($this->_url->getBackendUrl('blog/backend/post/index', [], true));
@@ -224,6 +231,9 @@ class Post extends BackendController
                 throw new \Exception(__('博客文章不存在'));
             }
 
+            $originalSiteId = (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0);
+            $originalStatus = (int)($post->getData(PostModel::schema_fields_STATUS) ?? PostModel::STATUS_DRAFT);
+
             $title = trim((string)($data['title'] ?? ''));
             $slug  = trim((string)($data['slug'] ?? ''));
 
@@ -274,6 +284,10 @@ class Post extends BackendController
                 ->setData(PostModel::schema_fields_STATUS, $status)
                 ->setData(PostModel::schema_fields_PUBLISHED_AT, $published_at)
                 ->save();
+
+            $this->invalidateBlogFrontendCache(
+                $this->collectAffectedSiteIds($originalSiteId, $originalStatus, $websiteId, $status)
+            );
 
             MessageManager::success(__('博客文章已保存'));
 
@@ -382,9 +396,12 @@ class Post extends BackendController
                 throw new \Exception(__('该文章已经是发布状态'));
             }
 
+            $siteId = (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0);
             $post->setData(PostModel::schema_fields_STATUS, PostModel::STATUS_PUBLISHED)
                 ->setData(PostModel::schema_fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
                 ->save();
+
+            $this->invalidateBlogFrontendCache([$siteId]);
 
             MessageManager::success(__('文章已审批发布'));
         } catch (\Throwable $e) {
@@ -407,7 +424,12 @@ class Post extends BackendController
                 throw new \Exception(__('博客文章不存在'));
             }
 
+            $siteIds = $this->collectAffectedSiteIds(
+                (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0),
+                (int)($post->getData(PostModel::schema_fields_STATUS) ?? PostModel::STATUS_DRAFT)
+            );
             $post->delete()->fetch();
+            $this->invalidateBlogFrontendCache($siteIds);
             MessageManager::success(__('博客文章已删除'));
         } catch (\Throwable $e) {
             MessageManager::error($e->getMessage());
@@ -431,6 +453,7 @@ class Post extends BackendController
         $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
         $ok = 0;
         $skip = 0;
+        $invalidateSiteIds = [];
         foreach ($ids as $id) {
             $post = clone $this->postModel;
             $post->clear()->load($id);
@@ -449,8 +472,13 @@ class Post extends BackendController
             $post->setData(PostModel::schema_fields_STATUS, PostModel::STATUS_PUBLISHED)
                 ->setData(PostModel::schema_fields_PUBLISHED_AT, date('Y-m-d H:i:s'))
                 ->save();
+            $siteId = (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0);
+            if ($siteId > 0) {
+                $invalidateSiteIds[$siteId] = $siteId;
+            }
             $ok++;
         }
+        $this->invalidateBlogFrontendCache(array_values($invalidateSiteIds));
         if ($ok > 0) {
             MessageManager::success(__('已批量发布 %{count} 篇文章', ['count' => (string)$ok]));
         }
@@ -477,6 +505,7 @@ class Post extends BackendController
         $websiteId = (int)(WebsiteData::getWebsiteId() ?? 0);
         $ok = 0;
         $skip = 0;
+        $invalidateSiteIds = [];
         foreach ($ids as $id) {
             $post = clone $this->postModel;
             $post->clear()->load($id);
@@ -488,9 +517,15 @@ class Post extends BackendController
                 $skip++;
                 continue;
             }
+            $siteId = (int)($post->getData(PostModel::schema_fields_SITE_ID) ?? 0);
+            $status = (int)($post->getData(PostModel::schema_fields_STATUS) ?? PostModel::STATUS_DRAFT);
+            if ($status === PostModel::STATUS_PUBLISHED && $siteId > 0) {
+                $invalidateSiteIds[$siteId] = $siteId;
+            }
             $post->delete()->fetch();
             $ok++;
         }
+        $this->invalidateBlogFrontendCache(array_values($invalidateSiteIds));
         if ($ok > 0) {
             MessageManager::success(__('已批量删除 %{count} 篇文章', ['count' => (string)$ok]));
         }
@@ -519,6 +554,48 @@ class Post extends BackendController
             }
         }
         return array_values($out);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function collectAffectedSiteIds(
+        int $originalSiteId,
+        int $originalStatus,
+        int $currentSiteId = 0,
+        ?int $currentStatus = null
+    ): array {
+        $siteIds = [];
+        if ($originalSiteId > 0 && $originalStatus === PostModel::STATUS_PUBLISHED) {
+            $siteIds[$originalSiteId] = $originalSiteId;
+        }
+        if ($currentSiteId > 0 && $currentStatus === PostModel::STATUS_PUBLISHED) {
+            $siteIds[$currentSiteId] = $currentSiteId;
+        }
+
+        return array_values($siteIds);
+    }
+
+    /**
+     * @param list<int> $siteIds
+     */
+    private function invalidateBlogFrontendCache(array $siteIds): void
+    {
+        if ($siteIds === []) {
+            return;
+        }
+
+        try {
+            $result = $this->blogSiteCacheInvalidator->invalidateSiteIds($siteIds);
+            if (!(bool)($result['application_cache_cleared'] ?? false)) {
+                MessageManager::warning(__('博客内容已变更，但站点缓存清理失败，请检查缓存服务。'));
+            }
+            if (!empty($result['errors'])) {
+                MessageManager::warning(__('博客内容已变更，但部分 CDN 缓存清理失败，请检查 CDN 配置。'));
+            }
+        } catch (\Throwable $throwable) {
+            MessageManager::warning(__('博客内容已变更，但缓存清理发生异常：%{error}', ['error' => $throwable->getMessage()]));
+        }
     }
 
     /** 批量操作完成后回到列表并保留搜索/分页参数 */
