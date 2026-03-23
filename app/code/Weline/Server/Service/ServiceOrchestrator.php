@@ -150,6 +150,9 @@ class ServiceOrchestrator
     /** 是否已输出"服务器准备就绪"通知 */
     private bool $serverReadyNotified = false;
 
+    /** 仅当本轮启动已完成所有计划实例投递后，才允许输出 ready 通知 */
+    private bool $serverReadyNotificationArmed = false;
+
     /** 单实例重启优先（可恢复角色 IPC 断开时先单实例重启） */
     private bool $singleRestartFirst = true;
 
@@ -473,7 +476,7 @@ class ServiceOrchestrator
         $this->ipcExclusiveClientId = null;
         $this->ipcImperialEpoch = 0;
         $this->pendingMaintenanceModeAck = null;
-        $this->serverReadyNotified = false;
+        $this->resetServerReadyNotificationState();
         $this->haMode = (bool)$context->getConfig('wls.orchestrator.ha_mode', true);
         $this->fullRestartOnFailure = (bool)$context->getConfig('wls.orchestrator.full_restart_on_failure', true);
         $this->fullRestartCooldown = (float)$context->getConfig('wls.orchestrator.restart_cooldown_sec', 10.0);
@@ -636,6 +639,7 @@ class ServiceOrchestrator
         // 持久化服务实例信息到实例文件
         $this->persistServicesInfo($context);
         $this->broadcastRoutingPolicyToWorkers();
+        $this->armServerReadyNotification();
     }
 
     /**
@@ -2740,7 +2744,7 @@ class ServiceOrchestrator
         // 3) 清空注册表实例索引，避免残留实例污染新一轮生命周期
         $this->registry->clearInstances();
         $this->resurrectQueue = [];
-        $this->serverReadyNotified = false;
+        $this->resetServerReadyNotificationState();
 
         // 4) bump epoch，旧代际进程即使迟到注册也会被拒绝
         $nextEpoch = $this->context->epoch + 1;
@@ -3658,7 +3662,7 @@ class ServiceOrchestrator
      */
     private function checkAndNotifyServerReady(): void
     {
-        if ($this->serverReadyNotified) {
+        if (!$this->serverReadyNotificationArmed || $this->serverReadyNotified) {
             return;
         }
 
@@ -3734,6 +3738,18 @@ class ServiceOrchestrator
                 @\flush();
             }
         }
+    }
+
+    private function armServerReadyNotification(): void
+    {
+        $this->serverReadyNotificationArmed = true;
+        $this->checkAndNotifyServerReady();
+    }
+
+    private function resetServerReadyNotificationState(): void
+    {
+        $this->serverReadyNotified = false;
+        $this->serverReadyNotificationArmed = false;
     }
 
     /**
@@ -3950,7 +3966,7 @@ class ServiceOrchestrator
      */
     public function resetServerReadyNotification(): void
     {
-        $this->serverReadyNotified = false;
+        $this->resetServerReadyNotificationState();
     }
 
     /**
