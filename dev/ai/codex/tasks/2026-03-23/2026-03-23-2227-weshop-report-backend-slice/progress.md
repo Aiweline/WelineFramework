@@ -1,0 +1,3 @@
+- 2026-03-24 10:12 Rebuilt `WeShop_Report` so the backend now has a router (`env.php`), menu entry, repository + service pair, controller, and template that surface date-windowed sales summary cards.
+- 2026-03-24 10:12 Added localized strings for the new backend view and created focused PHPUnit tests for the service and controller paths.
+- 2026-03-24 10:12 Validation planned: `php -l` for new PHP files and targeted `php vendor/bin/phpunit --no-coverage app/code/WeShop/Report/Test/Unit/Service/ReportServiceTest.php app/code/WeShop/Report/Test/Unit/Controller/Backend/Report/SalesTest.php --colors=never`.
