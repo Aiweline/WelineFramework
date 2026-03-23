@@ -1,0 +1,38 @@
+<?php
+$challengeToken = (string) ($this->getData('challenge_token') ?? '');
+?>
+<main class="flex-1 flex items-center justify-center py-12 px-4">
+    <div class="w-full max-w-md">
+        <div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark p-8">
+            <div class="text-center mb-8">
+                <div class="flex justify-center mb-4">
+                    <div class="p-3 bg-primary/10 rounded-full">
+                        <span class="material-symbols-outlined text-4xl text-primary">verified_user</span>
+                    </div>
+                </div>
+                <h1 class="text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Two-Factor Verification') ?></h1>
+                <p class="text-text-secondary-light dark:text-text-secondary-dark mt-2"><?= __('Enter the code from your authenticator app or a backup code.') ?></p>
+            </div>
+
+            <form action="<?= $this->getUrl('weshop/customer/account/challenge') ?>" method="post" class="space-y-5">
+                <?= $this->getFormKey() ?>
+                <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>">
+
+                <div>
+                    <label for="code" class="block text-sm font-medium text-text-primary-light dark:text-text-primary-dark mb-2"><?= __('Verification Code') ?></label>
+                    <input type="text" id="code" name="code" required autocomplete="one-time-code"
+                           class="form-input w-full rounded-lg border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark h-12 px-4 focus:border-primary focus:ring-primary"
+                           placeholder="<?= __('123456') ?>">
+                </div>
+
+                <button type="submit" class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-lg transition-colors">
+                    <?= __('Verify and Continue') ?>
+                </button>
+            </form>
+
+            <p class="text-center mt-8 text-text-secondary-light dark:text-text-secondary-dark">
+                <a href="<?= $this->getUrl('weshop/customer/account/login') ?>" class="text-primary hover:underline font-medium"><?= __('Back to sign in') ?></a>
+            </p>
+        </div>
+    </div>
+</main>

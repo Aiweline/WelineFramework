@@ -52,6 +52,7 @@ WelineFramework,WelineFramework
 账户被禁用！,账户被禁用！
 登录异常！,登录异常！
 验证码错误！,验证码错误！
+"Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
 您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
 登录凭据错误！,登录凭据错误！
 关键参数ID不存在！,关键参数ID不存在！
@@ -69,6 +70,8 @@ WelineFramework,WelineFramework
 在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。,在后台首页标签页导航区域动态追加标签页按钮，例如像素统计、数据分析等。
 后台首页标签页内容,后台首页标签页内容
 在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。
+"Backend login providers","Backend login providers"
+"Inject third-party sign-in providers above the backend login form.","Inject third-party sign-in providers above the backend login form."
 记住登录已过期，请重新登录！,记住登录已过期，请重新登录！
 用户不存在！,用户不存在！
 系统消息数据格式错误,系统消息数据格式错误
