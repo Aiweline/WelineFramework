@@ -1,104 +1,20 @@
 <?php
 /**
- * 订阅列表 Hook
- *
- * 在账户布局的内容之后显示订阅列表摘要
- * Hook名称：Weline_Theme::frontend::layouts::account::content-after
+ * Legacy account layout hook for older themes.
+ * The default and future account center entry is rendered through:
+ * WeShop_Customer::frontend::account::orders::cards
  *
  * @hook-priority 160
  * @hook-sort-order 0
  * @hook-solo false
  */
-
-use Weline\Framework\Session\SessionFactory;
-use WeShop\Subscription\Service\SubscriptionService;
-use WeShop\Subscription\Model\Subscription;
-use Weline\Framework\Manager\ObjectManager;
-
-$customerSession = SessionFactory::getInstance()->createFrontendSession();
-$customer = $customerSession->getCustomer();
-
-if (!$customer || !$customer->getId()) {
-    return;
-}
-
-/** @var SubscriptionService $subscriptionService */
-$subscriptionService = ObjectManager::getInstance(SubscriptionService::class);
-
-// 获取活跃订阅
-$result = $subscriptionService->getCustomerSubscriptions($customer->getId(), 1, 5);
-$items = $result['items'] ?? [];
-
-$statusOptions = Subscription::getStatusOptions();
-$billingCycles = \WeShop\Subscription\Model\SubscriptionPlan::getBillingCycleOptions();
-
-$statusColorMap = [
-    'trialing'  => '#3b82f6',
-    'active'    => '#22c55e',
-    'paused'    => '#f59e0b',
-    'past_due'  => '#ef4444',
-    'cancelled' => '#6b7280',
-    'expired'   => '#374151',
-];
 ?>
-
-<!-- 订阅摘要区域 -->
-<div class="weshop-account-subscriptions" id="weshop-account-subscriptions">
-    <div class="weshop-orders-header">
-        <h2 class="weshop-orders-title"><?= __('我的订阅') ?></h2>
-        <a href="<?= $this->getUrl('weshop/subscription/subscriptionList') ?>" class="weshop-view-all-link">
-            <?= __('查看全部') ?>
-            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: middle;">arrow_forward</span>
-        </a>
+<section class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Subscriptions') ?></p>
+            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Manage recurring plans') ?></h3>
+        </div>
+        <a href="<?= $this->getUrl('subscription') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open') ?></a>
     </div>
-
-    <div class="weshop-orders-list">
-        <?php if (empty($items)): ?>
-            <div class="weshop-empty-orders">
-                <span class="material-symbols-outlined" style="font-size: 3rem; color: var(--weshop-text-secondary);">auto_mode</span>
-                <p><?= __('暂无订阅') ?></p>
-            </div>
-        <?php else: ?>
-            <?php foreach ($items as $item): ?>
-                <?php
-                $status = $item['status'] ?? '';
-                $statusLabel = $statusOptions[$status] ?? $status;
-                $statusColor = $statusColorMap[$status] ?? '#6b7280';
-                $cycleLabel = $billingCycles[$item['billing_cycle']] ?? $item['billing_cycle'];
-                $interval = (int)($item['billing_interval'] ?? 1);
-                ?>
-                <div class="weshop-order-item">
-                    <div class="weshop-order-header">
-                        <div class="weshop-order-info">
-                            <span class="weshop-order-number"><?= __('订阅') ?> #<?= $item['subscription_id'] ?></span>
-                            <span class="weshop-order-date"><?= $item['created_at'] ?></span>
-                        </div>
-                        <div class="weshop-order-status">
-                            <span class="weshop-status-badge" style="background-color: <?= $statusColor ?>20; color: <?= $statusColor ?>;">
-                                <?= $statusLabel ?>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="weshop-order-content">
-                        <div class="weshop-order-amount">
-                            <span class="weshop-amount-label"><?= __('订阅价格') ?>：</span>
-                            <span class="weshop-amount-value">
-                                <?= $item['currency'] ?? 'USD' ?> <?= number_format((float)($item['price'] ?? 0), 2) ?>
-                                / <?= ($interval > 1 ? $interval . ' ' : '') . $cycleLabel ?>
-                            </span>
-                        </div>
-                    </div>
-                    <div class="weshop-order-actions">
-                        <a href="<?= $this->getUrl('weshop/subscription/view', ['id' => $item['subscription_id']]) ?>" class="weshop-action-link">
-                            <?= __('查看详情') ?>
-                        </a>
-                    </div>
-                </div>
-            <?php endforeach; ?>
-        <?php endif; ?>
-    </div>
-</div>
-
-<style>
-    .weshop-account-subscriptions { margin-top: 2rem; }
-</style>
+</section>
