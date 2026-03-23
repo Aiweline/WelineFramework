@@ -10,19 +10,20 @@ use Weline\Server\Service\Control\IpcControlGateway;
 
 final class IpcControlGatewayTest extends TestCase
 {
-    public function testReloadAsyncAndCacheClearDelegateToCommand(): void
+    public function testReloadAsyncAndCacheClearDelegateToAsyncCommand(): void
     {
         $gateway = new class extends IpcControlGateway {
             public array $calls = [];
 
-            public function command(
+            protected function commandAsync(
                 string $instanceName,
                 string $action,
                 string $reloadType = '',
                 array $payload = [],
-                float $timeout = 6.0
+                float $timeout = 0.8,
+                string $acceptedMessage = 'Command queued'
             ): array {
-                $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout];
+                $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout, $acceptedMessage];
 
                 return ['success' => true, 'message' => 'ok', 'data' => []];
             }
@@ -32,11 +33,11 @@ final class IpcControlGatewayTest extends TestCase
         $gateway->cacheClear('blue', 1.5);
 
         $this->assertSame(
-            ['blue', ControlMessage::ACTION_RELOAD, ControlMessage::RELOAD_TYPE_FORCE, [], 2.5],
+            ['blue', ControlMessage::ACTION_RELOAD, ControlMessage::RELOAD_TYPE_FORCE, [], 2.5, 'Reload initiated'],
             $gateway->calls[0]
         );
         $this->assertSame(
-            ['blue', ControlMessage::ACTION_CACHE_CLEAR, '', [], 1.5],
+            ['blue', ControlMessage::ACTION_CACHE_CLEAR, '', [], 1.5, 'Cache clear queued'],
             $gateway->calls[1]
         );
     }
