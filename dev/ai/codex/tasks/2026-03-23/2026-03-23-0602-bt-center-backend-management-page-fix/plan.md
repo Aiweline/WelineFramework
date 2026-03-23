@@ -17,4 +17,4 @@
 - [x] Syntax checks on touched PHP files
 - [x] `php bin/w setup:upgrade -m Weline_Bt_Center --yes`
 - [x] Focused route validation via `http:req` or equivalent backend request
-- [ ] Backend UI spot check for list/form navigation
+- [x] Backend UI spot check for list/form navigation

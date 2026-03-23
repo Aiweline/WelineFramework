@@ -40,6 +40,9 @@ Implement the unified preview/editor behavior for:
 - 02:15 Resumed from the broken intermediate `ThemeEditor.php` state and confirmed the immediate blocker was malformed legacy comment wrapping plus garbled response strings in the new preview/editor actions.
 - 02:19 Repaired `ThemeEditor.php` enough to restore controller syntax: fixed the broken `getCompileLayout()` JSON response, removed the stray comment terminators left by legacy wrappers, and replaced the syntax-breaking preview/publish response strings with stable messages.
 - 02:20 Re-ran `php -l app/code/Weline/Theme/Controller/Backend/ThemeEditor.php`; result passed. Functional shell/template/PageBuilder unification work is still pending after this syntax recovery checkpoint.
+- 11:34 Re-read startup files for this session (`SOUL.md`, `USER.md`, `memory/2026-03-21.md`, `memory/2026-03-22.md`, `ACTIVE.md`) and switched `ACTIVE.md` back to this theme preview unification task.
+- 11:35 Revalidated critical gaps before coding: `LayoutSlotRenderer` missing `isPreviewThemeMode()`, `ControllerFetchFileAfter` not registered, `ThemeEditor::getLayoutPreview()` still manual double-render path, `Router::rewritePreviewThemeQuery()` still no-op, `WeShop/Search` lacks `layoutType`, motor theme still partially aligned with merge lifecycle.
+- 11:36 Locked implementation order for this pass: unify fetch lifecycle observers, rewrite `preview_theme` homepage entry to gateway, migrate backend `layout-preview` onto shared lifecycle, then patch motor layout coverage and duplicate-content/resource pitfalls.
 
 ## Verification Plan
 
@@ -50,3 +53,4 @@ Implement the unified preview/editor behavior for:
 ## Resume Notes
 
 - If interrupted, resume from the preview context service and ThemeEditor controller/UI wiring first; those are on the critical path for the rest of the behavior.
+- Current execution checkpoint (2026-03-22 11:36): context read complete, no new code merged yet in this pass; next action is observer chain implementation (`ControllerFetchFileBefore/After`, `LayoutSlotRenderer`, `event.xml`).

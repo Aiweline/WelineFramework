@@ -1,0 +1,23 @@
+# Progress - wls async orchestration and imperial command redesign plan
+
+- 2026-03-23 10:56 Created the task workspace.
+- 2026-03-23 11:00 Routed the task through `runtime-and-process` plus `planning`, then inspected `ServiceOrchestrator`, `MasterControlServer`, and prior WLS plans/tasks.
+- 2026-03-23 11:05 Confirmed the biggest current architectural issue: heavy operations still execute inline inside the IPC message callback (`handleCommand` directly calling `reloadAll()`, `startRollingRestart()`, maintenance toggles, etc.), so the message pump blocks itself.
+- 2026-03-23 11:08 Confirmed many nested blocking loops still exist in startup / reload / stop paths (`poll + usleep + while`), which means the master loop is not a scheduler yet; it is repeatedly monopolized by phase-local waits.
+- 2026-03-23 11:10 Confirmed `MasterControlServer::sendTo()` uses synchronous `writeFully()` with up to 1s timeout per client, so broadcasts and multi-target command fan-out can block the master proportionally to client count.
+- 2026-03-23 11:12 Confirmed hot-path side effects still happen inline on state reports: worker-ready dispatcher notifications, full-pool sync, routing-policy broadcasts, and service-info persistence.
+- 2026-03-23 11:14 Confirmed imperial-command semantics are inconsistent:
+  - `stop` is queued via `requestStop()`
+  - `reload_wait` / `rolling_restart` run inline under exclusive mode
+  - plain `reload` is long-running but not imperial, so it can still overlap awkwardly with later stop/exclusive flows
+- 2026-03-23 11:18 Drafted a staged redesign plan under `dev/ai/plans/wls-async-control-plane-optimization.plan.md`.
+- 2026-03-23 11:28 Refined the redesign from a generic “imperial arbiter” into a stricter single-active-operation control-plane model:
+  - Master may have only one active control operation at a time
+  - protocol events (`register`/`ready`/`disconnect`/etc.) stay out of that queue and must keep flowing
+  - queued commands now have explicit `enqueue` / `coalesce` / `preempt` / `reject` outcomes
+- 2026-03-23 11:31 Added concrete Phase 1 guidance to the cross-task plan:
+  - `Phase 1A` solves command overlap by enforcing one active operation and storing the rest
+  - `Phase 1B` moves legacy long-running command entrypoints under queued operation wrappers
+  - documented explicitly that this fixes control-plane chaos first, while startup/reload slowness still requires later state-machine work
+- 2026-03-23 11:33 Created the follow-on implementation workspace `dev/ai/codex/tasks/2026-03-23/2026-03-23-0312-wls-single-active-operation-queue-implementation/` so the next coding slice can start from a concrete engineering brief instead of another open-ended diagnosis.
+- 2026-03-23 02:56 Created the task workspace.

@@ -1,0 +1,23 @@
+# Progress - wls-single-active-operation-queue-implementation
+
+- 2026-03-23 03:12 Created the task workspace.
+- 2026-03-23 11:33 Reframed this workspace as `Phase 1A` of the broader WLS async control-plane redesign.
+- 2026-03-23 11:34 Defined the main invariant for this slice: Master may have only one active control operation at a time, while later operations are queued, coalesced, preempted, or rejected by policy.
+- 2026-03-23 11:35 Recorded the key implementation boundaries:
+  - child-process protocol events remain out-of-band and must continue to drive registry updates
+  - stop is the only preemptive command that clears the field
+  - parameter parsing must remain isolated from orchestration semantics
+- 2026-03-23 11:49 Implemented the first runtime slice in `ServiceOrchestrator`:
+  - added a single-active-operation queue (`pendingControlOperations` + `activeControlOperation`)
+  - mutating control commands now enter the queue instead of running directly inside `handleCommand()`
+  - `stop` now clears pending operations and marks the active operation as aborting before entering the existing stop flow
+- 2026-03-23 11:54 Hooked the queue into `runLoop()` so Master steps at most one queued control operation per loop and exposes active/queued operation info in `getStatus()`.
+- 2026-03-23 11:57 Adjusted `server:maintenance enable/disable` so queued acknowledgements are rendered as queue notes instead of false “already completed” success output.
+- 2026-03-23 12:00 Added `ServiceOrchestratorControlQueueTest` covering:
+  - new mutating commands queue behind an active control operation
+  - queued reload executes later from the run loop with an epoch snapshot
+  - `stop` clears queued operations and marks the active operation as aborting
+- 2026-03-23 12:03 Validation summary:
+  - `php -l` passed for touched runtime / console / test files
+  - targeted PHPUnit suites all passed their assertions
+  - PHPUnit still exits with repo-level warning/deprecation status because no code coverage driver is installed in this environment

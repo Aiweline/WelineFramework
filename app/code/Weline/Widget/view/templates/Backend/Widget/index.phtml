@@ -8,12 +8,27 @@ $allowedTypes = $this->getData('allowedTypes') ?? [];
 $moduleFilter = $this->getData('moduleFilter') ?? '';
 $typeFilter = $this->getData('typeFilter') ?? '';
 $search = $this->getData('search') ?? '';
+$totalWidgetCount = count($allWidgets, COUNT_RECURSIVE) - count($allWidgets);
+$totalTypeCount = count($allWidgets);
+$totalModuleCount = count($modules);
 ?>
+<style>
+    .widget-admin-toolbar .form-control,
+    .widget-admin-toolbar .form-select { min-height: 38px; }
+    .widget-admin-summary .card { border: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08); }
+    .widget-admin-summary .summary-value { font-size: 1.25rem; font-weight: 700; line-height: 1.1; }
+    .widget-admin-table td, .widget-admin-table th { vertical-align: middle; }
+    .widget-admin-name { max-width: 300px; }
+    .widget-admin-name .text-muted { font-size: 12px; }
+</style>
 <!-- 页面标题 -->
                 <div class="row">
                     <div class="col-12">
                         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= $page_title ?? __('部件管理') ?></h4>
+                            <div>
+                                <h4 class="mb-1 mb-sm-0"><?= $page_title ?? __('部件管理') ?></h4>
+                                <small class="text-muted"><?= __('快速查看、筛选并预览部件详情') ?></small>
+                            </div>
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item">
@@ -26,18 +41,168 @@ $search = $this->getData('search') ?? '';
                     </div>
                 </div>
 
+<js:part>
+(function () {
+    'use strict';
+
+    var WIDGET_DETAIL_URL = '<?= $this->getBackendUrl('widget/backend/widget/detail') ?>';
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function ensureModal() {
+        var modalEl = document.getElementById('widgetDetailModal');
+        if (modalEl) return modalEl;
+
+        modalEl = document.createElement('div');
+        modalEl.className = 'modal fade';
+        modalEl.id = 'widgetDetailModal';
+        modalEl.tabIndex = -1;
+        modalEl.setAttribute('aria-hidden', 'true');
+        modalEl.innerHTML = '' +
+            '<div class="modal-dialog modal-lg">' +
+            '  <div class="modal-content">' +
+            '    <div class="modal-header">' +
+            '      <h5 class="modal-title" id="widgetDetailModalLabel"><?= __('部件详情') ?></h5>' +
+            '      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="<?= __('关闭') ?>"></button>' +
+            '    </div>' +
+            '    <div class="modal-body" id="widgetDetailModalBody">' +
+            '      <div class="text-muted"><?= __('加载中...') ?></div>' +
+            '    </div>' +
+            '    <div class="modal-footer">' +
+            '      <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= __('关闭') ?></button>' +
+            '    </div>' +
+            '  </div>' +
+            '</div>';
+
+        document.body.appendChild(modalEl);
+        return modalEl;
+    }
+
+    window.viewWidgetDetail = function (type, name) {
+        if (!type || !name) return;
+
+        var modalEl = ensureModal();
+        var bodyEl = modalEl.querySelector('#widgetDetailModalBody');
+        var labelEl = modalEl.querySelector('#widgetDetailModalLabel');
+        if (bodyEl) bodyEl.innerHTML = '<div class="text-muted"><?= __('加载中...') ?></div>';
+        if (labelEl) labelEl.textContent = '<?= __('部件详情') ?>';
+
+        var url = WIDGET_DETAIL_URL + '?type=' + encodeURIComponent(type) + '&name=' + encodeURIComponent(name);
+        fetch(url, { credentials: 'include' })
+            .then(function (resp) { return resp.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    if (bodyEl) bodyEl.innerHTML = '<div class="alert alert-danger mb-0">' + escapeHtml((data && data.message) ? data.message : '<?= __('操作失败') ?>') + '</div>';
+                    return;
+                }
+
+                var widget = data.widget || {};
+                if (labelEl) labelEl.textContent = widget.name ? escapeHtml(widget.name) : (name || '');
+
+                var params = widget.params || {};
+                var description = widget.description || '';
+                var module = widget.module || '';
+                var version = widget.version || '';
+
+                var paramsText = '';
+                try {
+                    paramsText = JSON.stringify(params, null, 2);
+                } catch (e) {
+                    paramsText = String(params);
+                }
+
+                if (bodyEl) {
+                    bodyEl.innerHTML =
+                        '<div class="row g-3">' +
+                        '  <div class="col-12">' +
+                        '    <div class="card border-0 bg-light">' +
+                        '      <div class="card-body">' +
+                        '        <div class="d-flex flex-wrap gap-2 mb-2">' +
+                        '          <span class="badge text-bg-info"><?= __('类型') ?>: ' + escapeHtml(type || '') + '</span>' +
+                        '          <span class="badge text-bg-secondary"><?= __('模块') ?>: ' + escapeHtml(module) + '</span>' +
+                        '          <span class="badge text-bg-primary"><?= __('版本') ?>: ' + escapeHtml(version || '') + '</span>' +
+                        '        </div>' +
+                        '        <div class="text-muted mb-0">' + escapeHtml(description) + '</div>' +
+                        '      </div>' +
+                        '    </div>' +
+                        '  </div>' +
+                        '  <div class="col-12">' +
+                        '    <h6 class="mb-2"><?= __('参数配置') ?></h6>' +
+                        '    <pre class="bg-light p-2 rounded mb-0" style="white-space: pre-wrap;">' + escapeHtml(paramsText) + '</pre>' +
+                        '  </div>' +
+                        '</div>';
+                }
+
+                try {
+                    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                } catch (e) {
+                    // ignore: 不影响主要功能
+                }
+            })
+            .catch(function () {
+                if (bodyEl) bodyEl.innerHTML = '<div class="alert alert-danger mb-0"><?= __('操作失败') ?></div>';
+                try {
+                    var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+                    modal.show();
+                } catch (e) {
+                    // ignore
+                }
+            });
+    };
+})();
+</js:part>
+
+                <!-- 概览卡片 -->
+                <div class="row g-3 mb-3 widget-admin-summary">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body py-3">
+                                <div class="text-muted mb-1"><?= __('总部件数') ?></div>
+                                <div class="summary-value"><?= (int)$totalWidgetCount ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body py-3">
+                                <div class="text-muted mb-1"><?= __('部件类型') ?></div>
+                                <div class="summary-value"><?= (int)$totalTypeCount ?></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body py-3">
+                                <div class="text-muted mb-1"><?= __('来源模块') ?></div>
+                                <div class="summary-value"><?= (int)$totalModuleCount ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 筛选工具栏 -->
                 <div class="row mb-3">
                     <div class="col-12">
                         <div class="card">
                             <div class="card-body">
-                                <form method="get" class="row g-3">
-                                    <div class="col-md-3">
+                                <form method="get" class="row g-2 align-items-end widget-admin-toolbar">
+                                    <div class="col-md-4">
+                                        <label class="form-label mb-1"><?= __('关键字') ?></label>
                                         <input type="text" class="form-control" name="search" 
                                                placeholder="<?= __('搜索部件...') ?>" 
                                                value="<?= htmlspecialchars($search) ?>">
                                     </div>
                                     <div class="col-md-3">
+                                        <label class="form-label mb-1"><?= __('模块') ?></label>
                                         <select class="form-select" name="module">
                                             <option value=""><?= __('所有模块') ?></option>
                                             <?php foreach ($modules as $module): ?>
@@ -49,6 +214,7 @@ $search = $this->getData('search') ?? '';
                                         </select>
                                     </div>
                                     <div class="col-md-3">
+                                        <label class="form-label mb-1"><?= __('类型') ?></label>
                                         <select class="form-select" name="type">
                                             <option value=""><?= __('所有类型') ?></option>
                                             <?php foreach ($allowedTypes as $type): ?>
@@ -59,10 +225,13 @@ $search = $this->getData('search') ?? '';
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
-                                    <div class="col-md-3">
-                                        <button type="submit" class="btn btn-primary w-100">
+                                    <div class="col-md-2 d-flex gap-2">
+                                        <button type="submit" class="btn btn-primary flex-fill">
                                             <i class="ri-search-line me-1"></i><?= __('筛选') ?>
                                         </button>
+                                        <a href="<?= $this->getBackendUrl('widget/backend/widget') ?>" class="btn btn-light border" title="<?= __('重置筛选') ?>">
+                                            <i class="ri-refresh-line"></i>
+                                        </a>
                                     </div>
                                 </form>
                             </div>
@@ -77,7 +246,7 @@ $search = $this->getData('search') ?? '';
                             <div class="card-header">
                                 <h5 class="card-title mb-0">
                                     <?= __('部件列表') ?>
-                                    <span class="badge bg-primary ms-2"><?= count($allWidgets, COUNT_RECURSIVE) - count($allWidgets) ?></span>
+                                    <span class="badge bg-primary ms-2"><?= (int)$totalWidgetCount ?></span>
                                 </h5>
                             </div>
                             <div class="card-body">
@@ -88,9 +257,10 @@ $search = $this->getData('search') ?? '';
                                     </div>
                                 <?php else: ?>
                                     <div class="table-responsive">
-                                        <table class="table table-hover">
+                                        <table class="table table-hover table-sm align-middle widget-admin-table">
                                             <thead>
                                                 <tr>
+                                                    <th style="width:60px;">#</th>
                                                     <th><?= __('部件名称') ?></th>
                                                     <th><?= __('类型') ?></th>
                                                     <th><?= __('来源模块') ?></th>
@@ -100,10 +270,12 @@ $search = $this->getData('search') ?? '';
                                                 </tr>
                                             </thead>
                                             <tbody>
+                                                <?php $rowIndex = 1; ?>
                                                 <?php foreach ($widgets as $type => $typeWidgets): ?>
                                                     <?php foreach ($typeWidgets as $name => $widget): ?>
                                                         <tr>
-                                                            <td>
+                                                            <td class="text-muted"><?= $rowIndex++ ?></td>
+                                                            <td class="widget-admin-name">
                                                                 <strong><?= htmlspecialchars($widget['name'] ?? $name) ?></strong>
                                                                 <br>
                                                                 <small class="text-muted"><?= htmlspecialchars($name) ?></small>
@@ -115,7 +287,7 @@ $search = $this->getData('search') ?? '';
                                                             <td><?= htmlspecialchars($widget['description'] ?? '') ?></td>
                                                             <td><?= htmlspecialchars($widget['version'] ?? '1.0.0') ?></td>
                                                             <td>
-                                                                <button type="button" class="btn btn-sm btn-primary" 
+                                                                <button type="button" class="btn btn-sm btn-outline-primary" 
                                                                         onclick="viewWidgetDetail('<?= htmlspecialchars($type) ?>', '<?= htmlspecialchars($name) ?>')">
                                                                     <i class="ri-eye-line"></i> <?= __('详情') ?>
                                                                 </button>

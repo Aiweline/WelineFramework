@@ -76,3 +76,21 @@
 1. 主线进入 Epic 3：后台控制器、工作台 JSON API、SSE 流接口。
 2. 让 Epic 3 只依赖当前服务层，不跨层直操作模型。
 3. 主题选择能力仍建议在 Epic 6 通过 `WebsiteThemeSource` 注入，不提前耦合到 Websites 核心。
+## 2026-03-23 Entry Integration Slice
+
+1. `Weline_Websites` `SiteBuilderAgent` is no longer just a plain one-shot form page.
+   - The entry now acts as a more human-friendly hub.
+   - It exposes provider cards and makes `PageBuilder` visible as an extension path.
+   - The fast-build form now surfaces AI mode explicitly, so domain/account inputs are optional when AI mode is enabled.
+2. `GuoLaiRen_PageBuilder` now registers `pagebuilder` under `AiSiteBuilderProvider`.
+   - `generated/extends.php` includes `AiSiteBuilderProvider/PageBuilderProvider.php`.
+3. Compatibility entry strategy is now partially implemented.
+   - `GuoLaiRen_PageBuilder\Controller\Backend\AiSiteAgent::index()` redirects to the Websites hub by default.
+   - `?legacy=1` still opens the old PageBuilder session workbench.
+   - The legacy PageBuilder workbench index now includes a back-link to the Websites hub.
+4. Duplicate menu coupling has been cleaned up.
+   - `Weline_Websites::site_builder_agent_pagebuilder` has been removed.
+5. This still does **not** mean the whole plan is finished.
+   - Epic 1 and Epic 2 were already done before this slice.
+   - The platform-level unified session/message/event/artifact workbench is still not the single source of truth.
+   - The default `websites_default` provider still lacks the full planned conversation/theme/draft/materialization flow.

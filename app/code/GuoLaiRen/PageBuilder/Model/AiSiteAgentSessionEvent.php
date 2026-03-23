@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /*
  * GuoLaiRen PageBuilder Module
- * AI 建站智能体会话事件：供 SSE 历史、审计与断线重连回放
+ * AI 建站工作台会话事件：供 SSE 历史、审计与断线重连回放
  */
 
 namespace GuoLaiRen\PageBuilder\Model;
@@ -14,7 +14,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
-#[Table(comment: 'PageBuilder AI建站智能体会话事件')]
+#[Table(comment: 'PageBuilder AI建站工作台会话事件')]
 #[Index(name: 'idx_session_time', columns: ['agent_session_id', 'create_time'], comment: '按会话拉取时间序事件')]
 class AiSiteAgentSessionEvent extends Model
 {
