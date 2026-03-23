@@ -2278,8 +2278,8 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
                 
                 // 检查测试目录是否存在
-                $testPath = $basePath . DS . 'test' . DS . 'e2e';
-                $hasTests = is_dir($testPath);
+                $testPath = $this->resolveModuleE2eTestPath($basePath);
+                $hasTests = $testPath !== null;
                 
                 // 转换为相对路径（统一使用正斜杠，兼容 Windows 和 Linux）
                 $relativeBasePath = str_replace([BP . DS, DS], ['', '/'], $basePath);
@@ -2324,6 +2324,24 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      * 获取锁文件路径
      * @return string
      */
+    private function resolveModuleE2eTestPath(string $basePath): ?string
+    {
+        $candidates = [
+            $basePath . DS . 'test' . DS . 'e2e',
+            $basePath . DS . 'Test' . DS . 'e2e',
+            $basePath . DS . 'test' . DS . 'E2E',
+            $basePath . DS . 'Test' . DS . 'E2E',
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (is_dir($candidate)) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
     private function getLockFile(): string
     {
         $lockDir = BP . 'var' . DS . 'process';
