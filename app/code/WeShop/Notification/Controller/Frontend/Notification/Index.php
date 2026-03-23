@@ -4,38 +4,35 @@ declare(strict_types=1);
 
 namespace WeShop\Notification\Controller\Frontend\Notification;
 
-use Weline\Framework\App\Controller\FrontendController;
-use WeShop\Customer\Session\CustomerSession;
-use WeShop\Notification\Service\NotificationService;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Frontend\Controller\BaseController;
+use WeShop\Notification\Service\NotificationPageDataService;
 
-/**
- * 通知列表控制器
- */
-class Index extends FrontendController
+class Index extends BaseController
 {
-    /**
-     * 通知列表
-     */
+    private const LOGIN_ROUTE = 'customer/account/login';
+
+    protected ?string $layoutType = 'account';
+
+    public function __construct(
+        private readonly CustomerContextInterface $customerContext,
+        private readonly NotificationPageDataService $notificationPageDataService
+    ) {
+    }
+
     public function index(): string
     {
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
-            $this->getMessageManager()->addError(__('请先登录'));
-            return $this->redirect('weshop/customer/account/login');
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->redirect(self::LOGIN_ROUTE);
+            return '';
         }
-        
-        /** @var NotificationService $notificationService */
-        $notificationService = ObjectManager::getInstance(NotificationService::class);
-        $notifications = $notificationService->getCustomerNotifications($customer->getId(), 20);
-        $unreadCount = $notificationService->getUnreadCount($customer->getId());
-        
-        $this->assign('notifications', $notifications);
-        $this->assign('unreadCount', $unreadCount);
-        
+
+        foreach ($this->notificationPageDataService->build($customerId) as $key => $value) {
+            $this->assign($key, $value);
+        }
+
         return $this->fetch();
     }
 }
