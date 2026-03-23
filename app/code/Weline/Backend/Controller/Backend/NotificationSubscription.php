@@ -6,10 +6,11 @@ namespace Weline\Backend\Controller\Backend;
 
 use Weline\Backend\Enum\NotificationType;
 use Weline\Backend\Model\UserNotificationSubscription;
+use Weline\Backend\Service\ChannelAdapterCollector;
+use Weline\Backend\Service\ContactService;
 use Weline\Backend\Service\TopicCollector;
-use Weline\Backend\Service\UserContactService;
-use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 
 #[Acl('Weline_Backend::notification_subscription', '消息订阅', 'mdi-bell-cog', '管理消息订阅', 'Weline_Backend::notification_settings')]
@@ -17,13 +18,15 @@ class NotificationSubscription extends BackendController
 {
     private TopicCollector $topicCollector;
     private UserNotificationSubscription $subscriptionModel;
-    private UserContactService $contactService;
+    private ContactService $contactService;
+    private ChannelAdapterCollector $adapterCollector;
 
     public function __construct()
     {
         $this->topicCollector = ObjectManager::getInstance(TopicCollector::class);
         $this->subscriptionModel = ObjectManager::getInstance(UserNotificationSubscription::class);
-        $this->contactService = ObjectManager::getInstance(UserContactService::class);
+        $this->contactService = ObjectManager::getInstance(ContactService::class);
+        $this->adapterCollector = ObjectManager::getInstance(ChannelAdapterCollector::class);
     }
 
     #[Acl('Weline_Backend::notification_subscription_index', '我的订阅', 'mdi-bell', '查看我的消息订阅')]
@@ -31,9 +34,7 @@ class NotificationSubscription extends BackendController
     {
         $userId = (int) $this->session->getLoginUserId();
 
-        // 先同步消息主题到数据库（各模块 Provider 注册的主题）
         $this->topicCollector->collect();
-
         $topicsGrouped = $this->topicCollector->getTopicsGrouped();
 
         $subscriptions = $this->subscriptionModel->clearQuery()
@@ -47,22 +48,11 @@ class NotificationSubscription extends BackendController
             $subscriptionMap[$key] = $sub;
         }
 
-        $channels = [
-            'backend' => ['name' => __('后台通知'), 'icon' => 'mdi-desktop-mac'],
-            'email' => ['name' => __('邮件'), 'icon' => 'mdi-email'],
-            'feishu' => ['name' => __('飞书'), 'icon' => 'mdi-message'],
-            'dingtalk' => ['name' => __('钉钉'), 'icon' => 'mdi-message-text'],
-        ];
-
-        $types = NotificationType::getTypeOptions();
-
-        $userContacts = $this->contactService->getUserContactsGrouped($userId);
-
         $this->assign('topics_grouped', $topicsGrouped);
         $this->assign('subscription_map', $subscriptionMap);
-        $this->assign('channels', $channels);
-        $this->assign('types', $types);
-        $this->assign('user_contacts', $userContacts);
+        $this->assign('channels', $this->getAvailableChannels());
+        $this->assign('types', NotificationType::getTypeOptions());
+        $this->assign('user_contacts', $this->contactService->getUserContactsGrouped($userId));
         $this->assign('page_title', __('消息订阅'));
 
         return $this->fetch();
@@ -76,12 +66,12 @@ class NotificationSubscription extends BackendController
         }
 
         $userId = (int) $this->session->getLoginUserId();
-        $topicCode = $this->request->getPost('topic_code', '');
-        $channel = $this->request->getPost('channel', '');
-        $minType = $this->request->getPost('min_type', 'info');
+        $topicCode = (string) $this->request->getPost('topic_code', '');
+        $channel = (string) $this->request->getPost('channel', '');
+        $minType = (string) $this->request->getPost('min_type', 'info');
         $isEnabled = (bool) $this->request->getPost('is_enabled', true);
 
-        if (empty($topicCode) || empty($channel)) {
+        if ($topicCode === '' || $channel === '') {
             return $this->jsonError(__('主题和渠道不能为空'));
         }
 
@@ -118,10 +108,10 @@ class NotificationSubscription extends BackendController
         }
 
         $userId = (int) $this->session->getLoginUserId();
-        $topicCode = $this->request->getPost('topic_code', '');
-        $channel = $this->request->getPost('channel', '');
+        $topicCode = (string) $this->request->getPost('topic_code', '');
+        $channel = (string) $this->request->getPost('channel', '');
 
-        if (empty($topicCode) || empty($channel)) {
+        if ($topicCode === '' || $channel === '') {
             return $this->jsonError(__('参数错误'));
         }
 
@@ -151,10 +141,39 @@ class NotificationSubscription extends BackendController
         return $this->jsonSuccess($message);
     }
 
+    private function getAvailableChannels(): array
+    {
+        $channels = [
+            'backend' => ['name' => __('后台通知'), 'icon' => 'mdi-desktop-mac'],
+        ];
+
+        foreach ($this->adapterCollector->getAdapters() as $adapter) {
+            $code = $adapter->getChannelCode();
+            $channels[$code] = [
+                'name' => $adapter->getChannelName(),
+                'icon' => $this->getChannelIcon($code),
+            ];
+        }
+
+        return $channels;
+    }
+
+    private function getChannelIcon(string $channelCode): string
+    {
+        return match ($channelCode) {
+            'email' => 'mdi-email',
+            'feishu' => 'mdi-message',
+            'dingtalk' => 'mdi-message-text',
+            'webhook' => 'mdi-webhook',
+            'telegram' => 'mdi-telegram',
+            default => 'mdi-bell-outline',
+        };
+    }
+
     private function jsonSuccess(string $message, array $data = []): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
+        return (string) json_encode([
             'success' => true,
             'message' => $message,
             'data' => $data,
@@ -164,7 +183,7 @@ class NotificationSubscription extends BackendController
     private function jsonError(string $message): string
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
-        return json_encode([
+        return (string) json_encode([
             'success' => false,
             'message' => $message,
         ], JSON_UNESCAPED_UNICODE);
