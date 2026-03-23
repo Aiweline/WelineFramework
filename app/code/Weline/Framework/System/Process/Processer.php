@@ -501,8 +501,8 @@ class Processer
             // On Windows, non-interactive PowerShell Start-Process can create headless
             // conhost instances. Use cmd/start so frontend workers get a real console.
             if (IS_WIN) {
-                $pid = self::createWindowsForeground($pname, $enableLog, $availableFunctions);
-                if ($pid > 0) {
+                $pid = self::createWindowsForeground($pname, (bool) $block, $enableLog, $availableFunctions);
+                if ($pid !== null) {
                     return $pid;
                 }
             }
@@ -2207,9 +2207,14 @@ class Processer
     {
         return \array_values(\array_filter(
             $launchItems,
-            static fn (array $item): bool => (bool) ($item['block'] ?? false)
+            static fn (array $item): bool => self::shouldWaitForManagedPidResolution((bool) ($item['block'] ?? false))
                 && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
         ));
+    }
+
+    private static function shouldWaitForManagedPidResolution(bool $block): bool
+    {
+        return $block;
     }
 
     /**
@@ -2320,14 +2325,14 @@ class Processer
      * Launch a visible Windows console for frontend workers, then poll by
      * command line identity because cmd/start does not expose the child PID.
      */
-    private static function createWindowsForeground(string $pname, bool $enableLog, array $availableFunctions): int
+    private static function createWindowsForeground(string $pname, bool $block, bool $enableLog, array $availableFunctions): ?int
     {
         if (empty($availableFunctions['popen']) && empty($availableFunctions['exec'])) {
             if ($enableLog) {
                 self::setOutput($pname, "[ERROR] windows foreground launch requires popen or exec" . PHP_EOL, true);
             }
 
-            return 0;
+            return null;
         }
 
         [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($pname);
@@ -2337,7 +2342,7 @@ class Processer
                 self::setOutput($pname, "[ERROR] failed to prepare windows foreground launcher" . PHP_EOL, true);
             }
 
-            return 0;
+            return null;
         }
 
         $windowTitle = self::extractCommandLineArg($pname, 'name');
@@ -2385,6 +2390,10 @@ class Processer
                 self::setOutput($pname, "[ERROR] windows foreground launch failed: {$lastError}" . PHP_EOL, true);
             }
 
+            return null;
+        }
+
+        if (!self::shouldWaitForManagedPidResolution($block)) {
             return 0;
         }
 
