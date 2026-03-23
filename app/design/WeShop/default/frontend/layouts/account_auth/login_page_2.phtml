@@ -447,7 +447,7 @@ $area = $themeData['area'] ?? 'frontend';
                 </div>
                 
                 <w:hook>WeShop_Customer::login::form_before</w:hook>
-                <form action="<?= $this->getUrl('customer/account/loginPost') ?>" method="post" class="weshop-login-form" onsubmit="return validateLoginForm(this);">
+                <form action="<?= $this->getUrl('weshop/customer/account/login') ?>" method="post" class="weshop-login-form" onsubmit="return validateLoginForm(this);">
                     <div class="weshop-login-field">
                         <label for="email" class="weshop-login-label">
                             <?= __('Email or mobile phone number') ?>
@@ -467,7 +467,7 @@ $area = $themeData['area'] ?? 'frontend';
                             <label for="password" class="weshop-login-label">
                                 <?= __('Password') ?>
                             </label>
-                            <a href="<?= $this->getUrl('customer/account/forgotPassword') ?>" class="weshop-login-forgot">
+                            <a href="<?= $this->getUrl('weshop/customer/account/forgot-password') ?>" class="weshop-login-forgot">
                                 <?= __('Forgot your password?') ?>
                             </a>
                         </div>
@@ -533,7 +533,7 @@ $area = $themeData['area'] ?? 'frontend';
                     </div>
                 </div>
                 
-                <a href="<?= $this->getUrl('customer/account/create') ?>" class="weshop-login-register-button">
+                <a href="<?= $this->getUrl('weshop/customer/account/register') ?>" class="weshop-login-register-button">
                     <?= __('Create your account') ?>
                 </a>
                 

@@ -28,5 +28,10 @@ return [
         'description' => __('在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。'),
         'doc'         => 'backend/dashboard/main-tabs-content.md',
     ],
+    'Weline_Admin::backend::partials::login::providers' => [
+        'name'        => __('Backend login providers'),
+        'description' => __('Inject third-party sign-in providers above the backend login form.'),
+        'doc'         => 'backend/login/providers.md',
+    ],
 ];
 
