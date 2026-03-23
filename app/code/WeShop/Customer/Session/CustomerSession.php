@@ -4,17 +4,14 @@ declare(strict_types=1);
 
 namespace WeShop\Customer\Session;
 
+use WeShop\Customer\Model\Customer as CustomerProfile;
+use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\SessionInterface;
 
-/**
- * WeShop 客户 Session 门面类
- *
- * 提供对新 Session 架构的简化访问，保持向后兼容。
- * 推荐新代码直接使用 SessionFactory::getInstance()->createFrontendSession()
- */
 class CustomerSession implements AuthenticatedSessionInterface
 {
     private AuthenticatedSessionInterface $session;
@@ -24,215 +21,156 @@ class CustomerSession implements AuthenticatedSessionInterface
         $this->session = SessionFactory::getInstance()->createFrontendSession();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function login(AuthenticableInterface $user): void
     {
         $this->session->login($user);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function logout(): void
     {
         $this->session->logout();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function isLoggedIn(): bool
     {
         return $this->session->isLoggedIn();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getUser(): ?AuthenticableInterface
     {
         return $this->session->getUser();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getCustomer(): ?AuthenticableInterface
     {
         return $this->session->getCustomer();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getUserId(): int|string|null
     {
         return $this->session->getUserId();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getUsername(): ?string
     {
         return $this->session->getUsername();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getSession(): SessionInterface
     {
         return $this->session->getSession();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function get(string $key): mixed
     {
         return $this->session->get($key);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function set(string $key, mixed $value): void
     {
         $this->session->set($key, $value);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function delete(string $key): void
     {
         $this->session->delete($key);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getId(): string
     {
         return $this->session->getId();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function start(?string $sessionId = null): void
     {
         $this->session->start($sessionId);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function destroy(): void
     {
         $this->session->destroy();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function regenerate(bool $deleteOldSession = true): void
     {
         $this->session->regenerate($deleteOldSession);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function isStarted(): bool
     {
         return $this->session->isStarted();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getArea(): string
     {
         return $this->session->getArea();
     }
 
-    // ==================== 兼容方法 ====================
-
-    /**
-     * 兼容旧的 isLogin 方法
-     *
-     * @deprecated 使用 isLoggedIn() 代替
-     */
     public function isLogin(): bool
     {
         return $this->isLoggedIn();
     }
 
-    /**
-     * 兼容旧的 getLoginUser 方法
-     *
-     * @deprecated 使用 getUser() 代替
-     */
     public function getLoginUser(string $model = ''): ?AuthenticableInterface
     {
         return $this->getUser();
     }
 
-    /**
-     * 兼容旧的 getLoginUsername 方法
-     *
-     * @deprecated 使用 getUsername() 代替
-     */
     public function getLoginUsername(): ?string
     {
         return $this->getUsername();
     }
 
-    /**
-     * 兼容旧的 getLoginUserId 方法
-     *
-     * @deprecated 使用 getUserId() 代替
-     */
     public function getLoginUserId(): int|string|null
     {
         return $this->getUserId();
     }
 
-    /**
-     * 兼容旧的 getSessionId 方法
-     *
-     * @deprecated 使用 getSession()->getId() 代替
-     */
     public function getSessionId(): string
     {
         return $this->session->getSession()->getId();
     }
 
-    /**
-     * 兼容旧的 getData 方法
-     *
-     * @deprecated 使用 getSession()->get() 代替
-     */
     public function getData(string $name = ''): mixed
     {
         if ($name === '') {
             return $this->session->getSession()->all();
         }
+
         return $this->session->getSession()->get($name);
     }
 
-    /**
-     * 兼容旧的 setData 方法
-     *
-     * @deprecated 使用 getSession()->set() 代替
-     */
     public function setData(string $name, mixed $value): static
     {
         $this->session->set($name, $value);
+        return $this;
+    }
+
+    public function setCustomer(AuthenticableInterface $customer): static
+    {
+        if ($customer instanceof AuthCustomer) {
+            $this->login($customer);
+            return $this;
+        }
+
+        if ($customer instanceof CustomerProfile) {
+            $userId = (int) ($customer->getData(CustomerProfile::schema_fields_USER_ID) ?? 0);
+            if ($userId <= 0) {
+                throw new \InvalidArgumentException((string) __('Customer profile is not linked to an auth user.'));
+            }
+
+            /** @var AuthCustomer $authCustomer */
+            $authCustomer = ObjectManager::getInstance(AuthCustomer::class);
+            $authCustomer->load($userId);
+            if (!$authCustomer->getId()) {
+                throw new \RuntimeException((string) __('Unable to locate the auth user for this customer profile.'));
+            }
+
+            $this->login($authCustomer);
+            return $this;
+        }
+
+        $this->login($customer);
         return $this;
     }
 }

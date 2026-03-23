@@ -11,6 +11,7 @@ declare(strict_types=1);
 
 namespace Weline\Admin\Controller;
 
+use WeShop\GoogleAuth\Service\BackendWebAuthService;
 use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
 use Weline\Backend\Service\MenuService;
@@ -39,17 +40,20 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private Data $helper;
     private MessageManager $messageManager;
     private MenuServiceInterface $menuService;
+    private BackendWebAuthService $backendWebAuthService;
 
     public function __construct(
-        BackendUser    $adminUser,
-        MessageManager $messageManager,
-        Data           $helper,
-        MenuService    $menuService
+        BackendUser           $adminUser,
+        MessageManager        $messageManager,
+        Data                  $helper,
+        MenuService           $menuService,
+        BackendWebAuthService $backendWebAuthService
     ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
         $this->menuService = $menuService;
+        $this->backendWebAuthService = $backendWebAuthService;
     }
 
     public function index()
@@ -236,6 +240,49 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         $storedPassword = $adminUsernameUser->getPassword();
         $passwordVerifyResult = $storedPassword && password_verify($password, $storedPassword);
         if ($passwordVerifyResult) {
+            try {
+                $result = $this->backendWebAuthService->beginLoginForBackendUser(
+                    $adminUsernameUser,
+                    'password',
+                    (bool) $this->request->getParam('remember'),
+                    ''
+                );
+            } catch (\Throwable $throwable) {
+                w_auth_log('login_post_exception', 'Backend web auth failed during password login', [
+                    'user_id' => $adminUsernameUser->getId(),
+                    'message' => $throwable->getMessage(),
+                    'session' => $this->getSessionDataForLog()
+                ]);
+                MessageManager::error($throwable->getMessage());
+                $this->redirect($this->_url->getBackendUrl('/admin/login'));
+                return;
+            }
+
+            if (($result['status'] ?? '') === 'challenge_required') {
+                $challengeToken = (string) ($result['challenge_token'] ?? '');
+                w_auth_log('login_post_challenge_required', 'Backend login requires two-factor verification', [
+                    'user_id' => $adminUsernameUser->getId(),
+                    'challenge_token' => $challengeToken,
+                    'session' => $this->getSessionDataForLog()
+                ]);
+                $this->getMessageManager()->addNotice(__('Please complete two-factor verification to finish sign in.'));
+                $this->redirect($this->_url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
+                    'challenge_token' => $challengeToken,
+                ]));
+                return;
+            }
+
+            $redirectUrl = (string) ($result['redirect_url'] ?? '');
+            if ($redirectUrl === '') {
+                $redirectUrl = $this->getBackendUrlSameOrigin($this->resolveDefaultRedirectTarget($adminUsernameUser));
+            }
+            w_auth_log('login_post_redirect', 'Backend login authenticated and redirecting', [
+                'user_id' => $adminUsernameUser->getId(),
+                'target_url' => $redirectUrl,
+                'session' => $this->getSessionDataForLog()
+            ]);
+            $this->redirect($redirectUrl);
+            return;
             # SESSION登录用户
             try {
                 // 确保session已启动
