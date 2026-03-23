@@ -11,6 +11,161 @@ use Weline\Framework\Http\Request;
 
 class AuthControllerTest extends TestCase
 {
+    public function testPostTokenUsesPasswordGrantWithFrontendDefaults(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->once())
+            ->method('issuePasswordToken')
+            ->with('frontend', 'buyer@example.com', 'secret-123')
+            ->willReturn([
+                'status' => 'authenticated',
+                'actor_type' => 'customer',
+                'access_token' => 'access-token-1',
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                'grant_type' => 'password',
+                'email' => 'buyer@example.com',
+                'password' => 'secret-123',
+                default => null,
+            };
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('success')
+            ->with(
+                $this->stringContains('Authentication succeeded'),
+                $this->callback(static fn (array $data): bool => ($data['access_token'] ?? '') === 'access-token-1')
+            )
+            ->willReturn('token-password-ok');
+        $controller->expects($this->never())->method('exception');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('token-password-ok', $controller->postToken());
+    }
+
+    public function testPostTokenUsesGoogleCodeGrant(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->once())
+            ->method('issueGoogleCodeToken')
+            ->with('backend', 'google-code-1')
+            ->willReturn([
+                'status' => 'challenge_required',
+                'actor_type' => 'backend',
+                'challenge_token' => 'challenge-1',
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                'grant_type' => 'google_code',
+                'area' => 'backend',
+                'code' => 'google-code-1',
+                default => null,
+            };
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('success')
+            ->with(
+                $this->stringContains('Authentication succeeded'),
+                $this->callback(static fn (array $data): bool => ($data['challenge_token'] ?? '') === 'challenge-1')
+            )
+            ->willReturn('token-google-ok');
+        $controller->expects($this->never())->method('exception');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('token-google-ok', $controller->postToken());
+    }
+
+    public function testPostTokenUsesApiCredentialsGrant(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->once())
+            ->method('issueApiCredentialsToken')
+            ->with('api-key-1', 'api-secret-1')
+            ->willReturn([
+                'status' => 'authenticated',
+                'actor_type' => 'integration',
+                'access_token' => 'access-token-api',
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                'grant_type' => 'api_credentials',
+                'api_key' => 'api-key-1',
+                'api_secret' => 'api-secret-1',
+                default => null,
+            };
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('success')
+            ->with(
+                $this->stringContains('Authentication succeeded'),
+                $this->callback(static fn (array $data): bool => ($data['actor_type'] ?? '') === 'integration')
+            )
+            ->willReturn('token-api-ok');
+        $controller->expects($this->never())->method('exception');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('token-api-ok', $controller->postToken());
+    }
+
+    public function testPostTokenRejectsUnsupportedGrantType(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->never())->method('issuePasswordToken');
+        $authGrantService->expects($this->never())->method('issueGoogleCodeToken');
+        $authGrantService->expects($this->never())->method('refreshToken');
+        $authGrantService->expects($this->never())->method('issueApiCredentialsToken');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return $key === 'grant_type' ? 'magic' : null;
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->never())->method('success');
+        $controller->expects($this->once())
+            ->method('exception')
+            ->with(
+                $this->callback(static fn (\Throwable $throwable): bool => $throwable instanceof \InvalidArgumentException),
+                $this->stringContains('Authentication failed')
+            )
+            ->willReturn('token-error');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('token-error', $controller->postToken());
+    }
+
     public function testPostRefreshUsesRefreshGrantWithoutGrantType(): void
     {
         $authGrantService = $this->createMock(AuthGrantService::class);
@@ -161,6 +316,72 @@ class AuthControllerTest extends TestCase
         $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('logout-ok', $controller->postLogout());
+    }
+
+    public function testPostExchangeRequiresChallengeTokenAndCode(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->never())->method('verifyChallenge');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturn(null);
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->never())->method('success');
+        $controller->expects($this->once())
+            ->method('exception')
+            ->with(
+                $this->callback(static fn (\Throwable $throwable): bool => $throwable instanceof \InvalidArgumentException),
+                $this->stringContains('Challenge verification failed')
+            )
+            ->willReturn('exchange-error');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('exchange-error', $controller->postExchange());
+    }
+
+    public function testPostExchangeUsesChallengeGrantService(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->once())
+            ->method('verifyChallenge')
+            ->with('challenge-token-1', '123456')
+            ->willReturn([
+                'status' => 'authenticated',
+                'access_token' => 'access-token-1',
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                'challenge_token' => 'challenge-token-1',
+                'code' => '123456',
+                default => null,
+            };
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('success')
+            ->with(
+                $this->stringContains('Challenge verification succeeded'),
+                $this->callback(static fn (array $data): bool => ($data['access_token'] ?? '') === 'access-token-1')
+            )
+            ->willReturn('exchange-ok');
+        $controller->expects($this->never())->method('exception');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('exchange-ok', $controller->postExchange());
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void
