@@ -121,6 +121,35 @@ class ContactService
     }
 
     /**
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    public function getUserContactsGrouped(int $userId): array
+    {
+        $contacts = $this->getContactsByUser($userId);
+        $grouped = [];
+
+        foreach ($contacts as $contact) {
+            $config = $contact[Contact::schema_fields_channel_config] ?? '';
+            $decoded = is_string($config) ? json_decode($config, true) : $config;
+            $channelConfig = is_array($decoded) ? $decoded : [];
+
+            foreach ($channelConfig as $channelCode => $channelSettings) {
+                if (!is_array($channelSettings)) {
+                    continue;
+                }
+
+                $grouped[$channelCode][] = [
+                    'contact_id' => (int) ($contact[Contact::schema_fields_ID] ?? 0),
+                    'contact_name' => (string) ($contact[Contact::schema_fields_contact_name] ?? ''),
+                    'config' => $channelSettings,
+                ];
+            }
+        }
+
+        return $grouped;
+    }
+
+    /**
      * 根据渠道获取用于发送通知的联系人列表
      * 返回该用户下「在该渠道有配置且启用」的联系人；每条含 contact_id、contact_name 及该渠道的 config，供 adapter->send($notification, $config) 使用。
      *
