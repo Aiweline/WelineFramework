@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /*
- * 建站智能体 - 通过 Weline_Ai Agent 扩展点实现
+ * AI 建站工作台 - 通过 Weline_Ai Agent 扩展点实现
  *
  * 根据用户描述理解需求，推荐域名，自动完成：购买域名 → DNS 解析 → HTTPS → 创建站点
  * 智能体识别与理解由 AI 模块完成
@@ -33,7 +33,7 @@ class WebsiteBuilderAgent implements AgentInterface
 
     public function getName(): string
     {
-        return __('建站智能体');
+        return __('AI 建站工作台');
     }
 
     public function getDescription(): string
@@ -71,7 +71,7 @@ class WebsiteBuilderAgent implements AgentInterface
             : "\n当前上下文：若用户未指定账号，请先调用 get_registrar_accounts 获取可用账号，选一个 account_id 再执行后续操作。";
 
         return <<<PROMPT
-你是一个建站智能体，负责根据用户描述理解需求，推荐域名，并执行一站式建站：购买域名 → DNS 解析 → HTTPS → 创建站点。
+你是 AI 建站工作台中的建站助手，负责根据用户描述理解需求，推荐域名，并执行一站式建站：购买域名 → DNS 解析 → HTTPS → 创建站点。
 
 ## 工作流程
 

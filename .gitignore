@@ -46,6 +46,8 @@ weline-async.json
 .playwright-mcp/
 
 # 临时文件和调试文件
+# 根目录脚本/抓包产生的 tmp- 前缀文件（勿提交）
+/tmp-*
 temp_*.json
 temp_*.txt
 temp_*.php
@@ -67,5 +69,13 @@ tests/**/pnpm-lock.yaml
 # Tests 生成的文件
 tests/e2e/modules.json
 
-# Tests 生成的文件
+# Tests / 验证过程产物（不入库）
 test-results.xml
+/test-results/
+tests/e2e/playwright-report/
+tests/e2e/test-results/
+tests/e2e/collected-tests.json
+tests/e2e/*-debug.png
+
+# Codex 任务过程产物
+dev/ai/codex/tasks/**/artifacts/*

@@ -435,6 +435,8 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 "- backend OK: %{1}\n","- backend OK: %{1}\n"
 "%{1} [backend] 生成失败：%{2}","%{1} [backend] 生成失败：%{2}"
 "- backend ERROR\n","- backend ERROR\n"
+"No available frontend theme. Please activate or select one first.","No available frontend theme. Please activate or select one first."
+"Selected backend theme is unavailable, fallback to the active backend theme.","Selected backend theme is unavailable, fallback to the active backend theme."
 "主题 ID %{1} 不存在！请选择有效的主题。","主题 ID %{1} 不存在！请选择有效的主题。"
 系统没有激活的主题！请先选择或激活一个主题。,系统没有激活的主题！请先选择或激活一个主题。
 无法加载主题！请检查主题配置。,无法加载主题！请检查主题配置。
@@ -466,6 +468,8 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 该部件没有配置项,该部件没有配置项
 配置数据格式错误,配置数据格式错误
 "已保存 %{locale} 语言的配置","已保存 %{locale} 语言的配置"
+"Missing theme ID","Missing theme ID"
+"Theme not found","Theme not found"
 "已保存为 %{name}","已保存为 %{name}"
 已切换到选定版本,已切换到选定版本
 切换版本失败,切换版本失败
@@ -478,10 +482,20 @@ AI翻译服务调用失败：%{1},AI翻译服务调用失败：%{1}
 无法删除当前版本或已发布版本,无法删除当前版本或已发布版本
 版本已重命名,版本已重命名
 重命名失败,重命名失败
+缂哄皯鍓嶇涓婚ID,缂哄皯鍓嶇涓婚ID
+"Preview started","Preview started"
+"Missing navigation target","Missing navigation target"
 预览已启动,预览已启动
+"Missing preview token","Missing preview token"
+"Preview exited","Preview exited"
+"Failed to exit preview","Failed to exit preview"
 "缺少预览 Token","缺少预览 Token"
 已退出预览模式,已退出预览模式
 退出预览失败,退出预览失败
+"Preview token is invalid or expired","Preview token is invalid or expired"
+"Preview token is missing theme information","Preview token is missing theme information"
+"Failed to publish layout","Failed to publish layout"
+"Theme published","Theme published"
 "预览 Token 已过期或无效","预览 Token 已过期或无效"
 "Token 中缺少主题信息","Token 中缺少主题信息"
 已释放编辑锁定,已释放编辑锁定
@@ -847,10 +861,13 @@ CMS页面,CMS页面
 容器部件,容器部件
 基础部件,基础部件
 主题旧部件,主题旧部件
-生成主题预览图失败：%{1},生成主题预览图失败：%{1}
-无法创建预览图片目录：%{1},无法创建预览图片目录：%{1}
-"未找到 Chrome/Chromium 浏览器","未找到 Chrome/Chromium 浏览器"
-浏览器截图失败，返回码：%{1}，错误：%{2},浏览器截图失败，返回码：%{1}，错误：%{2}
+鐢熸垚涓婚棰勮鍥惧け璐ワ細%{1},鐢熸垚涓婚棰勮鍥惧け璐ワ細%{1}
+"Unable to create preview image directory: %{1}","Unable to create preview image directory: %{1}"
+"Chrome or Chromium browser was not found.","Chrome or Chromium browser was not found."
+"Browser screenshot timed out after %{1} seconds. URL: %{2}","Browser screenshot timed out after %{1} seconds. URL: %{2}"
+"Browser screenshot failed. Exit code: %{1}. Output: %{2}","Browser screenshot failed. Exit code: %{1}. Output: %{2}"
+"`proc_open` is required to run the screenshot command safely.","`proc_open` is required to run the screenshot command safely."
+"Unable to start the Chrome screenshot process.","Unable to start the Chrome screenshot process."
 请选择,请选择
 暂无数据,暂无数据
 加载中...,加载中...

@@ -560,6 +560,25 @@ PageBuilder网站管理,PageBuilder网站管理
 "按 page_id 清除该页 URL 重写、router 统一缓存并通知 WLS；不传 page_id 时全量清理","按 page_id 清除该页 URL 重写、router 统一缓存并通知 WLS；不传 page_id 时全量清理"
 "PageBuilder 页面构建器 Sitemap 生成器，为所有站点的已发布页面生成 sitemap.xml","PageBuilder 页面构建器 Sitemap 生成器，为所有站点的已发布页面生成 sitemap.xml"
 "PageBuilder 页面构建器 Sitemap URL 提供者，为所有站点的已发布页面提供 URL 数据","PageBuilder 页面构建器 Sitemap URL 提供者，为所有站点的已发布页面提供 URL 数据"
+"PageBuilder 分阶段工作台","PageBuilder 分阶段工作台"
+"适合需要会话恢复、阶段推进、页面预览、主题绑定与发布前检查的 AI 建站任务。","适合需要会话恢复、阶段推进、页面预览、主题绑定与发布前检查的 AI 建站任务。"
+"打开 PageBuilder 工作台","打开 PageBuilder 工作台"
+"进入 PageBuilder 原生 AI 建站工作台，继续旧版精修流程。","进入 PageBuilder 原生 AI 建站工作台，继续旧版精修流程。"
+"打开 QuickBuild 向导","打开 QuickBuild 向导"
+"直接进入 PageBuilder 的站点初始化向导。","直接进入 PageBuilder 的站点初始化向导。"
+管理域名,管理域名
+"查看或处理 PageBuilder 侧的域名相关任务。","查看或处理 PageBuilder 侧的域名相关任务。"
+管理站点,管理站点
+"跳到 PageBuilder 的站点管理列表。","跳到 PageBuilder 的站点管理列表。"
+打开页面列表,打开页面列表
+"进入 PageBuilder 页面管理界面。","进入 PageBuilder 页面管理界面。"
+切到可视精修,切到可视精修
+"把工作区切到 PageBuilder 更擅长的可视化编辑阶段。","把工作区切到 PageBuilder 更擅长的可视化编辑阶段。"
+扩展流程,扩展流程
+进入分阶段工作台,进入分阶段工作台
+创建兼容工作区,创建兼容工作区
+"继续到 PageBuilder 旧工作台","继续到 PageBuilder 旧工作台"
+"已为你创建一个兼容 PageBuilder 的 AI 建站工作区。你可以先在这里整理需求、阶段与 scope，再切换到 PageBuilder 的原生精修工作台。","已为你创建一个兼容 PageBuilder 的 AI 建站工作区。你可以先在这里整理需求、阶段与 scope，再切换到 PageBuilder 的原生精修工作台。"
 头部组件,头部组件
 底部组件,底部组件
 内容组件,内容组件
@@ -627,8 +646,9 @@ Contact,Contact
 Terms,Terms
 "Privacy Policy","Privacy Policy"
 域名不能为空,域名不能为空
+"返回 Websites 总工作台","返回 Websites 总工作台"
 说明,说明
-"本工作台使用 PageBuilder 持久化会话（scope、阶段、站点与虚拟主题关联）。域名购买与一键建站仍可使用「建站智能体」或「新建站点」向导；此处聚焦可恢复的 AI 建站流水线。","本工作台使用 PageBuilder 持久化会话（scope、阶段、站点与虚拟主题关联）。域名购买与一键建站仍可使用「建站智能体」或「新建站点」向导；此处聚焦可恢复的 AI 建站流水线。"
+"本工作台使用 PageBuilder 持久化会话（scope、阶段、站点与虚拟主题关联）。域名购买与一键建站仍可使用「AI 建站工作台」或「新建站点」向导；此处聚焦可恢复的 AI 建站流水线。","本工作台使用 PageBuilder 持久化会话（scope、阶段、站点与虚拟主题关联）。域名购买与一键建站仍可使用「AI 建站工作台」或「新建站点」向导；此处聚焦可恢复的 AI 建站流水线。"
 新建会话,新建会话
 创建后将跳转到工作台，可在后续迭代中接入简报、域名与虚拟主题步骤。,创建后将跳转到工作台，可在后续迭代中接入简报、域名与虚拟主题步骤。
 创建会话,创建会话
@@ -665,7 +685,6 @@ Terms,Terms
 备注,备注
 查询域名状态,查询域名状态
 快速建站向导,快速建站向导
-建站智能体,建站智能体
 等待域名就绪,等待域名就绪
 "DNS 与证书生效可能需要数分钟至数小时。可开启右侧 SSE 监听后续事件，或前往域名管理查看状态。","DNS 与证书生效可能需要数分钟至数小时。可开启右侧 SSE 监听后续事件，或前往域名管理查看状态。"
 刷新域名状态,刷新域名状态
@@ -2465,6 +2484,7 @@ SEO账户绑定,SEO账户绑定
 切换语言：,切换语言：
 "⚠️ 表示该语言版本尚未翻译","⚠️ 表示该语言版本尚未翻译"
 保留所有权利。,保留所有权利。
+"No blog posts have been published for this site yet.","No blog posts have been published for this site yet."
 "Please add content to this page via the page editor or configure the component.","Please add content to this page via the page editor or configure the component."
 "Last updated","Last updated"
 菜单,菜单
