@@ -1,0 +1,223 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$postUrl = (string) ($this->getData('post_url') ?? '');
+$accountUrl = (string) ($this->getData('account_url') ?? '');
+$isEnabled = (bool) ($this->getData('is_enabled') ?? false);
+$config = (array) ($this->getData('config') ?? []);
+$setup = (array) ($this->getData('setup') ?? []);
+$flashBackupCodes = (array) ($this->getData('flash_backup_codes') ?? []);
+$flowStatus = (array) ($this->getData('flow_status') ?? []);
+$backupCodes = $flashBackupCodes ?: (array) ($setup['backup_codes'] ?? []);
+$passwordFlowEnabled = (bool) ($flowStatus['password'] ?? false);
+$googleFlowEnabled = (bool) ($flowStatus['google'] ?? false);
+?>
+<main class="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+            <div class="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-8 sm:p-10">
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Account Security') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Two-Factor Authentication') ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Add an authenticator app to your storefront login. You can then confirm sign-ins with a time-based code and keep one-time backup codes as recovery access.') ?>
+                </p>
+
+                <div class="mt-8 flex flex-wrap gap-3 text-sm">
+                    <a href="<?= htmlspecialchars($accountUrl, ENT_QUOTES) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Back to My Account') ?>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-1 lg:border-l lg:border-border-light dark:lg:border-border-dark">
+                <div class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Status') ?></p>
+                    <p class="mt-2 text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                        <?= $isEnabled ? __('Enabled') : __('Not Enabled Yet') ?>
+                    </p>
+                </div>
+                <div class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Sign-In Challenges') ?></p>
+                    <p class="mt-2 text-sm font-semibold text-text-primary-light dark:text-text-primary-dark">
+                        <?= __('Password') ?>: <?= $passwordFlowEnabled ? __('Enabled') : __('Disabled by default') ?><br>
+                        <?= __('Google') ?>: <?= $googleFlowEnabled ? __('Enabled') : __('Disabled by default') ?>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <?php if ($flashBackupCodes): ?>
+        <section class="rounded-3xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+            <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-3xl text-amber-600">warning</span>
+                <div>
+                    <h2 class="text-xl font-bold text-amber-950"><?= __('New Backup Codes') ?></h2>
+                    <p class="mt-2 text-sm leading-6 text-amber-900">
+                        <?= __('These codes replaced the previous set. Save them now. Each backup code can be used only once.') ?>
+                    </p>
+                    <div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                        <?php foreach ($flashBackupCodes as $backupCode): ?>
+                            <code class="rounded-2xl bg-white px-4 py-3 text-center text-sm font-semibold text-amber-950 shadow-sm"><?= htmlspecialchars((string) $backupCode, ENT_QUOTES) ?></code>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <?php if (!$passwordFlowEnabled || !$googleFlowEnabled): ?>
+        <section class="rounded-3xl border border-sky-200 bg-sky-50 p-6 shadow-sm">
+            <div class="flex items-start gap-3">
+                <span class="material-symbols-outlined text-3xl text-sky-600">info</span>
+                <div>
+                    <h2 class="text-xl font-bold text-sky-950"><?= __('Challenge Policy Reminder') ?></h2>
+                    <p class="mt-2 text-sm leading-6 text-sky-900">
+                        <?= __('Your authenticator can be configured before the storefront challenge policy is turned on. Login enforcement stays off by default until the relevant password or Google flow is enabled in configuration.') ?>
+                    </p>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <?php if ($isEnabled): ?>
+        <section class="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+            <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Protection Summary') ?></p>
+                        <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Current Configuration') ?></h2>
+                    </div>
+                    <span class="material-symbols-outlined text-4xl text-primary">shield_lock</span>
+                </div>
+
+                <dl class="mt-6 space-y-4 text-sm">
+                    <div class="flex items-start justify-between gap-4">
+                        <dt class="font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Created At') ?></dt>
+                        <dd class="text-right font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($config['created_at'] ?? __('Unknown')), ENT_QUOTES) ?></dd>
+                    </div>
+                    <div class="flex items-start justify-between gap-4">
+                        <dt class="font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Last Used At') ?></dt>
+                        <dd class="text-right font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) (($config['last_used_at'] ?? '') ?: __('Never')), ENT_QUOTES) ?></dd>
+                    </div>
+                    <div class="flex items-start justify-between gap-4">
+                        <dt class="font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Remaining Backup Codes') ?></dt>
+                        <dd class="text-right font-semibold text-text-primary-light dark:text-text-primary-dark"><?= (int) ($config['backup_codes_count'] ?? 0) ?></dd>
+                    </div>
+                </dl>
+            </article>
+
+            <div class="grid gap-6">
+                <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Backup Codes') ?></p>
+                            <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Regenerate Recovery Codes') ?></h2>
+                        </div>
+                        <span class="material-symbols-outlined text-4xl text-primary">key</span>
+                    </div>
+                    <p class="mt-4 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Generating a new set immediately invalidates the old backup codes. Confirm with the latest authenticator code before rotating them.') ?>
+                    </p>
+                    <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="mt-6 space-y-4">
+                        <?= $this->getFormKey($postUrl) ?>
+                        <input type="hidden" name="form_action" value="regenerate_backup_codes">
+                        <label class="block">
+                            <span class="mb-2 block text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Authenticator Code') ?></span>
+                            <input type="text" name="code" autocomplete="one-time-code" class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-text-primary-light outline-none transition focus:border-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                        </label>
+                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                            <?= __('Generate New Backup Codes') ?>
+                        </button>
+                    </form>
+                </article>
+
+                <article class="rounded-3xl border border-red-200 bg-red-50 p-6 shadow-sm">
+                    <div class="flex items-start justify-between gap-4">
+                        <div>
+                            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-red-700"><?= __('Disable 2FA') ?></p>
+                            <h2 class="mt-2 text-2xl font-bold text-red-950"><?= __('Turn Off Extra Verification') ?></h2>
+                        </div>
+                        <span class="material-symbols-outlined text-4xl text-red-600">gpp_maybe</span>
+                    </div>
+                    <p class="mt-4 text-sm leading-6 text-red-900">
+                        <?= __('Disabling two-factor authentication removes the second verification step for future storefront sign-ins. Use this only if you are rotating to another device or method.') ?>
+                    </p>
+                    <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="mt-6 space-y-4">
+                        <?= $this->getFormKey($postUrl) ?>
+                        <input type="hidden" name="form_action" value="disable">
+                        <label class="block">
+                            <span class="mb-2 block text-sm font-semibold text-red-950"><?= __('Authenticator Code') ?></span>
+                            <input type="text" name="code" autocomplete="one-time-code" class="w-full rounded-2xl border border-red-200 bg-white px-4 py-3 text-red-950 outline-none transition focus:border-red-500" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                        </label>
+                        <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-700">
+                            <?= __('Disable Two-Factor Authentication') ?>
+                        </button>
+                    </form>
+                </article>
+            </div>
+        </section>
+    <?php else: ?>
+        <section class="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
+            <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Step 1') ?></p>
+                        <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Scan the QR Code') ?></h2>
+                    </div>
+                    <span class="material-symbols-outlined text-4xl text-primary">qr_code_2</span>
+                </div>
+
+                <div class="mt-6 flex flex-col gap-6 sm:flex-row">
+                    <div class="flex h-56 w-56 items-center justify-center rounded-3xl border border-border-light bg-white p-4 shadow-sm dark:border-border-dark">
+                        <img src="<?= htmlspecialchars((string) ($setup['qr_code_url'] ?? ''), ENT_QUOTES) ?>" alt="<?= __('Two-factor QR code') ?>" class="h-full w-full object-contain">
+                    </div>
+                    <div class="flex-1 space-y-4">
+                        <p class="text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                            <?= __('Open Google Authenticator, Microsoft Authenticator, 1Password, or another TOTP-compatible app and scan this code.') ?>
+                        </p>
+                        <div class="rounded-2xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark">
+                            <p class="text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Manual Setup Secret') ?></p>
+                            <code class="mt-2 block break-all text-sm text-primary"><?= htmlspecialchars((string) ($setup['formatted_secret'] ?? ''), ENT_QUOTES) ?></code>
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Step 2') ?></p>
+                        <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Confirm and Save Backup Codes') ?></h2>
+                    </div>
+                    <span class="material-symbols-outlined text-4xl text-primary">key</span>
+                </div>
+
+                <p class="mt-4 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Enter the current 6-digit authenticator code and keep these backup codes somewhere safe. Each backup code works only once.') ?>
+                </p>
+
+                <div class="mt-6 grid gap-2 sm:grid-cols-2">
+                    <?php foreach ($backupCodes as $backupCode): ?>
+                        <code class="rounded-2xl border border-border-light bg-background-light px-4 py-3 text-center text-sm font-semibold text-text-primary-light dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark"><?= htmlspecialchars((string) $backupCode, ENT_QUOTES) ?></code>
+                    <?php endforeach; ?>
+                </div>
+
+                <form action="<?= htmlspecialchars($postUrl, ENT_QUOTES) ?>" method="post" class="mt-6 space-y-4">
+                    <?= $this->getFormKey($postUrl) ?>
+                    <input type="hidden" name="form_action" value="enable">
+                    <input type="hidden" name="secret" value="<?= htmlspecialchars((string) ($setup['secret'] ?? ''), ENT_QUOTES) ?>">
+                    <input type="hidden" name="backup_codes" value='<?= htmlspecialchars(json_encode($backupCodes, JSON_UNESCAPED_UNICODE), ENT_QUOTES) ?>'>
+
+                    <label class="block">
+                        <span class="mb-2 block text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= __('Authenticator Code') ?></span>
+                        <input type="text" name="code" autocomplete="one-time-code" class="w-full rounded-2xl border border-border-light bg-background-light px-4 py-3 text-text-primary-light outline-none transition focus:border-primary dark:border-border-dark dark:bg-background-dark dark:text-text-primary-dark" placeholder="<?= __('Enter the current 6-digit code') ?>">
+                    </label>
+
+                    <button type="submit" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Enable Two-Factor Authentication') ?>
+                    </button>
+                </form>
+            </article>
+        </section>
+    <?php endif; ?>
+</main>

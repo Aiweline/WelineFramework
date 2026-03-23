@@ -1,0 +1,54 @@
+<?php
+/**
+ * WeShop storefront two-factor security card.
+ *
+ * @hook-priority 210
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+$customerContext = w_obj(\WeShop\Customer\Service\CustomerContext::class);
+$twoFactorAccountService = w_obj(\WeShop\Auth\Service\TwoFactorAccountService::class);
+$url = w_obj(\Weline\Framework\Http\Url::class);
+
+$userId = (int) ($customerContext->getUserId() ?? 0);
+$isEnabled = $userId > 0 && $twoFactorAccountService->isEnabled(\WeShop\Auth\Data\ActorContext::ACTOR_CUSTOMER, $userId);
+$flowStatus = $twoFactorAccountService->getFlowStatus('frontend');
+$manageUrl = $url->getFrontendUrl('weshop/frontend/auth/two-factor');
+?>
+<article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Two-Factor Security') ?></p>
+            <h3 class="mt-2 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Authenticator App') ?></h3>
+            <p class="mt-2 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                <?= __('Protect this storefront account with an authenticator app and one-time backup codes that can be used when your device is unavailable.') ?>
+            </p>
+        </div>
+        <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined text-3xl"><?= $isEnabled ? 'shield_lock' : 'shield' ?></span>
+        </div>
+    </div>
+
+    <div class="mt-6 rounded-2xl border px-4 py-4 text-sm leading-6 <?= $isEnabled ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-border-light bg-background-light text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark' ?>">
+        <?php if ($isEnabled): ?>
+            <strong><?= __('Two-factor authentication is enabled for this storefront account.') ?></strong>
+            <p class="mt-1"><?= __('Future password and Google sign-in flows will require a second step whenever the storefront challenge policy is turned on.') ?></p>
+        <?php else: ?>
+            <strong><?= __('Two-factor authentication is currently disabled.') ?></strong>
+            <p class="mt-1"><?= __('Set it up now so the storefront account is ready before stricter sign-in policies are enabled.') ?></p>
+        <?php endif; ?>
+    </div>
+
+    <div class="mt-4 rounded-2xl border border-border-light bg-background-light px-4 py-4 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+        <p><strong><?= __('Storefront challenge policy') ?>:</strong></p>
+        <p class="mt-2"><?= __('Password login') ?>: <?= $flowStatus['password'] ? __('Enabled') : __('Disabled by default') ?></p>
+        <p><?= __('Google login') ?>: <?= $flowStatus['google'] ? __('Enabled') : __('Disabled by default') ?></p>
+    </div>
+
+    <div class="mt-6">
+        <a href="<?= htmlspecialchars($manageUrl, ENT_QUOTES) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary/90">
+            <?= $isEnabled ? __('Manage Two-Factor Authentication') : __('Set Up Two-Factor Authentication') ?>
+        </a>
+    </div>
+</article>
