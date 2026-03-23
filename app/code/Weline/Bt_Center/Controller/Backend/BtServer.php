@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Bt_Center\Controller\Backend;
+namespace Weline\Bt\Center\Controller\Backend;
 
 use Weline\Bt_Center\Model\BtServer as BtServerModel;
 use Weline\Framework\Acl\Acl as AclAttribute;
@@ -55,6 +55,9 @@ class BtServer extends BackendController
         $this->assign('keyword', $keyword);
         $this->assign('platformOptions', BtServerModel::getPlatformOptions());
         $this->assign('healthStatusOptions', BtServerModel::getHealthStatusOptions());
+        $this->assign('page_title', __('BT 服务器管理'));
+        $this->assign('breadcrumb_parent', __('BT 管理中心'));
+        $this->assign('breadcrumb_current', __('服务器管理'));
 
         return $this->fetch();
     }
@@ -69,13 +72,16 @@ class BtServer extends BackendController
             $server->load($id);
             if (!$server->getId()) {
                 Message::error(__('服务器不存在'));
-                return $this->redirect('*/backend/bt_server/index') ?? '';
+                return $this->redirect('*/backend/bt-server') ?? '';
             }
         }
 
         $this->assign('server', $server);
         $this->assign('platformOptions', BtServerModel::getPlatformOptions());
         $this->assign('healthStatusOptions', BtServerModel::getHealthStatusOptions());
+        $this->assign('page_title', $id > 0 ? __('编辑 BT 服务器') : __('新增 BT 服务器'));
+        $this->assign('breadcrumb_parent', __('BT 管理中心'));
+        $this->assign('breadcrumb_current', __('服务器管理'));
 
         return $this->fetch();
     }
@@ -166,7 +172,7 @@ class BtServer extends BackendController
     }
 
     #[AclAttribute('Weline_Bt_Center::bt_server_delete', '删除服务器', 'mdi-delete', '删除 BT 服务器')]
-    public function delete(): string
+    public function postDelete(): string
     {
         if (!$this->request->isPost()) {
             return $this->jsonResponse([
@@ -212,4 +218,8 @@ class BtServer extends BackendController
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return (string) json_encode($data, JSON_UNESCAPED_UNICODE);
     }
+}
+
+if (!class_exists('Weline\\Bt_Center\\Controller\\Backend\\BtServer', false)) {
+    class_alias(BtServer::class, 'Weline\\Bt_Center\\Controller\\Backend\\BtServer');
 }
