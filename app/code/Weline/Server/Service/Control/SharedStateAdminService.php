@@ -308,7 +308,10 @@ class SharedStateAdminService
 
     private function getEndpointConfig(string $role): array
     {
+        $registry = new \Weline\Server\Service\SharedStateServiceRegistry();
+
         if ($role === self::ROLE_MEMORY) {
+            $record = $registry->getRecord('memory_server');
             $host = (string)(Env::get('wls.memory_service.host') ?? '127.0.0.1');
             $host = \trim($host);
             if ($host === '') {
@@ -316,11 +319,13 @@ class SharedStateAdminService
             }
             $port = (int)(Env::get('wls.memory_service.port') ?? 19971);
             return [
-                'host' => $host,
-                'port' => $port > 0 ? $port : 19971,
-                'token_file_name' => 'memory_server.token',
+                'host' => (string) ($record['host'] ?? ($host !== '' ? $host : '127.0.0.1')),
+                'port' => (int) ($record['port'] ?? ($port > 0 ? $port : 19971)),
+                'token_file_name' => (string) ($record['token_file_name'] ?? 'memory_server.token'),
             ];
         }
+
+        $record = $registry->getRecord('session_server');
         $host = (string)(Env::get('session.server_host') ?? '127.0.0.1');
         $host = \trim($host);
         if ($host === '') {
@@ -328,9 +333,9 @@ class SharedStateAdminService
         }
         $port = (int)(Env::get('session.server_port') ?? 19970);
         return [
-            'host' => $host,
-            'port' => $port > 0 ? $port : 19970,
-            'token_file_name' => 'session_server.token',
+            'host' => (string) ($record['host'] ?? ($host !== '' ? $host : '127.0.0.1')),
+            'port' => (int) ($record['port'] ?? ($port > 0 ? $port : 19970)),
+            'token_file_name' => (string) ($record['token_file_name'] ?? 'session_server.token'),
         ];
     }
 

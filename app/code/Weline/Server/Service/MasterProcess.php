@@ -194,12 +194,12 @@ class MasterProcess
         $this->sslKey = $sslKey;
         $this->sslEnabled = $sslEnabled;
         $this->frontend = $frontend;
+        $this->logger->setProcessTag('Master@' . $instanceName);
 
         // 前台模式或开发模式：启用 Logger 控制台输出并保证写入日志文件
         if ($frontend || \Weline\Server\Log\LogConfig::isDevMode()) {
             $this->logger->setStdoutEnabled(true);
             $this->logger->setFileEnabled(true);
-            $this->logger->setProcessTag('Master');
         }
 
         $this->log('========================================');
@@ -1006,7 +1006,7 @@ class MasterProcess
      */
     protected function log(string $message, string $level = 'info'): void
     {
-        $formatted = "[Master] {$message}";
+        $formatted = "[Master@" . ($this->instanceName !== '' ? $this->instanceName : 'unknown') . "] {$message}";
 
         switch ($level) {
             case 'error':

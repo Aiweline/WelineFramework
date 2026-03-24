@@ -91,6 +91,7 @@ class ServiceOrchestratorStartupTest extends TestCase
                     'role' => $role,
                     'token_file_name' => $expectedTokenFileName,
                     'process_name' => 'weline-wls-session-owner',
+                    'instance_name' => 'shared-session-19970',
                 ];
             }
         };
@@ -138,10 +139,12 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(5678, $instance->pid);
         self::assertTrue((bool) $instance->getMeta('shared_external'));
         self::assertSame('weline-wls-session-owner', $instance->getMeta('process_name'));
+        self::assertSame('shared-session-19970', $instance->getMeta('instance_name'));
 
         $registered = $orchestrator->getRegistry()->getInstance('session_server', 1);
         self::assertInstanceOf(ServiceInstance::class, $registered);
         self::assertTrue((bool) $registered->getMeta('shared_external'));
+        self::assertSame('shared-session-19970', $registered->getMeta('service_instance_name'));
     }
 
     private function invokePrivate(object $object, string $method): mixed
