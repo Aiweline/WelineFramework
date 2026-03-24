@@ -165,6 +165,50 @@ class ThemeCompatibilityServiceTest extends TestCase
         $this->assertSame([], $result['missing_hosts']);
     }
 
+    public function testInspectThemeAggregatesHostsAcrossLayoutAndPageTemplates(): void
+    {
+        $basePath = $this->tmpDir . DIRECTORY_SEPARATOR . 'child';
+        $layoutFile = $this->createLayoutFile(
+            $basePath,
+            'frontend/layouts/checkout/checkout_page_1.phtml',
+            '<w:hook>WeShop_Checkout::frontend::layouts::checkout::payment-content</w:hook>'
+        );
+        $pageFile = $this->createLayoutFile(
+            $basePath,
+            'frontend/pages/checkout/index.phtml',
+            '<w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>'
+        );
+
+        $theme = $this->createThemeMock(7, 'child-theme', $basePath);
+        $service = $this->createService([
+            'frontend' => [
+                'checkout' => [
+                    '_templates' => [
+                        ['kind' => 'layout'],
+                        ['kind' => 'page', 'path' => 'checkout/index.phtml'],
+                    ],
+                    'WeShop_Checkout' => [
+                        'hosts' => [
+                            ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::layouts::checkout::payment-content'],
+                            ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::partials::checkout::payment-methods'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->inspectTheme($theme, 'frontend', 'checkout', 'checkout_page_1');
+        $resolvedFiles = $result['layout_files'];
+        sort($resolvedFiles);
+        $expectedFiles = [$layoutFile, $pageFile];
+        sort($expectedFiles);
+
+        $this->assertFalse($result['has_missing_hosts']);
+        $this->assertSame($layoutFile, $result['layout_file']);
+        $this->assertSame($expectedFiles, $resolvedFiles);
+        $this->assertSame([], $result['missing_hosts']);
+    }
+
     public function testInjectPreviewBannerPrependsCompatibilityNotice(): void
     {
         $service = $this->createService([]);
