@@ -4,6 +4,10 @@ $statusOptions = (array) ($this->getData('status_options') ?? []);
 $currentStatus = (string) ($this->getData('current_status') ?? '');
 $total = (int) ($this->getData('total') ?? 0);
 $listUrl = (string) ($this->getData('list_url') ?? $this->getUrl('subscription'));
+$viewUrl = (string) ($this->getData('view_url') ?? $this->getUrl('subscription/view'));
+$pauseUrl = (string) ($this->getData('pause_url') ?? $this->getUrl('subscription/pause'));
+$resumeUrl = (string) ($this->getData('resume_url') ?? $this->getUrl('subscription/pause/resume'));
+$cancelUrl = (string) ($this->getData('cancel_url') ?? $this->getUrl('subscription/cancel'));
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
@@ -73,12 +77,12 @@ $listUrl = (string) ($this->getData('list_url') ?? $this->getUrl('subscription')
                         </div>
 
                         <div class="mt-5 flex flex-wrap gap-2">
-                            <a href="<?= $this->getUrl('subscription/view', ['id' => (int) ($item['subscription_id'] ?? 0)]) ?>" class="inline-flex items-center justify-center rounded-xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                            <a href="<?= $viewUrl ?>?id=<?= (int) ($item['subscription_id'] ?? 0) ?>" class="inline-flex items-center justify-center rounded-xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                                 <?= __('View Details') ?>
                             </a>
                             <?php if (!empty($item['can_pause'])): ?>
-                                <form method="post" action="<?= $this->getUrl('subscription/pause') ?>">
-                                    <?= $this->getFormKey($this->getUrl('subscription/pause')) ?>
+                                <form method="post" action="<?= $pauseUrl ?>">
+                                    <?= $this->getFormKey($pauseUrl) ?>
                                     <input type="hidden" name="id" value="<?= (int) ($item['subscription_id'] ?? 0) ?>">
                                     <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-600 transition hover:bg-amber-500 hover:text-white">
                                         <?= __('Pause') ?>
@@ -86,8 +90,8 @@ $listUrl = (string) ($this->getData('list_url') ?? $this->getUrl('subscription')
                                 </form>
                             <?php endif; ?>
                             <?php if (!empty($item['can_resume'])): ?>
-                                <form method="post" action="<?= $this->getUrl('subscription/pause/resume') ?>">
-                                    <?= $this->getFormKey($this->getUrl('subscription/pause/resume')) ?>
+                                <form method="post" action="<?= $resumeUrl ?>">
+                                    <?= $this->getFormKey($resumeUrl) ?>
                                     <input type="hidden" name="id" value="<?= (int) ($item['subscription_id'] ?? 0) ?>">
                                     <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-emerald-500/40 px-4 py-2 text-sm font-semibold text-emerald-600 transition hover:bg-emerald-500 hover:text-white">
                                         <?= __('Resume') ?>
@@ -95,8 +99,8 @@ $listUrl = (string) ($this->getData('list_url') ?? $this->getUrl('subscription')
                                 </form>
                             <?php endif; ?>
                             <?php if (!empty($item['can_cancel'])): ?>
-                                <form method="post" action="<?= $this->getUrl('subscription/cancel') ?>" class="flex items-center gap-2">
-                                    <?= $this->getFormKey($this->getUrl('subscription/cancel')) ?>
+                                <form method="post" action="<?= $cancelUrl ?>" class="flex items-center gap-2">
+                                    <?= $this->getFormKey($cancelUrl) ?>
                                     <input type="hidden" name="id" value="<?= (int) ($item['subscription_id'] ?? 0) ?>">
                                     <input type="text" name="reason" class="w-52 rounded-xl border border-border-light bg-surface-light px-3 py-2 text-sm dark:border-border-dark dark:bg-surface-dark" placeholder="<?= __('Cancellation reason (optional)') ?>">
                                     <button type="submit" class="inline-flex items-center justify-center rounded-xl border border-rose-500/40 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-500 hover:text-white">
