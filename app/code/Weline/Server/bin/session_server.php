@@ -28,6 +28,7 @@ $isFrontend = false;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $role = 'session_server';
+$tokenFileName = '';
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
@@ -45,6 +46,8 @@ foreach ($argv as $arg) {
         if ($argRole !== '') {
             $role = $argRole;
         }
+    } elseif (\str_starts_with($arg, '--token-file-name=')) {
+        $tokenFileName = (string)\substr($arg, 18);
     } elseif ($arg === '--frontend' || $arg === '-f') {
         $isFrontend = true;
     }
@@ -115,7 +118,11 @@ $sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'
 $sessionConfig['port'] = $port;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
 $safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';
-$sessionConfig['token_file_name'] = $safeRole . '.token';
+$tokenFileName = \trim($tokenFileName);
+if ($tokenFileName === '') {
+    $tokenFileName = $safeRole . '.token';
+}
+$sessionConfig['token_file_name'] = $tokenFileName;
 
 $server = new \Weline\Server\Session\Server\SessionServer($sessionConfig);
 
