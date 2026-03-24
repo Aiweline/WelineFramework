@@ -30,7 +30,8 @@ class SessionServerProvider extends AbstractServiceProvider
     }
 
     /**
-     * 多 Worker 时启用（>1）；也可通过 wls.session_server.enabled 强制开启。
+     * Worker 运行时总是依赖可达的 Session 服务。
+     * 除非显式关闭，否则只要存在 Worker 槽位就默认启用。
      */
     public function isEnabled(ServiceContext $context): bool
     {
@@ -43,7 +44,7 @@ class SessionServerProvider extends AbstractServiceProvider
         if ($workerCount === 'auto') {
             $workerCount = $this->getAutoCpuCount();
         }
-        return (int) $workerCount > 1;
+        return (int) $workerCount > 0;
     }
 
     public function getInstanceCount(ServiceContext $context): int
