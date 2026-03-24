@@ -31,7 +31,7 @@ class ProductRecommendationService
         foreach ($this->resolveCategoryIds($seedProductIds) as $categoryId) {
             $result = $this->productService->getProducts([
                 'category_id' => $categoryId,
-                'status' => 'enabled',
+                'status' => 1,
                 'order_by' => Product::schema_fields_ID,
                 'order_dir' => 'DESC',
             ], 1, max($limit + count($seedProductIds), $limit * 2));
@@ -49,7 +49,7 @@ class ProductRecommendationService
         }
 
         $fallback = $this->productService->getProducts([
-            'status' => 'enabled',
+            'status' => 1,
             'order_by' => Product::schema_fields_ID,
             'order_dir' => 'DESC',
         ], 1, max($limit + count($seedProductIds), $limit * 2));
