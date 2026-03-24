@@ -21,6 +21,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Data\HtmlInterface;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\ThemeResourceGateway;
 
 trait TraitTemplate
 {
@@ -304,45 +305,27 @@ trait TraitTemplate
                 // 检查是否是静态资源文件（js/css等），如果是则返回URL，否则返回文件路径
                 $isStaticResource = preg_match('/\.(js|css|jpg|jpeg|png|gif|svg|ico|woff|woff2|ttf|eot|otf|pdf|zip)$/i', $source);
                 if ($isStaticResource) {
-                    // 静态资源：返回URL路径，参考STATICS类型的处理方式
                     list($t_f, $module_name) = $this->processModuleSourceFilePath($type, $source);
-                    # 第三方模组或当前模组
-                    if ($module_name) {
-                        $modules = Env::getInstance()->getModuleList();
-                        if (isset($modules[$module_name]) && $module = $modules[$module_name]) {
-                            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                            $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::dir_type_THEME, $module_name);
-                            $t_f = str_replace($module_name . '::', '', $t_f);
-                            $t_f = preg_replace('#^theme' . preg_quote(DS, '#') . '#', '', $t_f);
-                            $t_f = preg_replace('#^theme' . preg_quote('/', '#') . '#', '', $t_f);
-                        } else {
-                            throw new Exception(__('资源不存在：%{1}，模组：%{2}', [$source, $module_name]));
-                        }
-                    } else {
-                        $current_module_name = $this->getRequest()->getModuleName();
-                        $modules = Env::getInstance()->getModuleList();
-                        if (isset($modules[$current_module_name]) && $module = $modules[$current_module_name]) {
-                            $module_view_dir_path = $module['base_path'] . DataInterface::dir . DS;
-                            $base_url_path = $this->getModuleViewDir($module_view_dir_path, DataInterface::dir_type_THEME, $current_module_name);
-                        } else {
-                            $base_url_path = rtrim($this->statics_dir, DataInterface::dir_type_STATICS) . 'theme' . DS;
-                        }
+                    $module_name = $module_name !== '' ? $module_name : $this->getRequest()->getModuleName();
+                    if ($module_name === '') {
+                        throw new Exception(__('资源不存在：%{1}', [$source]));
                     }
-                    $url_base = $this->getUrlPath($base_url_path);
-                    if ($url_base === '' && $base_url_path !== '' && defined('APP_CODE_PATH')) {
-                        $norm = str_replace('\\', '/', $base_url_path);
-                        $appCode = str_replace('\\', '/', APP_CODE_PATH);
-                        if (stripos($norm, $appCode) === 0) {
-                            $url_base = '/' . ltrim(substr($norm, strlen($appCode)), '/');
-                        }
-                    }
-                    if ($url_base === '') {
-                        $name_for_base = $module_name !== '' ? $module_name : $this->getRequest()->getModuleName();
-                        if ($name_for_base !== '') {
-                            $url_base = '/' . str_replace('_', '/', $name_for_base) . '/view/theme/';
-                        }
-                    }
-                    $data = ($url_base !== '' ? rtrim($url_base, '/') . '/' : '') . str_replace('\\', '/', $t_f);
+
+                    $t_f = str_replace($module_name . '::', '', $t_f);
+                    $t_f = preg_replace('#^theme[\\\\/]#', '', str_replace('\\', '/', $t_f));
+                    $t_f = ltrim((string)$t_f, '/');
+                    [$themeArea, $themeRelativePath] = array_pad(explode('/', $t_f, 2), 2, '');
+                    $themeArea = strtolower(trim((string)$themeArea)) === 'backend' ? 'backend' : 'frontend';
+
+                    /** @var ThemeResourceGateway $themeResourceGateway */
+                    $themeResourceGateway = ObjectManager::getInstance(ThemeResourceGateway::class);
+                    $data = $themeResourceGateway->buildThemeAssetUrl(
+                        $module_name,
+                        $themeArea,
+                        $themeRelativePath,
+                        null,
+                        false
+                    );
                 } else {
                     // 模板文件：返回文件路径
                     $data = $this->viewCache->get($cache_key);
@@ -377,12 +360,11 @@ trait TraitTemplate
             
             $version = $this->getStaticResourceVersion();
             if ($version) {
-                // 始终使用 ? 作为第一个参数分隔符
-                $data .= '?v=' . $version;
+                $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
             } elseif (Env::dev('static_rand_version')) {
                 // 回退到随机版本号
                 $version = random_int(10000, 100000);
-                $data .= '?v=' . $version;
+                $data .= (str_contains($data, '?') ? '&' : '?') . 'v=' . $version;
             }
         }
         

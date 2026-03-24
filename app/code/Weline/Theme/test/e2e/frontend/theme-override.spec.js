@@ -70,4 +70,46 @@ test.describe('Theme frontend preview integration', () => {
     expect(state.currentUrl).toMatch(new RegExp(`(preview_theme|frontend_theme_id)=${activeThemeId}`));
     expect(state.hasPreviewToken || state.hasFrontendThemeId).toBeTruthy();
   });
+
+  test('preview theme assets stay isolated and do not leak into the next live visit', async ({ page }) => {
+    const activeTheme = getActiveTheme('frontend');
+    test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
+
+    await gotoThemePreview(page, {
+      themeId: activeTheme.id,
+      pageType: 'homepage',
+      previewMode: 'live',
+    }, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    const previewAssets = await page.evaluate(() => Array.from(document.querySelectorAll('link[href], script[src]'))
+      .map(node => node.getAttribute('href') || node.getAttribute('src') || '')
+      .filter(url => url.includes('/view/theme/') || url.includes('/layouts/')));
+
+    expect(previewAssets.length).toBeGreaterThan(0);
+    expect(previewAssets.some(url => url.includes('weline_preview_token='))).toBeTruthy();
+
+    const livePage = await page.context().newPage();
+
+    await gotoFrontend(livePage, '/', {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    const liveState = await livePage.evaluate(() => ({
+      currentUrl: window.location.href,
+      themedAssets: Array.from(document.querySelectorAll('link[href], script[src]'))
+        .map(node => node.getAttribute('href') || node.getAttribute('src') || '')
+        .filter(url => url.includes('/view/theme/') || url.includes('/layouts/')),
+    }));
+
+    expect(liveState.currentUrl).not.toContain('weline_preview_token=');
+    expect(liveState.currentUrl).not.toContain('frontend_theme_id=');
+    expect(liveState.themedAssets.every(url => !url.includes('weline_preview_token='))).toBeTruthy();
+    expect(liveState.themedAssets.every(url => !url.includes('/static/__preview/'))).toBeTruthy();
+
+    await livePage.close();
+  });
 });
