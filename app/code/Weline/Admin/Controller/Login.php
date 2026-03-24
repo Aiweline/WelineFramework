@@ -280,7 +280,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                     'challenge_token' => $challengeToken,
                     'session' => $this->getSessionDataForLog()
                 ]);
-                $this->getMessageManager()->addNotice(__('Please complete two-factor verification to finish sign in.'));
+                $this->getMessageManager()->addWarning(__('Please complete two-factor verification to finish sign in.'));
                 $this->redirect($this->_url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
                     'challenge_token' => $challengeToken,
                 ]));
