@@ -57,10 +57,82 @@ class NotificationService
         return count($this->getCustomerNotifications($customerId, 0, true));
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public function getTypeOptions(): array
+    {
+        $options = [
+            'info' => (string) __('Info'),
+            'order' => (string) __('Order'),
+            'payment' => (string) __('Payment'),
+            'membership' => (string) __('Membership'),
+            'promotion' => (string) __('Promotion'),
+        ];
+
+        $rows = $this->createNotificationModel()
+            ->clear()
+            ->fields('DISTINCT ' . Notification::schema_fields_TYPE . ' AS type')
+            ->select()
+            ->fetchArray();
+
+        foreach ($rows as $row) {
+            $type = trim((string) ($row['type'] ?? ''));
+            if ($type === '' || isset($options[$type])) {
+                continue;
+            }
+
+            $options[$type] = ucfirst(str_replace(['-', '_'], ' ', $type));
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getAdminNotifications(int $page = 1, int $pageSize = 20, array $filters = []): array
+    {
+        $notification = $this->createNotificationModel()->clear();
+        $this->applyAdminFilters($notification, $filters);
+
+        $notification->order(Notification::schema_fields_CREATED_AT, 'DESC')
+            ->pagination(max(1, $page), max(1, $pageSize));
+
+        return [
+            'items' => $notification->select()->fetchArray(),
+            'total' => $notification->getTotalCount(),
+            'pagination' => $notification->getPagination(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    public function getAdminSummary(array $filters = []): array
+    {
+        return [
+            'total_count' => $this->countAdminNotifications($filters),
+            'unread_count' => $this->countAdminNotifications($filters, 0),
+            'read_count' => $this->countAdminNotifications($filters, 1),
+        ];
+    }
+
+    public function getNotificationById(int $notificationId): ?Notification
+    {
+        if ($notificationId <= 0) {
+            return null;
+        }
+
+        $notification = $this->createNotificationModel();
+        $notification->load($notificationId);
+
+        return $notification->getId() ? $notification : null;
+    }
+
     public function markAsRead(int $notificationId, int $customerId = 0): bool
     {
-        /** @var Notification $notification */
-        $notification = ObjectManager::getInstance(Notification::class);
+        $notification = $this->createNotificationModel();
         $notification->load($notificationId);
 
         if (!$notification->getId()) {
@@ -77,5 +149,43 @@ class NotificationService
 
         $notification->setData(Notification::schema_fields_IS_READ, 1)->save();
         return true;
+    }
+
+    private function countAdminNotifications(array $filters = [], ?int $isRead = null): int
+    {
+        $notification = $this->createNotificationModel()->clear();
+        $this->applyAdminFilters($notification, $filters);
+
+        if ($isRead !== null) {
+            $notification->where(Notification::schema_fields_IS_READ, $isRead);
+        }
+
+        return $notification->count();
+    }
+
+    private function applyAdminFilters(Notification $notification, array $filters): void
+    {
+        if (!empty($filters['customer_id'])) {
+            $notification->where(Notification::schema_fields_CUSTOMER_ID, (int) $filters['customer_id']);
+        }
+
+        if (!empty($filters['type'])) {
+            $notification->where(Notification::schema_fields_TYPE, (string) $filters['type']);
+        }
+
+        if (array_key_exists('is_read', $filters) && $filters['is_read'] !== '' && $filters['is_read'] !== null) {
+            $notification->where(Notification::schema_fields_IS_READ, (int) $filters['is_read']);
+        }
+
+        if (!empty($filters['title'])) {
+            $notification->where(Notification::schema_fields_TITLE, '%' . trim((string) $filters['title']) . '%', 'LIKE');
+        }
+    }
+
+    private function createNotificationModel(): Notification
+    {
+        /** @var Notification $notification */
+        $notification = ObjectManager::getInstance(Notification::class);
+        return $notification;
     }
 }
