@@ -42,8 +42,8 @@ class Cancel extends BaseController
                 $this->getMessageManager()->addError($checkResult['reason'] ?? __('This order cannot be cancelled.'));
 
                 if (!empty($checkResult['require_return'])) {
-                    $this->getMessageManager()->addNotice(__('Please request a return for this order first.'));
-                    $this->redirect('weshop/rma/create', ['order_id' => $orderId]);
+                    $this->getMessageManager()->addWarning(__('Please request a return for this order first.'));
+                    $this->redirect('rma/create', ['order_id' => $orderId]);
                     return '';
                 }
 

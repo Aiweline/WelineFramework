@@ -32,12 +32,13 @@ class Register extends BaseController
 
     public function postIndex(): string
     {
-        $firstName = trim((string) ($this->request->getPost('firstname') ?? $this->request->getPost('first_name') ?? ''));
-        $lastName = trim((string) ($this->request->getPost('lastname') ?? $this->request->getPost('last_name') ?? ''));
-        $email = trim((string) ($this->request->getPost('email') ?? ''));
-        $password = (string) ($this->request->getPost('password') ?? '');
-        $passwordConfirm = (string) ($this->request->getPost('password_confirm') ?? $this->request->getPost('confirm_password') ?? '');
-        $agreeTerms = (bool) ($this->request->getPost('agree_terms') ?? false);
+        $request = $this->getRequest();
+        $firstName = trim((string) ($request->getPost('firstname') ?? $request->getPost('first_name') ?? ''));
+        $lastName = trim((string) ($request->getPost('lastname') ?? $request->getPost('last_name') ?? ''));
+        $email = trim((string) ($request->getPost('email') ?? ''));
+        $password = (string) ($request->getPost('password') ?? '');
+        $passwordConfirm = (string) ($request->getPost('password_confirm') ?? $request->getPost('confirm_password') ?? '');
+        $agreeTerms = (bool) ($request->getPost('agree_terms') ?? false);
 
         if ($firstName === '' || $lastName === '') {
             $this->getMessageManager()->addError(__('First name and last name are required.'));

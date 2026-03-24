@@ -6,194 +6,183 @@ namespace WeShop\Customer\Test\Unit\Controller\Frontend\Account;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Customer\Controller\Frontend\Account\Login;
+use WeShop\Customer\Service\CustomerWebAuthService;
 use WeShop\Customer\Session\CustomerSession;
-use WeShop\Customer\Model\Customer;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\MessageManager;
 
-/**
- * 登录页控制器单元测试
- * 
- * 测试登录页控制器的核心功能：
- * - 页面正常加载
- * - 已登录用户重定向
- * - 登录表单提交
- * - 登录验证
- */
 class LoginTest extends TestCase
 {
-    private Login $controller;
-    private CustomerSession $customerSession;
-    private Request $request;
-    private MessageManager $messageManager;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        
-        // Mock dependencies
-        $this->request = $this->createMock(Request::class);
-        $this->messageManager = $this->createMock(MessageManager::class);
-        $this->customerSession = $this->createMock(CustomerSession::class);
-        
-        // Create controller mock
-        $this->controller = $this->getMockBuilder(Login::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods([
-                'getRequest',
-                'getMessageManager',
-                'redirect',
-                'assign',
-                'fetch',
-                'getUrl'
-            ])
-            ->getMock();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->controller = null;
-        $this->customerSession = null;
-        $this->request = null;
-        $this->messageManager = null;
-        
-        parent::tearDown();
-    }
-
-    /**
-     * 测试：控制器类存在
-     */
-    public function testControllerClassExists(): void
-    {
-        $this->assertTrue(class_exists(Login::class));
-    }
-
-    /**
-     * 测试：控制器继承 BaseController
-     */
-    public function testControllerExtendsBaseController(): void
-    {
-        $reflection = new \ReflectionClass(Login::class);
-        $this->assertTrue($reflection->isSubclassOf(\WeShop\Frontend\Controller\BaseController::class));
-    }
-
-    /**
-     * 测试：控制器有 index 方法
-     */
-    public function testControllerHasIndexMethod(): void
-    {
-        $reflection = new \ReflectionClass(Login::class);
-        $this->assertTrue($reflection->hasMethod('index'));
-    }
-
-    /**
-     * 测试：控制器有 postLogin 方法
-     */
-    public function testControllerHasPostLoginMethod(): void
-    {
-        $reflection = new \ReflectionClass(Login::class);
-        $this->assertTrue($reflection->hasMethod('postLogin'));
-    }
-
-    /**
-     * 测试：layoutType 属性设置为 'account_auth'
-     */
     public function testLayoutTypeIsAccountAuth(): void
     {
         $reflection = new \ReflectionClass(Login::class);
         $property = $reflection->getProperty('layoutType');
         $property->setAccessible(true);
-        
-        $controller = new Login();
-        $this->assertEquals('account_auth', $property->getValue($controller));
+
+        $this->assertSame(
+            'account_auth',
+            $property->getValue(new Login(
+                $this->createMock(CustomerSession::class),
+                $this->createMock(CustomerWebAuthService::class)
+            ))
+        );
     }
 
-    /**
-     * 测试：postLogin 方法验证邮箱和密码为空的情况
-     */
-    public function testPostLoginValidatesEmptyEmailAndPassword(): void
+    public function testIndexRedirectsWhenCustomerIsAlreadyLoggedIn(): void
     {
-        // 设置Request返回空值
-        $this->request->expects($this->any())
-            ->method('getPost')
-            ->willReturnMap([
-                ['email', null],
-                ['password', null],
-                ['remember_me', false]
+        $session = $this->createMock(CustomerSession::class);
+        $session->expects($this->once())->method('isLoggedIn')->willReturn(true);
+
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$session, $this->createMock(CustomerWebAuthService::class)])
+            ->onlyMethods(['redirect', 'assign', 'fetch', 'getRequest'])
+            ->getMock();
+        $controller->expects($this->once())->method('redirect')->with('weshop/customer/account/index')->willReturn('redirected');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('fetch');
+
+        $this->assertSame('redirected', $controller->index());
+    }
+
+    public function testIndexAssignsAuthPageDataForGuest(): void
+    {
+        $session = $this->createMock(CustomerSession::class);
+        $session->expects($this->once())->method('isLoggedIn')->willReturn(false);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['redirect', null, 'sales/order/view?id=8'],
+            ['redirect_url', null, null],
+        ]);
+
+        $assigned = [];
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$session, $this->createMock(CustomerWebAuthService::class)])
+            ->onlyMethods(['getRequest', 'assign', 'fetch', 'redirect', 'getUrl'])
+            ->getMock();
+        $controller->method('getRequest')->willReturn($request);
+        $controller->method('getUrl')->willReturnCallback(static fn (string $route): string => $route);
+        $controller->expects($this->never())->method('redirect');
+        $controller->expects($this->exactly(4))
+            ->method('assign')
+            ->willReturnCallback(function (string $key, mixed $value) use (&$assigned, $controller): Login {
+                $assigned[$key] = $value;
+                return $controller;
+            });
+        $controller->expects($this->once())->method('fetch')->willReturn('page');
+
+        $this->assertSame('page', $controller->index());
+        $this->assertSame('sales/order/view?id=8', $assigned['redirect_url']);
+        $this->assertSame('weshop/customer/account/register', $assigned['register_url']);
+        $this->assertSame('weshop/customer/account/forgot-password', $assigned['forgot_password_url']);
+        $this->assertNotSame('', (string) $assigned['title']);
+    }
+
+    public function testPostIndexRejectsMissingCredentials(): void
+    {
+        $service = $this->createMock(CustomerWebAuthService::class);
+        $service->expects($this->never())->method('beginPasswordLogin');
+
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$this->createMock(CustomerSession::class), $service])
+            ->onlyMethods(['getRequest', 'redirect', 'getMessageManager'])
+            ->getMock();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->willReturnMap([
+            ['email', null, ''],
+            ['password', null, ''],
+            ['remember_me', false, false],
+            ['remember', false, false],
+            ['redirect_url', null, ''],
+        ]);
+        $request->method('getParam')->with('redirect')->willReturn('');
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addError');
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
+        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('weshop/customer/account/login')->willReturn('redirected');
+
+        $this->assertSame('redirected', $controller->postIndex());
+    }
+
+    public function testPostIndexRedirectsToChallengeWhenTwoFactorIsRequired(): void
+    {
+        $service = $this->createMock(CustomerWebAuthService::class);
+        $service->expects($this->once())
+            ->method('beginPasswordLogin')
+            ->with('ada@example.com', 'abc12345', true, 'customer/account')
+            ->willReturn([
+                'status' => 'challenge_required',
+                'challenge_token' => 'challenge-123',
             ]);
-        
-        $this->controller->expects($this->once())
-            ->method('getRequest')
-            ->willReturn($this->request);
-        
-        $this->controller->expects($this->once())
-            ->method('getMessageManager')
-            ->willReturn($this->messageManager);
-        
-        $this->messageManager->expects($this->once())
-            ->method('addError')
-            ->with($this->stringContains('邮箱和密码不能为空'));
-        
-        $this->controller->expects($this->once())
+
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$this->createMock(CustomerSession::class), $service])
+            ->onlyMethods(['getRequest', 'redirect', 'getMessageManager'])
+            ->getMock();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+            return match ($key) {
+                'email' => 'ada@example.com',
+                'password' => 'abc12345',
+                'remember_me' => true,
+                'remember' => false,
+                'redirect_url' => 'customer/account',
+                default => $default,
+            };
+        });
+        $request->method('getParam')->with('redirect')->willReturn('');
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addWarning');
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
+        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())
             ->method('redirect')
-            ->with('weshop/customer/account/login')
-            ->willReturn('');
-        
-        // 执行测试
-        $result = $this->controller->postLogin();
-        
-        $this->assertIsString($result);
+            ->with('weshop/customer/account/challenge?challenge_token=challenge-123')
+            ->willReturn('challenge');
+
+        $this->assertSame('challenge', $controller->postIndex());
     }
 
-    /**
-     * 测试：postLogin 方法验证邮箱格式
-     */
-    public function testPostLoginValidatesEmailFormat(): void
+    public function testPostIndexRedirectsToAuthenticatedTarget(): void
     {
-        // 这个测试需要在实际实现中验证邮箱格式
-        // 当前实现中，邮箱格式验证可能在Service层
-        $this->markTestIncomplete(
-            '需要查看实际实现以确定邮箱格式验证位置'
-        );
-    }
+        $service = $this->createMock(CustomerWebAuthService::class);
+        $service->expects($this->once())
+            ->method('beginPasswordLogin')
+            ->with('ada@example.com', 'abc12345', false, 'sales/order/view?id=8')
+            ->willReturn([
+                'status' => 'authenticated',
+                'redirect_url' => 'sales/order/view?id=8',
+            ]);
 
-    /**
-     * 测试：postLogin 方法处理用户不存在的情况
-     */
-    public function testPostLoginHandlesUserNotFound(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置，包括ObjectManager和Customer模型'
-        );
-    }
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$this->createMock(CustomerSession::class), $service])
+            ->onlyMethods(['getRequest', 'redirect', 'getMessageManager'])
+            ->getMock();
 
-    /**
-     * 测试：postLogin 方法处理密码错误的情况
-     */
-    public function testPostLoginHandlesWrongPassword(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置，包括密码验证逻辑'
-        );
-    }
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+            return match ($key) {
+                'email' => 'ada@example.com',
+                'password' => 'abc12345',
+                'remember_me' => false,
+                'remember' => false,
+                'redirect_url' => 'sales/order/view?id=8',
+                default => $default,
+            };
+        });
+        $request->method('getParam')->with('redirect')->willReturn('');
 
-    /**
-     * 测试：postLogin 方法处理账户被禁用的情况
-     */
-    public function testPostLoginHandlesDisabledAccount(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置，包括账户状态检查'
-        );
-    }
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addSuccess');
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
+        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('sales/order/view?id=8')->willReturn('target');
 
-    /**
-     * 测试：postLogin 方法处理登录成功的情况
-     */
-    public function testPostLoginHandlesLoginSuccess(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置，包括CustomerSession和重定向逻辑'
-        );
+        $this->assertSame('target', $controller->postIndex());
     }
 }
