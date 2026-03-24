@@ -1,0 +1,30 @@
+# Progress - weshop checkout retry product consistency
+
+- 2026-03-24 22:07 Created the task workspace.
+- 2026-03-25 22:15 Resumed the slice after checkpoint `a1196a26`, re-read workspace rules, and isolated the current uncommitted WeShop boundary to checkout retry-payment reuse, product filter consistency, and default-theme checkout/success updates.
+- 2026-03-25 22:18 Re-loaded the minimal repo skill set for this slice: `testing`, `theme-development`, `unified-query-provider`, and `codex-task-workspace`.
+- 2026-03-25 22:21 Confirmed the intended file set stays within WeShop checkout/product/default-theme and excludes the large unrelated dirty worktree.
+- 2026-03-25 22:23 Focused validation re-passed for the in-progress checkout/product slice:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit app/code/WeShop/Product/Test/Unit --colors=never` -> `45 tests / 264 assertions`
+- `php tests/e2e/framework/preflight-refresh.php` -> passed
+- live `curl.exe -k -I "https://127.0.0.1:9982/weshop/order/retry-payment?order_id=1"` -> `301` login redirect
+- 2026-03-25 22:24 Live `9982` probing found a real production gap still inside the current product consistency boundary: both `https://127.0.0.1:9982/product/list` and `https://127.0.0.1:9982/weshop/product/list` returned `404`.
+- 2026-03-25 22:27 Added clean-route aliases for product listing under both routers:
+- `app/code/WeShop/Product/Controller/List/Index.php`
+- `app/code/WeShop/Frontend/Controller/Product/List/Index.php`
+- plus controller tests and the new browser spec `tests/e2e/specs/frontend/weshop-product-list-clean-route.spec.js`
+- 2026-03-25 22:28 First validation exposed two real regressions and both were fixed locally:
+- a root class named `List` caused PHP parse failures during route collection, so the product alias was moved to `Controller/List/Index.php`
+- the new aliases still 500'd because `ProductList::fetch()` resolved `templates/List/Index/index.phtml`, so proxy templates were added in both `WeShop_Product` and `WeShop_Frontend`
+- 2026-03-25 22:31 Route refresh and live validation passed after the proxy-template fix:
+- `php bin/w route:list | Select-String -Pattern 'product/list|weshop/product/list'` -> both routes present
+- `curl.exe -k -I https://127.0.0.1:9982/product/list` -> `200 OK`
+- `curl.exe -k -I https://127.0.0.1:9982/weshop/product/list` -> `200 OK`
+- 2026-03-25 22:34 Focused Product/Frontend proxy-template unit tests passed (`7 tests / 17 assertions`), and the new standalone browser coverage passed (`node tests/e2e/start.js tests/e2e/specs/frontend/weshop-product-list-clean-route.spec.js` -> `2 passed`).
+- 2026-03-25 22:36 Reconciled the grouped storefront browser regression by removing a duplicated over-strong product-list assertion from `tests/e2e/specs/frontend/weshop-product-clean-route.spec.js`; the grouped run then passed:
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-product-clean-route.spec.js tests/e2e/specs/frontend/weshop-product-list-clean-route.spec.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js tests/e2e/specs/frontend/weshop-search.spec.js` -> `6 passed`
+- 2026-03-25 22:37 Current slice validation is green:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit app/code/WeShop/Product/Test/Unit app/code/WeShop/Frontend/Test/Unit/Controller/ProductCleanRouteControllersTest.php app/code/WeShop/Product/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php app/code/WeShop/Frontend/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php --colors=never` -> `54 tests / 284 assertions`
+- `php tests/e2e/framework/preflight-refresh.php` -> passed
+- `php bin/w server:reload --no-wait` -> accepted
+- live `9982` product-list probes -> both `200 OK`

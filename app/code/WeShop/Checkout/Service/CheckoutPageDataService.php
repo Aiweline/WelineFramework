@@ -7,6 +7,7 @@ namespace WeShop\Checkout\Service;
 use Weline\Framework\App\State;
 use WeShop\Address\Service\AddressService;
 use WeShop\Cart\Service\CartService;
+use WeShop\Order\Service\OrderService;
 use WeShop\Shipping\Service\ShippingService;
 use Weline\I18n\Model\I18n;
 
@@ -17,18 +18,28 @@ class CheckoutPageDataService
         private readonly AddressService $addressService,
         private readonly ShippingService $shippingService,
         private readonly CheckoutService $checkoutService,
-        private readonly I18n $i18n
+        private readonly I18n $i18n,
+        private readonly OrderService $orderService
     ) {
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function build(int $customerId, int $currentStep = 1): array
+    public function build(int $customerId, int $currentStep = 1, int $retryOrderId = 0): array
     {
-        $items = $this->cartService->getCartItems($customerId);
-        $cartItems = $this->mapCartItems($items);
-        $totals = $this->cartService->calculateTotals($customerId);
+        $retryContext = $retryOrderId > 0 ? $this->orderService->getRetryPaymentContext($retryOrderId, $customerId) : null;
+        $isRetryPayment = \is_array($retryContext);
+
+        if ($isRetryPayment) {
+            $cartItems = $this->mapRetryOrderItems((array) ($retryContext['items'] ?? []));
+            $summary = $this->normalizeSummary((array) ($retryContext['summary'] ?? []));
+        } else {
+            $items = $this->cartService->getCartItems($customerId);
+            $cartItems = $this->mapCartItems($items);
+            $summary = $this->normalizeSummary($this->cartService->calculateTotals($customerId));
+        }
+
         $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
         $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, [
             'area' => 'frontend',
@@ -36,6 +47,7 @@ class CheckoutPageDataService
         if ($shippingMethods === []) {
             $shippingMethods = $this->shippingService->getAvailableShippingMethods();
         }
+
         $itemCount = array_reduce(
             $cartItems,
             static fn(int $count, array $item): int => $count + (int) ($item['qty'] ?? 0),
@@ -46,16 +58,10 @@ class CheckoutPageDataService
             'cart_items' => $cartItems,
             'cart_count' => $itemCount,
             'item_count' => $itemCount,
-            'cart_total' => (float) ($totals['subtotal'] ?? 0),
-            'shipping' => (float) ($totals['shipping'] ?? 0),
-            'tax' => (float) ($totals['tax'] ?? 0),
-            'cart_summary' => [
-                'subtotal' => (float) ($totals['subtotal'] ?? 0),
-                'shipping' => (float) ($totals['shipping'] ?? 0),
-                'discount' => (float) ($totals['discount'] ?? 0),
-                'tax' => (float) ($totals['tax'] ?? 0),
-                'grand_total' => (float) ($totals['total'] ?? 0),
-            ],
+            'cart_total' => (float) ($summary['subtotal'] ?? 0),
+            'shipping' => (float) ($summary['shipping'] ?? 0),
+            'tax' => (float) ($summary['tax'] ?? 0),
+            'cart_summary' => $summary,
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
             'shipping_methods' => $this->mapShippingMethods($shippingMethods),
@@ -68,6 +74,9 @@ class CheckoutPageDataService
             'current_step' => max(1, min(3, $currentStep)),
             'countries' => $this->buildCountries(),
             'states' => [],
+            'is_retry_payment' => $isRetryPayment,
+            'retry_order_id' => $isRetryPayment ? (int) ($retryContext['order_id'] ?? 0) : 0,
+            'retry_order_increment_id' => $isRetryPayment ? (string) ($retryContext['increment_id'] ?? '') : '',
         ];
     }
 
@@ -98,6 +107,47 @@ class CheckoutPageDataService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, mixed> $items
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapRetryOrderItems(array $items): array
+    {
+        $result = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+
+            $result[] = [
+                'item_id' => (int) ($item['item_id'] ?? 0),
+                'product_id' => (int) ($item['product_id'] ?? 0),
+                'name' => (string) ($item['name'] ?? $item['product_name'] ?? ''),
+                'image' => (string) ($item['image'] ?? ''),
+                'price' => (float) ($item['price'] ?? 0),
+                'qty' => (int) ($item['qty'] ?? $item['quantity'] ?? 0),
+                'row_total' => (float) ($item['row_total'] ?? $item['total'] ?? 0),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<string, float>
+     */
+    protected function normalizeSummary(array $summary): array
+    {
+        return [
+            'subtotal' => (float) ($summary['subtotal'] ?? 0),
+            'shipping' => (float) ($summary['shipping'] ?? 0),
+            'discount' => (float) ($summary['discount'] ?? 0),
+            'tax' => (float) ($summary['tax'] ?? 0),
+            'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
+        ];
     }
 
     /**
@@ -166,8 +216,8 @@ class CheckoutPageDataService
                 continue;
             }
             $result[] = [
-                'code' => (string) $code,
-                'name' => (string) $label,
+                'code' => $code,
+                'name' => $label,
                 'description' => (string) __('Available shipping option: %{1}', [$label]),
                 'price' => 0.0,
                 'is_default' => $isFirst,
@@ -320,8 +370,11 @@ class CheckoutPageDataService
 
     protected function resolveCheckoutCurrency(): string
     {
-        $currency = strtoupper(trim(State::getCurrency()));
+        $currency = trim((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? ''));
+        if ($currency !== '') {
+            return strtoupper($currency);
+        }
 
-        return $currency !== '' ? $currency : 'USD';
+        return strtoupper((string) State::getCurrency());
     }
 }
