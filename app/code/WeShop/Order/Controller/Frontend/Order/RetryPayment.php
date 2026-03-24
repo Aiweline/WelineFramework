@@ -7,15 +7,13 @@ namespace WeShop\Order\Controller\Frontend\Order;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Order\Service\OrderService;
-use Weline\Framework\Manager\ObjectManager;
-
 class RetryPayment extends BaseController
 {
     private const LOGIN_ROUTE = 'customer/account/login';
 
     public function __construct(
-        private ?CustomerContextInterface $customerContext = null,
-        private ?OrderService $orderService = null
+        private readonly CustomerContextInterface $customerContext,
+        private readonly OrderService $orderService
     ) {
     }
 
@@ -28,14 +26,14 @@ class RetryPayment extends BaseController
             return '';
         }
 
-        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
             $this->getMessageManager()->addError(__('Please log in to continue.'));
             $this->redirect(self::LOGIN_ROUTE);
             return '';
         }
 
-        $retryContext = $this->getOrderService()->getRetryPaymentContext($orderId, $customerId);
+        $retryContext = $this->orderService->getRetryPaymentContext($orderId, $customerId);
         if ($retryContext === null) {
             $this->getMessageManager()->addError(__('This order cannot continue to payment.'));
             $this->redirect('weshop/order/list');
@@ -45,15 +43,5 @@ class RetryPayment extends BaseController
         $this->getMessageManager()->addSuccess(__('Continue the payment flow from checkout.'));
         $this->redirect('checkout', ['order_id' => $orderId]);
         return '';
-    }
-
-    private function getCustomerContext(): CustomerContextInterface
-    {
-        return $this->customerContext ??= ObjectManager::getInstance(CustomerContextInterface::class);
-    }
-
-    private function getOrderService(): OrderService
-    {
-        return $this->orderService ??= ObjectManager::getInstance(OrderService::class);
     }
 }
