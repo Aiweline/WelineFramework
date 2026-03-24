@@ -18,6 +18,10 @@ $backendUsers = $backendUser->reset()->select()->fetch()->getItems();
 
 // 语言列表
 $locales = \Weline\CustomerService\Model\ServiceAgent::getAvailableLocales();
+$customerServiceDefaultLocale = isset($locales['zh_Hans_CN'])
+    ? 'zh_Hans_CN'
+    : (string)(array_key_first($locales) ?: '');
+$customerServiceDefaultSupportedLocales = $customerServiceDefaultLocale !== '' ? [$customerServiceDefaultLocale] : [];
 ?>
 <link rel="stylesheet" href="<?= $statisticsCssUrl ?>">
 <style>
@@ -358,24 +362,28 @@ $locales = \Weline\CustomerService\Model\ServiceAgent::getAvailableLocales();
                 
                 <div class="cs-form-group">
                     <label for="locale"><?= __('主要语言') ?></label>
-                    <select id="locale" name="locale">
-                        <?php foreach ($locales as $code => $label): ?>
-                            <option value="<?= $code ?>"><?= $label ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <w:i18n:language:select
+                        id="customer_service_primary_locale_selector"
+                        name="locale"
+                        input-id="locale"
+                        value="customerServiceDefaultLocale"
+                        required="true"
+                        class="w-100"
+                    />
                     <small class="form-hint"><?= __('客服的首选沟通语言') ?></small>
                 </div>
                 
                 <div class="cs-form-group">
                     <label><?= __('支持的语言') ?></label>
-                    <div class="locale-checkboxes" id="supported-locales">
-                        <?php foreach ($locales as $code => $label): ?>
-                            <label class="locale-checkbox">
-                                <input type="checkbox" name="supported_locales[]" value="<?= $code ?>">
-                                <span><?= $label ?></span>
-                            </label>
-                        <?php endforeach; ?>
-                    </div>
+                    <w:i18n:language:select
+                        id="customer_service_supported_locales_selector"
+                        name="supported_locales[]"
+                        input-id="supported-locales"
+                        value="customerServiceDefaultSupportedLocales"
+                        readonly-values="customerServiceDefaultSupportedLocales"
+                        multiple="true"
+                        class="w-100"
+                    />
                     <small class="form-hint"><?= __('客服可以接待的所有语言（勾选多个可接待全球客户）') ?></small>
                 </div>
                 
@@ -407,6 +415,49 @@ const AgentManager = {
     agents: <?= json_encode($agents, JSON_UNESCAPED_UNICODE) ?>
 };
 
+const CustomerServiceLanguageUtils = window.WelineLanguageSelectUtils || null;
+const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+
+if (CustomerServiceLanguageUtils && typeof CustomerServiceLanguageUtils.bindDefaultToMultiple === 'function') {
+    CustomerServiceLanguageUtils.bindDefaultToMultiple({
+        singleId: 'customer_service_primary_locale_selector',
+        multipleId: 'customer_service_supported_locales_selector'
+    });
+}
+
+function getAgentLanguageSelector(id) {
+    if (CustomerServiceLanguageUtils && typeof CustomerServiceLanguageUtils.get === 'function') {
+        return CustomerServiceLanguageUtils.get(id);
+    }
+    if (window.WelineLanguageSelect && window.WelineLanguageSelect[id]) {
+        return window.WelineLanguageSelect[id];
+    }
+    return null;
+}
+
+function syncAgentLanguageSelection(locale, supportedLocales) {
+    const primarySelector = getAgentLanguageSelector('customer_service_primary_locale_selector');
+    const supportedSelector = getAgentLanguageSelector('customer_service_supported_locales_selector');
+    const primaryLocale = String(locale || CustomerServiceDefaultLocale || '').trim();
+
+    let nextSupportedLocales = Array.isArray(supportedLocales) ? supportedLocales.slice() : [];
+    nextSupportedLocales = nextSupportedLocales
+        .map(value => String(value || '').trim())
+        .filter((value, index, list) => value && list.indexOf(value) === index);
+
+    if (primaryLocale && nextSupportedLocales.indexOf(primaryLocale) === -1) {
+        nextSupportedLocales.unshift(primaryLocale);
+    }
+
+    if (primarySelector) {
+        primarySelector.setValue(primaryLocale);
+    }
+
+    if (supportedSelector) {
+        supportedSelector.setValues(nextSupportedLocales);
+    }
+}
+
 function showAgentModal(agentId = 0) {
     const modal = document.getElementById('agent-modal');
     const form = document.getElementById('agent-form');
@@ -417,9 +468,7 @@ function showAgentModal(agentId = 0) {
     document.getElementById('is_active').checked = true;
     
     // 重置所有语言复选框
-    document.querySelectorAll('#supported-locales input[type="checkbox"]').forEach(cb => {
-        cb.checked = false;
-    });
+    syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []);
     
     if (agentId > 0) {
         title.textContent = '<?= __('编辑客服') ?>';
@@ -429,7 +478,6 @@ function showAgentModal(agentId = 0) {
             document.getElementById('user_id').value = agent.user_id;
             document.getElementById('name').value = agent.name;
             document.getElementById('email').value = agent.email;
-            document.getElementById('locale').value = agent.locale;
             document.getElementById('max_sessions').value = agent.max_sessions;
             document.getElementById('is_active').checked = agent.is_active == 1;
             
@@ -445,18 +493,12 @@ function showAgentModal(agentId = 0) {
             if (!Array.isArray(supportedLocales) || supportedLocales.length === 0) {
                 supportedLocales = [agent.locale];
             }
-            supportedLocales.forEach(locale => {
-                const checkbox = document.querySelector(`#supported-locales input[value="${locale}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
+            syncAgentLanguageSelection(agent.locale, supportedLocales);
         }
     } else {
         title.textContent = '<?= __('添加客服') ?>';
         // 默认选中简体中文
-        const zhCheckbox = document.querySelector('#supported-locales input[value="zh_Hans_CN"]');
-        if (zhCheckbox) zhCheckbox.checked = true;
+        syncAgentLanguageSelection(CustomerServiceDefaultLocale, CustomerServiceDefaultLocale ? [CustomerServiceDefaultLocale] : []);
     }
     
     modal.style.display = 'flex';
