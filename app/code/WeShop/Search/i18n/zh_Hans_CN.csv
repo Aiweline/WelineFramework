@@ -17,6 +17,18 @@
 执行搜索前触发，可用于记录搜索日志、修改搜索参数等。,执行搜索前触发，可用于记录搜索日志、修改搜索参数等。
 搜索后,搜索后
 执行搜索后触发，可用于统计搜索数据、缓存搜索结果等。,执行搜索后触发，可用于统计搜索数据、缓存搜索结果等。
+"Search page before content","Search page before content"
+"Inject storefront content above the default-theme search results page.","Inject storefront content above the default-theme search results page."
+"Search results after content","Search results after content"
+"Inject storefront content after the default-theme search result grid and empty state.","Inject storefront content after the default-theme search result grid and empty state."
+Category,Category
+"Min Price","Min Price"
+"Max Price","Max Price"
+Sort,Sort
+"Search for products, brands, and categories.","Search for products, brands, and categories."
+"No results found yet.","No results found yet."
+"Results for ""%{1}""","Results for ""%{1}"""
+"Showing %{1}-%{2} of %{3} results","Showing %{1}-%{2} of %{3} results"
 基本信息,基本信息
 搜索引擎类型,搜索引擎类型
 请选择,请选择
