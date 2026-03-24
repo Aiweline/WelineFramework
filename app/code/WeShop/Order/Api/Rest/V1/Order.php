@@ -4,96 +4,155 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Api\Rest\V1;
 
-use Weline\Framework\App\Controller\FrontendRestController;
-use WeShop\Customer\Session\CustomerSession;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Order\Model\Order as OrderModel;
+use WeShop\Order\Service\OrderDetailPageDataService;
+use WeShop\Order\Service\OrderListPageDataService;
 use WeShop\Order\Service\OrderService;
+use Weline\Framework\App\Controller\FrontendRestController;
 use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 订单API控制器
- * 
- * 提供订单相关的API接口，用于异步数据加载
- */
 class Order extends FrontendRestController
 {
-    /**
-     * 获取未支付订单数量
-     * 
-     * 用于header下拉菜单显示消息红点
-     * 
-     * @return string JSON响应
-     */
-    public function getUnpaidCount(): string
+    public function __construct(
+        private ?CustomerContextInterface $customerContext = null,
+        private ?OrderService $orderService = null,
+        private ?OrderListPageDataService $orderListPageDataService = null,
+        private ?OrderDetailPageDataService $orderDetailPageDataService = null
+    ) {
+    }
+
+    public function getList(): string
     {
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => __('请先登录'),
-                'data' => ['count' => 0]
+                'msg' => (string) __('Please log in first'),
+                'data' => ['orders' => []],
             ]);
         }
-        
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        $count = $orderService->getUnpaidOrderCount($customer->getId());
-        
+
         return $this->fetchJson([
             'code' => 200,
-            'msg' => __('获取成功'),
-            'data' => [
-                'count' => $count,
-                'has_unpaid' => $count > 0
-            ]
+            'msg' => (string) __('Success'),
+            'data' => $this->getOrderListPageDataService()->build(
+                $customerId,
+                max(1, (int) ($this->request->getParam('page') ?? 1)),
+                max(1, (int) ($this->request->getParam('page_size') ?? 20))
+            ),
         ]);
     }
-    
-    /**
-     * 获取未支付订单列表（简要信息）
-     * 
-     * 用于header下拉菜单显示订单列表
-     * 
-     * @return string JSON响应
-     */
-    public function getUnpaidList(): string
+
+    public function getDetail(): string
     {
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
             return $this->fetchJson([
                 'code' => 401,
-                'msg' => __('请先登录'),
-                'data' => ['orders' => []]
+                'msg' => (string) __('Please log in first'),
+                'data' => ['order' => null, 'items' => []],
             ]);
         }
-        
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        $orders = $orderService->getUnpaidOrders($customer->getId());
-        
-        // 格式化订单数据（只返回简要信息）
+
+        try {
+            $data = $this->getOrderDetailPageDataService()->build(
+                $customerId,
+                (int) ($this->request->getParam('id', 0) ?? 0)
+            );
+        } catch (\RuntimeException $exception) {
+            return $this->fetchJson([
+                'code' => 404,
+                'msg' => $exception->getMessage(),
+                'data' => ['order' => null, 'items' => []],
+            ]);
+        }
+
+        return $this->fetchJson([
+            'code' => 200,
+            'msg' => (string) __('Success'),
+            'data' => $data,
+        ]);
+    }
+
+    public function getUnpaidCount(): string
+    {
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            return $this->fetchJson([
+                'code' => 401,
+                'msg' => (string) __('Please log in first'),
+                'data' => ['count' => 0],
+            ]);
+        }
+
+        $count = $this->getOrderService()->getUnpaidOrderCount($customerId);
+
+        return $this->fetchJson([
+            'code' => 200,
+            'msg' => (string) __('Success'),
+            'data' => [
+                'count' => $count,
+                'has_unpaid' => $count > 0,
+            ],
+        ]);
+    }
+
+    public function getUnpaidList(): string
+    {
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            return $this->fetchJson([
+                'code' => 401,
+                'msg' => (string) __('Please log in first'),
+                'data' => ['orders' => []],
+            ]);
+        }
+
+        $orders = $this->getOrderService()->getUnpaidOrders($customerId);
+
         $orderList = [];
         foreach ($orders as $order) {
             $orderList[] = [
-                'order_id' => $order['order_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_ID] ?? 0,
-                'increment_id' => $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_increment_id] ?? '',
-                'total' => $order['total'] ?? $order[\WeShop\Order\Model\Order::schema_fields_total] ?? 0,
-                'created_at' => $order['created_at'] ?? $order[\WeShop\Order\Model\Order::schema_fields_created_at] ?? '',
+                'order_id' => $order['order_id'] ?? $order[OrderModel::schema_fields_ID] ?? 0,
+                'increment_id' => $order['increment_id'] ?? $order[OrderModel::schema_fields_increment_id] ?? '',
+                'total' => $order['total'] ?? $order[OrderModel::schema_fields_total] ?? 0,
+                'created_at' => $order['created_at'] ?? $order[OrderModel::schema_fields_created_at] ?? '',
             ];
         }
-        
+
         return $this->fetchJson([
             'code' => 200,
-            'msg' => __('获取成功'),
+            'msg' => (string) __('Success'),
             'data' => [
                 'orders' => $orderList,
-                'count' => count($orderList)
-            ]
+                'count' => count($orderList),
+            ],
         ]);
+    }
+
+    protected function fetchJson(array $data): string
+    {
+        return parent::fetchJson($data);
+    }
+
+    private function getCustomerContext(): CustomerContextInterface
+    {
+        return $this->customerContext ??= ObjectManager::getInstance(CustomerContextInterface::class);
+    }
+
+    private function getOrderService(): OrderService
+    {
+        return $this->orderService ??= ObjectManager::getInstance(OrderService::class);
+    }
+
+    private function getOrderListPageDataService(): OrderListPageDataService
+    {
+        return $this->orderListPageDataService ??= ObjectManager::getInstance(OrderListPageDataService::class);
+    }
+
+    private function getOrderDetailPageDataService(): OrderDetailPageDataService
+    {
+        return $this->orderDetailPageDataService ??= ObjectManager::getInstance(OrderDetailPageDataService::class);
     }
 }
