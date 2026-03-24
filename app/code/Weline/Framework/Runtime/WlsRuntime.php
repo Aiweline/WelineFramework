@@ -144,6 +144,9 @@ class WlsRuntime implements RuntimeInterface
             'router_start_call_ms' => 0,
             'router_start_ms' => 0,
             'run_after_ms' => 0,
+            'pre_telemetry_total_ms' => 0,
+            'telemetry_ms' => 0,
+            'dev_tool_ms' => 0,
             'reset_ms' => 0,
             'total_ms' => 0
         ];
@@ -316,8 +319,21 @@ class WlsRuntime implements RuntimeInterface
             }
             
             $resultStr = (string) $result;
+            $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+            $telemetryStart = \microtime(true);
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
             $resultStr = TelemetryBroadcaster::broadcast($resultStr, $request);
+            $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
+            $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
+            $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+
+            $isDev = \defined('DEV') && DEV;
+            $performanceConfig = $this->getPerformanceConfig();
+            $slowThreshold = (float)($performanceConfig['slow_request_threshold_ms'] ?? 500.0);
+            if (!empty($performanceConfig['response_headers_enabled']) && ($timing['total_ms'] >= $slowThreshold || $isDev)) {
+                $this->applyPerformanceHeaders($timing, $request);
+            }
+
             return $resultStr;
             
         } catch (\Weline\Framework\Http\StaticFileException $staticEx) {
@@ -767,6 +783,32 @@ class WlsRuntime implements RuntimeInterface
         $this->appendJsonLine($this->getRuntimeLogFile(), $logEntry, true);
     }
 
+    private function applyPerformanceHeaders(array $timing, ?Request $request): void
+    {
+        try {
+            $request ??= ObjectManager::getInstance(Request::class);
+            if (!$request || !method_exists($request, 'getResponse')) {
+                return;
+            }
+
+            $response = $request->getResponse();
+            if (!$response || !method_exists($response, 'setHeader')) {
+                return;
+            }
+
+            $response->setHeader('X-WLS-Performance-Total', (string)($timing['total_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-RunBefore', (string)($timing['run_before_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-UrlParser', (string)($timing['url_parser_call_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-RouterStart', (string)($timing['router_start_call_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-RunAfter', (string)($timing['run_after_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-PreTelemetryTotal', (string)($timing['pre_telemetry_total_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-Telemetry', (string)($timing['telemetry_ms'] ?? 0));
+            $response->setHeader('X-WLS-Performance-DevTool', (string)($timing['dev_tool_ms'] ?? 0));
+        } catch (\Throwable) {
+            // 蹇界暐鍝嶅簲澶村啓鍏ラ敊璇紝涓嶅奖鍝嶄富娴佺▼銆?
+        }
+    }
+
     private function recordPerformanceTiming(array $timing, bool $isDev): void
     {
         $config = $this->getPerformanceConfig();
@@ -778,14 +820,16 @@ class WlsRuntime implements RuntimeInterface
 
         if (!empty($config['debug_log_enabled'])) {
             $performanceSummary = sprintf(
-                '[WLS Performance] URI=%s Total=%.2fms | run_before=%.2fms | url_parser=%.2fms | router_init=%.2fms | router_start=%.2fms | run_after=%.2fms',
+                '[WLS Performance] URI=%s Total=%.2fms | run_before=%.2fms | url_parser=%.2fms | router_init=%.2fms | router_start=%.2fms | run_after=%.2fms | telemetry=%.2fms | dev_tool=%.2fms',
                 $timing['uri'],
                 $timing['total_ms'],
                 $timing['run_before_ms'],
                 $timing['url_parser_call_ms'] ?? 0,
                 $timing['router_init_ms'] ?? 0,
                 $timing['router_start_call_ms'] ?? 0,
-                $timing['run_after_ms']
+                $timing['run_after_ms'],
+                $timing['telemetry_ms'] ?? 0,
+                $timing['dev_tool_ms'] ?? 0
             );
             w_log_debug($performanceSummary);
             w_log_debug('[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE));
@@ -808,6 +852,12 @@ class WlsRuntime implements RuntimeInterface
             }
             if ($timing['run_after_ms'] > 200) {
                 $analysis[] = "run_after事件耗时过长: {$timing['run_after_ms']}ms";
+            }
+            if (($timing['telemetry_ms'] ?? 0) > 100) {
+                $analysis[] = "telemetry闃舵鑰楁椂杩囬暱: {$timing['telemetry_ms']}ms";
+            }
+            if (($timing['dev_tool_ms'] ?? 0) > 50) {
+                $analysis[] = "dev_tool闈㈡澘鑰楁椂杩囬暱: {$timing['dev_tool_ms']}ms";
             }
             if (!empty($analysis)) {
                 w_log_debug('[WLS Performance Analysis] ' . implode('; ', $analysis));
