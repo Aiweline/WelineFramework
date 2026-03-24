@@ -72,7 +72,7 @@ class ServerInstanceManager
      */
     public function hasInstance(string $name): bool
     {
-        return $this->getInstanceInfo($name) !== null;
+        return $this->getRawInstanceData($name) !== null;
     }
 
     /**
@@ -80,7 +80,7 @@ class ServerInstanceManager
      *
      * 所有命令都应该通过此方法获取实例信息，而不是直接解析实例文件。
      */
-    public function getInstanceInfo(string $name): ?ServerInstanceInfo
+    public function getInstanceInfo(string $name, bool $validateStale = true): ?ServerInstanceInfo
     {
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
@@ -88,7 +88,7 @@ class ServerInstanceManager
         }
 
         $info = $this->buildInstanceInfo($name, $rawData);
-        if ($this->isStaleInstanceRecord($name, $rawData, $info)) {
+        if ($validateStale && $this->isStaleInstanceRecord($name, $rawData, $info)) {
             $this->cleanupStaleInstanceArtifacts($name, $rawData);
             return null;
         }
@@ -101,11 +101,11 @@ class ServerInstanceManager
      *
      * @return ServerInstanceInfo[]
      */
-    public function getAllInstanceInfo(): array
+    public function getAllInstanceInfo(bool $validateStale = true): array
     {
         $instances = [];
         foreach ($this->listRawInstanceNames() as $name) {
-            $info = $this->getInstanceInfo($name);
+            $info = $this->getInstanceInfo($name, $validateStale);
             if ($info !== null) {
                 $instances[$name] = $info;
             }
@@ -118,9 +118,9 @@ class ServerInstanceManager
      *
      * @return string[]
      */
-    public function listInstanceNames(): array
+    public function listInstanceNames(bool $validateStale = true): array
     {
-        return \array_keys($this->getAllInstanceInfo());
+        return \array_keys($this->getAllInstanceInfo($validateStale));
     }
 
     /**
@@ -436,18 +436,58 @@ class ServerInstanceManager
      */
     private function collectIndexedPidsByInstance(string $name, array $rawData): array
     {
-        $nameIndex = Processer::readNameIndex();
-        if (empty($nameIndex)) {
+        $pidIndex = Processer::readPidIndex();
+        if (empty($pidIndex)) {
             return [];
         }
 
-        $pids = [];
+        return $this->collectIndexedPidsByInstanceFromPidIndex($pidIndex, $name, $rawData);
+    }
+
+    /**
+     * @param array<int, array{pname: string, jsonPath: string}> $pidIndex
+     * @return int[]
+     */
+    private function collectIndexedPidsByInstanceFromPidIndex(array $pidIndex, string $name, array $rawData): array
+    {
+        $allowedTaskNames = [];
         foreach ($this->collectManagedProcessNames($name, $rawData) as $processName) {
-            foreach (($nameIndex[$processName] ?? []) as $entry) {
-                $pid = (int) ($entry['pid'] ?? 0);
-                if ($pid > 0) {
-                    $pids[$pid] = true;
+            try {
+                $allowedTaskNames[Processer::getTaskName($processName)] = true;
+            } catch (\Throwable) {
+                if (\str_starts_with($processName, '--name=')) {
+                    $allowedTaskNames[\substr($processName, 7)] = true;
                 }
+            }
+        }
+
+        $pids = [];
+        foreach ($pidIndex as $pid => $record) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $jsonPath = (string) ($record['jsonPath'] ?? '');
+            if ($jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+
+            $pname = (string) ($record['pname'] ?? '');
+            if ($pname === '') {
+                continue;
+            }
+
+            try {
+                $taskName = Processer::getTaskName($pname);
+            } catch (\Throwable) {
+                $taskName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : '';
+            }
+
+            if ($taskName !== '' && isset($allowedTaskNames[$taskName])) {
+                $pids[$pid] = true;
             }
         }
 
@@ -941,7 +981,7 @@ class ServerInstanceManager
         ];
     }
 
-    private function getPersistedInstanceInfo(string $name): ?ServerInstanceInfo
+    public function getPersistedInstanceInfo(string $name): ?ServerInstanceInfo
     {
         $rawData = $this->getRawInstanceData($name);
         if ($rawData === null) {
@@ -954,7 +994,7 @@ class ServerInstanceManager
     /**
      * @return array<string, ServerInstanceInfo>
      */
-    private function getAllPersistedInstanceInfo(): array
+    public function getAllPersistedInstanceInfo(): array
     {
         $instances = [];
         foreach ($this->listPersistedInstanceNames() as $name) {
@@ -965,6 +1005,14 @@ class ServerInstanceManager
         }
 
         return $instances;
+    }
+
+    /**
+     * @return array{instance_running: bool, workers: int, dispatchers: int, ports: int[]}
+     */
+    public function getRuntimeStatsForInstance(ServerInstanceInfo $info, bool $realtime = false): array
+    {
+        return $this->collectRuntimeStatsForInstance($info, $realtime);
     }
 
     /**
