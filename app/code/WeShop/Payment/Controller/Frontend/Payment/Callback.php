@@ -46,7 +46,23 @@ class Callback extends FrontendController
     protected function readCallbackData(): array
     {
         $params = $this->request->getParams();
+        $params = \is_array($params) ? $params : [];
 
-        return \is_array($params) ? $params : [];
+        $bodyParams = $this->request->getBodyParams(true);
+        if (\is_array($bodyParams) && $bodyParams !== []) {
+            $params = array_merge($params, $bodyParams);
+        }
+
+        $rawBody = $this->request->getBodyParams();
+        if (\is_string($rawBody) && trim($rawBody) !== '') {
+            $params['raw_body'] = $rawBody;
+        }
+
+        $contentType = trim((string) $this->request->getContentType());
+        if ($contentType !== '') {
+            $params['content_type'] = $contentType;
+        }
+
+        return $params;
     }
 }
