@@ -820,8 +820,12 @@ class ServiceOrchestrator
     /**
      * 启动所有服务（按优先级）
      */
-    public function startAll(ServiceContext $context): void
+    public function bootstrapControlPlane(ServiceContext $context): void
     {
+        if ($this->controlServer !== null && $this->context !== null) {
+            return;
+        }
+
         $this->context = $context;
         $this->running = true;
         $this->shuttingDown = false;
@@ -902,6 +906,11 @@ class ServiceOrchestrator
         // 设置 IPC 消息处理器
         $this->controlServer->onMessage([$this, 'handleIpcMessage']);
         $this->controlServer->onDisconnect([$this, 'handleIpcDisconnect']);
+    }
+
+    public function startAll(ServiceContext $context): void
+    {
+        $this->bootstrapControlPlane($context);
 
         // 启动顺序：Dispatcher -> 基础服务(session/memory/redirect/maintenance...) -> Worker（批量）
         $providers = $this->sortProvidersForStartup($this->registry->getAllProviders());
@@ -3759,6 +3768,7 @@ class ServiceOrchestrator
             $newInstance = $this->startInstance($provider, $entry['instanceId'], $this->context);
             if ($newInstance !== null) {
                 $newInstance->restarts = $oldRestarts;
+                $this->persistServicesInfo($this->context);
             }
 
             $infraBudget = (int) ($entry['infraRetryBudget'] ?? 0);
@@ -4166,6 +4176,9 @@ class ServiceOrchestrator
             $instance->setMeta('worker_id', $workerId);
         }
         $this->registry->updateInstance($instance);
+        if ($this->context !== null) {
+            $this->persistServicesInfo($this->context);
+        }
 
         $resurrectKey = $instance->getKey();
         if (isset($this->resurrectQueue[$resurrectKey])) {
@@ -6154,6 +6167,9 @@ class ServiceOrchestrator
                 $instance->state = ServiceInstance::STATE_STOPPING;
                 $this->registry->updateInstance($instance);
             }
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
             $this->sendStopProgress("  ✓ {$displayName}(PID:{$instance->pid}) 已断开连接");
             return;
         }
@@ -6165,6 +6181,9 @@ class ServiceOrchestrator
             ServiceInstance::STATE_STOPPING,
             ServiceInstance::STATE_STOPPED,
         ], true)) {
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
             WlsLogger::info_("[Orchestrator] 实例 {$instance->role}#{$instance->instanceId} 处于 {$instance->state} 状态，预期断开，跳过整组重启");
             return;
         }

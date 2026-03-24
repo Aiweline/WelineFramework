@@ -846,6 +846,7 @@ class Start extends CommandAbstract
         $masterStarted = false;
         $lastMasterPid = 0;
         $lastControlPort = 0;
+        $lastStartupPhase = '';
         
         while ($waited < $maxWaitMs) {
             SchedulerSystem::usleep($waitStepMs * 1000);
@@ -859,6 +860,7 @@ class Start extends CommandAbstract
                     if (\is_array($data)) {
                         $masterPid = (int)($data['master_pid'] ?? 0);
                         $controlPort = (int)($data['control_port'] ?? 0);
+                        $startupPhase = (string) ($data['startup_phase'] ?? '');
                         
                         // 检测到新的 master_pid 和 control_port
                         if ($masterPid > 0 && $controlPort > 0) {
@@ -867,6 +869,7 @@ class Start extends CommandAbstract
                                 $masterStarted = true;
                                 $lastMasterPid = $masterPid;
                                 $lastControlPort = $controlPort;
+                                $lastStartupPhase = $startupPhase;
                                 break;
                             }
                         }
@@ -874,9 +877,13 @@ class Start extends CommandAbstract
                 }
             }
         }
-        
+
         if ($masterStarted) {
-            $this->printer->success(__('服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）', [$lastMasterPid, $lastControlPort]));
+            if ($lastStartupPhase === 'bootstrapping') {
+                $this->printer->success(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化', [$lastMasterPid, $lastControlPort]));
+            } else {
+                $this->printer->success(__('服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）', [$lastMasterPid, $lastControlPort]));
+            }
             $this->printer->note(__('使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
         } else {
             // 启动确认失败：输出警告而非假成功
@@ -1095,24 +1102,30 @@ class Start extends CommandAbstract
             }
         }
 
-        $sessionTokenFileName = (string) (
-            $config['session_server_token_file_name']
-            ?? $wlsSessionServer['token_file_name']
-            ?? $wlsSession['token_file_name']
-            ?? ''
+        $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config);
+        $sessionTokenFileName = $this->resolveSharedStateTokenFileName(
+            $instanceName,
+            (string) (
+                $config['session_server_token_file_name']
+                ?? $wlsSessionServer['token_file_name']
+                ?? $wlsSession['token_file_name']
+                ?? ''
+            ),
+            'session_server.token',
+            $sessionTokenExplicit
         );
-        if ($sessionTokenFileName === '') {
-            $sessionTokenFileName = $this->getSharedStateTokenFileName($instanceName, 'session_server.token');
-        }
 
-        $memoryTokenFileName = (string) (
-            $config['memory_server_token_file_name']
-            ?? $memoryConfig['token_file_name']
-            ?? ''
+        $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config);
+        $memoryTokenFileName = $this->resolveSharedStateTokenFileName(
+            $instanceName,
+            (string) (
+                $config['memory_server_token_file_name']
+                ?? $memoryConfig['token_file_name']
+                ?? ''
+            ),
+            'memory_server.token',
+            $memoryTokenExplicit
         );
-        if ($memoryTokenFileName === '') {
-            $memoryTokenFileName = $this->getSharedStateTokenFileName($instanceName, 'memory_server.token');
-        }
 
         return [
             'session' => [
@@ -1144,6 +1157,44 @@ class Start extends CommandAbstract
         return $extension !== ''
             ? $filename . '.' . $safeInstanceName . '.' . $extension
             : $filename . '.' . $safeInstanceName;
+    }
+
+    protected function resolveSharedStateTokenFileName(
+        string $instanceName,
+        string $tokenFileName,
+        string $defaultFileName,
+        bool $explicit = false
+    ): string {
+        $tokenFileName = \trim($tokenFileName);
+        if ($tokenFileName === '') {
+            return $this->getSharedStateTokenFileName($instanceName, $defaultFileName);
+        }
+
+        if (!$explicit && $this->isRuntimeGeneratedSharedStateTokenFileName($tokenFileName, $defaultFileName)) {
+            return $this->getSharedStateTokenFileName($instanceName, $defaultFileName);
+        }
+
+        return $tokenFileName;
+    }
+
+    protected function isRuntimeGeneratedSharedStateTokenFileName(string $tokenFileName, string $defaultFileName): bool
+    {
+        $tokenFileName = \trim($tokenFileName);
+        if ($tokenFileName === '') {
+            return false;
+        }
+
+        $extension = \pathinfo($defaultFileName, \PATHINFO_EXTENSION);
+        $filename = \pathinfo($defaultFileName, \PATHINFO_FILENAME);
+        if ($filename === '') {
+            return false;
+        }
+
+        $pattern = $extension !== ''
+            ? '/^' . \preg_quote($filename, '/') . '\.[a-z0-9_-]+\.' . \preg_quote($extension, '/') . '$/i'
+            : '/^' . \preg_quote($filename, '/') . '\.[a-z0-9_-]+$/i';
+
+        return (bool) \preg_match($pattern, $tokenFileName);
     }
 
     protected function findAvailableAuxiliaryPort(int $preferredPort, array $reservedPorts = [], int $maxScan = 200): int
@@ -2928,6 +2979,24 @@ class Start extends CommandAbstract
         if (!\is_array($data) || empty($data)) {
             return null;
         }
+        return $this->stripRuntimeOnlySavedInstanceConfig($data);
+    }
+
+    /**
+     * Instance config memory should only keep user intent, not runtime-resolved sidecar state.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    protected function stripRuntimeOnlySavedInstanceConfig(array $data): array
+    {
+        unset(
+            $data['session_server_port'],
+            $data['session_server_token_file_name'],
+            $data['memory_server_port'],
+            $data['memory_server_token_file_name']
+        );
+
         return $data;
     }
     
@@ -2955,7 +3024,7 @@ class Start extends CommandAbstract
         
         // 从当前合并后的配置中提取可复用项
         // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
-        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port', 'session_server_port', 'session_server_token_file_name', 'memory_server_port', 'memory_server_token_file_name'];
+        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];

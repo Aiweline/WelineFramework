@@ -1334,6 +1334,12 @@ class Processer
                 self::writePidIndex($pidIndex);
             }
         }
+
+        $pidIndex = self::filterPidIndexExistingJsonPaths(self::readPidIndex());
+        self::writePidIndex($pidIndex);
+        self::atomicUpdateNameIndex(
+            static fn(array $nameIndex): array => self::filterNameIndexByPidIndex($nameIndex, $pidIndex)
+        );
         
         return $removed;
     }
@@ -3659,6 +3665,76 @@ CMD;
         }
 
         return '';
+    }
+
+    /**
+     * @param array<int, array{pname: string, jsonPath: string}> $pidIndex
+     * @return array<int, array{pname: string, jsonPath: string}>
+     */
+    private static function filterPidIndexExistingJsonPaths(array $pidIndex): array
+    {
+        $filtered = [];
+        foreach ($pidIndex as $pid => $record) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+
+            $pname = (string) ($record['pname'] ?? '');
+            $jsonPath = (string) ($record['jsonPath'] ?? '');
+            if ($pname === '' || $jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+
+            $filtered[$pid] = [
+                'pname' => $pname,
+                'jsonPath' => $jsonPath,
+            ];
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param array<string, list<array{pid: int, jsonPath: string}>> $nameIndex
+     * @param array<int, array{pname: string, jsonPath: string}> $pidIndex
+     * @return array<string, list<array{pid: int, jsonPath: string}>>
+     */
+    private static function filterNameIndexByPidIndex(array $nameIndex, array $pidIndex): array
+    {
+        if ($nameIndex === [] || $pidIndex === []) {
+            return [];
+        }
+
+        $filtered = [];
+        foreach ($nameIndex as $pname => $entries) {
+            $validEntries = [];
+            foreach ($entries as $entry) {
+                $pid = (int) ($entry['pid'] ?? 0);
+                if ($pid <= 0 || !isset($pidIndex[$pid])) {
+                    continue;
+                }
+
+                $pidRecord = $pidIndex[$pid];
+                $jsonPath = (string) ($entry['jsonPath'] ?? '');
+                if ($jsonPath === ''
+                    || $jsonPath !== (string) ($pidRecord['jsonPath'] ?? '')
+                    || $pname !== (string) ($pidRecord['pname'] ?? '')) {
+                    continue;
+                }
+
+                $validEntries[] = [
+                    'pid' => $pid,
+                    'jsonPath' => $jsonPath,
+                ];
+            }
+
+            if ($validEntries !== []) {
+                $filtered[$pname] = \array_values($validEntries);
+            }
+        }
+
+        return $filtered;
     }
 
     private static function doesPidMatchRecordedIdentity(int $pid, array $record): bool
