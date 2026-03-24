@@ -120,6 +120,8 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                         </div>
                     </a>
                 <?php endforeach; ?>
+
+                <w:hook name="WeShop_Customer::frontend::account::quick-links::cards"/>
             </div>
             <w:hook name="WeShop_Customer::frontend::account::quick-links::after"/>
         </article>
@@ -223,6 +225,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
             </div>
 
             <w:hook name="WeShop_Customer::frontend::account::recommendations::before"/>
+            <w:hook name="WeShop_Customer::frontend::account::recommendations::cards"/>
             <?php if ($recommendations): ?>
                 <div class="mt-6 grid grid-cols-2 gap-3">
                     <?php foreach ($recommendations as $product): ?>
