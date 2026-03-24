@@ -423,7 +423,9 @@ P99：%{1},P99：%{1}
 "提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。","提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。"
 "提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。","提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。"
 维护模式已关闭（端口检查未通过）。,维护模式已关闭（端口检查未通过）。
+"Session Server 端口 %{1} 复用现有共享服务 ✓","Session Server 端口 %{1} 复用现有共享服务 ✓"
 "维护模式已关闭（Session Server 端口检查未通过）。","维护模式已关闭（Session Server 端口检查未通过）。"
+"Memory Service 端口 %{1} 复用现有共享服务 ✓","Memory Service 端口 %{1} 复用现有共享服务 ✓"
 "Maintenance mode disabled (Memory Service port check failed).","Maintenance mode disabled (Memory Service port check failed)."
 "维护模式已关闭（HTTP 重定向端口检查未通过）。","维护模式已关闭（HTTP 重定向端口检查未通过）。"
 "1. 停止占用端口 %{1} 的进程","1. 停止占用端口 %{1} 的进程"
@@ -435,6 +437,7 @@ P99：%{1},P99：%{1}
 实例文件无效,实例文件无效
 "master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。","master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。"
 "请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。","请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。"
+"Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化","Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化"
 "服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）","服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）"
 "后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。"
 可能原因：,可能原因：
@@ -456,8 +459,8 @@ P99：%{1},P99：%{1}
 "按 Ctrl+C 停止服务","按 Ctrl+C 停止服务"
 服务器启动失败,服务器启动失败
 "1. 停止占用端口的进程","1. 停止占用端口的进程"
-"Session Server port switched to %{1} automatically (preferred %{2} was busy).","Session Server port switched to %{1} automatically (preferred %{2} was busy)."
-"Memory Service port switched to %{1} automatically (preferred %{2} was busy).","Memory Service port switched to %{1} automatically (preferred %{2} was busy)."
+"实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
+"实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})","实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})"
 "正在检测 Worker 状态（最长等待 %{1} 秒）...","正在检测 Worker 状态（最长等待 %{1} 秒）..."
 "当前有 %{1} 个请求正在处理...","当前有 %{1} 个请求正在处理..."
 "无法连接到 Worker，直接切换...","无法连接到 Worker，直接切换..."
