@@ -338,7 +338,7 @@ class ProductQueryProvider implements QueryProviderInterface
 
         $product = clone $this->productModel;
         $product->clear();
-        $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'])
+        $product->where(Product::schema_fields_name, '%' . $keyword . '%', 'LIKE')
             ->where(Product::schema_fields_status, 1)
             ->order(Product::schema_fields_ID, 'DESC')
             ->limit(\min(5, $limit));
@@ -360,10 +360,20 @@ class ProductQueryProvider implements QueryProviderInterface
     private function applyProductSearchFilters(Product $product, string $keyword, array $filters): void
     {
         if ($keyword !== '') {
-            $product->where(Product::schema_fields_name, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_sku, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_short_description, ['like', '%' . $keyword . '%'], 'or')
-                ->where(Product::schema_fields_description, ['like', '%' . $keyword . '%'], 'or');
+            $escapedKeyword = $this->escapeLikeValue($keyword);
+            $product->where(
+                sprintf(
+                    "(%s LIKE '%s' OR %s LIKE '%s' OR %s LIKE '%s' OR %s LIKE '%s')",
+                    Product::schema_fields_name,
+                    $escapedKeyword,
+                    Product::schema_fields_sku,
+                    $escapedKeyword,
+                    Product::schema_fields_short_description,
+                    $escapedKeyword,
+                    Product::schema_fields_description,
+                    $escapedKeyword
+                )
+            );
         }
 
         if (!empty($filters['category_id'])) {
@@ -371,14 +381,19 @@ class ProductQueryProvider implements QueryProviderInterface
         }
 
         if (!empty($filters['price_min'])) {
-            $product->where(Product::schema_fields_price, ['>=', $filters['price_min']]);
+            $product->where(Product::schema_fields_price, (float) $filters['price_min'], '>=');
         }
 
         if (!empty($filters['price_max'])) {
-            $product->where(Product::schema_fields_price, ['<=', $filters['price_max']]);
+            $product->where(Product::schema_fields_price, (float) $filters['price_max'], '<=');
         }
 
         $product->where(Product::schema_fields_status, 1);
+    }
+
+    private function escapeLikeValue(string $keyword): string
+    {
+        return str_replace(["\\", "'"], ["\\\\", "''"], '%' . $keyword . '%');
     }
 
     public function getDescriptor(): array
