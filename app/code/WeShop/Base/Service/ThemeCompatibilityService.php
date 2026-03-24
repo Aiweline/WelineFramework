@@ -82,7 +82,8 @@ class ThemeCompatibilityService
             return $this->buildCompatibilityResult(null, $area, $layoutType, $layoutOption, $scope, null, []);
         }
 
-        $layoutFile = $this->resolveLayoutFilePath($theme, $area, $layoutType, $layoutOption);
+        $templateDefinition = $this->getTemplateDefinition($area, $layoutType);
+        $layoutFile = $this->resolveLayoutFilePath($theme, $area, $layoutType, $layoutOption, $templateDefinition);
         $layoutContent = $layoutFile && is_file($layoutFile)
             ? (string) file_get_contents($layoutFile)
             : '';
@@ -261,7 +262,7 @@ class ThemeCompatibilityService
             'missing_hosts' => $missingHosts,
             'missing_modules' => $missingModules,
             'warning_message' => $missingHosts !== []
-                ? (string) __('Theme compatibility warning: layout %{layout_type}/%{layout_option} in theme %{theme} is missing %{count} required hook or slot hosts. Please extend the inherited layout instead of deleting default hooks or slots.', [
+                ? (string) __('Theme compatibility warning: template %{layout_type}/%{layout_option} in theme %{theme} is missing %{count} required hook or slot hosts. Please extend the inherited layout instead of deleting default hooks or slots.', [
                     'layout_type' => $layoutType,
                     'layout_option' => $layoutOption,
                     'theme' => $themeName !== '' ? $themeName : '#0',
@@ -276,11 +277,14 @@ class ThemeCompatibilityService
      */
     private function getLayoutManifest(string $area, string $layoutType): array
     {
-        $manifest = $this->manifestProvider->getManifest();
-        $areaManifest = $manifest[$area] ?? [];
-        $layoutManifest = $areaManifest[$layoutType] ?? [];
+        $layoutManifest = $this->getLayoutEntry($area, $layoutType);
+        foreach (array_keys($layoutManifest) as $key) {
+            if (is_string($key) && str_starts_with($key, '_')) {
+                unset($layoutManifest[$key]);
+            }
+        }
 
-        return is_array($layoutManifest) ? $layoutManifest : [];
+        return $layoutManifest;
     }
 
     private function normalizeArea(string $area): string
@@ -355,7 +359,8 @@ class ThemeCompatibilityService
         WelineTheme $theme,
         string $area,
         string $layoutType,
-        string $layoutOption
+        string $layoutOption,
+        array $templateDefinition = []
     ): ?string {
         $themeChain = method_exists($theme, 'getThemeChain') ? $theme->getThemeChain() : [$theme];
         if (!is_array($themeChain) || $themeChain === []) {
@@ -375,14 +380,14 @@ class ThemeCompatibilityService
 
             $candidates = array_merge(
                 $candidates,
-                $this->buildLayoutCandidates($themePath, $area, $layoutType, $layoutOption)
+                $this->buildLayoutCandidates($themePath, $area, $layoutType, $layoutOption, false, $templateDefinition)
             );
         }
 
         $frameworkLayoutBase = APP_CODE_PATH . 'Weline' . DIRECTORY_SEPARATOR . 'Theme';
         $candidates = array_merge(
             $candidates,
-            $this->buildLayoutCandidates($frameworkLayoutBase, $area, $layoutType, $layoutOption, true)
+            $this->buildLayoutCandidates($frameworkLayoutBase, $area, $layoutType, $layoutOption, true, $templateDefinition)
         );
 
         foreach (array_values(array_unique($candidates)) as $candidate) {
@@ -404,8 +409,20 @@ class ThemeCompatibilityService
         string $area,
         string $layoutType,
         string $layoutOption,
-        bool $moduleViewTheme = false
+        bool $moduleViewTheme = false,
+        array $templateDefinition = []
     ): array {
+        $kind = strtolower(trim((string) ($templateDefinition['kind'] ?? 'layout')));
+        if ($kind === 'page') {
+            return $this->buildPageCandidates(
+                $basePath,
+                $area,
+                (string) ($templateDefinition['path'] ?? ''),
+                $layoutType,
+                $moduleViewTheme
+            );
+        }
+
         $ds = DIRECTORY_SEPARATOR;
         $base = rtrim($basePath, '/\\');
         $optionFile = $layoutOption . '.phtml';
@@ -435,6 +452,70 @@ class ThemeCompatibilityService
         }
 
         return $candidates;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getTemplateDefinition(string $area, string $layoutType): array
+    {
+        $layoutManifest = $this->getLayoutEntry($area, $layoutType);
+        $templateDefinition = $layoutManifest['_template'] ?? [];
+        if (!is_array($templateDefinition)) {
+            $templateDefinition = [];
+        }
+
+        return [
+            'kind' => strtolower(trim((string) ($templateDefinition['kind'] ?? 'layout'))) ?: 'layout',
+            'path' => trim((string) ($templateDefinition['path'] ?? '')),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function getLayoutEntry(string $area, string $layoutType): array
+    {
+        $manifest = $this->manifestProvider->getManifest();
+        $areaManifest = $manifest[$area] ?? [];
+        $layoutManifest = $areaManifest[$layoutType] ?? [];
+
+        return is_array($layoutManifest) ? $layoutManifest : [];
+    }
+
+    /**
+     * @return string[]
+     */
+    private function buildPageCandidates(
+        string $basePath,
+        string $area,
+        string $relativePath,
+        string $layoutType,
+        bool $moduleViewTheme = false
+    ): array {
+        $path = trim($relativePath);
+        if ($path === '') {
+            $path = $layoutType . '/index.phtml';
+        }
+        if (!str_ends_with(strtolower($path), '.phtml')) {
+            $path .= '.phtml';
+        }
+
+        $ds = DIRECTORY_SEPARATOR;
+        $base = rtrim($basePath, '/\\');
+        $path = str_replace(['/', '\\'], $ds, $path);
+
+        if ($moduleViewTheme) {
+            return [
+                $base . $ds . 'view' . $ds . 'theme' . $ds . $area . $ds . 'pages' . $ds . $path,
+            ];
+        }
+
+        return [
+            $base . $ds . $area . $ds . 'pages' . $ds . $path,
+            $base . $ds . 'theme' . $ds . $area . $ds . 'pages' . $ds . $path,
+            $base . $ds . 'view' . $ds . 'theme' . $ds . $area . $ds . 'pages' . $ds . $path,
+        ];
     }
 
     /**

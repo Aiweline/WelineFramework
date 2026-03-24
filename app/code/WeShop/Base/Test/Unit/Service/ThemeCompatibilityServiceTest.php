@@ -98,6 +98,73 @@ class ThemeCompatibilityServiceTest extends TestCase
         $this->assertSame([], $result['missing_hosts']);
     }
 
+    public function testInspectThemeReportsMissingHostsFromDirectDesignPageTemplate(): void
+    {
+        $pageFile = $this->createLayoutFile(
+            $this->tmpDir . DIRECTORY_SEPARATOR . 'child',
+            'frontend/pages/customer/index.phtml',
+            '<w:hook name="WeShop_Customer::frontend::account::quick-links::before"/>'
+        );
+
+        $theme = $this->createThemeMock(4, 'child-theme', $this->tmpDir . DIRECTORY_SEPARATOR . 'child');
+        $service = $this->createService([
+            'frontend' => [
+                'account' => [
+                    '_template' => ['kind' => 'page', 'path' => 'customer/index.phtml'],
+                    'WeShop_Customer' => [
+                        'hosts' => [
+                            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::quick-links::before'],
+                            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::orders::cards'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->inspectTheme($theme, 'frontend', 'account', 'default');
+
+        $this->assertTrue($result['has_missing_hosts']);
+        $this->assertSame($pageFile, $result['layout_file']);
+        $this->assertSame(1, $result['missing_count']);
+        $this->assertSame('WeShop_Customer::frontend::account::orders::cards', $result['missing_hosts'][0]['name']);
+    }
+
+    public function testInspectThemeFallsBackToParentThemeViewThemePage(): void
+    {
+        $parentBase = $this->tmpDir . DIRECTORY_SEPARATOR . 'parent';
+        $childBase = $this->tmpDir . DIRECTORY_SEPARATOR . 'child';
+
+        $pageFile = $this->createLayoutFile(
+            $parentBase,
+            'view/theme/frontend/pages/b2b/index.phtml',
+            '<w:hook name="WeShop_B2B::frontend::layouts::business::page-before"/><w:hook name="WeShop_B2B::frontend::partials::company::list-after"/>'
+        );
+
+        $parentTheme = $this->createThemeMock(5, 'parent-theme', $parentBase);
+        $childTheme = $this->createThemeMock(6, 'child-theme', $childBase, [$parentTheme]);
+        $childTheme->method('getThemeChain')->willReturn([$parentTheme, $childTheme]);
+
+        $service = $this->createService([
+            'frontend' => [
+                'b2b' => [
+                    '_template' => ['kind' => 'page', 'path' => 'b2b/index.phtml'],
+                    'WeShop_B2B' => [
+                        'hosts' => [
+                            ['type' => 'hook', 'name' => 'WeShop_B2B::frontend::layouts::business::page-before'],
+                            ['type' => 'hook', 'name' => 'WeShop_B2B::frontend::partials::company::list-after'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = $service->inspectTheme($childTheme, 'frontend', 'b2b', 'default');
+
+        $this->assertFalse($result['has_missing_hosts']);
+        $this->assertSame($pageFile, $result['layout_file']);
+        $this->assertSame([], $result['missing_hosts']);
+    }
+
     public function testInjectPreviewBannerPrependsCompatibilityNotice(): void
     {
         $service = $this->createService([]);
