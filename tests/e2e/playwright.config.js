@@ -10,8 +10,39 @@ const { getRuntimeInfo } = require('./framework/runtime');
 const rootDir = path.resolve(__dirname, '../..');
 const localNodeModules = path.resolve(__dirname, 'node_modules');
 const moduleFilter = process.env.MODULE_FILTER || process.argv.find(arg => arg.startsWith('--module='))?.split('=')[1];
+const explicitTestFiles = (() => {
+  const raw = process.env.PLAYWRIGHT_TEST_FILES;
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+
+    return new Set(parsed.map(file => String(file).replace(/\\/g, '/')));
+  } catch (error) {
+    console.warn('[playwright] failed to parse PLAYWRIGHT_TEST_FILES:', error.message);
+    return null;
+  }
+})();
 const runtimeInfo = getRuntimeInfo({ refresh: true });
 const baseURL = runtimeInfo.proxy.origin;
+const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS || 1);
+const configuredTimeout = Number(process.env.PLAYWRIGHT_TEST_TIMEOUT || 90000);
+const configuredExpectTimeout = Number(process.env.PLAYWRIGHT_EXPECT_TIMEOUT || 10000);
+
+const resolvedWorkers = Number.isFinite(configuredWorkers) && configuredWorkers > 0
+  ? configuredWorkers
+  : 1;
+const resolvedTimeout = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+  ? configuredTimeout
+  : 90000;
+const resolvedExpectTimeout = Number.isFinite(configuredExpectTimeout) && configuredExpectTimeout > 0
+  ? configuredExpectTimeout
+  : 10000;
 
 process.env.NODE_PATH = [localNodeModules, __dirname, process.env.NODE_PATH]
   .filter(Boolean)
@@ -28,21 +59,26 @@ function normalizeFilePattern(file) {
 try {
   const result = collectAllTests();
 
-  if (result.all_test_files && result.all_test_files.length > 0) {
-    let filesToUse = result.all_test_files;
+    if (result.all_test_files && result.all_test_files.length > 0) {
+      let filesToUse = result.all_test_files;
 
-    if (moduleFilter) {
-      const moduleTests = result.modules[moduleFilter];
-      if (moduleTests && moduleTests.test_files) {
-        filesToUse = moduleTests.test_files;
-        console.log(`[playwright] module filter "${moduleFilter}" matched ${moduleTests.test_files.length} files`);
+      if (moduleFilter) {
+        const moduleTests = result.modules[moduleFilter];
+        if (moduleTests && moduleTests.test_files) {
+          filesToUse = moduleTests.test_files;
+          console.log(`[playwright] module filter "${moduleFilter}" matched ${moduleTests.test_files.length} files`);
       } else {
         console.warn(`[playwright] module "${moduleFilter}" has no collected test files`);
         filesToUse = [];
+        }
       }
-    }
 
-    if (filesToUse.length > 0) {
+      if (explicitTestFiles && explicitTestFiles.size > 0) {
+        filesToUse = filesToUse.filter(file => explicitTestFiles.has(String(file).replace(/\\/g, '/')));
+        console.log(`[playwright] explicit file filter matched ${filesToUse.length} files`);
+      }
+
+      if (filesToUse.length > 0) {
       testMatch = filesToUse.map(normalizeFilePattern);
       console.log(`[playwright] collected ${filesToUse.length} test files`);
     } else {
@@ -66,12 +102,16 @@ module.exports = defineConfig({
   rootDir,
   globalSetup: undefined,
   globalTeardown: undefined,
+  timeout: resolvedTimeout,
+  expect: {
+    timeout: resolvedExpectTimeout,
+  },
   testDir,
   testMatch: testMatch.length > 0 ? testMatch : ['tests/e2e/specs/**/*.spec.js'],
-  fullyParallel: true,
+  fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: resolvedWorkers,
   reporter: 'html',
   webServer: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? undefined : {
     command: 'node framework/proxy-server.js',
