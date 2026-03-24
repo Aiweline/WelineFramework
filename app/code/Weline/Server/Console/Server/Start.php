@@ -23,6 +23,7 @@ use Weline\Server\Console\Server\Stop as MainStop;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
@@ -404,6 +405,7 @@ class Start extends CommandAbstract
         $config['session_server_token_file_name'] = (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token');
         $config['memory_server_port'] = $memoryServerPort;
         $config['memory_server_token_file_name'] = (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token');
+        $config['shared_state'] = $sharedStateRuntime;
         
         // 计算 Worker 端口
         // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
@@ -609,7 +611,9 @@ class Start extends CommandAbstract
         
         // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
         if ($count > 1 && $sessionServerPort > 0) {
-            if (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
+            if (($sharedStateRuntime['session']['reuse_existing'] ?? false) === true) {
+                $this->printer->success(__('Session Server 端口 %{1} 复用现有共享服务 ✓', [$sessionServerPort]));
+            } elseif (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('维护模式已关闭（Session Server 端口检查未通过）。'));
@@ -619,7 +623,9 @@ class Start extends CommandAbstract
             }
         }
         if ($memoryServerPort > 0) {
-            if (!$this->checkAndReleasePort($host, $memoryServerPort, $forceRestart, 'Memory Service', $instanceName)) {
+            if (($sharedStateRuntime['memory']['reuse_existing'] ?? false) === true) {
+                $this->printer->success(__('Memory Service 端口 %{1} 复用现有共享服务 ✓', [$memoryServerPort]));
+            } elseif (!$this->checkAndReleasePort($host, $memoryServerPort, $forceRestart, 'Memory Service', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
                     $this->printer->note(__('Maintenance mode disabled (Memory Service port check failed).'));
@@ -1068,7 +1074,14 @@ class Start extends CommandAbstract
         $memoryPortExplicit = \array_key_exists('memory_server_port', $config);
 
         $sessionPort = $sessionPreferredPort;
-        if (!$forceRestart && !$sessionPortExplicit && Processer::isPortInUse($sessionPreferredPort)) {
+        $sessionReuse = $this->inspectReusableSharedStateService(
+            $sessionPreferredPort,
+            'session_server',
+            'session_server.token'
+        );
+        if ($sessionReuse['reusable'] ?? false) {
+            $sessionPort = $sessionPreferredPort;
+        } elseif (!$forceRestart && !$sessionPortExplicit && Processer::isPortInUse($sessionPreferredPort)) {
             $sessionPort = $this->findAvailableAuxiliaryPort($sessionPreferredPort);
             if ($sessionPort !== $sessionPreferredPort) {
                 $this->printer->warning(__('Session Server port switched to %{1} automatically (preferred %{2} was busy).', [
@@ -1079,11 +1092,18 @@ class Start extends CommandAbstract
         }
 
         $memoryPort = $memoryPreferredPort;
-        $memoryPortNeedsSwitch = !$forceRestart && !$memoryPortExplicit && (
+        $memoryReuse = $this->inspectReusableSharedStateService(
+            $memoryPreferredPort,
+            'memory_server',
+            'memory_server.token'
+        );
+        $memoryPortNeedsSwitch = !($memoryReuse['reusable'] ?? false) && !$forceRestart && !$memoryPortExplicit && (
             $memoryPreferredPort === $sessionPort
             || Processer::isPortInUse($memoryPreferredPort)
         );
-        if ($memoryPortNeedsSwitch) {
+        if ($memoryReuse['reusable'] ?? false) {
+            $memoryPort = $memoryPreferredPort;
+        } elseif ($memoryPortNeedsSwitch) {
             $memoryPort = $this->findAvailableAuxiliaryPort($memoryPreferredPort, [$sessionPort]);
             if ($memoryPort !== $memoryPreferredPort) {
                 $this->printer->warning(__('Memory Service port switched to %{1} automatically (preferred %{2} was busy).', [
@@ -1103,48 +1123,59 @@ class Start extends CommandAbstract
         }
 
         $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config);
-        $sessionTokenFileName = $this->resolveSharedStateTokenFileName(
-            $instanceName,
-            (string) (
-                $config['session_server_token_file_name']
-                ?? $wlsSessionServer['token_file_name']
-                ?? $wlsSession['token_file_name']
-                ?? ''
-            ),
-            'session_server.token',
-            $sessionTokenExplicit
-        );
+        $sessionTokenFileName = ($sessionReuse['reusable'] ?? false)
+            ? (string) ($sessionReuse['token_file_name'] ?? 'session_server.token')
+            : $this->resolveSharedStateTokenFileName(
+                $sessionPort,
+                (string) (
+                    $config['session_server_token_file_name']
+                    ?? $wlsSessionServer['token_file_name']
+                    ?? $wlsSession['token_file_name']
+                    ?? ''
+                ),
+                'session_server.token',
+                $sessionTokenExplicit,
+                19970
+            );
 
         $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config);
-        $memoryTokenFileName = $this->resolveSharedStateTokenFileName(
-            $instanceName,
-            (string) (
-                $config['memory_server_token_file_name']
-                ?? $memoryConfig['token_file_name']
-                ?? ''
-            ),
-            'memory_server.token',
-            $memoryTokenExplicit
-        );
+        $memoryTokenFileName = ($memoryReuse['reusable'] ?? false)
+            ? (string) ($memoryReuse['token_file_name'] ?? 'memory_server.token')
+            : $this->resolveSharedStateTokenFileName(
+                $memoryPort,
+                (string) (
+                    $config['memory_server_token_file_name']
+                    ?? $memoryConfig['token_file_name']
+                    ?? ''
+                ),
+                'memory_server.token',
+                $memoryTokenExplicit,
+                19971
+            );
 
         return [
             'session' => [
                 'host' => '127.0.0.1',
                 'port' => $sessionPort,
                 'token_file_name' => $sessionTokenFileName,
+                'reuse_existing' => (bool) ($sessionReuse['reusable'] ?? false),
+                'pid' => (int) ($sessionReuse['pid'] ?? 0),
+                'process_name' => (string) ($sessionReuse['process_name'] ?? ''),
             ],
             'memory' => [
                 'host' => '127.0.0.1',
                 'port' => $memoryPort,
                 'token_file_name' => $memoryTokenFileName,
+                'reuse_existing' => (bool) ($memoryReuse['reusable'] ?? false),
+                'pid' => (int) ($memoryReuse['pid'] ?? 0),
+                'process_name' => (string) ($memoryReuse['process_name'] ?? ''),
             ],
         ];
     }
 
-    protected function getSharedStateTokenFileName(string $instanceName, string $defaultFileName): string
+    protected function getSharedStateTokenFileName(int $port, string $defaultFileName, int $defaultPort): string
     {
-        $safeInstanceName = \preg_replace('/[^a-z0-9_-]/i', '_', \trim($instanceName)) ?: 'default';
-        if ($safeInstanceName === 'default') {
+        if ($port <= 0 || $port === $defaultPort) {
             return $defaultFileName;
         }
 
@@ -1155,23 +1186,24 @@ class Start extends CommandAbstract
         }
 
         return $extension !== ''
-            ? $filename . '.' . $safeInstanceName . '.' . $extension
-            : $filename . '.' . $safeInstanceName;
+            ? $filename . '.' . $port . '.' . $extension
+            : $filename . '.' . $port;
     }
 
     protected function resolveSharedStateTokenFileName(
-        string $instanceName,
+        int $port,
         string $tokenFileName,
         string $defaultFileName,
-        bool $explicit = false
+        bool $explicit = false,
+        int $defaultPort = 0
     ): string {
         $tokenFileName = \trim($tokenFileName);
         if ($tokenFileName === '') {
-            return $this->getSharedStateTokenFileName($instanceName, $defaultFileName);
+            return $this->getSharedStateTokenFileName($port, $defaultFileName, $defaultPort);
         }
 
         if (!$explicit && $this->isRuntimeGeneratedSharedStateTokenFileName($tokenFileName, $defaultFileName)) {
-            return $this->getSharedStateTokenFileName($instanceName, $defaultFileName);
+            return $this->getSharedStateTokenFileName($port, $defaultFileName, $defaultPort);
         }
 
         return $tokenFileName;
@@ -1211,6 +1243,23 @@ class Start extends CommandAbstract
         }
 
         return $preferredPort;
+    }
+
+    /**
+     * @return array{
+     *   in_use?: bool,
+     *   reusable?: bool,
+     *   pid?: int,
+     *   port?: int,
+     *   role?: string,
+     *   token_file_name?: string,
+     *   process_name?: string,
+     *   command_line?: string
+     * }
+     */
+    protected function inspectReusableSharedStateService(int $port, string $expectedRole, string $defaultTokenFileName): array
+    {
+        return (new SharedSidecarInspector())->inspect($port, $expectedRole, $defaultTokenFileName);
     }
     
     /**
