@@ -19,6 +19,9 @@ const MODULES_JSON = path.join(__dirname, 'modules.json');
 const RUNTIME_INFO_SCRIPT = path.join(__dirname, 'framework', 'runtime-info.php');
 const FALLBACK_HOST = '127.0.0.1';
 const FALLBACK_PORTS = [9991, 9992, 9993, 9994, 9995];
+const ALLOW_FALLBACK_RUNTIME_REUSE = process.env.PLAYWRIGHT_REUSE_FALLBACK_RUNTIME === '1';
+const RUNTIME_STRATEGIES = new Set(['auto', 'wls', 'fallback']);
+const TRANSPORT_STRATEGIES = new Set(['proxy', 'direct']);
 
 function readRuntimeInfo(env = process.env) {
     const stdout = execFileSync('php', [RUNTIME_INFO_SCRIPT], {
@@ -28,6 +31,115 @@ function readRuntimeInfo(env = process.env) {
     });
 
     return JSON.parse(stdout);
+}
+
+function normalizeRuntimeStrategy(value, fallback = 'auto') {
+    const normalized = String(value || '').trim().toLowerCase();
+    return RUNTIME_STRATEGIES.has(normalized) ? normalized : fallback;
+}
+
+function normalizeTransportStrategy(value, fallback = null) {
+    const normalized = String(value || '').trim().toLowerCase();
+    return TRANSPORT_STRATEGIES.has(normalized) ? normalized : fallback;
+}
+
+function resolveRequestedTestFile(file) {
+    if (typeof file !== 'string' || !file.endsWith('.js')) {
+        return null;
+    }
+
+    const candidates = [];
+    const normalizedFile = file.replace(/\\/g, '/');
+    if (path.isAbsolute(file)) {
+        candidates.push(file);
+    } else {
+        candidates.push(path.resolve(process.cwd(), file));
+        candidates.push(path.resolve(__dirname, file));
+        candidates.push(path.resolve(ROOT_DIR, file));
+
+        for (const anchor of ['app/', 'tests/']) {
+            const anchorIndex = normalizedFile.indexOf(anchor);
+            if (anchorIndex !== -1) {
+                candidates.push(path.join(ROOT_DIR, normalizedFile.slice(anchorIndex).replace(/\//g, path.sep)));
+            }
+        }
+    }
+
+    for (const candidate of candidates) {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+            return candidate;
+        }
+    }
+
+    return null;
+}
+
+function resolveRequestedTestFiles(args = []) {
+    return args
+        .filter(arg => typeof arg === 'string' && !arg.startsWith('-') && arg.endsWith('.js'))
+        .map(resolveRequestedTestFile)
+        .filter(Boolean);
+}
+
+function toProjectRelativePath(file) {
+    return path.relative(ROOT_DIR, file).replace(/\\/g, '/');
+}
+
+function inferRuntimeStrategyFromArgs(args = []) {
+    for (const file of resolveRequestedTestFiles(args)) {
+        const source = fs.readFileSync(file, 'utf8');
+        const marker = source.match(/@weline-e2e-runtime\s*:?\s*([a-z-]+)/i);
+        if (marker) {
+            return normalizeRuntimeStrategy(marker[1], null);
+        }
+    }
+
+    return null;
+}
+
+function inferTransportStrategyFromArgs(args = []) {
+    for (const file of resolveRequestedTestFiles(args)) {
+        const source = fs.readFileSync(file, 'utf8');
+        const marker = source.match(/@weline-e2e-transport\s*:?\s*([a-z-]+)/i);
+        if (marker) {
+            return normalizeTransportStrategy(marker[1], null);
+        }
+    }
+
+    return null;
+}
+
+function resolveRuntimeStrategy(args = [], env = process.env) {
+    if (Object.prototype.hasOwnProperty.call(env, 'PLAYWRIGHT_RUNTIME_STRATEGY')) {
+        return normalizeRuntimeStrategy(env.PLAYWRIGHT_RUNTIME_STRATEGY);
+    }
+
+    return inferRuntimeStrategyFromArgs(args) || 'auto';
+}
+
+function resolveTransportStrategy(args = [], env = process.env) {
+    if (Object.prototype.hasOwnProperty.call(env, 'PLAYWRIGHT_E2E_TRANSPORT')) {
+        return normalizeTransportStrategy(env.PLAYWRIGHT_E2E_TRANSPORT);
+    }
+
+    return inferTransportStrategyFromArgs(args);
+}
+
+function normalizePlaywrightArgs(args = []) {
+    return args.map(arg => {
+        if (typeof arg !== 'string' || arg.startsWith('-') || !arg.endsWith('.js')) {
+            return arg;
+        }
+
+        const resolved = resolveRequestedTestFile(arg);
+        return resolved
+            ? path.relative(__dirname, resolved).replace(/\\/g, '/')
+            : arg;
+    });
+}
+
+function stripFileArgs(args = []) {
+    return args.filter(arg => !(typeof arg === 'string' && !arg.startsWith('-') && arg.endsWith('.js')));
 }
 
 function resolvePhpBinary() {
@@ -201,16 +313,18 @@ async function startFallbackPhpServer(port) {
 async function resolveFallbackRuntime() {
     for (const port of FALLBACK_PORTS) {
         const origin = `http://${FALLBACK_HOST}:${port}`;
-        const reusable = await requestUrl(origin, { timeoutMs: 2000 });
-        if (reusable.ok) {
-            return {
-                origin,
-                reused: true,
-                cleanup: null,
-            };
+        const listening = await isPortListening(port, FALLBACK_HOST);
+        if (listening && ALLOW_FALLBACK_RUNTIME_REUSE) {
+            const reusable = await requestUrl(origin, { timeoutMs: 2000 });
+            if (reusable.ok) {
+                return {
+                    origin,
+                    reused: true,
+                    cleanup: null,
+                };
+            }
         }
 
-        const listening = await isPortListening(port, FALLBACK_HOST);
         if (!listening) {
             return startFallbackPhpServer(port);
         }
@@ -220,33 +334,7 @@ async function resolveFallbackRuntime() {
     return startFallbackPhpServer(dynamicPort);
 }
 
-async function prepareRuntime() {
-    const userPinnedTarget = Boolean(process.env.PLAYWRIGHT_TARGET_ORIGIN);
-    const userPinnedProxyMode = Object.prototype.hasOwnProperty.call(process.env, 'PLAYWRIGHT_DISABLE_PROXY');
-
-    if (!userPinnedTarget) {
-        const preferredLocalRuntime = await resolveFallbackRuntime();
-        process.env.PLAYWRIGHT_TARGET_ORIGIN = preferredLocalRuntime.origin;
-        if (!userPinnedProxyMode) {
-            process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
-        }
-
-        const runtimeInfo = readRuntimeInfo(process.env);
-        const note = preferredLocalRuntime.reused
-            ? `[e2e] using preferred local PHP runtime ${preferredLocalRuntime.origin} for a stable test target`
-            : `[e2e] started local PHP runtime ${preferredLocalRuntime.origin} for a stable test target`;
-
-        return {
-            runtimeInfo,
-            cleanup: preferredLocalRuntime.cleanup,
-            note,
-        };
-    }
-
-    let runtimeInfo = readRuntimeInfo(process.env);
-    let cleanup = null;
-    let note = null;
-
+async function finalizePreparedRuntime(runtimeInfo, userPinnedProxyMode, note, cleanup = null) {
     if (!runtimeInfo.runtime.reachable) {
         return { runtimeInfo, cleanup, note };
     }
@@ -265,7 +353,9 @@ async function prepareRuntime() {
             if (proxyListening) {
                 process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
                 runtimeInfo = readRuntimeInfo(process.env);
-                note = `[e2e] proxy ${runtimeInfo.proxy.origin} is occupied but not reusable; running tests in direct mode`;
+                note = note
+                    ? `${note}; proxy ${runtimeInfo.proxy.origin} is occupied but not reusable, running tests in direct mode`
+                    : `[e2e] proxy ${runtimeInfo.proxy.origin} is occupied but not reusable; running tests in direct mode`;
             }
         }
     }
@@ -273,10 +363,74 @@ async function prepareRuntime() {
     return { runtimeInfo, cleanup, note };
 }
 
+async function prepareRuntime(args = process.argv.slice(2)) {
+    const userPinnedTarget = Boolean(process.env.PLAYWRIGHT_TARGET_ORIGIN);
+    const userPinnedProxyMode = Object.prototype.hasOwnProperty.call(process.env, 'PLAYWRIGHT_DISABLE_PROXY');
+    const runtimeStrategy = resolveRuntimeStrategy(args, process.env);
+    const transportStrategy = resolveTransportStrategy(args, process.env);
+
+    if (!userPinnedProxyMode && transportStrategy === 'direct') {
+        process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
+    }
+
+    if (!userPinnedTarget) {
+        const detectedRuntimeInfo = readRuntimeInfo(process.env);
+        const runtimeSource = String(detectedRuntimeInfo.runtime && detectedRuntimeInfo.runtime.source ? detectedRuntimeInfo.runtime.source : '');
+        const hasWlsTarget = runtimeSource.startsWith('wls_');
+
+        if (runtimeStrategy === 'wls') {
+            if (!hasWlsTarget) {
+                throw new Error('E2E runtime strategy "wls" was requested, but runtime-info.php did not discover a WLS target.');
+            }
+
+            const note = detectedRuntimeInfo.runtime.reachable
+                ? `[e2e] using detected WLS runtime ${detectedRuntimeInfo.runtime.target_origin} because the selected specs require it`
+                : `[e2e] waiting for detected WLS runtime ${detectedRuntimeInfo.runtime.target_origin} because the selected specs require it`;
+
+            return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note);
+        }
+
+        if (runtimeStrategy !== 'fallback' && detectedRuntimeInfo.runtime.reachable) {
+            const note = `[e2e] using detected runtime ${detectedRuntimeInfo.runtime.target_origin} (strategy: ${runtimeStrategy})`;
+            return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note);
+        }
+
+        const preferredLocalRuntime = await resolveFallbackRuntime();
+        process.env.PLAYWRIGHT_TARGET_ORIGIN = preferredLocalRuntime.origin;
+        if (!userPinnedProxyMode) {
+            process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
+        }
+
+        const runtimeInfo = readRuntimeInfo(process.env);
+        const note = preferredLocalRuntime.reused
+            ? `[e2e] reusing local PHP runtime ${preferredLocalRuntime.origin} for a stable test target`
+            : `[e2e] started fresh local PHP runtime ${preferredLocalRuntime.origin} for a stable test target`;
+
+        return {
+            runtimeInfo,
+            cleanup: preferredLocalRuntime.cleanup,
+            note,
+        };
+    }
+
+    return finalizePreparedRuntime(readRuntimeInfo(process.env), userPinnedProxyMode, null);
+}
+
 async function main() {
     let cleanup = null;
 
     try {
+        const rawArgs = process.argv.slice(2);
+        const args = normalizePlaywrightArgs(rawArgs);
+        const requestedTestFiles = resolveRequestedTestFiles(rawArgs).map(toProjectRelativePath);
+        if (requestedTestFiles.length > 0) {
+            process.env.PLAYWRIGHT_TEST_FILES = JSON.stringify(requestedTestFiles);
+        } else {
+            delete process.env.PLAYWRIGHT_TEST_FILES;
+        }
+
+        const runtimeStrategy = resolveRuntimeStrategy(args, process.env);
+        const transportStrategy = resolveTransportStrategy(args, process.env) || 'auto';
         console.log('[e2e] running framework preflight...\n');
         try {
             const preflight = runFrameworkPreflight(resolvePhpBinary, process.env);
@@ -291,7 +445,7 @@ async function main() {
             throw error;
         }
 
-        const preparedRuntime = await prepareRuntime();
+        const preparedRuntime = await prepareRuntime(args);
         cleanup = preparedRuntime.cleanup;
         const runtimeInfo = preparedRuntime.runtimeInfo;
 
@@ -299,6 +453,8 @@ async function main() {
         if (preparedRuntime.note) {
             console.log(`${preparedRuntime.note}\n`);
         }
+        console.log(`[e2e] runtime strategy: ${runtimeStrategy}`);
+        console.log(`[e2e] transport strategy: ${transportStrategy}`);
         console.log(`[e2e] proxy origin: ${runtimeInfo.proxy.origin}`);
         console.log(`[e2e] target origin: ${runtimeInfo.runtime.target_origin}`);
         console.log(`[e2e] transport: ${process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? 'direct' : 'proxy'}\n`);
@@ -327,9 +483,9 @@ async function main() {
 
         console.log('[e2e] running Playwright...\n');
         try {
-            const args = process.argv.slice(2);
-            const command = args.length > 0
-                ? `npx playwright test ${args.join(' ')}`
+            const playwrightArgs = stripFileArgs(args);
+            const command = playwrightArgs.length > 0
+                ? `npx playwright test ${playwrightArgs.join(' ')}`
                 : 'npx playwright test';
 
             execSync(command, {
