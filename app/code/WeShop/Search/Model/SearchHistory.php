@@ -52,10 +52,13 @@ class SearchHistory extends Model
         $keyword = trim($keyword);
         $this->clear();
         $existing = $this->where(self::schema_fields_KEYWORD, $keyword)->find()->fetch();
-        if ($existing) {
+        $existingId = $this->resolveExistingId($existing);
+
+        if ($existingId > 0) {
             $this->clear()
-                ->setId($existing[self::schema_fields_ID])
-                ->setData(self::schema_fields_SEARCH_COUNT, (int)$existing[self::schema_fields_SEARCH_COUNT] + 1)
+                ->setId($existingId)
+                ->setData(self::schema_fields_KEYWORD, $keyword)
+                ->setData(self::schema_fields_SEARCH_COUNT, $this->resolveExistingSearchCount($existing) + 1)
                 ->setData(self::schema_fields_RESULT_COUNT, $resultCount)
                 ->setData(self::schema_fields_USER_ID, $userId ?? 0)
                 ->setData(self::schema_fields_IP_ADDRESS, $_SERVER['REMOTE_ADDR'] ?? '')
@@ -74,17 +77,75 @@ class SearchHistory extends Model
         return true;
     }
 
+    private function resolveExistingId(mixed $existing): int
+    {
+        if (is_object($existing) && method_exists($existing, 'getId')) {
+            return (int) $existing->getId();
+        }
+
+        if (is_array($existing)) {
+            return (int) ($existing[self::schema_fields_ID] ?? 0);
+        }
+
+        return 0;
+    }
+
+    private function resolveExistingSearchCount(mixed $existing): int
+    {
+        if (is_object($existing) && method_exists($existing, 'getData')) {
+            return (int) $existing->getData(self::schema_fields_SEARCH_COUNT);
+        }
+
+        if (is_array($existing)) {
+            return (int) ($existing[self::schema_fields_SEARCH_COUNT] ?? 0);
+        }
+
+        return 0;
+    }
+
     public function getPopularKeywords(int $limit = 10, int $days = 30): array
     {
         $this->clear();
         $dateThreshold = date('Y-m-d H:i:s', strtotime("-{$days} days"));
-        $this->where(self::schema_fields_CREATED_AT, ['>=', $dateThreshold])
+        $this->where(self::schema_fields_CREATED_AT, $dateThreshold, '>=')
             ->order(self::schema_fields_SEARCH_COUNT, 'DESC')
             ->limit($limit);
         $results = $this->select()->fetchArray();
-        return array_map(function ($item) {
-            return ['keyword' => $item[self::schema_fields_KEYWORD], 'count' => (int)$item[self::schema_fields_SEARCH_COUNT]];
-        }, $results);
+
+        return $this->normalizePopularKeywords($results, $limit);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $results
+     * @return array<int, array{keyword:string,count:int}>
+     */
+    private function normalizePopularKeywords(array $results, int $limit): array
+    {
+        $grouped = [];
+
+        foreach ($results as $item) {
+            $keyword = trim((string) ($item[self::schema_fields_KEYWORD] ?? ''));
+            if ($keyword === '') {
+                continue;
+            }
+
+            $count = (int) ($item[self::schema_fields_SEARCH_COUNT] ?? 0);
+            if (!isset($grouped[$keyword])) {
+                $grouped[$keyword] = [
+                    'keyword' => $keyword,
+                    'count' => 0,
+                ];
+            }
+
+            $grouped[$keyword]['count'] += $count;
+        }
+
+        $keywords = array_values($grouped);
+        usort($keywords, static function (array $left, array $right): int {
+            return $right['count'] <=> $left['count'];
+        });
+
+        return array_slice($keywords, 0, $limit);
     }
 }
 

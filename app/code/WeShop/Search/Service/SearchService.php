@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Search\Service;
 
+use WeShop\Search\Api\SearchEngineInterface;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Search\Model\SearchHistory;
 
@@ -26,7 +27,7 @@ class SearchService
      */
     public function searchProducts(string $keyword, array $filters = [], int $page = 1, int $pageSize = 20, string $scope = 'default'): array
     {
-        $engine = SearchEngineFactory::create($scope);
+        $engine = $this->createEngine($scope);
 
         if (!$engine) {
             return $this->fallbackSearch($keyword, $filters, $page, $pageSize);
@@ -37,7 +38,7 @@ class SearchService
 
         if (!empty($keyword)) {
             /** @var SearchHistory $searchHistory */
-            $searchHistory = ObjectManager::getInstance(SearchHistory::class);
+            $searchHistory = $this->getSearchHistoryModel();
             $userId = $this->getCurrentUserId();
             $searchHistory->recordSearch($keyword, $total, $userId);
         }
@@ -88,12 +89,12 @@ class SearchService
         }
 
         $keyword = \trim($keyword);
-        $engine = SearchEngineFactory::create($scope);
+        $engine = $this->createEngine($scope);
 
         if ($engine) {
             $engineSuggestions = $engine->getSuggestions($keyword, $limit);
             if (!empty($engineSuggestions)) {
-                return \array_slice($engineSuggestions, 0, $limit);
+                return \array_slice($this->normalizeSuggestions($engineSuggestions), 0, $limit);
             }
         }
 
@@ -118,9 +119,9 @@ class SearchService
 
         if (\count($suggestions) < $limit) {
             /** @var SearchHistory $searchHistory */
-            $searchHistory = ObjectManager::getInstance(SearchHistory::class);
+            $searchHistory = $this->getSearchHistoryModel();
             $searchHistory->clear();
-            $searchHistory->where(SearchHistory::schema_fields_KEYWORD, ['like', '%' . $keyword . '%'])
+            $searchHistory->where(SearchHistory::schema_fields_KEYWORD, '%' . $keyword . '%', 'like')
                 ->order(SearchHistory::schema_fields_SEARCH_COUNT, 'DESC')
                 ->limit(\min(3, $limit - \count($suggestions)));
 
@@ -163,9 +164,23 @@ class SearchService
         return null;
     }
 
+    protected function createEngine(string $scope): ?SearchEngineInterface
+    {
+        return SearchEngineFactory::create($scope);
+    }
+
+    protected function getSearchHistoryModel(): SearchHistory
+    {
+        /** @var SearchHistory $searchHistory */
+        $searchHistory = ObjectManager::getInstance(SearchHistory::class);
+
+        return $searchHistory;
+    }
+
     private function appendUniqueSuggestions(array $target, array $candidates, int $limit): array
     {
         foreach ($candidates as $candidate) {
+            $candidate = $this->normalizeSuggestion($candidate);
             $text = (string) ($candidate['text'] ?? '');
             if ($text === '' || $this->hasSuggestionText($target, $text)) {
                 continue;
@@ -188,6 +203,57 @@ class SearchService
         }
 
         return false;
+    }
+
+    /**
+     * @param array<int, mixed> $suggestions
+     * @return array<int, array<string, string>>
+     */
+    private function normalizeSuggestions(array $suggestions): array
+    {
+        $normalized = [];
+
+        foreach ($suggestions as $suggestion) {
+            $item = $this->normalizeSuggestion($suggestion);
+            if (($item['text'] ?? '') === '') {
+                continue;
+            }
+
+            $normalized[] = $item;
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function normalizeSuggestion(mixed $suggestion): array
+    {
+        if (is_string($suggestion)) {
+            return [
+                'text' => $suggestion,
+                'type' => 'search',
+                'icon' => 'fa-search',
+                'url' => $this->buildSearchUrl($suggestion),
+            ];
+        }
+
+        if (!is_array($suggestion)) {
+            return [];
+        }
+
+        $text = trim((string) ($suggestion['text'] ?? $suggestion['query'] ?? $suggestion['name'] ?? $suggestion['sku'] ?? ''));
+        if ($text === '') {
+            return [];
+        }
+
+        return [
+            'text' => $text,
+            'type' => (string) ($suggestion['type'] ?? 'search'),
+            'icon' => (string) ($suggestion['icon'] ?? 'fa-search'),
+            'url' => (string) ($suggestion['url'] ?? $this->buildSearchUrl($text)),
+        ];
     }
 
     private function buildSearchUrl(string $keyword): string
