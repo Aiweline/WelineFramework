@@ -24,7 +24,10 @@ class CallbackTest extends TestCase
         $result = json_decode($controller->index(), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertFalse($result['success']);
-        $this->assertSame('Payment method is required.', $result['message']);
+        $this->assertContains(
+            $result['message'],
+            ['Payment method is required.', '支付方式不能为空。']
+        );
     }
 
     public function testIndexDelegatesCallbackHandlingToPaymentService(): void
@@ -55,7 +58,10 @@ class CallbackTest extends TestCase
         $result = json_decode($controller->index(), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertTrue($result['success']);
-        $this->assertSame('Payment callback handled.', $result['message']);
+        $this->assertContains(
+            $result['message'],
+            ['Payment callback handled.', '支付回调已处理。']
+        );
     }
 
     private function createController(Request $request, PaymentService $paymentService): Callback

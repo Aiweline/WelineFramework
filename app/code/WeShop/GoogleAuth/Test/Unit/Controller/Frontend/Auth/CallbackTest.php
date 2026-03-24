@@ -77,6 +77,10 @@ class CallbackTest extends TestCase
                 'local_user_id' => 88,
                 'redirect_url' => 'https://example.com/account',
             ]);
+        $googleOAuthService->expects($this->once())
+            ->method('sanitizeRedirectUrl')
+            ->with('frontend', 'https://example.com/account', true)
+            ->willReturn('https://example.com/account');
 
         $googleLoginService = $this->createMock(GoogleLoginService::class);
         $googleLoginService->expects($this->once())
@@ -106,6 +110,68 @@ class CallbackTest extends TestCase
             $this->createMock(BackendWebAuthService::class),
             $this->createMock(BackendUser::class),
             $this->createMock(Url::class),
+            $request,
+            $messageManager
+        );
+
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('https://example.com/account');
+
+        $controller->index();
+    }
+
+    public function testIndexBlocksExternalFrontendBindRedirectAndUsesAccountCenterFallback(): void
+    {
+        $googleOAuthService = $this->createMock(GoogleOAuthService::class);
+        $googleOAuthService->expects($this->once())
+            ->method('consumeState')
+            ->with('bind-state')
+            ->willReturn([
+                'area' => 'frontend',
+                'mode' => 'bind',
+                'local_user_id' => 88,
+                'redirect_url' => 'https://evil.example/phish',
+            ]);
+        $googleOAuthService->expects($this->once())
+            ->method('sanitizeRedirectUrl')
+            ->with('frontend', 'https://evil.example/phish', true)
+            ->willReturn('');
+
+        $googleLoginService = $this->createMock(GoogleLoginService::class);
+        $googleLoginService->expects($this->once())
+            ->method('bindByCode')
+            ->with('frontend', 88, 'google-code');
+
+        $url = $this->createMock(Url::class);
+        $url->expects($this->once())
+            ->method('getFrontendUrl')
+            ->with('weshop/customer/account/index')
+            ->willReturn('https://example.com/account');
+
+        $request = $this->createMock(Request::class);
+        $request->expects($this->exactly(4))
+            ->method('getParam')
+            ->willReturnMap([
+                ['state', 'bind-state'],
+                ['error', ''],
+                ['error_description', ''],
+                ['code', 'google-code'],
+            ]);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addSuccess')
+            ->with($this->stringContains('bound successfully'));
+
+        $controller = $this->createController(
+            $googleOAuthService,
+            $googleLoginService,
+            $this->createMock(CustomerAccountService::class),
+            $this->createMock(CustomerWebAuthService::class),
+            $this->createMock(BackendWebAuthService::class),
+            $this->createMock(BackendUser::class),
+            $url,
             $request,
             $messageManager
         );

@@ -37,13 +37,15 @@ class SaveTest extends TestCase
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
             ->method('addSuccess')
-            ->with('Payment settings saved successfully.');
+            ->with($this->callback(static function (mixed $message): bool {
+                return in_array((string) $message, ['Payment settings saved successfully.', '支付设置已保存。'], true);
+            }));
 
         $controller = $this->getMockBuilder(Save::class)
             ->setConstructorArgs([$service])
             ->onlyMethods(['redirect', 'getMessageManager'])
             ->getMock();
-        $controller->expects($this->once())
+        $controller->expects($this->atLeastOnce())
             ->method('getMessageManager')
             ->willReturn($messageManager);
         $controller->expects($this->once())

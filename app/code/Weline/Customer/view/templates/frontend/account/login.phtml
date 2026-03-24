@@ -3,6 +3,12 @@
 // 设置页面标题
 $this->setData('title', __('用户登录'));
 ?>
+<?php
+$redirectUrl = (string) ($this->getData('redirect_url') ?? ($_GET['redirect_url'] ?? $_GET['redirect'] ?? ''));
+$googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', [
+    'redirect_url' => $redirectUrl,
+]));
+?>
 <style>
 .login-form-container {
     max-width: 440px;
@@ -332,6 +338,7 @@ $this->setData('title', __('用户登录'));
     </div>
     
     <form id="loginForm" class="login-form">
+        <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>" />
         <?php
         // 使用主题错误提示组件
         echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
@@ -403,6 +410,11 @@ $this->setData('title', __('用户登录'));
     </form>
     
     <div class="login-footer">
+        <?php if ($googleLoginButton !== ''): ?>
+            <div class="social-login-provider-section" style="margin-bottom: 1rem;">
+                <?= $googleLoginButton ?>
+            </div>
+        <?php endif; ?>
         <p>
             <lang>还没有账户？</lang> 
             <a href="/customer/account/register">
