@@ -32,7 +32,10 @@ class ProcessTest extends TestCase
         $result = json_decode($controller->index(), true, 512, JSON_THROW_ON_ERROR);
 
         $this->assertFalse($result['success']);
-        $this->assertSame('Order ID is required.', $result['message']);
+        $this->assertContains(
+            $result['message'],
+            ['Order ID is required.', '订单 ID 不能为空。']
+        );
     }
 
     public function testIndexProcessesPaymentWithResolvedOrder(): void

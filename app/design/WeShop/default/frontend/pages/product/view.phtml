@@ -8,6 +8,7 @@ $images = $this->getData('product_images') ?? [];
 $reviews = $this->getData('reviews') ?? [];
 $relatedProducts = $this->getData('related_products') ?? [];
 $breadcrumbs = $this->getData('breadcrumbs') ?? [];
+$canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::frontend::layouts::product::tabs-content'));
 ?>
 <main class="px-4 sm:px-6 lg:px-8 xl:px-20 py-10 flex-1">
     <div class="mx-auto max-w-7xl">
@@ -150,47 +151,51 @@ $breadcrumbs = $this->getData('breadcrumbs') ?? [];
         <!-- Tabs Section -->
         <div class="mt-16">
             <w:hook name="WeShop_Product::detail::tabs_before"/>
-            <div class="border-b border-border-light dark:border-border-dark">
-                <nav aria-label="Tabs" class="-mb-px flex space-x-8">
-                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-primary border-primary" href="#description" data-tab="description"><?= __('Product Description') ?></a>
-                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#specifications" data-tab="specifications"><?= __('Specifications') ?></a>
-                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#qa" data-tab="qa"><?= __('Q&A') ?></a>
-                    <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#reviews" data-tab="reviews"><?= __('Reviews') ?></a>
-                </nav>
-            </div>
-            
-            <!-- Description Tab -->
-            <div class="tab-content py-10" id="description-content">
-                <h3 class="text-xl font-bold mb-4"><?= htmlspecialchars($product['description_title'] ?? __('Product Description')) ?></h3>
-                <div class="text-text-secondary-light dark:text-text-secondary-dark leading-relaxed prose dark:prose-invert max-w-none">
-                    <?= $product['description'] ?? '' ?>
+            <?php if ($canonicalProductTabsContent !== ''): ?>
+                <?= $canonicalProductTabsContent ?>
+            <?php else: ?>
+                <div class="border-b border-border-light dark:border-border-dark">
+                    <nav aria-label="Tabs" class="-mb-px flex space-x-8">
+                        <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-primary border-primary" href="#description" data-tab="description"><?= __('Product Description') ?></a>
+                        <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#specifications" data-tab="specifications"><?= __('Specifications') ?></a>
+                        <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#qa" data-tab="qa"><?= __('Q&A') ?></a>
+                        <a class="product-tab whitespace-nowrap py-4 px-1 border-b-2 font-medium text-base text-text-secondary-light dark:text-text-secondary-dark border-transparent hover:text-primary hover:border-primary/50" href="#reviews" data-tab="reviews"><?= __('Reviews') ?></a>
+                    </nav>
                 </div>
-            </div>
-            
-            <!-- Specifications Tab -->
-            <div class="tab-content py-10 hidden" id="specifications-content">
-                <?php $specs = $product['specifications'] ?? []; ?>
-                <table class="w-full text-left">
-                    <tbody>
-                        <?php foreach ($specs as $spec): ?>
-                            <tr class="border-b border-border-light dark:border-border-dark">
-                                <th class="py-3 pr-4 font-medium text-text-primary-light dark:text-text-primary-dark w-1/3"><?= htmlspecialchars($spec['label']) ?></th>
-                                <td class="py-3 text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($spec['value']) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
 
-            <!-- Q&A Tab -->
-            <div class="tab-content py-10 hidden" id="qa-content">
-                <w:hook name="WeShop_QA::frontend::layouts::product-questions::content"/>
-            </div>
-            
-            <!-- Reviews Tab -->
-            <div class="tab-content py-10 hidden" id="reviews-content">
-                <w:hook name="WeShop_Review::frontend::layouts::product-reviews::content"/>
-            </div>
+                <!-- Description Tab -->
+                <div class="tab-content py-10" id="description-content">
+                    <h3 class="text-xl font-bold mb-4"><?= htmlspecialchars($product['description_title'] ?? __('Product Description')) ?></h3>
+                    <div class="text-text-secondary-light dark:text-text-secondary-dark leading-relaxed prose dark:prose-invert max-w-none">
+                        <?= $product['description'] ?? '' ?>
+                    </div>
+                </div>
+
+                <!-- Specifications Tab -->
+                <div class="tab-content py-10 hidden" id="specifications-content">
+                    <?php $specs = $product['specifications'] ?? []; ?>
+                    <table class="w-full text-left">
+                        <tbody>
+                            <?php foreach ($specs as $spec): ?>
+                                <tr class="border-b border-border-light dark:border-border-dark">
+                                    <th class="py-3 pr-4 font-medium text-text-primary-light dark:text-text-primary-dark w-1/3"><?= htmlspecialchars($spec['label']) ?></th>
+                                    <td class="py-3 text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($spec['value']) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Q&A Tab -->
+                <div class="tab-content py-10 hidden" id="qa-content">
+                    <w:hook name="WeShop_QA::frontend::layouts::product-questions::content"/>
+                </div>
+
+                <!-- Reviews Tab -->
+                <div class="tab-content py-10 hidden" id="reviews-content">
+                    <w:hook name="WeShop_Review::frontend::layouts::product-reviews::content"/>
+                </div>
+            <?php endif; ?>
             <w:hook name="WeShop_Product::detail::tabs_after"/>
         </div>
         

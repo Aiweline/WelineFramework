@@ -2,71 +2,62 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\Customer\Model;
 
-use Weline\Backend\Model\Config;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Table;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
-use Weline\Framework\View\Template;
 
-#[Table(comment: '用户表')]
+#[Table(comment: 'Frontend customer auth table')]
 class Customer extends Model implements AuthenticableInterface
 {
-    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '用户ID')]
-    public const schema_fields_ID            = 'user_id';
-    #[Col(type: 'varchar', length: 64, nullable: false, comment: '用户名')]
-    public const schema_fields_username      = 'username';
-    #[Col(type: 'varchar', length: 255, nullable: false, comment: '密码')]
-    public const schema_fields_password      = 'password';
-    #[Col(type: 'varchar', length: 255, nullable: true, comment: '头像')]
-    public const schema_fields_avatar        = 'avatar';
-    #[Col(type: 'varchar', length: 45, nullable: true, comment: '登录IP')]
-    public const schema_fields_login_ip      = 'login_ip';
-    #[Col(type: 'varchar', length: 45, nullable: true, comment: '尝试IP')]
-    public const schema_fields_attempt_ip    = 'attempt_ip';
-    #[Col(type: 'int', nullable: false, default: 0, comment: '尝试登录次数')]
+    #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: 'Customer ID')]
+    public const schema_fields_ID = 'customer_id';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: 'Customer email')]
+    public const schema_fields_email = 'email';
+    #[Col(type: 'varchar', length: 100, nullable: true, comment: 'Legacy username / login identifier')]
+    public const schema_fields_username = 'username';
+    #[Col(type: 'varchar', length: 255, nullable: false, comment: 'Password hash')]
+    public const schema_fields_password = 'password';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Avatar')]
+    public const schema_fields_avatar = 'avatar';
+    #[Col(type: 'varchar', length: 45, nullable: true, comment: 'Last login IP')]
+    public const schema_fields_login_ip = 'login_ip';
+    #[Col(type: 'varchar', length: 45, nullable: true, comment: 'Last failed attempt IP')]
+    public const schema_fields_attempt_ip = 'attempt_ip';
+    #[Col(type: 'int', nullable: false, default: 0, comment: 'Failed login attempts')]
     public const schema_fields_attempt_times = 'attempt_times';
-    #[Col(type: 'varchar', length: 64, nullable: true, comment: '会话ID')]
-    public const schema_fields_sess_id       = 'sess_id';
-    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '是否沙箱')]
-    public const schema_fields_is_sandbox    = 'is_sandbox';
+    #[Col(type: 'varchar', length: 64, nullable: true, comment: 'Auth session ID')]
+    public const schema_fields_sess_id = 'sess_id';
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Sandbox flag')]
+    public const schema_fields_is_sandbox = 'is_sandbox';
 
-    public const schema_primary_key = 'user_id';
-    public const schema_primary_keys = ['user_id'];
+    public const schema_primary_key = 'customer_id';
+    public const schema_primary_keys = ['customer_id'];
 
-    /**
-     * 初始化模型
-     */
     public function _init(): void
     {
     }
 
-    public function getAttemptTimes()
+    public function getAttemptTimes(): int
     {
-        return intval($this->getData(self::schema_fields_attempt_times));
+        return (int) $this->getData(self::schema_fields_attempt_times);
     }
 
     public function addAttemptTimes(): static
     {
-        $this->setData(self::schema_fields_attempt_times, intval($this->getData(self::schema_fields_attempt_times)) + 1);
+        $this->setData(self::schema_fields_attempt_times, $this->getAttemptTimes() + 1);
         return $this;
     }
 
-    public function getAttemptIp()
+    public function getAttemptIp(): ?string
     {
-        return $this->getData(self::schema_fields_attempt_ip);
+        $value = $this->getData(self::schema_fields_attempt_ip);
+        return $value === null ? null : (string) $value;
     }
 
-    public function setAttemptIp($ip)
+    public function setAttemptIp(string $ip): static
     {
         return $this->setData(self::schema_fields_attempt_ip, $ip);
     }
@@ -74,54 +65,65 @@ class Customer extends Model implements AuthenticableInterface
     public function resetAttemptTimes(): static
     {
         $this->setData(self::schema_fields_attempt_times, 0);
-        $this->save();
         return $this;
     }
 
-    public function getUsername()
+    public function getUsername(): ?string
     {
-        return $this->getData('username');
+        $email = $this->getData(self::schema_fields_email);
+        return is_string($email) && trim($email) !== '' ? $email : null;
     }
 
-    public function setUsername(string $username)
+    public function setUsername(string $username): static
     {
-        return $this->setData('username', $username);
+        return $this->setEmail($username);
     }
 
-    public function getAvatar()
+    public function getEmail(): string
     {
-        return $this->getData('avatar');
+        return (string) ($this->getData(self::schema_fields_email) ?? '');
     }
 
-    public function setAvatar(string $avatar)
+    public function setEmail(string $email): static
     {
-        return $this->setData('avatar', $avatar);
+        return $this->setData(self::schema_fields_email, strtolower(trim($email)));
     }
 
-    public function getPassword()
+    public function getAvatar(): ?string
     {
-        return $this->getData('password');
+        $value = $this->getData(self::schema_fields_avatar);
+        return $value === null ? null : (string) $value;
     }
 
-    public function setPassword(string $password)
+    public function setAvatar(string $avatar): static
     {
-        return $this->setData('password', password_hash($password, PASSWORD_DEFAULT));
+        return $this->setData(self::schema_fields_avatar, $avatar);
     }
 
-
-    public function getSessionId()
+    public function getPassword(): string
     {
-        return $this->getData(self::schema_fields_sess_id);
+        return (string) ($this->getData(self::schema_fields_password) ?? '');
     }
 
-    public function setSessionId(string $sess_id): static
+    public function setPassword(string $password): static
     {
-        return $this->setData(self::schema_fields_sess_id, $sess_id);
+        return $this->setData(self::schema_fields_password, password_hash($password, PASSWORD_DEFAULT));
     }
 
-    public function getLoginIp()
+    public function getSessionId(): string
     {
-        return $this->getData(self::schema_fields_login_ip);
+        return (string) ($this->getData(self::schema_fields_sess_id) ?? '');
+    }
+
+    public function setSessionId(string $sessId): static
+    {
+        return $this->setData(self::schema_fields_sess_id, $sessId);
+    }
+
+    public function getLoginIp(): ?string
+    {
+        $value = $this->getData(self::schema_fields_login_ip);
+        return $value === null ? null : (string) $value;
     }
 
     public function setLoginIp(string $ip): static
@@ -131,7 +133,7 @@ class Customer extends Model implements AuthenticableInterface
 
     public function isSandboxAccount(): bool
     {
-        return (bool)$this->getData(self::schema_fields_is_sandbox);
+        return (bool) $this->getData(self::schema_fields_is_sandbox);
     }
 
     public function setSandboxAccount(bool $flag): static
@@ -139,38 +141,23 @@ class Customer extends Model implements AuthenticableInterface
         return $this->setData(self::schema_fields_is_sandbox, $flag ? 1 : 0);
     }
 
-    // ==================== AuthenticableInterface 实现 ====================
-
-    /**
-     * @inheritDoc
-     */
     public function getAuthIdentifier(): int|string
     {
-        return (int)$this->getId();
+        return (int) $this->getId();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getAuthUsername(): string
     {
-        return (string)$this->getUsername();
+        return $this->getEmail() !== '' ? $this->getEmail() : (string) $this->getUsername();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getAuthSessionId(): string
     {
-        return (string)$this->getSessionId();
+        return $this->getSessionId();
     }
 
-    /**
-     * @inheritDoc
-     */
     public static function getAuthModelClass(): string
     {
         return self::class;
     }
 }
-

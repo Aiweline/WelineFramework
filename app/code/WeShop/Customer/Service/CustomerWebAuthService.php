@@ -23,7 +23,8 @@ class CustomerWebAuthService
         string $email,
         string $password,
         bool $rememberMe = false,
-        string $redirectUrl = ''
+        string $redirectUrl = '',
+        int $rememberDuration = 604800
     ): array {
         $result = $this->customerAccountService->authenticate($email, $password);
 
@@ -31,7 +32,8 @@ class CustomerWebAuthService
             $result['auth_user'],
             'password',
             $rememberMe,
-            $redirectUrl
+            $redirectUrl,
+            $rememberDuration
         );
     }
 
@@ -39,9 +41,11 @@ class CustomerWebAuthService
         AuthCustomer $authUser,
         string $authMethod = 'password',
         bool $rememberMe = false,
-        string $redirectUrl = ''
+        string $redirectUrl = '',
+        int $rememberDuration = 604800
     ): array {
         $redirectUrl = $this->normalizeRedirectTarget($redirectUrl);
+        $rememberDuration = max(3600, $rememberDuration);
         $context = new ActorContext(
             ActorContext::ACTOR_CUSTOMER,
             (int) $authUser->getId(),
@@ -56,6 +60,7 @@ class CustomerWebAuthService
             [
                 'flow' => $authMethod,
                 'remember_me' => $rememberMe,
+                'remember_duration' => $rememberDuration,
                 'redirect_url' => $redirectUrl,
             ]
         );
@@ -72,7 +77,7 @@ class CustomerWebAuthService
             ];
         }
 
-        $this->customerAccountService->login($authUser, $rememberMe);
+        $this->customerAccountService->login($authUser, $rememberMe, $rememberDuration);
 
         return [
             'status' => 'authenticated',
@@ -101,7 +106,8 @@ class CustomerWebAuthService
 
         $this->customerAccountService->login(
             $authUser,
-            (bool) ($payload['remember_me'] ?? false)
+            (bool) ($payload['remember_me'] ?? false),
+            max(3600, (int) ($payload['remember_duration'] ?? 604800))
         );
 
         return [
