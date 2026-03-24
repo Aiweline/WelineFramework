@@ -6,7 +6,6 @@ namespace WeShop\Analytics\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
@@ -14,19 +13,21 @@ use WeShop\Analytics\Service\PixelDispatcher;
  */
 class CustomerLoginPixel implements ObserverInterface
 {
+    public function __construct(
+        private readonly PixelDispatcher $pixelDispatcher
+    ) {
+    }
+
     public function execute(Event &$event): void
     {
         $data = $event->getData();
         $customer = $data->getData('customer');
-        
+
         if (!$customer) {
             return;
         }
-        
-        /** @var PixelDispatcher $dispatcher */
-        $dispatcher = ObjectManager::getInstance(PixelDispatcher::class);
-        
-        $dispatcher->track('login', [
+
+        $this->pixelDispatcher->track('login', [
             'user_id' => $customer->getId(),
             'module' => 'WeShop_Customer',
             'name' => 'customer_login',
