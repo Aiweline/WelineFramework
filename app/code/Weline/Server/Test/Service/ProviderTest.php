@@ -109,6 +109,7 @@ class ProviderTest extends TestCase
 
         $this->assertEquals('session_server', $provider->getRole());
         $this->assertEquals('Session Server', $provider->getDisplayName());
+        $this->assertTrue($provider->isEnabled($this->context));
         $this->assertEquals(1, $provider->getInstanceCount($this->context));
         $this->assertEquals(10, $provider->getPriority());
     }
@@ -151,6 +152,63 @@ class ProviderTest extends TestCase
         );
 
         $this->assertEquals(18889, $provider->getPort(0, $context));
+    }
+
+    public function testSessionServerProviderEnabledForSingleWorkerByDefault(): void
+    {
+        $provider = new SessionServerProvider();
+        $context = new ServiceContext(
+            instanceName: 'single-worker',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'multi',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 1,
+                ],
+            ],
+        );
+
+        $this->assertTrue($provider->isEnabled($context));
+    }
+
+    public function testSessionServerProviderHonorsExplicitDisable(): void
+    {
+        $provider = new SessionServerProvider();
+        $context = new ServiceContext(
+            instanceName: 'single-worker',
+            epoch: 1,
+            controlPort: 19000,
+            masterPid: 12345,
+            host: '127.0.0.1',
+            mainPort: 9981,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'multi',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'worker_count' => 1,
+                    'session_server' => [
+                        'enabled' => false,
+                    ],
+                ],
+            ],
+        );
+
+        $this->assertFalse($provider->isEnabled($context));
     }
 
     public function testHttpRedirectProviderBasic(): void
