@@ -17,13 +17,18 @@
 - [x] Revalidate the local `WeShop_Order` storefront/default-theme/API slice
 - [x] Commit the isolated `WeShop_Order` slice with white-list staging
 - [x] Refresh `progress.md` / `result.md` for the `WeShop_Order` checkpoint
+- [x] Harden the `Order + Checkout` clean frontend routes with focused unit and browser smoke coverage
 - [x] Integrate parallel audit output and choose the next bounded module slice
 - [x] Implement and validate the next slice with white-list staging only
-- [ ] Commit the isolated `WeShop_Invoice` slice with white-list staging only
-- [ ] Choose the next bounded module after `WeShop_Invoice` and continue the module wave
+- [x] Commit the isolated `WeShop_Invoice` slice with white-list staging only
+- [x] Choose the next bounded module after `WeShop_Invoice` and continue the module wave
+- [x] Implement and validate the `WeShop_Subscription` clean-route/admin/account slice
+- [ ] Commit the isolated `WeShop_Subscription` slice with white-list staging only
+- [ ] Choose the next bounded module after `WeShop_Subscription` and continue the module wave
 
 ## Verification Targets
 
 - [x] Unit / phpunit
 - [x] Route / integration / preflight refresh
 - [x] E2E / browser flow for the active `WeShop_Invoice` storefront route guard
+- [x] E2E / browser flow for the active `WeShop_Subscription` storefront route guard

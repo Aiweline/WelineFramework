@@ -397,3 +397,113 @@
 
 - `app/code/WeShop/Search/README.md`, `app/code/WeShop/Search/env/*`, and multiple unrelated i18n files remain outside the commit boundary and must stay excluded until they are independently validated.
 - The next concrete delivery should be a module slice, not more framework-adjacent cleanup; the top two candidates remain `WeShop_Order` storefront/API closure and `WeShop_Analytics` event/admin hardening.
+
+## Update 2026-03-25 02:45
+
+- The pending `Order + Checkout` clean-route hardening is now validated end to end.
+- `Order` clean frontend aliases had to move under `WeShop_Frontend` instead of living only inside `WeShop_Order`; otherwise the framework registered them as `weshop_order/order/*` rather than the intended shared `/weshop/order/*`.
+- `/weshop/order/list`, `/weshop/order/view`, `/weshop/order/retry-payment`, `/weshop/order/cancel`, `/checkout`, `/checkout/place-order`, and `/checkout/success` all now have verified non-404 runtime behavior, with guest requests landing on login/cart guards instead of fatal errors.
+- The `Cancel` clean-route alias regression is fixed: GET no longer throws `Call to undefined method ... Cancel::index()`, and the POST aliases now delegate to the real cancel flow.
+- Focused regression coverage now protects both the PHP alias layer and the storefront browser behavior.
+
+### Additional Changed Files
+
+- `app/code/WeShop/Checkout/Controller/Index.php`
+- `app/code/WeShop/Checkout/Controller/PlaceOrder.php`
+- `app/code/WeShop/Checkout/Controller/Success.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/Index.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/PlaceOrder.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/Success.php`
+- `app/code/WeShop/Checkout/Test/Unit/Controller/CleanRouteAliasControllersTest.php`
+- `app/code/WeShop/Frontend/Controller/Order/Cancel.php`
+- `app/code/WeShop/Frontend/Controller/Order/List/Index.php`
+- `app/code/WeShop/Frontend/Controller/Order/RetryPayment.php`
+- `app/code/WeShop/Frontend/Controller/Order/View.php`
+- `app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php`
+- `app/code/WeShop/Order/Controller/Frontend/Order/OrderList.php`
+- `app/code/WeShop/Order/Controller/Frontend/Order/View.php`
+- `app/code/WeShop/Order/Controller/Order/Cancel.php`
+- `app/code/WeShop/Order/Controller/Order/List/Index.php`
+- `app/code/WeShop/Order/Controller/Order/RetryPayment.php`
+- `app/code/WeShop/Order/Controller/Order/View.php`
+- `app/code/WeShop/Order/etc/env.php`
+- `tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js`
+
+### Additional Verification
+
+- `php -l app/code/WeShop/Frontend/Controller/Order/Cancel.php`
+- `php -l app/code/WeShop/Frontend/Controller/Order/RetryPayment.php`
+- `php -l app/code/WeShop/Frontend/Controller/Order/View.php`
+- `php -l app/code/WeShop/Frontend/Controller/Order/List/Index.php`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Order/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php --colors=never`
+- `php bin/w reflection:compile`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w server:reload --no-wait`
+- `php bin/w route:list | Select-String -Pattern 'weshop/order/'`
+- `curl.exe -k -i https://127.0.0.1:9982/weshop/order/list`
+- `curl.exe -k -i "https://127.0.0.1:9982/weshop/order/view?id=1"`
+- `curl.exe -k -i "https://127.0.0.1:9982/weshop/order/retry-payment?order_id=1"`
+- `curl.exe -k -i https://127.0.0.1:9982/weshop/order/cancel`
+- `curl.exe -k -i https://127.0.0.1:9982/checkout`
+- `curl.exe -k -i https://127.0.0.1:9982/checkout/place-order`
+- `curl.exe -k -i https://127.0.0.1:9982/checkout/success`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js`
+
+### Updated Risks / Next Steps
+
+- The new storefront smoke proves clean-route availability and guest guards, but there is still no reusable storefront `loginAsCustomer` helper or seeded customer/cart/order fixture for a full authenticated checkout-place-order-success-order-list browser chain.
+- `WeShop_Order` still has mixed `i18n/*.csv` drift outside this slice and should stay excluded from any white-list commit until those generated files are reconciled independently.
+- The next production slice should return to a bounded business module rather than more route plumbing; `WeShop_Invoice` is the nearest commit-ready candidate, followed by the broader unfinished modules such as `Analytics`, `B2B`, `Payment provider expansion`, and the remaining customer/account feature wave.
+
+## Update 2026-03-25 03:41
+
+- The pending `WeShop_Subscription` slice is now validation-complete and ready for a white-list checkpoint commit.
+- Clean storefront aliases now exist for `/subscription`, `/subscription/view`, `/subscription/pause`, and `/subscription/cancel`, so the module no longer depends on legacy `Frontend/Subscription/*` paths to reach its main guest/login guards.
+- The Subscription customer-account order card now reads host data (`subscription_count`) instead of creating its own session/service lookups, and `AccountDashboardDataService` now provides that count.
+- Backend IA is now aligned with the planned customer grouping: the Subscription menu root is under `Weline_Backend::customer_group`, and the backend list/detail/plan controllers are thin service-backed adapters.
+- The default-theme subscription page contract is now explicit in `theme-compatibility.php`, so missing `WeShop_Subscription` hook hosts can be detected by the existing compatibility warning pipeline.
+
+### Additional Changed Files
+
+- `app/code/WeShop/Base/etc/theme-compatibility.php`
+- `app/code/WeShop/Customer/Service/AccountDashboardDataService.php`
+- `app/code/WeShop/Customer/Test/Unit/Service/AccountDashboardDataServiceTest.php`
+- `app/code/WeShop/Subscription/Controller/Backend/Plan/Index.php`
+- `app/code/WeShop/Subscription/Controller/Backend/Subscription/Index.php`
+- `app/code/WeShop/Subscription/Controller/Backend/Subscription/View.php`
+- `app/code/WeShop/Subscription/Controller/Cancel.php`
+- `app/code/WeShop/Subscription/Controller/Index.php`
+- `app/code/WeShop/Subscription/Controller/Pause.php`
+- `app/code/WeShop/Subscription/Controller/View.php`
+- `app/code/WeShop/Subscription/Service/SubscriptionAdminPageDataService.php`
+- `app/code/WeShop/Subscription/Service/SubscriptionDetailPageDataService.php`
+- `app/code/WeShop/Subscription/Service/SubscriptionPlanAdminPageDataService.php`
+- `app/code/WeShop/Subscription/Test/Unit/Controller/CleanRouteAliasControllersTest.php`
+- `app/code/WeShop/Subscription/Test/Unit/Service/SubscriptionAdminPageDataServiceTest.php`
+- `app/code/WeShop/Subscription/Test/Unit/Service/SubscriptionDetailPageDataServiceTest.php`
+- `app/code/WeShop/Subscription/Test/Unit/Service/SubscriptionPlanAdminPageDataServiceTest.php`
+- `app/code/WeShop/Subscription/Test/Unit/View/AccountOrderCardHookTemplateTest.php`
+- `app/code/WeShop/Subscription/doc/hook/frontend/account/orders-cards.md`
+- `app/code/WeShop/Subscription/etc/backend/menu.xml`
+- `app/code/WeShop/Subscription/view/hooks/WeShop_Customer/frontend/account/orders/cards.phtml`
+- `app/design/WeShop/default/frontend/pages/subscription/index.phtml`
+- `tests/e2e/specs/frontend/weshop-subscription.spec.js`
+
+### Additional Verification
+
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Subscription/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Customer/Test/Unit/Service/AccountDashboardDataServiceTest.php --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w reflection:compile`
+- `php bin/w server:reload --no-wait`
+- `curl.exe -k -o NUL -s -w "%{http_code} %{redirect_url}" https://127.0.0.1:9982/subscription`
+- `curl.exe -k -o NUL -s -w "%{http_code} %{redirect_url}" https://127.0.0.1:9982/subscription/view`
+- `cd tests/e2e && node start.js specs/frontend/weshop-subscription.spec.js`
+
+### Updated Risks / Next Steps
+
+- `app/code/WeShop/Subscription/i18n/*.csv` remains dirty from broader parser-generated drift and must stay outside the checkpoint commit.
+- The worker-created `app/code/WeShop/Subscription/Test/Unit/Controller/IndexTest.php` and `app/code/WeShop/Subscription/Test/Unit/Controller/ViewTest.php` are redundant with the broader clean-route alias test; they can stay out of the commit boundary without reducing coverage.
+- The next bounded module after this checkpoint should return to a business domain slice such as `RMA`, `Compliance`, or the account-center host completion wave rather than expanding the Subscription scope further.
