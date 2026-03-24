@@ -53,6 +53,7 @@ class SearchPageDataServiceTest extends TestCase
         $this->assertSame('Travel Bag', $result['products'][0]['name']);
         $this->assertSame(13, $result['search_summary']['from']);
         $this->assertSame(15, $result['search_summary']['to']);
+        $this->assertSame('Showing 13-15 of 15 results', $result['search_summary']['label']);
         $this->assertSame('Sort', $result['active_filters'][0]['label']);
         $this->assertSame('price ASC', $result['active_filters'][0]['value']);
     }
