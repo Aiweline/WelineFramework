@@ -24,7 +24,8 @@ class ForgotPassword extends BaseController
             return $this->redirect('weshop/customer/account/index');
         }
 
-        $token = trim((string) ($this->request->getParam('token') ?? ''));
+        $request = $this->getRequest();
+        $token = trim((string) ($request->getParam('token') ?? ''));
         $resetRecord = null;
         if ($token !== '') {
             $resetRecord = $this->passwordResetService->validateToken($token);
@@ -45,7 +46,7 @@ class ForgotPassword extends BaseController
 
     public function postIndex(): string
     {
-        $email = trim((string) ($this->request->getPost('email') ?? ''));
+        $email = trim((string) ($this->getRequest()->getPost('email') ?? ''));
         if ($email === '') {
             $this->getMessageManager()->addError(__('Email is required.'));
             return $this->redirect('weshop/customer/account/forgot-password');
@@ -71,9 +72,10 @@ class ForgotPassword extends BaseController
 
     public function postResetPassword(): string
     {
-        $token = trim((string) ($this->request->getPost('token') ?? ''));
-        $password = (string) ($this->request->getPost('password') ?? '');
-        $passwordConfirm = (string) ($this->request->getPost('password_confirm') ?? $this->request->getPost('confirm_password') ?? '');
+        $request = $this->getRequest();
+        $token = trim((string) ($request->getPost('token') ?? ''));
+        $password = (string) ($request->getPost('password') ?? '');
+        $passwordConfirm = (string) ($request->getPost('password_confirm') ?? $request->getPost('confirm_password') ?? '');
 
         if ($token === '') {
             $this->getMessageManager()->addError(__('The reset token is required.'));

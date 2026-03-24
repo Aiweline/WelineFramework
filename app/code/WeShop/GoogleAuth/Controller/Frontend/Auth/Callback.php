@@ -73,7 +73,7 @@ class Callback extends FrontendController
             if ($area === 'backend') {
                 $result = $this->handleBackendLogin($code, $redirectUrl);
                 if (($result['status'] ?? '') === 'challenge_required') {
-                    $this->getMessageManager()->addNotice(__('Please complete two-factor verification to finish sign in.'));
+                    $this->getMessageManager()->addWarning(__('Please complete two-factor verification to finish sign in.'));
                     $this->redirect($this->url->getFrontendUrl('weshop_googleauth/frontend/auth/backend-challenge', [
                         'challenge_token' => (string) ($result['challenge_token'] ?? ''),
                     ]));
@@ -86,7 +86,7 @@ class Callback extends FrontendController
 
             $result = $this->handleFrontendLogin($code, $redirectUrl);
             if (($result['status'] ?? '') === 'challenge_required') {
-                $this->getMessageManager()->addNotice(__('Please complete two-factor verification to finish sign in.'));
+                $this->getMessageManager()->addWarning(__('Please complete two-factor verification to finish sign in.'));
                 $this->redirect($this->url->getFrontendUrl('weshop/customer/account/challenge', [
                     'challenge_token' => (string) ($result['challenge_token'] ?? ''),
                 ]));
