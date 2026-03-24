@@ -4,147 +4,85 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Customer\Service\CustomerAccountService;
 use Weline\Framework\View\Template;
-use Weline\Customer\Model\Customer;
 
 /**
- * 前端用户注册控制器
+ * Public storefront registration bridge backed by the WeShop customer account service.
  */
 class Register extends \Weline\Framework\App\Controller\FrontendController
 {
-    private Template $template;
+    protected ?string $layoutType = 'account_auth';
 
     public function __construct(
-        Template $template
+        private readonly Template $template,
+        private readonly CustomerAccountService $customerAccountService
     ) {
-        $this->template = $template;
     }
 
-    /**
-     * 显示注册页面
-     */
-    public function getIndex()
+    public function getIndex(): string
     {
-        // 如果已登录，跳转到个人中心
         if ($this->isLoggedIn()) {
-            $this->redirect('/customer/account');
+            return $this->redirect('/customer/account');
         }
 
-        // 使用主题认证布局
-        return $this->renderAuthLayout(
-            'account/register.phtml',
-            __('用户注册')
-        );
+        $this->assign('login_url', '/customer/account/login');
+        $this->assign('title', __('Create Account'));
+
+        return $this->fetch('Weline_Customer::templates/frontend/account/register.phtml');
     }
 
-    /**
-     * 处理注册请求
-     */
-    public function postIndex()
+    public function postIndex(): string
     {
         if ($this->isLoggedIn()) {
-            return $this->json([
-                'success' => false,
-                'message' => __('您已登录，无需注册')
-            ]);
+            $this->getMessageManager()->addWarning(__('You are already signed in.'));
+            return $this->redirect('/customer/account');
         }
 
-        $username = $this->request->getPost('username');
-        $password = $this->request->getPost('password');
-        $confirmPassword = $this->request->getPost('confirm_password');
+        $firstName = trim((string) ($this->request->getPost('firstname') ?? $this->request->getPost('first_name') ?? ''));
+        $lastName = trim((string) ($this->request->getPost('lastname') ?? $this->request->getPost('last_name') ?? ''));
+        $email = trim((string) ($this->request->getPost('email') ?? $this->request->getPost('username') ?? ''));
+        $password = (string) ($this->request->getPost('password') ?? '');
+        $confirmPassword = (string) ($this->request->getPost('confirm_password') ?? '');
+        $agreeTerms = (bool) ($this->request->getPost('agree_terms') ?? false);
 
-        // 验证输入
-        if (empty($username) || empty($password) || empty($confirmPassword)) {
-            return $this->json([
-                'success' => false,
-                'message' => __('请填写完整信息')
-            ]);
+        if ($firstName === '' || $lastName === '') {
+            $this->getMessageManager()->addError(__('First name and last name are required.'));
+            return $this->redirect('/customer/account/register');
         }
 
-        if (strlen($username) < 3 || strlen($username) > 20) {
-            return $this->json([
-                'success' => false,
-                'message' => __('用户名长度必须在3-20个字符之间')
-            ]);
+        if ($email === '') {
+            $this->getMessageManager()->addError(__('Email is required.'));
+            return $this->redirect('/customer/account/register');
         }
 
-        if (strlen($password) < 6) {
-            return $this->json([
-                'success' => false,
-                'message' => __('密码长度不能少于6位')
-            ]);
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $this->getMessageManager()->addError(__('Please enter a valid email address.'));
+            return $this->redirect('/customer/account/register');
         }
 
         if ($password !== $confirmPassword) {
-            return $this->json([
-                'success' => false,
-                'message' => __('两次输入的密码不一致')
-            ]);
+            $this->getMessageManager()->addError(__('The password confirmation does not match.'));
+            return $this->redirect('/customer/account/register');
+        }
+
+        if (!$agreeTerms) {
+            $this->getMessageManager()->addError(__('Please accept the terms and privacy policy.'));
+            return $this->redirect('/customer/account/register');
         }
 
         try {
-            // 检查用户名是否已存在
-            /** @var Customer $existingUser */
-            $existingUser = ObjectManager::getInstance(Customer::class);
-            $existingUser->where('username', $username)->find()->fetch();
-
-            if ($existingUser->getId()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => __('用户名已被使用')
-                ]);
-            }
-
-            // 创建新用户
-            /** @var Customer $newUser */
-            $newUser = ObjectManager::getInstance(Customer::class);
-            $newUser->setUsername($username)
-                ->setPassword($password)
-                ->setData('avatar', 'default-svg')  // 使用内联SVG标记
-                ->save();
-
-            // 自动登录
-            $this->session->login($newUser);
-            $newUser->setSessionId($this->session->getSession()->getSessionId())
-                ->setLoginIp($this->request->clientIP())
-                ->save();
-
-            // 派发注册成功事件
-            /** @var EventsManager $eventManager */
-            $eventManager = ObjectManager::getInstance(EventsManager::class);
-            $eventData = new \Weline\Framework\DataObject\DataObject([
-                'user' => $newUser,
-                'request' => $this->request,
-                'session' => $this->session
+            $result = $this->customerAccountService->register($email, $password, [
+                'first_name' => $firstName,
+                'last_name' => $lastName,
             ]);
-            $eventManager->dispatch('Weline_Customer_Account_Register::register_after', $eventData);
-
-            return $this->json([
-                'success' => true,
-                'message' => __('注册成功'),
-                'redirect' => '/customer/account'
-            ]);
-
-        } catch (\Exception $e) {
-            // 记录异常日志
-            if (defined('DEV') && DEV) {
-                w_log_error('注册异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
-            }
-            return $this->json([
-                'success' => false,
-                'message' => __('注册失败：%{1}', [$e->getMessage()])
-            ]);
+            $this->customerAccountService->login($result['auth_user']);
+            $this->getMessageManager()->addSuccess(__('Registration succeeded. Welcome to WeShop.'));
+            return $this->redirect('/customer/account');
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
         }
-    }
 
-    /**
-     * 返回JSON响应
-     */
-    private function json(array $data): string
-    {
-        header('Content-Type: application/json');
-        return json_encode($data, JSON_UNESCAPED_UNICODE);
+        return $this->redirect('/customer/account/register');
     }
 }
