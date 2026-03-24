@@ -64,6 +64,45 @@ class CallbackTest extends TestCase
         );
     }
 
+    public function testIndexMergesParsedBodyAndRawBodyForGatewayCallbacks(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->expects($this->once())
+            ->method('getParam')
+            ->with('payment_method')
+            ->willReturn('wechatpay');
+        $request->expects($this->once())
+            ->method('getParams')
+            ->willReturn([
+                'payment_method' => 'wechatpay',
+            ]);
+        $request->expects($this->exactly(2))
+            ->method('getBodyParams')
+            ->willReturnMap([
+                [true, []],
+                [false, '<xml><return_code>SUCCESS</return_code></xml>'],
+            ]);
+        $request->expects($this->once())
+            ->method('getContentType')
+            ->willReturn('application/xml');
+
+        $paymentService = $this->createMock(PaymentService::class);
+        $paymentService->expects($this->once())
+            ->method('handleCallback')
+            ->with('wechatpay', [
+                'payment_method' => 'wechatpay',
+                'raw_body' => '<xml><return_code>SUCCESS</return_code></xml>',
+                'content_type' => 'application/xml',
+            ])
+            ->willReturn(true);
+
+        $controller = $this->createController($request, $paymentService);
+
+        $result = json_decode($controller->index(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertTrue($result['success']);
+    }
+
     private function createController(Request $request, PaymentService $paymentService): Callback
     {
         return new class($request, $paymentService) extends Callback {

@@ -100,7 +100,7 @@ class PaymentService
             'alipay' => [
                 'code' => 'alipay',
                 'title' => (string) __('Alipay'),
-                'description' => (string) __('Reserved for future Alipay gateway rollout.'),
+                'description' => (string) __('Pay with Alipay through a hosted redirect checkout.'),
                 'provider' => Alipay::class,
                 'enabled' => false,
                 'is_default' => false,
@@ -115,6 +115,11 @@ class PaymentService
                     'merchant_id' => '',
                     'public_key' => '',
                     'private_key' => '',
+                    'notify_url' => '',
+                    'return_url' => '',
+                    'product_code' => 'FAST_INSTANT_TRADE_PAY',
+                    'timeout_express' => '30m',
+                    'sign_type' => 'RSA2',
                 ],
                 'config_fields' => [
                     ['key' => 'sandbox', 'label' => (string) __('Sandbox Mode'), 'type' => 'checkbox'],
@@ -122,12 +127,18 @@ class PaymentService
                     ['key' => 'merchant_id', 'label' => (string) __('Merchant ID'), 'type' => 'text'],
                     ['key' => 'public_key', 'label' => (string) __('Public Key'), 'type' => 'textarea'],
                     ['key' => 'private_key', 'label' => (string) __('Private Key'), 'type' => 'textarea'],
+                    ['key' => 'notify_url', 'label' => (string) __('Notify URL'), 'type' => 'text'],
+                    ['key' => 'return_url', 'label' => (string) __('Return URL'), 'type' => 'text'],
+                    ['key' => 'product_code', 'label' => (string) __('Product Code'), 'type' => 'text'],
+                    ['key' => 'timeout_express', 'label' => (string) __('Payment Timeout'), 'type' => 'text'],
+                    ['key' => 'sign_type', 'label' => (string) __('Signature Type'), 'type' => 'text'],
                 ],
+                'required_config' => ['app_id', 'merchant_id', 'public_key', 'private_key'],
             ],
             'wechatpay' => [
                 'code' => 'wechatpay',
                 'title' => (string) __('WeChat Pay'),
-                'description' => (string) __('Reserved for future WeChat Pay gateway rollout.'),
+                'description' => (string) __('Pay with WeChat Pay through the unified order gateway.'),
                 'provider' => WeChatPay::class,
                 'enabled' => false,
                 'is_default' => false,
@@ -142,6 +153,11 @@ class PaymentService
                     'mch_id' => '',
                     'api_v3_key' => '',
                     'merchant_cert_path' => '',
+                    'notify_url' => '',
+                    'trade_type' => 'MWEB',
+                    'sign_type' => 'MD5',
+                    'scene_info' => '{"h5_info":{"type":"Wap"}}',
+                    'spbill_create_ip' => '',
                 ],
                 'config_fields' => [
                     ['key' => 'sandbox', 'label' => (string) __('Sandbox Mode'), 'type' => 'checkbox'],
@@ -149,7 +165,13 @@ class PaymentService
                     ['key' => 'mch_id', 'label' => (string) __('Merchant ID'), 'type' => 'text'],
                     ['key' => 'api_v3_key', 'label' => (string) __('API v3 Key'), 'type' => 'password'],
                     ['key' => 'merchant_cert_path', 'label' => (string) __('Merchant Certificate Path'), 'type' => 'text'],
+                    ['key' => 'notify_url', 'label' => (string) __('Notify URL'), 'type' => 'text'],
+                    ['key' => 'trade_type', 'label' => (string) __('Trade Type'), 'type' => 'text'],
+                    ['key' => 'sign_type', 'label' => (string) __('Signature Type'), 'type' => 'text'],
+                    ['key' => 'scene_info', 'label' => (string) __('Scene Info'), 'type' => 'textarea'],
+                    ['key' => 'spbill_create_ip', 'label' => (string) __('Client IP Override'), 'type' => 'text'],
                 ],
+                'required_config' => ['app_id', 'mch_id', 'api_v3_key'],
             ],
         ];
     }
@@ -160,9 +182,18 @@ class PaymentService
         if (!$this->isEnabled($method)) {
             throw new \InvalidArgumentException((string) __('Unsupported payment method: %{1}', [$paymentMethod]));
         }
+        if (!$this->isConfigured($method)) {
+            throw new \InvalidArgumentException((string) __('Payment method %{1} is missing required configuration: %{2}', [
+                $paymentMethod,
+                implode(', ', (array) ($method['missing_config'] ?? [])),
+            ]));
+        }
 
         $provider = $this->resolveProvider($method);
-        $result = $provider->processPayment($order, $paymentData);
+        $providerContext = $this->buildProviderContext($method, [
+            'payment_data' => $paymentData,
+        ]);
+        $result = $provider->processPayment($order, $paymentData, $providerContext);
 
         return array_merge($method, $result, [
             'payment_method' => $method['code'],
@@ -170,20 +201,22 @@ class PaymentService
         ]);
     }
 
-    public function handleCallback(string $paymentMethod, array $callbackData): bool
+    public function handleCallback(string $paymentMethod, array $callbackData, array $context = []): bool
     {
         $method = $this->requireMethod($paymentMethod);
         $provider = $this->resolveProvider($method);
 
-        return $provider->handleCallback($callbackData);
+        return $provider->handleCallback($callbackData, $this->buildProviderContext($method, array_merge($context, [
+            'callback_data' => $callbackData,
+        ])));
     }
 
-    public function queryPaymentStatus(string $paymentMethod, string $orderNumber): string
+    public function queryPaymentStatus(string $paymentMethod, string $orderNumber, array $context = []): string
     {
         $method = $this->requireMethod($paymentMethod);
         $provider = $this->resolveProvider($method);
 
-        return $provider->queryPaymentStatus($orderNumber);
+        return $provider->queryPaymentStatus($orderNumber, $this->buildProviderContext($method, $context));
     }
 
     public function getPaymentMethod(string $code): ?array
@@ -220,7 +253,7 @@ class PaymentService
         foreach ($this->getMethodRegistry() as $method) {
             $method = $this->normalizeMethod($method);
             $method = $this->applyRuntimeOverrides($method);
-            if ($enabledOnly && !$this->isEnabled($method)) {
+            if ($enabledOnly && (!$this->isEnabled($method) || !$this->isConfigured($method))) {
                 continue;
             }
             if (!$this->matchesContext($method, $context)) {
@@ -312,6 +345,9 @@ class PaymentService
             'countries' => array_values(array_map(static fn(mixed $value): string => strtoupper((string) $value), (array) ($method['countries'] ?? []))),
             'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
             'config_fields' => \is_array($method['config_fields'] ?? null) ? $method['config_fields'] : [],
+            'required_config' => array_values(array_map(static fn(mixed $value): string => (string) $value, (array) ($method['required_config'] ?? []))),
+            'missing_config' => [],
+            'is_configured' => true,
         ];
     }
 
@@ -323,11 +359,17 @@ class PaymentService
     {
         $code = (string) ($method['code'] ?? '');
         if ($code === '') {
+            $method['missing_config'] = $this->getMissingRequiredConfig($method);
+            $method['is_configured'] = $method['missing_config'] === [];
+
             return $method;
         }
 
         $override = $this->getMethodOverrides()[$code] ?? null;
         if (!\is_array($override)) {
+            $method['missing_config'] = $this->getMissingRequiredConfig($method);
+            $method['is_configured'] = $method['missing_config'] === [];
+
             return $method;
         }
 
@@ -349,9 +391,15 @@ class PaymentService
                 $method[$key] = array_values($override[$key]);
             }
         }
+        if (\is_array($override['required_config'] ?? null)) {
+            $method['required_config'] = array_values($override['required_config']);
+        }
         if (\is_array($override['config'] ?? null)) {
             $method['config'] = array_replace((array) ($method['config'] ?? []), $override['config']);
         }
+
+        $method['missing_config'] = $this->getMissingRequiredConfig($method);
+        $method['is_configured'] = $method['missing_config'] === [];
 
         return $method;
     }
@@ -376,5 +424,47 @@ class PaymentService
     protected function isEnabled(array $method): bool
     {
         return (bool) ($method['enabled'] ?? false);
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @return array<int, string>
+     */
+    protected function getMissingRequiredConfig(array $method): array
+    {
+        $config = \is_array($method['config'] ?? null) ? $method['config'] : [];
+        $missing = [];
+        foreach ((array) ($method['required_config'] ?? []) as $key) {
+            if (!isset($config[$key]) || trim((string) $config[$key]) === '') {
+                $missing[] = (string) $key;
+            }
+        }
+
+        return $missing;
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     */
+    protected function isConfigured(array $method): bool
+    {
+        return (bool) ($method['is_configured'] ?? true);
+    }
+
+    /**
+     * @param array<string, mixed> $method
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    protected function buildProviderContext(array $method, array $context = []): array
+    {
+        return array_merge($context, [
+            'payment_method' => $method,
+            'config' => \is_array($method['config'] ?? null) ? $method['config'] : [],
+            'required_config' => array_values((array) ($method['required_config'] ?? [])),
+            'missing_config' => array_values((array) ($method['missing_config'] ?? [])),
+            'is_configured' => (bool) ($method['is_configured'] ?? true),
+            'sandbox' => (bool) (($method['config']['sandbox'] ?? false)),
+        ]);
     }
 }
