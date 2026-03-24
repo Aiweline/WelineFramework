@@ -1,0 +1,35 @@
+<?php
+$challengeToken = (string) ($this->getData('challenge_token') ?? '');
+?>
+<div class="login-form-container">
+    <div class="login-header">
+        <div class="login-icon">
+            <i class="fas fa-shield-halved"></i>
+        </div>
+        <h1 class="login-title"><?= __('Two-Factor Verification') ?></h1>
+        <p class="login-subtitle"><?= __('Enter the code from your authenticator app or one of your backup codes.') ?></p>
+    </div>
+
+    <form action="/customer/account/challenge" method="post" class="login-form">
+        <?= $this->getFormKey('/customer/account/challenge') ?>
+        <input type="hidden" name="challenge_token" value="<?= htmlspecialchars($challengeToken, ENT_QUOTES) ?>" />
+
+        <div class="form-group-enhanced">
+            <label for="code"><i class="fas fa-mobile-screen-button"></i><?= __('Verification Code') ?></label>
+            <div class="form-input-wrapper">
+                <i class="fas fa-key"></i>
+                <input type="text" id="code" name="code" required autocomplete="one-time-code" placeholder="<?= __('123456') ?>" />
+            </div>
+        </div>
+
+        <button type="submit" class="btn-login"><?= __('Verify and Continue') ?></button>
+    </form>
+
+    <div class="login-footer">
+        <p>
+            <a href="/customer/account/login">
+                <i class="fas fa-sign-in-alt me-1"></i><?= __('Back to sign in') ?>
+            </a>
+        </p>
+    </div>
+</div>
