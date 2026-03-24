@@ -63,7 +63,10 @@ class IndexTest extends TestCase
 
         $controller->expects($this->never())->method('redirect');
         $controller->expects($this->exactly(4))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Invoice::templates/Frontend/Invoice/Index/index.phtml')
+            ->willReturn('page');
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnMap([
             ['page', null, 1],

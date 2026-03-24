@@ -35,7 +35,7 @@ $cancelReason = trim((string) ($order['cancel_reason'] ?? ''));
                         <?= __('Back to Orders') ?>
                     </a>
                     <?php if ($canRetry): ?>
-                        <a href="<?= $this->getUrl('weshop/order/retryPayment', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                        <a href="<?= $this->getUrl('weshop/order/retry-payment', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
                             <?= __('Retry Payment') ?>
                         </a>
                     <?php endif; ?>
@@ -103,7 +103,7 @@ $cancelReason = trim((string) ($order['cancel_reason'] ?? ''));
                         </button>
                     </form>
                 <?php elseif ($requireReturn): ?>
-                    <a href="<?= $this->getUrl('weshop/rma/create', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
+                    <a href="<?= $this->getUrl('rma/create', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
                         <?= __('Request Return') ?>
                     </a>
                 <?php elseif ($cancelReason !== ''): ?>
