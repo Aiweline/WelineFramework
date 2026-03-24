@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Weline\Backend\Setup;
@@ -9,33 +10,26 @@ use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
- * 确保默认管理员（user_id=1 / admin）存在且拥有 role_id=1。
- * 被安装脚本与升级观察者复用，避免「用户没有分配角色」导致后台无法登录。
+ * Ensure the built-in admin user and the super-admin role relation exist.
  */
 class EnsureAdmin
 {
-    /**
-     * 兼容旧代码调用。
-     * 安装阶段直接调用该方法为默认管理员分配角色。
-     */
+    public function __construct(
+        private readonly ?BackendUser $backendUserModel = null,
+        private readonly ?Role $roleModel = null,
+        private readonly ?UserRole $userRoleModel = null,
+    ) {
+    }
+
     public function ensureAdminUserHasRole1(): void
     {
         $this->ensure();
     }
 
-    /**
-     * 升级完成后调用，保证默认管理员和角色的正确性。
-     */
     public function ensure(): void
     {
-        /** @var BackendUser $userModel */
-        $userModel = ObjectManager::getInstance(BackendUser::class);
-        $user      = clone $userModel;
+        $user = $this->createBackendUserModel()->load(1);
 
-        // 优先使用 user_id=1，框架中默认将其视为超管
-        $user = $user->load(1);
-
-        // 若不存在，则兜底创建一个默认管理员账号
         if (!$user->getId()) {
             $user->clear()
                 ->setUsername('admin')
@@ -44,24 +38,43 @@ class EnsureAdmin
                 ->save();
         }
 
-        /** @var Role $roleModel */
-        $roleModel = ObjectManager::getInstance(Role::class);
-        $role      = clone $roleModel;
-
-        // 确保 role_id=1 的超级管理员角色存在
-        $role = $role->load(1);
+        $role = $this->createRoleModel()->load(1);
         if (!$role->getId()) {
             $role->clear()
-                ->setRoleName('超级管理员')
-                ->setRoleDescription('系统内置超管角色（自动创建）')
+                ->setRoleName('Super Admin')
+                ->setRoleDescription('System built-in super admin role')
                 ->save();
         }
 
-        /** @var UserRole $userRole */
-        $userRole = ObjectManager::getInstance(UserRole::class);
-        $userRole->setUserId((int)$user->getId())
-            ->setRoleId((int)$role->getId())
+        $userRole = $this->createUserRoleModel();
+        $existingRelation = $userRole->reset()
+            ->where(UserRole::schema_fields_USER_ID, (int) $user->getId())
+            ->where(UserRole::schema_fields_ROLE_ID, (int) $role->getId())
+            ->find()
+            ->fetch();
+
+        if ($existingRelation->getUserId() && $existingRelation->getRoleId()) {
+            return;
+        }
+
+        $userRole->clearData()
+            ->setUserId((int) $user->getId())
+            ->setRoleId((int) $role->getId())
             ->save(true);
     }
-}
 
+    private function createBackendUserModel(): BackendUser
+    {
+        return clone ($this->backendUserModel ?? ObjectManager::getInstance(BackendUser::class));
+    }
+
+    private function createRoleModel(): Role
+    {
+        return clone ($this->roleModel ?? ObjectManager::getInstance(Role::class));
+    }
+
+    private function createUserRoleModel(): UserRole
+    {
+        return clone ($this->userRoleModel ?? ObjectManager::getInstance(UserRole::class));
+    }
+}

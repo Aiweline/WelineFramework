@@ -232,6 +232,39 @@ final class DatabaseAstCompilerRegressionTest extends TestCase
         $this->assertStringNotContainsString(QueryInterface::EXIST_UPDATE_ALL_FIELDS, $compiled->sql);
     }
 
+    public function testPgsqlCompilerCompilesBatchInsertWithoutLosingRows(): void
+    {
+        $rows = [];
+        for ($i = 1; $i <= 128; $i++) {
+            $rows[] = [
+                'id' => $i,
+                'email' => "user{$i}@example.com",
+                'name' => "User {$i}",
+            ];
+        }
+
+        $query = new CompilerTestQuery();
+        $query->table('users')->insert($rows);
+        $query->rebuildAst('insert');
+
+        $compiled = (new PgsqlCompiler())->compile($query->getAst(), [
+            'identity_field' => $query->identity_field,
+            'table_alias' => $query->table_alias,
+            'exist_update_sql' => $query->exist_update_sql,
+            'insert_update_fields' => $query->insert_update_fields,
+            'insert_update_where_fields' => $query->insert_update_where_fields,
+        ]);
+
+        $lastEmailPlaceholder = ':' . md5('insert_email_field_128');
+
+        $this->assertStringContainsString('"users"', $compiled->sql);
+        $this->assertStringContainsString('VALUES', strtoupper($compiled->sql));
+        $this->assertStringContainsString($lastEmailPlaceholder, $compiled->sql);
+        $this->assertArrayHasKey($lastEmailPlaceholder, $compiled->bindings);
+        $this->assertSame('user128@example.com', $compiled->bindings[$lastEmailPlaceholder]);
+        $this->assertCount(count($rows) * 3, $compiled->bindings);
+    }
+
     /**
      * @dataProvider adapterQueryProvider
      */
