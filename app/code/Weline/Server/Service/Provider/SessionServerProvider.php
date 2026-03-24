@@ -85,6 +85,7 @@ class SessionServerProvider extends AbstractServiceProvider
             '127.0.0.1',
             (string) $port,
             $context->instanceName,
+            '--instance-name=' . $context->instanceName,
             '--control-port=' . $context->controlPort,
             '--master-pid=' . $context->masterPid,
             '--token-file-name=' . $tokenFileName,
