@@ -15,8 +15,10 @@ class DefaultThemeAccountHookHostTest extends TestCase
 
         $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::before', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::after', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::security::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::after', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::discovery::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::orders::cards', $template);
@@ -39,7 +41,9 @@ class DefaultThemeAccountHookHostTest extends TestCase
 
         $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::before', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::after', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::after', $template);
     }
 

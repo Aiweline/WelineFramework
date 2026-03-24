@@ -28,10 +28,20 @@ return [
         'description' => __('Inject content after the account-center quick links card grid.'),
         'doc' => 'frontend/account/quick-links/after.md',
     ],
+    'WeShop_Customer::frontend::account::quick-links::cards' => [
+        'name' => __('Storefront account quick link cards'),
+        'description' => __('Inject additional quick-link cards into the account-center quick actions grid.'),
+        'doc' => 'frontend/account/quick-links/cards.md',
+    ],
     'WeShop_Customer::frontend::account::recommendations::before' => [
         'name' => __('Storefront account recommendations before'),
         'description' => __('Inject content before the account-center recommendation section.'),
         'doc' => 'frontend/account/recommendations/before.md',
+    ],
+    'WeShop_Customer::frontend::account::recommendations::cards' => [
+        'name' => __('Storefront account recommendation cards'),
+        'description' => __('Inject additional recommendation content into the account-center recommendation section.'),
+        'doc' => 'frontend/account/recommendations/cards.md',
     ],
     'WeShop_Customer::frontend::account::recommendations::after' => [
         'name' => __('Storefront account recommendations after'),
