@@ -237,6 +237,13 @@ class ThemeContextService
         }
 
         if (!$previewThemeId) {
+            try {
+                if (!$this->getPreviewContextService()->shouldUseStoredContext()) {
+                    return null;
+                }
+            } catch (\Throwable) {
+            }
+
             $previewThemeArea = '';
             $previewThemeAreaFromRequest = '';
 
