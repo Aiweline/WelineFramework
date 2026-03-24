@@ -42,6 +42,7 @@ class SearchEngineConfig extends Model
     public const schema_fields_UPDATED_AT = 'updated_at';
     
     public const ENGINE_MYSQL = 'mysql';
+    public const ENGINE_OPENSEARCH = 'opensearch';
     public const ENGINE_ELASTICSEARCH = 'elasticsearch';
     public const ENGINE_ALGOLIA = 'algolia';
     public const ENGINE_SOLR = 'solr';

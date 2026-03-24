@@ -111,7 +111,7 @@ class SearchPageDataService
         $to = min($page * $pageSize, $total);
 
         return [
-            'label' => (string) __('Showing %1-%2 of %3 results', $from, $to, $total),
+            'label' => (string) __('Showing %{1}-%{2} of %{3} results', [$from, $to, $total]),
             'from' => $from,
             'to' => $to,
         ];
