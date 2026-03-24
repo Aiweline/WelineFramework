@@ -6,7 +6,6 @@ namespace WeShop\Analytics\Observer;
 
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Event\Observer;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
@@ -14,17 +13,19 @@ use WeShop\Analytics\Service\PixelDispatcher;
  */
 class AddToCartPixel extends Observer implements ObserverInterface
 {
+    public function __construct(
+        private readonly PixelDispatcher $pixelDispatcher
+    ) {
+    }
+
     /**
      * @inheritDoc
      */
     public function execute(): void
     {
         $eventData = $this->getEvent()->getData();
-        
-        /** @var PixelDispatcher $pixelDispatcher */
-        $pixelDispatcher = ObjectManager::getInstance(PixelDispatcher::class);
-        
-        $pixelDispatcher->dispatch('AddToCart', [
+
+        $this->pixelDispatcher->dispatch('AddToCart', [
             'product_id' => $eventData['product_id'] ?? 0,
             'quantity' => $eventData['quantity'] ?? 1,
             'price' => $eventData['price'] ?? 0,
