@@ -29,7 +29,8 @@ class PaymentQueryProvider implements QueryProviderInterface
             'processPayment' => $this->processPayment($params),
             'queryPaymentStatus' => $this->paymentService->queryPaymentStatus(
                 (string) ($params['payment_method'] ?? ''),
-                (string) ($params['order_number'] ?? '')
+                (string) ($params['order_number'] ?? ''),
+                \is_array($params['context'] ?? null) ? $params['context'] : []
             ),
             default => throw new \InvalidArgumentException(
                 (string) __('Payment query provider does not support operation: %{1}', [$operation])
