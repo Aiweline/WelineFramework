@@ -1,191 +1,481 @@
 <?php
-/**
- * 搜索引擎配置表单页面
- */
+
+declare(strict_types=1);
+
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use WeShop\Search\Model\SearchEngineConfig;
+use WeShop\Search\Service\SearchEngineEnvConfig;
 
 /** @var Template $this */
 $config = $this->getData('config') ?? null;
-$scope = $this->getData('scope') ?? 'default';
+$scope = (string) ($this->getData('scope') ?? 'default');
 $scopes = $this->getData('scopes') ?? ['default'];
 $availableEngines = $this->getData('availableEngines') ?? [];
 
 $isEdit = !empty($config);
-$engineType = $config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? '';
 $configData = [];
 if ($isEdit && !empty($config[SearchEngineConfig::schema_fields_CONFIG_DATA])) {
-    $configData = json_decode($config[SearchEngineConfig::schema_fields_CONFIG_DATA], true) ?? [];
+    $configData = json_decode((string) $config[SearchEngineConfig::schema_fields_CONFIG_DATA], true) ?? [];
+}
+
+/** @var SearchEngineEnvConfig $envConfig */
+$envConfig = ObjectManager::getInstance(SearchEngineEnvConfig::class);
+$engineType = (string) ($config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? $envConfig->getDefaultEngineType());
+
+$opensearchConfig = $envConfig->getEngineConfig(SearchEngineConfig::ENGINE_OPENSEARCH);
+$meilisearchConfig = $envConfig->getEngineConfig(SearchEngineConfig::ENGINE_MEILISEARCH);
+$elasticsearchConfig = $envConfig->getEngineConfig(SearchEngineConfig::ENGINE_ELASTICSEARCH);
+$algoliaConfig = $envConfig->getEngineConfig(SearchEngineConfig::ENGINE_ALGOLIA);
+
+if ($engineType === SearchEngineConfig::ENGINE_OPENSEARCH) {
+    $opensearchConfig = array_replace($opensearchConfig, $configData);
+} elseif ($engineType === SearchEngineConfig::ENGINE_MEILISEARCH) {
+    $meilisearchConfig = array_replace($meilisearchConfig, $configData);
+} elseif ($engineType === SearchEngineConfig::ENGINE_ELASTICSEARCH) {
+    $elasticsearchConfig = array_replace($elasticsearchConfig, $configData);
+} elseif ($engineType === SearchEngineConfig::ENGINE_ALGOLIA) {
+    $algoliaConfig = array_replace($algoliaConfig, $configData);
 }
 ?>
+
 <div class="content-header">
     <h1 class="page-title"><?= $isEdit ? __('编辑搜索引擎配置') : __('新增搜索引擎配置') ?></h1>
 </div>
 
 <div class="content">
     <div class="row">
-        <div class="col-md-8">
+        <div class="col-lg-9">
             <form id="search-engine-form" method="post" action="<?= $this->getUrl('search/backend/engine/save') ?>">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="card-title"><?= __('基本信息') ?></h5>
+                        <h5 class="card-title mb-0"><?= __('基础信息') ?></h5>
                     </div>
                     <div class="card-body">
+                        <div class="alert alert-primary">
+                            <?= __('默认推荐使用 OpenSearch。执行 `php bin/w env:install opensearch -y` 后会按当前环境下载官方发行包、生成配置并同步 `app/etc/env.php`。') ?>
+                        </div>
+
                         <div class="form-group">
                             <label for="engine_type"><?= __('搜索引擎类型') ?> <span class="text-danger">*</span></label>
-                            <select id="engine_type" name="engine_type" class="form-control" required onchange="updateEngineConfig()">
+                            <select id="engine_type" name="engine_type" class="form-control" required>
                                 <option value=""><?= __('请选择') ?></option>
                                 <?php foreach ($availableEngines as $type => $info): ?>
-                                    <option value="<?= htmlspecialchars($type) ?>" 
-                                            <?= $engineType === $type ? 'selected' : '' ?>
-                                            data-description="<?= htmlspecialchars($info['description'] ?? '') ?>">
-                                        <?= htmlspecialchars($info['name']) ?>
+                                    <option
+                                        value="<?= htmlspecialchars((string) $type) ?>"
+                                        <?= $engineType === $type ? 'selected' : '' ?>
+                                        data-description="<?= htmlspecialchars((string) ($info['description'] ?? '')) ?>"
+                                    >
+                                        <?= htmlspecialchars((string) ($info['name'] ?? $type)) ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
                             <small class="form-text text-muted" id="engine-description"></small>
                         </div>
-                        
+
                         <div class="form-group">
                             <label for="scope"><?= __('作用域') ?> <span class="text-danger">*</span></label>
-                            <input type="text" id="scope" name="scope" class="form-control" 
-                                   value="<?= htmlspecialchars($scope) ?>" required>
-                            <small class="form-text text-muted"><?= __('作用域用于隔离不同环境的配置，如：default, production, staging等') ?></small>
+                            <input
+                                type="text"
+                                id="scope"
+                                name="scope"
+                                class="form-control"
+                                value="<?= htmlspecialchars($scope) ?>"
+                                list="scope-options"
+                                required
+                            >
+                            <datalist id="scope-options">
+                                <?php foreach ($scopes as $itemScope): ?>
+                                    <option value="<?= htmlspecialchars((string) $itemScope) ?>"></option>
+                                <?php endforeach; ?>
+                            </datalist>
+                            <small class="form-text text-muted"><?= __('用于区分 default、production、staging 等不同环境的搜索配置。') ?></small>
                         </div>
-                        
-                        <div class="form-group">
-                            <label for="is_active"><?= __('启用状态') ?></label>
-                            <div class="form-check">
-                                <input type="checkbox" id="is_active" name="is_active" value="1" 
-                                       class="form-check-input" <?= ($config[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? 0) ? 'checked' : '' ?>>
-                                <label class="form-check-label" for="is_active"><?= __('启用此搜索引擎配置') ?></label>
-                            </div>
-                        </div>
-                        
+
                         <div class="form-group">
                             <label for="priority"><?= __('优先级') ?></label>
-                            <input type="number" id="priority" name="priority" class="form-control" 
-                                   value="<?= htmlspecialchars($config[SearchEngineConfig::schema_fields_PRIORITY] ?? 0) ?>" 
-                                   min="0" max="999">
-                            <small class="form-text text-muted"><?= __('数字越大优先级越高，当同一作用域有多个配置时，将使用优先级最高的配置') ?></small>
+                            <input
+                                type="number"
+                                id="priority"
+                                name="priority"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($config[SearchEngineConfig::schema_fields_PRIORITY] ?? 0)) ?>"
+                                min="0"
+                                max="999"
+                            >
+                            <small class="form-text text-muted"><?= __('同一作用域下优先级越高，越优先作为当前生效引擎。') ?></small>
+                        </div>
+
+                        <div class="form-check">
+                            <input
+                                type="checkbox"
+                                id="is_active"
+                                name="is_active"
+                                value="1"
+                                class="form-check-input"
+                                <?= ($config[SearchEngineConfig::schema_fields_IS_ACTIVE] ?? 0) ? 'checked' : '' ?>
+                            >
+                            <label class="form-check-label" for="is_active"><?= __('启用此搜索引擎配置') ?></label>
                         </div>
                     </div>
                 </div>
-                
-                <!-- Meilisearch配置 -->
-                <div class="card mt-3" id="config-meilisearch" style="display: none;">
+
+                <div class="card mt-3 engine-config-panel" id="config-opensearch" data-engine="opensearch" data-engine-panel="opensearch">
                     <div class="card-header">
-                        <h5 class="card-title"><?= __('Meilisearch配置') ?></h5>
+                        <h5 class="card-title mb-0"><?= __('OpenSearch 配置') ?></h5>
                     </div>
                     <div class="card-body">
                         <div class="alert alert-info">
-                            <?= __('Meilisearch 是一个快速、相关且容错的搜索引擎。请确保已安装并运行 Meilisearch 服务。') ?>
+                            <?= __('OpenSearch 是当前默认搜索引擎。环境安装脚本会自动下载并生成本地单节点配置，同时把连接信息写入 `app/etc/env.php`。') ?>
                         </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="opensearch_host"><?= __('服务地址') ?></label>
+                                    <input
+                                        type="text"
+                                        id="opensearch_host"
+                                        name="host"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['host'] ?? 'http://127.0.0.1')) ?>"
+                                        placeholder="http://127.0.0.1"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="opensearch_port"><?= __('端口') ?></label>
+                                    <input
+                                        type="number"
+                                        id="opensearch_port"
+                                        name="port"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['port'] ?? 9200)) ?>"
+                                        min="1"
+                                        max="65535"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="opensearch_index"><?= __('索引名称') ?></label>
+                                    <input
+                                        type="text"
+                                        id="opensearch_index"
+                                        name="index"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['index'] ?? 'products')) ?>"
+                                        placeholder="products"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="opensearch_timeout"><?= __('超时秒数') ?></label>
+                                    <input
+                                        type="number"
+                                        id="opensearch_timeout"
+                                        name="timeout"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['timeout'] ?? 5)) ?>"
+                                        min="1"
+                                        max="120"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="opensearch_username"><?= __('用户名') ?></label>
+                                    <input
+                                        type="text"
+                                        id="opensearch_username"
+                                        name="username"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['username'] ?? '')) ?>"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="opensearch_password"><?= __('密码') ?></label>
+                                    <input
+                                        type="password"
+                                        id="opensearch_password"
+                                        name="password"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['password'] ?? '')) ?>"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="opensearch_version"><?= __('安装版本') ?></label>
+                                    <input
+                                        type="text"
+                                        id="opensearch_version"
+                                        name="version"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['version'] ?? '3.5.0')) ?>"
+                                        readonly
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="opensearch_install_dir"><?= __('安装目录') ?></label>
+                                    <input
+                                        type="text"
+                                        id="opensearch_install_dir"
+                                        name="install_dir"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($opensearchConfig['install_dir'] ?? 'extend/server/opensearch')) ?>"
+                                        readonly
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="form-group">
-                            <label for="meilisearch_host"><?= __('服务地址') ?> <span class="text-danger">*</span></label>
-                            <input type="text" id="meilisearch_host" name="host" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['host'] ?? 'http://127.0.0.1:7700') ?>" 
-                                   placeholder="http://127.0.0.1:7700" required>
-                            <small class="form-text text-muted"><?= __('Meilisearch 服务地址，默认端口为 7700') ?></small>
+                            <label for="opensearch_config_file"><?= __('配置文件') ?></label>
+                            <input
+                                type="text"
+                                id="opensearch_config_file"
+                                name="config_file"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($opensearchConfig['config_file'] ?? 'extend/server/opensearch/config/opensearch.yml')) ?>"
+                                readonly
+                            >
+                            <small class="form-text text-muted"><?= __('以上版本与路径通常由环境安装脚本自动维护。') ?></small>
                         </div>
+
+                        <button type="button" class="btn btn-info js-test-connection" data-engine="opensearch">
+                            <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card mt-3 engine-config-panel" id="config-meilisearch" data-engine="meilisearch" data-engine-panel="meilisearch">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><?= __('Meilisearch 配置') ?></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <?= __('适用于已独立部署 Meilisearch 的环境。') ?>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="meilisearch_host"><?= __('服务地址') ?></label>
+                            <input
+                                type="text"
+                                id="meilisearch_host"
+                                name="host"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($meilisearchConfig['host'] ?? 'http://127.0.0.1:7700')) ?>"
+                                placeholder="http://127.0.0.1:7700"
+                            >
+                        </div>
+
                         <div class="form-group">
                             <label for="meilisearch_api_key"><?= __('API Key') ?></label>
-                            <input type="text" id="meilisearch_api_key" name="api_key" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['api_key'] ?? '') ?>" 
-                                   placeholder="<?= __('可选，如果 Meilisearch 启用了 API Key 认证，请填写') ?>">
-                            <small class="form-text text-muted"><?= __('如果 Meilisearch 启用了 API Key 认证，请填写主密钥或搜索密钥') ?></small>
+                            <input
+                                type="text"
+                                id="meilisearch_api_key"
+                                name="api_key"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($meilisearchConfig['api_key'] ?? '')) ?>"
+                            >
                         </div>
+
                         <div class="form-group">
                             <label for="meilisearch_index_name"><?= __('索引名称') ?></label>
-                            <input type="text" id="meilisearch_index_name" name="index_name" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['index_name'] ?? 'products') ?>" 
-                                   placeholder="products">
-                            <small class="form-text text-muted"><?= __('产品索引名称，默认为 products') ?></small>
+                            <input
+                                type="text"
+                                id="meilisearch_index_name"
+                                name="index_name"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($meilisearchConfig['index_name'] ?? 'products')) ?>"
+                                placeholder="products"
+                            >
                         </div>
-                        <div class="form-group">
-                            <button type="button" class="btn btn-info" onclick="testMeilisearchConnection()">
-                                <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
-                            </button>
-                        </div>
+
+                        <button type="button" class="btn btn-info js-test-connection" data-engine="meilisearch">
+                            <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                        </button>
                     </div>
                 </div>
-                
-                <!-- MySQL配置 -->
-                <div class="card mt-3" id="config-mysql" style="display: none;">
+
+                <div class="card mt-3 engine-config-panel" id="config-mysql" data-engine="mysql" data-engine-panel="mysql">
                     <div class="card-header">
-                        <h5 class="card-title"><?= __('MySQL配置') ?></h5>
+                        <h5 class="card-title mb-0"><?= __('MySQL 全文搜索配置') ?></h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info mb-3">
+                            <?= __('MySQL 作为兜底方案时无需额外服务，直接复用当前数据库能力。') ?>
+                        </div>
+
+                        <button type="button" class="btn btn-info js-test-connection" data-engine="mysql">
+                            <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card mt-3 engine-config-panel" id="config-elasticsearch" data-engine="elasticsearch" data-engine-panel="elasticsearch">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0"><?= __('Elasticsearch 配置') ?></h5>
                     </div>
                     <div class="card-body">
                         <div class="alert alert-info">
-                            <?= __('MySQL搜索引擎无需额外配置，将直接使用系统数据库连接') ?>
+                            <?= __('用于兼容已有 Elasticsearch 集群。') ?>
                         </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="elasticsearch_host"><?= __('服务地址') ?></label>
+                                    <input
+                                        type="text"
+                                        id="elasticsearch_host"
+                                        name="host"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['host'] ?? 'http://127.0.0.1')) ?>"
+                                        placeholder="http://127.0.0.1"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="elasticsearch_port"><?= __('端口') ?></label>
+                                    <input
+                                        type="number"
+                                        id="elasticsearch_port"
+                                        name="port"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['port'] ?? 9200)) ?>"
+                                        min="1"
+                                        max="65535"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="elasticsearch_index"><?= __('索引名称') ?></label>
+                                    <input
+                                        type="text"
+                                        id="elasticsearch_index"
+                                        name="index"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['index'] ?? 'products')) ?>"
+                                        placeholder="products"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group">
+                                    <label for="elasticsearch_timeout"><?= __('超时秒数') ?></label>
+                                    <input
+                                        type="number"
+                                        id="elasticsearch_timeout"
+                                        name="timeout"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['timeout'] ?? 5)) ?>"
+                                        min="1"
+                                        max="120"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="elasticsearch_username"><?= __('用户名') ?></label>
+                                    <input
+                                        type="text"
+                                        id="elasticsearch_username"
+                                        name="username"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['username'] ?? '')) ?>"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="elasticsearch_password"><?= __('密码') ?></label>
+                                    <input
+                                        type="password"
+                                        id="elasticsearch_password"
+                                        name="password"
+                                        class="form-control"
+                                        value="<?= htmlspecialchars((string) ($elasticsearchConfig['password'] ?? '')) ?>"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="button" class="btn btn-info js-test-connection" data-engine="elasticsearch">
+                            <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                        </button>
                     </div>
                 </div>
-                
-                <!-- Elasticsearch配置 -->
-                <div class="card mt-3" id="config-elasticsearch" style="display: none;">
+
+                <div class="card mt-3 engine-config-panel" id="config-algolia" data-engine="algolia" data-engine-panel="algolia">
                     <div class="card-header">
-                        <h5 class="card-title"><?= __('Elasticsearch配置') ?></h5>
+                        <h5 class="card-title mb-0"><?= __('Algolia 配置') ?></h5>
                     </div>
                     <div class="card-body">
                         <div class="form-group">
-                            <label for="host"><?= __('主机地址') ?></label>
-                            <input type="text" id="host" name="host" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['host'] ?? 'localhost') ?>" 
-                                   placeholder="localhost">
+                            <label for="algolia_application_id"><?= __('Application ID') ?></label>
+                            <input
+                                type="text"
+                                id="algolia_application_id"
+                                name="application_id"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($algoliaConfig['application_id'] ?? '')) ?>"
+                            >
                         </div>
+
                         <div class="form-group">
-                            <label for="port"><?= __('端口') ?></label>
-                            <input type="number" id="port" name="port" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['port'] ?? 9200) ?>" 
-                                   placeholder="9200">
+                            <label for="algolia_api_key"><?= __('API Key') ?></label>
+                            <input
+                                type="text"
+                                id="algolia_api_key"
+                                name="api_key"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($algoliaConfig['api_key'] ?? '')) ?>"
+                            >
                         </div>
+
                         <div class="form-group">
-                            <label for="index"><?= __('索引名称') ?></label>
-                            <input type="text" id="index" name="index" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['index'] ?? 'products') ?>" 
-                                   placeholder="products">
+                            <label for="algolia_index_name"><?= __('索引名称') ?></label>
+                            <input
+                                type="text"
+                                id="algolia_index_name"
+                                name="index_name"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) ($algoliaConfig['index_name'] ?? 'products')) ?>"
+                                placeholder="products"
+                            >
                         </div>
-                        <div class="form-group">
-                            <label for="username"><?= __('用户名') ?></label>
-                            <input type="text" id="username" name="username" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['username'] ?? '') ?>">
-                        </div>
-                        <div class="form-group">
-                            <label for="password"><?= __('密码') ?></label>
-                            <input type="password" id="password" name="password" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['password'] ?? '') ?>">
-                        </div>
+
+                        <button type="button" class="btn btn-info js-test-connection" data-engine="algolia">
+                            <i class="mdi mdi-connection"></i> <?= __('测试连接') ?>
+                        </button>
                     </div>
                 </div>
-                
-                <!-- Algolia配置 -->
-                <div class="card mt-3" id="config-algolia" style="display: none;">
-                    <div class="card-header">
-                        <h5 class="card-title"><?= __('Algolia配置') ?></h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label for="application_id"><?= __('Application ID') ?> <span class="text-danger">*</span></label>
-                            <input type="text" id="application_id" name="application_id" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['application_id'] ?? '') ?>" 
-                                   required>
-                        </div>
-                        <div class="form-group">
-                            <label for="api_key"><?= __('API Key') ?> <span class="text-danger">*</span></label>
-                            <input type="text" id="api_key" name="api_key" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['api_key'] ?? '') ?>" 
-                                   required>
-                        </div>
-                        <div class="form-group">
-                            <label for="index_name"><?= __('索引名称') ?></label>
-                            <input type="text" id="index_name" name="index_name" class="form-control" 
-                                   value="<?= htmlspecialchars($configData['index_name'] ?? 'products') ?>" 
-                                   placeholder="products">
-                        </div>
-                    </div>
-                </div>
-                
+
                 <div class="form-actions mt-3">
                     <button type="submit" class="btn btn-primary">
                         <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
@@ -199,144 +489,159 @@ if ($isEdit && !empty($config[SearchEngineConfig::schema_fields_CONFIG_DATA])) {
     </div>
 </div>
 
-<!-- SweetAlert2 CSS -->
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
-// 更新引擎配置显示
-function updateEngineConfig() {
-    const engineType = document.getElementById('engine_type').value;
-    const description = document.getElementById('engine_type').options[document.getElementById('engine_type').selectedIndex]?.dataset.description || '';
-    
-    // 隐藏所有配置面板
-    document.querySelectorAll('[id^="config-"]').forEach(el => {
-        el.style.display = 'none';
-    });
-    
-    // 显示描述
-    document.getElementById('engine-description').textContent = description;
-    
-    // 显示对应引擎的配置面板
-    if (engineType) {
-        const configPanel = document.getElementById('config-' + engineType);
-        if (configPanel) {
-            configPanel.style.display = 'block';
-        }
-    }
-}
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('search-engine-form');
+    const engineSelect = document.getElementById('engine_type');
+    const engineDescription = document.getElementById('engine-description');
+    const panels = Array.from(document.querySelectorAll('[data-engine-panel]'));
 
-// 初始化
-document.addEventListener('DOMContentLoaded', function() {
-    updateEngineConfig();
-    
-    // 表单提交
-    document.getElementById('search-engine-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        
-        const formData = new FormData(this);
-        var url = this.action;
-        var opts = { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } };
-        window.Weline.Api.request(url, opts)
-        .then(function(response) {
-            var data = (response && response.data) || response;
-            if (data.success) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('保存成功') ?>',
-                        text: '<?= __('配置已成功保存') ?>',
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => {
-                        window.location.href = '<?= $this->getUrl('search/backend/engine/index', ['scope' => $scope]) ?>';
-                    });
-                } else {
-                    console.log('<?= __('保存成功！') ?>');
-                    window.location.href = '<?= $this->getUrl('search/backend/engine/index', ['scope' => $scope]) ?>';
-                }
-            } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('保存失败') ?>',
-                        text: data.message || '<?= __('未知错误') ?>',
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('保存失败：') ?>' + (data.message || '<?= __('未知错误') ?>'));
-                }
-            }
-        })
-        .catch(error => {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('保存请求失败') ?>',
-                    text: error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('保存请求失败：') ?>' + error.message);
+    function toggleEnginePanelInputs(panel, isActivePanel) {
+        panel.style.display = isActivePanel ? 'block' : 'none';
+        panel.querySelectorAll('input, select, textarea, button').forEach(function (input) {
+            input.disabled = !isActivePanel;
+            if (input.dataset.required === '1') {
+                input.required = isActivePanel;
             }
         });
+    }
+
+    function updateEngineConfig() {
+        const option = engineSelect.options[engineSelect.selectedIndex];
+        const currentEngine = engineSelect.value;
+
+        engineDescription.textContent = option ? (option.dataset.description || '') : '';
+
+        panels.forEach(function (panel) {
+            toggleEnginePanelInputs(panel, panel.dataset.enginePanel === currentEngine);
         });
-    });
-    
-    // 测试 Meilisearch 连接
-    function testMeilisearchConnection() {
-        const host = document.getElementById('meilisearch_host').value;
-        const apiKey = document.getElementById('meilisearch_api_key').value;
-        const indexName = document.getElementById('meilisearch_index_name').value;
-        
-        if (!host) {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'warning',
-                    title: '<?= __('请填写服务地址') ?>',
-                    text: '<?= __('请先填写 Meilisearch 服务地址') ?>'
-                });
-            }
+    }
+
+    function showAlert(icon, title, text) {
+        if (typeof Swal !== 'undefined') {
+            return Swal.fire({
+                icon: icon,
+                title: title,
+                text: text || '',
+                confirmButtonText: '<?= __('确定') ?>'
+            });
+        }
+
+        if (text) {
+            alert(title + "\n" + text);
+        } else {
+            alert(title);
+        }
+
+        return Promise.resolve();
+    }
+
+    function extractResponseData(response) {
+        return (response && response.data) || response || {};
+    }
+
+    function testSearchEngineConnection(engine) {
+        if (!engine) {
+            showAlert('warning', '<?= __('请选择搜索引擎') ?>', '');
             return;
         }
-        
-        // 显示加载提示
+
+        const formData = new FormData(form);
+        formData.set('engine_type', engine);
+        const payload = new URLSearchParams();
+        formData.forEach(function (value, key) {
+            payload.append(key, value);
+        });
+
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 title: '<?= __('正在测试连接...') ?>',
                 allowOutsideClick: false,
-                didOpen: () => {
+                didOpen: function () {
                     Swal.showLoading();
                 }
             });
         }
-        
-        var testUrl = '<?= $this->getUrl('search/backend/engine/test') ?>';
-        var testBody = new URLSearchParams({ engine_type: 'meilisearch', host: host, api_key: apiKey, index_name: indexName });
-        var testOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest' }, body: testBody };
-        window.Weline.Api.request(testUrl, testOpts)
-        .then(function(response) {
-            var data = (response && response.data) || response;
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: data.success ? 'success' : 'error',
-                    title: data.success ? '<?= __('连接成功') ?>' : '<?= __('连接失败') ?>',
-                    text: data.message || ''
-                });
-            } else {
-                alert(data.success ? '<?= __('连接成功') ?>' : '<?= __('连接失败：') ?>' + (data.message || ''));
-            }
-        })
-        .catch(error => {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('测试请求失败') ?>',
-                    text: error.message
-                });
-            } else {
-                alert('<?= __('测试请求失败：') ?>' + error.message);
-            }
+
+        window.Weline.Api.request('<?= $this->getUrl('search/backend/engine/test') ?>', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: payload
+        }).then(function (response) {
+            const data = extractResponseData(response);
+            return showAlert(
+                data.success ? 'success' : 'error',
+                data.success ? '<?= __('连接测试成功') ?>' : '<?= __('连接测试失败') ?>',
+                data.message || ''
+            );
+        }).catch(function (error) {
+            return showAlert('error', '<?= __('测试请求失败') ?>', error.message || '');
         });
     }
+
+    const engineConnectionTestHandlers = {
+        opensearch: function () {
+            return testSearchEngineConnection('opensearch');
+        },
+        meilisearch: function () {
+            return testSearchEngineConnection('meilisearch');
+        },
+        mysql: function () {
+            return testSearchEngineConnection('mysql');
+        },
+        elasticsearch: function () {
+            return testSearchEngineConnection('elasticsearch');
+        },
+        algolia: function () {
+            return testSearchEngineConnection('algolia');
+        }
+    };
+
+    engineSelect.addEventListener('change', updateEngineConfig);
+
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+
+        const formData = new FormData(form);
+        window.Weline.Api.request(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function (response) {
+            const data = extractResponseData(response);
+            if (!data.success) {
+                return showAlert('error', '<?= __('保存失败') ?>', data.message || '<?= __('未知错误') ?>');
+            }
+
+            return showAlert('success', '<?= __('保存成功') ?>', data.message || '<?= __('配置已成功保存') ?>')
+                .then(function () {
+                    window.location.href = '<?= $this->getUrl('search/backend/engine/index', ['scope' => $scope]) ?>';
+                });
+        }).catch(function (error) {
+            return showAlert('error', '<?= __('保存请求失败') ?>', error.message || '');
+        });
+    });
+
+    document.querySelectorAll('.js-test-connection').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const engine = button.dataset.engine || engineSelect.value;
+            const handler = engineConnectionTestHandlers[engine];
+            if (handler) {
+                handler();
+                return;
+            }
+
+            testSearchEngineConnection(engine);
+        });
+    });
+
+    updateEngineConfig();
+});
 </script>
