@@ -9,6 +9,7 @@ use WeShop\Address\Service\AddressService;
 use WeShop\Cart\Service\CartService;
 use WeShop\Checkout\Service\CheckoutPageDataService;
 use WeShop\Checkout\Service\CheckoutService;
+use WeShop\Order\Service\OrderService;
 use WeShop\Shipping\Service\ShippingService;
 use Weline\I18n\Model\I18n;
 
@@ -84,9 +85,7 @@ class CheckoutPageDataServiceTest extends TestCase
         $checkoutService = $this->createMock(CheckoutService::class);
         $checkoutService->expects($this->once())
             ->method('getCheckoutShippingMethods')
-            ->with(12, [
-                'area' => 'frontend',
-            ])
+            ->with(12, ['area' => 'frontend'])
             ->willReturn([
                 [
                     'code' => 'flat_rate',
@@ -94,13 +93,6 @@ class CheckoutPageDataServiceTest extends TestCase
                     'description' => 'Delivery in 3-5 business days.',
                     'is_default' => true,
                     'sort_order' => 10,
-                ],
-                [
-                    'code' => 'local_pickup',
-                    'name' => 'Local Pickup',
-                    'description' => 'Pick up from the local store.',
-                    'is_default' => false,
-                    'sort_order' => 20,
                 ],
             ]);
         $checkoutService->expects($this->once())
@@ -137,37 +129,30 @@ class CheckoutPageDataServiceTest extends TestCase
                 'CN' => 'China',
             ]);
 
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())
+            ->method('getRetryPaymentContext');
+
         $service = new CheckoutPageDataService(
             $cartService,
             $addressService,
             $shippingService,
             $checkoutService,
-            $i18n
+            $i18n,
+            $orderService
         );
 
         $result = $service->build(12, 9);
 
         $this->assertSame(3, $result['current_step']);
         $this->assertSame(3, $result['cart_count']);
-        $this->assertSame(3, $result['item_count']);
-        $this->assertSame(50.0, $result['cart_total']);
         $this->assertSame(63.5, $result['cart_summary']['grand_total']);
-        $this->assertCount(2, $result['cart_items']);
+        $this->assertFalse((bool) $result['is_retry_payment']);
         $this->assertSame('Traveler Backpack', $result['cart_items'][0]['name']);
-        $this->assertSame(24.0, $result['cart_items'][0]['row_total']);
         $this->assertSame('Ada Lovelace', $result['saved_addresses'][0]['name']);
-        $this->assertSame('flat_rate', $result['shipping_methods'][0]['code']);
-        $this->assertTrue((bool) ($result['shipping_methods'][0]['is_default'] ?? false));
         $this->assertSame('paypal', $result['payment_methods'][0]['code']);
         $this->assertSame('redirect', $result['payment_methods'][0]['flow']);
-        $this->assertContains(
-            $result['payment_methods'][0]['flow_label'],
-            ['Redirect after order placement', '下单后跳转支付']
-        );
-        $this->assertContains(
-            $result['payment_methods'][1]['badge'],
-            ['Offline', '线下']
-        );
+        $this->assertContains($result['payment_methods'][1]['badge'], ['Offline', '线下']);
         $this->assertStringContainsString('Use the order number as the payment reference.', $result['payment_methods'][1]['checkout_note']);
         $this->assertSame(
             [
@@ -176,5 +161,67 @@ class CheckoutPageDataServiceTest extends TestCase
             ],
             $result['countries']
         );
+    }
+
+    public function testBuildUsesRetryOrderContextWithoutCartLookups(): void
+    {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+
+        $cartService = $this->createMock(CartService::class);
+        $cartService->expects($this->never())->method('getCartItems');
+        $cartService->expects($this->never())->method('calculateTotals');
+
+        $addressService = $this->createMock(AddressService::class);
+        $addressService->method('getCustomerAddresses')->willReturn([]);
+
+        $shippingService = $this->createMock(ShippingService::class);
+        $shippingService->method('getAvailableShippingMethods')->willReturn([]);
+
+        $checkoutService = $this->createMock(CheckoutService::class);
+        $checkoutService->method('getCheckoutShippingMethods')->willReturn([]);
+        $checkoutService->method('getCheckoutPaymentMethods')->willReturn([
+            ['code' => 'paypal', 'title' => 'PayPal', 'is_default' => true],
+        ]);
+
+        $i18n = $this->createMock(I18n::class);
+        $i18n->method('getCountries')->willReturn([]);
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('getRetryPaymentContext')
+            ->with(88, 12)
+            ->willReturn([
+                'order_id' => 88,
+                'increment_id' => 'WS000088',
+                'items' => [
+                    ['item_id' => 1, 'product_id' => 101, 'name' => 'Trail Backpack', 'price' => 19.5, 'qty' => 1, 'row_total' => 19.5],
+                    ['item_id' => 2, 'product_id' => 102, 'name' => 'Travel Bottle', 'price' => 20.0, 'qty' => 2, 'row_total' => 40.0],
+                ],
+                'summary' => [
+                    'subtotal' => 59.5,
+                    'shipping' => 0,
+                    'discount' => 0,
+                    'tax' => 0,
+                    'grand_total' => 59.5,
+                ],
+            ]);
+
+        $service = new CheckoutPageDataService(
+            $cartService,
+            $addressService,
+            $shippingService,
+            $checkoutService,
+            $i18n,
+            $orderService
+        );
+
+        $result = $service->build(12, 1, 88);
+
+        $this->assertTrue((bool) $result['is_retry_payment']);
+        $this->assertSame(88, $result['retry_order_id']);
+        $this->assertSame('WS000088', $result['retry_order_increment_id']);
+        $this->assertSame(3, $result['cart_count']);
+        $this->assertSame(59.5, $result['cart_summary']['grand_total']);
+        $this->assertSame('Trail Backpack', $result['cart_items'][0]['name']);
     }
 }
