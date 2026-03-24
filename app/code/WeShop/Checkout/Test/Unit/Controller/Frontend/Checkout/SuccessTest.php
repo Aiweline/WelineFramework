@@ -73,7 +73,10 @@ class SuccessTest extends TestCase
             ->getMock();
         $controller->expects($this->never())->method('redirect');
         $controller->expects($this->exactly(2))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Checkout::templates/frontend/checkout/success.phtml')
+            ->willReturn('page');
 
         $this->setProtectedProperty($controller, 'request', $request);
 

@@ -74,6 +74,23 @@ class OrderListTest extends TestCase
         $this->assertSame('page', $controller->index());
     }
 
+    public function testRenderPageUsesModuleQualifiedOrderListTemplate(): void
+    {
+        $controller = $this->getMockBuilder(OrderList::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['fetchTemplateWithEvents'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('fetchTemplateWithEvents')
+            ->with('WeShop_Order::templates/Frontend/Order/OrderList/index.phtml')
+            ->willReturn('page');
+
+        $method = new \ReflectionMethod(OrderList::class, 'renderPage');
+        $method->setAccessible(true);
+
+        $this->assertSame('page', $method->invoke($controller));
+    }
+
     private function setProtectedProperty(object $target, string $property, mixed $value): void
     {
         $reflection = new \ReflectionObject($target);
