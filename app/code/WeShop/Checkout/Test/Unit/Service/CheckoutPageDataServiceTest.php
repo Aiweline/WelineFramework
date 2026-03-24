@@ -70,14 +70,31 @@ class CheckoutPageDataServiceTest extends TestCase
             ]);
 
         $shippingService = $this->createMock(ShippingService::class);
-        $shippingService->expects($this->once())
-            ->method('getAvailableShippingMethods')
-            ->willReturn([
-                'flat_rate' => 'Flat Rate',
-                'local_pickup' => 'Local Pickup',
-            ]);
+        $shippingService->expects($this->never())
+            ->method('getAvailableShippingMethods');
 
         $checkoutService = $this->createMock(CheckoutService::class);
+        $checkoutService->expects($this->once())
+            ->method('getCheckoutShippingMethods')
+            ->with(12, [
+                'area' => 'frontend',
+            ])
+            ->willReturn([
+                [
+                    'code' => 'flat_rate',
+                    'name' => 'Flat Rate',
+                    'description' => 'Delivery in 3-5 business days.',
+                    'is_default' => true,
+                    'sort_order' => 10,
+                ],
+                [
+                    'code' => 'local_pickup',
+                    'name' => 'Local Pickup',
+                    'description' => 'Pick up from the local store.',
+                    'is_default' => false,
+                    'sort_order' => 20,
+                ],
+            ]);
         $checkoutService->expects($this->once())
             ->method('getCheckoutPaymentMethods')
             ->with(12, [
@@ -135,8 +152,14 @@ class CheckoutPageDataServiceTest extends TestCase
         $this->assertTrue((bool) ($result['shipping_methods'][0]['is_default'] ?? false));
         $this->assertSame('paypal', $result['payment_methods'][0]['code']);
         $this->assertSame('redirect', $result['payment_methods'][0]['flow']);
-        $this->assertSame('Redirect after order placement', $result['payment_methods'][0]['flow_label']);
-        $this->assertSame('Offline', $result['payment_methods'][1]['badge']);
+        $this->assertContains(
+            $result['payment_methods'][0]['flow_label'],
+            ['Redirect after order placement', '下单后跳转支付']
+        );
+        $this->assertContains(
+            $result['payment_methods'][1]['badge'],
+            ['Offline', '线下']
+        );
         $this->assertStringContainsString('Use the order number as the payment reference.', $result['payment_methods'][1]['checkout_note']);
         $this->assertSame(
             [

@@ -166,6 +166,42 @@ class AuthControllerTest extends TestCase
         $this->assertSame('token-error', $controller->postToken());
     }
 
+    public function testPostTokenRejectsMissingPasswordGrantCredentials(): void
+    {
+        $authGrantService = $this->createMock(AuthGrantService::class);
+        $authGrantService->expects($this->never())->method('issuePasswordToken');
+        $authGrantService->expects($this->never())->method('issueGoogleCodeToken');
+        $authGrantService->expects($this->never())->method('refreshToken');
+        $authGrantService->expects($this->never())->method('issueApiCredentialsToken');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')->willReturnCallback(static function (string $key) {
+            return match ($key) {
+                'grant_type' => 'password',
+                default => null,
+            };
+        });
+        $request->method('getPost')->willReturn(null);
+
+        $controller = $this->getMockBuilder(Auth::class)
+            ->setConstructorArgs([$authGrantService])
+            ->onlyMethods(['success', 'exception'])
+            ->getMock();
+        $controller->expects($this->never())->method('success');
+        $controller->expects($this->once())
+            ->method('exception')
+            ->with(
+                $this->callback(static fn (\Throwable $throwable): bool => $throwable instanceof \InvalidArgumentException
+                    && str_contains($throwable->getMessage(), 'Username or email and password are required.')),
+                $this->stringContains('Authentication failed')
+            )
+            ->willReturn('token-missing-credentials');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('token-missing-credentials', $controller->postToken());
+    }
+
     public function testPostRefreshUsesRefreshGrantWithoutGrantType(): void
     {
         $authGrantService = $this->createMock(AuthGrantService::class);
