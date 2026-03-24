@@ -82,11 +82,21 @@ class ThemeCompatibilityService
             return $this->buildCompatibilityResult(null, $area, $layoutType, $layoutOption, $scope, null, []);
         }
 
-        $templateDefinition = $this->getTemplateDefinition($area, $layoutType);
-        $layoutFile = $this->resolveLayoutFilePath($theme, $area, $layoutType, $layoutOption, $templateDefinition);
-        $layoutContent = $layoutFile && is_file($layoutFile)
-            ? (string) file_get_contents($layoutFile)
-            : '';
+        $templateDefinitions = $this->getTemplateDefinitions($area, $layoutType);
+        $layoutFiles = [];
+        $layoutContents = [];
+        foreach ($templateDefinitions as $templateDefinition) {
+            $layoutFile = $this->resolveLayoutFilePath($theme, $area, $layoutType, $layoutOption, $templateDefinition);
+            if (!$layoutFile || !is_file($layoutFile)) {
+                continue;
+            }
+
+            $layoutFiles[] = $layoutFile;
+            $layoutContents[] = (string) file_get_contents($layoutFile);
+        }
+        $layoutFiles = array_values(array_unique($layoutFiles));
+        $layoutFile = $layoutFiles[0] ?? null;
+        $layoutContent = implode(PHP_EOL, $layoutContents);
 
         $missingModules = [];
         $missingHosts = [];
@@ -133,6 +143,7 @@ class ThemeCompatibilityService
             $scope,
             $layoutFile,
             [
+                'layout_files' => $layoutFiles,
                 'missing_hosts' => $missingHosts,
                 'missing_modules' => $missingModules,
             ]
@@ -179,6 +190,7 @@ class ThemeCompatibilityService
                     'layout_type' => (string) ($compatibility['layout_type'] ?? ''),
                     'layout_option' => (string) ($compatibility['layout_option'] ?? ''),
                     'layout_file' => (string) ($compatibility['layout_file'] ?? ''),
+                    'layout_files' => (array) ($compatibility['layout_files'] ?? []),
                     'missing_hosts' => (array) ($compatibility['missing_hosts'] ?? []),
                 ],
             ]
@@ -223,6 +235,7 @@ class ThemeCompatibilityService
             'layout_type' => (string) ($compatibility['layout_type'] ?? ''),
             'layout_option' => (string) ($compatibility['layout_option'] ?? ''),
             'layout_file' => (string) ($compatibility['layout_file'] ?? ''),
+            'layout_files' => (array) ($compatibility['layout_files'] ?? []),
             'has_missing_hosts' => !empty($compatibility['has_missing_hosts']),
             'missing_count' => (int) ($compatibility['missing_count'] ?? 0),
             'missing_hosts' => (array) ($compatibility['missing_hosts'] ?? []),
@@ -243,6 +256,14 @@ class ThemeCompatibilityService
         ?string $layoutFile,
         array $data
     ): array {
+        $layoutFiles = array_values(array_filter(array_map(
+            static fn (mixed $file): string => is_string($file) ? $file : '',
+            (array) ($data['layout_files'] ?? [])
+        )));
+        if ($layoutFile === null && $layoutFiles !== []) {
+            $layoutFile = $layoutFiles[0];
+        }
+
         $missingHosts = (array) ($data['missing_hosts'] ?? []);
         $missingModules = (array) ($data['missing_modules'] ?? []);
         $themeName = $theme && $theme->getId()
@@ -257,6 +278,7 @@ class ThemeCompatibilityService
             'layout_type' => $layoutType,
             'layout_option' => $layoutOption,
             'layout_file' => $layoutFile,
+            'layout_files' => $layoutFiles,
             'has_missing_hosts' => $missingHosts !== [],
             'missing_count' => count($missingHosts),
             'missing_hosts' => $missingHosts,
@@ -457,14 +479,44 @@ class ThemeCompatibilityService
     /**
      * @return array<string, mixed>
      */
-    private function getTemplateDefinition(string $area, string $layoutType): array
+    private function getTemplateDefinitions(string $area, string $layoutType): array
     {
         $layoutManifest = $this->getLayoutEntry($area, $layoutType);
-        $templateDefinition = $layoutManifest['_template'] ?? [];
-        if (!is_array($templateDefinition)) {
-            $templateDefinition = [];
+        $templateDefinitions = [];
+
+        $multiTemplateDefinitions = $layoutManifest['_templates'] ?? [];
+        if (is_array($multiTemplateDefinitions)) {
+            $definitions = array_is_list($multiTemplateDefinitions)
+                ? $multiTemplateDefinitions
+                : [$multiTemplateDefinitions];
+
+            foreach ($definitions as $templateDefinition) {
+                if (!is_array($templateDefinition)) {
+                    continue;
+                }
+
+                $templateDefinitions[] = $this->normalizeTemplateDefinition($templateDefinition);
+            }
         }
 
+        if ($templateDefinitions === []) {
+            $templateDefinition = $layoutManifest['_template'] ?? [];
+            if (!is_array($templateDefinition)) {
+                $templateDefinition = [];
+            }
+
+            $templateDefinitions[] = $this->normalizeTemplateDefinition($templateDefinition);
+        }
+
+        return $templateDefinitions;
+    }
+
+    /**
+     * @param array<string, mixed> $templateDefinition
+     * @return array<string, mixed>
+     */
+    private function normalizeTemplateDefinition(array $templateDefinition): array
+    {
         return [
             'kind' => strtolower(trim((string) ($templateDefinition['kind'] ?? 'layout'))) ?: 'layout',
             'path' => trim((string) ($templateDefinition['path'] ?? '')),
