@@ -14,7 +14,7 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                 </p>
 
                 <div class="mt-8 flex flex-wrap gap-3 text-sm">
-                    <a href="<?= $this->getUrl('catalog/category') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                    <a href="<?= $this->getUrl('weshop') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
                         <?= __('Continue Shopping') ?>
                     </a>
                     <a href="<?= $this->getUrl('wishlist') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
@@ -45,7 +45,7 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('History Feed') ?></p>
                     <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Your Latest Product Views') ?></h2>
                 </div>
-                <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Back to Account') ?></a>
+                <a href="<?= $this->getUrl('weshop_customer/frontend/account') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Back to Account') ?></a>
             </div>
 
             <?php if ($recentlyViewedItems): ?>

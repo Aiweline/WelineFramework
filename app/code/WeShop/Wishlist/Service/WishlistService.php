@@ -4,122 +4,130 @@ declare(strict_types=1);
 
 namespace WeShop\Wishlist\Service;
 
-use Weline\Framework\Manager\ObjectManager;
-use WeShop\Wishlist\Model\Wishlist;
 use WeShop\Product\Model\Product;
+use WeShop\Product\Service\ProductService;
+use WeShop\Wishlist\Model\Wishlist;
+use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 愿望清单服务
- */
 class WishlistService
 {
-    /**
-     * 添加到愿望清单
-     * 
-     * @param int $customerId 客户ID
-     * @param int $productId 产品ID
-     * @return Wishlist
-     */
+    public function __construct(
+        private readonly ?ProductService $productService = null
+    ) {
+    }
+
     public function addToWishlist(int $customerId, int $productId): Wishlist
     {
         /** @var Wishlist $wishlist */
         $wishlist = ObjectManager::getInstance(Wishlist::class);
-        
-        // 检查是否已存在
+
         $existing = $wishlist->clear()
             ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
             ->where(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
-        
+
         if ($existing && $existing->getId()) {
             return $existing;
         }
-        
-        // 创建新记录
+
         $wishlist->clearData()
             ->setData(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
             ->setData(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->save();
-        
+
         return $wishlist;
     }
-    
-    /**
-     * 从愿望清单移除
-     * 
-     * @param int $wishlistId 愿望清单ID
-     * @param int $customerId 客户ID（用于验证）
-     * @return bool
-     */
+
     public function removeFromWishlist(int $wishlistId, int $customerId): bool
     {
         /** @var Wishlist $wishlist */
         $wishlist = ObjectManager::getInstance(Wishlist::class);
         $wishlist->load($wishlistId);
-        
+
         if (!$wishlist->getId()) {
             return false;
         }
-        
-        // 验证客户ID
-        if ((int)$wishlist->getData(Wishlist::schema_fields_CUSTOMER_ID) !== $customerId) {
-            throw new \Exception(__('无权移除此愿望清单项'));
+
+        if ((int) $wishlist->getData(Wishlist::schema_fields_CUSTOMER_ID) !== $customerId) {
+            throw new \Exception((string) __('You are not allowed to remove this wishlist item.'));
         }
-        
+
         return (bool) $wishlist->delete()->fetch();
     }
-    
+
     /**
-     * 获取客户愿望清单
-     * 
-     * @param int $customerId 客户ID
-     * @return array
+     * @return array<int, array<string, mixed>>
      */
-    public function getCustomerWishlist(int $customerId): array
+    public function getCustomerWishlist(int $customerId, int $limit = 0): array
     {
         /** @var Wishlist $wishlist */
         $wishlist = ObjectManager::getInstance(Wishlist::class);
-        
-        $items = $wishlist->clear()
+
+        $query = $wishlist->clear()
             ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
-            ->order(Wishlist::schema_fields_CREATED_AT, 'DESC')
-            ->select()
-            ->fetchArray();
-        
-        // 加载产品信息
+            ->order(Wishlist::schema_fields_CREATED_AT, 'DESC');
+        if ($limit > 0) {
+            $query->limit($limit);
+        }
+
+        $items = $query->select()->fetchArray();
         foreach ($items as &$item) {
-            if (!empty($item['product_id'])) {
-                /** @var Product $product */
-                $product = ObjectManager::getInstance(Product::class);
-                $product->load($item['product_id']);
-                if ($product->getId()) {
-                    $item['product'] = $product->getData();
-                }
+            $productId = (int) ($item[Wishlist::schema_fields_PRODUCT_ID] ?? 0);
+            if ($productId > 0) {
+                $item['product'] = $this->loadProductData($productId);
             }
         }
-        
+
         return $items;
     }
-    
-    /**
-     * 检查产品是否在愿望清单中
-     * 
-     * @param int $customerId 客户ID
-     * @param int $productId 产品ID
-     * @return bool
-     */
+
+    public function getCustomerWishlistCount(int $customerId): int
+    {
+        /** @var Wishlist $wishlist */
+        $wishlist = ObjectManager::getInstance(Wishlist::class);
+
+        return count($wishlist->clear()
+            ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
+            ->select()
+            ->fetchArray());
+    }
+
     public function isInWishlist(int $customerId, int $productId): bool
     {
         /** @var Wishlist $wishlist */
         $wishlist = ObjectManager::getInstance(Wishlist::class);
-        
+
         $item = $wishlist->clear()
             ->where(Wishlist::schema_fields_CUSTOMER_ID, $customerId)
             ->where(Wishlist::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
-        
+
         return $item && $item->getId();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function loadProductData(int $productId): array
+    {
+        $product = $this->getProductService()->getProduct($productId);
+        if (!$product || !$product->getId()) {
+            return [];
+        }
+
+        return [
+            'product_id' => (int) $product->getId(),
+            'name' => (string) ($product->getData(Product::schema_fields_name) ?? ''),
+            'image' => (string) ($product->getData(Product::schema_fields_image) ?? ''),
+            'price' => (float) ($product->getData(Product::schema_fields_price) ?? 0),
+            'sku' => (string) ($product->getData(Product::schema_fields_sku) ?? ''),
+        ];
+    }
+
+    private function getProductService(): ProductService
+    {
+        return $this->productService ?? ObjectManager::getInstance(ProductService::class);
     }
 }

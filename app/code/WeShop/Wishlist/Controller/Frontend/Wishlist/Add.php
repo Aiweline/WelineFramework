@@ -48,7 +48,7 @@ class Add extends FrontendController
         }
 
         $this->wishlistService->addToWishlist($customerId, $productId);
-        $wishlistCount = count($this->wishlistService->getCustomerWishlist($customerId));
+        $wishlistCount = $this->wishlistService->getCustomerWishlistCount($customerId);
 
         if ($this->shouldReturnJson()) {
             return $this->fetchJson([

@@ -56,9 +56,9 @@ class RemoveTest extends TestCase
             ->with(11, 7)
             ->willReturn(true);
         $wishlistService->expects($this->once())
-            ->method('getCustomerWishlist')
+            ->method('getCustomerWishlistCount')
             ->with(7)
-            ->willReturn([]);
+            ->willReturn(0);
         $url = $this->createMock(Url::class);
 
         $request = $this->createMock(Request::class);

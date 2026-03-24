@@ -1,0 +1,27 @@
+<?php
+/**
+ * Recently viewed storefront account-center discovery card.
+ *
+ * @hook-priority 230
+ * @hook-sort-order 18
+ * @hook-solo false
+ */
+$recentlyViewedCount = (int) ($this->getData('recently_viewed_count') ?? 0);
+?>
+<article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Browsing Memory') ?></p>
+            <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recently Viewed') ?></h2>
+        </div>
+        <a href="<?= $this->getUrl('recently-viewed') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Open History') ?></a>
+    </div>
+
+    <div class="mt-6 rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+        <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Products in your history') ?></p>
+        <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $recentlyViewedCount ?></p>
+        <p class="mt-2 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+            <?= __('Keep the products you inspected most recently one click away so you can resume comparison, wishlist decisions, and checkout without searching again.') ?>
+        </p>
+    </div>
+</article>
