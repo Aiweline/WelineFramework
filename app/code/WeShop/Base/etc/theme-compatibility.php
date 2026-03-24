@@ -1,5 +1,12 @@
 <?php
 
+$analyticsCompatibility = [
+    'description' => 'Analytics snippets depend on the canonical base head-after hook so storefront tracking code can inject safely.',
+    'hosts' => [
+        ['type' => 'hook', 'name' => 'Weline_Theme::frontend::layouts::base::head-after'],
+    ],
+];
+
 $accountCompatibility = [
     '_template' => [
         'kind' => 'page',
@@ -24,6 +31,7 @@ $accountCompatibility = [
 return [
     'frontend' => [
         'homepage' => [
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_Promotion' => [
                 'description' => 'Homepage promotion blocks inject into the deals hosts.',
                 'hosts' => [
@@ -42,6 +50,7 @@ return [
             ],
         ],
         'product' => [
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_Product' => [
                 'description' => 'Product detail modules depend on the canonical product hosts.',
                 'hosts' => [
@@ -63,6 +72,7 @@ return [
             ],
         ],
         'product_list' => [
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_Catalog' => [
                 'description' => 'Catalog listing modules depend on canonical product-list hosts.',
                 'hosts' => [
@@ -81,6 +91,7 @@ return [
             ],
         ],
         'cart' => [
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_Cart' => [
                 'description' => 'Cart modules inject into cart item, summary, and recommendation hosts.',
                 'hosts' => [
@@ -95,6 +106,11 @@ return [
             ],
         ],
         'checkout' => [
+            '_templates' => [
+                ['kind' => 'layout'],
+                ['kind' => 'page', 'path' => 'checkout/index.phtml'],
+            ],
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_Checkout' => [
                 'description' => 'Checkout sections depend on canonical shipping, payment, review, and summary hosts.',
                 'hosts' => [
@@ -103,6 +119,9 @@ return [
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::checkout::payment_before'],
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::layouts::checkout::payment-content'],
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::checkout::payment_after'],
+                    ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::partials::checkout::shipping-methods'],
+                    ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::partials::checkout::payment-methods'],
+                    ['type' => 'hook', 'name' => 'WeShop_Checkout::frontend::partials::checkout::payment-details'],
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::checkout::review_before'],
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::checkout::review_after'],
                     ['type' => 'hook', 'name' => 'WeShop_Checkout::checkout::summary_before'],
@@ -116,13 +135,14 @@ return [
                 ],
             ],
         ],
-        'account' => $accountCompatibility,
-        'customer' => $accountCompatibility,
+        'account' => $accountCompatibility + ['WeShop_Analytics' => $analyticsCompatibility],
+        'customer' => $accountCompatibility + ['WeShop_Analytics' => $analyticsCompatibility],
         'b2b' => [
             '_template' => [
                 'kind' => 'page',
                 'path' => 'b2b/index.phtml',
             ],
+            'WeShop_Analytics' => $analyticsCompatibility,
             'WeShop_B2B' => [
                 'description' => 'B2B modules depend on the canonical company page hook hosts.',
                 'hosts' => [
@@ -130,6 +150,13 @@ return [
                     ['type' => 'hook', 'name' => 'WeShop_B2B::frontend::partials::company::list-after'],
                 ],
             ],
+        ],
+        'search' => [
+            '_template' => [
+                'kind' => 'page',
+                'path' => 'search/index.phtml',
+            ],
+            'WeShop_Analytics' => $analyticsCompatibility,
         ],
     ],
 ];
