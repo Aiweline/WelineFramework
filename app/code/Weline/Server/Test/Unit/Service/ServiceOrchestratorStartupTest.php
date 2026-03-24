@@ -5,7 +5,9 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Service\ServiceOrchestrator;
 
 class ServiceOrchestratorStartupTest extends TestCase
@@ -77,12 +79,85 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotificationArmed'));
     }
 
+    public function testStartProvidersBatchAdoptsExistingSharedSidecar(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            protected function inspectSharedSidecarForAdoption(string $role, int $port, string $expectedTokenFileName): array
+            {
+                return [
+                    'reusable' => true,
+                    'pid' => 5678,
+                    'port' => $port,
+                    'role' => $role,
+                    'token_file_name' => $expectedTokenFileName,
+                    'process_name' => 'weline-wls-session-owner',
+                ];
+            }
+        };
+
+        $provider = new SessionServerProvider();
+        $context = new ServiceContext(
+            instanceName: 'consumer',
+            epoch: 1,
+            controlPort: 19980,
+            masterPid: 999,
+            host: '127.0.0.1',
+            mainPort: 9982,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'session' => ['server_port' => 19970],
+                'wls' => [
+                    'session' => [
+                        'port' => 19970,
+                        'token_file_name' => 'session_server.token',
+                        'wls_server' => [
+                            'port' => 19970,
+                            'token_file_name' => 'session_server.token',
+                        ],
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 10000,
+            workerPort: 19982,
+        );
+
+        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [[$provider], $context]);
+
+        self::assertCount(1, $result['session_server'] ?? []);
+        $instance = $result['session_server'][0];
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertSame(ServiceInstance::STATE_READY, $instance->state);
+        self::assertSame(5678, $instance->pid);
+        self::assertTrue((bool) $instance->getMeta('shared_external'));
+        self::assertSame('weline-wls-session-owner', $instance->getMeta('process_name'));
+
+        $registered = $orchestrator->getRegistry()->getInstance('session_server', 1);
+        self::assertInstanceOf(ServiceInstance::class, $registered);
+        self::assertTrue((bool) $registered->getMeta('shared_external'));
+    }
+
     private function invokePrivate(object $object, string $method): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
         $reflection->setAccessible(true);
 
         return $reflection->invoke($object);
+    }
+
+    private function invokePrivateWithArgs(object $object, string $method, array $arguments): mixed
+    {
+        $reflection = new \ReflectionMethod($object, $method);
+        $reflection->setAccessible(true);
+
+        return $reflection->invokeArgs($object, $arguments);
     }
 
     private function readPrivateBool(object $object, string $property): bool
