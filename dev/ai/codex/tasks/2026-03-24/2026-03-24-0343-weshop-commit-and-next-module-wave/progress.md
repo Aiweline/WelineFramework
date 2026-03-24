@@ -215,3 +215,63 @@
 - `curl.exe -k -I https://127.0.0.1:9982/invoice` -> `301` to `customer/account/login`
 - `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-invoice.spec.js` -> `1 passed`
 - 2026-03-25 01:36 The `Invoice` commit boundary should include only module code/templates/tests, the new frontend e2e spec, and this task workspace update; `app/code/WeShop/Invoice/i18n/*.csv` remain intentionally excluded because they are still mixed with broader parser-generated drift.
+- 2026-03-25 02:05 Re-loaded the current task context and narrowed the next live slice to `Order + Checkout` clean frontend route hardening because the new alias controllers had been patched but not fully runtime-validated.
+- 2026-03-25 02:08 Verified the pending route hardening baseline:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit --colors=never` -> `17 tests / 143 assertions`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Order/Test/Unit --colors=never` -> `26 tests / 95 assertions`
+- syntax checks surfaced the real blocker: `app/code/WeShop/Order/Controller/Order/List.php` used the reserved PHP keyword `List` as a class name.
+- 2026-03-25 02:12 Fixed the first alias bug by moving the `list` action into a directory-backed controller (`Controller/Order/List/Index.php`) so `/.../order/list` remains available without illegal PHP identifiers.
+- 2026-03-25 02:21 Refreshed reflection metadata, route registries, and the live runtime:
+- `php bin/w reflection:compile`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w server:reload --no-wait`
+- route inspection then revealed the more important router issue: adding alias controllers inside `WeShop_Order` still registered them as `weshop_order/order/*`, not the desired shared clean paths under `/weshop/order/*`.
+- 2026-03-25 02:27 Added shared clean-route alias controllers under `app/code/WeShop/Frontend/Controller/Order/*` so the existing `WeShop_Frontend` `router => weshop` namespace now owns:
+- `/weshop/order/list`
+- `/weshop/order/view`
+- `/weshop/order/retry-payment`
+- `/weshop/order/cancel`
+- 2026-03-25 02:32 Runtime probing on `https://127.0.0.1:9982` confirmed the new clean routes were now live:
+- `php bin/w route:list | Select-String -Pattern 'weshop/order/'`
+- `curl.exe -k -i https://127.0.0.1:9982/weshop/order/list` -> `301` to `customer/account/login`
+- `curl.exe -k -i "https://127.0.0.1:9982/weshop/order/view?id=1"` -> `301` to `customer/account/login`
+- `curl.exe -k -i "https://127.0.0.1:9982/weshop/order/retry-payment?order_id=1"` -> `301` to `customer/account/login`
+- `curl.exe -k -i https://127.0.0.1:9982/checkout` -> `301` to `customer/account/login`
+- `curl.exe -k -i https://127.0.0.1:9982/checkout/place-order` -> `200` JSON guest-guard payload
+- `curl.exe -k -i https://127.0.0.1:9982/checkout/success` -> `301` to `weshop/cart`
+- 2026-03-25 02:35 Live probing also found one more real runtime regression: `WeShop_Frontend\Controller\Order\Cancel` called nonexistent parent methods on GET/POST and could still 500 on `/weshop/order/cancel`.
+- 2026-03-25 02:38 Fixed the cancel alias so GET safely redirects back to the order list and POST routes delegate to the existing `postIndex()` cancel flow; after `preflight-refresh` + `server:reload`, `curl.exe -k -i https://127.0.0.1:9982/weshop/order/cancel` returned a safe `301` instead of `500`.
+- 2026-03-25 02:42 Added focused regression coverage for the new clean-route layer:
+- `app/code/WeShop/Checkout/Test/Unit/Controller/CleanRouteAliasControllersTest.php`
+- `app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php`
+- `tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js`
+- 2026-03-25 02:45 Validation for the route-hardening slice passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit --colors=never` -> `20 tests / 153 assertions`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Order/Test/Unit --colors=never` -> `26 tests / 95 assertions`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php --colors=never` -> `4 tests / 14 assertions`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w server:reload --no-wait`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js` -> `2 passed`
+- 2026-03-25 03:00 Re-loaded the workspace and narrowed the next bounded slice to `WeShop_Subscription`, based on the earlier audit and the still-open clean-route / admin menu / account-hook gaps.
+- 2026-03-25 03:06 Loaded the minimal repo skill set for this slice: `weline-routing`, `extension-points`, `unified-query-provider`, and `testing`.
+- 2026-03-25 03:15 Integrated the in-progress local Subscription backend refactor:
+- kept the new `SubscriptionAdminPageDataService` and `SubscriptionPlanAdminPageDataService`
+- kept the thin backend `Subscription` / `Plan` controllers
+- fixed the service regression where admin pagination had been cast to arrays instead of preserving the framework pagination markup contract
+- 2026-03-25 03:24 Completed the storefront/account compatibility follow-up for Subscription:
+- added clean-route alias controllers for `/subscription`, `/subscription/view`, `/subscription/pause`, and `/subscription/cancel`
+- moved the customer-account order card away from `SessionFactory + ObjectManager` and onto host-provided `subscription_count` data
+- extended `AccountDashboardDataService` to provide `subscription_count`
+- aligned default-theme subscription actions to use the page-data-provided clean route URLs
+- moved the backend menu root from `WeShop_Shop::main` to `Weline_Backend::customer_group`
+- added a theme-compatibility manifest entry for the default-theme `subscription/index.phtml` page hook hosts
+- 2026-03-25 03:33 Fixed the new Subscription unit tests so their fake models now match `AbstractModel` method signatures (`clear`, `load`, `pagination`, `getPagination`, `getData`, `getId`) instead of crashing at compile time.
+- 2026-03-25 03:41 Validation for the Subscription slice passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Subscription/Test/Unit --colors=never` -> `18 tests / 67 assertions`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Customer/Test/Unit/Service/AccountDashboardDataServiceTest.php --colors=never` -> `1 test / 18 assertions`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w reflection:compile`
+- `php bin/w server:reload --no-wait`
+- `curl.exe -k -o NUL -s -w "%{http_code} %{redirect_url}" https://127.0.0.1:9982/subscription` -> `301 .../customer/account/login/`
+- `curl.exe -k -o NUL -s -w "%{http_code} %{redirect_url}" https://127.0.0.1:9982/subscription/view` -> `301 .../customer/account/login/`
+- `cd tests/e2e && node start.js specs/frontend/weshop-subscription.spec.js` -> `1 passed`

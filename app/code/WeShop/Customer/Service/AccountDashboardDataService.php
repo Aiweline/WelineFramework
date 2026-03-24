@@ -10,6 +10,7 @@ use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 use WeShop\Product\Service\ProductRecommendationService;
 use WeShop\RecentlyViewed\Service\RecentlyViewedService;
+use WeShop\Subscription\Service\SubscriptionService;
 use WeShop\Wishlist\Service\WishlistService;
 use Weline\Customer\Model\Customer as AuthCustomer;
 
@@ -20,7 +21,8 @@ class AccountDashboardDataService
         private readonly CompareService $compareService,
         private readonly WishlistService $wishlistService,
         private readonly RecentlyViewedService $recentlyViewedService,
-        private readonly ProductRecommendationService $productRecommendationService
+        private readonly ProductRecommendationService $productRecommendationService,
+        private readonly SubscriptionService $subscriptionService
     ) {
     }
 
@@ -37,6 +39,7 @@ class AccountDashboardDataService
         $wishlistItems = $this->wishlistService->getCustomerWishlist($customerId);
         $compareItems = $this->compareService->getCompareList($customerId);
         $recentlyViewedItems = $this->recentlyViewedService->getRecentlyViewed($customerId, 4);
+        $subscriptionSummary = $this->subscriptionService->getCustomerSubscriptions($customerId, 1, 1);
         $comparePreview = $this->mapProductPreviewItems($compareItems, 4);
         $wishlistPreview = $this->mapProductPreviewItems($wishlistItems, 4);
         $recentlyViewed = $this->mapProductPreviewItems($recentlyViewedItems, 4);
@@ -58,6 +61,7 @@ class AccountDashboardDataService
             'wishlist_preview' => $wishlistPreview,
             'recently_viewed_count' => count($recentlyViewedItems),
             'recently_viewed' => $recentlyViewed,
+            'subscription_count' => max(0, (int) ($subscriptionSummary['total'] ?? 0)),
             'recommendations' => $this->productRecommendationService->getRecommendations($recommendationSeeds, 4),
         ];
     }
