@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<config xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+        xs:noNamespaceSchemaLocation="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd"
+        xmlns="urn:Weline_Framework::Plugin/etc/xsd/plugin.xsd">
+    <plugin name="WeShop_Base::theme_editor_compatibility_plugin"
+            class="Weline\Theme\Controller\Backend\ThemeEditor">
+        <interceptor name="WeShop_Base::theme_editor_compatibility_interceptor"
+                     instance="WeShop\Base\Plugin\Theme\ThemeEditorCompatibilityPlugin"
+                     disabled="false"
+                     sort="10"/>
+    </plugin>
+</config>
