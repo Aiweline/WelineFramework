@@ -1,262 +1,81 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+$loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 ?>
-<div class="register-form-container">
-    <h1 class="register-title"><lang>创建账户</lang></h1>
-    
-    <form id="registerForm" class="register-form" novalidate>
-        <?php
-        // 使用主题错误提示组件
-        echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
-            'type' => 'error',
-            'id' => 'errorMessage',
-            'message' => '<span id="errorText"></span>',
-            'dismissible' => false,
-            'class' => 'd-none'
-        ]);
-        ?>
-        
-        <?php
-        // 使用主题输入框组件 - 用户名
-        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
-            'name' => 'username',
-            'type' => 'text',
-            'label' => __('用户名'),
-            'placeholder' => __('3-20个字符'),
-            'required' => true,
-            'autocomplete' => 'username',
-            'id' => 'username',
-            'help' => __('用户名长度必须在3-20个字符之间')
-        ]);
-        ?>
-        
-        <?php
-        // 使用主题输入框组件 - 密码
-        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
-            'name' => 'password',
-            'type' => 'password',
-            'label' => __('密码'),
-            'placeholder' => __('至少6位字符'),
-            'required' => true,
-            'autocomplete' => 'new-password',
-            'id' => 'password',
-            'help' => __('建议使用字母、数字和特殊字符组合')
-        ]);
-        ?>
-        
-        <?php
-        // 使用主题输入框组件 - 确认密码
-        echo $this->fetch('Weline_Theme::theme/frontend/components/input.phtml', [
-            'name' => 'confirm_password',
-            'type' => 'password',
-            'label' => __('确认密码'),
-            'placeholder' => __('再次输入密码'),
-            'required' => true,
-            'autocomplete' => 'new-password',
-            'id' => 'confirm_password'
-        ]);
-        ?>
-        
-        <?php
-        // 使用主题按钮组件
-        echo $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
-            'text' => __('注册'),
-            'type' => 'primary',
-            'size' => 'lg',
-            'class' => 'btn-register w-100',
-            'id' => 'registerBtn',
-            'attributes' => 'type="submit"'
-        ]);
-        ?>
+<div class="login-form-container">
+    <div class="login-header">
+        <div class="login-icon">
+            <i class="fas fa-user-plus"></i>
+        </div>
+        <h1 class="login-title"><?= __('Create Account') ?></h1>
+        <p class="login-subtitle"><?= __('Create your WeShop account with your email address.') ?></p>
+    </div>
+
+    <form action="/customer/account/register" method="post" class="login-form">
+        <?= $this->getFormKey('/customer/account/register') ?>
+
+        <div class="row g-3">
+            <div class="col-6">
+                <div class="form-group-enhanced">
+                    <label for="firstname"><i class="fas fa-id-card"></i><?= __('First Name') ?></label>
+                    <div class="form-input-wrapper">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="firstname" name="firstname" required autocomplete="given-name" placeholder="<?= __('Ada') ?>" />
+                    </div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="form-group-enhanced">
+                    <label for="lastname"><i class="fas fa-id-card"></i><?= __('Last Name') ?></label>
+                    <div class="form-input-wrapper">
+                        <i class="fas fa-user"></i>
+                        <input type="text" id="lastname" name="lastname" required autocomplete="family-name" placeholder="<?= __('Lovelace') ?>" />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group-enhanced">
+            <label for="email"><i class="fas fa-envelope"></i><?= __('Email Address') ?></label>
+            <div class="form-input-wrapper">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="email" name="email" required autocomplete="email" placeholder="<?= __('you@example.com') ?>" />
+            </div>
+        </div>
+
+        <div class="form-group-enhanced">
+            <label for="password"><i class="fas fa-lock"></i><?= __('Password') ?></label>
+            <div class="form-input-wrapper">
+                <i class="fas fa-key"></i>
+                <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="<?= __('At least 8 characters with letters and numbers') ?>" />
+            </div>
+        </div>
+
+        <div class="form-group-enhanced">
+            <label for="confirm_password"><i class="fas fa-check-double"></i><?= __('Confirm Password') ?></label>
+            <div class="form-input-wrapper">
+                <i class="fas fa-check-double"></i>
+                <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" placeholder="<?= __('Re-enter your password') ?>" />
+            </div>
+        </div>
+
+        <div class="remember-section">
+            <label class="d-flex align-items-start gap-2" for="agree_terms">
+                <input type="checkbox" id="agree_terms" name="agree_terms" value="1" required style="margin-top: 0.2rem;" />
+                <span><?= __('I agree to the terms of service and privacy policy.') ?></span>
+            </label>
+        </div>
+
+        <button type="submit" class="btn-login">
+            <?= __('Create Account') ?>
+        </button>
     </form>
-    
-    <div class="register-footer">
+
+    <div class="login-footer">
         <p>
-            <lang>已有账户？</lang> 
-            <a href="/customer/account/login"><lang>立即登录</lang></a>
+            <?= __('Already have an account?') ?>
+            <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>">
+                <i class="fas fa-sign-in-alt me-1"></i><?= __('Sign in') ?>
+            </a>
         </p>
     </div>
 </div>
-
-<script>
-$(document).ready(function() {
-    const $form = $('#registerForm');
-    const $username = $('#username');
-    const $password = $('#password');
-    const $confirmPassword = $('#confirm_password');
-    const $errorMsg = $('#errorMessage');
-    const $errorText = $('#errorText');
-    const $registerBtn = $('#registerBtn');
-    
-    // 创建注册文本和加载状态的容器
-    const $registerText = $('<span id="registerText"><lang>注册</lang></span>');
-    const $registerSpinner = $('<span id="registerSpinner" class="d-none"><i class="fas fa-spinner fa-spin me-2"></i><lang>注册中...</lang></span>');
-    $registerBtn.append($registerText).append($registerSpinner);
-
-    // 用户名验证
-    $username.on('blur', function() {
-        const username = $(this).val().trim();
-        if (username.length === 0) {
-            $(this).removeClass('is-valid is-invalid');
-            return;
-        }
-        
-        if (username.length < 3 || username.length > 20) {
-            $(this).addClass('is-invalid').removeClass('is-valid');
-            return;
-        }
-        
-        // 检查用户名是否可用
-        window.Weline.Api.request('/customer/account/check-username', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: 'username=' + encodeURIComponent(username)
-        }, { silent: true })
-        .then(function(response) {
-            var resp = response.data;
-            if (response.ok && resp && resp.available) {
-                $username.addClass('is-valid').removeClass('is-invalid');
-            } else {
-                $username.addClass('is-invalid').removeClass('is-valid');
-            }
-        })
-        .catch(function() { /* 静默失败 */ });
-    });
-
-    // 密码验证
-    $password.on('input', function() {
-        const password = $(this).val();
-        if (password.length < 6) {
-            $(this).addClass('is-invalid').removeClass('is-valid');
-        } else {
-            $(this).addClass('is-valid').removeClass('is-invalid');
-        }
-        
-        // 如果确认密码已填写，检查一致性
-        if ($confirmPassword.val()) {
-            validatePasswordMatch();
-        }
-    });
-
-    // 确认密码验证
-    $confirmPassword.on('input', function() {
-        validatePasswordMatch();
-    });
-
-    function validatePasswordMatch() {
-        const password = $password.val();
-        const confirmPassword = $confirmPassword.val();
-        
-        if (confirmPassword.length === 0) {
-            $confirmPassword.removeClass('is-valid is-invalid');
-            return;
-        }
-        
-        if (password === confirmPassword) {
-            $confirmPassword.addClass('is-valid').removeClass('is-invalid');
-        } else {
-            $confirmPassword.addClass('is-invalid').removeClass('is-valid');
-        }
-    }
-
-    // 表单提交
-    $form.on('submit', function(e) {
-        e.preventDefault();
-        
-        // 清除之前的错误
-        $errorMsg.addClass('d-none').removeClass('show');
-        
-        // 基本验证
-        const username = $username.val().trim();
-        const password = $password.val();
-        const confirmPassword = $confirmPassword.val();
-        
-        if (!username || !password || !confirmPassword) {
-            $errorText.text('<lang>请填写完整信息</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            return;
-        }
-        
-        if (username.length < 3 || username.length > 20) {
-            $errorText.text('<lang>用户名长度必须在3-20个字符之间</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            $username.focus();
-            return;
-        }
-        
-        if (password.length < 6) {
-            $errorText.text('<lang>密码长度不能少于6位</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            $password.focus();
-            return;
-        }
-        
-        if (password !== confirmPassword) {
-            $errorText.text('<lang>两次输入的密码不一致</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            $confirmPassword.focus();
-            return;
-        }
-
-        // 设置加载状态
-        $registerBtn.prop('disabled', true).addClass('btn-loading');
-        $registerText.hide();
-        $registerSpinner.removeClass('d-none').show();
-
-        // 发送注册请求
-        window.Weline.Api.request('/customer/account/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: $form.serialize()
-        })
-        .then(function(response) {
-            var resp = response.data;
-            if (response.ok && resp && resp.success) {
-                    $registerBtn.removeClass('btn-loading').addClass('btn-success');
-                    $registerSpinner.addClass('d-none').hide();
-                    $registerText.html('<i class="fas fa-check-circle me-2"></i><lang>注册成功！</lang>').show();
-                    
-                    // 添加成功动画
-                    $registerBtn.css({
-                        'transform': 'scale(1.05)',
-                        'transition': 'transform 0.3s'
-                    });
-                    
-                    setTimeout(function() {
-                        window.location.href = (resp.redirect || '/customer/account');
-                    }, 800);
-                } else {
-                    handleRegisterError((resp && resp.message) || '<lang>注册失败，请稍后重试</lang>');
-                }
-        })
-        .catch(function(error) {
-            var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>注册请求失败，请稍后重试</lang>';
-            handleRegisterError(errorMsg);
-        });
-    });
-
-    // 处理注册错误
-    function handleRegisterError(message) {
-        $errorText.text(message);
-        $errorMsg.removeClass('d-none').addClass('show');
-        
-        // 滚动到错误提示
-        $('html, body').animate({
-            scrollTop: $errorMsg.offset().top - 100
-        }, 300);
-        
-        // 恢复按钮状态
-        $registerBtn.prop('disabled', false)
-            .removeClass('btn-loading btn-success')
-            .css('transform', '');
-        $registerSpinner.addClass('d-none').hide();
-        $registerText.text('<lang>注册</lang>').show();
-        
-        // 添加错误动画
-        $form.addClass('error-shake');
-        setTimeout(function() {
-            $form.removeClass('error-shake');
-        }, 500);
-    }
-});
-</script>
