@@ -250,6 +250,8 @@ class Env extends DataObject
     ];
 
     private array $config = [];
+    private array $persistentConfig = [];
+    private array $runtimeConfig = [];
 
     private array $module_list = [];
     private static array $module_configs = [];
@@ -366,8 +368,9 @@ class Env extends DataObject
                 $envConfig = [];
             }
         }
-        $this->config = array_replace_recursive(self::default_CONFIG, $envConfig);
-        $this->setData($this->config);
+        $this->persistentConfig = array_replace_recursive(self::default_CONFIG, $envConfig);
+        $this->runtimeConfig = [];
+        $this->rebuildEffectiveConfig();
         return $this;
     }
 
@@ -850,7 +853,7 @@ class Env extends DataObject
         if (str_contains($key, '.')) {
             $keys = explode('.', $key);
             $lastKey = array_pop($keys);
-            $config = &$this->config;
+            $config = &$this->persistentConfig;
 
             // 遍历键路径，创建或设置中间层级数组
             foreach ($keys as $k) {
@@ -864,20 +867,50 @@ class Env extends DataObject
             $config[$lastKey] = $value;
         } else {
             // 处理单一层级设置
-            $this->config[$key] = $value;
+            $this->persistentConfig[$key] = $value;
         }
 
         // 更新缓存的配置文件
+        $this->rebuildEffectiveConfig();
+
         try {
             $file = new File();
             $file->open(self::path_ENV_FILE, $file::mode_w);
-            $text = '<?php return ' . w_var_export($this->config, true) . ';';
+            $text = '<?php return ' . w_var_export($this->persistentConfig, true) . ';';
             $file->write($text);
             $file->close();
             return true;
         } catch (Exception $exception) {
             return false;
         }
+    }
+
+    /**
+     * Merge runtime-only config overrides without mutating app/etc/env.php.
+     *
+     * @param array<string, mixed> $config
+     */
+    public function applyRuntimeConfig(array $config): void
+    {
+        if ($config === []) {
+            return;
+        }
+
+        $this->runtimeConfig = \array_replace_recursive($this->runtimeConfig, $config);
+        $this->rebuildEffectiveConfig();
+
+        if (isset($config['cache'])) {
+            self::$mergedCacheConfig = null;
+        }
+    }
+
+    private function rebuildEffectiveConfig(): void
+    {
+        $baseConfig = $this->persistentConfig ?: self::default_CONFIG;
+        $this->config = $this->runtimeConfig === []
+            ? $baseConfig
+            : \array_replace_recursive($baseConfig, $this->runtimeConfig);
+        $this->setData($this->config);
     }
     
     /**
@@ -985,7 +1018,6 @@ class Env extends DataObject
                 ])
             );
         }
-        
         try {
             $this->module_list = (array)require Env::path_MODULES_FILE;
             $this->module_list = $this->ensureFrameworkFirstInModuleList($this->module_list);
