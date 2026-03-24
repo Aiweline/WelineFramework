@@ -55,7 +55,10 @@ class IndexTest extends TestCase
 
         $controller->expects($this->never())->method('redirect');
         $controller->expects($this->exactly(3))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_RMA::templates/Frontend/RMA/Index/index.phtml')
+            ->willReturn('page');
         $this->setProtectedProperty($controller, 'request', $this->createMock(Request::class));
 
         $this->assertSame('page', $controller->index());
