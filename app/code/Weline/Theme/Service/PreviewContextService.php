@@ -33,6 +33,7 @@ final class PreviewContextService
         private readonly Session $session,
         private readonly PreviewTokenService $previewTokenService,
         private readonly WelineTheme $welineTheme,
+        private readonly ?PreviewRequestInspector $previewRequestInspector = null,
     ) {
     }
 
@@ -78,15 +79,18 @@ final class PreviewContextService
     public function getCurrentContext(bool $mergeRequest = true): array
     {
         $context = $this->getDefaultContext();
+        $shouldUseStoredContext = $this->shouldUseStoredContext();
 
-        $storedContext = $this->session->getData(self::SESSION_KEY);
-        if (\is_array($storedContext)) {
-            $context = \array_replace($context, $storedContext);
-        }
+        if ($shouldUseStoredContext) {
+            $storedContext = $this->session->getData(self::SESSION_KEY);
+            if (\is_array($storedContext)) {
+                $context = \array_replace($context, $storedContext);
+            }
 
-        $tokenData = $this->previewTokenService->getCurrentPreviewData();
-        if (\is_array($tokenData)) {
-            $context = \array_replace($context, $this->extractContextFromTokenData($tokenData));
+            $tokenData = $this->previewTokenService->getCurrentPreviewData();
+            if (\is_array($tokenData)) {
+                $context = \array_replace($context, $this->extractContextFromTokenData($tokenData));
+            }
         }
 
         if ($mergeRequest) {
@@ -100,6 +104,11 @@ final class PreviewContextService
     {
         $base = $mergeCurrent ? $this->getCurrentContext() : $this->getDefaultContext();
         return $this->normalizeContext(\array_replace($base, $context));
+    }
+
+    public function shouldUseStoredContext(): bool
+    {
+        return $this->getPreviewRequestInspector()->shouldUseStoredPreviewContext();
     }
 
     public function persistContext(array $context, bool $syncRequest = true): array
@@ -495,5 +504,16 @@ final class PreviewContextService
         return \is_dir($basePath . \DIRECTORY_SEPARATOR . $area)
             || \is_dir($basePath . \DIRECTORY_SEPARATOR . 'view' . \DIRECTORY_SEPARATOR . 'theme' . \DIRECTORY_SEPARATOR . $area)
             || \is_dir($basePath . \DIRECTORY_SEPARATOR . 'theme' . \DIRECTORY_SEPARATOR . $area);
+    }
+
+    private function getPreviewRequestInspector(): PreviewRequestInspector
+    {
+        if ($this->previewRequestInspector) {
+            return $this->previewRequestInspector;
+        }
+
+        /** @var PreviewRequestInspector $service */
+        $service = \Weline\Framework\Manager\ObjectManager::getInstance(PreviewRequestInspector::class);
+        return $service;
     }
 }
