@@ -86,7 +86,9 @@ use Weline\Server\Log\Error\ErrorBootstrap;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
 
-ErrorBootstrap::init('Dispatcher:' . $port, [
+$processTag = 'Dispatcher:' . $port . '@' . $instanceName;
+
+ErrorBootstrap::init($processTag, [
     'port' => $port,
     'worker_base_port' => $workerBasePort,
     'worker_count' => $workerCount,
@@ -97,7 +99,7 @@ ErrorBootstrap::init('Dispatcher:' . $port, [
 if ($isFrontend) {
     WlsLogger::getInstance()
         ->setStdoutEnabled(true)
-        ->setProcessTag('Dispatcher:' . $port);
+        ->setProcessTag($processTag);
 }
 
 // Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE

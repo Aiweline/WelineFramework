@@ -16,6 +16,7 @@ final class SharedSidecarInspector
      *   pid: int,
      *   port: int,
      *   role: string,
+     *   instance_name: string,
      *   token_file_name: string,
      *   process_name: string,
      *   command_line: string
@@ -29,6 +30,7 @@ final class SharedSidecarInspector
             'pid' => 0,
             'port' => $port,
             'role' => '',
+            'instance_name' => '',
             'token_file_name' => $defaultTokenFileName,
             'process_name' => '',
             'command_line' => '',
@@ -65,6 +67,7 @@ final class SharedSidecarInspector
         $result['command_line'] = $commandLine;
         $result['token_file_name'] = $this->extractOptionValue($commandLine, 'token-file-name') ?: $defaultTokenFileName;
         $result['process_name'] = $this->extractOptionValue($commandLine, 'name');
+        $result['instance_name'] = $this->resolveInstanceName($commandLine);
 
         return $result;
     }
@@ -101,10 +104,77 @@ final class SharedSidecarInspector
         foreach ([1, 2, 3] as $index) {
             $value = (string) ($matches[$index] ?? '');
             if ($value !== '') {
-                return $value;
+                return $this->normalizeCommandValue($value);
             }
         }
 
         return '';
+    }
+
+    private function resolveInstanceName(string $commandLine): string
+    {
+        $instanceName = $this->extractOptionValue($commandLine, 'instance-name');
+        if ($instanceName !== '') {
+            return $instanceName;
+        }
+
+        $tokens = $this->tokenizeCommandLine($commandLine);
+        $scriptIndex = $this->findScriptTokenIndex($tokens);
+        if ($scriptIndex === null) {
+            return '';
+        }
+
+        $instanceIndex = $scriptIndex + 3;
+        $instanceName = (string) ($tokens[$instanceIndex] ?? '');
+        if ($instanceName === '' || \str_starts_with($instanceName, '--')) {
+            return '';
+        }
+
+        return $this->normalizeCommandValue($instanceName);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function tokenizeCommandLine(string $commandLine): array
+    {
+        if ($commandLine === '') {
+            return [];
+        }
+
+        \preg_match_all('/"([^"]*)"|\'([^\']*)\'|([^\\s]+)/', $commandLine, $matches, \PREG_SET_ORDER);
+        $tokens = [];
+        foreach ($matches as $match) {
+            foreach ([1, 2, 3] as $index) {
+                if (!isset($match[$index]) || $match[$index] === '') {
+                    continue;
+                }
+
+                $tokens[] = $this->normalizeCommandValue((string) $match[$index]);
+                break;
+            }
+        }
+
+        return $tokens;
+    }
+
+    /**
+     * @param list<string> $tokens
+     */
+    private function findScriptTokenIndex(array $tokens): ?int
+    {
+        foreach ($tokens as $index => $token) {
+            $normalized = \str_replace('\\', '/', $token);
+            if (\str_ends_with($normalized, '/session_server.php') || \str_ends_with($normalized, 'session_server.php')) {
+                return $index;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeCommandValue(string $value): string
+    {
+        return \trim($value, " \t\n\r\0\x0B\"'");
     }
 }
