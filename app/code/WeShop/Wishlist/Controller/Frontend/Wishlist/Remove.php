@@ -47,7 +47,7 @@ class Remove extends FrontendController
             'success' => true,
             'message' => __('Removed from wishlist.'),
             'data' => [
-                'wishlist_count' => count($this->wishlistService->getCustomerWishlist($customerId)),
+                'wishlist_count' => $this->wishlistService->getCustomerWishlistCount($customerId),
             ],
         ]);
     }
