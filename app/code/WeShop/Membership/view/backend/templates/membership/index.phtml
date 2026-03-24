@@ -1,0 +1,156 @@
+<?php
+$memberships = $this->getData('memberships') ?? [];
+$summary = $this->getData('summary') ?? [];
+$filters = $this->getData('filters') ?? [];
+$levelOptions = $this->getData('levelOptions') ?? [];
+$editingRecord = $this->getData('editingRecord') ?? [];
+$membershipIndexUrl = (string) ($this->getData('membershipIndexUrl') ?? $this->getBackendUrl('*/backend/membership'));
+$membershipSaveUrl = (string) ($this->getData('membershipSaveUrl') ?? $this->getBackendUrl('*/backend/membership/save'));
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Membership Management') ?></h1>
+            <p class="text-muted mb-0"><?= __('Operate customer tiers, points, and upgrade visibility without leaving the backend.') ?></p>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Members') ?></div>
+                    <div class="display-6"><?= (int) ($summary['total'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Gold Members') ?></div>
+                    <div class="display-6 text-warning"><?= (int) ($summary['gold'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Platinum Members') ?></div>
+                    <div class="display-6 text-primary"><?= (int) ($summary['platinum'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Points') ?></div>
+                    <div class="display-6"><?= (int) ($summary['total_points'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= (int) ($editingRecord['membership_id'] ?? 0) > 0 ? __('Edit Membership') : __('Create Membership') ?></h2>
+                    <form method="post" action="<?= $membershipSaveUrl ?>" class="d-grid gap-3">
+                        <input type="hidden" name="membership_id" value="<?= (int) ($editingRecord['membership_id'] ?? 0) ?>">
+                        <input type="hidden" name="back_url" value="<?= htmlspecialchars((string) $membershipIndexUrl, ENT_QUOTES) ?>">
+                        <div>
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input type="number" name="customer_id" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['customer_id'] ?? 0), ENT_QUOTES) ?>" required>
+                        </div>
+                        <div>
+                            <label class="form-label"><?= __('Level') ?></label>
+                            <select name="level" class="form-select">
+                                <?php foreach ($levelOptions as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($editingRecord['level'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label"><?= __('Points') ?></label>
+                            <input type="number" min="0" name="points" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['points'] ?? 0), ENT_QUOTES) ?>" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary"><?= __('Save Membership') ?></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <form method="get" action="<?= $membershipIndexUrl ?>" class="row g-3 align-items-end">
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input type="number" name="customer_id" class="form-control" value="<?= htmlspecialchars((string) ($filters['customer_id'] ?? ''), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('Level') ?></label>
+                            <select name="level" class="form-select">
+                                <option value=""><?= __('All levels') ?></option>
+                                <?php foreach ($levelOptions as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($filters['level'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-primary"><?= __('Apply Filters') ?></button>
+                            <a href="<?= $membershipIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Reset') ?></a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <?php if ($memberships): ?>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Customer ID') ?></th>
+                                    <th><?= __('Level') ?></th>
+                                    <th><?= __('Points') ?></th>
+                                    <th><?= __('Updated At') ?></th>
+                                    <th><?= __('Created At') ?></th>
+                                    <th class="text-end"><?= __('Actions') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($memberships as $membership): ?>
+                                    <tr>
+                                        <td><?= (int) $membership['customer_id'] ?></td>
+                                        <td><?= htmlspecialchars((string) $membership['level_label'], ENT_QUOTES) ?></td>
+                                        <td><?= (int) $membership['points'] ?></td>
+                                        <td><?= htmlspecialchars((string) $membership['updated_at'], ENT_QUOTES) ?></td>
+                                        <td><?= htmlspecialchars((string) $membership['created_at'], ENT_QUOTES) ?></td>
+                                        <td class="text-end">
+                                            <a href="<?= $this->getBackendUrl('*/backend/membership', ['id' => $membership['membership_id']]) ?>" class="btn btn-sm btn-outline-primary">
+                                                <?= __('Edit') ?>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center py-5">
+                            <h2 class="h5 mb-2"><?= __('No memberships found.') ?></h2>
+                            <p class="text-muted mb-0"><?= __('Create the first membership record to begin customer tier operations.') ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
