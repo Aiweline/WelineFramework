@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Analytics\Provider;
 
+use WeShop\Analytics\Service\AnalyticsConfigService;
 use WeShop\Analytics\Interface\PixelProviderInterface;
 use Weline\Framework\App\Env;
 
@@ -13,7 +14,8 @@ class FacebookPixel implements PixelProviderInterface
         private readonly ?string $pixelId = null,
         private readonly ?string $accessToken = null,
         private readonly ?bool $enabled = null,
-        private readonly ?string $testEventCode = null
+        private readonly ?string $testEventCode = null,
+        private readonly ?AnalyticsConfigService $analyticsConfigService = null
     ) {
     }
 
@@ -194,21 +196,33 @@ HTML;
 
     protected function readEnabled(): bool
     {
-        return $this->enabled ?? (bool) Env::getInstance()->getConfig('analytics.facebook.enabled', false);
+        return $this->enabled ?? (bool) $this->getConfigValue('enabled', false);
     }
 
     protected function readPixelId(): string
     {
-        return trim((string) ($this->pixelId ?? Env::getInstance()->getConfig('analytics.facebook.pixel_id', '')));
+        return trim((string) ($this->pixelId ?? $this->getConfigValue('pixel_id', '')));
     }
 
     protected function readAccessToken(): string
     {
-        return trim((string) ($this->accessToken ?? Env::getInstance()->getConfig('analytics.facebook.access_token', '')));
+        return trim((string) ($this->accessToken ?? $this->getConfigValue('access_token', '')));
     }
 
     protected function readTestEventCode(): string
     {
-        return trim((string) ($this->testEventCode ?? Env::getInstance()->getConfig('analytics.facebook.test_event_code', '')));
+        return trim((string) ($this->testEventCode ?? $this->getConfigValue('test_event_code', '')));
+    }
+
+    private function getConfigValue(string $field, mixed $default): mixed
+    {
+        if ($this->analyticsConfigService) {
+            $config = $this->analyticsConfigService->getProviderConfig(AnalyticsConfigService::PROVIDER_FACEBOOK);
+            if (array_key_exists($field, $config)) {
+                return $config[$field];
+            }
+        }
+
+        return Env::getInstance()->getConfig('analytics.facebook.' . $field, $default);
     }
 }
