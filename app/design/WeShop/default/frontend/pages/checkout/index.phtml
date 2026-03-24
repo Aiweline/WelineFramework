@@ -333,6 +333,9 @@ $countries = $this->getData('countries') ?? [];
     (function () {
         var radios = document.querySelectorAll('input[name="shipping_address_id"]');
         var newAddressFields = document.querySelectorAll('[data-new-address-field]');
+        var form = document.getElementById('weshop-checkout-form');
+        var submitButton = form ? form.querySelector('button[type="submit"]') : null;
+        var successUrl = '<?= $this->getUrl('checkout/success') ?>';
 
         function syncNewAddressRequirement() {
             var hasSavedAddress = false;
@@ -352,6 +355,50 @@ $countries = $this->getData('countries') ?? [];
         radios.forEach(function (radio) {
             radio.addEventListener('change', syncNewAddressRequirement);
         });
+
+        function showCheckoutMessage(message, type) {
+            if (window.WeShop && typeof window.WeShop.showNotification === 'function') {
+                window.WeShop.showNotification(message, type);
+                return;
+            }
+
+            console.error(message);
+        }
+
+        if (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (payload) {
+                    if (!payload || !payload.success) {
+                        showCheckoutMessage((payload && payload.message) || 'Unable to place the order right now.', 'error');
+                        return;
+                    }
+
+                    var redirectUrl = payload.data && payload.data.redirect_url ? payload.data.redirect_url : '';
+                    window.location.href = redirectUrl || successUrl;
+                }).catch(function (error) {
+                    console.error('Checkout submit error:', error);
+                    showCheckoutMessage('Unable to place the order right now.', 'error');
+                }).finally(function () {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                });
+            });
+        }
 
         syncNewAddressRequirement();
     })();
