@@ -1,0 +1,178 @@
+<?php
+$giftCards = $this->getData('giftCards') ?? [];
+$summary = $this->getData('summary') ?? [];
+$filters = $this->getData('filters') ?? [];
+$statusOptions = $this->getData('statusOptions') ?? [];
+$editingRecord = $this->getData('editingRecord') ?? [];
+$giftCardIndexUrl = (string) ($this->getData('giftCardIndexUrl') ?? $this->getBackendUrl('*/backend/gift-card'));
+$giftCardSaveUrl = (string) ($this->getData('giftCardSaveUrl') ?? $this->getBackendUrl('*/backend/gift-card/save'));
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Gift Card Management') ?></h1>
+            <p class="text-muted mb-0"><?= __('Manage issued gift cards, remaining balances, and redemption readiness from one place.') ?></p>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Cards') ?></div>
+                    <div class="display-6"><?= (int) ($summary['total'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Active Cards') ?></div>
+                    <div class="display-6 text-success"><?= (int) ($summary['active'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Redeemed Cards') ?></div>
+                    <div class="display-6 text-primary"><?= (int) ($summary['redeemed'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Balance') ?></div>
+                    <div class="display-6"><?= number_format((float) ($summary['total_balance'] ?? 0), 2) ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= (int) ($editingRecord['card_id'] ?? 0) > 0 ? __('Edit Gift Card') : __('Create Gift Card') ?></h2>
+                    <form method="post" action="<?= $giftCardSaveUrl ?>" class="d-grid gap-3">
+                        <input type="hidden" name="card_id" value="<?= (int) ($editingRecord['card_id'] ?? 0) ?>">
+                        <input type="hidden" name="back_url" value="<?= htmlspecialchars((string) $giftCardIndexUrl, ENT_QUOTES) ?>">
+                        <div>
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input type="number" name="customer_id" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['customer_id'] ?? 0), ENT_QUOTES) ?>" required>
+                        </div>
+                        <div>
+                            <label class="form-label"><?= __('Card Number') ?></label>
+                            <input type="text" name="card_number" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['card_number'] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string) __('Leave blank to auto-generate'), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-sm-6">
+                                <label class="form-label"><?= __('Amount') ?></label>
+                                <input type="number" step="0.01" min="0" name="amount" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['amount'] ?? 0), ENT_QUOTES) ?>" required>
+                            </div>
+                            <div class="col-sm-6">
+                                <label class="form-label"><?= __('Balance') ?></label>
+                                <input type="number" step="0.01" min="0" name="balance" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['balance'] ?? 0), ENT_QUOTES) ?>" required>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="form-label"><?= __('Status') ?></label>
+                            <select name="status" class="form-select">
+                                <?php foreach ($statusOptions as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($editingRecord['status'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label"><?= __('Expires At') ?></label>
+                            <input type="text" name="expires_at" class="form-control" value="<?= htmlspecialchars((string) ($editingRecord['expires_at'] ?? ''), ENT_QUOTES) ?>" placeholder="YYYY-MM-DD HH:MM:SS">
+                        </div>
+                        <button type="submit" class="btn btn-primary"><?= __('Save Gift Card') ?></button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <form method="get" action="<?= $giftCardIndexUrl ?>" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input type="number" name="customer_id" class="form-control" value="<?= htmlspecialchars((string) ($filters['customer_id'] ?? ''), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Card Number') ?></label>
+                            <input type="text" name="card_number" class="form-control" value="<?= htmlspecialchars((string) ($filters['card_number'] ?? ''), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Status') ?></label>
+                            <select name="status" class="form-select">
+                                <option value=""><?= __('All statuses') ?></option>
+                                <?php foreach ($statusOptions as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars((string) $code, ENT_QUOTES) ?>" <?= ($filters['status'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars((string) $label, ENT_QUOTES) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-primary"><?= __('Apply Filters') ?></button>
+                            <a href="<?= $giftCardIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Reset') ?></a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <?php if ($giftCards): ?>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Card Number') ?></th>
+                                    <th><?= __('Customer ID') ?></th>
+                                    <th><?= __('Amount') ?></th>
+                                    <th><?= __('Balance') ?></th>
+                                    <th><?= __('Status') ?></th>
+                                    <th><?= __('Expires At') ?></th>
+                                    <th><?= __('Created At') ?></th>
+                                    <th class="text-end"><?= __('Actions') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($giftCards as $giftCard): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars((string) $giftCard['card_number'], ENT_QUOTES) ?></td>
+                                        <td><?= (int) $giftCard['customer_id'] ?></td>
+                                        <td><?= number_format((float) $giftCard['amount'], 2) ?></td>
+                                        <td><?= number_format((float) $giftCard['balance'], 2) ?></td>
+                                        <td><?= htmlspecialchars((string) $giftCard['status_label'], ENT_QUOTES) ?></td>
+                                        <td><?= htmlspecialchars((string) ($giftCard['expires_at'] ?: __('Never')), ENT_QUOTES) ?></td>
+                                        <td><?= htmlspecialchars((string) $giftCard['created_at'], ENT_QUOTES) ?></td>
+                                        <td class="text-end">
+                                            <a href="<?= $this->getBackendUrl('*/backend/gift-card', ['id' => $giftCard['card_id']]) ?>" class="btn btn-sm btn-outline-primary">
+                                                <?= __('Edit') ?>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-center py-5">
+                            <h2 class="h5 mb-2"><?= __('No gift cards found.') ?></h2>
+                            <p class="text-muted mb-0"><?= __('Create the first gift card to enable stored-value and promotion workflows.') ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
