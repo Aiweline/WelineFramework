@@ -11,6 +11,7 @@ use WeShop\Invoice\Service\InvoicePageDataService;
 class Index extends BaseController
 {
     private const LOGIN_ROUTE = 'customer/account/login';
+    private const CONTENT_TEMPLATE = 'WeShop_Invoice::templates/Frontend/Invoice/Index/index.phtml';
 
     protected ?string $layoutType = 'invoice';
 
@@ -36,6 +37,6 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
