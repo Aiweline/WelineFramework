@@ -9,6 +9,7 @@
 $configs = $this->getData('configs') ?? [];
 $apiType = $configs['guolairen_blog_trends_api_type'] ?? 'none';
 $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both';
+$trendsDefaultLanguage = (string)($configs['guolairen_blog_trends_default_language'] ?? 'zh_Hans_CN');
 ?>
 
 <div class="row">
@@ -145,10 +146,20 @@ $growthComparison = $configs['guolairen_blog_trends_growth_comparison'] ?? 'both
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="default_language" class="form-label"><lang>默认语言</lang></label>
+                            <w:i18n:language:select
+                                id="blog_trends_default_language_selector"
+                                name="config[guolairen_blog_trends_default_language]"
+                                input-id="default_language"
+                                value="trendsDefaultLanguage"
+                                required="true"
+                                class="w-100"
+                            />
+                            <?php if (false): ?>
                             <select class="form-select" name="config[guolairen_blog_trends_default_language]" id="default_language">
                                 <option value="en_US" <?= ($configs['guolairen_blog_trends_default_language'] ?? '') === 'en_US' ? 'selected' : '' ?>>en_US</option>
                                 <option value="zh_Hans_CN" <?= ($configs['guolairen_blog_trends_default_language'] ?? '') === 'zh_Hans_CN' ? 'selected' : '' ?>>zh_Hans_CN</option>
                             </select>
+                            <?php endif; ?>
                         </div>
                     </div>
 
