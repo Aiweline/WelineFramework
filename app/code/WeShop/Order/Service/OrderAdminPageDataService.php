@@ -32,7 +32,7 @@ class OrderAdminPageDataService
     {
         $order = $this->orderService->getOrder($orderId);
         if (!$order || !$order->getId()) {
-            throw new \InvalidArgumentException((string) __('Order not found.'));
+            throw new \InvalidArgumentException('Order not found.');
         }
 
         return [

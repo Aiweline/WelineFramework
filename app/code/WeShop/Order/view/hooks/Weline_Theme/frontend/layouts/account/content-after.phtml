@@ -70,12 +70,12 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
         <?php else: ?>
             <?php foreach ($result['items'] as $order): ?>
                 <?php
-                $orderId = $order['order_id'] ?? $order[\WeShop\Order\Model\Order::fields_ID] ?? 0;
-                $incrementId = $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::fields_increment_id] ?? '';
-                $status = $order['status'] ?? $order[\WeShop\Order\Model\Order::fields_status] ?? 'pending';
+                $orderId = $order['order_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_ID] ?? 0;
+                $incrementId = $order['increment_id'] ?? $order[\WeShop\Order\Model\Order::schema_fields_increment_id] ?? '';
+                $status = $order['status'] ?? $order[\WeShop\Order\Model\Order::schema_fields_status] ?? 'pending';
                 $paymentStatus = $order['payment_status'] ?? \WeShop\Order\Service\OrderService::PAYMENT_STATUS_PENDING;
-                $total = $order['total'] ?? $order[\WeShop\Order\Model\Order::fields_total] ?? 0;
-                $createdAt = $order['created_at'] ?? $order[\WeShop\Order\Model\Order::fields_created_at] ?? '';
+                $total = $order['total'] ?? $order[\WeShop\Order\Model\Order::schema_fields_total] ?? 0;
+                $createdAt = $order['created_at'] ?? $order[\WeShop\Order\Model\Order::schema_fields_created_at] ?? '';
                 
                 // 判断是否可以继续支付
                 $canRetryPayment = $orderService->canRetryPayment($orderId, $customer->getId());

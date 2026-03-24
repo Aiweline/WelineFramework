@@ -4,63 +4,56 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Controller\Frontend\Order;
 
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
-use WeShop\Customer\Session\CustomerSession;
 use WeShop\Order\Service\OrderService;
-use WeShop\Payment\Service\PaymentService;
 use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 订单继续支付控制器
- * 
- * 用于处理支付失败的订单继续支付
- */
 class RetryPayment extends BaseController
 {
-    /**
-     * 继续支付
-     * 
-     * 重定向到结账页面，携带订单ID参数
-     */
+    private const LOGIN_ROUTE = 'customer/account/login';
+
+    public function __construct(
+        private ?CustomerContextInterface $customerContext = null,
+        private ?OrderService $orderService = null
+    ) {
+    }
+
     public function index(): string
     {
-        $orderId = (int)($this->request->getParam('order_id') ?? 0);
-        
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            return $this->redirect('weshop/order/list');
+        $orderId = (int) ($this->request->getParam('order_id') ?? 0);
+        if ($orderId <= 0) {
+            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->redirect('weshop/order/list');
+            return '';
         }
-        
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
-            $this->getMessageManager()->addError(__('请先登录'));
-            return $this->redirect('weshop/customer/account/login');
+
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->redirect(self::LOGIN_ROUTE);
+            return '';
         }
-        
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        
-        // 检查订单是否可以继续支付
-        if (!$orderService->canRetryPayment($orderId, $customer->getId())) {
-            $this->getMessageManager()->addError(__('该订单无法继续支付'));
-            return $this->redirect('weshop/order/list');
+
+        $retryContext = $this->getOrderService()->getRetryPaymentContext($orderId, $customerId);
+        if ($retryContext === null) {
+            $this->getMessageManager()->addError(__('This order cannot continue to payment.'));
+            $this->redirect('weshop/order/list');
+            return '';
         }
-        
-        // 获取订单信息
-        $order = $orderService->getOrder($orderId);
-        if (!$order) {
-            $this->getMessageManager()->addError(__('订单不存在'));
-            return $this->redirect('weshop/order/list');
-        }
-        
-        // 将订单商品恢复到购物车（可选，根据业务需求）
-        // TODO: 实现将订单商品恢复到购物车的逻辑
-        
-        // 重定向到结账页面，携带订单ID参数
-        $this->getMessageManager()->addSuccess(__('请完成订单支付'));
-        return $this->redirect('weshop/checkout?order_id=' . $orderId);
+
+        $this->getMessageManager()->addSuccess(__('Continue the payment flow from checkout.'));
+        $this->redirect('checkout', ['order_id' => $orderId]);
+        return '';
+    }
+
+    private function getCustomerContext(): CustomerContextInterface
+    {
+        return $this->customerContext ??= ObjectManager::getInstance(CustomerContextInterface::class);
+    }
+
+    private function getOrderService(): OrderService
+    {
+        return $this->orderService ??= ObjectManager::getInstance(OrderService::class);
     }
 }
