@@ -17,7 +17,10 @@ if (!$customer || !$customer->getId()) {
     return;
 }
 
-$contactEmail = trim((string) ($customer->getUsername() ?? ''));
+$contactEmail = trim((string) ($customer->getEmail() ?? ''));
+if ($contactEmail === '') {
+    $contactEmail = trim((string) ($customer->getUsername() ?? ''));
+}
 
 /** @var CompanyService $companyService */
 $companyService = ObjectManager::getInstance(CompanyService::class);
