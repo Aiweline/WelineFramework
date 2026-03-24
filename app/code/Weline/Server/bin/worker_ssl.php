@@ -142,13 +142,20 @@ $envFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env
 if (\is_file($envFile)) {
     $envConfig = @include $envFile;
 }
+$envConfig = \is_array($envConfig) ? $envConfig : [];
+$sharedStateRuntime = \Weline\Server\Service\SharedStateRuntimeOptions::fromCliArgs($argv, $instanceName, $envConfig);
+$envOverrides = $sharedStateRuntime->toEnvOverrides();
+$envConfig = \array_replace_recursive($envConfig, $envOverrides);
+\Weline\Framework\App\Env::getInstance()->applyRuntimeConfig($envOverrides);
+$sessionRuntime = $sharedStateRuntime->getSession();
+$memoryRuntime = $sharedStateRuntime->getMemory();
 
 // Origin Token 回源校验配置（可选安全增强）
 $originToken = '';
 $originTokenValidationEnabled = false;
 $originTokenHeader = 'X-Weline-Origin-Token';
 $originTokenAllowLocal = true;
-if (\is_array($envConfig)) {
+if ($envConfig !== []) {
     $wlsEnv = $envConfig['wls'] ?? [];
     $originToken = (string)($wlsEnv['origin_token'] ?? '');
     $originValidationConfig = $wlsEnv['origin_token_validation'] ?? [];
@@ -442,16 +449,17 @@ try {
     WlsLogger::info_("框架运行时初始化成功");
 
     // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
-    $wlsSess = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
-        ? $envConfig['wls']['session'] : [];
-    $wlsSrv = \is_array($wlsSess['wls_server'] ?? null) ? $wlsSess['wls_server'] : [];
-    $sessionHost = (string)($wlsSrv['host'] ?? $wlsSess['host'] ?? '127.0.0.1');
-    $sessionPort = (int)($wlsSrv['port'] ?? $wlsSess['port'] ?? 19970);
+    $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
+    $sessionPort = (int) ($sessionRuntime['port'] ?? 19970);
+    $sessionTokenFileName = (string) ($sessionRuntime['token_file_name'] ?? 'session_server.token');
+    $memoryHost = (string) ($memoryRuntime['host'] ?? '127.0.0.1');
+    $memoryPort = (int) ($memoryRuntime['port'] ?? 19971);
+    $memoryTokenFileName = (string) ($memoryRuntime['token_file_name'] ?? 'memory_server.token');
     WlsLogger::info_("[Session] 开始连接 Session 服务 {$sessionHost}:{$sessionPort}，最多重试 10 次，间隔 2 秒");
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
         'connect_timeout' => 1.0,
         'timeout' => 2.0,
-        'token_file_name' => 'session_server.token',
+        'token_file_name' => $sessionTokenFileName,
     ]);
     $sessionConnected = false;
     for ($attempt = 1; $attempt <= 10; $attempt++) {
@@ -477,10 +485,10 @@ try {
     }
     // 预热 Session/Memory 连接池，避免首请求时再建连导致延迟（Linux 下尤为明显）
     try {
-        $sessionOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => 'session_server.token'];
-        $memoryOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => 'memory_server.token'];
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance('127.0.0.1', 19970, $sessionOpts);
-        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance('127.0.0.1', 19971, $memoryOpts);
+        $sessionOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $sessionTokenFileName];
+        $memoryOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $memoryTokenFileName];
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, $sessionOpts);
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, $memoryOpts);
     } catch (\Throwable $warmupEx) {
         // 预热失败不阻塞 Worker，首请求时再建连
     }
