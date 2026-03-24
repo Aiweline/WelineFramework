@@ -59,8 +59,8 @@ class ComparePageDataServiceTest extends TestCase
 
         $this->assertSame(2, $result['compare_count']);
         $this->assertSame('Travel Backpack', $result['compare_items'][0]['name']);
-        $this->assertSame('In stock', $result['compare_items'][0]['availability']);
-        $this->assertSame('Out of stock', $result['compare_items'][1]['availability']);
+        $this->assertSame((string) __('In stock'), $result['compare_items'][0]['availability']);
+        $this->assertSame((string) __('Out of stock'), $result['compare_items'][1]['availability']);
         $this->assertSame(701, $result['recommendations'][0]['product_id']);
     }
 }
