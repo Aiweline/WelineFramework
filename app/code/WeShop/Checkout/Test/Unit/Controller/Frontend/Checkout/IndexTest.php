@@ -6,39 +6,117 @@ namespace WeShop\Checkout\Test\Unit\Controller\Frontend\Checkout;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Checkout\Controller\Frontend\Checkout\Index;
+use WeShop\Checkout\Service\CheckoutPageDataService;
+use WeShop\Customer\Model\Customer;
+use WeShop\Customer\Session\CustomerSession;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\MessageManager;
 
-/**
- * 结账页控制器单元测试
- */
 class IndexTest extends TestCase
 {
-    /**
-     * 测试：控制器类存在
-     */
-    public function testControllerClassExists(): void
+    public function testIndexBuildsRetryCheckoutPageWhenOrderIdIsPresent(): void
     {
-        $this->assertTrue(class_exists(Index::class));
+        $customer = $this->createCustomer(9);
+
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->expects($this->once())
+            ->method('getCustomer')
+            ->willReturn($customer);
+
+        $pageDataService = $this->createMock(CheckoutPageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(9, 1, 77)
+            ->willReturn([
+                'cart_items' => [['qty' => 1]],
+                'is_retry_payment' => true,
+                'retry_order_id' => 77,
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')
+            ->willReturnMap([
+                ['step', null, 1],
+                ['order_id', null, 77],
+            ]);
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerSession, $pageDataService])
+            ->onlyMethods(['assign', 'fetch'])
+            ->getMock();
+        $controller->expects($this->atLeastOnce())->method('assign');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Checkout::templates/frontend/checkout/index.phtml')
+            ->willReturn('html');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('html', $controller->index());
     }
 
-    /**
-     * 测试：控制器继承 BaseController
-     */
-    public function testControllerExtendsBaseController(): void
+    public function testIndexRedirectsToOrderListWhenRetryOrderIsInvalid(): void
     {
-        $reflection = new \ReflectionClass(Index::class);
-        $this->assertTrue($reflection->isSubclassOf(\WeShop\Frontend\Controller\BaseController::class));
+        $customer = $this->createCustomer(9);
+
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->method('getCustomer')->willReturn($customer);
+
+        $pageDataService = $this->createMock(CheckoutPageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(9, 1, 77)
+            ->willReturn([
+                'cart_items' => [],
+                'is_retry_payment' => false,
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')
+            ->willReturnMap([
+                ['step', null, 1],
+                ['order_id', null, 77],
+            ]);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addError');
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerSession, $pageDataService])
+            ->onlyMethods(['redirect', 'getMessageManager'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/order/list');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertNull($controller->index());
     }
 
-    /**
-     * 测试：layoutType 属性设置为 'checkout'
-     */
-    public function testLayoutTypeIsCheckout(): void
+    private function createCustomer(int $id): Customer
     {
-        $reflection = new \ReflectionClass(Index::class);
-        $property = $reflection->getProperty('layoutType');
-        $property->setAccessible(true);
-        
-        $controller = new Index();
-        $this->assertEquals('checkout', $property->getValue($controller));
+        $customer = $this->getMockBuilder(Customer::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId'])
+            ->getMock();
+        $customer->method('getId')->willReturn($id);
+
+        return $customer;
+    }
+
+    private function setProtectedProperty(object $target, string $property, mixed $value): void
+    {
+        $reflection = new \ReflectionObject($target);
+        while (!$reflection->hasProperty($property) && ($reflection = $reflection->getParentClass())) {
+        }
+
+        $reflectionProperty = $reflection->getProperty($property);
+        $reflectionProperty->setAccessible(true);
+        $reflectionProperty->setValue($target, $value);
     }
 }

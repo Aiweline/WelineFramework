@@ -11,6 +11,7 @@ use WeShop\RMA\Service\RmaPageDataService;
 class Index extends BaseController
 {
     private const LOGIN_ROUTE = 'customer/account/login';
+    private const CONTENT_TEMPLATE = 'WeShop_RMA::templates/Frontend/RMA/Index/index.phtml';
 
     protected ?string $layoutType = 'rma';
 
@@ -35,6 +36,6 @@ class Index extends BaseController
         }
 
         $this->assign('title', __('Returns & Exchanges'));
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }

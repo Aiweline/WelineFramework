@@ -9,15 +9,18 @@ use WeShop\Customer\Session\CustomerSession;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
+use Weline\Framework\Manager\ObjectManager;
 
 class Success extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Checkout::templates/frontend/checkout/success.phtml';
+
     protected ?string $layoutType = 'checkout_success';
 
     public function __construct(
-        private readonly CustomerSession $customerSession,
-        private readonly OrderService $orderService,
-        private readonly OrderSuccessPageDataService $orderSuccessPageDataService
+        private ?CustomerSession $customerSession = null,
+        private ?OrderService $orderService = null,
+        private ?OrderSuccessPageDataService $orderSuccessPageDataService = null
     ) {
     }
 
@@ -26,33 +29,48 @@ class Success extends BaseController
         $orderId = (int) ($this->request->getParam('order_id') ?? 0);
         if (!$orderId) {
             $this->getMessageManager()->addError(__('Order ID is required.'));
-
-            return $this->redirect('weshop/cart');
+            $this->redirect('weshop/cart');
+            return '';
         }
 
-        $customer = $this->customerSession->getCustomer();
+        $customer = $this->getCustomerSession()->getCustomer();
         if (!$customer || !$customer->getId()) {
             $this->getMessageManager()->addError(__('Please log in to continue.'));
-
-            return $this->redirect('weshop/customer/account/login');
+            $this->redirect('customer/account/login');
+            return '';
         }
 
-        $order = $this->orderService->getOrder($orderId);
+        $order = $this->getOrderService()->getOrder($orderId);
         if (!$order || (int) ($order->getData(Order::schema_fields_customer_id) ?? 0) !== (int) $customer->getId()) {
             $this->getMessageManager()->addError(__('The requested order could not be found.'));
-
-            return $this->redirect('weshop/cart');
+            $this->redirect('weshop/cart');
+            return '';
         }
 
-        $lastOrderContext = $this->customerSession->get('weshop_checkout_last_order_context');
-        if (!is_array($lastOrderContext) || (int) ($lastOrderContext['order_id'] ?? 0) !== $orderId) {
+        $lastOrderContext = $this->getCustomerSession()->get('weshop_checkout_last_order_context');
+        if (!\is_array($lastOrderContext) || (int) ($lastOrderContext['order_id'] ?? 0) !== $orderId) {
             $lastOrderContext = [];
         }
 
-        foreach ($this->orderSuccessPageDataService->build($order, $lastOrderContext) as $key => $value) {
+        foreach ($this->getOrderSuccessPageDataService()->build($order, $lastOrderContext) as $key => $value) {
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
+    }
+
+    private function getCustomerSession(): CustomerSession
+    {
+        return $this->customerSession ??= ObjectManager::getInstance(CustomerSession::class);
+    }
+
+    private function getOrderService(): OrderService
+    {
+        return $this->orderService ??= ObjectManager::getInstance(OrderService::class);
+    }
+
+    private function getOrderSuccessPageDataService(): OrderSuccessPageDataService
+    {
+        return $this->orderSuccessPageDataService ??= ObjectManager::getInstance(OrderSuccessPageDataService::class);
     }
 }
