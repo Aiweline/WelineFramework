@@ -1184,8 +1184,10 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
      */
     private function executeModuleUpgrade(array $args = [], array $data = []): void
     {
-        $prevLimit = \ini_get('memory_limit') ?: '';
-        @\ini_set('memory_limit', '512M');
+        // setup:upgrade still runs post-upgrade observers and modules.json generation late in the CLI flow.
+        // Keep a generous limit for the rest of the process so those tail steps do not fall back to
+        // the shell default and fail after the main schema work already succeeded.
+        @\ini_set('memory_limit', '1024M');
 
         /**@var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
@@ -2241,9 +2243,6 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             // 如果需要，可以在这里添加禁用模块的特殊处理逻辑
         }
 
-        if (isset($prevLimit) && $prevLimit !== '') {
-            @ini_set('memory_limit', $prevLimit);
-        }
 
         // 生成 modules.json 用于 E2E 测试用例收集
         $stageNumber++;

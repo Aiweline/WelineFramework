@@ -255,18 +255,8 @@ $countries = $this->getData('countries') ?? [];
 
         <section class="weshop-checkout-card">
             <h2><?= __('Shipping Method') ?></h2>
-            <w:hook name="WeShop_Shipping::checkout::methods"/>
-            <div class="weshop-checkout-choice-list">
-                <?php foreach ($shippingMethods as $method): ?>
-                    <label class="weshop-checkout-choice">
-                        <input type="radio" name="shipping_method" value="<?= htmlspecialchars((string) ($method['code'] ?? '')) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?> required>
-                        <span>
-                            <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($method['name'] ?? '')) ?></div>
-                            <div class="weshop-checkout-choice-meta"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
-                        </span>
-                    </label>
-                <?php endforeach; ?>
-            </div>
+            <w:hook name="WeShop_Shipping::frontend::layouts::checkout::methods"/>
+            <w:hook name="WeShop_Checkout::frontend::partials::checkout::shipping-methods"/>
         </section>
 
         <section class="weshop-checkout-card">
