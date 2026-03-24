@@ -23,8 +23,20 @@ class AnalyticsConfigService
                 'description' => 'GA4 measurement protocol events for storefront commerce flows.',
                 'env_path' => 'analytics.google',
                 'fields' => [
-                    ['name' => 'measurement_id', 'label' => 'Measurement ID', 'required' => true],
-                    ['name' => 'api_secret', 'label' => 'API Secret', 'required' => true],
+                    [
+                        'name' => 'measurement_id',
+                        'label' => 'Measurement ID',
+                        'required' => true,
+                        'input_type' => 'text',
+                        'sensitive' => false,
+                    ],
+                    [
+                        'name' => 'api_secret',
+                        'label' => 'API Secret',
+                        'required' => true,
+                        'input_type' => 'password',
+                        'sensitive' => true,
+                    ],
                 ],
                 'defaults' => [
                     'enabled' => false,
@@ -39,9 +51,27 @@ class AnalyticsConfigService
                 'description' => 'Meta Pixel and Conversions API tracking for storefront commerce flows.',
                 'env_path' => 'analytics.facebook',
                 'fields' => [
-                    ['name' => 'pixel_id', 'label' => 'Pixel ID', 'required' => true],
-                    ['name' => 'access_token', 'label' => 'Access Token', 'required' => true],
-                    ['name' => 'test_event_code', 'label' => 'Test Event Code', 'required' => false],
+                    [
+                        'name' => 'pixel_id',
+                        'label' => 'Pixel ID',
+                        'required' => true,
+                        'input_type' => 'text',
+                        'sensitive' => false,
+                    ],
+                    [
+                        'name' => 'access_token',
+                        'label' => 'Access Token',
+                        'required' => true,
+                        'input_type' => 'password',
+                        'sensitive' => true,
+                    ],
+                    [
+                        'name' => 'test_event_code',
+                        'label' => 'Test Event Code',
+                        'required' => false,
+                        'input_type' => 'text',
+                        'sensitive' => false,
+                    ],
                 ],
                 'defaults' => [
                     'enabled' => false,
@@ -124,7 +154,12 @@ class AnalyticsConfigService
                 continue;
             }
 
-            $config[$name] = trim((string) ($payload[$name] ?? $config[$name] ?? ''));
+            $value = trim((string) ($payload[$name] ?? $config[$name] ?? ''));
+            if (!empty($field['sensitive']) && $value === '' && trim((string) ($config[$name] ?? '')) !== '') {
+                continue;
+            }
+
+            $config[$name] = $value;
         }
 
         if ($config['enabled']) {
@@ -180,6 +215,9 @@ class AnalyticsConfigService
     {
         $definition = $this->getProviderDefinition($providerCode);
         $config = $config ?? $this->getProviderConfig($providerCode);
+        if (empty($config['enabled'])) {
+            return false;
+        }
 
         foreach ($definition['fields'] ?? [] as $field) {
             if (empty($field['required'])) {
