@@ -24,6 +24,7 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
+use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
@@ -398,7 +399,12 @@ class Start extends CommandAbstract
         }
         
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
-        $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart);
+        try {
+            $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart);
+        } catch (\RuntimeException $exception) {
+            $this->printer->error($exception->getMessage());
+            return;
+        }
         $sessionServerPort = (int) ($sharedStateRuntime['session']['port'] ?? 19970);
         $memoryServerPort = (int) ($sharedStateRuntime['memory']['port'] ?? 19971);
         $config['session_server_port'] = $sessionServerPort;
@@ -406,6 +412,7 @@ class Start extends CommandAbstract
         $config['memory_server_port'] = $memoryServerPort;
         $config['memory_server_token_file_name'] = (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token');
         $config['shared_state'] = $sharedStateRuntime;
+        $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
         
         // 计算 Worker 端口
         // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
@@ -1045,132 +1052,65 @@ class Start extends CommandAbstract
             $envConfig = [];
         }
 
-        $sessionConfig = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
-        $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
-        $wlsSession = \is_array($wlsConfig['session'] ?? null) ? $wlsConfig['session'] : [];
-        $wlsSessionServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
-        $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
+        return $this->createSharedStateServiceManager()->ensureRuntime($instanceName, $config, $envConfig);
+    }
 
-        $sessionPreferredPort = (int) (
-            $config['session_server_port']
-            ?? $wlsSession['port']
-            ?? $wlsSessionServer['port']
-            ?? $sessionConfig['server_port']
-            ?? 19970
-        );
-        if ($sessionPreferredPort <= 0) {
-            $sessionPreferredPort = 19970;
-        }
-        $sessionPortExplicit = \array_key_exists('session_server_port', $config);
+    protected function createSharedStateServiceManager(): SharedStateServiceManager
+    {
+        return new SharedStateServiceManager();
+    }
 
-        $memoryPreferredPort = (int) (
-            $config['memory_server_port']
-            ?? $memoryConfig['port']
-            ?? 19971
-        );
-        if ($memoryPreferredPort <= 0) {
-            $memoryPreferredPort = 19971;
-        }
-        $memoryPortExplicit = \array_key_exists('memory_server_port', $config);
+    /**
+     * @param array{
+     *   session?: array<string, mixed>,
+     *   memory?: array<string, mixed>
+     * } $sharedStateRuntime
+     */
+    protected function printSharedStateRuntimeSummary(string $instanceName, array $sharedStateRuntime): void
+    {
+        foreach ([
+            'session' => 'Session Server',
+            'memory' => 'Memory Service',
+        ] as $key => $label) {
+            $runtime = \is_array($sharedStateRuntime[$key] ?? null) ? $sharedStateRuntime[$key] : [];
+            if ($runtime === []) {
+                continue;
+            }
 
-        $sessionPort = $sessionPreferredPort;
-        $sessionReuse = $this->inspectReusableSharedStateService(
-            $sessionPreferredPort,
-            'session_server',
-            'session_server.token'
-        );
-        if ($sessionReuse['reusable'] ?? false) {
-            $sessionPort = $sessionPreferredPort;
-        } elseif (!$forceRestart && !$sessionPortExplicit && Processer::isPortInUse($sessionPreferredPort)) {
-            $sessionPort = $this->findAvailableAuxiliaryPort($sessionPreferredPort);
-            if ($sessionPort !== $sessionPreferredPort) {
-                $this->printer->warning(__('Session Server port switched to %{1} automatically (preferred %{2} was busy).', [
-                    $sessionPort,
-                    $sessionPreferredPort,
-                ]));
+            $serviceInstanceName = (string) ($runtime['instance_name'] ?? $runtime['service_instance_name'] ?? '');
+            $port = (int) ($runtime['port'] ?? 0);
+            $processName = (string) ($runtime['process_name'] ?? '');
+            $pid = (int) ($runtime['pid'] ?? 0);
+            $reused = (bool) ($runtime['reuse_existing'] ?? false);
+            $createdNow = (bool) ($runtime['created_now'] ?? false);
+
+            if ($createdNow) {
+                $this->printer->note(
+                    __('实例 [%{1}] 已创建共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})', [
+                        $instanceName,
+                        $label,
+                        $serviceInstanceName !== '' ? $serviceInstanceName : 'shared-service',
+                        $port,
+                        $pid,
+                        $processName !== '' ? $processName : 'unknown',
+                    ])
+                );
+                continue;
+            }
+
+            if ($reused) {
+                $this->printer->note(
+                    __('实例 [%{1}] 复用共享 %{2}: %{3} (port=%{4}, pid=%{5}, process=%{6})', [
+                        $instanceName,
+                        $label,
+                        $serviceInstanceName !== '' ? $serviceInstanceName : 'shared-service',
+                        $port,
+                        $pid,
+                        $processName !== '' ? $processName : 'unknown',
+                    ])
+                );
             }
         }
-
-        $memoryPort = $memoryPreferredPort;
-        $memoryReuse = $this->inspectReusableSharedStateService(
-            $memoryPreferredPort,
-            'memory_server',
-            'memory_server.token'
-        );
-        $memoryPortNeedsSwitch = !($memoryReuse['reusable'] ?? false) && !$forceRestart && !$memoryPortExplicit && (
-            $memoryPreferredPort === $sessionPort
-            || Processer::isPortInUse($memoryPreferredPort)
-        );
-        if ($memoryReuse['reusable'] ?? false) {
-            $memoryPort = $memoryPreferredPort;
-        } elseif ($memoryPortNeedsSwitch) {
-            $memoryPort = $this->findAvailableAuxiliaryPort($memoryPreferredPort, [$sessionPort]);
-            if ($memoryPort !== $memoryPreferredPort) {
-                $this->printer->warning(__('Memory Service port switched to %{1} automatically (preferred %{2} was busy).', [
-                    $memoryPort,
-                    $memoryPreferredPort,
-                ]));
-            }
-        } elseif ($memoryPort === $sessionPort) {
-            $nextMemoryPort = $this->findAvailableAuxiliaryPort($memoryPort, [$sessionPort]);
-            if ($nextMemoryPort !== $memoryPort) {
-                $this->printer->warning(__('Memory Service port switched to %{1} automatically (preferred %{2} was busy).', [
-                    $nextMemoryPort,
-                    $memoryPort,
-                ]));
-                $memoryPort = $nextMemoryPort;
-            }
-        }
-
-        $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config);
-        $sessionTokenFileName = ($sessionReuse['reusable'] ?? false)
-            ? (string) ($sessionReuse['token_file_name'] ?? 'session_server.token')
-            : $this->resolveSharedStateTokenFileName(
-                $sessionPort,
-                (string) (
-                    $config['session_server_token_file_name']
-                    ?? $wlsSessionServer['token_file_name']
-                    ?? $wlsSession['token_file_name']
-                    ?? ''
-                ),
-                'session_server.token',
-                $sessionTokenExplicit,
-                19970
-            );
-
-        $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config);
-        $memoryTokenFileName = ($memoryReuse['reusable'] ?? false)
-            ? (string) ($memoryReuse['token_file_name'] ?? 'memory_server.token')
-            : $this->resolveSharedStateTokenFileName(
-                $memoryPort,
-                (string) (
-                    $config['memory_server_token_file_name']
-                    ?? $memoryConfig['token_file_name']
-                    ?? ''
-                ),
-                'memory_server.token',
-                $memoryTokenExplicit,
-                19971
-            );
-
-        return [
-            'session' => [
-                'host' => '127.0.0.1',
-                'port' => $sessionPort,
-                'token_file_name' => $sessionTokenFileName,
-                'reuse_existing' => (bool) ($sessionReuse['reusable'] ?? false),
-                'pid' => (int) ($sessionReuse['pid'] ?? 0),
-                'process_name' => (string) ($sessionReuse['process_name'] ?? ''),
-            ],
-            'memory' => [
-                'host' => '127.0.0.1',
-                'port' => $memoryPort,
-                'token_file_name' => $memoryTokenFileName,
-                'reuse_existing' => (bool) ($memoryReuse['reusable'] ?? false),
-                'pid' => (int) ($memoryReuse['pid'] ?? 0),
-                'process_name' => (string) ($memoryReuse['process_name'] ?? ''),
-            ],
-        ];
     }
 
     protected function getSharedStateTokenFileName(int $port, string $defaultFileName, int $defaultPort): string

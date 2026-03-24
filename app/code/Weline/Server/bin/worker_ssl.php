@@ -113,7 +113,9 @@ use Weline\Server\Log\Error\ErrorBootstrap;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
 
-ErrorBootstrap::init('WorkerSSL#' . $workerId . ':' . $port, [
+$processTag = 'WorkerSSL#' . $workerId . ':' . $port . '@' . $instanceName;
+
+ErrorBootstrap::init($processTag, [
     'worker_id' => $workerId,
     'port' => $port,
     'instance' => $instanceName,
@@ -422,7 +424,7 @@ if (\defined('DEV') && DEV) {
 if ($isFrontend) {
     WlsLogger::getInstance()
         ->setStdoutEnabled(true)
-        ->setProcessTag('WorkerSSL#' . $workerId . ':' . $port);
+        ->setProcessTag($processTag);
 }
 // ========== 日志系统结束 ==========
 
