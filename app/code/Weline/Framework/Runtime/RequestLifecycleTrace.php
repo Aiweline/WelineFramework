@@ -222,6 +222,23 @@ class RequestLifecycleTrace
     /**
      * 重置（WLS 状态管理调用）
      */
+    public static function sumDurationsByName(string $name): float
+    {
+        if ($name === '' || empty(self::$spans)) {
+            return 0.0;
+        }
+
+        $total = 0.0;
+        foreach (self::$spans as $span) {
+            if (($span['name'] ?? '') !== $name) {
+                continue;
+            }
+            $total += (float)($span['duration_ms'] ?? 0.0);
+        }
+
+        return round($total, 2);
+    }
+
     public static function reset(): void
     {
         self::$spans = [];

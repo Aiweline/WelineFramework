@@ -42,12 +42,17 @@ class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
      */
     public function execute(Event &$event): void
     {
-        if ($this->request->isBackend()) {
-            $this->cache->set(self::BACKEND_WORDS_CACHE_KEY, array_merge($this->getBackendWords(), Parser::getWords()));
-        } else {
-            $this->cache->set(self::FRONTEND_WORDS_CACHE_KEY, array_merge($this->getFrontendWords(), Parser::getWords()));
+        $words = Parser::getUsedWordsWithTranslations();
+        if (empty($words)) {
+            return;
         }
-        $this->cache->set(self::WORDS_CACHE_KEY, array_merge($this->getWords(), Parser::getWords()));
+
+        if ($this->request->isBackend()) {
+            $this->mergeWords(self::BACKEND_WORDS_CACHE_KEY, $words);
+        } else {
+            $this->mergeWords(self::FRONTEND_WORDS_CACHE_KEY, $words);
+        }
+        $this->mergeWords(self::WORDS_CACHE_KEY, $words);
     }
 
     public function getWords(): array
@@ -75,5 +80,35 @@ class ParserWordsRegister implements \Weline\Framework\Event\ObserverInterface
             $words = [];
         }
         return $words;
+    }
+
+    private function mergeWords(string $cacheKey, array $words): void
+    {
+        if (empty($words)) {
+            return;
+        }
+
+        $existing = $this->cache->get($cacheKey);
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+
+        $changed = false;
+        foreach ($words as $word => $translation) {
+            $word = trim((string)$word);
+            if ($word === '') {
+                continue;
+            }
+
+            $translation = is_string($translation) && $translation !== '' ? $translation : $word;
+            if (!array_key_exists($word, $existing) || $existing[$word] !== $translation) {
+                $existing[$word] = $translation;
+                $changed = true;
+            }
+        }
+
+        if ($changed) {
+            $this->cache->set($cacheKey, $existing);
+        }
     }
 }

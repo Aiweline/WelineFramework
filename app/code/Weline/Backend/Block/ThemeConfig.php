@@ -12,8 +12,12 @@ declare(strict_types=1);
 namespace Weline\Backend\Block;
 
 use Weline\Backend\Model\BackendUserConfig;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Theme\Helper\LayoutScanner;
+use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\ThemeContextService;
 
 class ThemeConfig extends \Weline\Framework\View\Block
 {
@@ -89,20 +93,27 @@ class ThemeConfig extends \Weline\Framework\View\Block
 
     public function getThemeModel()
     {
-        // 优先检查预览配置
-        $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-        $previewThemeId = $session->getData('preview_theme_id');
-        $previewThemeArea = $session->getData('preview_theme_area');
-        
-        if ($previewThemeId && $previewThemeArea === 'backend') {
-            // 预览模式：使用预览色系配置
-            $previewColor = $session->getData('preview_color_backend');
-            if ($previewColor) {
-                // light 模式返回空字符串，其他模式返回对应的值
-                return $previewColor === 'light' ? '' : $previewColor;
+        try {
+            /** @var PreviewContextService $previewContextService */
+            $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
+            if ($previewContextService->shouldUseStoredContext()) {
+                $context = $previewContextService->getCurrentContext();
+                $previewThemeId = $previewContextService->getThemeIdForArea('backend', $context, false);
+                if ($previewThemeId > 0) {
+                    /** @var ThemeContextService $themeContext */
+                    $themeContext = ObjectManager::getInstance(ThemeContextService::class);
+                    $previewTheme = $themeContext->resolveTheme('backend');
+                    if ($previewTheme && $previewTheme->getId()) {
+                        $previewColor = LayoutScanner::getColorConfig($previewTheme, 'backend');
+                        if ($previewColor) {
+                            return $previewColor === 'light' ? '' : $previewColor;
+                        }
+                    }
+                }
             }
+        } catch (\Throwable) {
         }
-        
+
         $themeModeFromSwitch = $this->getThemeConfig('theme-mode-switch');
         $themeMode = $this->resolveThemeModeFromConfig(
             $this->getThemeConfig(),
