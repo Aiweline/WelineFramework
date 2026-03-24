@@ -1,3 +1,8 @@
-﻿聚焦,聚焦
+聚焦,聚焦
 展示,展示
 全部展示,全部展示
+"Theme compatibility warning","主题兼容性警告"
+"Theme compatibility warning: layout %{layout_type}/%{layout_option} in theme %{theme} is missing %{count} required hook or slot hosts. Please extend the inherited layout instead of deleting default hooks or slots.","主题 %{theme} 的布局 %{layout_type}/%{layout_option} 缺少 %{count} 个模块所需的 hook 或 slot 宿主。请通过继承原布局后扩展，不要删除默认 hook 或 slot。"
+"Preview compatibility notice","预览兼容性提示"
+"Missing hosts","缺失宿主"
+"Please extend the inherited layout instead of deleting default hooks or slots.","请通过继承原布局后扩展，不要删除默认 hook 或 slot。"

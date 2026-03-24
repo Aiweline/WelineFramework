@@ -1,0 +1,92 @@
+<?php
+$source = $this->getData('source') ?? [];
+$action = (string) ($this->getData('action') ?? $this->request->getUrlBuilder()->getCurrentUrl());
+$sourceIndexUrl = (string) ($this->getData('sourceIndexUrl') ?? $this->getBackendUrl('*/backend/inventory/source'));
+
+$sourceId = (int) ($source['source_id'] ?? 0);
+$isEnabled = (int) ($source['is_enabled'] ?? 1) === 1;
+$useDefaultCarrier = (int) ($source['use_default_carrier'] ?? 1) === 1;
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= $sourceId > 0 ? __('Edit Inventory Source') : __('Create Inventory Source') ?></h1>
+            <p class="text-muted mb-0"><?= __('Define source profile and priority for inventory allocation.') ?></p>
+        </div>
+        <a href="<?= $sourceIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Back to Sources') ?></a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" action="<?= htmlspecialchars($action, ENT_QUOTES) ?>" class="row g-3">
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('Code') ?></label>
+                    <input type="text" name="code" class="form-control" value="<?= htmlspecialchars((string) ($source['code'] ?? ''), ENT_QUOTES) ?>" required>
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label"><?= __('Name') ?></label>
+                    <input type="text" name="name" class="form-control" value="<?= htmlspecialchars((string) ($source['name'] ?? ''), ENT_QUOTES) ?>" required>
+                </div>
+                <div class="col-12">
+                    <label class="form-label"><?= __('Description') ?></label>
+                    <textarea name="description" class="form-control" rows="3"><?= htmlspecialchars((string) ($source['description'] ?? ''), ENT_QUOTES) ?></textarea>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Country') ?></label>
+                    <input type="text" name="country" class="form-control" value="<?= htmlspecialchars((string) ($source['country'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Region') ?></label>
+                    <input type="text" name="region" class="form-control" value="<?= htmlspecialchars((string) ($source['region'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('City') ?></label>
+                    <input type="text" name="city" class="form-control" value="<?= htmlspecialchars((string) ($source['city'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Postcode') ?></label>
+                    <input type="text" name="postcode" class="form-control" value="<?= htmlspecialchars((string) ($source['postcode'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-12">
+                    <label class="form-label"><?= __('Address') ?></label>
+                    <input type="text" name="address" class="form-control" value="<?= htmlspecialchars((string) ($source['address'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('Phone') ?></label>
+                    <input type="text" name="phone" class="form-control" value="<?= htmlspecialchars((string) ($source['phone'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('Email') ?></label>
+                    <input type="email" name="email" class="form-control" value="<?= htmlspecialchars((string) ($source['email'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label"><?= __('Contact Name') ?></label>
+                    <input type="text" name="contact_name" class="form-control" value="<?= htmlspecialchars((string) ($source['contact_name'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Priority') ?></label>
+                    <input type="number" min="0" step="1" name="priority" class="form-control" value="<?= (int) ($source['priority'] ?? 0) ?>">
+                </div>
+                <div class="col-md-3">
+                    <input type="hidden" name="is_enabled" value="0">
+                    <label class="form-label d-block"><?= __('Enabled') ?></label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="is_enabled" value="1" <?= $isEnabled ? 'checked' : '' ?>>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <input type="hidden" name="use_default_carrier" value="0">
+                    <label class="form-label d-block"><?= __('Use Default Carrier') ?></label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" name="use_default_carrier" value="1" <?= $useDefaultCarrier ? 'checked' : '' ?>>
+                    </div>
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary"><?= __('Save Source') ?></button>
+                    <a href="<?= $sourceIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Cancel') ?></a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
