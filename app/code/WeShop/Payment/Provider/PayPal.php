@@ -9,7 +9,7 @@ use WeShop\Payment\Interface\PaymentProviderInterface;
 
 class PayPal implements PaymentProviderInterface
 {
-    public function processPayment(Order $order, array $paymentData = []): array
+    public function processPayment(Order $order, array $paymentData = [], array $context = []): array
     {
         $orderNumber = '';
         if (method_exists($order, 'getIncrementId')) {
@@ -29,12 +29,12 @@ class PayPal implements PaymentProviderInterface
         ];
     }
 
-    public function handleCallback(array $callbackData): bool
+    public function handleCallback(array $callbackData, array $context = []): bool
     {
         return !empty($callbackData);
     }
 
-    public function queryPaymentStatus(string $orderNumber): string
+    public function queryPaymentStatus(string $orderNumber, array $context = []): string
     {
         return 'pending';
     }
