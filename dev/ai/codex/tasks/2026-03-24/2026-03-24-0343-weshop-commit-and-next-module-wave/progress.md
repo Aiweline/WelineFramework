@@ -110,3 +110,108 @@
 - `curl.exe -k -i "https://127.0.0.1:9982/search/suggest?q=bag&limit=3"` -> `200 OK`
 - `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-search.spec.js` -> `1 passed`
 - 2026-03-24 19:42 Next immediate step is to white-list stage the Search slice plus this task workspace update, commit it cleanly, then continue from the stronger of the `Analytics` / `Order` audits.
+- 2026-03-24 19:45 White-list committed the `WeShop_Search` slice as `09624067` (`feat(weshop): complete search storefront slice`).
+- 2026-03-24 19:49 Chose `WeShop_Analytics` as the next bounded production slice after re-auditing the module locally:
+- provider implementations already existed, but there was no backend management surface, no live storefront injection path, no theme-compat manifest coverage, and observers / dispatcher still relied on `ObjectManager`
+- 2026-03-24 19:53 Added red-first Analytics tests for:
+- `AnalyticsConfigService`
+- `AnalyticsAdminPageDataService`
+- `AnalyticsSnippetService`
+- `AnalyticsQueryProvider`
+- backend Analytics controller existence
+- frontend head hook template contract
+- backend e2e dashboard render
+- 2026-03-24 19:56 First red test run failed as expected on missing Analytics service/controller/template classes and missing frontend hook implementation.
+- 2026-03-24 20:18 Implemented the `WeShop_Analytics` completion slice locally:
+- added env-backed `AnalyticsConfigService`, `AnalyticsAdminPageDataService`, and `AnalyticsSnippetService`
+- added `AnalyticsQueryProvider` so frontend/theme templates read snippets through `w_query('analytics', ...)`
+- added backend router/menu/controllers/template for analytics management
+- added frontend hook implementation on `Weline_Theme::frontend::layouts::base::head-after`
+- extended `WeShop_Base` theme compatibility manifest to warn when major storefront layouts drop the canonical base analytics hook
+- refactored `PixelDispatcher` and all Analytics observers away from `ObjectManager`, and normalized event names before dispatch
+- updated `GoogleAnalytics` and `FacebookPixel` providers to read config from the new service with `Env` fallback
+- 2026-03-24 20:22 Re-ran Analytics unit tests, fixed a couple of test-contract mismatches, and reached green:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Analytics/Test/Unit --colors=never` -> `17 tests / 51 assertions`
+- 2026-03-24 20:24 Focused syntax validation passed for the touched Analytics PHP files.
+- 2026-03-24 20:25 `php bin/w setup:upgrade -m WeShop_Analytics --yes` refreshed the module registries but still surfaced an unrelated repo-wide blocker in `Weline\SystemConfig\Model\SystemConfig.php` (`ParseError` on `idx_key_module_area`), so it cannot currently be treated as a clean validation signal for this slice.
+- 2026-03-24 20:26 `php tests/e2e/framework/preflight-refresh.php` passed, and `php bin/w server:reload --no-wait` refreshed the live WLS workers.
+- 2026-03-24 20:28 Backend e2e first exposed a real controller regression (`getBackendUrl()` missing on the Analytics backend controller path); patched the controllers to use the backend URL builder explicitly, then re-ran Analytics PHPUnit to keep the slice green.
+- 2026-03-24 20:32 `node tests/e2e/start.js tests/e2e/specs/backend/weshop-analytics.spec.js` passed (`1 passed`) on the fallback runtime.
+- 2026-03-24 20:33 Next immediate step is to white-list commit the Analytics slice, then continue into the next higher-value unfinished module, currently most likely `WeShop_Order`.
+- 2026-03-24 19:48 Re-opened the Search storefront slice from live verification and found the current `/search?q=bag` path still had two production blockers in the local runtime despite earlier route/e2e coverage: the product query fallback built invalid PostgreSQL where clauses, and search-history writes dropped the `keyword` column on update.
+- 2026-03-24 19:53 Added `WeShop\Product\Test\Unit\Query\ProductQueryProviderTest` red-first coverage for keyword OR clauses, price filters, and suggestion query signatures; the new test failed against the old `ProductQueryProvider` implementation as expected.
+- 2026-03-24 19:56 Fixed `WeShop_Product` search fallback by rebuilding keyword OR conditions into a grouped raw clause and correcting the query-builder signatures for `LIKE`, `>=`, and `<=`; the new ProductQueryProvider test went green afterward.
+- 2026-03-24 20:02 Added SearchHistory regression coverage for both existing-record and new-record persistence, then fixed `SearchHistory::recordSearch()` so model-object fetch results preserve `keyword`, resolve the existing ID correctly, and update counts without causing an accidental insert.
+- 2026-03-24 20:07 Improved Search storefront usability after the live blockers were removed:
+- normalized the heading placeholder to the framework `%{n}` format so `/search?q=bag` renders `Results for "bag"`
+- collapsed duplicate popular-keyword rows inside `SearchHistory::getPopularKeywords()`
+- extended the Search page-data unit test to lock the summary-label formatting contract
+- 2026-03-24 20:15 Hardened the Search backend configuration UI:
+- rewrote `view/templates/Backend/Engine/form.phtml` so `opensearch`, `meilisearch`, `mysql`, `elasticsearch`, and `algolia` each have their own panel
+- hidden engine panels now disable their inputs and only restore required validation for the active engine
+- replaced the old Meilisearch-only test button with a generic `testSearchEngineConnection(engineType)` helper
+- added `BackendSearchEngineFormContractTest` to guard the new OpenSearch panel and safe field toggling contract
+- 2026-03-24 20:20 Final Search + product-fallback validation passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Search/Test/Unit app/code/WeShop/Product/Test/Unit/Query/ProductQueryProviderTest.php --colors=never`
+- `php -l app/code/WeShop/Search/view/templates/Backend/Engine/form.phtml`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `curl.exe -k -I "https://127.0.0.1:9982/search?q=bag"` -> `200 OK`
+- `curl.exe -k "https://127.0.0.1:9982/search?q=bag" --max-time 20` -> live HTML now renders the search page successfully
+- 2026-03-24 21:26 Re-opened the actual `WeShop_Search` backend engine form on disk and confirmed the staged copy and working-tree copy had drifted; the file still used the older `.engine-config-panel` / `setPanelEnabled()` / `testCurrentEngine()` structure while the contract test expected the newer `data-engine-panel` / `toggleEnginePanelInputs()` / `testSearchEngineConnection()` contract.
+- 2026-03-24 21:30 Reconciled `app/code/WeShop/Search/view/templates/Backend/Engine/form.phtml` to the final Search form contract without changing the module boundary:
+- engine panels now expose `data-engine-panel`
+- hidden engine panels are toggled via `toggleEnginePanelInputs()` and disable their inputs safely
+- per-engine connection tests now route through `testSearchEngineConnection()`, including the explicit OpenSearch handler expected by the contract guard
+- 2026-03-24 21:34 Re-ran focused validation after the reconciliation:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Search/Test/Unit app/code/WeShop/Product/Test/Unit/Query/ProductQueryProviderTest.php --colors=never` -> `24 tests / 96 assertions`
+- `php -l app/code/WeShop/Search/view/templates/Backend/Engine/form.phtml`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `curl.exe -k -I "https://127.0.0.1:9982/search?q=bag"` -> `200 OK`
+- `curl.exe -k "https://127.0.0.1:9982/search/suggest?q=bag&limit=3"` -> JSON suggestions returned successfully
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-search.spec.js` -> `1 passed`
+- 2026-03-24 21:41 White-list committed the isolated Search/Product slice as `01a3a545` (`feat(weshop): stabilize search engine configuration`), intentionally excluding `WeShop_Search/README.md`, `WeShop_Search/env/*`, task-workspace files, and unrelated i18n drift.
+- 2026-03-24 21:46 Started the next bounded local slice on `WeShop_Base` theme compatibility while two sidecar workers began implementing the next `Order` and `Analytics` follow-up slices.
+- 2026-03-24 21:49 Added red-first checkout coverage to `ThemeCompatibilityServiceTest` for the real production gap: one layout type must be able to validate required hosts across both the selected checkout layout template and the checkout page template.
+- 2026-03-24 21:54 Implemented the `ThemeCompatibilityService` fix so manifest entries can resolve multiple template definitions (`layout` + `page`) for a single layout type, aggregate scanned files, and keep warning payloads aware of all resolved template files.
+- 2026-03-24 21:56 Validation for the Base slice passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Base/Test/Unit/Service/ThemeCompatibilityServiceTest.php --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Base/Test/Unit/Plugin/Theme/ThemeEditorCompatibilityPluginTest.php --colors=never`
+- `php -l app/code/WeShop/Base/Service/ThemeCompatibilityService.php`
+- `php -l app/code/WeShop/Base/etc/theme-compatibility.php`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-24 21:58 White-list committed the isolated Base compatibility slice as `b78557b1` (`fix(weshop): scan page and layout theme hosts`), again excluding unrelated Base i18n drift.
+- 2026-03-25 00:20 Re-loaded the workspace startup context (`memory`, task workspace, skill router) and narrowed the current critical path to the local `WeShop_Order` storefront/default-theme/API slice described in the previous checkpoint summary.
+- 2026-03-25 00:22 Loaded the minimal repo skill set for this slice: `testing`, `unified-query-provider`, and `theme-development`.
+- 2026-03-25 00:24 Re-ran the focused Order unit suite after the last controller redirect fixes:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Order/Test/Unit --colors=never` -> `25 tests / 92 assertions`
+- 2026-03-25 00:26 Re-validated the active Order slice with focused syntax checks and preflight refresh:
+- `php -l app/code/WeShop/Order/Api/Rest/V1/Order.php`
+- `php -l app/code/WeShop/Order/Controller/Frontend/Order/OrderList.php`
+- `php -l app/code/WeShop/Order/Controller/Frontend/Order/View.php`
+- `php -l app/code/WeShop/Order/Service/OrderListPageDataService.php`
+- `php -l app/code/WeShop/Order/Service/OrderDetailPageDataService.php`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-25 00:28 Confirmed the order slice commit boundary should include only Order storefront/API/default-theme/query/test files plus the legacy Weline account hook compatibility fix; explicitly kept `app/code/WeShop/Order/i18n/*.csv` outside the commit because those files are still mixed with broader parser drift.
+- 2026-03-25 00:31 White-list staged the 27-file `WeShop_Order` slice only and verified the cached diff before commit.
+- 2026-03-25 00:32 Checkpointed the `WeShop_Order` storefront/account/API slice as commit `a4b3053b` (`feat(weshop): complete order storefront account flows`).
+- 2026-03-25 00:33 Launched two read-only parallel audits:
+- next recommended WeShop module after Order
+- remaining default-theme / account-center hook gaps outside Order
+- 2026-03-25 01:17 Re-loaded the workspace context, repo skill routing, and the in-progress local `WeShop_Invoice` slice after the user asked to continue.
+- 2026-03-25 01:20 Re-ran focused `WeShop_Invoice` validation and confirmed the unit suite is green:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Invoice/Test/Unit --colors=never` -> `17 tests / 39 assertions`
+- `php tests/e2e/framework/preflight-refresh.php` -> passed
+- 2026-03-25 01:24 Investigated the earlier `/invoice` live `404` on `9982` and identified the clean-route gap: unlike `GiftCard` / `Compare`, `Invoice` lacked the root `Controller/Index.php` alias even though the module router is `invoice`.
+- 2026-03-25 01:27 Added the clean-route alias controller `WeShop\Invoice\Controller\Index`, added `IndexTest`, and added the new frontend browser guard spec `tests/e2e/specs/frontend/weshop-invoice.spec.js`.
+- 2026-03-25 01:31 The first browser spec iteration proved the route contract but was too strict about login-form text because the fallback runtime injects extra storefront widgets; simplified the assertion to the stable contract: guest `/invoice` must land on `customer/account/login`.
+- 2026-03-25 01:34 Refreshed reflection metadata with `php bin/w reflection:compile`, then reloaded WLS and re-checked live routing on `9982`.
+- 2026-03-25 01:35 Validation for the finalized `Invoice` slice passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Invoice/Test/Unit --colors=never`
+- `php -l app/code/WeShop/Invoice/Controller/Index.php`
+- `php -l app/code/WeShop/Invoice/Test/Unit/Controller/IndexTest.php`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w reflection:compile`
+- `php bin/w server:reload --no-wait`
+- `curl.exe -k -I https://127.0.0.1:9982/invoice` -> `301` to `customer/account/login`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-invoice.spec.js` -> `1 passed`
+- 2026-03-25 01:36 The `Invoice` commit boundary should include only module code/templates/tests, the new frontend e2e spec, and this task workspace update; `app/code/WeShop/Invoice/i18n/*.csv` remain intentionally excluded because they are still mixed with broader parser-generated drift.
