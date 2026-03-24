@@ -7,14 +7,14 @@
 ## Steps
 
 - [x] Clarify checkout/payment/theme scope and risks
-- [ ] Implement checkout payment hook hosts and normalized page data
-- [ ] Update default theme checkout page and layout variants to use the new hosts
-- [ ] Add or update focused unit tests
-- [ ] Run validation commands
-- [ ] Record results and remaining gaps
+- [x] Implement checkout payment hook hosts and normalized page data
+- [x] Update default theme checkout page and layout variants to use the new hosts
+- [x] Add or update focused unit tests
+- [x] Run validation commands
+- [x] Record results and remaining gaps
 
 ## Verification Targets
 
-- [ ] Unit / phpunit
-- [ ] Syntax / php -l
+- [x] Unit / phpunit
+- [x] Syntax / php -l
 - [ ] Route / live smoke if runtime is available on 9982

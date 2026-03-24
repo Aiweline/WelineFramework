@@ -205,4 +205,75 @@ class AuthGrantServiceTest extends TestCase
         $this->assertSame('backend', $result['actor']['area'] ?? null);
         $this->assertTrue((bool) ($result['actor']['is_2fa_verified'] ?? false));
     }
+
+    public function testIssuePasswordTokenRejectsMissingCredentialsBeforeAuthenticating(): void
+    {
+        $customerAccountService = $this->createMock(CustomerAccountService::class);
+        $customerAccountService->expects($this->never())->method('authenticate');
+
+        $service = new AuthGrantService(
+            $customerAccountService,
+            $this->createMock(BackendPasswordAuthenticator::class),
+            $this->createMock(GoogleCodeAuthenticator::class),
+            $this->createMock(IntegrationCredentialAuthenticator::class),
+            $this->createMock(WeShopAuth2FAOrchestrator::class),
+            $this->createMock(WeShopAuthTokenService::class)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Username or email and password are required.');
+
+        $service->issuePasswordToken('frontend', '', '');
+    }
+
+    public function testIssueGoogleCodeTokenRejectsMissingCode(): void
+    {
+        $service = new AuthGrantService(
+            $this->createMock(CustomerAccountService::class),
+            $this->createMock(BackendPasswordAuthenticator::class),
+            $this->createMock(GoogleCodeAuthenticator::class),
+            $this->createMock(IntegrationCredentialAuthenticator::class),
+            $this->createMock(WeShopAuth2FAOrchestrator::class),
+            $this->createMock(WeShopAuthTokenService::class)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Google authorization code is required.');
+
+        $service->issueGoogleCodeToken('frontend', '');
+    }
+
+    public function testIssueApiCredentialsTokenRejectsMissingCredentials(): void
+    {
+        $service = new AuthGrantService(
+            $this->createMock(CustomerAccountService::class),
+            $this->createMock(BackendPasswordAuthenticator::class),
+            $this->createMock(GoogleCodeAuthenticator::class),
+            $this->createMock(IntegrationCredentialAuthenticator::class),
+            $this->createMock(WeShopAuth2FAOrchestrator::class),
+            $this->createMock(WeShopAuthTokenService::class)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('API key and secret are required.');
+
+        $service->issueApiCredentialsToken('', '');
+    }
+
+    public function testRefreshTokenRejectsMissingRefreshToken(): void
+    {
+        $service = new AuthGrantService(
+            $this->createMock(CustomerAccountService::class),
+            $this->createMock(BackendPasswordAuthenticator::class),
+            $this->createMock(GoogleCodeAuthenticator::class),
+            $this->createMock(IntegrationCredentialAuthenticator::class),
+            $this->createMock(WeShopAuth2FAOrchestrator::class),
+            $this->createMock(WeShopAuthTokenService::class)
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Refresh token is required.');
+
+        $service->refreshToken('');
+    }
 }

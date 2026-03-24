@@ -106,4 +106,28 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame(7, $result['params']['customer_id']);
         $this->assertSame('USD', $result['params']['currency']);
     }
+
+    public function testGetCheckoutShippingMethodsDelegatesToShippingQueryProvider(): void
+    {
+        $service = new class() extends CheckoutService {
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                return [
+                    'provider' => $provider,
+                    'operation' => $operation,
+                    'params' => $params,
+                ];
+            }
+        };
+
+        $result = $service->getCheckoutShippingMethods(9, [
+            'area' => 'frontend',
+            'country' => 'US',
+        ]);
+
+        $this->assertSame('shipping', $result['provider']);
+        $this->assertSame('getCheckoutShippingMethods', $result['operation']);
+        $this->assertSame(9, $result['params']['customer_id']);
+        $this->assertSame('US', $result['params']['country']);
+    }
 }

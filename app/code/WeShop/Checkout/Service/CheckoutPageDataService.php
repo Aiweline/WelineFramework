@@ -29,6 +29,12 @@ class CheckoutPageDataService
         $cartItems = $this->mapCartItems($items);
         $totals = $this->cartService->calculateTotals($customerId);
         $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
+        $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, [
+            'area' => 'frontend',
+        ]);
+        if ($shippingMethods === []) {
+            $shippingMethods = $this->shippingService->getAvailableShippingMethods();
+        }
         $itemCount = array_reduce(
             $cartItems,
             static fn(int $count, array $item): int => $count + (int) ($item['qty'] ?? 0),
@@ -51,7 +57,7 @@ class CheckoutPageDataService
             ],
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
-            'shipping_methods' => $this->mapShippingMethods($this->shippingService->getAvailableShippingMethods()),
+            'shipping_methods' => $this->mapShippingMethods($shippingMethods),
             'payment_methods' => $this->mapPaymentMethods(
                 $this->checkoutService->getCheckoutPaymentMethods($customerId, [
                     'area' => 'frontend',
@@ -131,9 +137,33 @@ class CheckoutPageDataService
     protected function mapShippingMethods(array $methods): array
     {
         $result = [];
-        $sortOrder = 10;
-        $isFirst = true;
-        foreach ($methods as $code => $label) {
+        $position = 0;
+        foreach ($methods as $index => $method) {
+            $position++;
+            $sortOrder = $position * 10;
+            $isFirst = $position === 1;
+            if (\is_array($method)) {
+                $code = (string) ($method['code'] ?? '');
+                if ($code === '') {
+                    continue;
+                }
+                $name = (string) ($method['name'] ?? $method['title'] ?? $code);
+                $result[] = [
+                    'code' => $code,
+                    'name' => $name,
+                    'description' => (string) ($method['description'] ?? __('Available shipping option: %{1}', [$name])),
+                    'price' => (float) ($method['price'] ?? 0),
+                    'is_default' => (bool) ($method['is_default'] ?? $isFirst),
+                    'sort_order' => (int) ($method['sort_order'] ?? $sortOrder),
+                ];
+                continue;
+            }
+
+            $code = (string) $index;
+            $label = (string) $method;
+            if ($code === '' || $label === '') {
+                continue;
+            }
             $result[] = [
                 'code' => (string) $code,
                 'name' => (string) $label,
@@ -142,8 +172,24 @@ class CheckoutPageDataService
                 'is_default' => $isFirst,
                 'sort_order' => $sortOrder,
             ];
-            $sortOrder += 10;
-            $isFirst = false;
+        }
+
+        usort(
+            $result,
+            static fn(array $left, array $right): int => ((int) ($left['sort_order'] ?? 0)) <=> ((int) ($right['sort_order'] ?? 0))
+        );
+
+        if ($result !== []) {
+            $hasDefault = false;
+            foreach ($result as $method) {
+                if (!empty($method['is_default'])) {
+                    $hasDefault = true;
+                    break;
+                }
+            }
+            if (!$hasDefault) {
+                $result[0]['is_default'] = true;
+            }
         }
 
         return $result;
