@@ -26,6 +26,12 @@ $accountCompatibility = [
             ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::orders::cards'],
         ],
     ],
+    'WeShop_Order' => [
+        'description' => 'Order account modules depend on the canonical customer account order host.',
+        'hosts' => [
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::orders::cards'],
+        ],
+    ],
 ];
 
 return [
@@ -157,6 +163,20 @@ return [
                 'path' => 'search/index.phtml',
             ],
             'WeShop_Analytics' => $analyticsCompatibility,
+        ],
+        'subscription' => [
+            '_template' => [
+                'kind' => 'page',
+                'path' => 'subscription/index.phtml',
+            ],
+            'WeShop_Analytics' => $analyticsCompatibility,
+            'WeShop_Subscription' => [
+                'description' => 'Subscription modules depend on the canonical subscription page hook hosts.',
+                'hosts' => [
+                    ['type' => 'hook', 'name' => 'WeShop_Subscription::frontend::layouts::subscription::page-before'],
+                    ['type' => 'hook', 'name' => 'WeShop_Subscription::frontend::layouts::subscription::item-after'],
+                ],
+            ],
         ],
     ],
 ];
