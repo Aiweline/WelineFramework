@@ -7,11 +7,12 @@ namespace WeShop\Subscription\Service;
 use WeShop\Subscription\Model\Subscription;
 use WeShop\Subscription\Model\SubscriptionHistory;
 use WeShop\Subscription\Model\SubscriptionPlan;
-use Weline\Framework\Manager\ObjectManager;
 
 class SubscriptionDetailPageDataService
 {
     public function __construct(
+        private readonly Subscription $subscription,
+        private readonly SubscriptionPlan $subscriptionPlan,
         private readonly SubscriptionService $subscriptionService
     ) {
     }
@@ -21,8 +22,7 @@ class SubscriptionDetailPageDataService
      */
     public function build(int $customerId, int $subscriptionId): array
     {
-        /** @var Subscription $subscription */
-        $subscription = ObjectManager::getInstance(Subscription::class);
+        $subscription = $this->subscription->clear();
         $subscription->load($subscriptionId);
 
         if (!$subscription->getId()) {
@@ -33,8 +33,7 @@ class SubscriptionDetailPageDataService
             throw new \RuntimeException((string) __('You do not have permission to view this subscription.'));
         }
 
-        /** @var SubscriptionPlan $plan */
-        $plan = ObjectManager::getInstance(SubscriptionPlan::class);
+        $plan = $this->subscriptionPlan->clear();
         $plan->load((int) $subscription->getData(Subscription::schema_fields_PLAN_ID));
 
         $history = $this->subscriptionService->getSubscriptionHistory((int) $subscription->getId(), 1, 20);
