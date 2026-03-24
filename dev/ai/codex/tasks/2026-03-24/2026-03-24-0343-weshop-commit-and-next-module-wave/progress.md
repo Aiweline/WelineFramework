@@ -1,0 +1,112 @@
+# Progress - weshop-commit-and-next-module-wave
+
+- 2026-03-24 03:43 Created the task workspace.
+- 2026-03-24 03:44 Re-read workspace startup context, confirmed only the `default` WLS instance is running on `9981`, and noted that the requested acceptance runtime `9982` is not currently alive.
+- 2026-03-24 03:45 Audited the dirty worktree and found mixed WeShop, WLS, Websites, i18n, memory, and temp-file drift, so the next commit must be white-list staged.
+- 2026-03-24 03:47 Isolated the independent WLS shared-state runtime slice as the only currently validated non-WeShop checkpoint candidate.
+- 2026-03-24 03:49 Focused validation for the WLS slice passed:
+- `php -l app/code/Weline/Server/Service/SharedStateServiceManager.php`
+- `php -l app/code/Weline/Server/Service/SharedStateServiceRegistry.php`
+- `php -l app/code/Weline/Server/Console/Server/Start.php`
+- `php vendor/bin/phpunit --no-coverage app/code/Weline/Server/Test/Unit/Service/SharedStateServiceManagerTest.php app/code/Weline/Server/Test/Unit/Console/StartSharedStateRuntimeConfigTest.php app/code/Weline/Server/Test/Unit/Service/ServiceOrchestratorStartupTest.php --colors=never`
+- 2026-03-24 03:52 Checkpointed the isolated runtime slice as commit `babdddfe` (`feat(wls): decouple shared state services`) without mixing the remaining WeShop/Websites/i18n/temp-file drift.
+- 2026-03-24 03:50 Next step is to checkpoint the WLS slice, then resume the WeShop module wave from the next incomplete backend/storefront/admin slice.
+- 2026-03-24 04:02 Audited the next WeShop candidates and confirmed the cleanest backend/admin gaps are `GiftCard`, `Affiliate`, `Membership`, and `B2B`.
+- 2026-03-24 04:07 Implemented the `WeShop_GiftCard` backend/admin slice locally:
+- added `etc/backend/menu.xml`
+- added backend controllers `Backend/GiftCard/Index.php` and `Backend/GiftCard/Save.php`
+- added `GiftCardAdminPageDataService`
+- expanded `GiftCardService` with backend list/summary/load/save/status helpers
+- added backend template `view/backend/templates/gift-card/index.phtml`
+- added backend unit tests for the controller and page-data service
+- 2026-03-24 04:09 Validation for the GiftCard slice passed:
+- `php -l app/code/WeShop/GiftCard/Service/GiftCardService.php`
+- `php -l app/code/WeShop/GiftCard/Service/GiftCardAdminPageDataService.php`
+- `php -l app/code/WeShop/GiftCard/Controller/Backend/GiftCard/Index.php`
+- `php -l app/code/WeShop/GiftCard/Controller/Backend/GiftCard/Save.php`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/GiftCard/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-24 04:14 Checkpointed the `WeShop_GiftCard` backend/admin slice as commit `b73e8173` (`feat(weshop): add gift card admin management`) using white-list staging only, explicitly excluding the unrelated dirty GiftCard i18n files.
+- 2026-03-24 04:10 Parallel codebase audits concluded:
+- `Affiliate` is missing the admin slice entirely but is otherwise ready for a Logistics-style backend module.
+- `Membership` is the best follow-up slice after GiftCard/Affiliate because it already has coherent storefront/default-theme coverage and a bounded backend/admin gap.
+- 2026-03-24 04:19 Implemented the `WeShop_Membership` backend/admin slice locally:
+- added `etc/backend/menu.xml`
+- added backend controllers `Backend/Membership/Index.php` and `Backend/Membership/Save.php`
+- added `MembershipAdminPageDataService`
+- expanded `MembershipService` with level/list/summary/load/save helpers
+- added backend template `view/backend/templates/membership/index.phtml`
+- added backend unit tests for the controller and page-data service
+- 2026-03-24 04:21 Validation for the Membership slice passed:
+- `php -l app/code/WeShop/Membership/Service/MembershipService.php`
+- `php -l app/code/WeShop/Membership/Service/MembershipAdminPageDataService.php`
+- `php -l app/code/WeShop/Membership/Controller/Backend/Membership/Index.php`
+- `php -l app/code/WeShop/Membership/Controller/Backend/Membership/Save.php`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Membership/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-24 04:23 Checkpointed the `WeShop_Membership` backend/admin slice as commit `3397ff41` (`feat(weshop): add membership admin management`) with white-list staging only, again excluding unrelated i18n drift.
+- 2026-03-24 04:27 Fixed the `WeShop_B2B` storefront consistency gap where the account-center card looked up companies by username while the page controller used email; the hook template now prefers email with username fallback.
+- 2026-03-24 04:28 Added `WeShop\B2B\Test\Unit\View\AccountOrdersCardEmailLookupTest` and re-ran focused B2B PHPUnit coverage:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/B2B/Test/Unit/View/AccountOrdersCardEmailLookupTest.php app/code/WeShop/B2B/Test/Unit/Service/CompanyPageDataServiceTest.php app/code/WeShop/B2B/Test/Unit/Controller/Frontend/B2B/IndexTest.php --colors=never`
+- 2026-03-24 04:29 Checkpointed the B2B compatibility fix as commit `766935d7` (`fix(weshop): align b2b email lookups`).
+- 2026-03-24 04:34 Integrated the parallel `WeShop_Affiliate` backend/admin slice from the worker, then locally tightened it by adding controller existence tests and switching the backend page render to an explicit module-template path.
+- 2026-03-24 04:35 Validation for the Affiliate slice passed:
+- `php -l app/code/WeShop/Affiliate/Service/AffiliateService.php`
+- `php -l app/code/WeShop/Affiliate/Service/AffiliateAdminPageDataService.php`
+- `php -l app/code/WeShop/Affiliate/Controller/Backend/Affiliate/Index.php`
+- `php -l app/code/WeShop/Affiliate/Controller/Backend/Affiliate/Save.php`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Affiliate/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-24 04:37 Checkpointed the `WeShop_Affiliate` backend/admin slice as commit `478b66c8` (`feat(weshop): add affiliate admin management`) with white-list staging only, excluding task-workspace files and unrelated i18n drift.
+- 2026-03-24 16:02 Re-loaded the workspace/task state after the latest user push and re-ran the framework skill routing for the current B2B follow-up slice.
+- 2026-03-24 16:05 Confirmed the next bounded gap is the missing `WeShop_B2B` backend/admin management slice; the storefront page and account-center hook already existed, but admin menu/controller/template/page-data coverage did not.
+- 2026-03-24 16:08 Added red-first backend B2B unit tests for `CompanyAdminPageDataService` plus backend company controller existence/method coverage, then ran `php vendor/bin/phpunit --no-coverage app/code/WeShop/B2B/Test/Unit --colors=never` to confirm the expected failures.
+- 2026-03-24 16:16 Implemented the `WeShop_B2B` backend/admin slice locally:
+- added `etc/backend/menu.xml`
+- added backend controllers `Backend/Company/Index.php` and `Backend/Company/Save.php`
+- added `CompanyAdminPageDataService`
+- expanded `CompanyService` with status options, admin list/summary/load/save helpers, and stronger company name/contact-email validation
+- added backend template `view/backend/templates/company/index.phtml`
+- added backend unit tests for the controller and page-data service
+- 2026-03-24 16:17 Validation for the B2B slice passed:
+- `php -l app/code/WeShop/B2B/Service/CompanyService.php`
+- `php -l app/code/WeShop/B2B/Service/CompanyAdminPageDataService.php`
+- `php -l app/code/WeShop/B2B/Controller/Backend/Company/Index.php`
+- `php -l app/code/WeShop/B2B/Controller/Backend/Company/Save.php`
+- `php -l app/code/WeShop/B2B/view/backend/templates/company/index.phtml`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/B2B/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- 2026-03-24 16:19 Re-checked runtime status and confirmed the intended acceptance instance is currently healthy on `https://127.0.0.1:9982`.
+- 2026-03-24 16:20 Parallel theme audit found a real follow-up gap: `ThemeCompatibilityService` currently misses account-center and B2B page hook hosts because the manifest lacks those page types and the scanner only inspects `layouts/*`, not the `pages/*` templates that actually host these hooks.
+- 2026-03-24 17:05 Re-loaded the current workspace again, aligned with the `9982` runtime note, and narrowed the next critical-path slice to `WeShop_Payment` provider completion plus checkout/default-theme payment follow-through.
+- 2026-03-24 17:09 Loaded the minimal repo skill set for this slice (`unified-query-provider`, `extension-points`, `theme-development`, `testing`) and delegated two parallel read-only audits: checkout/payment host integrity and next-module prioritization.
+- 2026-03-24 17:12 Added red-first tests for payment provider context propagation, Alipay / WeChat Pay behavior, payment callback raw-body parsing, runtime checkout currency resolution, checkout redirect payloads, and default-theme checkout submit behavior.
+- 2026-03-24 17:20 Implemented the local payment/checkout slice:
+- extended `PaymentProviderInterface` with provider context support and added `ProviderContextHelperTrait`
+- upgraded `PaymentService` with required-config metadata, configuration-state tracking, and provider-context propagation
+- replaced the TODO placeholders in `WeShop_Payment` `Alipay` and `WeChatPay` with real payload building, callback normalization, status mapping, and gateway request hooks
+- updated `WeShop_Payment\Controller\Frontend\Payment\Callback` to merge parsed body, raw body, and content type
+- updated `WeShop_Checkout` page-data to use runtime currency instead of a hard-coded `USD`
+- updated `WeShop_Checkout\Controller\Frontend\Checkout\PlaceOrder` to pass runtime currency and client IP into payment processing and to surface top-level redirect URLs
+- updated `app/design/WeShop/default/frontend/pages/checkout/index.phtml` so the default checkout page now AJAX-submits and redirects to either the payment gateway or `checkout/success`
+- 2026-03-24 17:25 Validation for the payment/checkout slice passed:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Payment/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `curl.exe -k -I https://127.0.0.1:9982/` returned `HTTP/1.1 404 Not Found` with WLS headers, confirming the intended runtime on `9982` is alive even though the bare root path is unmapped
+- 2026-03-24 17:31 Sidecar audit conclusions:
+- the main default checkout page host chain is now coherent, but `ThemeCompatibilityService` still models checkout mostly at the layout-host level and does not separately track the page-level `payment-methods` / `payment-details` hosts
+- `WeShop_Search` is the next highest-value unfinished module because Elasticsearch / Algolia engines are still TODO while the backend configuration surface is already exposed
+- 2026-03-24 19:33 Recovered the current session context from the task workspace and daily memory, confirmed the repo still has a heavily mixed dirty worktree, and decided to close the already-finished `WeShop_Search` slice before moving to the next module.
+- 2026-03-24 19:36 Re-loaded the minimal repo skills for this slice (`testing`, `theme-development`, `weline-routing`) so the Search checkpoint stays aligned with TDD, clean storefront routes, and default-theme template rules.
+- 2026-03-24 19:38 Started two parallel read-only audits for the next module wave:
+- `WeShop_Analytics` audit for menu/default-theme/API/provider gaps
+- `WeShop_Order` audit for state machine / retry payment / unified API gaps
+- 2026-03-24 19:41 Re-validated the full `WeShop_Search` checkpoint locally:
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Search/Test/Unit --colors=never` -> `16 tests / 60 assertions`
+- `php tests/e2e/framework/preflight-refresh.php` -> passed
+- `php bin/w server:reload --no-wait` -> accepted by the live runtime
+- `curl.exe -k -i https://127.0.0.1:9982/search` -> `200 OK`
+- `curl.exe -k -i "https://127.0.0.1:9982/search/suggest?q=bag&limit=3"` -> `200 OK`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-search.spec.js` -> `1 passed`
+- 2026-03-24 19:42 Next immediate step is to white-list stage the Search slice plus this task workspace update, commit it cleanly, then continue from the stronger of the `Analytics` / `Order` audits.

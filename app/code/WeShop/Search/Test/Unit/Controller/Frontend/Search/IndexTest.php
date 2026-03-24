@@ -37,11 +37,11 @@ class IndexTest extends TestCase
 
         $controller = $this->getMockBuilder(Index::class)
             ->setConstructorArgs([$pageDataService])
-            ->onlyMethods(['assign', 'fetch'])
+            ->onlyMethods(['assign', 'renderPage'])
             ->getMock();
 
         $controller->expects($this->exactly(3))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->once())->method('renderPage')->willReturn('page');
         $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('page', $controller->index());

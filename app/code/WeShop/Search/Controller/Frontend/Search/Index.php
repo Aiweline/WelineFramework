@@ -9,6 +9,8 @@ use WeShop\Search\Service\SearchPageDataService;
 
 class Index extends BaseController
 {
+    protected const CONTENT_TEMPLATE = 'templates/Frontend/Search/index';
+
     protected ?string $layoutType = 'search';
 
     public function __construct(
@@ -29,7 +31,7 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->renderPage();
     }
 
     /**
@@ -57,5 +59,10 @@ class Index extends BaseController
     private function readPositiveInt(string $field, int $default): int
     {
         return max(1, (int) ($this->request->getParam($field) ?? $default));
+    }
+
+    protected function renderPage(): string
+    {
+        return $this->fetchTemplateWithEvents(self::CONTENT_TEMPLATE);
     }
 }
