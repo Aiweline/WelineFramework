@@ -2,132 +2,149 @@
 
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归WeShop所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：2024/01/15
- * 描述：库存源管理控制器
- */
-
 namespace WeShop\Inventory\Controller\Backend\Inventory;
 
-use Weline\Framework\App\Controller\BackendController;
-use WeShop\Inventory\Model\Source as SourceModel;
+use WeShop\Inventory\Service\SourceAdminPageDataService;
+use WeShop\Inventory\Service\SourceManagementService;
+use Weline\Admin\Controller\BaseController;
 
-class Source extends BackendController
+class Source extends BaseController
 {
-    private SourceModel $source;
-
-    public function __construct(SourceModel $source)
-    {
-        $this->source = $source;
+    public function __construct(
+        private readonly SourceManagementService $sourceManagementService,
+        private readonly SourceAdminPageDataService $sourceAdminPageDataService
+    ) {
     }
 
-    /**
-     * 库存源列表
-     */
-    public function index()
+    public function index(): string
     {
-        $sources = $this->source->reset()
-            ->pagination()
-            ->order(SourceModel::schema_fields_PRIORITY, 'ASC')
-            ->select()
-            ->fetch()
-            ->getItems();
+        $page = max(1, (int) $this->request->getParam('page', 1));
+        $pageSize = max(1, (int) $this->request->getParam('page_size', 20));
+        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
 
-        $this->assign('sources', $sources);
-        $this->assign('pagination', $this->source->getPagination());
-        return $this->fetch();
+        $this->assign(array_merge(
+            [
+                'title' => (string) __('Inventory Sources'),
+                'sourceIndexUrl' => $sourceIndexUrl,
+                'sourceAddUrl' => $this->getBackendUrl('*/backend/inventory/source/add'),
+            ],
+            $this->sourceAdminPageDataService->getListData($page, $pageSize)
+        ));
+
+        return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/index.phtml');
     }
 
-    /**
-     * 添加库存源
-     */
-    public function add()
+    public function add(): string
     {
-        if ($this->request->isPost()) {
-            try {
-                $data = $this->request->getPost();
-                $this->source->reset()
-                    ->clearData()
-                    ->setModelData($data)
-                    ->save();
-
-                $this->getMessageManager()->addSuccess(__('库存源添加成功！'));
-                $this->redirect('*/backend/inventory/source/edit', ['id' => $this->source->getId()]);
-            } catch (\Exception $e) {
-                $this->getMessageManager()->addError(__('库存源添加失败！') . (DEV ? $e->getMessage() : ''));
-                $this->assign('source', $this->request->getPost());
-            }
-        }
-
-        $this->assign('action', $this->request->getUrlBuilder()->getCurrentUrl());
-        return $this->fetch('form');
-    }
-
-    /**
-     * 编辑库存源
-     */
-    public function edit()
-    {
-        $id = (int)$this->request->getGet('id');
+        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
 
         if ($this->request->isPost()) {
             try {
-                $data = $this->request->getPost();
-                $this->source->load($id);
-                if (!$this->source->getId()) {
-                    throw new \Exception(__('库存源不存在！'));
-                }
-                $this->source->setModelData($data)->save();
-                $this->getMessageManager()->addSuccess(__('库存源保存成功！'));
-            } catch (\Exception $e) {
-                $this->getMessageManager()->addError(__('库存源保存失败！') . (DEV ? $e->getMessage() : ''));
+                $source = $this->sourceManagementService->saveSource($this->collectSourcePayload());
+                $this->getMessageManager()->addSuccess(__('Inventory source created.'));
+                $this->redirect('*/backend/inventory/source/edit', ['id' => $source->getId()]);
+                return '';
+            } catch (\Throwable $throwable) {
+                $this->getMessageManager()->addError($throwable->getMessage() ?: __('Unable to create inventory source.'));
+                $this->assign('source', $this->collectSourcePayload());
             }
-            $this->redirect('*/backend/inventory/source/edit', ['id' => $id]);
+        } else {
+            $this->assign('source', $this->sourceManagementService->getEmptySourceData());
         }
 
-        $source = $this->source->load($id);
-        if (!$source->getId()) {
-            $this->getMessageManager()->addError(__('库存源不存在！'));
-            $this->redirect('*/backend/inventory/source');
-        }
+        $this->assign([
+            'title' => (string) __('Create Inventory Source'),
+            'action' => (string) $this->request->getUrlBuilder()->getCurrentUrl(),
+            'sourceIndexUrl' => $sourceIndexUrl,
+        ]);
 
-        $this->assign('source', $source);
-        $this->assign('action', $this->request->getUrlBuilder()->getCurrentUrl());
-        return $this->fetch('form');
+        return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/form.phtml');
     }
 
-    /**
-     * 删除库存源
-     */
-    public function getDelete()
+    public function edit(): string
     {
-        $id = (int)$this->request->getGet('id');
-        $source = $this->source->load($id);
-
-        if (!$source->getId()) {
-            $this->getMessageManager()->addError(__('库存源不存在！'));
-            $this->redirect('*/backend/inventory/source');
+        $sourceId = (int) $this->request->getParam('id', 0);
+        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
+        if ($sourceId <= 0) {
+            $this->getMessageManager()->addError(__('Invalid source id.'));
+            $this->redirect($sourceIndexUrl);
+            return '';
         }
 
-        // 不允许删除默认库存源
-        if ($source->getCode() === 'default') {
-            $this->getMessageManager()->addError(__('默认库存源不能删除！'));
-            $this->redirect('*/backend/inventory/source');
+        if ($this->request->isPost()) {
+            try {
+                $this->sourceManagementService->saveSource($this->collectSourcePayload(), $sourceId);
+                $this->getMessageManager()->addSuccess(__('Inventory source saved.'));
+                $this->redirect('*/backend/inventory/source/edit', ['id' => $sourceId]);
+                return '';
+            } catch (\Throwable $throwable) {
+                $this->getMessageManager()->addError($throwable->getMessage() ?: __('Unable to save inventory source.'));
+                $this->assign('source', array_merge($this->collectSourcePayload(), ['source_id' => $sourceId]));
+            }
+        } else {
+            try {
+                $this->assign('source', $this->sourceAdminPageDataService->getEditData($sourceId));
+            } catch (\Throwable $throwable) {
+                $this->getMessageManager()->addError($throwable->getMessage() ?: __('Inventory source not found.'));
+                $this->redirect($sourceIndexUrl);
+                return '';
+            }
         }
+
+        $this->assign([
+            'title' => (string) __('Edit Inventory Source'),
+            'action' => (string) $this->request->getUrlBuilder()->getCurrentUrl(),
+            'sourceIndexUrl' => $sourceIndexUrl,
+        ]);
+
+        return (string) $this->fetchBase('WeShop_Inventory::backend/templates/inventory/source/form.phtml');
+    }
+
+    public function postDelete(): string
+    {
+        return $this->deleteAction();
+    }
+
+    public function getDelete(): string
+    {
+        // Keep GET compatibility for existing links while delegating to a single deletion flow.
+        return $this->deleteAction();
+    }
+
+    private function deleteAction(): string
+    {
+        $sourceId = (int) $this->request->getParam('id', 0);
+        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
 
         try {
-            $source->delete();
-            $this->getMessageManager()->addSuccess(__('库存源删除成功！'));
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError(__('库存源删除失败！') . (DEV ? $e->getMessage() : ''));
+            $this->sourceManagementService->deleteSource($sourceId);
+            $this->getMessageManager()->addSuccess(__('Inventory source deleted.'));
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage() ?: __('Unable to delete inventory source.'));
         }
 
-        $this->redirect('*/backend/inventory/source');
+        $this->redirect($sourceIndexUrl);
+        return '';
+    }
+
+    private function collectSourcePayload(): array
+    {
+        return [
+            'code' => $this->request->getParam('code', ''),
+            'name' => $this->request->getParam('name', ''),
+            'description' => $this->request->getParam('description', ''),
+            'country' => $this->request->getParam('country', ''),
+            'region' => $this->request->getParam('region', ''),
+            'city' => $this->request->getParam('city', ''),
+            'address' => $this->request->getParam('address', ''),
+            'postcode' => $this->request->getParam('postcode', ''),
+            'phone' => $this->request->getParam('phone', ''),
+            'email' => $this->request->getParam('email', ''),
+            'contact_name' => $this->request->getParam('contact_name', ''),
+            'is_enabled' => $this->request->getParam('is_enabled', 1),
+            'priority' => $this->request->getParam('priority', 0),
+            'use_default_carrier' => $this->request->getParam('use_default_carrier', 1),
+        ];
     }
 }
 
