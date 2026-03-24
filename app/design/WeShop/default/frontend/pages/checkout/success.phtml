@@ -185,11 +185,11 @@ $recommendations = $this->getData('recommendations') ?? [];
     
     <!-- Actions -->
     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="<?= $this->getUrl('customer/account/orders') ?>" class="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors">
+        <a href="<?= $this->getUrl('weshop/order/list') ?>" class="flex items-center justify-center gap-2 px-6 py-3 bg-primary text-white font-bold rounded-lg hover:bg-primary/90 transition-colors">
             <span class="material-symbols-outlined">receipt_long</span>
             <?= __('View Order Details') ?>
         </a>
-        <a href="<?= $this->getUrl('catalog') ?>" class="flex items-center justify-center gap-2 px-6 py-3 border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold rounded-lg hover:bg-background-light dark:hover:bg-background-dark transition-colors">
+        <a href="<?= $this->getUrl('weshop') ?>" class="flex items-center justify-center gap-2 px-6 py-3 border border-border-light dark:border-border-dark text-text-primary-light dark:text-text-primary-dark font-bold rounded-lg hover:bg-background-light dark:hover:bg-background-dark transition-colors">
             <span class="material-symbols-outlined">shopping_bag</span>
             <?= __('Continue Shopping') ?>
         </a>

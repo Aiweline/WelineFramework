@@ -23,6 +23,8 @@ use WeShop\Catalog\Service\CategoryService;
  */
 class ProductList extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Product::templates/frontend/product/list/index.phtml';
+
     /**
      * 布局类型
      * Theme模块会根据此类型从主题配置中加载对应的布局
@@ -138,7 +140,7 @@ class ProductList extends BaseController
         
         // Theme模块会自动根据 layoutType 和主题配置加载对应的布局
         // 布局文件路径：app/design/WeShop/default/frontend/layouts/product_list/product_listing_page_{variant}.phtml
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 
 }

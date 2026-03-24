@@ -7,6 +7,7 @@ namespace WeShop\Checkout\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Order\Model\Order;
+use WeShop\Order\Service\OrderService;
 
 class CheckoutServiceTest extends TestCase
 {
@@ -37,11 +38,22 @@ class CheckoutServiceTest extends TestCase
 
         $queries = [];
 
-        $service = new class($order, $queries) extends CheckoutService {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('updatePaymentStatus')
+            ->with(88, OrderService::PAYMENT_STATUS_PENDING);
+        $orderService->expects($this->once())
+            ->method('getOrder')
+            ->with(88)
+            ->willReturn($order);
+
+        $service = new class($orderService, $order, $queries) extends CheckoutService {
             public function __construct(
+                OrderService $orderService,
                 private readonly Order $fakeOrder,
                 private array &$queries
             ) {
+                parent::__construct($orderService);
             }
 
             public function createOrderFromCart(int $customerId, array $checkoutData): Order
@@ -85,7 +97,14 @@ class CheckoutServiceTest extends TestCase
 
     public function testGetCheckoutPaymentMethodsDelegatesToPaymentQueryProvider(): void
     {
-        $service = new class() extends CheckoutService {
+        $orderService = $this->createMock(OrderService::class);
+
+        $service = new class($orderService) extends CheckoutService {
+            public function __construct(OrderService $orderService)
+            {
+                parent::__construct($orderService);
+            }
+
             protected function query(string $provider, string $operation, array $params = []): mixed
             {
                 return [
@@ -109,7 +128,14 @@ class CheckoutServiceTest extends TestCase
 
     public function testGetCheckoutShippingMethodsDelegatesToShippingQueryProvider(): void
     {
-        $service = new class() extends CheckoutService {
+        $orderService = $this->createMock(OrderService::class);
+
+        $service = new class($orderService) extends CheckoutService {
+            public function __construct(OrderService $orderService)
+            {
+                parent::__construct($orderService);
+            }
+
             protected function query(string $provider, string $operation, array $params = []): mixed
             {
                 return [

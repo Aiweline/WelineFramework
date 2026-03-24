@@ -6,6 +6,9 @@ $savedAddresses = $this->getData('saved_addresses') ?? [];
 $shippingMethods = $this->getData('shipping_methods') ?? [];
 $paymentMethods = $this->getData('payment_methods') ?? [];
 $countries = $this->getData('countries') ?? [];
+$isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
+$retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
+$retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
 ?>
 <w:hook name="WeShop_Checkout::page::before"/>
 
@@ -192,6 +195,16 @@ $countries = $this->getData('countries') ?? [];
 
 <div class="weshop-checkout-page">
     <form class="weshop-checkout-stack" id="weshop-checkout-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
+        <?php if ($isRetryPayment && $retryOrderId > 0): ?>
+            <input type="hidden" name="order_id" value="<?= $retryOrderId ?>">
+            <section class="weshop-checkout-card">
+                <h2><?= __('Retry Payment') ?></h2>
+                <div class="weshop-checkout-empty" style="background:#ecfeff;color:#155e75;">
+                    <?= __('You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one.', [$retryOrderIncrementId !== '' ? $retryOrderIncrementId : (string) $retryOrderId]) ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
         <section class="weshop-checkout-card">
             <h2><?= __('Shipping Address') ?></h2>
 

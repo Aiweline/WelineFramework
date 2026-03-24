@@ -43,5 +43,7 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('weshop-checkout-form', $template);
         $this->assertStringContainsString('checkout/success', $template);
         $this->assertStringContainsString('redirect_url', $template);
+        $this->assertStringContainsString("name=\"order_id\"", $template);
+        $this->assertStringContainsString('Retry Payment', $template);
     }
 }

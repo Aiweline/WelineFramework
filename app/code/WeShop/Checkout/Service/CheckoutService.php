@@ -5,11 +5,16 @@ declare(strict_types=1);
 namespace WeShop\Checkout\Service;
 
 use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
+use WeShop\Order\Service\OrderService;
 
 class CheckoutService
 {
+    public function __construct(
+        private readonly OrderService $orderService
+    ) {
+    }
+
     public function createOrderFromCart(int $customerId, array $checkoutData): Order
     {
         $cartItems = $this->query('cart', 'getCartItems', [
@@ -34,14 +39,12 @@ class CheckoutService
             'grand_total' => (float) ($totals['total'] ?? 0),
         ];
 
-        $orderData = [
-            'customer_id' => $customerId,
-            'status' => 'pending',
-            'total' => $summary['grand_total'],
-        ];
-
         $orderSummary = $this->query('order', 'createOrder', [
-            'order_data' => $orderData,
+            'order_data' => [
+                'customer_id' => $customerId,
+                'status' => OrderService::STATUS_PENDING,
+                'total' => $summary['grand_total'],
+            ],
         ]);
         if (!\is_array($orderSummary) || (int) ($orderSummary['order_id'] ?? 0) <= 0) {
             throw new \Exception((string) __('Order creation failed.'));
@@ -78,18 +81,11 @@ class CheckoutService
             'customer_id' => $customerId,
         ]);
 
-        /** @var Order $order */
-        $order = ObjectManager::getInstance(Order::class);
-        $order->load($orderId);
-        if (!$order->getId()) {
-            $order->setData(Order::schema_fields_ID, $orderId)
-                ->setData(Order::schema_fields_increment_id, (string) ($orderSummary['increment_id'] ?? ''))
-                ->setData(Order::schema_fields_customer_id, (int) ($orderSummary['customer_id'] ?? $customerId))
-                ->setData(Order::schema_fields_status, (string) ($orderSummary['status'] ?? 'pending'))
-                ->setData(Order::schema_fields_total, (float) ($orderSummary['total'] ?? 0))
-                ->setData(Order::schema_fields_created_at, (string) ($orderSummary['created_at'] ?? ''))
-                ->setData(Order::schema_fields_updated_at, (string) ($orderSummary['updated_at'] ?? ''));
+        $order = $this->orderService->getOrder($orderId);
+        if (!$order) {
+            throw new \Exception((string) __('Order creation failed.'));
         }
+
         $order->setData('weshop_checkout_summary', $summary);
 
         EventsManager::getInstance()->dispatch('WeShop_Checkout::order_created', [
@@ -113,14 +109,25 @@ class CheckoutService
             throw new \InvalidArgumentException((string) __('A customer account is required to place an order.'));
         }
 
-        $order = $this->createOrderFromCart($customerId, $checkoutData);
+        $retryOrderId = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
+        $isRetryPayment = $retryOrderId > 0;
+
+        $order = $isRetryPayment
+            ? $this->reuseRetryPaymentOrder($customerId, $retryOrderId)
+            : $this->createOrderFromCart($customerId, $checkoutData);
+
         $payment = $this->query('payment', 'processPayment', [
             'order' => $order,
             'payment_method' => (string) ($checkoutData['payment_method'] ?? ''),
             'payment_data' => $checkoutData,
         ]);
-
         $payment = \is_array($payment) ? $payment : [];
+
+        $paymentStatus = (string) ($payment['status'] ?? '');
+        if ($paymentStatus !== '') {
+            $this->orderService->updatePaymentStatus((int) $order->getId(), $this->normalizePaymentStatus($paymentStatus));
+            $order = $this->orderService->getOrder((int) $order->getId()) ?? $order;
+        }
 
         return [
             'order' => $order,
@@ -133,6 +140,7 @@ class CheckoutService
                 'title' => (string) ($payment['payment_method_title'] ?? $payment['title'] ?? $checkoutData['payment_method'] ?? ''),
                 'description' => (string) ($payment['description'] ?? ''),
             ],
+            'is_retry_payment' => $isRetryPayment,
         ];
     }
 
@@ -188,8 +196,34 @@ class CheckoutService
         $checkoutData['shipping_address'] = $shippingAddress;
         $checkoutData['shipping_method'] = (string) ($checkoutData['shipping_method'] ?? '');
         $checkoutData['payment_method'] = (string) ($checkoutData['payment_method'] ?? '');
+        $checkoutData['order_id'] = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
 
         return $checkoutData;
+    }
+
+    protected function reuseRetryPaymentOrder(int $customerId, int $orderId): Order
+    {
+        $context = $this->orderService->getRetryPaymentContext($orderId, $customerId);
+        if (!\is_array($context) || !($context['order'] ?? null) instanceof Order) {
+            throw new \InvalidArgumentException((string) __('This order can no longer be retried.'));
+        }
+
+        /** @var Order $order */
+        $order = $context['order'];
+        $order->setData('weshop_checkout_summary', $context['summary'] ?? []);
+
+        return $order;
+    }
+
+    protected function normalizePaymentStatus(string $paymentStatus): string
+    {
+        return match (strtolower($paymentStatus)) {
+            'paid', 'success', 'completed' => OrderService::PAYMENT_STATUS_PAID,
+            'refunded' => OrderService::PAYMENT_STATUS_REFUNDED,
+            'failed', 'error' => OrderService::PAYMENT_STATUS_FAILED,
+            'partial' => OrderService::PAYMENT_STATUS_PARTIAL,
+            default => OrderService::PAYMENT_STATUS_PENDING,
+        };
     }
 
     protected function readOrderIncrementId(Order $order): string
@@ -207,7 +241,7 @@ class CheckoutService
     protected function readOrderSummary(Order $order): array
     {
         $summary = $order->getData('weshop_checkout_summary');
-        if (is_array($summary)) {
+        if (\is_array($summary)) {
             return [
                 'subtotal' => (float) ($summary['subtotal'] ?? 0),
                 'shipping' => (float) ($summary['shipping'] ?? 0),

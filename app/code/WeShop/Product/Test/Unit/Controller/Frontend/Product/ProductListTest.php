@@ -5,180 +5,236 @@ declare(strict_types=1);
 namespace WeShop\Product\Test\Unit\Controller\Frontend\Product;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Catalog\Model\Category;
+use WeShop\Catalog\Service\CategoryService;
 use WeShop\Product\Controller\Frontend\Product\ProductList;
 use WeShop\Product\Service\ProductService;
-use WeShop\Catalog\Service\CategoryService;
 use Weline\Framework\Http\Request;
 
-/**
- * 产品列表页控制器单元测试
- * 
- * 测试产品列表页控制器的核心功能：
- * - 页面正常加载
- * - 筛选功能
- * - 排序功能
- * - 分页功能
- */
 class ProductListTest extends TestCase
 {
-    private ProductList $controller;
-    private ProductService $productService;
-    private CategoryService $categoryService;
-    private Request $request;
+    private const CONTENT_TEMPLATE = 'WeShop_Product::templates/frontend/product/list/index.phtml';
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        
-        $this->request = $this->createMock(Request::class);
-        $this->productService = $this->createMock(ProductService::class);
-        $this->categoryService = $this->createMock(CategoryService::class);
-        
-        $this->controller = $this->getMockBuilder(ProductList::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods([
-                'getRequest',
-                'assign',
-                'fetch',
-                'getUrl'
-            ])
-            ->getMock();
-    }
-
-    protected function tearDown(): void
-    {
-        $this->controller = null;
-        $this->productService = null;
-        $this->categoryService = null;
-        $this->request = null;
-        
-        parent::tearDown();
-    }
-
-    /**
-     * 测试：控制器类存在
-     */
     public function testControllerClassExists(): void
     {
         $this->assertTrue(class_exists(ProductList::class));
     }
 
-    /**
-     * 测试：控制器继承 BaseController
-     */
     public function testControllerExtendsBaseController(): void
     {
         $reflection = new \ReflectionClass(ProductList::class);
         $this->assertTrue($reflection->isSubclassOf(\WeShop\Frontend\Controller\BaseController::class));
     }
 
-    /**
-     * 测试：控制器有 index 方法
-     */
     public function testControllerHasIndexMethod(): void
     {
         $reflection = new \ReflectionClass(ProductList::class);
         $this->assertTrue($reflection->hasMethod('index'));
     }
 
-    /**
-     * 测试：layoutType 属性设置为 'product_list'
-     */
     public function testLayoutTypeIsProductList(): void
     {
         $reflection = new \ReflectionClass(ProductList::class);
         $property = $reflection->getProperty('layoutType');
         $property->setAccessible(true);
-        
-        $controller = new ProductList();
-        $this->assertEquals('product_list', $property->getValue($controller));
+
+        $controller = new ProductList(
+            $this->createMock(ProductService::class),
+            $this->createMock(CategoryService::class)
+        );
+
+        $this->assertSame('product_list', $property->getValue($controller));
     }
 
-    /**
-     * 测试：index 方法处理默认参数（无筛选）
-     */
-    public function testIndexHandlesDefaultParameters(): void
+    public function testIndexBuildsDefaultProductListingQuery(): void
     {
-        // 设置Request返回默认值
-        $this->request->expects($this->any())
-            ->method('getParam')
-            ->willReturnMap([
-                ['category_id', null, 0],
-                ['search', null, ''],
-                ['min_price', null, 0],
-                ['max_price', null, 0],
-                ['sort', null, ''],
-                ['order', null, ''],
-                ['page', null, 1],
-                ['page_size', null, 20]
-            ]);
-        
-        $this->controller->expects($this->once())
-            ->method('getRequest')
-            ->willReturn($this->request);
-        
-        $this->controller->expects($this->any())
-            ->method('assign')
-            ->willReturnSelf();
-        
-        $this->controller->expects($this->once())
+        $productService = $this->createMock(ProductService::class);
+        $productService->expects($this->once())
+            ->method('getProducts')
+            ->with(
+                [
+                    'order_by' => 'product_id',
+                    'order_dir' => 'DESC',
+                    'status' => 'enabled',
+                ],
+                1,
+                20
+            )
+            ->willReturn($this->buildResult([
+                [
+                    'product_id' => 10,
+                    'name' => 'Starter Camera',
+                    'price' => 99.5,
+                    'stock' => 7,
+                    'image' => '/camera.jpg',
+                    'sku' => 'CAM-10',
+                ],
+            ]));
+
+        $categoryService = $this->createMock(CategoryService::class);
+        $categoryService->expects($this->never())->method('getCategory');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['page', null, null],
+            ['page_size', null, null],
+            ['category_id', null, null],
+            ['q', null, null],
+            ['search', null, null],
+            ['min_price', null, null],
+            ['max_price', null, null],
+            ['order_by', null, null],
+            ['order_dir', null, null],
+        ]);
+
+        $assigned = [];
+        $controller = $this->createController($productService, $categoryService, $request, $assigned);
+
+        $this->assertSame('html', $controller->index());
+        $this->assertSame('Starter Camera', $assigned['products'][0]['name']);
+        $this->assertTrue($assigned['products'][0]['in_stock']);
+        $this->assertNull($assigned['category']);
+        $this->assertSame('', $assigned['search']);
+        $this->assertSame('product_id', $assigned['order_by']);
+        $this->assertSame('DESC', $assigned['order_dir']);
+        $this->assertSame(1, $assigned['page']);
+        $this->assertSame(20, $assigned['page_size']);
+    }
+
+    public function testIndexAppliesCategorySearchAndPriceFilters(): void
+    {
+        $productService = $this->createMock(ProductService::class);
+        $productService->expects($this->once())
+            ->method('getProducts')
+            ->with(
+                [
+                    'category_id' => 8,
+                    'name' => 'helmet',
+                    'min_price' => 50.0,
+                    'max_price' => 200.0,
+                    'order_by' => 'price',
+                    'order_dir' => 'ASC',
+                    'status' => 'enabled',
+                ],
+                3,
+                12
+            )
+            ->willReturn($this->buildResult());
+
+        $categoryService = $this->createMock(CategoryService::class);
+        $categoryService->expects($this->once())
+            ->method('getCategory')
+            ->with(8)
+            ->willReturn(
+                $this->createConfiguredMock(Category::class, [
+                    'getData' => ['category_id' => 8, 'name' => 'Helmets'],
+                ])
+            );
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['page', null, 3],
+            ['page_size', null, 12],
+            ['category_id', null, 8],
+            ['q', null, 'helmet'],
+            ['search', null, 'legacy-search'],
+            ['min_price', null, '50'],
+            ['max_price', null, '200'],
+            ['order_by', null, 'price'],
+            ['order_dir', null, 'asc'],
+        ]);
+
+        $assigned = [];
+        $controller = $this->createController($productService, $categoryService, $request, $assigned);
+
+        $this->assertSame('html', $controller->index());
+        $this->assertSame('helmet', $assigned['search']);
+        $this->assertInstanceOf(Category::class, $assigned['category']);
+        $this->assertSame(8, $assigned['filters']['category_id']);
+        $this->assertSame(50.0, $assigned['filters']['min_price']);
+        $this->assertSame(200.0, $assigned['filters']['max_price']);
+        $this->assertSame('price', $assigned['order_by']);
+        $this->assertSame('ASC', $assigned['order_dir']);
+        $this->assertSame(3, $assigned['page']);
+        $this->assertSame(12, $assigned['page_size']);
+    }
+
+    public function testIndexFallsBackToSafeSortingWhenRequestValuesAreInvalid(): void
+    {
+        $productService = $this->createMock(ProductService::class);
+        $productService->expects($this->once())
+            ->method('getProducts')
+            ->with(
+                [
+                    'order_by' => 'product_id',
+                    'order_dir' => 'DESC',
+                    'status' => 'enabled',
+                ],
+                2,
+                30
+            )
+            ->willReturn($this->buildResult());
+
+        $categoryService = $this->createMock(CategoryService::class);
+        $categoryService->expects($this->never())->method('getCategory');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['page', null, 2],
+            ['page_size', null, 30],
+            ['category_id', null, 0],
+            ['q', null, ''],
+            ['search', null, ''],
+            ['min_price', null, 'abc'],
+            ['max_price', null, null],
+            ['order_by', null, 'dangerous_column'],
+            ['order_dir', null, 'sideways'],
+        ]);
+
+        $assigned = [];
+        $controller = $this->createController($productService, $categoryService, $request, $assigned);
+
+        $this->assertSame('html', $controller->index());
+        $this->assertArrayNotHasKey('min_price', $assigned['filters']);
+        $this->assertSame('product_id', $assigned['filters']['order_by']);
+        $this->assertSame('DESC', $assigned['filters']['order_dir']);
+        $this->assertSame(2, $assigned['page']);
+        $this->assertSame(30, $assigned['page_size']);
+    }
+
+    private function createController(
+        ProductService $productService,
+        CategoryService $categoryService,
+        Request $request,
+        array &$assigned
+    ): ProductList {
+        $controller = $this->getMockBuilder(ProductList::class)
+            ->setConstructorArgs([$productService, $categoryService])
+            ->onlyMethods(['assign', 'fetch', 'getRequest'])
+            ->getMock();
+        $controller->method('getRequest')->willReturn($request);
+        $controller->method('assign')->willReturnCallback(function (string $key, mixed $value) use (&$assigned, $controller): ProductList {
+            $assigned[$key] = $value;
+            return $controller;
+        });
+        $controller->expects($this->once())
             ->method('fetch')
-            ->willReturn('<html>Test</html>');
-        
-        // 注意：这个测试需要Mock ObjectManager和ProductService
-        // 当前实现中，ObjectManager是静态调用，难以Mock
-        $this->markTestIncomplete(
-            '需要完善Mock设置，包括ObjectManager和ProductService'
-        );
+            ->with(self::CONTENT_TEMPLATE)
+            ->willReturn('html');
+
+        return $controller;
     }
 
     /**
-     * 测试：index 方法处理分类筛选
+     * @param array<int,array<string,mixed>> $items
+     * @return array<string,mixed>
      */
-    public function testIndexHandlesCategoryFilter(): void
+    private function buildResult(array $items = []): array
     {
-        $this->markTestIncomplete(
-            '需要完善Mock设置以测试分类筛选功能'
-        );
-    }
-
-    /**
-     * 测试：index 方法处理搜索功能
-     */
-    public function testIndexHandlesSearch(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置以测试搜索功能'
-        );
-    }
-
-    /**
-     * 测试：index 方法处理排序功能
-     */
-    public function testIndexHandlesSorting(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置以测试排序功能'
-        );
-    }
-
-    /**
-     * 测试：index 方法处理分页功能
-     */
-    public function testIndexHandlesPagination(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置以测试分页功能'
-        );
-    }
-
-    /**
-     * 测试：index 方法处理价格筛选
-     */
-    public function testIndexHandlesPriceFilter(): void
-    {
-        $this->markTestIncomplete(
-            '需要完善Mock设置以测试价格筛选功能'
-        );
+        return [
+            'items' => $items,
+            'pagination' => ['current_page' => 1, 'total_pages' => 1],
+            'total' => count($items),
+        ];
     }
 }
