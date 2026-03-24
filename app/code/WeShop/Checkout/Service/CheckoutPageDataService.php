@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Service;
 
+use Weline\Framework\App\State;
 use WeShop\Address\Service\AddressService;
 use WeShop\Cart\Service\CartService;
 use WeShop\Shipping\Service\ShippingService;
@@ -61,7 +62,7 @@ class CheckoutPageDataService
             'payment_methods' => $this->mapPaymentMethods(
                 $this->checkoutService->getCheckoutPaymentMethods($customerId, [
                     'area' => 'frontend',
-                    'currency' => 'USD',
+                    'currency' => $this->resolveCheckoutCurrency(),
                 ])
             ),
             'current_step' => max(1, min(3, $currentStep)),
@@ -315,5 +316,12 @@ class CheckoutPageDataService
             'cash_on_delivery' => (string) __('Prepare the order amount for the courier when your shipment arrives.'),
             default => trim((string) ($method['description'] ?? '')),
         };
+    }
+
+    protected function resolveCheckoutCurrency(): string
+    {
+        $currency = strtoupper(trim(State::getCurrency()));
+
+        return $currency !== '' ? $currency : 'USD';
     }
 }
