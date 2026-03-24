@@ -1,0 +1,23 @@
+<?php
+/**
+ * @hook-priority 200
+ * @hook-sort-order 1
+ * @hook-solo false
+ */
+$snippets = w_query('analytics', 'getFrontendPixelSnippets', []);
+$snippets = is_array($snippets) ? $snippets : [];
+?>
+<?php foreach ($snippets as $snippet): ?>
+    <?php
+    if (!is_array($snippet)) {
+        continue;
+    }
+    $provider = trim((string) ($snippet['provider'] ?? ''));
+    $content = trim((string) ($snippet['snippet'] ?? ''));
+    if ($provider === '' || $content === '') {
+        continue;
+    }
+    ?>
+    <meta name="weshop-analytics-provider" data-weshop-analytics-provider="<?= htmlspecialchars($provider, ENT_QUOTES) ?>" content="enabled">
+    <?= $content ?>
+<?php endforeach; ?>

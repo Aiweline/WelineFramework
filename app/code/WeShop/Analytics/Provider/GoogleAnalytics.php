@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Analytics\Provider;
 
+use WeShop\Analytics\Service\AnalyticsConfigService;
 use WeShop\Analytics\Interface\PixelProviderInterface;
 use Weline\Framework\App\Env;
 
@@ -12,7 +13,8 @@ class GoogleAnalytics implements PixelProviderInterface
     public function __construct(
         private readonly ?string $measurementId = null,
         private readonly ?string $apiSecret = null,
-        private readonly ?bool $enabled = null
+        private readonly ?bool $enabled = null,
+        private readonly ?AnalyticsConfigService $analyticsConfigService = null
     ) {
     }
 
@@ -190,16 +192,28 @@ HTML;
 
     protected function readMeasurementId(): string
     {
-        return trim((string) ($this->measurementId ?? Env::getInstance()->getConfig('analytics.google.measurement_id', '')));
+        return trim((string) ($this->measurementId ?? $this->getConfigValue('measurement_id', '')));
     }
 
     protected function readApiSecret(): string
     {
-        return trim((string) ($this->apiSecret ?? Env::getInstance()->getConfig('analytics.google.api_secret', '')));
+        return trim((string) ($this->apiSecret ?? $this->getConfigValue('api_secret', '')));
     }
 
     protected function readEnabled(): bool
     {
-        return $this->enabled ?? (bool) Env::getInstance()->getConfig('analytics.google.enabled', false);
+        return $this->enabled ?? (bool) $this->getConfigValue('enabled', false);
+    }
+
+    private function getConfigValue(string $field, mixed $default): mixed
+    {
+        if ($this->analyticsConfigService) {
+            $config = $this->analyticsConfigService->getProviderConfig(AnalyticsConfigService::PROVIDER_GOOGLE);
+            if (array_key_exists($field, $config)) {
+                return $config[$field];
+            }
+        }
+
+        return Env::getInstance()->getConfig('analytics.google.' . $field, $default);
     }
 }
