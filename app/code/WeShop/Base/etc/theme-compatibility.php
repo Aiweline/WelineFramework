@@ -91,7 +91,7 @@ return [
             'WeShop_Shipping' => [
                 'description' => 'Shipping methods inject into the checkout shipping methods host.',
                 'hosts' => [
-                    ['type' => 'hook', 'name' => 'WeShop_Shipping::checkout::methods'],
+                    ['type' => 'hook', 'name' => 'WeShop_Shipping::frontend::layouts::checkout::methods'],
                 ],
             ],
         ],

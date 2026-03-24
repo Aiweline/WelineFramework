@@ -123,9 +123,10 @@ class Upgrade implements UpgradeInterface
         $userRole = ObjectManager::getInstance(UserRole::class);
         $exist = $userRole->reset()
             ->where(UserRole::schema_fields_USER_ID, 1)
+            ->where(UserRole::schema_fields_ROLE_ID, 1)
             ->find()
             ->fetch();
-        if ($exist && $exist->getData(UserRole::schema_fields_ROLE_ID)) {
+        if ($exist && $exist->getData(UserRole::schema_fields_USER_ID) && $exist->getData(UserRole::schema_fields_ROLE_ID)) {
             return;
         }
         $userRole->clear()
