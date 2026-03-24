@@ -71,6 +71,23 @@ class ViewTest extends TestCase
         $this->assertSame('detail', $controller->index());
     }
 
+    public function testRenderPageUsesModuleQualifiedOrderViewTemplate(): void
+    {
+        $controller = $this->getMockBuilder(View::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['fetchTemplateWithEvents'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('fetchTemplateWithEvents')
+            ->with('WeShop_Order::templates/Frontend/Order/View/index.phtml')
+            ->willReturn('detail');
+
+        $method = new \ReflectionMethod(View::class, 'renderPage');
+        $method->setAccessible(true);
+
+        $this->assertSame('detail', $method->invoke($controller));
+    }
+
     private function setProtectedProperty(object $target, string $property, mixed $value): void
     {
         $reflection = new \ReflectionObject($target);

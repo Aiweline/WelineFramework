@@ -11,7 +11,15 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Index extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Checkout::templates/frontend/checkout/index.phtml';
+
     protected ?string $layoutType = 'checkout';
+
+    public function __construct(
+        private ?CustomerSession $customerSession = null,
+        private ?CheckoutPageDataService $checkoutPageDataService = null
+    ) {
+    }
 
     public function index()
     {
@@ -22,11 +30,19 @@ class Index extends BaseController
         }
 
         $currentStep = max(1, min(3, (int) ($this->request->getParam('step') ?? 1)));
-        $pageData = $this->getCheckoutPageDataService()->build((int) $customer->getId(), $currentStep);
+        $retryOrderId = (int) ($this->request->getParam('order_id') ?? 0);
+        $pageData = $this->getCheckoutPageDataService()->build((int) $customer->getId(), $currentStep, $retryOrderId);
+
+        if ($retryOrderId > 0 && empty($pageData['is_retry_payment'])) {
+            $this->getMessageManager()->addError(__('This order can no longer be retried.'));
+            $this->redirect('weshop/order/list');
+            return null;
+        }
 
         if (($pageData['cart_items'] ?? []) === []) {
-            $this->getMessageManager()->addWarning(__('购物车为空，无法结账'));
-            return $this->redirect('weshop/cart');
+            $this->getMessageManager()->addWarning(__('The checkout is empty.'));
+            $this->redirect('weshop/cart');
+            return null;
         }
 
         foreach ($pageData as $key => $value) {
@@ -34,16 +50,16 @@ class Index extends BaseController
         }
         $this->assign('customer', $customer);
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 
-    protected function getCustomerSession(): CustomerSession
+    private function getCustomerSession(): CustomerSession
     {
-        return ObjectManager::getInstance(CustomerSession::class);
+        return $this->customerSession ??= ObjectManager::getInstance(CustomerSession::class);
     }
 
-    protected function getCheckoutPageDataService(): CheckoutPageDataService
+    private function getCheckoutPageDataService(): CheckoutPageDataService
     {
-        return ObjectManager::getInstance(CheckoutPageDataService::class);
+        return $this->checkoutPageDataService ??= ObjectManager::getInstance(CheckoutPageDataService::class);
     }
 }
