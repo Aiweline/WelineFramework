@@ -9,6 +9,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
+use Weline\Theme\Service\PreviewContextService;
 
 class PreviewManager
 {
@@ -131,6 +132,10 @@ class PreviewManager
      */
     public static function isPreviewMode(): bool
     {
+        if (!self::shouldUsePreviewContext()) {
+            return false;
+        }
+
         $session = ObjectManager::getInstance(Session::class);
         $themeId = $session->getData(self::SESSION_KEY_THEME_ID);
         return !empty($themeId);
@@ -143,6 +148,17 @@ class PreviewManager
         }
         $session = ObjectManager::getInstance(Session::class);
         return $session->getData(self::SESSION_KEY_PREFIX . 'scope_' . $area);
+    }
+
+    private static function shouldUsePreviewContext(): bool
+    {
+        try {
+            /** @var PreviewContextService $previewContextService */
+            $previewContextService = ObjectManager::getInstance(PreviewContextService::class);
+            return $previewContextService->shouldUseStoredContext();
+        } catch (\Throwable) {
+            return true;
+        }
     }
     
     /**
