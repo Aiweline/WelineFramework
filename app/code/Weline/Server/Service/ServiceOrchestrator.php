@@ -1301,12 +1301,24 @@ class ServiceOrchestrator
         if ($processName !== '') {
             $instance->setMeta('process_name', $processName);
         }
+        $sharedInstanceName = (string) ($sidecar['instance_name'] ?? '');
+        if ($sharedInstanceName !== '') {
+            $instance->setMeta('instance_name', $sharedInstanceName);
+            $instance->setMeta('service_instance_name', $sharedInstanceName);
+        }
         $instance->setMeta('control_capabilities', $controlCapabilities);
         $instance->setMeta('epoch', $context->epoch);
         $instance->setMeta('launch_id', $launchId);
         $instance->setMeta('shared_external', true);
         $instance->setMeta('token_file_name', (string) ($sidecar['token_file_name'] ?? $expectedTokenFileName));
         $instance->setMeta('adopted_shared_sidecar', true);
+
+        WlsLogger::info_(
+            "[Orchestrator] 共享 {$role} 已作为外部服务接入 instance={$context->instanceName}"
+            . ($sharedInstanceName !== '' ? ", shared_instance={$sharedInstanceName}" : '')
+            . ($processName !== '' ? ", process={$processName}" : '')
+            . ", port={$port}, pid=" . (int) ($sidecar['pid'] ?? 0)
+        );
 
         return $instance;
     }
@@ -1318,6 +1330,7 @@ class ServiceOrchestrator
      *   pid?: int,
      *   port?: int,
      *   role?: string,
+     *   instance_name?: string,
      *   token_file_name?: string,
      *   process_name?: string,
      *   command_line?: string
