@@ -29,7 +29,7 @@ class ProductRecommendationServiceTest extends TestCase
             ->willReturnMap([
                 [[
                     'category_id' => 8,
-                    'status' => 'enabled',
+                    'status' => 1,
                     'order_by' => Product::schema_fields_ID,
                     'order_dir' => 'DESC',
                 ], 1, 6, [
@@ -39,7 +39,7 @@ class ProductRecommendationServiceTest extends TestCase
                     ],
                 ]],
                 [[
-                    'status' => 'enabled',
+                    'status' => 1,
                     'order_by' => Product::schema_fields_ID,
                     'order_dir' => 'DESC',
                 ], 1, 6, [
@@ -65,7 +65,7 @@ class ProductRecommendationServiceTest extends TestCase
         $productService->expects($this->once())
             ->method('getProducts')
             ->with([
-                'status' => 'enabled',
+                'status' => 1,
                 'order_by' => Product::schema_fields_ID,
                 'order_dir' => 'DESC',
             ], 1, 4)
