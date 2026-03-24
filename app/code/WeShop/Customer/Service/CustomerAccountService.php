@@ -48,10 +48,11 @@ class CustomerAccountService
         }
 
         $authUser = $this->authCustomer->reset()
-            ->clearData()
+            ->clearData();
+        $authUser->setEmail($email)
             ->setUsername($email)
-            ->setPassword($password)
-            ->save();
+            ->setPassword($password);
+        $authUser->save();
 
         $profile = $this->customerProfileService->getOrCreateByAuthUser($authUser, array_merge($profileData, [
             'email' => $email,
@@ -74,8 +75,13 @@ class CustomerAccountService
         }
 
         $profile = $this->customerProfileService->getOrCreateByAuthUser($authUser, ['email' => $email]);
-        $status = (string) ($profile->getData(CustomerProfile::schema_fields_STATUS) ?? 'active');
-        if (!in_array($status, ['active', 'enabled'], true)) {
+        $status = $profile->getData(CustomerProfile::schema_fields_STATUS);
+        $enabled = $status === true
+            || $status === 1
+            || $status === '1'
+            || $status === 'active'
+            || $status === 'enabled';
+        if (!$enabled) {
             throw new \RuntimeException((string) __('This account has been disabled.'));
         }
 
@@ -88,10 +94,6 @@ class CustomerAccountService
     public function login(AuthCustomer $authUser, bool $rememberMe = false, int $rememberDuration = 604800): void
     {
         $this->customerSession->login($authUser);
-        $authUser->setSessionId($this->customerSession->getId())
-            ->setLoginIp($this->request->clientIP())
-            ->resetAttemptTimes()
-            ->save();
 
         if ($rememberMe) {
             $token = CustomerToken::generateToken();
@@ -118,7 +120,7 @@ class CustomerAccountService
     public function findAuthUserByEmail(string $email): ?AuthCustomer
     {
         $authUser = $this->authCustomer->reset()
-            ->where(AuthCustomer::schema_fields_username, $this->normalizeEmail($email))
+            ->where(AuthCustomer::schema_fields_email, $this->normalizeEmail($email))
             ->find()
             ->fetch();
 
