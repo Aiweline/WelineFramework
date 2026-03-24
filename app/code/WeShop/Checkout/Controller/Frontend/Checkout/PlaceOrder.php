@@ -8,7 +8,6 @@ use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\App\State;
-
 class PlaceOrder extends FrontendController
 {
     public function __construct(
@@ -27,6 +26,7 @@ class PlaceOrder extends FrontendController
 
             $checkoutData = [
                 'customer_id' => (int) $customer->getId(),
+                'order_id' => (int) ($this->request->getParam('order_id') ?? 0),
                 'shipping_address_id' => (int) ($this->request->getParam('shipping_address_id') ?? 0),
                 'billing_address_id' => (int) ($this->request->getParam('billing_address_id') ?? 0),
                 'shipping_address' => $this->readShippingAddress(),
@@ -44,6 +44,7 @@ class PlaceOrder extends FrontendController
                 'shipping_method' => $checkoutData['shipping_method'],
                 'payment_method' => \is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
                 'cart_summary' => \is_array($result['order_summary'] ?? null) ? $result['order_summary'] : [],
+                'is_retry_payment' => (bool) ($result['is_retry_payment'] ?? false),
             ]);
 
             return $this->fetchJson([
@@ -55,6 +56,7 @@ class PlaceOrder extends FrontendController
                     'payment' => \is_array($result['payment'] ?? null) ? $result['payment'] : [],
                     'payment_method' => \is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
                     'redirect_url' => (string) (($result['payment']['redirect_url'] ?? $result['payment']['payment_url'] ?? '')),
+                    'is_retry_payment' => (bool) ($result['is_retry_payment'] ?? false),
                 ],
             ]);
         } catch (\Throwable $throwable) {
@@ -76,4 +78,5 @@ class PlaceOrder extends FrontendController
 
         return \is_array($shippingAddress) ? $shippingAddress : [];
     }
+
 }

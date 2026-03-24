@@ -507,3 +507,188 @@
 - `app/code/WeShop/Subscription/i18n/*.csv` remains dirty from broader parser-generated drift and must stay outside the checkpoint commit.
 - The worker-created `app/code/WeShop/Subscription/Test/Unit/Controller/IndexTest.php` and `app/code/WeShop/Subscription/Test/Unit/Controller/ViewTest.php` are redundant with the broader clean-route alias test; they can stay out of the commit boundary without reducing coverage.
 - The next bounded module after this checkpoint should return to a business domain slice such as `RMA`, `Compliance`, or the account-center host completion wave rather than expanding the Subscription scope further.
+
+## Update 2026-03-25 03:26
+
+- The clean-route alias-template hardening follow-up is now validation-complete.
+- The original root clean-route work had fixed routing, but real rendering on `9982` still failed for alias controllers that used implicit or relative template resolution. That production blocker is now closed.
+- Live `https://127.0.0.1:9982/product/view?id=1` no longer throws `templates/View/index.phtml` missing; it now returns `200 OK`.
+- The same alias-template pattern is now hardened for `Product`, `Cart`, `Checkout`, `Invoice`, `Order`, and `RMA`.
+- Full browser regression verification is green again on the current workspace: `node tests/e2e/start.js` completed as `18 passed`, `14 passed`, and `1 passed` across the three runtime groups.
+
+### Additional Changed Files
+
+- `app/code/WeShop/Product/view/templates/View/index.phtml`
+- `app/code/WeShop/Product/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php`
+- `app/code/WeShop/Product/Test/Unit/Controller/Frontend/Product/ViewTest.php`
+- `app/code/WeShop/Frontend/view/templates/Cart/Index/index.phtml`
+- `app/code/WeShop/Frontend/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php`
+- `app/code/WeShop/Cart/Test/Unit/Controller/Frontend/Cart/IndexTest.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/Index.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/Success.php`
+- `app/code/WeShop/Checkout/Test/Unit/Controller/Frontend/Checkout/IndexTest.php`
+- `app/code/WeShop/Checkout/Test/Unit/Controller/Frontend/Checkout/SuccessTest.php`
+- `app/code/WeShop/Checkout/view/templates/frontend/checkout/success.phtml`
+- `app/code/WeShop/Invoice/Controller/Frontend/Invoice/Index.php`
+- `app/code/WeShop/Invoice/Test/Unit/Controller/Frontend/Invoice/IndexTest.php`
+- `app/code/WeShop/RMA/Controller/Frontend/RMA/Index.php`
+- `app/code/WeShop/RMA/Test/Unit/Controller/Frontend/RMA/IndexTest.php`
+- `app/code/WeShop/RMA/view/templates/Frontend/RMA/Index/index.phtml`
+- `app/code/WeShop/Order/Controller/Frontend/Order/OrderList.php`
+- `app/code/WeShop/Order/Controller/Frontend/Order/View.php`
+- `app/code/WeShop/Order/Test/Unit/Controller/Frontend/Order/OrderListTest.php`
+- `app/code/WeShop/Order/Test/Unit/Controller/Frontend/Order/ViewTest.php`
+- `tests/e2e/specs/frontend/weshop-product-clean-route.spec.js`
+
+### Additional Verification
+
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Product/Test/Unit/Service/ProductRecommendationServiceTest.php app/code/WeShop/Product/Test/Unit/Service/ProductViewPageDataServiceTest.php app/code/WeShop/Product/Test/Unit/Controller/CleanRouteAliasControllersTest.php app/code/WeShop/Product/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php app/code/WeShop/Frontend/Test/Unit/Controller/CartCleanRouteControllerTest.php app/code/WeShop/Frontend/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php --colors=never`
+- `php -l app/code/WeShop/Checkout/view/templates/frontend/checkout/success.phtml`
+- `php -l app/code/WeShop/RMA/view/templates/Frontend/RMA/Index/index.phtml`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit app/code/WeShop/Invoice/Test/Unit app/code/WeShop/RMA/Test/Unit app/code/WeShop/Order/Test/Unit app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php app/code/WeShop/Frontend/Test/Unit/Controller/CartCleanRouteControllerTest.php app/code/WeShop/Frontend/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w server:reload --no-wait`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-product-clean-route.spec.js`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-product-clean-route.spec.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js tests/e2e/specs/frontend/weshop-invoice.spec.js tests/e2e/specs/frontend/weshop-search.spec.js`
+- `node tests/e2e/start.js`
+- `curl.exe -k -I "https://127.0.0.1:9982/product/view?id=1"`
+- `curl.exe -k -I https://127.0.0.1:9982/invoice`
+- `curl.exe -k -I https://127.0.0.1:9982/rma`
+- `curl.exe -k -i "https://127.0.0.1:9982/checkout/success?order_id=1"`
+
+### Updated Risks / Next Steps
+
+- The repo is still extremely dirty; any commit from here must continue to use strict white-list staging only.
+- This follow-up intentionally hardened template resolution and route smoke behavior, but it still does not provide an authenticated customer browser fixture for full `cart -> checkout -> success -> order detail -> rma` E2E.
+- `WeShop_Product\Test\Unit\Controller\Frontend\Product\ProductListTest.php` still contains older incomplete scenarios built around static `ObjectManager` usage and should be cleaned in a separate bounded refactor instead of being mixed into the alias-template checkpoint.
+- The next bounded module step should return to business completion, with the nearest clean candidates still being `Invoice` checkpoint commit, `Subscription` checkpoint commit, and then the remaining unfinished domain modules such as `RMA`, `Compliance`, and deeper account-center/admin completion.
+
+## Update 2026-03-25 11:08
+
+- The next checkpoint boundary is now the validated customer-auth/public-route slice rather than another clean-route batch.
+- That slice keeps runtime-safe public storefront auth under `Weline_Customer`, including `GET/POST /customer/account/register`, `GET/POST /customer/account/forgot-password`, and `/customer/account/challenge`, while leaving the legacy `WeShop_Customer` namespace available as a compatibility layer.
+- The touched `WeShop_Customer` account controllers were re-aligned with current coding rules before commit: explicit constructor DI stayed in place, and the rewritten controller tests now pass mocks instead of relying on `ObjectManager` fallback.
+- The commit boundary also includes the real message-manager bug fix where the touched flows were still calling nonexistent `addNotice()` instead of `addWarning()`.
+- Parallel work for the next module wave has been delegated to existing sidecar agents for `Wishlist`, `RecentlyViewed`, and `Compare`, but those results are intentionally outside this auth checkpoint boundary.
+
+### Planned Auth Checkpoint Files
+
+- `app/code/Weline/Customer/Controller/Account/Login.php`
+- `app/code/Weline/Customer/Controller/Account/Register.php`
+- `app/code/Weline/Customer/Controller/Account/ForgotPassword.php`
+- `app/code/Weline/Customer/Controller/Account/Challenge.php`
+- `app/code/Weline/Customer/view/templates/frontend/account/login.phtml`
+- `app/code/Weline/Customer/view/templates/frontend/account/register.phtml`
+- `app/code/Weline/Customer/view/templates/frontend/account/forgot-password.phtml`
+- `app/code/Weline/Customer/view/templates/frontend/account/challenge.phtml`
+- `app/code/Weline/Customer/Test/Unit/Controller/Account/RegisterViewRoutingTest.php`
+- `app/code/Weline/Customer/Test/Unit/Controller/Account/ForgotPasswordViewRoutingTest.php`
+- `app/code/Weline/Customer/Test/Unit/Controller/Account/ChallengeViewRoutingTest.php`
+- `app/code/Weline/Customer/Test/Unit/View/LoginTemplateGoogleHostTest.php`
+- `app/code/WeShop/Customer/Test/Unit/Controller/Frontend/Account/LoginTest.php`
+- `app/code/WeShop/Customer/Test/Unit/Controller/Frontend/Account/RegisterTest.php`
+- `app/code/WeShop/Customer/Test/Unit/Controller/Frontend/Account/ForgotPasswordTest.php`
+- `app/code/WeShop/GoogleAuth/Controller/Frontend/Auth/Callback.php`
+- `app/code/Weline/Admin/Controller/Login.php`
+- `app/code/WeShop/Order/Controller/Frontend/Order/Cancel.php`
+- `tests/e2e/specs/frontend/weshop-customer-auth.spec.js`
+- `tests/e2e/specs/frontend/weshop-compliance.spec.js`
+- `tests/e2e/specs/frontend/weshop-rma.spec.js`
+
+## Update 2026-03-25 11:56
+
+- Three more clean checkpoint commits have now landed on top of the earlier module wave:
+- `b7ddd5c1` `feat(weshop): complete public customer auth routes`
+- `5fe280d3` `fix(weshop): harden clean storefront route aliases`
+- `cb0fb406` `feat(weshop): complete saved item storefront flows`
+
+### Latest Completed Scope
+
+- Public customer auth closure is now committed and validated:
+- public register / forgot-password / challenge routes under `Weline_Customer`
+- cleaned storefront auth templates plus the missing forgot-password affordance on login
+- real controller tests for the legacy `WeShop_Customer` compatibility namespace
+- green focused browser coverage for auth, compliance, and RMA guards
+- Clean-route / alias-template hardening is now committed and validated:
+- root clean routes for `product`, `wishlist`, `compare`, `checkout`, `invoice`, `compliance`, `rma`, and `weshop/order/*` no longer rely on fragile alias-template resolution
+- guest-safe browser coverage exists for product detail, checkout/order guards, invoice, compliance, and RMA
+- Saved-item storefront modules are now committed and validated:
+- `Compare` uses module-owned rendering and query-provider product hydration
+- `RecentlyViewed` exposes a discovery card into the account center and clean-route-safe default-theme links
+- `Wishlist` exposes account quick links, stabilizes page-data URLs/counts, and keeps add/remove on thin controller flows
+- dedicated browser coverage now exists for `compare`, `recently-viewed`, and `wishlist`
+
+### New Verification Since Last Update
+
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Customer/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/GoogleAuth/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/Weline/Customer/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/Weline/Admin/Test --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Compliance/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/RMA/Test/Unit --colors=never`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-customer-auth.spec.js tests/e2e/specs/frontend/weshop-compliance.spec.js tests/e2e/specs/frontend/weshop-rma.spec.js`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Product/Test/Unit/Controller/CleanRouteAliasControllersTest.php app/code/WeShop/Product/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php app/code/WeShop/Product/Test/Unit/Controller/Frontend/Product/ViewTest.php app/code/WeShop/Cart/Test/Unit/Controller/Frontend/Cart/IndexTest.php app/code/WeShop/Frontend/Test/Unit/Controller/CartCleanRouteControllerTest.php app/code/WeShop/Frontend/Test/Unit/Controller/OrderCleanRouteControllersTest.php app/code/WeShop/Frontend/Test/Unit/View/CleanRouteAliasTemplateProxyTest.php --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit/Controller/CleanRouteAliasControllersTest.php app/code/WeShop/Checkout/Test/Unit/Controller/Frontend/Checkout/IndexTest.php app/code/WeShop/Checkout/Test/Unit/Controller/Frontend/Checkout/SuccessTest.php app/code/WeShop/Invoice/Test/Unit/Controller/Frontend/Invoice/IndexTest.php app/code/WeShop/RMA/Test/Unit/Controller/CleanRouteAliasControllersTest.php app/code/WeShop/RMA/Test/Unit/Controller/Frontend/RMA/IndexTest.php app/code/WeShop/Order/Test/Unit/Controller/Frontend/Order/OrderListTest.php app/code/WeShop/Order/Test/Unit/Controller/Frontend/Order/ViewTest.php --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Compare/Test/Unit app/code/WeShop/RecentlyViewed/Test/Unit app/code/WeShop/Wishlist/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w server:reload --no-wait`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-product-clean-route.spec.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js tests/e2e/specs/frontend/weshop-compliance.spec.js tests/e2e/specs/frontend/weshop-rma.spec.js tests/e2e/specs/frontend/weshop-invoice.spec.js`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-compare.spec.js tests/e2e/specs/frontend/weshop-recently-viewed.spec.js tests/e2e/specs/frontend/weshop-wishlist.spec.js`
+
+### Updated Remaining Risks
+
+- The repo is still extremely dirty outside the WeShop scope; every future checkpoint must continue using strict white-list staging only.
+- Unified API auth and `/api/rest/v1/weshop/*` standardization are still not complete and remain one of the highest-value unfinished platform slices.
+- Several business/admin modules still need completion beyond storefront parity, especially `Social`, `Tax`, `Store`, `Filters`, and parts of `Cms`, `Notification`, `Promotion`, and `ImportExport`.
+- Some already-touched slices still have uncommitted follow-up work in the local tree, including checkout query-driven payment/shipping plumbing, theme/account hook polish, and parser-generated i18n drift that must stay isolated from business commits.
+
+## Update 2026-03-25 22:00
+
+- The next checkpoint candidate is now validation-complete and ready for a white-list commit.
+- This slice closes a mixed storefront hardening batch that the user explicitly asked to submit before continuing:
+- unified auth token unit coverage is green again under PHPUnit 10
+- checkout retry-payment and related storefront controllers now use explicit DI instead of `ObjectManager` fallback
+- `/weshop` homepage is production-safe again on the real `9982` runtime
+- homepage hook hosts are now formalized with valid WeShop-side hook contracts and docs, and the default homepage page was aligned to those same contract names
+- a dedicated homepage browser regression now exists, so homepage availability is part of the ongoing storefront smoke suite
+
+### Additional Changed Files
+
+- `app/code/WeShop/Auth/Test/Unit/Service/WeShopAuthTokenServiceTest.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/Index.php`
+- `app/code/WeShop/Checkout/Controller/Frontend/Checkout/PlaceOrder.php`
+- `app/code/WeShop/Product/Controller/Frontend/Product/ProductList.php`
+- `app/code/WeShop/Order/Controller/Frontend/Order/RetryPayment.php`
+- `app/code/WeShop/Frontend/Controller/Index.php`
+- `app/code/WeShop/Frontend/Test/Unit/Controller/IndexTest.php`
+- `app/code/WeShop/Frontend/view/templates/Index/index.phtml`
+- `app/code/WeShop/Promotion/hook.php`
+- `app/code/WeShop/Catalog/hook.php`
+- `app/code/WeShop/Frontend/hook.php`
+- `app/code/WeShop/Promotion/doc/hook/frontend/layouts/homepage/hero-banner.md`
+- `app/code/WeShop/Promotion/doc/hook/frontend/layouts/homepage/deals-before.md`
+- `app/code/WeShop/Promotion/doc/hook/frontend/layouts/homepage/deals-after.md`
+- `app/code/WeShop/Catalog/doc/hook/frontend/layouts/homepage/categories-before.md`
+- `app/code/WeShop/Catalog/doc/hook/frontend/layouts/homepage/categories-after.md`
+- `app/code/WeShop/Frontend/doc/hook/frontend/layouts/homepage/content-after.md`
+- `app/design/WeShop/default/frontend/pages/homepage/index.phtml`
+- `tests/e2e/specs/frontend/weshop-homepage.spec.js`
+
+### Additional Verification
+
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Auth/Test/Unit --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Frontend/Test/Unit app/code/WeShop/Checkout/Test/Unit app/code/WeShop/Product/Test/Unit app/code/WeShop/Auth/Test/Unit --colors=never`
+- `php tests/e2e/framework/preflight-refresh.php`
+- `php bin/w reflection:compile`
+- `php bin/w server:restart -r`
+- `curl.exe -k -I https://127.0.0.1:9982/weshop`
+- `curl.exe -k -I https://127.0.0.1:9982/checkout`
+- `curl.exe -k -I "https://127.0.0.1:9982/weshop/order/retry-payment?order_id=1"`
+- `node tests/e2e/start.js tests/e2e/specs/frontend/weshop-homepage.spec.js tests/e2e/specs/frontend/weshop-order-checkout-clean-routes.spec.js tests/e2e/specs/frontend/weshop-search.spec.js`
+
+### Updated Risks / Next Steps
+
+- This checkpoint intentionally does not include the unrelated dirty i18n/parser/framework drift that still fills the worktree; the commit must remain strict white-list staging only.
+- Focused PHPUnit and storefront e2e are green, but the repo-wide PHPUnit deprecation noise remains outside this slice.
+- The next major unfinished platform slice is still unified API auth and `/api/rest/v1/weshop/*` standardization, followed by the remaining business/admin module completion wave.
