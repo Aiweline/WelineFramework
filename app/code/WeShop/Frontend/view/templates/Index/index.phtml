@@ -1,11 +1,12 @@
 <?php
 /**
- * WeShop Default Theme - Homepage Content
- * 首页内容模板 - 根据UI设计创建
+ * WeShop frontend homepage fallback template.
+ *
+ * This keeps the default storefront homepage usable even when module-relative
+ * template resolution is used before a theme page override kicks in.
  */
 ?>
 <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-    <!-- Hero Banner -->
     <div class="w-full rounded-xl overflow-hidden mb-12">
         <w:hook name="WeShop_Promotion::frontend::layouts::homepage::hero-banner"/>
         <div class="relative w-full h-[400px] bg-cover bg-center flex items-center p-12 rounded-xl text-white" style="background-image: url('<?= $this->getStaticUrl('assets/images/hero-banner.jpg') ?>');">
@@ -19,12 +20,11 @@
             </div>
         </div>
     </div>
-    
-    <!-- Deals of the Day -->
+
     <section class="mb-12">
         <w:hook name="WeShop_Promotion::frontend::layouts::homepage::deals-before"/>
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark"><?= __("Deals of the Day") ?></h2>
+            <h2 class="text-2xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark"><?= __('Deals of the Day') ?></h2>
             <a class="text-sm font-medium text-primary hover:underline" href="<?= $this->getUrl('promotion/deals') ?>"><?= __('View All') ?></a>
         </div>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6">
@@ -51,8 +51,7 @@
         </div>
         <w:hook name="WeShop_Promotion::frontend::layouts::homepage::deals-after"/>
     </section>
-    
-    <!-- Shop by Category -->
+
     <section class="mb-12">
         <w:hook name="WeShop_Catalog::frontend::layouts::homepage::categories-before"/>
         <h2 class="text-2xl font-bold tracking-tight text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Shop by Category') ?></h2>
@@ -68,7 +67,6 @@
         </div>
         <w:hook name="WeShop_Catalog::frontend::layouts::homepage::categories-after"/>
     </section>
-    
-    <!-- Hook: Homepage Content After -->
+
     <w:hook name="WeShop_Frontend::frontend::layouts::homepage::content-after"/>
 </div>
