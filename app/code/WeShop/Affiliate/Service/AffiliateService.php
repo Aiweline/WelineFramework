@@ -147,4 +147,103 @@ class AffiliateService
     {
         return 'REF' . str_pad((string) $customerId, 8, '0', STR_PAD_LEFT) . strtoupper(bin2hex(random_bytes(2)));
     }
+
+    public function getStatusOptions(): array
+    {
+        return [
+            self::STATUS_ACTIVE => (string) __('Active'),
+            self::STATUS_DISABLED => (string) __('Disabled'),
+        ];
+    }
+
+    public function isValidStatus(string $status): bool
+    {
+        return isset($this->getStatusOptions()[$status]);
+    }
+
+    public function getAffiliateRecord(int $affiliateId): ?Affiliate
+    {
+        /** @var Affiliate $affiliate */
+        $affiliate = ObjectManager::getInstance(Affiliate::class);
+        $affiliate->load($affiliateId);
+
+        return $affiliate->getId() ? $affiliate : null;
+    }
+
+    public function getAffiliateList(int $page = 1, int $pageSize = 20, array $filters = []): array
+    {
+        /** @var Affiliate $affiliate */
+        $affiliate = ObjectManager::getInstance(Affiliate::class);
+        $affiliate->clear();
+
+        if (!empty($filters['customer_id'])) {
+            $affiliate->where(Affiliate::schema_fields_CUSTOMER_ID, (int) $filters['customer_id']);
+        }
+
+        if (!empty($filters['referral_code'])) {
+            $affiliate->where(Affiliate::schema_fields_REFERRAL_CODE, '%' . $filters['referral_code'] . '%', 'LIKE');
+        }
+
+        if (!empty($filters['status']) && $this->isValidStatus((string) $filters['status'])) {
+            $affiliate->where(Affiliate::schema_fields_STATUS, (string) $filters['status']);
+        }
+
+        $affiliate->order(Affiliate::schema_fields_CREATED_AT, 'DESC')
+            ->pagination($page, $pageSize);
+
+        return [
+            'items' => $affiliate->select()->fetchArray(),
+            'total' => $affiliate->getTotalCount(),
+            'pagination' => $affiliate->getPagination(),
+        ];
+    }
+
+    public function saveAffiliate(array $data): Affiliate
+    {
+        $affiliateId = (int) ($data['affiliate_id'] ?? 0);
+        $customerId = (int) ($data['customer_id'] ?? 0);
+        $commissionRate = (float) ($data['commission_rate'] ?? 0);
+        $status = trim((string) ($data['status'] ?? self::STATUS_ACTIVE));
+
+        if (!$this->isValidStatus($status)) {
+            throw new \InvalidArgumentException((string) __('Unsupported affiliate status.'));
+        }
+
+        if ($commissionRate < 0 || $commissionRate > 1) {
+            throw new \InvalidArgumentException((string) __('Commission rate must be between 0 and 1.'));
+        }
+
+        /** @var Affiliate $affiliate */
+        $affiliate = ObjectManager::getInstance(Affiliate::class);
+
+        if ($affiliateId) {
+            $affiliate->load($affiliateId);
+            if (!$affiliate->getId()) {
+                throw new \InvalidArgumentException((string) __('Affiliate record not found.'));
+            }
+        } elseif ($customerId) {
+            $existing = $this->getAffiliateAccount($customerId);
+            if (is_array($existing) && (int) ($existing[Affiliate::schema_fields_ID] ?? 0) > 0) {
+                $affiliate->load((int) $existing[Affiliate::schema_fields_ID]);
+            } else {
+                $affiliate = $this->createAffiliate($customerId);
+            }
+        } else {
+            throw new \InvalidArgumentException((string) __('Customer ID or affiliate ID is required.'));
+        }
+
+        $affiliate->setData([
+            Affiliate::schema_fields_COMMISSION_RATE => round($commissionRate, 2),
+            Affiliate::schema_fields_STATUS => $status,
+            Affiliate::schema_fields_UPDATED_AT => date('Y-m-d H:i:s'),
+        ]);
+
+        if (!$affiliate->getData(Affiliate::schema_fields_CREATED_AT)) {
+            $affiliate->setData(Affiliate::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
+        }
+
+        $affiliate->save();
+
+        return $affiliate;
+    }
 }
