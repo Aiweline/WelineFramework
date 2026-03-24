@@ -6,11 +6,11 @@ namespace WeShop\Order\Test\Unit\Controller\Frontend\Order;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Customer\Api\CustomerContextInterface;
-use WeShop\Order\Controller\Frontend\Order\OrderList;
-use WeShop\Order\Service\OrderListPageDataService;
+use WeShop\Order\Controller\Frontend\Order\View;
+use WeShop\Order\Service\OrderDetailPageDataService;
 use Weline\Framework\Http\Request;
 
-class OrderListTest extends TestCase
+class ViewTest extends TestCase
 {
     public function testIndexRedirectsGuestCustomersToLogin(): void
     {
@@ -19,10 +19,10 @@ class OrderListTest extends TestCase
             ->method('getUserId')
             ->willReturn(null);
 
-        $pageDataService = $this->createMock(OrderListPageDataService::class);
+        $pageDataService = $this->createMock(OrderDetailPageDataService::class);
         $pageDataService->expects($this->never())->method('build');
 
-        $controller = $this->getMockBuilder(OrderList::class)
+        $controller = $this->getMockBuilder(View::class)
             ->setConstructorArgs([$customerContext, $pageDataService])
             ->onlyMethods(['assign', 'redirect', 'renderPage'])
             ->getMock();
@@ -36,42 +36,39 @@ class OrderListTest extends TestCase
         $this->assertSame('', $controller->index());
     }
 
-    public function testIndexAssignsOrderListPageDataForLoggedInCustomer(): void
+    public function testIndexAssignsOrderDetailPageDataForLoggedInCustomer(): void
     {
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())
             ->method('getUserId')
-            ->willReturn(12);
+            ->willReturn(9);
 
-        $pageDataService = $this->createMock(OrderListPageDataService::class);
+        $pageDataService = $this->createMock(OrderDetailPageDataService::class);
         $pageDataService->expects($this->once())
             ->method('build')
-            ->with(12, 2, 15)
+            ->with(9, 42)
             ->willReturn([
-                'orders' => [['order_id' => 88]],
-                'unpaid_count' => 1,
-                'order_count' => 3,
-                'page' => 2,
-                'page_size' => 15,
+                'order' => ['order_id' => 42],
+                'items' => [['item_id' => 1]],
+                'back_url' => 'weshop/order/list',
             ]);
 
-        $controller = $this->getMockBuilder(OrderList::class)
+        $controller = $this->getMockBuilder(View::class)
             ->setConstructorArgs([$customerContext, $pageDataService])
             ->onlyMethods(['assign', 'redirect', 'renderPage'])
             ->getMock();
 
-        $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(6))->method('assign');
-        $controller->expects($this->once())->method('renderPage')->willReturn('page');
-
         $request = $this->createMock(Request::class);
         $request->method('getParam')->willReturnMap([
-            ['page', null, 2],
-            ['page_size', null, 15],
+            ['id', null, 42],
         ]);
         $this->setProtectedProperty($controller, 'request', $request);
 
-        $this->assertSame('page', $controller->index());
+        $controller->expects($this->never())->method('redirect');
+        $controller->expects($this->exactly(4))->method('assign');
+        $controller->expects($this->once())->method('renderPage')->willReturn('detail');
+
+        $this->assertSame('detail', $controller->index());
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

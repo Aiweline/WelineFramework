@@ -1,0 +1,158 @@
+<?php
+/**
+ * WeShop Order storefront list template.
+ */
+$orders = (array) ($this->getData('orders') ?? []);
+$orderCount = (int) ($this->getData('order_count') ?? count($orders));
+$unpaidCount = (int) ($this->getData('unpaid_count') ?? 0);
+$pagination = (array) ($this->getData('pagination') ?? []);
+$currentPage = max(1, (int) ($pagination['current_page'] ?? $pagination['page'] ?? 1));
+$pageSize = max(1, (int) ($pagination['page_size'] ?? $pagination['per_page'] ?? $this->getData('page_size') ?? 20));
+$totalPages = max(1, (int) ($pagination['total_pages'] ?? $pagination['last_page'] ?? $this->getData('page_count') ?? 1));
+
+$buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
+    return (string) $this->getUrl('weshop/order/list', [
+        'page' => max(1, $targetPage),
+        'page_size' => $pageSize,
+    ]);
+};
+?>
+<main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <w:hook name="WeShop_Order::frontend::pages::order::list-before"/>
+
+    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
+            <div class="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-8 sm:p-10">
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Order Center') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('My Orders') ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Track your purchases, complete unpaid orders, and review delivery progress in one place.') ?>
+                </p>
+                <div class="mt-8 flex flex-wrap gap-3 text-sm">
+                    <a href="<?= $this->getUrl('catalog/category') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Continue Shopping') ?>
+                    </a>
+                    <a href="<?= $this->getUrl('customer') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Back to Account') ?>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid gap-4 p-6 sm:grid-cols-2 lg:grid-cols-1 lg:border-l lg:border-border-light dark:lg:border-border-dark">
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Total Orders') ?></p>
+                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $orderCount ?></p>
+                </article>
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Awaiting Payment') ?></p>
+                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $unpaidCount ?></p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <?php if ($orders === []): ?>
+        <section class="rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-12 text-center dark:border-border-dark dark:bg-background-dark">
+            <span class="material-symbols-outlined text-5xl text-primary">package_2</span>
+            <h2 class="mt-4 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No orders yet') ?></h2>
+            <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                <?= __('Your order history will appear here after you place your first purchase.') ?>
+            </p>
+            <a href="<?= $this->getUrl('catalog/category') ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                <?= __('Browse Products') ?>
+            </a>
+        </section>
+    <?php else: ?>
+        <section class="grid gap-4">
+            <?php foreach ($orders as $order): ?>
+                <?php
+                $orderId = (int) ($order['order_id'] ?? 0);
+                $incrementId = trim((string) ($order['increment_id'] ?? ''));
+                $statusLabel = trim((string) ($order['status_label'] ?? ucfirst((string) ($order['status'] ?? 'pending'))));
+                $paymentStatusLabel = trim((string) ($order['payment_status_label'] ?? ucfirst((string) ($order['payment_status'] ?? 'pending'))));
+                $createdAt = trim((string) ($order['created_at'] ?? ''));
+                $canRetry = !empty($order['can_retry_payment']);
+                $canCancel = !empty($order['can_cancel']);
+                $requireReturn = !empty($order['require_return']);
+                $cancelReason = trim((string) ($order['cancel_reason'] ?? ''));
+                $requiresPayment = in_array(strtolower((string) ($order['payment_status'] ?? 'pending')), ['pending', 'failed'], true);
+                ?>
+                <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+                    <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                            <p class="text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('Order') ?></p>
+                            <h2 class="mt-1 text-xl font-bold text-text-primary-light dark:text-text-primary-dark">#<?= htmlspecialchars($incrementId !== '' ? $incrementId : (string) $orderId, ENT_QUOTES) ?></h2>
+                            <?php if ($createdAt !== ''): ?>
+                                <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars($createdAt, ENT_QUOTES) ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full bg-background-light px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-text-primary-light dark:bg-background-dark dark:text-text-primary-dark">
+                                <?= htmlspecialchars($statusLabel, ENT_QUOTES) ?>
+                            </span>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] <?= $requiresPayment ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700' ?>">
+                                <?= htmlspecialchars($paymentStatusLabel, ENT_QUOTES) ?>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark">
+                            <?= __('Grand Total') ?>:
+                            <span class="font-bold text-text-primary-light dark:text-text-primary-dark">
+                                <?= $this->formatPrice((float) ($order['total'] ?? 0)) ?>
+                            </span>
+                        </p>
+
+                        <div class="flex flex-wrap gap-2">
+                            <a href="<?= $this->getUrl('weshop/order/view', ['id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                <?= __('View Details') ?>
+                            </a>
+
+                            <?php if ($canRetry): ?>
+                                <a href="<?= $this->getUrl('weshop/order/retryPayment', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary/90">
+                                    <?= __('Pay Now') ?>
+                                </a>
+                            <?php endif; ?>
+
+                            <?php if ($canCancel): ?>
+                                <form method="post" action="<?= $this->getUrl('weshop/order/cancel') ?>" onsubmit="return confirm('<?= htmlspecialchars((string) __('Cancel this order?'), ENT_QUOTES) ?>');">
+                                    <?= $this->getFormKey($this->getUrl('weshop/order/cancel')) ?>
+                                    <input type="hidden" name="order_id" value="<?= $orderId ?>">
+                                    <button type="submit" class="inline-flex items-center justify-center rounded-2xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 transition hover:border-rose-500 hover:text-rose-800">
+                                        <?= __('Cancel Order') ?>
+                                    </button>
+                                </form>
+                            <?php elseif ($requireReturn): ?>
+                                <a href="<?= $this->getUrl('weshop/rma/create', ['order_id' => $orderId]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
+                                    <?= __('Request Return') ?>
+                                </a>
+                            <?php elseif ($cancelReason !== ''): ?>
+                                <span class="inline-flex items-center justify-center rounded-2xl bg-background-light px-4 py-2 text-xs font-semibold text-text-secondary-light dark:bg-background-dark dark:text-text-secondary-dark" title="<?= htmlspecialchars($cancelReason, ENT_QUOTES) ?>">
+                                    <?= __('Not Cancellable') ?>
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </section>
+    <?php endif; ?>
+
+    <?php if ($totalPages > 1): ?>
+        <nav class="flex flex-wrap items-center justify-center gap-2 rounded-3xl border border-border-light bg-surface-light p-4 dark:border-border-dark dark:bg-surface-dark">
+            <?php for ($page = 1; $page <= $totalPages; $page++): ?>
+                <?php if ($page === $currentPage): ?>
+                    <span class="inline-flex min-w-10 items-center justify-center rounded-xl bg-primary px-3 py-2 text-sm font-bold text-white"><?= $page ?></span>
+                <?php else: ?>
+                    <a href="<?= htmlspecialchars($buildPaginationUrl($page), ENT_QUOTES) ?>" class="inline-flex min-w-10 items-center justify-center rounded-xl border border-border-light px-3 py-2 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= $page ?>
+                    </a>
+                <?php endif; ?>
+            <?php endfor; ?>
+        </nav>
+    <?php endif; ?>
+
+    <w:hook name="WeShop_Order::frontend::pages::order::list-after"/>
+</main>

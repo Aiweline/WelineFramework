@@ -4,71 +4,75 @@ declare(strict_types=1);
 
 namespace WeShop\Order\Controller\Frontend\Order;
 
+use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
-use WeShop\Customer\Session\CustomerSession;
 use WeShop\Order\Service\OrderService;
 use Weline\Framework\Manager\ObjectManager;
 
-/**
- * 订单取消控制器
- * 
- * 用于取消未支付的订单
- */
 class Cancel extends BaseController
 {
-    /**
-     * 取消订单
-     */
+    private const LOGIN_ROUTE = 'customer/account/login';
+
+    public function __construct(
+        private ?CustomerContextInterface $customerContext = null,
+        private ?OrderService $orderService = null
+    ) {
+    }
+
     public function postIndex(): string
     {
-        $orderId = (int)($this->request->getPost('order_id') ?? 0);
-        
-        if (!$orderId) {
-            $this->getMessageManager()->addError(__('订单ID不能为空'));
-            return $this->redirect('weshop/order/list');
+        $orderId = (int) ($this->request->getPost('order_id') ?? 0);
+        if ($orderId <= 0) {
+            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->redirect('weshop/order/list');
+            return '';
         }
-        
-        /** @var CustomerSession $customerSession */
-        $customerSession = ObjectManager::getInstance(CustomerSession::class);
-        $customer = $customerSession->getCustomer();
-        
-        if (!$customer || !$customer->getId()) {
-            $this->getMessageManager()->addError(__('请先登录'));
-            return $this->redirect('weshop/customer/account/login');
+
+        $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
+        if ($customerId <= 0) {
+            $this->getMessageManager()->addError(__('Please log in to continue.'));
+            $this->redirect(self::LOGIN_ROUTE);
+            return '';
         }
-        
-        /** @var OrderService $orderService */
-        $orderService = ObjectManager::getInstance(OrderService::class);
-        
+
         try {
-            // 先检查是否可以取消
-            $checkResult = $orderService->canCancelOrder($orderId, $customer->getId());
-            
-            if (!$checkResult['can_cancel']) {
-                $this->getMessageManager()->addError($checkResult['reason'] ?? __('订单不能取消'));
-                
-                // 如果需要退货，引导用户去退货页面
+            $checkResult = $this->getOrderService()->canCancelOrder($orderId, $customerId);
+
+            if (empty($checkResult['can_cancel'])) {
+                $this->getMessageManager()->addError($checkResult['reason'] ?? __('This order cannot be cancelled.'));
+
                 if (!empty($checkResult['require_return'])) {
-                    $this->getMessageManager()->addNotice(__('请先申请退货'));
-                    return $this->redirect('weshop/rma/create?order_id=' . $orderId);
+                    $this->getMessageManager()->addNotice(__('Please request a return for this order first.'));
+                    $this->redirect('weshop/rma/create', ['order_id' => $orderId]);
+                    return '';
                 }
-                
-                return $this->redirect('weshop/order/list');
+
+                $this->redirect('weshop/order/list');
+                return '';
             }
-            
-            // 取消订单
-            $orderService->cancelOrder($orderId, $customer->getId());
-            
-            // 根据是否需要退款显示不同的提示
+
+            $this->getOrderService()->cancelOrder($orderId, $customerId);
+
             if (!empty($checkResult['require_refund'])) {
-                $this->getMessageManager()->addSuccess(__('订单已取消，退款将在3-7个工作日内处理'));
+                $this->getMessageManager()->addSuccess(__('Order cancelled. Refund processing will follow your payment method rules.'));
             } else {
-                $this->getMessageManager()->addSuccess(__('订单已取消'));
+                $this->getMessageManager()->addSuccess(__('Order cancelled.'));
             }
-        } catch (\Exception $e) {
-            $this->getMessageManager()->addError($e->getMessage());
+        } catch (\Throwable $throwable) {
+            $this->getMessageManager()->addError($throwable->getMessage());
         }
-        
-        return $this->redirect('weshop/order/list');
+
+        $this->redirect('weshop/order/list');
+        return '';
+    }
+
+    private function getCustomerContext(): CustomerContextInterface
+    {
+        return $this->customerContext ??= ObjectManager::getInstance(CustomerContextInterface::class);
+    }
+
+    private function getOrderService(): OrderService
+    {
+        return $this->orderService ??= ObjectManager::getInstance(OrderService::class);
     }
 }
