@@ -9,6 +9,7 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
+use WeShop\Customer\Service\CustomerWebAuthService;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
 
@@ -19,7 +20,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 {
     private Template $template;
 
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account_auth';
 
     public function __construct(
         Template $template
@@ -44,6 +45,14 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
 
         // 使用主题认证布局
+        $redirectUrl = trim((string) ($this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? ''));
+        if ($redirectUrl === '' && is_string($referer) && $referer !== '') {
+            $redirectUrl = $referer;
+        }
+
+        $this->assign('redirect_url', $redirectUrl);
+        $this->assign('title', __('鐢ㄦ埛鐧诲綍'));
+
         return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
     }
 
@@ -78,6 +87,12 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
         $rememberDuration = (int)$rememberDuration;
 
+        $redirectUrl = $this->request->getBodyParam('redirect_url');
+        if ($redirectUrl === null) {
+            $redirectUrl = $this->request->getPost('redirect_url', '');
+        }
+        $redirectUrl = $this->normalizeRedirectTarget(is_string($redirectUrl) ? $redirectUrl : '');
+
         if (empty($username) || empty($password)) {
             return $this->json([
                 'success' => false,
@@ -86,6 +101,11 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
 
         try {
+            $weShopResponse = $this->handleWeShopPasswordLogin($username, $password, $rememberDuration, $redirectUrl);
+            if ($weShopResponse !== null) {
+                return $weShopResponse;
+            }
+
             /** @var Customer $user */
             $user = ObjectManager::getInstance(Customer::class);
             $user->where('username', $username)->find()->fetch();
@@ -204,6 +224,129 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if (!empty($adminPath)) {
             Cookie::set('w_sandbox', $enabled ? '1' : '', $lifetime, ['path' => '/' . ltrim($adminPath, '/')]);
         }
+    }
+
+    private function handleWeShopPasswordLogin(string $username, string $password, int $rememberDuration, string $redirectUrl): ?string
+    {
+        if (!str_contains($username, '@')) {
+            return null;
+        }
+
+        try {
+            /** @var CustomerWebAuthService $customerWebAuthService */
+            $customerWebAuthService = ObjectManager::getInstance(CustomerWebAuthService::class);
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                (string) __('WeShop login bridge is unavailable: %{1}', [$throwable->getMessage()]),
+                previous: $throwable
+            );
+        }
+
+        $effectiveRedirect = $redirectUrl;
+        if ($effectiveRedirect === '') {
+            $effectiveRedirect = $this->normalizeRedirectTarget($this->getStoredLoginReferer());
+        }
+
+        $result = $customerWebAuthService->beginPasswordLogin(
+            $username,
+            $password,
+            $rememberDuration > 0,
+            $effectiveRedirect,
+            $rememberDuration > 0 ? $rememberDuration : 604800
+        );
+
+        $this->clearStoredLoginReferer();
+
+        if (($result['status'] ?? '') === 'challenge_required') {
+            $challengeToken = (string) ($result['challenge_token'] ?? '');
+            $challengePath = $challengeToken !== ''
+                ? 'weshop/customer/account/challenge?challenge_token=' . rawurlencode($challengeToken)
+                : 'weshop/customer/account/login';
+
+            return $this->json([
+                'success' => true,
+                'status' => 'challenge_required',
+                'requires_challenge' => true,
+                'message' => __('Please complete two-factor verification to finish sign in.'),
+                'redirect' => $this->formatClientRedirect($challengePath),
+            ]);
+        }
+
+        return $this->json([
+            'success' => true,
+            'status' => 'authenticated',
+            'message' => __('Login succeeded.'),
+            'redirect' => $this->formatClientRedirect((string) ($result['redirect_url'] ?? $effectiveRedirect)),
+        ]);
+    }
+
+    private function getStoredLoginReferer(): string
+    {
+        $referer = $this->session->getSession()->get('login_referer');
+        return is_string($referer) ? trim($referer) : '';
+    }
+
+    private function clearStoredLoginReferer(): void
+    {
+        $this->session->getSession()->delete('login_referer');
+    }
+
+    private function normalizeRedirectTarget(string $redirectUrl): string
+    {
+        $redirectUrl = trim($redirectUrl);
+        if ($redirectUrl === '' || str_starts_with($redirectUrl, '//')) {
+            return '';
+        }
+
+        if ((bool) preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
+            $absoluteUrl = $redirectUrl;
+            if (!$this->isValidReferer($redirectUrl)) {
+                return '';
+            }
+
+            $path = trim((string) (parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
+            if ($path === '') {
+                return '';
+            }
+
+            $redirectUrl = $path;
+            $query = trim((string) (parse_url($absoluteUrl, PHP_URL_QUERY) ?? ''));
+            if ($query !== '') {
+                $redirectUrl .= '?' . $query;
+            }
+        } else {
+            $redirectUrl = ltrim($redirectUrl, '/');
+        }
+
+        $redirectUrl = ltrim($redirectUrl, '/');
+        if ($redirectUrl === '') {
+            return '';
+        }
+
+        if (preg_match('#^(customer/account/login|weshop/customer/account/login)(\\?|$)#', $redirectUrl) === 1) {
+            return '';
+        }
+
+        return $redirectUrl;
+    }
+
+    private function formatClientRedirect(string $redirectUrl): string
+    {
+        $redirectUrl = trim($redirectUrl);
+        if ($redirectUrl === '') {
+            return '/customer/account';
+        }
+
+        if ($this->isValidReferer($redirectUrl) && str_contains($redirectUrl, '://')) {
+            return $redirectUrl;
+        }
+
+        $normalized = ltrim($redirectUrl, '/');
+        if ($normalized === '' || $normalized === 'weshop/customer/account/index' || $normalized === 'customer/account/index') {
+            return '/customer/account';
+        }
+
+        return '/' . $normalized;
     }
 
     /**
