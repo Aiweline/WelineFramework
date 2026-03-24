@@ -16,12 +16,28 @@ function terminalContent(page) {
   return page.locator('#site-builder-agent-terminal_content');
 }
 
+async function waitForWorkspaceReload(page, action) {
+  await Promise.all([
+    page.waitForNavigation({
+      url: /site-builder-agent\/workspace\?public_id=/,
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    }),
+    action(),
+  ]);
+
+  await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+}
+
 test.describe('AI Site Workbench', () => {
   test.describe.configure({ mode: 'serial' });
 
   test('provider lane anchors stay on the hub and workspace flow advances through guided stages', async ({ page }) => {
     test.slow();
     const { hubUrl } = await openHub(page);
+
+    await expect(page.locator('body')).toContainText('AI 建站工作台', { timeout: 30000 });
+    await expect(page.locator('#provider-lane')).toBeVisible({ timeout: 30000 });
 
     const providerLaneLink = page.locator('a[href*="#provider-lane"]').first();
     await expect(providerLaneLink).toHaveAttribute('href', /site-builder-agent\/index/);
@@ -42,20 +58,18 @@ test.describe('AI Site Workbench', () => {
     await page.fill('#site-builder-domain', 'demo-coffee.local.test');
     await page.fill('#site-builder-notes', 'Verify workspace summary and provider tools');
     await page.fill('#site-builder-brief', 'Need brand storytelling, product pages, FAQ, and subscription CTA.');
-    await page.click('#site-builder-save-summary');
-    await page.waitForURL(/site-builder-agent\/workspace\?public_id=/, { timeout: 30000 });
-    await page.waitForTimeout(1500);
+    await waitForWorkspaceReload(page, () => page.click('#site-builder-save-summary'));
 
     await expect(page.locator('#site-builder-title')).toHaveValue('Demo Coffee Roasters');
     await expect(page.locator('#site-builder-domain')).toHaveValue('demo-coffee.local.test');
     await expect(page.locator('#site-builder-current-stage')).toContainText('信息准备');
 
-    await page.click('#site-builder-apply-stage-recommendation');
+    await waitForWorkspaceReload(page, () => page.click('#site-builder-apply-stage-recommendation'));
     await expect(page.locator('#site-builder-current-stage')).toContainText('页面生成', { timeout: 30000 });
     await expect(page.locator('body')).toContainText('styles', { timeout: 30000 });
     await expect(page.locator('body')).toContainText(/Header\s*(\/|和)\s*Footer/, { timeout: 30000 });
 
-    await page.click('#site-builder-apply-stage-recommendation');
+    await waitForWorkspaceReload(page, () => page.click('#site-builder-apply-stage-recommendation'));
     await expect(page.locator('#site-builder-current-stage')).toContainText('完成', { timeout: 30000 });
 
     const stateUrl = await page.locator('a[href*="state-json"]').getAttribute('href');

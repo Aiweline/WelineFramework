@@ -60,7 +60,8 @@ class ThemeCompatibilityServiceTest extends TestCase
         $this->assertSame(2, $result['missing_count']);
         $this->assertSame('WeShop_Promotion', $result['missing_modules'][0]['module']);
         $this->assertSame('WeShop_Promotion::homepage::deals_content', $result['missing_hosts'][0]['name']);
-        $this->assertStringContainsString('Please extend the inherited layout', (string) $result['warning_message']);
+        $this->assertNotSame('', (string) $result['warning_message']);
+        $this->assertStringContainsString('child-theme', (string) $result['warning_message']);
     }
 
     public function testInspectThemeFallsBackToParentThemeViewThemeLayout(): void
@@ -71,7 +72,7 @@ class ThemeCompatibilityServiceTest extends TestCase
         $layoutFile = $this->createLayoutFile(
             $parentBase,
             'view/theme/frontend/layouts/checkout/default.phtml',
-            '<w:hook>WeShop_Shipping::checkout::methods</w:hook>'
+            '<w:hook>WeShop_Shipping::frontend::layouts::checkout::methods</w:hook>'
         );
 
         $parentTheme = $this->createThemeMock(2, 'parent-theme', $parentBase);
@@ -83,7 +84,7 @@ class ThemeCompatibilityServiceTest extends TestCase
                 'checkout' => [
                     'WeShop_Shipping' => [
                         'hosts' => [
-                            ['type' => 'hook', 'name' => 'WeShop_Shipping::checkout::methods'],
+                            ['type' => 'hook', 'name' => 'WeShop_Shipping::frontend::layouts::checkout::methods'],
                         ],
                     ],
                 ],
@@ -112,7 +113,7 @@ class ThemeCompatibilityServiceTest extends TestCase
         $decorated = $service->injectPreviewBanner($html, $compatibility);
 
         $this->assertStringContainsString('weshop-theme-compatibility-banner', $decorated);
-        $this->assertStringContainsString('Preview compatibility notice', $decorated);
+        $this->assertStringContainsString('Theme compatibility warning', $decorated);
         $this->assertStringContainsString('WeShop_Checkout::frontend::layouts::checkout::payment-content', $decorated);
     }
 
