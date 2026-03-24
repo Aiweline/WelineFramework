@@ -14,7 +14,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
  */
 #[Table(comment: 'WeShop gift card table')]
 #[Index(name: 'idx_card_number', columns: [self::schema_fields_CARD_NUMBER], type: 'UNIQUE', comment: 'Gift card number unique index')]
-#[Index(name: 'idx_customer_id', columns: [self::schema_fields_CUSTOMER_ID], type: 'BTREE', comment: 'Customer gift card index')]
+#[Index(name: 'idx_customer_id', columns: [self::schema_fields_CUSTOMER_ID], type: 'KEY', comment: 'Customer gift card index')]
 class GiftCard extends Model
 {
     public const schema_table = 'weshop_gift_card';
