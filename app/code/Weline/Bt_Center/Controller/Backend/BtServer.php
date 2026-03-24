@@ -10,7 +10,7 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Manager\ObjectManager;
 
-#[AclAttribute('Weline_Bt_Center::bt_server', 'BT服务器管理', 'mdi-server', '管理 BT 服务器', 'Weline_Bt_Center::bt_center')]
+#[AclAttribute('Weline_Bt_Center::bt_server', 'BT服务器管理', 'mdi-server', '管理 BT 服务器')]
 class BtServer extends BackendController
 {
     private function getBtServerModel(): BtServerModel
