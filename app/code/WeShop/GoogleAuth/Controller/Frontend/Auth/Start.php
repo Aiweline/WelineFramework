@@ -24,6 +24,7 @@ class Start extends FrontendController
         $redirectUrl = (string) ($this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? '');
 
         try {
+            $redirectUrl = $this->googleOAuthService->sanitizeRedirectUrl($area, $redirectUrl, true);
             $localUserId = $this->resolveLocalUserId($area, $mode);
             $this->redirect($this->googleOAuthService->beginAuthorization($area, $mode, $localUserId, $redirectUrl));
         } catch (\Throwable $throwable) {
