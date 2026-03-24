@@ -40,5 +40,8 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::shipping-methods', $template);
         $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-methods', $template);
         $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-details', $template);
+        $this->assertStringContainsString('weshop-checkout-form', $template);
+        $this->assertStringContainsString('checkout/success', $template);
+        $this->assertStringContainsString('redirect_url', $template);
     }
 }

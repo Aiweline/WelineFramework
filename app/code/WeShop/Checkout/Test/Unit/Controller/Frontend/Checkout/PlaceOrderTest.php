@@ -13,8 +13,16 @@ use Weline\Framework\Http\Request;
 
 class PlaceOrderTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        unset($_SERVER['WELINE_USER_CURRENCY']);
+        parent::tearDown();
+    }
+
     public function testIndexPersistsCheckoutContextIntoSessionWhenOrderIsPlaced(): void
     {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+
         $customer = $this->getMockBuilder(Customer::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['getId'])
@@ -53,10 +61,15 @@ class PlaceOrderTest extends TestCase
                 'shipping_address' => ['firstname' => 'Ada'],
                 'shipping_method' => 'flat_rate',
                 'payment_method' => 'paypal',
+                'currency' => 'USD',
+                'client_ip' => '203.0.113.9',
             ])
             ->willReturn([
                 'order_id' => 88,
                 'order_increment_id' => 'WS000088',
+                'payment' => [
+                    'redirect_url' => 'https://paypal.test/checkout',
+                ],
                 'payment_method' => [
                     'code' => 'paypal',
                     'title' => 'PayPal',
@@ -76,6 +89,10 @@ class PlaceOrderTest extends TestCase
                 ['shipping_method', null, 'flat_rate'],
                 ['payment_method', null, 'paypal'],
             ]);
+        $request->method('getServer')
+            ->willReturnMap([
+                ['REMOTE_ADDR', '203.0.113.9'],
+            ]);
 
         $controller = $this->getMockBuilder(PlaceOrder::class)
             ->setConstructorArgs([$checkoutService, $customerSession])
@@ -86,7 +103,8 @@ class PlaceOrderTest extends TestCase
             ->with($this->callback(static function (array $payload): bool {
                 return (bool) ($payload['success'] ?? false)
                     && (int) ($payload['data']['order_id'] ?? 0) === 88
-                    && (string) ($payload['data']['increment_id'] ?? '') === 'WS000088';
+                    && (string) ($payload['data']['increment_id'] ?? '') === 'WS000088'
+                    && (string) ($payload['data']['redirect_url'] ?? '') === 'https://paypal.test/checkout';
             }))
             ->willReturn('json');
 
