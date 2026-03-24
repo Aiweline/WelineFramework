@@ -1,6 +1,11 @@
 <?php
 
 return [
+    'WeShop_Checkout::frontend::partials::checkout::shipping-methods' => [
+        'name' => __('Checkout shipping method list'),
+        'description' => __('Render the dynamic list of checkout shipping methods gathered from the shipping query provider.'),
+        'doc' => 'frontend/checkout/shipping-methods.md',
+    ],
     'WeShop_Checkout::frontend::partials::checkout::payment-methods' => [
         'name' => __('Checkout payment method list'),
         'description' => __('Render the dynamic list of checkout payment methods gathered from the payment query provider.'),

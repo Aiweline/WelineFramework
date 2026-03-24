@@ -105,6 +105,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                 <span class="material-symbols-outlined text-4xl text-primary">dashboard</span>
             </div>
 
+            <w:hook name="WeShop_Customer::frontend::account::quick-links::before"/>
             <div class="mt-6 grid gap-3 sm:grid-cols-2">
                 <?php foreach ($quickLinks as $link): ?>
                     <a href="<?= $this->getUrl((string) ($link['url'] ?? '')) ?>" class="group rounded-2xl border border-border-light bg-background-light p-4 transition hover:border-primary hover:shadow-sm dark:border-border-dark dark:bg-background-dark">
@@ -120,6 +121,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     </a>
                 <?php endforeach; ?>
             </div>
+            <w:hook name="WeShop_Customer::frontend::account::quick-links::after"/>
         </article>
 
         <div class="grid gap-6 lg:grid-cols-2">
@@ -220,6 +222,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                 <a href="<?= $this->getUrl('catalog/category') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Keep Shopping') ?></a>
             </div>
 
+            <w:hook name="WeShop_Customer::frontend::account::recommendations::before"/>
             <?php if ($recommendations): ?>
                 <div class="mt-6 grid grid-cols-2 gap-3">
                     <?php foreach ($recommendations as $product): ?>
@@ -237,6 +240,7 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     <?= __('As you save and browse products, personalized recommendations will show up here.') ?>
                 </div>
             <?php endif; ?>
+            <w:hook name="WeShop_Customer::frontend::account::recommendations::after"/>
         </article>
 
         <w:hook name="WeShop_Customer::frontend::account::discovery::cards"/>
