@@ -15,8 +15,30 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
             $this->assertIsString($template);
 
             $this->assertStringContainsString('WeShop_Checkout::checkout::shipping_before', $template);
-            $this->assertStringContainsString('WeShop_Shipping::checkout::methods', $template);
+            $this->assertStringContainsString('WeShop_Shipping::frontend::layouts::checkout::methods', $template);
             $this->assertStringContainsString('WeShop_Checkout::frontend::layouts::checkout::payment-content', $template);
+            $this->assertStringContainsString('{{content}}', $template);
+            $this->assertStringContainsString('{{meta.content}}', $template);
+
+            $paymentHostPos = strpos($template, 'WeShop_Checkout::frontend::layouts::checkout::payment-content');
+            $contentPos = strpos($template, '{{content}}');
+            $metaContentPos = strpos($template, '{{meta.content}}');
+
+            $this->assertIsInt($paymentHostPos);
+            $this->assertIsInt($contentPos);
+            $this->assertIsInt($metaContentPos);
+            $this->assertGreaterThan($contentPos, $paymentHostPos);
+            $this->assertGreaterThan($metaContentPos, $paymentHostPos);
         }
+    }
+
+    public function testCheckoutPageHostsDynamicPaymentHooks(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../../../../design/WeShop/default/frontend/pages/checkout/index.phtml');
+        $this->assertIsString($template);
+        $this->assertStringContainsString('WeShop_Shipping::frontend::layouts::checkout::methods', $template);
+        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::shipping-methods', $template);
+        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-methods', $template);
+        $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-details', $template);
     }
 }
