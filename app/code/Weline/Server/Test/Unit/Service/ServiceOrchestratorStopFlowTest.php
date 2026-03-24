@@ -180,6 +180,58 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame(1, $orchestrator->sleepCalls);
     }
 
+    public function testVerifyAndKillRemainingProcessesSkipsExternallyManagedSharedSidecar(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public array $batchCheckCalls = [];
+            public array $forceKillCalls = [];
+
+            protected function batchCheckStopFlowRunning(array $pids): array
+            {
+                $this->batchCheckCalls[] = \array_values($pids);
+
+                return \array_fill_keys($pids, true);
+            }
+
+            protected function getStopVerificationTimeout(): float
+            {
+                return 0.0;
+            }
+
+            protected function forceStopRemainingProcesses(array $pids): array
+            {
+                $this->forceKillCalls[] = \array_values($pids);
+
+                return [
+                    'killed' => \count($pids),
+                    'failed' => 0,
+                    'remaining' => [],
+                ];
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: 'session_server',
+            instanceId: 1,
+            pid: 303,
+            state: ServiceInstance::STATE_READY,
+            metadata: [
+                'shared_external' => true,
+                'process_name' => 'weline-wls-session-owner',
+            ]
+        ));
+
+        $this->invokePrivate($orchestrator, 'verifyAndKillRemainingProcesses');
+
+        self::assertSame([[]], $orchestrator->batchCheckCalls);
+        self::assertSame([], $orchestrator->forceKillCalls);
+
+        $session = $registry->getInstance('session_server', 1);
+        self::assertInstanceOf(ServiceInstance::class, $session);
+        self::assertSame(ServiceInstance::STATE_STOPPED, $session->state);
+    }
+
     public function testBroadcastDrainToAllUsesGlobalDrainWithoutPorts(): void
     {
         $server = new class extends MasterControlServer {
