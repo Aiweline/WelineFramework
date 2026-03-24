@@ -36,13 +36,19 @@ class CustomerProfileService
 
     public function getOrCreateByAuthUser(AuthCustomer $authUser, array $profileData = []): CustomerProfile
     {
-        $profile = $this->getByUserId((int) $authUser->getId()) ?? $this->customerProfile->reset()->clearData();
+        $email = (string) ($profileData['email'] ?? $authUser->getEmail() ?: $authUser->getUsername());
+        $profile = $this->getByUserId((int) $authUser->getId())
+            ?? ($email !== '' ? $this->getByEmail($email) : null)
+            ?? $this->customerProfile->reset()->clearData();
         $now = date('Y-m-d H:i:s');
-        $email = (string) ($profileData['email'] ?? $authUser->getUsername());
+        $enabled = in_array((string) ($profileData['status'] ?? 'active'), ['active', 'enabled', '1'], true) ? 1 : 0;
 
-        $profile->setData(CustomerProfile::schema_fields_USER_ID, (int) $authUser->getId())
-            ->setData(CustomerProfile::schema_fields_EMAIL, $email)
-            ->setData(CustomerProfile::schema_fields_STATUS, $profileData['status'] ?? 'active')
+        if (!$profile->getId()) {
+            $profile->setData(CustomerProfile::schema_fields_ID, (int) $authUser->getId());
+        }
+
+        $profile->setData(CustomerProfile::schema_fields_EMAIL, $email)
+            ->setData(CustomerProfile::schema_fields_STATUS, $enabled)
             ->setData(CustomerProfile::schema_fields_FIRST_NAME, $profileData['first_name'] ?? $profile->getData(CustomerProfile::schema_fields_FIRST_NAME))
             ->setData(CustomerProfile::schema_fields_LAST_NAME, $profileData['last_name'] ?? $profile->getData(CustomerProfile::schema_fields_LAST_NAME))
             ->setData(CustomerProfile::schema_fields_PHONE, $profileData['phone'] ?? $profile->getData(CustomerProfile::schema_fields_PHONE))

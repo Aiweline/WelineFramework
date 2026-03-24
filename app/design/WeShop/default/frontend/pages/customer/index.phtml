@@ -34,9 +34,18 @@ $memberSince = trim((string) ($customer['created_at'] ?? ''));
                     <a href="<?= $this->getUrl('weshop/order/list') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
                         <?= __('View Orders') ?>
                     </a>
+                    <a href="<?= $this->getUrl('rma') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Returns Center') ?>
+                    </a>
                     <a href="<?= $this->getUrl('weshop/customer/account/logout') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                         <?= __('Sign Out') ?>
                     </a>
+                </div>
+
+                <div class="mt-4 flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary-light dark:text-text-secondary-dark">
+                    <a href="<?= $this->getUrl('compare') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('Compare') ?></a>
+                    <a href="<?= $this->getUrl('recently-viewed') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('Recently Viewed') ?></a>
+                    <a href="<?= $this->getUrl('rma') ?>" class="rounded-full border border-border-light px-3 py-1 transition hover:border-primary hover:text-primary dark:border-border-dark"><?= __('RMA') ?></a>
                 </div>
             </div>
 
