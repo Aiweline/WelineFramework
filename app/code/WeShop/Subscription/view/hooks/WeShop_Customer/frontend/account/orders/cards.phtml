@@ -6,21 +6,7 @@
  * @hook-sort-order 24
  * @hook-solo false
  */
-
-use WeShop\Subscription\Service\SubscriptionService;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionFactory;
-
-$session = SessionFactory::getInstance()->createFrontendSession();
-$customer = $session->getCustomer();
-if (!$customer || !$customer->getId()) {
-    return;
-}
-
-/** @var SubscriptionService $subscriptionService */
-$subscriptionService = ObjectManager::getInstance(SubscriptionService::class);
-$summary = $subscriptionService->getCustomerSubscriptions((int) $customer->getId(), 1, 1);
-$total = (int) ($summary['total'] ?? 0);
+$total = (int) ($this->getData('subscription_count') ?? 0);
 ?>
 <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
     <div class="flex items-center justify-between gap-4">

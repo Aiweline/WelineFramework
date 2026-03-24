@@ -9,3 +9,11 @@
 - Renders a subscription summary card with total subscription count.
 - Links directly to clean route `subscription`.
 - Keeps compatibility with shared customer account host without modifying host theme templates.
+
+## Data contract
+
+This hook can read optional host data:
+
+- `subscription_count`
+
+Templates must still render safely when the host does not provide these values.

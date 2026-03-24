@@ -11,6 +11,7 @@ use WeShop\Customer\Service\AccountDashboardDataService;
 use WeShop\Order\Service\OrderService;
 use WeShop\Product\Service\ProductRecommendationService;
 use WeShop\RecentlyViewed\Service\RecentlyViewedService;
+use WeShop\Subscription\Service\SubscriptionService;
 use WeShop\Wishlist\Service\WishlistService;
 use Weline\Customer\Model\Customer as AuthCustomer;
 
@@ -116,6 +117,15 @@ class AccountDashboardDataServiceTest extends TestCase
                 ],
             ]);
 
+        $subscriptionService = $this->createMock(SubscriptionService::class);
+        $subscriptionService->expects($this->once())
+            ->method('getCustomerSubscriptions')
+            ->with(42, 1, 1)
+            ->willReturn([
+                'items' => [],
+                'total' => 3,
+            ]);
+
         $recommendationService = $this->createMock(ProductRecommendationService::class);
         $recommendationService->expects($this->once())
             ->method('getRecommendations')
@@ -129,7 +139,8 @@ class AccountDashboardDataServiceTest extends TestCase
             $compareService,
             $wishlistService,
             $recentlyViewedService,
-            $recommendationService
+            $recommendationService,
+            $subscriptionService
         );
         $result = $service->build($authUser, $profile);
 
@@ -140,6 +151,7 @@ class AccountDashboardDataServiceTest extends TestCase
         $this->assertSame(1, $result['compare_count']);
         $this->assertSame(2, $result['wishlist_count']);
         $this->assertSame(1, $result['recently_viewed_count']);
+        $this->assertSame(3, $result['subscription_count']);
         $this->assertSame('Carry-On Spinner', $result['compare_preview'][0]['name']);
         $this->assertSame('Travel Backpack', $result['wishlist_preview'][0]['name']);
         $this->assertSame('Passport Holder', $result['recently_viewed'][0]['name']);
