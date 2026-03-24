@@ -439,7 +439,25 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
 
 /* 子节点样式 */
 #acl .jstree-node {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     margin-bottom: 2px;
+    min-width: 0;
+}
+
+#acl .jstree-node > .jstree-ocl {
+    flex: 0 0 auto;
+}
+
+#acl .jstree-node > .jstree-anchor {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+#acl .jstree-node > .jstree-children {
+    flex: 0 0 100%;
+    min-width: 0;
 }
 
 #acl .jstree-anchor {
@@ -449,7 +467,16 @@ $selectedPercent = $totalAll > 0 ? round(($selectedAll / $totalAll) * 100) : 0;
     transition: all 0.15s ease;
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 6px;
+    min-width: 0;
+}
+
+#acl .jstree-anchor > .jstree-checkbox,
+#acl .jstree-anchor > .jstree-themeicon,
+#acl .weline-acl-type-badge,
+#acl .weline-acl-module-badge {
+    flex-shrink: 0;
 }
 
 #acl .jstree-anchor:hover {
