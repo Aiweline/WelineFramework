@@ -5,6 +5,9 @@
 $wishlistItems = (array) ($this->getData('wishlist_items') ?? []);
 $wishlistCount = (int) ($this->getData('wishlist_count') ?? 0);
 $recommendations = (array) ($this->getData('recommendations') ?? []);
+$wishlistUrl = (string) ($this->getData('wishlist_url') ?? $this->getUrl('wishlist'));
+$browseUrl = (string) ($this->getData('browse_url') ?? $this->getUrl('catalog/category'));
+$removeUrl = (string) ($this->getData('remove_url') ?? $this->getUrl('wishlist/remove'));
 ?>
 <main class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
     <section class="rounded-[2rem] border border-border-light bg-surface-light p-8 shadow-sm dark:border-border-dark dark:bg-surface-dark">
@@ -30,14 +33,15 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                     <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Wishlist Items') ?></p>
                     <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Ready To Revisit') ?></h2>
                 </div>
-                <a href="<?= $this->getUrl('catalog/category') ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Browse More') ?></a>
+                <a href="<?= htmlspecialchars($browseUrl, ENT_QUOTES) ?>" class="text-sm font-semibold text-primary hover:underline"><?= __('Browse More') ?></a>
             </div>
 
             <?php if ($wishlistItems): ?>
                 <div class="mt-6 space-y-4">
                     <?php foreach ($wishlistItems as $item): ?>
+                        <?php $productUrl = (string) ($item['product_url'] ?? $this->getUrl('product/view', ['id' => $item['product_id']])); ?>
                         <div class="group flex flex-col gap-4 rounded-3xl border border-border-light bg-background-light p-4 dark:border-border-dark dark:bg-background-dark sm:flex-row sm:items-center sm:justify-between">
-                            <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id']]) ?>" class="flex min-w-0 flex-1 items-center gap-4">
+                            <a href="<?= htmlspecialchars($productUrl, ENT_QUOTES) ?>" class="flex min-w-0 flex-1 items-center gap-4">
                                 <div class="h-20 w-20 overflow-hidden rounded-2xl bg-surface-light dark:bg-surface-dark">
                                     <img src="<?= $item['image'] ?? '' ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? ''), ENT_QUOTES) ?>" class="h-full w-full object-cover">
                                 </div>
@@ -48,7 +52,7 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                                 </div>
                             </a>
                             <div class="flex gap-3">
-                                <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id']]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                <a href="<?= htmlspecialchars($productUrl, ENT_QUOTES) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                                     <?= __('View Product') ?>
                                 </a>
                                 <button type="button" data-remove-wishlist-item="<?= (int) ($item['wishlist_id'] ?? 0) ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
@@ -65,7 +69,7 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                     <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
                         <?= __('Start saving products from category and product pages to build a shortlist for later.') ?>
                     </p>
-                    <a href="<?= $this->getUrl('catalog/category') ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
+                    <a href="<?= htmlspecialchars($browseUrl, ENT_QUOTES) ?>" class="mt-6 inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-white transition hover:bg-primary/90">
                         <?= __('Start Shopping') ?>
                     </a>
                 </div>
@@ -81,7 +85,8 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
             <?php if ($recommendations): ?>
                 <div class="mt-6 grid grid-cols-2 gap-3">
                     <?php foreach ($recommendations as $product): ?>
-                        <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group rounded-2xl border border-border-light bg-background-light p-3 transition hover:border-primary dark:border-border-dark dark:bg-background-dark">
+                        <?php $productUrl = (string) ($product['product_url'] ?? $this->getUrl('product/view', ['id' => $product['product_id']])); ?>
+                        <a href="<?= htmlspecialchars($productUrl, ENT_QUOTES) ?>" class="group rounded-2xl border border-border-light bg-background-light p-3 transition hover:border-primary dark:border-border-dark dark:bg-background-dark">
                             <div class="aspect-square overflow-hidden rounded-2xl bg-surface-light dark:bg-surface-dark">
                                 <img src="<?= $product['image'] ?? '' ?>" alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>" class="h-full w-full object-cover">
                             </div>
@@ -108,7 +113,7 @@ $recommendations = (array) ($this->getData('recommendations') ?? []);
                 return;
             }
 
-            fetch('<?= $this->getUrl('wishlist/remove') ?>', {
+            fetch('<?= htmlspecialchars($removeUrl, ENT_QUOTES) ?>', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

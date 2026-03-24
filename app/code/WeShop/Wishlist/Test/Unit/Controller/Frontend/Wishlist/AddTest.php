@@ -69,9 +69,9 @@ class AddTest extends TestCase
             ->with(7, 501)
             ->willReturn($wishlistItem);
         $wishlistService->expects($this->once())
-            ->method('getCustomerWishlist')
+            ->method('getCustomerWishlistCount')
             ->with(7)
-            ->willReturn([['wishlist_id' => 11]]);
+            ->willReturn(1);
         $url = $this->createMock(Url::class);
 
         $request = $this->createMock(Request::class);

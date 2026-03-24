@@ -11,6 +11,7 @@ use WeShop\Frontend\Controller\BaseController;
 class Index extends BaseController
 {
     private const LOGIN_ROUTE = 'customer/account/login';
+    private const CONTENT_TEMPLATE = 'WeShop_Compare::templates/Frontend/Compare/Index/index.phtml';
 
     protected ?string $layoutType = 'account';
 
@@ -33,6 +34,8 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        $this->assign('page_title', (string) __('Compare Products'));
+
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
