@@ -2,18 +2,18 @@
 
 ## Outcome
 
-- 
+- Phase 5 should stop treating every still-alive PID equally; disconnected residual processes should bypass the graceful verification window and move straight to batch cleanup, while IPC-connected processes keep the short graceful wait.
 
 ## Steps
 
-- [ ] Clarify scope, affected files, and risks
-- [ ] Implement the smallest correct change
-- [ ] Add or update tests / verification
-- [ ] Run validation commands
-- [ ] Update result.md and memory if needed
+- [x] Clarify scope, affected files, and risks
+- [x] Implement the smallest correct change
+- [x] Add or update tests / verification
+- [x] Run validation commands
+- [x] Update result.md and memory if needed
 
 ## Verification Targets
 
-- [ ] Unit / phpunit
+- [x] Unit / phpunit
 - [ ] Route / integration / http:req
 - [ ] E2E / browser flow

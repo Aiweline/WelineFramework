@@ -396,6 +396,52 @@ class ProcesserTest extends TestCore
         ]));
     }
 
+    public function testFilterPidIndexExistingJsonPathsDropsMissingJsonRecords(): void
+    {
+        $tempFile = \tempnam(\sys_get_temp_dir(), 'wls-pid-');
+        self::assertNotFalse($tempFile);
+
+        try {
+            $filtered = $this->invokePrivateStatic(Processer::class, 'filterPidIndexExistingJsonPaths', [[
+                101 => ['pname' => '--name=weline-wls-master-default', 'jsonPath' => $tempFile],
+                202 => ['pname' => '--name=weline-wls-worker-default-1', 'jsonPath' => $tempFile . '.missing'],
+                303 => ['pname' => '', 'jsonPath' => $tempFile],
+            ]]);
+
+            self::assertSame([
+                101 => ['pname' => '--name=weline-wls-master-default', 'jsonPath' => $tempFile],
+            ], $filtered);
+        } finally {
+            @\unlink($tempFile);
+        }
+    }
+
+    public function testFilterNameIndexByPidIndexRemovesHistoricalOrphanEntries(): void
+    {
+        $filtered = $this->invokePrivateStatic(Processer::class, 'filterNameIndexByPidIndex', [[
+            '--name=weline-wls-master-default' => [
+                ['pid' => 101, 'jsonPath' => 'var/process/pid/live-master.json'],
+                ['pid' => 999, 'jsonPath' => 'var/process/pid/stale-master.json'],
+            ],
+            '--name=weline-wls-worker-default-1' => [
+                ['pid' => 202, 'jsonPath' => 'var/process/pid/live-worker.json'],
+                ['pid' => 303, 'jsonPath' => 'var/process/pid/stale-worker.json'],
+            ],
+        ], [
+            101 => ['pname' => '--name=weline-wls-master-default', 'jsonPath' => 'var/process/pid/live-master.json'],
+            202 => ['pname' => '--name=weline-wls-worker-default-1', 'jsonPath' => 'var/process/pid/live-worker.json'],
+        ]]);
+
+        self::assertSame([
+            '--name=weline-wls-master-default' => [
+                ['pid' => 101, 'jsonPath' => 'var/process/pid/live-master.json'],
+            ],
+            '--name=weline-wls-worker-default-1' => [
+                ['pid' => 202, 'jsonPath' => 'var/process/pid/live-worker.json'],
+            ],
+        ], $filtered);
+    }
+
     private function invokePrivateStatic(string $class, string $method, array $args): mixed
     {
         $ref = new \ReflectionMethod($class, $method);
