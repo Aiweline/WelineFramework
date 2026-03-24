@@ -33,16 +33,20 @@ class Callback extends FrontendController
         $errorDescription = trim((string) ($this->request->getParam('error_description') ?? ''));
         $payload = $this->googleOAuthService->consumeState($state);
 
-        $area = strtolower((string) ($payload['area'] ?? 'frontend'));
-        $mode = strtolower((string) ($payload['mode'] ?? 'login'));
-        $localUserId = (int) ($payload['local_user_id'] ?? 0);
-        $redirectUrl = (string) ($payload['redirect_url'] ?? '');
-
         if (!$payload) {
             $this->getMessageManager()->addError(__('The Google login state is invalid or has expired.'));
             $this->redirect($this->url->getFrontendUrl('weshop/customer/account/login'));
             return;
         }
+
+        $area = strtolower((string) ($payload['area'] ?? 'frontend'));
+        $mode = strtolower((string) ($payload['mode'] ?? 'login'));
+        $localUserId = (int) ($payload['local_user_id'] ?? 0);
+        $redirectUrl = $this->googleOAuthService->sanitizeRedirectUrl(
+            $area,
+            (string) ($payload['redirect_url'] ?? ''),
+            true
+        );
 
         if ($error !== '') {
             $message = $errorDescription !== '' ? $errorDescription : $error;
@@ -126,7 +130,7 @@ class Callback extends FrontendController
             return $this->url->getBackendUrl('weshop_googleauth/backend/auth/binding');
         }
 
-        if (trim($redirectUrl) !== '') {
+        if ($redirectUrl !== '') {
             return $redirectUrl;
         }
 
