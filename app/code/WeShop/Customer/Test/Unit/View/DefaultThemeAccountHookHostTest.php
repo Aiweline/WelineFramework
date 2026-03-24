@@ -13,7 +13,11 @@ class DefaultThemeAccountHookHostTest extends TestCase
         $template = file_get_contents(__DIR__ . '/../../../../../../design/WeShop/default/frontend/pages/customer/index.phtml');
         $this->assertIsString($template);
 
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::after', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::security::cards', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::after', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::discovery::cards', $template);
         $this->assertStringContainsString('WeShop_Customer::frontend::account::orders::cards', $template);
     }
@@ -26,5 +30,25 @@ class DefaultThemeAccountHookHostTest extends TestCase
         $this->assertStringContainsString("getUrl('compare')", $template);
         $this->assertStringContainsString("getUrl('recently-viewed')", $template);
         $this->assertStringContainsString("getUrl('rma')", $template);
+    }
+
+    public function testAccountPageHostsQuickLinksAndRecommendationsHooks(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../../../../design/WeShop/default/frontend/pages/customer/index.phtml');
+        $this->assertIsString($template);
+
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::quick-links::after', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::before', $template);
+        $this->assertStringContainsString('WeShop_Customer::frontend::account::recommendations::after', $template);
+    }
+
+    public function testCustomerLoginPageHostsSocialButtonsAndRedirectField(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../../../../design/WeShop/default/frontend/pages/customer/login.phtml');
+        $this->assertIsString($template);
+
+        $this->assertStringContainsString('WeShop_Social::frontend::partials::login::buttons', $template);
+        $this->assertStringContainsString('name="redirect_url"', $template);
     }
 }

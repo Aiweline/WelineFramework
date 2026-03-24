@@ -1,0 +1,53 @@
+<?php
+/**
+ * Checkout shipping method radios.
+ *
+ * @hook-priority 200
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+$shippingMethods = $this->getData('shipping_methods') ?? [];
+if (!is_array($shippingMethods) || $shippingMethods === []) {
+    ?>
+    <div class="weshop-checkout-empty"><?= __('No shipping methods are available for the current checkout context.') ?></div>
+    <?php
+    return;
+}
+
+$hasExplicitDefault = false;
+foreach ($shippingMethods as $shippingMethod) {
+    if (is_array($shippingMethod) && !empty($shippingMethod['is_default'])) {
+        $hasExplicitDefault = true;
+        break;
+    }
+}
+?>
+<div class="weshop-checkout-choice-list" data-weshop-shipping-method-list>
+    <?php foreach ($shippingMethods as $index => $method): ?>
+        <?php
+        if (!is_array($method)) {
+            continue;
+        }
+        $code = (string) ($method['code'] ?? '');
+        $title = (string) ($method['name'] ?? $method['title'] ?? $code);
+        $description = trim((string) ($method['description'] ?? ''));
+        $checked = !empty($method['is_default']) || (!$hasExplicitDefault && $index === 0);
+        ?>
+        <label class="weshop-checkout-choice">
+            <input
+                type="radio"
+                name="shipping_method"
+                value="<?= htmlspecialchars($code, ENT_QUOTES) ?>"
+                <?= $checked ? 'checked' : '' ?>
+                required
+            >
+            <span>
+                <div class="weshop-checkout-choice-title"><?= htmlspecialchars($title, ENT_QUOTES) ?></div>
+                <?php if ($description !== ''): ?>
+                    <div class="weshop-checkout-choice-meta"><?= htmlspecialchars($description, ENT_QUOTES) ?></div>
+                <?php endif; ?>
+            </span>
+        </label>
+    <?php endforeach; ?>
+</div>
+

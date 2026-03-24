@@ -22,3 +22,11 @@
   - `GET /customer/account/login` still returns `200`
   - `POST /customer/account/login` with an unknown email now returns clean JSON `{"success":false,"message":"登录失败：Invalid email or password."}` instead of the earlier SQL/schema exception
 - 2026-03-24 10:11 Follow-up runtime inspection clarified that the current `9982` storefront instance is serving the `WeShop/motor` frontend theme (`data-theme="motor"` and `account_auth/default.css` from the motor theme), so default-theme login template changes are not directly observable from this live page. The default-theme and Weline login template updates are therefore being guarded by unit tests plus compiled template cache inspection in this slice rather than by theme-switched live HTML.
+- 2026-03-24 10:34 Continued the unified auth API live acceptance sweep on `9982`:
+  - found `POST /api123/weshop/rest/v1/auth/token` with an empty body still returned `500 Authentication failed` because the controller defaulted to the password grant and reached `CustomerAccountService::authenticate('', '')`
+  - added explicit grant-payload validation in both `WeShop\Auth\Api\Rest\V1\Auth` and `WeShop\Auth\Service\AuthGrantService`, plus focused controller/service tests for missing password/google/api_credentials/refresh payloads
+  - re-ran `php vendor/bin/phpunit --no-coverage app/code/WeShop/Auth/Test/Unit --colors=never` successfully (`39` tests / `150` assertions)
+  - after WLS reload and refresh, live `POST /api123/weshop/rest/v1/auth/token` with `{}` now returns `422` + `InvalidArgumentException` instead of `500`
+- 2026-03-24 10:38 Restored the local e2e preflight chain after introducing extra storefront account hook docs:
+  - preflight initially failed on missing `WeShop_Customer` hook docs for account quick-links/recommendations
+  - added the missing recommendation hook docs and confirmed `php tests/e2e/framework/preflight-refresh.php` returns green again
