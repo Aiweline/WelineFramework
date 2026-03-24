@@ -7,6 +7,7 @@ namespace WeShop\Checkout\Controller\Frontend\Checkout;
 use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\State;
 
 class PlaceOrder extends FrontendController
 {
@@ -31,6 +32,8 @@ class PlaceOrder extends FrontendController
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->request->getParam('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->request->getParam('payment_method') ?? ''),
+                'currency' => State::getCurrency(),
+                'client_ip' => (string) ($this->request->getServer('REMOTE_ADDR') ?? ''),
             ];
             $result = $this->checkoutService->placeOrder($checkoutData);
 
@@ -51,6 +54,7 @@ class PlaceOrder extends FrontendController
                     'increment_id' => (string) ($result['order_increment_id'] ?? ''),
                     'payment' => \is_array($result['payment'] ?? null) ? $result['payment'] : [],
                     'payment_method' => \is_array($result['payment_method'] ?? null) ? $result['payment_method'] : [],
+                    'redirect_url' => (string) (($result['payment']['redirect_url'] ?? $result['payment']['payment_url'] ?? '')),
                 ],
             ]);
         } catch (\Throwable $throwable) {
