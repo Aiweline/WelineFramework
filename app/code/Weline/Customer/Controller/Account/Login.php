@@ -260,8 +260,8 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if (($result['status'] ?? '') === 'challenge_required') {
             $challengeToken = (string) ($result['challenge_token'] ?? '');
             $challengePath = $challengeToken !== ''
-                ? 'weshop/customer/account/challenge?challenge_token=' . rawurlencode($challengeToken)
-                : 'weshop/customer/account/login';
+                ? 'customer/account/challenge?challenge_token=' . rawurlencode($challengeToken)
+                : 'customer/account/login';
 
             return $this->json([
                 'success' => true,
