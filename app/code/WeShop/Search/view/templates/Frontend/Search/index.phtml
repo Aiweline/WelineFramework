@@ -1,0 +1,148 @@
+<?php
+/**
+ * WeShop Search content template.
+ */
+$keyword = trim((string) ($this->getData('keyword') ?? ''));
+$hasKeyword = (bool) ($this->getData('has_keyword') ?? false);
+$products = $this->getData('products') ?? [];
+$popularKeywords = $this->getData('popular_keywords') ?? [];
+$activeFilters = $this->getData('active_filters') ?? [];
+$searchSummary = $this->getData('search_summary') ?? [];
+$engine = (string) ($this->getData('engine') ?? 'mysql');
+?>
+<div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <w:hook name="WeShop_Search::frontend::layouts::search-page::before"/>
+
+    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm">
+        <div class="grid gap-8 px-6 py-8 lg:grid-cols-[1.4fr_0.6fr] lg:px-10">
+            <div class="space-y-5">
+                <div class="space-y-3">
+                    <span class="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-primary">
+                        <?= __('Search') ?>
+                    </span>
+                    <h1 class="text-3xl font-black tracking-[-0.03em] text-text-primary-light sm:text-4xl">
+                        <?= $hasKeyword ? __('Results for "%{1}"', [$keyword]) : __('Find what shoppers are looking for') ?>
+                    </h1>
+                    <p class="max-w-2xl text-sm leading-6 text-text-secondary-light">
+                        <?= htmlspecialchars((string) ($searchSummary['label'] ?? __('Search for products, brands, and categories.'))) ?>
+                    </p>
+                </div>
+
+                <form action="<?= $this->getUrl('search') ?>" method="get" class="flex flex-col gap-3 sm:flex-row">
+                    <label class="sr-only" for="default-search-keyword"><?= __('Search keyword') ?></label>
+                    <input
+                        id="default-search-keyword"
+                        type="text"
+                        name="q"
+                        value="<?= htmlspecialchars($keyword) ?>"
+                        class="h-12 flex-1 rounded-2xl border border-border-light bg-background-light px-4 text-sm text-text-primary-light outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+                        placeholder="<?= __('Search for products, brands, and more...') ?>"
+                    />
+                    <button type="submit" class="inline-flex h-12 items-center justify-center rounded-2xl bg-primary px-6 text-sm font-bold text-white transition hover:bg-blue-600">
+                        <?= __('Search') ?>
+                    </button>
+                </form>
+
+                <?php if (!empty($activeFilters)): ?>
+                    <div class="flex flex-wrap gap-2">
+                        <?php foreach ($activeFilters as $activeFilter): ?>
+                            <span class="inline-flex items-center gap-2 rounded-full bg-background-light px-3 py-2 text-xs font-medium text-text-secondary-light">
+                                <span class="text-text-primary-light"><?= htmlspecialchars($activeFilter['label'] ?? '') ?>:</span>
+                                <span><?= htmlspecialchars($activeFilter['value'] ?? '') ?></span>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="rounded-[1.5rem] bg-background-light p-5">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold uppercase tracking-[0.16em] text-text-primary-light"><?= __('Trending Searches') ?></h2>
+                    <span class="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary"><?= htmlspecialchars(strtoupper($engine)) ?></span>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-2">
+                    <?php foreach ($popularKeywords as $item): ?>
+                        <a
+                            href="<?= $this->getUrl('search', ['q' => $item['keyword'] ?? '']) ?>"
+                            class="inline-flex items-center gap-2 rounded-full border border-border-light bg-surface-light px-3 py-2 text-sm text-text-secondary-light transition hover:border-primary hover:text-primary"
+                        >
+                            <span><?= htmlspecialchars($item['keyword'] ?? '') ?></span>
+                            <?php if (!empty($item['count'])): ?>
+                                <span class="rounded-full bg-background-light px-2 py-0.5 text-xs text-text-primary-light"><?= (int) $item['count'] ?></span>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="mt-8">
+        <?php if ($hasKeyword && !empty($products)): ?>
+            <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+                <?php foreach ($products as $product): ?>
+                    <article class="overflow-hidden rounded-[1.5rem] border border-border-light bg-surface-light shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+                        <a
+                            href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>"
+                            class="block aspect-square bg-background-light bg-cover bg-center"
+                            style="background-image: url('<?= htmlspecialchars((string) ($product['image'] ?? '')) ?>');"
+                        ></a>
+                        <div class="space-y-4 p-5">
+                            <div class="space-y-2">
+                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="line-clamp-2 text-base font-bold text-text-primary-light transition hover:text-primary">
+                                    <?= htmlspecialchars((string) ($product['name'] ?? '')) ?>
+                                </a>
+                                <?php if (!empty($product['short_description'])): ?>
+                                    <p class="line-clamp-2 text-sm leading-6 text-text-secondary-light">
+                                        <?= htmlspecialchars((string) $product['short_description']) ?>
+                                    </p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="text-lg font-black text-text-primary-light">
+                                    <?= $this->formatPrice((float) ($product['price'] ?? 0)) ?>
+                                </span>
+                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-blue-600">
+                                    <?= __('View') ?>
+                                </a>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+
+            <?php if (!empty($this->getData('pagination'))): ?>
+                <div class="mt-8 rounded-[1.5rem] border border-border-light bg-surface-light px-5 py-4">
+                    <?= $this->getData('pagination') ?>
+                </div>
+            <?php endif; ?>
+        <?php elseif ($hasKeyword): ?>
+            <div class="rounded-[2rem] border border-dashed border-border-light bg-surface-light px-6 py-16 text-center">
+                <div class="mx-auto max-w-2xl space-y-4">
+                    <h2 class="text-2xl font-black tracking-[-0.03em] text-text-primary-light"><?= __('No matching products yet') ?></h2>
+                    <p class="text-sm leading-6 text-text-secondary-light">
+                        <?= __('Try another keyword, browse a trending term, or remove filters to widen the catalog results.') ?>
+                    </p>
+                    <div class="flex flex-wrap justify-center gap-2 pt-2">
+                        <?php foreach ($popularKeywords as $item): ?>
+                            <a href="<?= $this->getUrl('search', ['q' => $item['keyword'] ?? '']) ?>" class="rounded-full border border-border-light px-3 py-2 text-sm text-text-secondary-light transition hover:border-primary hover:text-primary">
+                                <?= htmlspecialchars($item['keyword'] ?? '') ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="rounded-[2rem] border border-border-light bg-surface-light px-6 py-16 text-center">
+                <div class="mx-auto max-w-2xl space-y-4">
+                    <h2 class="text-2xl font-black tracking-[-0.03em] text-text-primary-light"><?= __('Start with a product, brand, or category') ?></h2>
+                    <p class="text-sm leading-6 text-text-secondary-light">
+                        <?= __('Use the search bar above to explore your catalog. Popular shopper queries are ready as one-click shortcuts.') ?>
+                    </p>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <w:hook name="WeShop_Search::frontend::layouts::search-page::results-after"/>
+    </section>
+</div>
