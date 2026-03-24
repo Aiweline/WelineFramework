@@ -25,7 +25,7 @@ class Index extends BaseController
     {
         $customer = $this->customerSession->getCustomer();
         if (!$customer || !$customer->getId()) {
-            $this->redirect('weshop/customer/account/login');
+            $this->redirect('customer/account/login');
 
             return '';
         }
