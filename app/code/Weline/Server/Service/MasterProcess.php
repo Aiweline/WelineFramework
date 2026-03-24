@@ -246,6 +246,10 @@ class MasterProcess
             // 注册信号处理
             $this->registerSignalHandlers();
 
+            // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
+            $this->orchestrator->bootstrapControlPlane($this->context);
+            $this->saveMasterInfo('bootstrapping');
+
             // 启动所有服务
             $this->log(__('正在启动子进程...'));
             $this->orchestrator->startAll($this->context);
@@ -255,7 +259,7 @@ class MasterProcess
             $this->releaseStartupLock();
 
             // 保存 Master 信息
-            $this->saveMasterInfo();
+            $this->saveMasterInfo('running');
 
             // 进入主循环
             $this->log(__('Master 进入主循环，监控子进程...'));
@@ -582,7 +586,7 @@ class MasterProcess
      * 
      * 注意：合并现有数据而非覆盖，保留 Start.php 保存的 worker_port、count 等字段
      */
-    public function saveMasterInfo(): void
+    public function saveMasterInfo(string $startupPhase = 'running'): void
     {
         $instanceFile = $this->getInstanceFile();
         $dir = \dirname($instanceFile);
@@ -607,6 +611,7 @@ class MasterProcess
             'master_mode' => $this->mode,
             'main_port' => $this->mainPort,
             'control_port' => $this->controlPort,
+            'startup_phase' => $startupPhase,
             'instance_name' => $this->instanceName,
             'orchestrator_mode' => true,
         ];

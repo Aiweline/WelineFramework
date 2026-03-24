@@ -106,7 +106,9 @@ class Status extends CommandAbstract
     {
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        $allInstances = $manager->getAllInstanceInfo();
+        $allInstances = $manager->getAllInstanceInfo(false);
+        $processInfoMap = $this->buildProcessInfoMap($allInstances);
+        $allInstances = $this->filterActiveInstances($allInstances, $processInfoMap);
 
         $this->printer->setup(__('Weline Server 状态'));
         echo "\n";
@@ -141,7 +143,7 @@ class Status extends CommandAbstract
             $workers = $info->getWorkers();
             $runningCount = 0;
             foreach ($workers as $worker) {
-                if ($worker->isRunning()) {
+                if ($this->isServiceRunning($worker, $processInfoMap)) {
                     $runningCount++;
                 }
             }
@@ -179,7 +181,7 @@ class Status extends CommandAbstract
                 $isLastSvc = ($svcIndex === $serviceCount - 1);
                 $svcPrefix = $isLastSvc ? '└─' : '├─';
                 
-                $isRunning = $service->isRunning();
+                $isRunning = $this->isServiceRunning($service, $processInfoMap);
                 $svcStatus = $isRunning ? __('● 运行中') : __('○ 已停止');
                 $svcColor = $isRunning ? 'success' : 'error';
                 $portDisplay = $service->port !== null && $service->port > 0 ? ':' . $service->port : '';
@@ -204,7 +206,7 @@ class Status extends CommandAbstract
     protected function showInstanceStatus(string $name): void
     {
         $manager = $this->getInstanceManager();
-        $info = $manager->getInstanceInfo($name);
+        $info = $manager->getInstanceInfo($name, false);
 
         if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -213,7 +215,8 @@ class Status extends CommandAbstract
             return;
         }
         
-        $masterRunning = $info->isMasterRunning();
+        $processInfoMap = $this->buildProcessInfoMap([$name => $info]);
+        $masterRunning = $this->isMasterRunning($info, $processInfoMap);
         
         $this->printer->setup(__('实例 [%{1}] 状态', [$name]));
         echo "\n";
@@ -237,18 +240,6 @@ class Status extends CommandAbstract
         $this->printer->note(__('进程架构：'));
         echo "\n";
         
-        // 批量获取所有进程的内存信息（单次系统调用）
-        $allPids = [];
-        if ($info->masterPid > 0) {
-            $allPids[] = $info->masterPid;
-        }
-        foreach ($info->services as $service) {
-            if ($service->pid > 0) {
-                $allPids[] = $service->pid;
-            }
-        }
-        $processInfoMap = !empty($allPids) ? Processer::batchGetProcessInfo($allPids) : [];
-        
         // Master 进程状态
         $masterColor = $masterRunning ? 'success' : 'error';
         $masterIcon = $masterRunning ? '●' : '○';
@@ -265,7 +256,7 @@ class Status extends CommandAbstract
         $this->showServicesTree($info, $processInfoMap);
         
         // 总结
-        $stats = $info->getServiceStats();
+        $stats = $this->getServiceStats($info, $processInfoMap);
         $runningCount = $stats['running'];
         $totalCount = $stats['total'];
         
@@ -333,7 +324,7 @@ class Status extends CommandAbstract
      */
     protected function showServiceStatus(ServiceInfo $service, bool $isLast, array $processInfoMap = []): void
     {
-        $isRunning = $service->isRunning();
+        $isRunning = $this->isServiceRunning($service, $processInfoMap);
         $icon = $isRunning ? '●' : '○';
         $statusStr = $isRunning ? __('运行中') : __('已停止');
         $color = $isRunning ? 'success' : 'error';
@@ -356,6 +347,93 @@ class Status extends CommandAbstract
         }
     }
     
+    /**
+     * @param array<string, ServerInstanceInfo> $instances
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     * @return array<string, ServerInstanceInfo>
+     */
+    protected function filterActiveInstances(array $instances, array $processInfoMap): array
+    {
+        $active = [];
+        foreach ($instances as $name => $info) {
+            if ($this->isMasterRunning($info, $processInfoMap) || $this->getServiceStats($info, $processInfoMap)['running'] > 0) {
+                $active[$name] = $info;
+            }
+        }
+
+        return $active;
+    }
+
+    /**
+     * @param array<string, ServerInstanceInfo> $instances
+     * @return array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}>
+     */
+    protected function buildProcessInfoMap(array $instances): array
+    {
+        $pids = [];
+        foreach ($instances as $info) {
+            if ($info->masterPid > 0) {
+                $pids[$info->masterPid] = $info->masterPid;
+            }
+            foreach ($info->services as $service) {
+                if ($service->pid > 0) {
+                    $pids[$service->pid] = $service->pid;
+                }
+            }
+        }
+
+        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+    }
+
+    /**
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     */
+    protected function isMasterRunning(ServerInstanceInfo $info, array $processInfoMap): bool
+    {
+        if ($info->masterPid <= 0) {
+            return false;
+        }
+
+        return (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
+    }
+
+    /**
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     */
+    protected function isServiceRunning(ServiceInfo $service, array $processInfoMap): bool
+    {
+        if (!$service->isExpectedRunningState()) {
+            return false;
+        }
+
+        if ($service->pid > 0) {
+            return (bool) ($processInfoMap[$service->pid]['exists'] ?? false);
+        }
+
+        return true;
+    }
+
+    /**
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     * @return array{total: int, running: int, stopped: int}
+     */
+    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap): array
+    {
+        $total = \count($info->services);
+        $running = 0;
+        foreach ($info->services as $service) {
+            if ($this->isServiceRunning($service, $processInfoMap)) {
+                $running++;
+            }
+        }
+
+        return [
+            'total' => $total,
+            'running' => $running,
+            'stopped' => $total - $running,
+        ];
+    }
+
     /**
      * 获取实例管理器
      */

@@ -176,7 +176,7 @@ class Stop extends CommandAbstract
 
         // 通过 ServerInstanceManager 获取实例信息（统一入口）
         $manager = $this->getInstanceManager();
-        $instanceInfo = $manager->getInstanceInfo($name);
+        $instanceInfo = $manager->getInstanceInfo($name, false);
         
         if ($instanceInfo === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -200,7 +200,7 @@ class Stop extends CommandAbstract
         echo "\n";
         
         // 检查 Master 是否存在
-        if (!$instanceInfo->isMasterRunning()) {
+        if (!$this->isMasterProcessAvailableForStop($instanceInfo)) {
             $this->printer->warning(__('Master 进程不存在 (PID: %{1})', [$masterPid]));
             $this->showInstanceInfo($instanceInfo);
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
@@ -261,6 +261,40 @@ class Stop extends CommandAbstract
      *
      * 所有信息都来自 ServerInstanceManager，确保一致性。
      */
+    protected function isMasterProcessAvailableForStop(ServerInstanceInfo $info): bool
+    {
+        if ($info->masterPid <= 0) {
+            return false;
+        }
+
+        $processInfoMap = Processer::batchGetProcessInfo([$info->masterPid]);
+
+        return $this->isMasterProcessAvailableForStopFromRuntime(
+            $info,
+            $processInfoMap,
+            Processer::hasExitedFast($info->masterPid)
+        );
+    }
+
+    /**
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     */
+    protected function isMasterProcessAvailableForStopFromRuntime(
+        ServerInstanceInfo $info,
+        array $processInfoMap,
+        bool $hasExitedFast
+    ): bool {
+        if ($info->masterPid <= 0) {
+            return false;
+        }
+
+        if (!($processInfoMap[$info->masterPid]['exists'] ?? false)) {
+            return false;
+        }
+
+        return !$hasExitedFast;
+    }
+
     protected function showInstanceInfo(ServerInstanceInfo $info): void
     {
         $this->printer->note(__('╔══════════════════════════════════════════════════════════════╗'));
@@ -465,6 +499,9 @@ class Stop extends CommandAbstract
         $lastActivityAt = $startedAt;
         $lastIdleNoticeAt = 0.0;
         $lastProgress = '';
+        $observedStopStage = 0;
+        $childrenFullyExited = false;
+        $readBuffer = '';
         $masterAboutToExit = false; // 只在收到 "Master 即将退出" 时置 true
         $exitedPids = []; // 用 PID 去重，防止同一进程的 "已断开" 和 "已退出" 重复计数
         $totalInstances = 0; // 总实例数
@@ -490,6 +527,17 @@ class Stop extends CommandAbstract
             if ($ready > 0) {
                 $data = @\fread($conn, 4096);
                 if ($data === false || $data === '') {
+                    foreach ($this->flushTrailingIpcBufferLines($readBuffer) as $line) {
+                        $this->processStopProgressLine(
+                            $line,
+                            $lastProgress,
+                            $exitedPids,
+                            $totalInstances,
+                            $observedStopStage,
+                            $childrenFullyExited,
+                            $masterAboutToExit
+                        );
+                    }
                     // 连接断开 - Master 已关闭 IPC
                     $this->ipcMsg("Master 已关闭连接 ✓", 'success');
                     @\fclose($conn);
@@ -499,43 +547,22 @@ class Stop extends CommandAbstract
                 }
 
                 $lastActivityAt = \microtime(true);
-                
-                // 解析消息
-                $lines = \explode("\n", \trim($data));
-                foreach ($lines as $line) {
-                    if (empty($line)) {
-                        continue;
-                    }
-                    $msg = \Weline\Server\IPC\ControlMessage::decode($line);
-                    if ($msg === null) {
-                        continue;
-                    }
-                    
-                    $type = $msg['type'] ?? '';
-                    
-                    // 处理进度消息
-                    if ($type === \Weline\Server\IPC\ControlMessage::TYPE_COMMAND_RESULT) {
-                        $message = $msg['message'] ?? '';
-                        if ($message && $message !== $lastProgress) {
-                            $this->ipcProgress($message);
-                            $lastProgress = $message;
-                            
-                            // 解析进度信息：总实例数
-                            if (\preg_match('/共\s*(\d+)\s*个实例待停止/', $message, $matches)) {
-                                $totalInstances = (int) $matches[1];
-                            }
-                            // 检测单个子进程退出消息，提取 PID 去重
-                            // 格式示例: "✓ HTTP Worker(PID:12345) 已退出" 或 "✓ HTTP Worker(PID:12345) 已断开连接"
-                            if (\preg_match('/PID[:\s]*(\d+)\)?\s*(?:已退出|已断开连接)/', $message, $pidMatch)) {
-                                $exitedPids[(int) $pidMatch[1]] = true;
-                            }
-                            // 只在 Orchestrator 明确发送 "Master 即将退出" 时才结束等待
-                            if ($this->shouldWaitForMasterExitAfterProgress($message, $exitedPids, $totalInstances)) {
-                                $masterAboutToExit = true;
-                            }
-                        }
+                $readBuffer .= $data;
+                foreach ($this->extractCompleteIpcLines($readBuffer) as $line) {
+                    $this->processStopProgressLine(
+                        $line,
+                        $lastProgress,
+                        $exitedPids,
+                        $totalInstances,
+                        $observedStopStage,
+                        $childrenFullyExited,
+                        $masterAboutToExit
+                    );
+                    if ($masterAboutToExit) {
+                        break;
                     }
                 }
+                continue;
             }
             
             // 只在 Master 明确发送 "即将退出" 后才进入等待退出流程
@@ -576,9 +603,128 @@ class Stop extends CommandAbstract
     /**
      * @param array<int, bool> $exitedPids
      */
-    protected function shouldWaitForMasterExitAfterProgress(string $message, array $exitedPids, int $totalInstances): bool
+    protected function shouldWaitForMasterExitAfterProgress(
+        string $message,
+        array $exitedPids,
+        int $totalInstances,
+        int $observedStopStage = 0,
+        bool $childrenFullyExited = false
+    ): bool
     {
-        return \str_contains($message, 'Master 即将退出');
+        unset($exitedPids, $totalInstances);
+
+        if (\str_contains($message, 'Master 即将退出')) {
+            return true;
+        }
+
+        return $childrenFullyExited && $observedStopStage >= 5;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function extractCompleteIpcLines(string &$buffer): array
+    {
+        $lines = [];
+
+        while (($newlinePos = \strpos($buffer, "\n")) !== false) {
+            $line = \trim(\substr($buffer, 0, $newlinePos), "\r\n\t ");
+            $buffer = (string) \substr($buffer, $newlinePos + 1);
+            if ($line !== '') {
+                $lines[] = $line;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function flushTrailingIpcBufferLines(string &$buffer): array
+    {
+        $lines = $this->extractCompleteIpcLines($buffer);
+        $tail = \trim($buffer, "\r\n\t ");
+        $buffer = '';
+        if ($tail !== '') {
+            $lines[] = $tail;
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param array<int, bool> $exitedPids
+     */
+    protected function processStopProgressLine(
+        string $line,
+        string &$lastProgress,
+        array &$exitedPids,
+        int &$totalInstances,
+        int &$observedStopStage,
+        bool &$childrenFullyExited,
+        bool &$masterAboutToExit
+    ): void {
+        $msg = \Weline\Server\IPC\ControlMessage::decode($line);
+        if ($msg === null) {
+            return;
+        }
+
+        if (($msg['type'] ?? '') !== \Weline\Server\IPC\ControlMessage::TYPE_COMMAND_RESULT) {
+            return;
+        }
+
+        $message = (string) ($msg['message'] ?? '');
+        if ($message === '' || $message === $lastProgress) {
+            return;
+        }
+
+        $this->ipcProgress($message);
+        $lastProgress = $message;
+
+        if (\preg_match('/共\s*(\d+)\s*个实例待停止/u', $message, $matches)) {
+            $totalInstances = (int) $matches[1];
+        }
+
+        if (\preg_match('/PID[:\s]*(\d+)\)?\s*(?:已退出|已断开连接)/u', $message, $pidMatch)) {
+            $exitedPids[(int) $pidMatch[1]] = true;
+        }
+
+        $observedStopStage = $this->updateObservedStopStage($message, $observedStopStage);
+        $childrenFullyExited = $childrenFullyExited || $this->isChildrenFullyExitedProgress($message);
+
+        if ($this->shouldWaitForMasterExitAfterProgress(
+            $message,
+            $exitedPids,
+            $totalInstances,
+            $observedStopStage,
+            $childrenFullyExited
+        )) {
+            $masterAboutToExit = true;
+        }
+    }
+
+    protected function updateObservedStopStage(string $message, int $observedStopStage): int
+    {
+        if (\preg_match('/(?:阶段|Stage)\s*(\d+)\s*\/\s*6/u', $message, $matches)) {
+            return \max($observedStopStage, (int) $matches[1]);
+        }
+
+        if ($this->isChildrenFullyExitedProgress($message)) {
+            return \max($observedStopStage, 5);
+        }
+
+        return $observedStopStage;
+    }
+
+    protected function isChildrenFullyExitedProgress(string $message): bool
+    {
+        if (\str_contains($message, '阶段5完成')) {
+            return true;
+        }
+
+        return \str_contains($message, '全部')
+            && \str_contains($message, '子进程已退出');
     }
 
     private function getIpcHardTimeout(): int
@@ -709,32 +855,52 @@ class Stop extends CommandAbstract
      */
     private function collectIndexedResidualPids(string $instanceName): array
     {
-        $nameIndex = Processer::readNameIndex();
-        if (empty($nameIndex)) {
+        $pidIndex = Processer::readPidIndex();
+        if (empty($pidIndex)) {
             return [];
         }
 
-        $currentPid = \getmypid();
+        return $this->collectIndexedResidualPidsFromPidIndex($pidIndex, $instanceName, \getmypid());
+    }
+
+    /**
+     * @param array<int, array{pname: string, jsonPath: string}> $pidIndex
+     * @return array<int>
+     */
+    private function collectIndexedResidualPidsFromPidIndex(array $pidIndex, string $instanceName, int $currentPid): array
+    {
         $instanceSuffix = '-' . $instanceName;
         $legacyWorkerPrefix = 'weline-master-' . $instanceName . '-worker-';
         $pids = [];
 
-        foreach ($nameIndex as $pname => $entries) {
-            $taskName = \str_starts_with($pname, '--name=')
-                ? \substr($pname, 7)
-                : $pname;
-
-            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \strpos($taskName, $instanceSuffix) !== false)
-                || \str_starts_with($taskName, $legacyWorkerPrefix);
-            if (!$isCurrentInstance) {
+        foreach ($pidIndex as $pid => $record) {
+            $pid = (int) $pid;
+            if ($pid <= 0 || $pid === $currentPid) {
                 continue;
             }
 
-            foreach ($entries as $entry) {
-                $pid = (int) ($entry['pid'] ?? 0);
-                if ($pid > 0 && $pid !== $currentPid) {
-                    $pids[$pid] = true;
-                }
+            $jsonPath = (string) ($record['jsonPath'] ?? '');
+            if ($jsonPath === '' || !\is_file($jsonPath)) {
+                continue;
+            }
+
+            $pname = (string) ($record['pname'] ?? '');
+            if ($pname === '') {
+                continue;
+            }
+
+            try {
+                $taskName = Processer::getTaskName($pname);
+            } catch (\Throwable) {
+                $taskName = \str_starts_with($pname, '--name=')
+                    ? \substr($pname, 7)
+                    : $pname;
+            }
+
+            $isCurrentInstance = (\str_starts_with($taskName, 'weline-wls-') && \str_contains($taskName, $instanceSuffix))
+                || \str_starts_with($taskName, $legacyWorkerPrefix);
+            if ($isCurrentInstance) {
+                $pids[$pid] = true;
             }
         }
 
