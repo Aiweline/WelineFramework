@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Console;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Console\Server\Start;
+use Weline\Server\Service\SharedStateServiceManager;
 
 final class StartSharedStateRuntimeConfigTest extends TestCase
 {
@@ -60,25 +61,54 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
         self::assertSame('session_server.cluster-a.token', $token);
     }
 
-    public function testResolveSharedStateRuntimeConfigReusesExistingSharedSidecar(): void
+    public function testResolveSharedStateRuntimeConfigDelegatesToIndependentSharedServiceManager(): void
     {
-        $start = new class extends Start {
-            protected function inspectReusableSharedStateService(int $port, string $expectedRole, string $defaultTokenFileName): array
+        $manager = new class extends SharedStateServiceManager {
+            /**
+             * @param array<string, mixed> $config
+             * @param array<string, mixed> $envConfig
+             * @return array{
+             *   session: array<string, mixed>,
+             *   memory: array<string, mixed>
+             * }
+             */
+            public function ensureRuntime(string $requesterInstanceName, array $config, array $envConfig = []): array
             {
-                if ($expectedRole !== 'session_server') {
-                    return ['reusable' => false];
-                }
-
                 return [
-                    'reusable' => true,
-                    'pid' => 4321,
-                    'port' => $port,
-                    'role' => 'session_server',
-                    'token_file_name' => 'session_server.owner.token',
-                    'process_name' => 'weline-wls-session-owner',
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 19970,
+                        'token_file_name' => 'session_server.shared.token',
+                        'reuse_existing' => true,
+                        'pid' => 4321,
+                        'process_name' => 'weline-wls-session-shared-19970',
+                        'instance_name' => 'shared-session-19970',
+                        'independent' => true,
+                    ],
+                    'memory' => [
+                        'host' => '127.0.0.1',
+                        'port' => 19971,
+                        'token_file_name' => 'memory_server.shared.token',
+                        'reuse_existing' => false,
+                        'created_now' => true,
+                        'pid' => 9876,
+                        'process_name' => 'weline-wls-memory-shared-19971',
+                        'instance_name' => 'shared-memory-19971',
+                        'independent' => true,
+                    ],
                 ];
             }
         };
+
+        $start = new class extends Start {
+            public SharedStateServiceManager $manager;
+
+            protected function createSharedStateServiceManager(): SharedStateServiceManager
+            {
+                return $this->manager;
+            }
+        };
+        $start->manager = $manager;
 
         $runtime = $this->invokeProtected(
             $start,
@@ -92,11 +122,13 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
         );
 
         self::assertSame(19970, $runtime['session']['port']);
-        self::assertSame('session_server.owner.token', $runtime['session']['token_file_name']);
+        self::assertSame('session_server.shared.token', $runtime['session']['token_file_name']);
         self::assertTrue((bool) ($runtime['session']['reuse_existing'] ?? false));
         self::assertSame(4321, $runtime['session']['pid']);
-        self::assertSame('weline-wls-session-owner', $runtime['session']['process_name']);
-        self::assertFalse((bool) ($runtime['memory']['reuse_existing'] ?? false));
+        self::assertSame('weline-wls-session-shared-19970', $runtime['session']['process_name']);
+        self::assertSame('shared-session-19970', $runtime['session']['instance_name']);
+        self::assertTrue((bool) ($runtime['memory']['created_now'] ?? false));
+        self::assertSame('shared-memory-19971', $runtime['memory']['instance_name']);
     }
 
     public function testSavedConfigStripsRuntimeOnlySharedStateKeys(): void

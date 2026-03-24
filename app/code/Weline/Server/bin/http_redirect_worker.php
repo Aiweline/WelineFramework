@@ -62,7 +62,9 @@ if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
 
-ErrorBootstrap::init('HttpRedirect:' . $httpPort, [
+$processTag = 'HttpRedirect:' . $httpPort . '@' . $instanceName;
+
+ErrorBootstrap::init($processTag, [
     'http_port' => $httpPort,
     'https_port' => $httpsPort,
     'instance' => $instanceName,
@@ -73,7 +75,7 @@ ErrorBootstrap::init('HttpRedirect:' . $httpPort, [
 if ($isFrontend) {
     WlsLogger::getInstance()
         ->setStdoutEnabled(true)
-        ->setProcessTag('HttpRedirect:' . $httpPort);
+        ->setProcessTag($processTag);
 }
 
 // 进程日志文件（持久化，跨重启保留）
