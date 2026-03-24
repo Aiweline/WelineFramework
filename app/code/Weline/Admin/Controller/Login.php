@@ -14,6 +14,7 @@ namespace Weline\Admin\Controller;
 use WeShop\GoogleAuth\Service\BackendWebAuthService;
 use Weline\Admin\Helper\Data;
 use Weline\Admin\Helper\MenuUrlValidator;
+use Weline\Admin\Service\BackendVerificationCodeGate;
 use Weline\Backend\Service\MenuService;
 use Weline\Backend\Service\MenuServiceInterface;
 use Weline\Backend\Model\BackendUserToken;
@@ -34,6 +35,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     /**
      * 登录页不使用布局系统，使用独立完整的模板
      */
+    private const SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE = 'need_backend_verification_code';
+    private const SESSION_KEY_BACKEND_VERIFICATION_CODE = 'backend_verification_code';
     protected ?string $layoutType = null;
     
     protected BackendUser $adminUser;
@@ -41,19 +44,22 @@ class Login extends \Weline\Framework\App\Controller\BackendController
     private MessageManager $messageManager;
     private MenuServiceInterface $menuService;
     private BackendWebAuthService $backendWebAuthService;
+    private BackendVerificationCodeGate $backendVerificationCodeGate;
 
     public function __construct(
         BackendUser           $adminUser,
         MessageManager        $messageManager,
         Data                  $helper,
         MenuService           $menuService,
-        BackendWebAuthService $backendWebAuthService
+        BackendWebAuthService $backendWebAuthService,
+        BackendVerificationCodeGate $backendVerificationCodeGate
     ) {
         $this->adminUser = $adminUser;
         $this->helper = $helper;
         $this->messageManager = $messageManager;
         $this->menuService = $menuService;
         $this->backendWebAuthService = $backendWebAuthService;
+        $this->backendVerificationCodeGate = $backendVerificationCodeGate;
     }
 
     public function index()
@@ -87,20 +93,22 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         // 显式输出 MessageManager 的 Flash 消息（密码错误、验证码错误等），确保 302 后能展示
         $this->assign('login_flash_message', (string) $this->messageManager);
         # 检测验证码
-        if ($this->session->get('need_backend_verification_code')) {
+        if ($this->session->get(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE)) {
+            $this->session->delete(self::SESSION_KEY_BACKEND_VERIFICATION_CODE);
             $this->assign('need_backend_verification_code', true);
             // 使用连字符小写路径以与白名单精确匹配，并兼容路由规则
             $this->assign('backend_verification_code_url', $this->_url->getBackendUrl('admin/login/verification-code'));
         }
         # 登录页：使用后台配置（Logo、站点名）
         $backendConfig = ObjectManager::getInstance(BackendConfig::class);
-        $logoDark = $backendConfig->getConfig('logo_dark', 'Weline_Backend') ?: '';
-        $logoLight = $backendConfig->getConfig('logo_light', 'Weline_Backend') ?: '';
+        $backendConfigs = $backendConfig->getConfigs('Weline_Backend');
+        $logoDark = (string)($backendConfigs['logo_dark'] ?? '');
+        $logoLight = (string)($backendConfigs['logo_light'] ?? '');
         $this->assign('login_logo_dark', $logoDark !== '' ? ImageHelper::pathToMediaUrl($logoDark, 125, 125) : '');
         $this->assign('login_logo_light', $logoLight !== '' ? ImageHelper::pathToMediaUrl($logoLight, 125, 125) : '');
-        $siteName = (string) ($backendConfig->getConfig('site_name', 'Weline_Backend') ?: 'Weline');
+        $siteName = (string)($backendConfigs['site_name'] ?? 'Weline');
         $this->assign('login_site_name', $siteName);
-        $loginBg = trim((string) ($backendConfig->getConfig('login_bg', 'Weline_Backend') ?? ''));
+        $loginBg = trim((string)($backendConfigs['login_bg'] ?? ''));
         if ($loginBg !== '') {
             foreach (['/pub/media/', 'pub/media/', '/media/'] as $prefix) {
                 if (str_starts_with($loginBg, $prefix)) {
@@ -222,13 +230,20 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return;
         }
         # 如果大于2次的尝试登录 验证客户提供的验证码
-        if ($adminUsernameUser->getAttemptTimes() > 2) {
-            $this->session->set('need_backend_verification_code', 1);
+        $verificationCodeState = $this->backendVerificationCodeGate->evaluate(
+            $adminUsernameUser->getAttemptTimes(),
+            $this->session->get(self::SESSION_KEY_BACKEND_VERIFICATION_CODE),
+            $this->request->getParam('code')
+        );
+        if ($verificationCodeState['should_display_captcha']) {
+            $this->session->set(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE, 1);
         }
         # 验证验证码
-        if ($adminUsernameUser->getAttemptTimes() > 3 && ($this->session->get('backend_verification_code') !== $this->request->getParam('code'))) {
-            w_auth_log('login_post_captcha_error', '验证码错误', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
-            MessageManager::error(__('验证码错误！'));
+        if ($verificationCodeState['should_block']) {
+            if ($verificationCodeState['error_message'] !== null) {
+                w_auth_log('login_post_captcha_error', '验证码错误', ['user_id' => $adminUsernameUser->getId(), 'username' => $adminUsernameUser->getUsername(), 'session' => $this->getSessionDataForLog()]);
+                MessageManager::error(__($verificationCodeState['error_message']));
+            }
             $adminUsernameUser->setSessionId($this->session->getId())
                 ->setAttemptIp($this->request->clientIP())
                 ->save();
@@ -317,8 +332,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             # 重置 尝试登录次数
             $adminUsernameUser->resetAttemptTimes()->save();
             # 登录成功后清理验证码相关的session数据
-            $this->session->delete('need_backend_verification_code');
-            $this->session->delete('backend_verification_code');
+            $this->clearBackendVerificationCodeState();
             $this->syncSandboxCookie($adminUsernameUser->isSandboxAccount());
             # 检测是否记住我
             if ($this->request->getParam('remember')) {
@@ -574,6 +588,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         Cookie::set('w_sandbox', '', -1, ['path' => '/']);
         Cookie::set('w_sandbox', '', -1, ['path' => '/' . $this->request->getAreaRouter()]);
         $this->session->delete('remember_expire_time');
+        $this->clearBackendVerificationCodeState();
         $this->session->getSession()->destroy();
         $this->redirect($this->_url->getBackendUrl('admin/login'));
     }
@@ -596,6 +611,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
      */
     public function verificationCode()
     {
+        if (
+            !$this->backendVerificationCodeGate->canAccessCaptcha(
+                (bool)$this->session->get(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE)
+            )
+        ) {
+            $this->request->getResponse()->noRouter(DEV ? 403 : 404);
+        }
         # --1 设置验证码图片的大小
         $image = imagecreatetruecolor(100, 30);
         # --2 设置验证码颜色 imagecolorallocate(int im, int red, int green, int blue);
@@ -619,7 +641,7 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             $y = rand(5, 10);
             imagestring($image, $fontsize, $x, $y, (string)$fontcontent, $fontcolor);
         }
-        $this->session->set('backend_verification_code', $captcha_code);
+        $this->session->set(self::SESSION_KEY_BACKEND_VERIFICATION_CODE, $captcha_code);
 
         # --6 增加干扰元素，设置雪花点
         for ($i = 0; $i < 200; $i++) {
@@ -638,12 +660,39 @@ class Login extends \Weline\Framework\App\Controller\BackendController
 
         # --8 通过 Response 输出并发送，兼容 FPM/WLS，由 Runtime 统一处理
         ob_start();
-        imagepng($image);
+        $pngGenerated = imagepng($image);
         $png = ob_get_clean();
         imagedestroy($image);
+
+        if (!$pngGenerated || !is_string($png) || $png === '') {
+            $response = $this->request->getResponse();
+            $response->setHeader('Content-Type', 'text/plain; charset=UTF-8');
+            $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+            $response->setBody((string)__('验证码生成失败，请刷新重试。'));
+            $response->send();
+            return;
+        }
+
+        // 某些运行时链路会残留输出缓冲内容，可能导致 PNG 响应被污染为破损图。
+        while (ob_get_level() > 0) {
+            ob_end_clean();
+        }
+
         $response = $this->request->getResponse();
         $response->setHeader('Content-Type', 'image/png');
+        $response->setHeader('X-Content-Type-Options', 'nosniff');
+        $response->setHeader('Content-Disposition', 'inline; filename="captcha.png"');
+        $response->setHeader('Content-Length', (string)strlen($png));
+        $response->setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+        $response->setHeader('Pragma', 'no-cache');
+        $response->setHeader('Expires', '0');
         $response->setBody($png);
         $response->send();
+    }
+
+    private function clearBackendVerificationCodeState(): void
+    {
+        $this->session->delete(self::SESSION_KEY_NEED_BACKEND_VERIFICATION_CODE);
+        $this->session->delete(self::SESSION_KEY_BACKEND_VERIFICATION_CODE);
     }
 }
