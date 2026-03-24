@@ -23,6 +23,12 @@ class AuthGrantService
     public function issuePasswordToken(string $area, string $username, string $password): array
     {
         $area = strtolower($area);
+        $username = trim($username);
+        $password = (string) $password;
+        if ($username === '' || $password === '') {
+            throw new \InvalidArgumentException((string) __('Username or email and password are required.'));
+        }
+
         if ($area === 'frontend') {
             $result = $this->customerAccountService->authenticate($username, $password);
             $context = new ActorContext(
@@ -63,6 +69,12 @@ class AuthGrantService
 
     public function issueApiCredentialsToken(string $apiKey, string $apiSecret): array
     {
+        $apiKey = trim($apiKey);
+        $apiSecret = trim($apiSecret);
+        if ($apiKey === '' || $apiSecret === '') {
+            throw new \InvalidArgumentException((string) __('API key and secret are required.'));
+        }
+
         $apiUser = $this->integrationCredentialAuthenticator->authenticate($apiKey, $apiSecret);
 
         $context = new ActorContext(
@@ -78,6 +90,11 @@ class AuthGrantService
 
     public function issueGoogleCodeToken(string $area, string $code): array
     {
+        $code = trim($code);
+        if ($code === '') {
+            throw new \InvalidArgumentException((string) __('Google authorization code is required.'));
+        }
+
         $context = $this->googleCodeAuthenticator->authenticate($area, $code);
         $primaryAuth = $this->twoFactorOrchestrator->beginPrimaryAuth(
             $context,
@@ -98,6 +115,11 @@ class AuthGrantService
 
     public function refreshToken(string $refreshToken): array
     {
+        $refreshToken = trim($refreshToken);
+        if ($refreshToken === '') {
+            throw new \InvalidArgumentException((string) __('Refresh token is required.'));
+        }
+
         $tokens = $this->tokenService->refresh($refreshToken);
         if (!$tokens) {
             throw new \RuntimeException((string) __('Refresh token is invalid or expired.'));

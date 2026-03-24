@@ -1,7 +1,23 @@
-﻿DHL,DHL
+﻿"Shipping query provider does not support operation: %{1}","Shipping query provider does not support operation: %{1}"
+"Shipping Query","Shipping Query"
+"Provides checkout shipping method data and shipping calculation access.","Provides checkout shipping method data and shipping calculation access."
+"Get enabled shipping methods for checkout.","Get enabled shipping methods for checkout."
+"Get available shipping methods as code-label map.","Get available shipping methods as code-label map."
+"Calculate shipping fee for a shipping method.","Calculate shipping fee for a shipping method."
+"Checkout shipping extension slot","Checkout shipping extension slot"
+"Inject extra shipping UI blocks into checkout shipping section without overriding theme pages.","Inject extra shipping UI blocks into checkout shipping section without overriding theme pages."
+DHL,DHL
 DHL标准配送,DHL标准配送
 DHL运单创建失败,DHL运单创建失败
 FedEx,FedEx
 获取FedEx访问令牌失败,获取FedEx访问令牌失败
 FedEx标准配送,FedEx标准配送
-"不支持的物流方式: %{1}","不支持的物流方式: %{1}"
+"Unsupported shipping method: %{1}","Unsupported shipping method: %{1}"
+"Flat Rate","Flat Rate"
+"Standard delivery with a fixed shipping fee.","Standard delivery with a fixed shipping fee."
+"Free Shipping","Free Shipping"
+"Free delivery for eligible orders.","Free delivery for eligible orders."
+"Local Pickup","Local Pickup"
+"Pick up your order at the selected local location.","Pick up your order at the selected local location."
+"DHL carrier integration (sandbox-ready, disabled by default).","DHL carrier integration (sandbox-ready, disabled by default)."
+"FedEx carrier integration (sandbox-ready, disabled by default).","FedEx carrier integration (sandbox-ready, disabled by default)."
