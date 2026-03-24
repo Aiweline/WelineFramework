@@ -348,7 +348,12 @@ class Template extends DataObject
         list($comFileName, $tplFile) = $this->convertFetchFileName($fileName);
         
         // 检测编译文件，如果不符合条件则重新进行文件编译
-        if (DEV || !file_exists($comFileName) || (filemtime($comFileName) < filemtime($tplFile))) {
+        if (self::shouldRecompileCompiledTemplate(
+            $comFileName,
+            $tplFile,
+            DEV,
+            Env::getInstance()->getConfig('template.force_recompile_in_dev', false)
+        )) {
             // 如果缓存文件不存在则编译，或者文件修改了也编译
             $content = file_get_contents($tplFile);
             $repContent = $this->tmp_replace($content, $comFileName);  // 得到模板文件并替换占位符，得到替换后的文件
@@ -390,6 +395,30 @@ class Template extends DataObject
         }
         
         return $comFileName;
+    }
+
+    public static function shouldRecompileCompiledTemplate(
+        string $compiledFile,
+        string $templateFile,
+        bool $isDev,
+        mixed $forceRecompileInDev = false
+    ): bool
+    {
+        if (!file_exists($compiledFile)) {
+            return true;
+        }
+
+        if (filemtime($compiledFile) < filemtime($templateFile)) {
+            return true;
+        }
+
+        if (!$isDev) {
+            return false;
+        }
+
+        return $forceRecompileInDev === true
+            || $forceRecompileInDev === 1
+            || $forceRecompileInDev === '1';
     }
 
     /**

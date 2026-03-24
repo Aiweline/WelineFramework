@@ -10,10 +10,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Unit;
 
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\UnitTest\TestCore;
 use Weline\Theme\Helper\LayoutAssetsManager;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\PreviewTokenService;
 
 /**
  * 布局资源管理器测试
@@ -27,6 +29,17 @@ class LayoutAssetsManagerTest extends TestCore
     public function setUp(): void
     {
         parent::setUp();
+        /** @var Request $request */
+        $request = ObjectManager::getInstance(Request::class);
+        $request->setServer('REQUEST_URI', '/test');
+        $request->setGet('frontend_theme_id', 0);
+        $request->setGet('backend_theme_id', 0);
+        $request->setGet('editor_area', '');
+        $request->setGet('shell', '');
+        $request->setGet('preview_mode', '');
+        $request->setGet('status', '');
+        $request->setGet(PreviewTokenService::TOKEN_KEY, '');
+        PreviewTokenService::resetRequestState();
         $this->manager = ObjectManager::getInstance(LayoutAssetsManager::class);
     }
     
@@ -172,6 +185,30 @@ class LayoutAssetsManagerTest extends TestCore
         if (is_dir($dir) && strpos($dir, 'test') !== false) {
             // 可以在这里清理，但通常测试环境会自动清理
         }
+    }
+
+    public function testPreviewGeneratedAssetsUseIsolatedNamespaceAndExplicitQuery(): void
+    {
+        /** @var WelineTheme $theme */
+        $theme = ObjectManager::getInstance(WelineTheme::class)->getActiveTheme();
+
+        /** @var Request $request */
+        $request = ObjectManager::getInstance(Request::class);
+        $request->setServer('REQUEST_URI', '/theme/backend/theme-editor/layout-preview');
+        $request->setGet('frontend_theme_id', (int)$theme->getId());
+        $request->setGet('editor_area', 'frontend');
+        $request->setGet('shell', 'theme-editor');
+        $request->setGet('preview_mode', 'live');
+        $request->setGet('status', 'draft');
+        $request->setGet(PreviewTokenService::TOKEN_KEY, 'pv_layout_assets');
+
+        $cssPath = $this->manager->getGeneratedCssPath('frontend', 'homepage', 'default', $theme);
+        $cssUrl = $this->manager->getCssUrl('frontend', 'homepage', 'default', $theme);
+
+        $this->assertStringContainsString('__preview', str_replace('\\', '/', $cssPath));
+        $this->assertStringContainsString('/static/__preview/', $cssUrl);
+        $this->assertStringContainsString('weline_preview_token=pv_layout_assets', $cssUrl);
+        $this->assertStringContainsString('frontend_theme_id=' . (int)$theme->getId(), $cssUrl);
     }
 }
 

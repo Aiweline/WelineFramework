@@ -45,7 +45,8 @@ class PreviewTokenService
     private static bool $detected = false;
 
     public function __construct(
-        Request $request
+        Request $request,
+        private readonly PreviewRequestInspector $previewRequestInspector,
     ) {
         $this->request = $request;
         // 使用框架缓存
@@ -213,7 +214,7 @@ class PreviewTokenService
      * 
      * @return string|null
      */
-    public function getTokenFromRequest(): ?string
+    public function getTokenFromRequest(bool $allowCookie = true): ?string
     {
         // 1. URL 参数（优先级最高，便于分享预览链接）
         $token = $this->request->getParam(self::TOKEN_KEY);
@@ -221,17 +222,19 @@ class PreviewTokenService
             return $token;
         }
         
-        // 2. Cookie
-        $token = Cookie::get(self::TOKEN_KEY);
-        if (!empty($token)) {
-            return $token;
-        }
-        
-        // 3. HTTP Header
+        // 2. HTTP Header
         $headerKey = 'HTTP_' . str_replace('-', '_', strtoupper(self::TOKEN_HEADER));
         $token = $_SERVER[$headerKey] ?? null;
         if (!empty($token)) {
             return $token;
+        }
+
+        // 3. Cookie
+        if ($allowCookie && $this->previewRequestInspector->shouldAllowPreviewTokenCookie()) {
+            $token = Cookie::get(self::TOKEN_KEY);
+            if (!empty($token)) {
+                return $token;
+            }
         }
         
         return null;
