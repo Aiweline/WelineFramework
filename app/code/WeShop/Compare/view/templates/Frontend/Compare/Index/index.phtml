@@ -1,0 +1,202 @@
+<?php
+$compareItems = (array) ($this->getData('compare_items') ?? []);
+$compareCount = (int) ($this->getData('compare_count') ?? 0);
+$recommendations = (array) ($this->getData('recommendations') ?? []);
+?>
+<main data-weshop-compare-page="true" class="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+    <section class="overflow-hidden rounded-[2rem] border border-border-light bg-surface-light shadow-sm dark:border-border-dark dark:bg-surface-dark">
+        <div class="grid gap-6 p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+            <div>
+                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-primary"><?= __('Compare Products') ?></p>
+                <h1 class="mt-4 text-3xl font-black tracking-tight text-text-primary-light dark:text-text-primary-dark sm:text-4xl"><?= __('Side-by-Side Decisions') ?></h1>
+                <p class="mt-3 max-w-2xl text-base leading-7 text-text-secondary-light dark:text-text-secondary-dark">
+                    <?= __('Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth.') ?>
+                </p>
+
+                <div class="mt-8 flex flex-wrap gap-3 text-sm">
+                    <a href="<?= $this->getUrl('weshop') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
+                        <?= __('Continue Shopping') ?>
+                    </a>
+                    <a href="<?= $this->getUrl('customer/account') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                        <?= __('Back to Account') ?>
+                    </a>
+                </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Compared Items') ?></p>
+                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= $compareCount ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Products currently lined up for side-by-side review.') ?></p>
+                </article>
+                <article class="rounded-3xl border border-border-light bg-background-light p-5 dark:border-border-dark dark:bg-background-dark">
+                    <p class="text-sm font-medium text-text-secondary-light dark:text-text-secondary-dark"><?= __('Recommended Next') ?></p>
+                    <p class="mt-2 text-3xl font-black text-text-primary-light dark:text-text-primary-dark"><?= count($recommendations) ?></p>
+                    <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Fresh picks chosen around what you are comparing now.') ?></p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Compare Board') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Products In Focus') ?></h2>
+                </div>
+                <span class="material-symbols-outlined text-4xl text-primary">compare_arrows</span>
+            </div>
+
+            <?php if ($compareItems): ?>
+                <div class="mt-6 space-y-6">
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <?php foreach ($compareItems as $item): ?>
+                            <article class="group flex h-full flex-col rounded-3xl border border-border-light bg-background-light p-4 transition hover:border-primary dark:border-border-dark dark:bg-background-dark" data-compare-item="<?= (int) ($item['compare_id'] ?? 0) ?>">
+                                <div class="flex items-start gap-4">
+                                    <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id'] ?? 0]) ?>" class="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-surface-light dark:bg-surface-dark">
+                                        <img src="<?= htmlspecialchars((string) ($item['image'] ?? ''), ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? ''), ENT_QUOTES) ?>" class="h-full w-full object-cover">
+                                    </a>
+                                    <div class="min-w-0 flex-1">
+                                        <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id'] ?? 0]) ?>" class="line-clamp-2 text-lg font-bold text-text-primary-light transition group-hover:text-primary dark:text-text-primary-dark">
+                                            <?= htmlspecialchars((string) ($item['name'] ?? ''), ENT_QUOTES) ?>
+                                        </a>
+                                        <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('SKU: %1', htmlspecialchars((string) ($item['sku'] ?? ''), ENT_QUOTES)) ?></p>
+                                        <p class="mt-1 text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= htmlspecialchars((string) ($item['availability'] ?? ''), ENT_QUOTES) ?></p>
+                                        <p class="mt-3 text-xl font-black text-primary"><?= $this->formatPrice((float) ($item['price'] ?? 0)) ?></p>
+                                    </div>
+                                </div>
+
+                                <?php if (!empty($item['short_description'])): ?>
+                                    <p class="mt-4 line-clamp-3 text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                                        <?= htmlspecialchars((string) $item['short_description'], ENT_QUOTES) ?>
+                                    </p>
+                                <?php endif; ?>
+
+                                <div class="mt-5 flex flex-wrap gap-3">
+                                    <button type="button" class="add-to-cart inline-flex items-center justify-center rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white transition hover:bg-primary/90" data-product-id="<?= (int) ($item['product_id'] ?? 0) ?>">
+                                        <?= __('Add to Cart') ?>
+                                    </button>
+                                    <a href="<?= $this->getUrl('product/view', ['id' => $item['product_id'] ?? 0]) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                        <?= __('View Product') ?>
+                                    </a>
+                                    <button type="button" data-remove-compare-item="<?= (int) ($item['compare_id'] ?? 0) ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-4 py-3 text-sm font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                                        <?= __('Remove') ?>
+                                    </button>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-3xl border border-border-light dark:border-border-dark">
+                        <table class="min-w-full divide-y divide-border-light dark:divide-border-dark">
+                            <thead class="bg-background-light dark:bg-background-dark">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('Attribute') ?></th>
+                                    <?php foreach ($compareItems as $item): ?>
+                                        <th class="px-4 py-3 text-left text-sm font-semibold text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['name'] ?? ''), ENT_QUOTES) ?></th>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-light bg-surface-light dark:divide-border-dark dark:bg-surface-dark">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('Price') ?></th>
+                                    <?php foreach ($compareItems as $item): ?>
+                                        <td class="px-4 py-3 text-sm font-bold text-primary"><?= $this->formatPrice((float) ($item['price'] ?? 0)) ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('SKU') ?></th>
+                                    <?php foreach ($compareItems as $item): ?>
+                                        <td class="px-4 py-3 text-sm text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['sku'] ?? '-'), ENT_QUOTES) ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('Availability') ?></th>
+                                    <?php foreach ($compareItems as $item): ?>
+                                        <td class="px-4 py-3 text-sm text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) ($item['availability'] ?? '-'), ENT_QUOTES) ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-semibold text-text-secondary-light dark:text-text-secondary-dark"><?= __('Brand') ?></th>
+                                    <?php foreach ($compareItems as $item): ?>
+                                        <td class="px-4 py-3 text-sm text-text-primary-light dark:text-text-primary-dark"><?= htmlspecialchars((string) (($item['brand'] ?? '') ?: '-'), ENT_QUOTES) ?></td>
+                                    <?php endforeach; ?>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-6 py-10 text-center dark:border-border-dark dark:bg-background-dark">
+                    <span class="material-symbols-outlined text-5xl text-primary">compare_arrows</span>
+                    <h3 class="mt-4 text-xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('No compared products yet') ?></h3>
+                    <p class="mx-auto mt-2 max-w-xl text-sm leading-6 text-text-secondary-light dark:text-text-secondary-dark">
+                        <?= __('Add products from category or product detail pages and they will appear here for a clean side-by-side review.') ?>
+                    </p>
+                </div>
+            <?php endif; ?>
+        </article>
+
+        <article class="rounded-3xl border border-border-light bg-surface-light p-6 shadow-sm dark:border-border-dark dark:bg-surface-dark">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <p class="text-sm font-semibold uppercase tracking-[0.2em] text-primary"><?= __('Guess You May Like') ?></p>
+                    <h2 class="mt-2 text-2xl font-bold text-text-primary-light dark:text-text-primary-dark"><?= __('Recommended Next') ?></h2>
+                </div>
+                <span class="material-symbols-outlined text-4xl text-primary">auto_awesome</span>
+            </div>
+
+            <?php if ($recommendations): ?>
+                <div class="mt-6 grid grid-cols-2 gap-3">
+                    <?php foreach ($recommendations as $product): ?>
+                        <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="group rounded-2xl border border-border-light bg-background-light p-3 transition hover:border-primary dark:border-border-dark dark:bg-background-dark">
+                            <div class="aspect-square overflow-hidden rounded-2xl bg-surface-light dark:bg-surface-dark">
+                                <img src="<?= htmlspecialchars((string) ($product['image'] ?? ''), ENT_QUOTES) ?>" alt="<?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?>" class="h-full w-full object-cover">
+                            </div>
+                            <p class="mt-3 line-clamp-2 text-sm font-semibold text-text-primary-light group-hover:text-primary dark:text-text-primary-dark"><?= htmlspecialchars((string) ($product['name'] ?? ''), ENT_QUOTES) ?></p>
+                            <p class="mt-1 text-sm font-bold text-primary"><?= $this->formatPrice((float) ($product['price'] ?? 0)) ?></p>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="mt-6 rounded-3xl border border-dashed border-border-light bg-background-light px-5 py-8 text-sm leading-6 text-text-secondary-light dark:border-border-dark dark:bg-background-dark dark:text-text-secondary-dark">
+                    <?= __('As you compare more products, related recommendations will appear here automatically.') ?>
+                </div>
+            <?php endif; ?>
+        </article>
+    </section>
+</main>
+
+<script>
+    (function () {
+        document.querySelectorAll('[data-remove-compare-item]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var compareId = this.getAttribute('data-remove-compare-item');
+                if (!compareId) {
+                    return;
+                }
+
+                fetch('<?= $this->getUrl('compare/remove') ?>', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({ compare_id: compareId })
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (payload) {
+                    if (payload && payload.success) {
+                        window.location.reload();
+                        return;
+                    }
+
+                    if (payload && payload.data && payload.data.redirect_url) {
+                        window.location.href = payload.data.redirect_url;
+                    }
+                });
+            });
+        });
+    })();
+</script>

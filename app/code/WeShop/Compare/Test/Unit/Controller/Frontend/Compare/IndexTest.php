@@ -59,8 +59,11 @@ class IndexTest extends TestCase
             ->getMock();
 
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(2))->method('assign');
-        $controller->expects($this->once())->method('fetch')->willReturn('page');
+        $controller->expects($this->exactly(3))->method('assign');
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Compare::templates/Frontend/Compare/Index/index.phtml')
+            ->willReturn('page');
 
         $this->assertSame('page', $controller->index());
     }
