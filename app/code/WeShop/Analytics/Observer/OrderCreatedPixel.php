@@ -6,7 +6,6 @@ namespace WeShop\Analytics\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
@@ -14,19 +13,21 @@ use WeShop\Analytics\Service\PixelDispatcher;
  */
 class OrderCreatedPixel implements ObserverInterface
 {
+    public function __construct(
+        private readonly PixelDispatcher $pixelDispatcher
+    ) {
+    }
+
     public function execute(Event &$event): void
     {
         $data = $event->getData();
         $order = $data->getData('order');
-        
+
         if (!$order) {
             return;
         }
-        
-        /** @var PixelDispatcher $dispatcher */
-        $dispatcher = ObjectManager::getInstance(PixelDispatcher::class);
-        
-        $dispatcher->track('begin_checkout', [
+
+        $this->pixelDispatcher->track('begin_checkout', [
             'user_id' => $order->getCustomerId(),
             'module' => 'WeShop_Order',
             'name' => 'order_created',

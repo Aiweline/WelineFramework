@@ -6,7 +6,6 @@ namespace WeShop\Analytics\Observer;
 
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Event\Observer;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
@@ -14,6 +13,11 @@ use WeShop\Analytics\Service\PixelDispatcher;
  */
 class OrderPaidPixel extends Observer implements ObserverInterface
 {
+    public function __construct(
+        private readonly PixelDispatcher $pixelDispatcher
+    ) {
+    }
+
     /**
      * @inheritDoc
      */
@@ -21,15 +25,12 @@ class OrderPaidPixel extends Observer implements ObserverInterface
     {
         $eventData = $this->getEvent()->getData();
         $order = $eventData['order'] ?? null;
-        
+
         if (!$order) {
             return;
         }
-        
-        /** @var PixelDispatcher $pixelDispatcher */
-        $pixelDispatcher = ObjectManager::getInstance(PixelDispatcher::class);
-        
-        $pixelDispatcher->dispatch('Purchase', [
+
+        $this->pixelDispatcher->dispatch('Purchase', [
             'order_id' => $order->getData('order_id') ?? 0,
             'order_number' => $order->getData('increment_id') ?? '',
             'total' => $order->getData('total') ?? 0,
