@@ -29,10 +29,14 @@ $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
 $role = 'session_server';
 $tokenFileName = '';
+$bootstrapInstance = '';
+$sharedService = false;
 
 foreach ($argv as $arg) {
     if (\str_starts_with($arg, '--name=')) {
         $processName = \substr($arg, 7);
+    } elseif (\str_starts_with($arg, '--instance-name=')) {
+        $instanceName = (string)\substr($arg, 16);
     } elseif (\str_starts_with($arg, '--control-port=')) {
         $controlPort = (int)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--master-pid=')) {
@@ -48,6 +52,10 @@ foreach ($argv as $arg) {
         }
     } elseif (\str_starts_with($arg, '--token-file-name=')) {
         $tokenFileName = (string)\substr($arg, 18);
+    } elseif (\str_starts_with($arg, '--bootstrap-instance=')) {
+        $bootstrapInstance = (string)\substr($arg, 21);
+    } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
+        $sharedService = true;
     } elseif ($arg === '--frontend' || $arg === '-f') {
         $isFrontend = true;
     }
@@ -73,18 +81,23 @@ if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
 
-ErrorBootstrap::init('SessionServer:' . $port, [
+$processLabel = $role === 'memory_server' ? 'MemoryService' : 'SessionServer';
+$processTag = $processLabel . ':' . $port . '@' . $instanceName;
+
+ErrorBootstrap::init($processTag, [
     'port' => $port,
     'instance' => $instanceName,
     'role' => $role,
     'process_name' => $processName,
+    'shared_service' => $sharedService,
+    'bootstrap_instance' => $bootstrapInstance,
 ]);
 
 // 前台模式：启用控制台输出
 if ($isFrontend) {
     WlsLogger::getInstance()
         ->setStdoutEnabled(true)
-        ->setProcessTag(\ucfirst(\str_replace('_', '-', $role)) . ':' . $port);
+        ->setProcessTag($processTag);
 }
 
 if ($processName) {
@@ -136,6 +149,12 @@ if (!$server->start($host, $port)) {
 
 WlsLogger::info_("Started on tcp://{$host}:{$port}");
 WlsLogger::info_("Instance: {$instanceName}, role={$role}, PID: " . \getmypid());
+if ($bootstrapInstance !== '') {
+    WlsLogger::info_("Bootstrap requester instance: {$bootstrapInstance}");
+}
+if ($sharedService) {
+    WlsLogger::info_('Shared service mode: independent');
+}
 WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend ? 'ON' : 'OFF'));
 WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50000) .
     ", persist_interval=" . ($sessionConfig['persist_interval'] ?? 60) . "s" .
