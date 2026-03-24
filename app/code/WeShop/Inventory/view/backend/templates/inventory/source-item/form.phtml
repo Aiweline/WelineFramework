@@ -1,0 +1,61 @@
+<?php
+$item = $this->getData('item') ?? [];
+$action = (string) ($this->getData('action') ?? $this->request->getUrlBuilder()->getCurrentUrl());
+$sourceItemIndexUrl = (string) ($this->getData('sourceItemIndexUrl') ?? $this->getBackendUrl('*/backend/inventory/source-item'));
+$statusOptions = $this->getData('statusOptions') ?? [];
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Edit Inventory Source Item') ?></h1>
+            <p class="text-muted mb-0"><?= __('Adjust stock quantity and warning threshold for this source-product pair.') ?></p>
+        </div>
+        <a href="<?= $sourceItemIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Back to Source Items') ?></a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= __('Reference') ?></h2>
+                    <div class="small text-muted mb-2"><?= __('Source') ?></div>
+                    <div class="mb-3 fw-semibold"><?= htmlspecialchars((string) ($item['source_name'] ?? ''), ENT_QUOTES) ?></div>
+                    <div class="small text-muted mb-2"><?= __('Product') ?></div>
+                    <div class="mb-3 fw-semibold"><?= htmlspecialchars((string) ($item['product_name'] ?? ''), ENT_QUOTES) ?></div>
+                    <div class="small text-muted mb-2"><?= __('SKU') ?></div>
+                    <div class="fw-semibold"><?= htmlspecialchars((string) ($item['sku'] ?? ''), ENT_QUOTES) ?></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <form method="post" action="<?= htmlspecialchars($action, ENT_QUOTES) ?>" class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('Quantity') ?></label>
+                            <input type="number" min="0" step="0.0001" name="quantity" class="form-control" value="<?= htmlspecialchars((string) ($item['quantity'] ?? 0), ENT_QUOTES) ?>" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('Low Stock Threshold') ?></label>
+                            <input type="number" min="0" step="1" name="low_stock_threshold" class="form-control" value="<?= (int) ($item['low_stock_threshold'] ?? 0) ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label"><?= __('Current Status') ?></label>
+                            <?php $status = (int) ($item['status'] ?? 0); ?>
+                            <input type="text"
+                                   class="form-control"
+                                   value="<?= htmlspecialchars((string) ($statusOptions[$status] ?? ($item['status_label'] ?? '')), ENT_QUOTES) ?>"
+                                   readonly>
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary"><?= __('Save Stock') ?></button>
+                            <a href="<?= $sourceItemIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Cancel') ?></a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
