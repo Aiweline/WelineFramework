@@ -15,7 +15,9 @@ namespace Weline\Server\Console\Server;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\Service\CliServerService;
+use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\ServerInstanceManager;
 
 /**
@@ -81,10 +83,12 @@ class Listing extends CommandAbstract
         // 2. 获取所有 Weline Server 实例（通过 ServerInstanceManager）
         if ($typeFilter === null || $typeFilter === 'weline') {
             $manager = $this->getInstanceManager();
-            $allInfo = $manager->getAllInstanceInfo();
+            $allInfo = $manager->getAllInstanceInfo(false);
+            $processInfoMap = $this->buildProcessInfoMap($allInfo);
             
             foreach ($allInfo as $name => $info) {
-                $isRunning = $info->isMasterRunning() || $info->getServiceStats()['running'] > 0;
+                $runtimeStats = $manager->getRuntimeStatsForInstance($info, false);
+                $isRunning = $this->isInstanceRunning($info, $runtimeStats, $processInfoMap);
                 
                 if ($runningOnly && !$isRunning) {
                     continue;
@@ -110,6 +114,39 @@ class Listing extends CommandAbstract
         }
         
         return $allInstances;
+    }
+
+    /**
+     * @param array<string, ServerInstanceInfo> $instances
+     * @return array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}>
+     */
+    protected function buildProcessInfoMap(array $instances): array
+    {
+        $pids = [];
+        foreach ($instances as $info) {
+            if ($info->masterPid > 0) {
+                $pids[$info->masterPid] = $info->masterPid;
+            }
+        }
+
+        return $pids === [] ? [] : Processer::batchGetProcessInfo(\array_values($pids));
+    }
+
+    /**
+     * @param array{instance_running: bool, workers: int, dispatchers: int, ports: int[]} $runtimeStats
+     * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
+     */
+    protected function isInstanceRunning(ServerInstanceInfo $info, array $runtimeStats, array $processInfoMap): bool
+    {
+        if ($runtimeStats['instance_running']) {
+            return true;
+        }
+
+        if ($info->masterPid <= 0) {
+            return false;
+        }
+
+        return (bool) ($processInfoMap[$info->masterPid]['exists'] ?? false);
     }
     
     /**
