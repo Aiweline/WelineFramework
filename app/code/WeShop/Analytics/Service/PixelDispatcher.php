@@ -5,10 +5,22 @@ declare(strict_types=1);
 namespace WeShop\Analytics\Service;
 
 use WeShop\Analytics\Interface\PixelProviderInterface;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Analytics\Provider\FacebookPixel;
+use WeShop\Analytics\Provider\GoogleAnalytics;
 
 class PixelDispatcher
 {
+    protected ?PixelProviderInterface $googleAnalytics = null;
+    protected ?PixelProviderInterface $facebookPixel = null;
+
+    public function __construct(
+        ?GoogleAnalytics $googleAnalytics = null,
+        ?FacebookPixel $facebookPixel = null
+    ) {
+        $this->googleAnalytics = $googleAnalytics;
+        $this->facebookPixel = $facebookPixel;
+    }
+
     /**
      * @param array<string, mixed> $eventData
      */
@@ -22,6 +34,8 @@ class PixelDispatcher
      */
     public function dispatch(string $eventName, array $eventData): void
     {
+        $eventName = $this->normalizeEventName($eventName);
+
         foreach ($this->getActiveProviders() as $provider) {
             try {
                 $provider->sendEvent($eventName, $eventData);
@@ -41,27 +55,28 @@ class PixelDispatcher
     {
         $providers = [];
 
-        foreach ($this->getProviderClasses() as $providerClass) {
-            try {
-                $provider = ObjectManager::getInstance($providerClass);
-                if ($provider instanceof PixelProviderInterface && $provider->isEnabled()) {
-                    $providers[] = $provider;
-                }
-            } catch (\Throwable) {
+        foreach ([$this->googleAnalytics, $this->facebookPixel] as $provider) {
+            if (!$provider instanceof PixelProviderInterface || !$provider->isEnabled()) {
+                continue;
             }
+
+            $providers[] = $provider;
         }
 
         return $providers;
     }
 
-    /**
-     * @return array<int, class-string<PixelProviderInterface>>
-     */
-    protected function getProviderClasses(): array
+    private function normalizeEventName(string $eventName): string
     {
-        return [
-            \WeShop\Analytics\Provider\FacebookPixel::class,
-            \WeShop\Analytics\Provider\GoogleAnalytics::class,
-        ];
+        $eventName = trim($eventName);
+        if ($eventName === '') {
+            return 'page_view';
+        }
+
+        $eventName = preg_replace('/(?<!^)[A-Z]/', '_$0', $eventName) ?? $eventName;
+        $eventName = str_replace(['-', ' '], '_', $eventName);
+        $eventName = strtolower($eventName);
+
+        return preg_replace('/_+/', '_', $eventName) ?? $eventName;
     }
 }

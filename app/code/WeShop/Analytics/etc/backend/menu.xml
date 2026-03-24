@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="WeShop_Analytics::analytics_management"
+          name="weshop_analytics_management"
+          title="Analytics Management"
+          action="/*/backend/analytics"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi mdi-chart-line"
+          order="28"/>
+</menus>
