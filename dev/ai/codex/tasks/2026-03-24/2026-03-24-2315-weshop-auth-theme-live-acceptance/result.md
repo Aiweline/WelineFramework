@@ -7,6 +7,7 @@
 - Current checkpoint:
 - live auth probes on port `9982` are confirmed against the real REST prefix `api123`
 - frontend password login on `/customer/account/login` no longer throws the auth/profile schema SQL error; invalid credentials now return the expected JSON failure payload
+- empty unified-auth token requests now fail fast with `422` validation instead of leaking through to a `500` auth/service exception
 - Weline customer login now bridges email-style sign-in into `WeShop\Customer\Service\CustomerWebAuthService`, preserving remember-duration and 2FA challenge handoff behavior
 - default-theme account/product/checkout compatibility guards are covered by focused unit tests
 - current live HTML on `9982` is still not a reliable oracle for default-theme login rendering because that runtime is serving the `WeShop/motor` theme, not `WeShop/default`
@@ -15,12 +16,14 @@
 
 - `php vendor/bin/phpunit --no-coverage app/code/Weline/Customer/Test/Unit app/code/WeShop/Customer/Test/Unit/Service app/code/WeShop/GoogleAuth/Test/Unit/Controller/Frontend/Auth app/code/WeShop/GoogleAuth/Test/Unit/Sticker app/code/WeShop/Checkout/Test/Unit/View/CheckoutPaymentDynamicHookTemplateTest.php app/code/WeShop/Payment/Test/Unit --colors=never`
 - `php vendor/bin/phpunit --no-coverage app/code/WeShop/Product/Test/Unit/View/DefaultThemeProductHookHostTest.php app/code/WeShop/Customer/Test/Unit/View/DefaultThemeAccountHookHostTest.php app/code/WeShop/Checkout/Test/Unit/View/DefaultThemeCheckoutLayoutHookHostTest.php app/code/WeShop/Checkout/Test/Unit/View/CheckoutPaymentDynamicHookTemplateTest.php --colors=never`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Auth/Test/Unit --colors=never`
 - `php tests/e2e/framework/preflight-refresh.php`
 - `php bin/w command:collect`
 - `php bin/w server:reload weshop-acceptance`
 - live probes on `http://127.0.0.1:9982`:
   - `GET /customer/account/login`
   - `POST /customer/account/login`
+  - `POST /api123/weshop/rest/v1/auth/token`
   - `GET /wishlist`
   - `GET /recently-viewed`
   - `GET /compare`
@@ -60,3 +63,4 @@
 
 - In this local shell/runtime, the shared Google provider template still renders an empty string unless `GoogleOAuthService::isConfigured()` sees valid `google_auth.client_id/client_secret` values.
 - The currently running `weshop-acceptance` storefront on `9982` is serving the `WeShop/motor` theme, so default-theme login/body markup changes are not directly visible in that live response even after reload. Default-theme compatibility in this slice is therefore enforced through view tests and compiled-template inspection, not by claiming live `WeShop/default` rendering on this runtime.
+- Current e2e preflight is green again after restoring missing `WeShop_Customer` account recommendation hook docs.

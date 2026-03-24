@@ -20,23 +20,29 @@ class Auth extends FrontendRestController
         try {
             $grantType = strtolower((string) ($this->request->getBodyParam('grant_type') ?? $this->request->getPost('grant_type') ?? 'password'));
             $area = strtolower((string) ($this->request->getBodyParam('area') ?? $this->request->getPost('area') ?? 'frontend'));
+            $username = $this->readUsername();
+            $password = $this->readPassword();
+            $googleCode = $this->readGoogleCode();
+            $refreshToken = $this->readRefreshToken();
+            $apiKey = $this->readApiKey();
+            $apiSecret = $this->readApiSecret();
 
             $data = match ($grantType) {
                 'password' => $this->authGrantService->issuePasswordToken(
                     $area,
-                    (string) ($this->request->getBodyParam('username') ?? $this->request->getBodyParam('email') ?? $this->request->getPost('username') ?? $this->request->getPost('email') ?? ''),
-                    (string) ($this->request->getBodyParam('password') ?? $this->request->getPost('password') ?? '')
+                    $this->requireValue($username, __('Username or email and password are required.')),
+                    $this->requireValue($password, __('Username or email and password are required.'))
                 ),
                 'google_code' => $this->authGrantService->issueGoogleCodeToken(
                     $area,
-                    (string) ($this->request->getBodyParam('code') ?? $this->request->getPost('code') ?? '')
+                    $this->requireValue($googleCode, __('Google authorization code is required.'))
                 ),
                 'refresh_token' => $this->authGrantService->refreshToken(
-                    (string) ($this->request->getBodyParam('refresh_token') ?? $this->request->getPost('refresh_token') ?? '')
+                    $this->requireValue($refreshToken, __('Refresh token is required.'))
                 ),
                 'api_credentials' => $this->authGrantService->issueApiCredentialsToken(
-                    (string) ($this->request->getBodyParam('api_key') ?? $this->request->getPost('api_key') ?? ''),
-                    (string) ($this->request->getBodyParam('api_secret') ?? $this->request->getPost('api_secret') ?? '')
+                    $this->requireValue($apiKey, __('API key and secret are required.')),
+                    $this->requireValue($apiSecret, __('API key and secret are required.'))
                 ),
                 default => throw new \InvalidArgumentException((string) __('Unsupported grant type.')),
             };
@@ -164,8 +170,32 @@ class Auth extends FrontendRestController
         return (string) ($this->request->getBodyParam('password') ?? $this->request->getPost('password') ?? '');
     }
 
+    private function readGoogleCode(): string
+    {
+        return (string) ($this->request->getBodyParam('code') ?? $this->request->getPost('code') ?? '');
+    }
+
     private function readRefreshToken(): string
     {
         return (string) ($this->request->getBodyParam('refresh_token') ?? $this->request->getPost('refresh_token') ?? '');
+    }
+
+    private function readApiKey(): string
+    {
+        return (string) ($this->request->getBodyParam('api_key') ?? $this->request->getPost('api_key') ?? '');
+    }
+
+    private function readApiSecret(): string
+    {
+        return (string) ($this->request->getBodyParam('api_secret') ?? $this->request->getPost('api_secret') ?? '');
+    }
+
+    private function requireValue(string $value, \Stringable|string $message): string
+    {
+        if (trim($value) === '') {
+            throw new \InvalidArgumentException((string) $message);
+        }
+
+        return $value;
     }
 }
