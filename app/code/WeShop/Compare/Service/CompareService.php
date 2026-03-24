@@ -6,42 +6,29 @@ namespace WeShop\Compare\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Compare\Model\Compare;
-use WeShop\Product\Model\Product;
 
-/**
- * 商品对比服务
- */
 class CompareService
 {
-    /**
-     * 添加到对比
-     * 
-     * @param int $customerId 客户ID
-     * @param int $productId 产品ID
-     * @return Compare
-     */
     public function addToCompare(int $customerId, int $productId): Compare
     {
         /** @var Compare $compare */
         $compare = ObjectManager::getInstance(Compare::class);
-        
-        // 检查是否已存在
+
         $existing = $compare->clear()
             ->where(Compare::schema_fields_CUSTOMER_ID, $customerId)
             ->where(Compare::schema_fields_PRODUCT_ID, $productId)
             ->find()
             ->fetch();
-        
+
         if ($existing && $existing->getId()) {
             return $existing;
         }
-        
-        // 创建新记录
+
         $compare->clearData()
             ->setData(Compare::schema_fields_CUSTOMER_ID, $customerId)
             ->setData(Compare::schema_fields_PRODUCT_ID, $productId)
             ->save();
-        
+
         return $compare;
     }
 
@@ -49,56 +36,83 @@ class CompareService
     {
         return count($this->getCompareList($customerId));
     }
-    
-    /**
-     * 从对比移除
-     * 
-     * @param int $compareId 对比ID
-     * @param int $customerId 客户ID
-     * @return bool
-     */
+
     public function removeFromCompare(int $compareId, int $customerId): bool
     {
         /** @var Compare $compare */
         $compare = ObjectManager::getInstance(Compare::class);
         $compare->load($compareId);
-        
-        if (!$compare->getId() || (int)$compare->getData(Compare::schema_fields_CUSTOMER_ID) !== $customerId) {
+
+        if (!$compare->getId() || (int) $compare->getData(Compare::schema_fields_CUSTOMER_ID) !== $customerId) {
             return false;
         }
-        
+
         return (bool) $compare->delete()->fetch();
     }
-    
+
     /**
-     * 获取客户对比列表
-     * 
-     * @param int $customerId 客户ID
-     * @return array
+     * @return array<int, array<string, mixed>>
      */
     public function getCompareList(int $customerId): array
     {
         /** @var Compare $compare */
         $compare = ObjectManager::getInstance(Compare::class);
-        
+
         $items = $compare->clear()
             ->where(Compare::schema_fields_CUSTOMER_ID, $customerId)
             ->order(Compare::schema_fields_CREATED_AT, 'DESC')
             ->select()
             ->fetchArray();
-        
-        // 加载产品信息
+
+        $products = $this->getProductsByCompareItems($items);
         foreach ($items as &$item) {
-            if (!empty($item['product_id'])) {
-                /** @var Product $product */
-                $product = ObjectManager::getInstance(Product::class);
-                $product->load((int) $item['product_id']);
-                if ($product->getId()) {
-                    $item['product'] = $product->getData();
-                }
+            $productId = (int) ($item['product_id'] ?? 0);
+            if ($productId > 0 && isset($products[$productId])) {
+                $item['product'] = $products[$productId];
             }
         }
-        
+        unset($item);
+
         return $items;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function getProductsByCompareItems(array $items): array
+    {
+        $productIds = [];
+        foreach ($items as $item) {
+            $productId = (int) ($item['product_id'] ?? 0);
+            if ($productId > 0) {
+                $productIds[] = $productId;
+            }
+        }
+
+        if ($productIds === []) {
+            return [];
+        }
+
+        $productRows = w_query('product', 'getProductByIds', [
+            'product_ids' => array_values(array_unique($productIds)),
+        ]);
+        if (!is_array($productRows)) {
+            return [];
+        }
+
+        $products = [];
+        foreach ($productRows as $product) {
+            if (!is_array($product)) {
+                continue;
+            }
+
+            $productId = (int) ($product['product_id'] ?? 0);
+            if ($productId > 0) {
+                $products[$productId] = $product;
+            }
+        }
+
+        return $products;
     }
 }
