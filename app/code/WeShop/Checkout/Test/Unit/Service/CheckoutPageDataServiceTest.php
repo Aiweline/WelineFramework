@@ -14,8 +14,16 @@ use Weline\I18n\Model\I18n;
 
 class CheckoutPageDataServiceTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        unset($_SERVER['WELINE_USER_CURRENCY']);
+        parent::tearDown();
+    }
+
     public function testBuildMapsCheckoutPageDataForDefaultThemeRendering(): void
     {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+
         $cartService = $this->createMock(CartService::class);
         $cartService->expects($this->once())
             ->method('getCartItems')
