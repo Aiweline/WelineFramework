@@ -73,6 +73,46 @@ class GoogleOAuthService
         return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($query);
     }
 
+    public function sanitizeRedirectUrl(string $area, string $redirectUrl, bool $allowEmpty = true): string
+    {
+        $area = $this->normalizeArea($area);
+        $redirectUrl = trim($redirectUrl);
+
+        if ($redirectUrl === '') {
+            return $allowEmpty ? '' : $this->getDefaultRedirectUrl($area);
+        }
+
+        if ($this->url->isLink($redirectUrl)) {
+            if (Url::is_same_site($redirectUrl)) {
+                return $redirectUrl;
+            }
+
+            return $allowEmpty ? '' : $this->getDefaultRedirectUrl($area);
+        }
+
+        // Reject scheme-like payloads such as "javascript:" and "data:".
+        if ((bool) preg_match('/^[a-z][a-z0-9+.-]*:/i', $redirectUrl)) {
+            return $allowEmpty ? '' : $this->getDefaultRedirectUrl($area);
+        }
+
+        $path = trim((string) (parse_url($redirectUrl, PHP_URL_PATH) ?? ''), '/');
+        if ($path === '') {
+            return $allowEmpty ? '' : $this->getDefaultRedirectUrl($area);
+        }
+
+        $query = [];
+        $queryString = (string) (parse_url($redirectUrl, PHP_URL_QUERY) ?? '');
+        if ($queryString !== '') {
+            parse_str($queryString, $query);
+        }
+
+        if ($area === 'backend') {
+            return $this->url->getBackendUrl($path, $query, false);
+        }
+
+        return $this->url->getFrontendUrl($path, $query, false);
+    }
+
     public function consumeState(string $state): ?array
     {
         $state = trim($state);
@@ -234,5 +274,14 @@ class GoogleOAuthService
         }
 
         return in_array(strtolower(trim((string) $value)), ['1', 'true', 'yes'], true);
+    }
+
+    private function getDefaultRedirectUrl(string $area): string
+    {
+        if ($area === 'backend') {
+            return $this->url->getBackendUrl('admin');
+        }
+
+        return $this->url->getFrontendUrl('weshop/customer/account/index');
     }
 }
