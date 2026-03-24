@@ -34,8 +34,9 @@ final class SqliteCompiler extends AbstractCompiler
             return '';
         }
 
-        $identitySql = '';
-        $values = '';
+        $identityStatements = [];
+        $valueRows = [];
+        $normalInsertFields = [];
         $hasIdentityInsert = false;
         $hasNormalInsert = false;
 
@@ -45,22 +46,25 @@ final class SqliteCompiler extends AbstractCompiler
                 unset($row[$identityField]);
                 $fields = array_keys($row);
                 $fieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $fields);
-                $identitySql .= 'INSERT INTO ' . $table . ' (' . implode(',', $fieldsQuoted) . ') VALUES (';
+                $rowPlaceholders = [];
                 foreach ($row as $f => $v) {
                     $pk = ':' . md5("insert_{$f}_field_{$insertKey}");
                     $this->bindings[$pk] = $this->valueToBinding($v);
-                    $identitySql .= $pk . ', ';
+                    $rowPlaceholders[] = $pk;
                 }
-                $identitySql = rtrim($identitySql, ', ') . '); ';
+                $identityStatements[] = 'INSERT INTO ' . $table . ' (' . implode(',', $fieldsQuoted) . ') VALUES (' . implode(', ', $rowPlaceholders) . ');';
                 $hasIdentityInsert = true;
             } else {
-                $values .= '(';
+                $rowPlaceholders = [];
                 foreach ($row as $f => $v) {
                     $pk = ':' . md5("insert_{$f}_field_{$insertKey}");
                     $this->bindings[$pk] = $this->valueToBinding($v);
-                    $values .= $pk . ', ';
+                    $rowPlaceholders[] = $pk;
                 }
-                $values = rtrim($values, ', ') . '),';
+                if ($normalInsertFields === []) {
+                    $normalInsertFields = array_keys($row);
+                }
+                $valueRows[] = '(' . implode(', ', $rowPlaceholders) . ')';
                 $hasNormalInsert = true;
             }
         }
@@ -69,12 +73,11 @@ final class SqliteCompiler extends AbstractCompiler
             throw new \Exception(__('插入的数据记录中不允许同时存在有主键和无主键的情况！'));
         }
 
-        $values = rtrim($values, ',');
-        $sql = $identitySql;
+        $values = implode(',', $valueRows);
+        $sql = implode(' ', $identityStatements);
 
         if ($values !== '') {
-            $first = reset($allItems);
-            $insertFields = array_keys($first);
+            $insertFields = $normalInsertFields;
             $insertFieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $insertFields);
             $sql .= 'INSERT INTO ' . $table . ' (' . implode(',', $insertFieldsQuoted) . ') VALUES ' . $values;
 

@@ -26,24 +26,40 @@ class BlogPostSummarySourceKeywordText20250318V102 extends AbstractMigration
 
     public function install(): bool
     {
-        $c = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
         $table = ObjectManager::getInstance(Post::class)->getTable();
         $tableSql = $this->tableSqlIdent($table);
-        $driver = strtolower((string) $c->getConfigProvider()->getDbType());
+        $driver = strtolower((string)$connector->getConfigProvider()->getDbType());
+        $hasSummary = $connector->hasField($table, Post::schema_fields_SUMMARY);
+        $hasSourceKeyword = $connector->hasField($table, Post::schema_fields_SOURCE_KEYWORD);
 
         if ($driver === 'pgsql') {
-            $c->query(
-                "ALTER TABLE {$tableSql} ALTER COLUMN \"summary\" TYPE TEXT USING \"summary\"::text"
-            )->fetch();
-            $c->query(
-                "ALTER TABLE {$tableSql} ALTER COLUMN \"source_keyword\" TYPE TEXT USING \"source_keyword\"::text"
-            )->fetch();
+            if ($hasSummary) {
+                $connector->query(
+                    "ALTER TABLE {$tableSql} ALTER COLUMN \"summary\" TYPE TEXT USING \"summary\"::text"
+                )->fetch();
+            }
+            if ($hasSourceKeyword) {
+                $connector->query(
+                    "ALTER TABLE {$tableSql} ALTER COLUMN \"source_keyword\" TYPE TEXT USING \"source_keyword\"::text"
+                )->fetch();
+            }
         } elseif (str_contains($driver, 'mysql') || $driver === 'mariadb') {
-            $c->query(
-                "ALTER TABLE {$tableSql} MODIFY COLUMN `summary` TEXT NULL, MODIFY COLUMN `source_keyword` TEXT NULL"
-            )->fetch();
+            $alterClauses = [];
+            if ($hasSummary) {
+                $alterClauses[] = "MODIFY COLUMN `summary` TEXT NULL";
+            }
+            if ($hasSourceKeyword) {
+                $alterClauses[] = "MODIFY COLUMN `source_keyword` TEXT NULL";
+            }
+
+            if ($alterClauses !== []) {
+                $connector->query(
+                    "ALTER TABLE {$tableSql} " . implode(', ', $alterClauses)
+                )->fetch();
+            }
         } else {
-            // SQLite 等：TEXT 已兼容，跳过
+            // SQLite 等场景不需要额外处理。
         }
 
         return true;
@@ -57,14 +73,14 @@ class BlogPostSummarySourceKeywordText20250318V102 extends AbstractMigration
     /** 供 ALTER TABLE 使用的表标识（保留 schema.database 前缀若存在） */
     private function tableSqlIdent(string $formatted): string
     {
-        $s = trim($formatted);
-        if ($s === '') {
+        $table = trim($formatted);
+        if ($table === '') {
             return '"' . Post::schema_table . '"';
         }
-        if (str_contains($s, '"') || str_contains($s, '`')) {
-            return $s;
+        if (str_contains($table, '"') || str_contains($table, '`')) {
+            return $table;
         }
 
-        return '"' . str_replace('"', '', $s) . '"';
+        return '"' . str_replace('"', '', $table) . '"';
     }
 }

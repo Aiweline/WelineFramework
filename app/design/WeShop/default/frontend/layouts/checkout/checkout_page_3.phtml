@@ -669,7 +669,7 @@ $area = $themeData['area'] ?? 'frontend';
                                         <?= __('for faster checkout.') ?>
                                     </p>
                                 </div>
-                                <w:hook>WeShop_Shipping::checkout::methods</w:hook>
+                                <w:hook>WeShop_Shipping::frontend::layouts::checkout::methods</w:hook>
                                 
                                 <form class="weshop-checkout-form" action="<?= $this->getUrl('checkout/shipping/save') ?>" method="post">
                                     <div class="weshop-checkout-form-row">

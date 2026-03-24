@@ -12,6 +12,7 @@ const http = require('http');
 const https = require('https');
 const net = require('net');
 const { execFileSync, execSync, spawn, spawnSync } = require('child_process');
+const { runFrameworkPreflight } = require('./framework/preflight-refresh');
 
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const MODULES_JSON = path.join(__dirname, 'modules.json');
@@ -276,6 +277,20 @@ async function main() {
     let cleanup = null;
 
     try {
+        console.log('[e2e] running framework preflight...\n');
+        try {
+            const preflight = runFrameworkPreflight(resolvePhpBinary, process.env);
+            if (preflight.output) {
+                console.log(`${preflight.output}\n`);
+            }
+        } catch (error) {
+            console.error('[e2e] framework preflight failed.');
+            if (error.details) {
+                console.error(`${error.details}\n`);
+            }
+            throw error;
+        }
+
         const preparedRuntime = await prepareRuntime();
         cleanup = preparedRuntime.cleanup;
         const runtimeInfo = preparedRuntime.runtimeInfo;
