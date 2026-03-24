@@ -26,6 +26,18 @@ if ($isEdit && $page && $page->getId()) {
     $pageLocales = [];
 }
 if (!is_array($pageLocales)) $pageLocales = [];
+if ($pageDefaultLocale && !in_array($pageDefaultLocale, $selectedLocales, true)) {
+    $selectedLocales[] = $pageDefaultLocale;
+}
+$pageSelectedLanguageValues = array_values(array_filter(array_map(
+    static function ($value): string {
+        return is_scalar($value) ? trim((string)$value) : '';
+    },
+    array_unique($selectedLocales)
+), static function (string $value): bool {
+    return $value !== '';
+}));
+$pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 ?>
 
 <!-- start page title -->
@@ -504,61 +516,14 @@ if (!is_array($pageLocales)) $pageLocales = [];
                         <label for="default_locale" class="form-label">
                             <?= __('默认语言') ?> <span class="text-danger">*</span>
                         </label>
-                        
-                        <?php 
-                        $currentDefaultLocale = $page ? $page->getData('default_locale') : '';
-                        if (!$currentDefaultLocale && count($this->getData('active_locales')) > 0) {
-                            $firstLocale = $this->getData('active_locales')[0];
-                            $currentDefaultLocale = $firstLocale->getData('code');
-                        }
-                        
-                        // 获取当前默认语言的名称
-                        $currentDefaultLocaleName = '';
-                        foreach ($this->getData('active_locales') as $locale) {
-                            if ($locale->getData('code') == $currentDefaultLocale) {
-                                $currentDefaultLocaleName = $locale->getData('name');
-                                break;
-                            }
-                        }
-                        ?>
-                        
-                        <!-- 当前选中的默认语言显示 -->
-                        <div class="input-group">
-                            <input type="text" 
-                                   class="form-control" 
-                                   id="defaultLocaleSearch"
-                                   placeholder="<?= __('搜索语言...') ?>"
-                                   autocomplete="off"
-                                   value="<?= $currentDefaultLocaleName ?> (<?= $currentDefaultLocale ?>)">
-                            <button class="btn btn-outline-secondary dropdown-toggle" 
-                                    type="button" 
-                                    data-bs-toggle="dropdown" 
-                                    aria-expanded="false"
-                                    id="defaultLocaleDropdownBtn">
-                                <?= __('选择') ?>
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end" 
-                                id="defaultLocaleDropdown"
-                                style="max-height: 300px; overflow-y: auto; width: 100%;">
-                                <?php foreach ($this->getData('active_locales') as $locale): ?>
-                                <li>
-                                    <a class="dropdown-item default-locale-option <?= ($locale->getData('code') == $currentDefaultLocale) ? 'active' : '' ?>" 
-                                       href="javascript:void(0)"
-                                       data-locale-code="<?= $locale->getData('code') ?>"
-                                       data-locale-name="<?= $locale->getData('name') ?>"
-                                       onclick="selectDefaultLocale('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')">
-                                        <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
-                                        <?php if ($locale->getData('code') == $currentDefaultLocale): ?>
-                                            <i class="mdi mdi-check float-end"></i>
-                                        <?php endif; ?>
-                                    </a>
-                                </li>
-                                <?php endforeach; ?>
-                            </ul>
-                        </div>
-                        
-                        <!-- 隐藏的input用于表单提交 -->
-                        <input type="hidden" id="default_locale" name="default_locale" value="<?= $currentDefaultLocale ?>" required>
+                        <w:i18n:language:select
+                            id="weshop_page_default_locale_selector"
+                            name="default_locale"
+                            input-id="default_locale"
+                            value="pageDefaultLocale"
+                            required="true"
+                            class="w-100"
+                        />
                         
                         <div class="form-text"><?= __('选择页面的主要语言版本') ?></div>
                     </div>
@@ -570,79 +535,15 @@ if (!is_array($pageLocales)) $pageLocales = [];
                         <label class="form-label"><?= __('支持的语言翻译') ?></label>
                         
                         <!-- 已选中的语言标签 -->
-                        <div id="selectedLocalesTags" class="mb-2" style="min-height: 38px; padding: 8px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f8f9fa;">
-                            <?php 
-                            $hasSelectedLocales = false;
-                            foreach ($this->getData('active_locales') as $locale): 
-                                if (in_array($locale->getData('code'), $selectedLocales)): 
-                                    $hasSelectedLocales = true;
-                                    ?>
-                                <span class="badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag" 
-                                      data-locale-code="<?= $locale->getData('code') ?>"
-                                      style="font-size: 0.875rem;">
-                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
-                                    <i class="mdi mdi-close ms-1" 
-                                       style="cursor: pointer;"
-                                       onclick="removeLocaleTag('<?= $locale->getData('code') ?>')"></i>
-                                </span>
-                            <?php endif; 
-                            endforeach; 
-                            
-                            // 如果没有选择任何语言，显示提示
-                            if (!$hasSelectedLocales): ?>
-                                <div class="text-muted" id="noLocalesHint" style="font-size: 0.875rem;">
-                                    <i class="mdi mdi-information-outline me-1"></i>
-                                    <?= __('暂未选择支持的语言，请使用下方搜索框添加语言') ?>
-                                </div>
-                            <?php endif; ?>
-                        </div>
-                        
-                        <!-- 搜索添加语言 - 自定义下拉选择器 -->
-                        <div class="position-relative">
-                            <div class="input-group">
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="localeSearch"
-                                       placeholder="<?= __('搜索并选择语言...') ?>"
-                                       autocomplete="off">
-                                <button class="btn btn-outline-secondary" 
-                                        type="button" 
-                                        id="localeDropdownBtn"
-                                        onclick="toggleLocaleDropdown()">
-                                    <i class="mdi mdi-chevron-down"></i>
-                                </button>
-                            </div>
-                            
-                            <!-- 自定义下拉列表 -->
-                            <div id="localeDropdown" 
-                                 class="border rounded bg-white shadow-sm position-absolute w-100 mt-1" 
-                                 style="max-height: 300px; overflow-y: auto; display: none; z-index: 1050;">
-                                <?php foreach ($this->getData('active_locales') as $locale): ?>
-                                <div class="dropdown-item locale-option" 
-                                     data-locale-code="<?= $locale->getData('code') ?>"
-                                     data-locale-name="<?= $locale->getData('name') ?>"
-                                     onclick="addLocaleTag('<?= $locale->getData('code') ?>', '<?= $locale->getData('name') ?>')"
-                                     style="cursor: pointer; padding: 0.5rem 1rem; <?= in_array($locale->getData('code'), $selectedLocales) ? 'display: none;' : '' ?>">
-                                    <?= $locale->getData('name') ?> (<?= $locale->getData('code') ?>)
-                                </div>
-                                <?php endforeach; ?>
-                                <div id="noMatchHint" class="text-muted text-center py-2" style="display: none; font-size: 0.875rem;">
-                                    <?= __('未找到匹配的语言') ?>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- 隐藏的checkbox用于表单提交 -->
-                        <div id="localeCheckboxes" style="display: none;">
-                            <?php foreach ($this->getData('active_locales') as $locale): ?>
-                                <input class="locale-checkbox" 
-                                       type="checkbox" 
-                                       name="locales[]" 
-                                       value="<?= $locale->getData('code') ?>"
-                                       id="locale_<?= $locale->getData('code') ?>"
-                                       <?= in_array($locale->getData('code'), $selectedLocales) ? 'checked' : '' ?>>
-                            <?php endforeach; ?>
-                        </div>
+                        <w:i18n:language:select
+                            id="weshop_page_related_locales_selector"
+                            name="locales[]"
+                            input-id="locales"
+                            value="pageSelectedLanguageValues"
+                            multiple="true"
+                            readonly-values="pageReadonlyLocales"
+                            class="w-100"
+                        />
                         
                         <div class="form-text"><?= __('选择后可点击字段旁边的翻译按钮进行翻译') ?></div>
                     </div>
@@ -808,64 +709,6 @@ if (!is_array($pageLocales)) $pageLocales = [];
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/ckeditor.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/39.0.1/classic/translations/zh-cn.js"></script>
 
-<style>
-/* 自定义下拉选择器样式优化 */
-#localeDropdown .locale-option {
-    transition: background-color 0.2s ease;
-}
-
-#localeDropdown .locale-option:hover {
-    background-color: #f0f0f0;
-}
-
-#localeDropdown .locale-option:active {
-    background-color: #e0e0e0;
-}
-
-/* 语言标签样式优化 */
-.selected-locale-tag {
-    transition: all 0.2s ease;
-}
-
-.selected-locale-tag:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.selected-locale-tag .mdi-close {
-    transition: transform 0.2s ease;
-}
-
-.selected-locale-tag .mdi-close:hover {
-    transform: scale(1.2);
-}
-
-/* 搜索框聚焦效果 */
-#localeSearch:focus {
-    border-color: #0d6efd;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-}
-
-/* 下拉列表滚动条样式 */
-#localeDropdown::-webkit-scrollbar {
-    width: 8px;
-}
-
-#localeDropdown::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-#localeDropdown::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-#localeDropdown::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-</style>
-
 <script>
 // 全局 HTML 转义函数（供所有配置渲染函数使用）
 function escapeHtml(text) {
@@ -980,351 +823,16 @@ document.getElementById('name')?.addEventListener('blur', function() {
 /**
  * 选择默认语言
  */
-function selectDefaultLocale(localeCode, localeName) {
-    // 更新搜索框显示
-    document.getElementById('defaultLocaleSearch').value = `${localeName} (${localeCode})`;
-    
-    // 更新隐藏的input值
-    document.getElementById('default_locale').value = localeCode;
-    
-    // 更新下拉列表中的active状态
-    document.querySelectorAll('.default-locale-option').forEach(option => {
-        const optionCode = option.getAttribute('data-locale-code');
-        if (optionCode === localeCode) {
-            option.classList.add('active');
-            // 添加勾选图标
-            if (!option.querySelector('.mdi-check')) {
-                option.innerHTML += '<i class="mdi mdi-check float-end"></i>';
-            }
-        } else {
-            option.classList.remove('active');
-            // 移除勾选图标
-            const checkIcon = option.querySelector('.mdi-check');
-            if (checkIcon) {
-                checkIcon.remove();
-            }
-        }
-    });
-    
-    // 自动勾选对应的翻译语言
-    const localeCheckbox = document.getElementById('locale_' + localeCode);
-    if (localeCheckbox && !localeCheckbox.checked) {
-        localeCheckbox.checked = true;
-        // 添加标签
-        addLocaleTag(localeCode, localeName);
-    }
-    
-    // 关闭下拉列表
-    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
-    if (dropdownBtn) {
-        const dropdown = bootstrap.Dropdown.getInstance(dropdownBtn);
-        if (dropdown) {
-            dropdown.hide();
-        }
-    }
-}
-
-/**
- * 搜索默认语言
- */
-document.getElementById('defaultLocaleSearch')?.addEventListener('input', function() {
-    const searchText = this.value.toLowerCase();
-    const options = document.querySelectorAll('.default-locale-option');
-    
-    options.forEach(option => {
-        const localeCode = option.getAttribute('data-locale-code');
-        const localeName = option.getAttribute('data-locale-name');
-        const text = `${localeName} ${localeCode}`.toLowerCase();
-        
-        // 根据搜索文本显示/隐藏
-        const parentLi = option.parentElement;
-        if (text.includes(searchText)) {
-            parentLi.style.display = 'block';
-        } else {
-            parentLi.style.display = 'none';
-        }
-    });
-});
-
-/**
- * 点击搜索框时自动展开下拉列表
- */
-document.getElementById('defaultLocaleSearch')?.addEventListener('focus', function() {
-    const dropdownBtn = document.getElementById('defaultLocaleDropdownBtn');
-    if (dropdownBtn && !dropdownBtn.classList.contains('show')) {
-        dropdownBtn.click();
-    }
-});
-
-/**
- * 清空搜索框时恢复当前选中的语言显示
- */
-document.getElementById('defaultLocaleSearch')?.addEventListener('blur', function(e) {
-    // 延迟执行，避免点击下拉选项时被清空
-    setTimeout(() => {
-        const currentCode = document.getElementById('default_locale').value;
-        if (currentCode) {
-            const currentOption = document.querySelector(`.default-locale-option[data-locale-code="${currentCode}"]`);
-            if (currentOption) {
-                const localeName = currentOption.getAttribute('data-locale-name');
-                this.value = `${localeName} (${currentCode})`;
-            }
-        }
-    }, 200);
-});
-
-// ==================== 语言标签管理功能 ====================
-
-/**
- * 添加语言标签
- */
-function addLocaleTag(localeCode, localeName) {
-    // 检查是否已存在
-    if (document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`)) {
+document.addEventListener('DOMContentLoaded', function() {
+    var utils = window.WelineLanguageSelectUtils;
+    if (!utils || typeof utils.bindDefaultToMultiple !== 'function') {
         return;
     }
-    
-    // 创建标签
-    const tag = document.createElement('span');
-    tag.className = 'badge bg-primary me-2 mb-2 py-2 px-3 selected-locale-tag';
-    tag.setAttribute('data-locale-code', localeCode);
-    tag.style.fontSize = '0.875rem';
-    tag.innerHTML = `
-        ${localeName} (${localeCode})
-        <i class="mdi mdi-close ms-1" 
-           style="cursor: pointer;"
-           onclick="removeLocaleTag('${localeCode}')"></i>
-    `;
-    
-    // 添加到标签区域
-    document.getElementById('selectedLocalesTags').appendChild(tag);
-    
-    // 勾选对应的checkbox
-    const checkbox = document.getElementById('locale_' + localeCode);
-    if (checkbox) {
-        checkbox.checked = true;
-    }
-    
-    // 隐藏下拉列表中的选项
-    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
-    if (option) {
-        option.style.display = 'none';
-    }
-    
-    // 清空搜索框
-    const searchInput = document.getElementById('localeSearch');
-    searchInput.value = '';
-    
-    // 重置下拉列表显示
-    resetLocaleDropdown();
-    
-    // 隐藏提示信息（如果存在）
-    updateLocalesHint();
-    
-    // 保持下拉列表打开并聚焦搜索框，方便继续选择
-    const dropdown = document.getElementById('localeDropdown');
-    if (dropdown.style.display === 'block') {
-        searchInput.focus();
-    }
-}
 
-/**
- * 移除语言标签
- */
-function removeLocaleTag(localeCode) {
-    // 移除标签
-    const tag = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
-    if (tag) {
-        tag.remove();
-    }
-    
-    // 取消勾选checkbox
-    const checkbox = document.getElementById('locale_' + localeCode);
-    if (checkbox) {
-        checkbox.checked = false;
-    }
-    
-    // 显示下拉列表中的选项
-    const option = document.querySelector(`.locale-option[data-locale-code="${localeCode}"]`);
-    if (option) {
-        option.style.display = 'block';
-    }
-    
-    // 重置下拉列表显示
-    resetLocaleDropdown();
-    
-    // 更新提示信息（如果没有标签了则显示提示）
-    updateLocalesHint();
-}
-
-/**
- * 更新语言选择提示信息的显示/隐藏
- */
-function updateLocalesHint() {
-    const tagsContainer = document.getElementById('selectedLocalesTags');
-    const existingHint = document.getElementById('noLocalesHint');
-    const selectedTags = document.querySelectorAll('.selected-locale-tag');
-    
-    if (selectedTags.length === 0) {
-        // 没有选择任何语言，显示提示
-        if (!existingHint) {
-            const hint = document.createElement('div');
-            hint.className = 'alert alert-info py-2 px-3 mb-0';
-            hint.id = 'noLocalesHint';
-            hint.style.fontSize = '0.875rem';
-            hint.innerHTML = '<i class="mdi mdi-information-outline me-1"></i>暂未选择支持的语言，请使用下方搜索框添加语言';
-            tagsContainer.appendChild(hint);
-        }
-    } else {
-        // 已有选择的语言，隐藏提示
-        if (existingHint) {
-            existingHint.remove();
-        }
-    }
-}
-
-/**
- * 切换语言下拉列表显示/隐藏
- */
-function toggleLocaleDropdown() {
-    const dropdown = document.getElementById('localeDropdown');
-    const btn = document.getElementById('localeDropdownBtn');
-    const icon = btn.querySelector('i');
-    
-    if (dropdown.style.display === 'none' || dropdown.style.display === '') {
-        dropdown.style.display = 'block';
-        icon.classList.remove('mdi-chevron-down');
-        icon.classList.add('mdi-chevron-up');
-        // 自动聚焦搜索框
-        document.getElementById('localeSearch').focus();
-    } else {
-        dropdown.style.display = 'none';
-        icon.classList.remove('mdi-chevron-up');
-        icon.classList.add('mdi-chevron-down');
-    }
-}
-
-/**
- * 搜索语言功能
- */
-document.getElementById('localeSearch')?.addEventListener('input', function() {
-    const searchText = this.value.toLowerCase();
-    const options = document.querySelectorAll('.locale-option');
-    const dropdown = document.getElementById('localeDropdown');
-    const noMatchHint = document.getElementById('noMatchHint');
-    
-    let hasVisibleOptions = false;
-    
-    options.forEach(option => {
-        const localeCode = option.getAttribute('data-locale-code');
-        const localeName = option.getAttribute('data-locale-name');
-        const text = `${localeName} ${localeCode}`.toLowerCase();
-        
-        // 如果已被选中，不显示
-        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
-        if (isSelected) {
-            option.style.display = 'none';
-            return;
-        }
-        
-        // 根据搜索文本显示/隐藏
-        if (text.includes(searchText)) {
-            option.style.display = 'block';
-            hasVisibleOptions = true;
-        } else {
-            option.style.display = 'none';
-        }
+    utils.bindDefaultToMultiple({
+        singleId: 'weshop_page_default_locale_selector',
+        multipleId: 'weshop_page_related_locales_selector'
     });
-    
-    // 显示/隐藏"未找到匹配"提示
-    if (!hasVisibleOptions && searchText) {
-        noMatchHint.style.display = 'block';
-    } else {
-        noMatchHint.style.display = 'none';
-    }
-    
-    // 自动展开下拉列表
-    if (dropdown.style.display === 'none' && searchText) {
-        dropdown.style.display = 'block';
-        const btn = document.getElementById('localeDropdownBtn');
-        const icon = btn.querySelector('i');
-        icon.classList.remove('mdi-chevron-down');
-        icon.classList.add('mdi-chevron-up');
-    }
-});
-
-/**
- * 点击搜索框时自动展开下拉列表
- */
-document.getElementById('localeSearch')?.addEventListener('focus', function() {
-    const dropdown = document.getElementById('localeDropdown');
-    const btn = document.getElementById('localeDropdownBtn');
-    const icon = btn.querySelector('i');
-    
-    // 先过滤一遍选项（隐藏已选中的）
-    resetLocaleDropdown();
-    
-    // 展开下拉列表
-    dropdown.style.display = 'block';
-    icon.classList.remove('mdi-chevron-down');
-    icon.classList.add('mdi-chevron-up');
-});
-
-/**
- * 点击页面其他地方关闭下拉列表
- */
-document.addEventListener('click', function(event) {
-    const dropdown = document.getElementById('localeDropdown');
-    const searchInput = document.getElementById('localeSearch');
-    const dropdownBtn = document.getElementById('localeDropdownBtn');
-    
-    // 如果点击的不是下拉列表、搜索框或按钮，则关闭下拉列表
-    if (dropdown && 
-        !dropdown.contains(event.target) && 
-        event.target !== searchInput && 
-        event.target !== dropdownBtn &&
-        !dropdownBtn.contains(event.target)) {
-        dropdown.style.display = 'none';
-        const btn = document.getElementById('localeDropdownBtn');
-        const icon = btn.querySelector('i');
-        icon.classList.remove('mdi-chevron-up');
-        icon.classList.add('mdi-chevron-down');
-        // 清空搜索框
-        if (searchInput) {
-            searchInput.value = '';
-            resetLocaleDropdown();
-        }
-    }
-});
-
-/**
- * 重置下拉列表显示（过滤已选中的）
- */
-function resetLocaleDropdown() {
-    const options = document.querySelectorAll('.locale-option');
-    options.forEach(option => {
-        const localeCode = option.getAttribute('data-locale-code');
-        const isSelected = document.querySelector(`.selected-locale-tag[data-locale-code="${localeCode}"]`);
-        
-        if (isSelected) {
-            option.style.display = 'none';
-        } else {
-            // 如果有搜索文本，按搜索文本过滤
-            const searchText = document.getElementById('localeSearch').value.toLowerCase();
-            if (searchText) {
-                const localeName = option.getAttribute('data-locale-name');
-                const text = `${localeName} ${localeCode}`.toLowerCase();
-                option.style.display = text.includes(searchText) ? 'block' : 'none';
-            } else {
-                option.style.display = 'block';
-            }
-        }
-    });
-}
-
-// 页面加载时初始化下拉列表
-document.addEventListener('DOMContentLoaded', function() {
-    resetLocaleDropdown();
 });
 
 /**
