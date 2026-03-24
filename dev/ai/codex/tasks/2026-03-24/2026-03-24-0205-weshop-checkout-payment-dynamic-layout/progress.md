@@ -13,3 +13,34 @@
   - `php vendor/bin/phpunit app/code/WeShop/Checkout/Test/Unit/Service app/code/WeShop/Checkout/Test/Unit/Controller/Frontend/Checkout --colors=never` passed assertions with the same warning
   - `php bin/w setup:upgrade -m WeShop_Checkout --yes` scanned the new hook files successfully, then failed later on the known unrelated SQLite adapter environment issue
   - `Test-NetConnection 127.0.0.1:9982` reported `TcpTestSucceeded = False`, so no live checkout smoke was possible in this session
+- 2026-03-24 08:56 Follow-up audit for the current parallel Checkout/Payment line:
+  - Re-checked checkout -> payment dynamic chain and confirmed it still routes through `CheckoutService::getCheckoutPaymentMethods()` -> `w_query('payment', 'getCheckoutPaymentMethods', ...)` -> `PaymentQueryProvider::execute()`.
+  - Verified `WeShop_Payment/extends.php` being empty is expected here because `QueryProviderRegistry` auto-scans `extends/module/Weline_Framework/Query/*`.
+  - Added a view contract hardening slice in `DefaultThemeCheckoutLayoutHookHostTest`:
+    - assert each checkout layout variant contains `{{meta.content}}` and `{{content}}`
+    - assert both content placeholders appear before `WeShop_Checkout::frontend::layouts::checkout::payment-content` host
+    - assert checkout page template still hosts `payment-methods` and `payment-details` hooks
+  - Validation:
+    - `php -l app/code/WeShop/Checkout/Test/Unit/View/DefaultThemeCheckoutLayoutHookHostTest.php` passed
+    - `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit/View/DefaultThemeCheckoutLayoutHookHostTest.php --colors=never` passed (`2 tests / 47 assertions`)
+    - `php vendor/bin/phpunit --no-coverage app/code/WeShop/Payment/Test/Unit/Extends/Module/Weline_Framework/Query/PaymentQueryProviderTest.php --colors=never` passed (`1 test / 2 assertions`)
+- 2026-03-24 10:28 Checkout/Payment/Shipping dynamic injection acceptance follow-up:
+  - Aligned checkout shipping methods data path with payment path by adding `CheckoutService::getCheckoutShippingMethods()` that delegates to `w_query('shipping', 'getCheckoutShippingMethods', ...)`.
+  - Updated `CheckoutPageDataService` to use the shipping query-provider path first, with `ShippingService::getAvailableShippingMethods()` fallback for compatibility.
+  - Added checkout shipping methods hook host contract and template:
+    - new hook key `WeShop_Checkout::frontend::partials::checkout::shipping-methods`
+    - new template `view/hooks/WeShop_Checkout/frontend/partials/checkout/shipping-methods.phtml`
+    - default checkout page shipping section now renders via hook host instead of inline shipping loop.
+  - Added shipping query provider implementation:
+    - `WeShop_Shipping/extends/module/Weline_Framework/Query/ShippingQueryProvider.php`
+    - supports `getCheckoutShippingMethods`, `getAvailableShippingMethods`, `calculateShipping`.
+  - Rebuilt `ShippingService` into structured checkout method registry (`flat_rate`, `free_shipping`, `local_pickup`, `dhl`, `fedex`) with runtime override support via `shipping.methods` config and context filtering.
+  - Added shipping hook manifest/docs for extension slot compatibility (`WeShop_Shipping::frontend::layouts::checkout::methods` + legacy alias).
+  - Added/updated focused unit tests:
+    - checkout service delegation and checkout page-data normalization
+    - checkout hook template contract for shipping/payment content
+    - shipping query provider and shipping service method exposure.
+  - Validation:
+    - `php -l` passed for all touched checkout/shipping php and phtml files
+    - `php vendor/bin/phpunit --no-coverage app/code/WeShop/Checkout/Test/Unit app/code/WeShop/Payment/Test/Unit app/code/WeShop/Shipping/Test/Unit --colors=never` passed (`30 tests / 186 assertions`, repo-level PHPUnit deprecation note remains)
+    - `php bin/w extends:rebuild` passed and `generated/extends.php` includes `ShippingQueryProvider` registration.

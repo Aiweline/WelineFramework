@@ -144,6 +144,14 @@ class CheckoutService
         return \is_array($methods) ? $methods : [];
     }
 
+    public function getCheckoutShippingMethods(int $customerId, array $context = []): array
+    {
+        $context['customer_id'] = $customerId;
+        $methods = $this->query('shipping', 'getCheckoutShippingMethods', $context);
+
+        return \is_array($methods) ? $methods : [];
+    }
+
     public function validateCheckoutData(array $checkoutData): bool
     {
         $hasShippingAddress = !empty($checkoutData['shipping_address']) || (int) ($checkoutData['shipping_address_id'] ?? 0) > 0;
