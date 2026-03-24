@@ -66,7 +66,7 @@ class ProductService
         if (defined(Product::class . '::schema_fields_HANDLE')) {
             $product->clear()
                 ->where(Product::schema_fields_HANDLE, $handle)
-                ->where(Product::schema_fields_status, 'enabled')
+                ->where(Product::schema_fields_status, 1)
                 ->find()
                 ->fetch();
             
@@ -78,7 +78,7 @@ class ProductService
         // 如果通过 handle 没找到，尝试通过sku查询
         $product->clear()
             ->where(Product::schema_fields_sku, $handle)
-            ->where(Product::schema_fields_status, 'enabled')
+            ->where(Product::schema_fields_status, 1)
             ->find()
             ->fetch();
         
@@ -109,7 +109,7 @@ class ProductService
         }
         
         if (!empty($filters['status'])) {
-            $product->where(Product::schema_fields_status, $filters['status']);
+            $product->where(Product::schema_fields_status, $this->normalizeStatusFilter($filters['status']));
         }
         
         if (!empty($filters['name'])) {
@@ -270,6 +270,20 @@ class ProductService
         ]);
         
         return $product;
+    }
+
+    protected function normalizeStatusFilter(mixed $status): mixed
+    {
+        if (is_string($status)) {
+            $normalized = strtolower(trim($status));
+            return match ($normalized) {
+                'enabled', 'enable', 'active' => 1,
+                'disabled', 'disable', 'inactive' => 0,
+                default => $status,
+            };
+        }
+
+        return $status;
     }
     
     /**
