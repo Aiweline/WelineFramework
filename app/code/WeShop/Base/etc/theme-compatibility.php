@@ -1,5 +1,26 @@
 <?php
 
+$accountCompatibility = [
+    '_template' => [
+        'kind' => 'page',
+        'path' => 'customer/index.phtml',
+    ],
+    'WeShop_Customer' => [
+        'description' => 'Customer account modules depend on the canonical account-center hook hosts.',
+        'hosts' => [
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::quick-links::before'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::quick-links::after'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::quick-links::cards'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::security::cards'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::recommendations::before'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::recommendations::cards'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::recommendations::after'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::discovery::cards'],
+            ['type' => 'hook', 'name' => 'WeShop_Customer::frontend::account::orders::cards'],
+        ],
+    ],
+];
+
 return [
     'frontend' => [
         'homepage' => [
@@ -92,6 +113,21 @@ return [
                 'description' => 'Shipping methods inject into the checkout shipping methods host.',
                 'hosts' => [
                     ['type' => 'hook', 'name' => 'WeShop_Shipping::frontend::layouts::checkout::methods'],
+                ],
+            ],
+        ],
+        'account' => $accountCompatibility,
+        'customer' => $accountCompatibility,
+        'b2b' => [
+            '_template' => [
+                'kind' => 'page',
+                'path' => 'b2b/index.phtml',
+            ],
+            'WeShop_B2B' => [
+                'description' => 'B2B modules depend on the canonical company page hook hosts.',
+                'hosts' => [
+                    ['type' => 'hook', 'name' => 'WeShop_B2B::frontend::layouts::business::page-before'],
+                    ['type' => 'hook', 'name' => 'WeShop_B2B::frontend::partials::company::list-after'],
                 ],
             ],
         ],
