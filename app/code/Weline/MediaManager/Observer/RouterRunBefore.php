@@ -49,6 +49,14 @@ class RouterRunBefore implements ObserverInterface
                 $core->StaticFile($full_path, true);
                 exit;
             }
+
+            $publishedThemePath = $this->publishThemeOverrideStaticPath((string)($path_original !== false ? $path_original : $path));
+            if ($publishedThemePath !== null) {
+                /** @var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $core->StaticFile($publishedThemePath, true);
+                exit;
+            }
         }
         
         # 匹配模块静态资源（开发环境下直接从模块目录加载）
@@ -80,11 +88,20 @@ class RouterRunBefore implements ObserverInterface
         }
         # 匹配主题资源（开发环境下直接从模块 view/theme 目录加载，如 theme:css）
         # 路径格式: /Vendor/ModuleName/view/theme/...
-        if (preg_match('#^/([a-z0-9_]+)/([a-z0-9_]+)/view/theme/(.+)$#', $path, $matches) && $path_original !== false) {
+        if (preg_match('#^/([A-Za-z0-9_]+)/([A-Za-z0-9_]+)/view/theme/(.+)$#', $path_original !== false ? $path_original : $path, $matches)) {
+            $requestThemePath = (string)($path_original !== false ? $path_original : $path);
+            $publishedThemePath = $this->publishThemeOverrideStaticPath($requestThemePath);
+            if ($publishedThemePath !== null) {
+                /**@var Core $core */
+                $core = ObjectManager::getInstance(Core::class);
+                $core->StaticFile($publishedThemePath, true);
+                exit;
+            }
+
             $file = $matches[3];
             $suffix = '/view/theme/' . $file;
-            $prefix_len = strlen($path_original) - strlen($suffix);
-            $vendor_module = $prefix_len > 0 ? substr($path_original, 1, $prefix_len - 1) : '';
+            $prefix_len = strlen($requestThemePath) - strlen($suffix);
+            $vendor_module = $prefix_len > 0 ? substr($requestThemePath, 1, $prefix_len - 1) : '';
             $theme_file_path = BP . '/app/code/' . str_replace('/', DIRECTORY_SEPARATOR, $vendor_module) . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR . 'theme' . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $file);
             if (IS_WIN) {
                 $theme_file_path = str_replace('/', '\\', $theme_file_path);
@@ -97,7 +114,7 @@ class RouterRunBefore implements ObserverInterface
                 $core = ObjectManager::getInstance(Core::class);
                 // 主题资源路径本身是 /Vendor/Module/view/theme/...，应走 APP_CODE_PATH 解析链路
                 //（is_media=false），否则会按 BP 直拼导致找不到文件并回退为 HTML 响应。
-                $core->StaticFile($path_original, false);
+                $core->StaticFile($requestThemePath, false);
                 exit;
             }
         }
@@ -127,6 +144,22 @@ class RouterRunBefore implements ObserverInterface
         if (str_starts_with($path, '/media/file/')) {
             $_SERVER['WELINE_PARSER_URL'] = false;
             $_SERVER['WELINE_IS_MEDIA'] = true;
+        }
+    }
+
+    private function publishThemeOverrideStaticPath(string $requestPath): ?string
+    {
+        if (!class_exists(\Weline\Theme\Service\ThemeStaticAssetPublisher::class)) {
+            return null;
+        }
+
+        try {
+            /** @var \Weline\Theme\Service\ThemeStaticAssetPublisher $publisher */
+            $publisher = ObjectManager::getInstance(\Weline\Theme\Service\ThemeStaticAssetPublisher::class);
+            $publicPath = $publisher->publishForRequestPath($requestPath);
+            return is_string($publicPath) && $publicPath !== '' ? $publicPath : null;
+        } catch (\Throwable) {
+            return null;
         }
     }
 }
