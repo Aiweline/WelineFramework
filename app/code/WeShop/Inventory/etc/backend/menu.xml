@@ -2,24 +2,24 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    
-    <!-- 库存管理菜单 -->
-    <menu source="WeShop_Inventory::inventory_management" name="inventory_management" title="库存管理" 
-         action="*/backend/inventory"
-         parent="WeShop_Product::catalog"
-         icon="mdi mdi-warehouse"
-         order="50">
-        
-        <!-- 库存源管理 -->
-        <menu source="WeShop_Inventory::source" name="inventory_source" title="库存源管理" 
-             action="*/backend/inventory/source"
-             icon="mdi mdi-home-city-outline"
-             order="10"/>
-        
-        <!-- 产品库存 -->
-        <menu source="WeShop_Inventory::source_item" name="inventory_source_item" title="产品库存" 
-             action="*/backend/inventory/source-item"
-             icon="mdi mdi-package-variant-closed"
-             order="20"/>
+    <menu source="WeShop_Inventory::inventory_management"
+          name="weshop_inventory_management"
+          title="Inventory Management"
+          action="/*/backend/inventory/source"
+          parent="Weline_Backend::shop_group"
+          icon="mdi mdi-warehouse"
+          order="50">
+        <menu source="WeShop_Inventory::source"
+              name="weshop_inventory_source"
+              title="Sources"
+              action="/*/backend/inventory/source"
+              icon="mdi mdi-home-city-outline"
+              order="10"/>
+        <menu source="WeShop_Inventory::source_item"
+              name="weshop_inventory_source_item"
+              title="Source Items"
+              action="/*/backend/inventory/source-item"
+              icon="mdi mdi-package-variant-closed"
+              order="20"/>
     </menu>
 </menus>
