@@ -1163,16 +1163,20 @@ class ServiceOrchestrator
             }
             WlsLogger::info_("[Orchestrator] 启动服务 {$displayName} (role={$role}, instances={$instanceCount}, priority={$provider->getPriority()})");
 
-            if ($role === 'session_server') {
-                $sessionPort = $provider->getPort(1, $context);
-                if ($sessionPort > 0) {
-                    Processer::killProcessByPort($sessionPort);
-                    Processer::forceReleasePort($sessionPort);
-                    SchedulerSystem::usleep(500000);
-                }
-            }
-
             for ($i = 1; $i <= $instanceCount; $i++) {
+                $adopted = $this->tryAdoptSharedSidecarInstance($provider, $i, $context);
+                if ($adopted !== null) {
+                    $this->registry->addInstance($adopted);
+                    $provider->onStarted($adopted);
+                    WlsLogger::info_(
+                        "[Orchestrator] 复用现有共享服务 {$role}#{$i} (pid={$adopted->pid}"
+                        . ($adopted->port !== null ? ", port={$adopted->port}" : '')
+                        . ')'
+                    );
+                    $result[$role][] = $adopted;
+                    continue;
+                }
+
                 $port = $provider->getPort($i, $context);
                 $launchId = $this->generateLaunchId($role, $i);
                 $instance = new ServiceInstance(
@@ -1246,6 +1250,125 @@ class ServiceOrchestrator
         }
 
         return $result;
+    }
+
+    private function tryAdoptSharedSidecarInstance(
+        ServiceProviderInterface $provider,
+        int $instanceId,
+        ServiceContext $context
+    ): ?ServiceInstance {
+        $role = $provider->getRole();
+        if (!\in_array($role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)) {
+            return null;
+        }
+
+        if ($instanceId !== 1) {
+            return null;
+        }
+
+        $port = $provider->getPort($instanceId, $context);
+        if ($port === null || $port <= 0) {
+            return null;
+        }
+
+        $expectedTokenFileName = $this->resolveExpectedSharedSidecarTokenFileName($role, $context);
+        $sidecar = $this->inspectSharedSidecarForAdoption($role, $port, $expectedTokenFileName);
+        if (!($sidecar['reusable'] ?? false)) {
+            return null;
+        }
+
+        $launchId = 'adopted-' . $role . '-' . $port;
+        $instance = new ServiceInstance(
+            role: $role,
+            instanceId: $instanceId,
+            epoch: $context->epoch,
+            launchId: $launchId,
+            pid: (int) ($sidecar['pid'] ?? 0),
+            port: $port,
+            state: ServiceInstance::STATE_READY,
+            startedAt: \microtime(true),
+            processKind: $provider->getProcessKind(),
+            moduleCode: $provider->getModuleCode(),
+        );
+
+        $controlCapabilities = $this->buildControlCapabilities($provider);
+        $controlCapabilities['drain'] = false;
+        $controlCapabilities['shutdown'] = false;
+        $controlCapabilities['reload'] = false;
+        $controlCapabilities['shared_external'] = true;
+
+        $processName = (string) ($sidecar['process_name'] ?? '');
+        if ($processName !== '') {
+            $instance->setMeta('process_name', $processName);
+        }
+        $instance->setMeta('control_capabilities', $controlCapabilities);
+        $instance->setMeta('epoch', $context->epoch);
+        $instance->setMeta('launch_id', $launchId);
+        $instance->setMeta('shared_external', true);
+        $instance->setMeta('token_file_name', (string) ($sidecar['token_file_name'] ?? $expectedTokenFileName));
+        $instance->setMeta('adopted_shared_sidecar', true);
+
+        return $instance;
+    }
+
+    /**
+     * @return array{
+     *   in_use?: bool,
+     *   reusable?: bool,
+     *   pid?: int,
+     *   port?: int,
+     *   role?: string,
+     *   token_file_name?: string,
+     *   process_name?: string,
+     *   command_line?: string
+     * }
+     */
+    protected function inspectSharedSidecarForAdoption(string $role, int $port, string $expectedTokenFileName): array
+    {
+        $info = (new SharedSidecarInspector())->inspect($port, $role, $expectedTokenFileName);
+        if (!($info['reusable'] ?? false)) {
+            return $info;
+        }
+
+        $actualTokenFileName = (string) ($info['token_file_name'] ?? '');
+        if ($expectedTokenFileName !== '' && $actualTokenFileName !== '' && $actualTokenFileName !== $expectedTokenFileName) {
+            WlsLogger::warning_(
+                "[Orchestrator] {$role} 共享服务 token 采用现存值 {$actualTokenFileName}，忽略期望值 {$expectedTokenFileName}"
+            );
+        }
+
+        return $info;
+    }
+
+    private function resolveExpectedSharedSidecarTokenFileName(string $role, ServiceContext $context): string
+    {
+        if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
+            $memory = \is_array(($context->envConfig['wls'] ?? [])['memory_service'] ?? null)
+                ? $context->envConfig['wls']['memory_service']
+                : [];
+
+            $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+
+            return $tokenFileName !== '' ? $tokenFileName : 'memory_server.token';
+        }
+
+        $wlsSession = \is_array(($context->envConfig['wls'] ?? [])['session'] ?? null)
+            ? $context->envConfig['wls']['session']
+            : [];
+        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+
+        $tokenFileName = (string) (
+            $wlsServer['token_file_name']
+            ?? $wlsSession['token_file_name']
+            ?? 'session_server.token'
+        );
+
+        return $tokenFileName !== '' ? $tokenFileName : 'session_server.token';
+    }
+
+    private function isExternallyManagedSharedInstance(ServiceInstance $instance): bool
+    {
+        return (bool) ($instance->getMeta('shared_external') ?? false);
     }
     
     /**
@@ -1660,6 +1783,9 @@ class ServiceOrchestrator
             if ($instance->ipcClientId === null) {
                 continue;
             }
+            if ($this->isExternallyManagedSharedInstance($instance)) {
+                continue;
+            }
             $provider = $this->registry->getProvider($instance->role);
             if ($provider === null || !$provider->supportsDrain()) {
                 continue;
@@ -1691,6 +1817,9 @@ class ServiceOrchestrator
             if ($instance->ipcClientId === null) {
                 continue;
             }
+            if ($this->isExternallyManagedSharedInstance($instance)) {
+                continue;
+            }
             $provider = $this->registry->getProvider($instance->role);
             if ($provider === null || !$provider->supportsShutdown()) {
                 continue;
@@ -1713,7 +1842,7 @@ class ServiceOrchestrator
     {
         $candidatePids = [];
         foreach ($this->registry->getAllInstances() as $instance) {
-            if ($instance->pid <= 0) {
+            if ($instance->pid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
                 continue;
             }
 
@@ -1905,7 +2034,7 @@ class ServiceOrchestrator
         $immediateForceKillPids = [];
 
         foreach ($allInstances as $instance) {
-            if ($instance->pid <= 0) {
+            if ($instance->pid <= 0 || $this->isExternallyManagedSharedInstance($instance)) {
                 continue;
             }
 
@@ -2130,6 +2259,14 @@ class ServiceOrchestrator
     private function stopInstanceWithProtocol(ServiceInstance $instance): void
     {
         $provider = $this->registry->getProvider($instance->role);
+        if ($this->isExternallyManagedSharedInstance($instance)) {
+            $instance->state = ServiceInstance::STATE_STOPPED;
+            $this->registry->updateInstance($instance);
+            $provider?->onStopped($instance);
+            WlsLogger::info_("[Orchestrator] 跳过外部共享服务 {$instance->role}#{$instance->instanceId} 的本地停机控制");
+
+            return;
+        }
 
         // 阶段 1：DRAIN
         if ($provider !== null && $provider->getReloadStrategy() === 'graceful' && $instance->ipcClientId !== null) {
@@ -2183,6 +2320,10 @@ class ServiceOrchestrator
      */
     private function stopInstance(ServiceInstance $instance): void
     {
+        if ($this->isExternallyManagedSharedInstance($instance)) {
+            return;
+        }
+
         if ($instance->ipcClientId !== null && $this->controlServer !== null) {
             $this->controlServer->sendTo($instance->ipcClientId, ControlMessage::shutdown());
             WlsLogger::info_("[Orchestrator] 已发送 shutdown 给 {$instance->role}#{$instance->instanceId}");
@@ -2199,6 +2340,12 @@ class ServiceOrchestrator
      */
     private function killInstanceProcess(ServiceInstance $instance): void
     {
+        if ($this->isExternallyManagedSharedInstance($instance)) {
+            WlsLogger::info_("[Orchestrator] 跳过外部共享服务 {$instance->role}#{$instance->instanceId} 的进程终止");
+
+            return;
+        }
+
         $processName = $this->getInstanceProcessName($instance);
         $launchId = $this->getInstanceLaunchId($instance);
         $pid = $instance->pid;
@@ -2262,6 +2409,10 @@ class ServiceOrchestrator
      */
     private function cleanupInstancePidFile(ServiceInstance $instance): void
     {
+        if ($this->isExternallyManagedSharedInstance($instance)) {
+            return;
+        }
+
         $processName = $this->getInstanceProcessName($instance);
         if ($processName !== '') {
             Processer::removePidFile('--name=' . $processName);
@@ -2273,6 +2424,10 @@ class ServiceOrchestrator
      */
     private function sendDrainToInstance(ServiceInstance $instance): void
     {
+        if ($this->isExternallyManagedSharedInstance($instance)) {
+            return;
+        }
+
         if ($instance->ipcClientId === null || $this->controlServer === null) {
             return;
         }
@@ -5156,6 +5311,15 @@ class ServiceOrchestrator
             if ($inst->state !== ServiceInstance::STATE_READY) {
                 continue;
             }
+            if ($this->isExternallyManagedSharedInstance($inst)) {
+                $alive = $inst->pid > 0
+                    ? $this->isProcessRunning($inst->pid)
+                    : ($inst->port !== null && $inst->port > 0 && Processer::isPortInUse($inst->port));
+                if ($alive) {
+                    $n++;
+                }
+                continue;
+            }
             if ($inst->ipcClientId === null
                 || ($this->controlServer !== null && !$this->controlServer->clientExists($inst->ipcClientId))) {
                 continue;
@@ -5232,6 +5396,19 @@ class ServiceOrchestrator
             }
             // READY 但 IPC 已断或进程已死：占槽无效，回收并重启（如 Dispatcher 僵死）
             if ($instance->state === ServiceInstance::STATE_READY) {
+                if ($this->isExternallyManagedSharedInstance($instance)) {
+                    $alive = $instance->pid > 0
+                        ? $this->isProcessRunning($instance->pid)
+                        : ($instance->port !== null && $instance->port > 0 && Processer::isPortInUse($instance->port));
+                    if (!$alive) {
+                        WlsLogger::warning_(
+                            '[Master自检] 外部共享 sidecar ' . $role . '#' . (string) $slot . ' 已不可用，切换为本实例接管'
+                        );
+                        $this->registry->removeInstance($role, $slot);
+                        $this->startInstance($provider, $slot, $this->context);
+                    }
+                    continue;
+                }
                 $ipcBad = $instance->ipcClientId === null
                     || ($this->controlServer !== null && !$this->controlServer->clientExists($instance->ipcClientId));
                 $pidBad = $instance->pid > 0 && !$this->isProcessRunning($instance->pid);
