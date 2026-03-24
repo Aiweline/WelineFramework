@@ -7,7 +7,6 @@ namespace WeShop\Product\Controller\Frontend\Product;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Product\Service\ProductService;
 use WeShop\Catalog\Service\CategoryService;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
  * 产品列表页控制器
@@ -29,20 +28,25 @@ class ProductList extends BaseController
      * Theme模块会根据此类型从主题配置中加载对应的布局
      */
     protected ?string $layoutType = 'product_list';
+
+    public function __construct(
+        private readonly ProductService $productService,
+        private readonly CategoryService $categoryService
+    ) {
+    }
     
     /**
      * 产品列表页
      */
     public function index(): string
     {
-        /** @var ProductService $productService */
-        $productService = ObjectManager::getInstance(ProductService::class);
+        $request = $this->getRequest();
         
         // 获取请求参数
-        $page = (int)($this->request->getParam('page') ?? 1);
-        $pageSize = (int)($this->request->getParam('page_size') ?? 20);
-        $categoryId = (int)($this->request->getParam('category_id') ?? 0);
-        $search = trim((string)($this->request->getParam('q') ?? $this->request->getParam('search') ?? ''));
+        $page = (int)($request->getParam('page') ?? 1);
+        $pageSize = (int)($request->getParam('page_size') ?? 20);
+        $categoryId = (int)($request->getParam('category_id') ?? 0);
+        $search = trim((string)($request->getParam('q') ?? $request->getParam('search') ?? ''));
         
         // 筛选条件
         $filters = [];
@@ -58,8 +62,8 @@ class ProductList extends BaseController
         }
         
         // 价格筛选
-        $minPrice = $this->request->getParam('min_price');
-        $maxPrice = $this->request->getParam('max_price');
+        $minPrice = $request->getParam('min_price');
+        $maxPrice = $request->getParam('max_price');
         if ($minPrice !== null && is_numeric($minPrice)) {
             $filters['min_price'] = (float)$minPrice;
         }
@@ -68,8 +72,8 @@ class ProductList extends BaseController
         }
         
         // 排序
-        $orderBy = $this->request->getParam('order_by') ?? 'product_id';
-        $orderDir = strtoupper($this->request->getParam('order_dir') ?? 'DESC');
+        $orderBy = $request->getParam('order_by') ?? 'product_id';
+        $orderDir = strtoupper($request->getParam('order_dir') ?? 'DESC');
         
         // 验证排序字段
         $allowedOrderFields = ['product_id', 'name', 'price', 'created_at', 'stock'];
@@ -89,7 +93,7 @@ class ProductList extends BaseController
         $filters['status'] = 'enabled';
         
         // 获取产品列表
-        $result = $productService->getProducts($filters, $page, $pageSize);
+        $result = $this->productService->getProducts($filters, $page, $pageSize);
         
         // 格式化产品数据
         $products = [];
@@ -109,9 +113,7 @@ class ProductList extends BaseController
         // 获取分类信息（如果有分类ID）
         $category = null;
         if ($categoryId > 0) {
-            /** @var CategoryService $categoryService */
-            $categoryService = ObjectManager::getInstance(CategoryService::class);
-            $category = $categoryService->getCategory($categoryId);
+            $category = $this->categoryService->getCategory($categoryId);
         }
         
         // 准备模板数据
@@ -138,4 +140,5 @@ class ProductList extends BaseController
         // 布局文件路径：app/design/WeShop/default/frontend/layouts/product_list/product_listing_page_{variant}.phtml
         return $this->fetch();
     }
+
 }

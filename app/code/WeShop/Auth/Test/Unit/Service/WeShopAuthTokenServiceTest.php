@@ -15,7 +15,8 @@ class WeShopAuthTokenServiceTest extends TestCase
     {
         $revokeRecord = $this->getMockBuilder(AuthToken::class)
             ->disableOriginalConstructor()
-            ->addMethods(['where', 'delete', 'fetch'])
+            ->addMethods(['where', 'fetch'])
+            ->onlyMethods(['delete'])
             ->getMock();
         $revokeRecord->method('where')->willReturnSelf();
         $revokeRecord->method('delete')->willReturnSelf();
@@ -115,7 +116,8 @@ class WeShopAuthTokenServiceTest extends TestCase
 
         $revokeRecord = $this->getMockBuilder(AuthToken::class)
             ->disableOriginalConstructor()
-            ->addMethods(['where', 'delete', 'fetch'])
+            ->addMethods(['where', 'fetch'])
+            ->onlyMethods(['delete'])
             ->getMock();
         $revokeRecord->method('where')->willReturnSelf();
         $revokeRecord->method('delete')->willReturnSelf();
@@ -165,7 +167,8 @@ class WeShopAuthTokenServiceTest extends TestCase
 
         $deleteRecord = $this->getMockBuilder(AuthToken::class)
             ->disableOriginalConstructor()
-            ->addMethods(['where', 'delete', 'fetch'])
+            ->addMethods(['where', 'fetch'])
+            ->onlyMethods(['delete'])
             ->getMock();
         $deleteRecord->method('where')->willReturnSelf();
         $deleteRecord->expects($this->once())->method('delete')->willReturnSelf();
@@ -205,7 +208,8 @@ class WeShopAuthTokenServiceTest extends TestCase
 
         $deleteRecord = $this->getMockBuilder(AuthToken::class)
             ->disableOriginalConstructor()
-            ->addMethods(['where', 'delete', 'fetch'])
+            ->addMethods(['where', 'fetch'])
+            ->onlyMethods(['delete'])
             ->getMock();
         $deleteRecord->method('where')->willReturnSelf();
         $deleteRecord->expects($this->once())->method('delete')->willReturnSelf();
