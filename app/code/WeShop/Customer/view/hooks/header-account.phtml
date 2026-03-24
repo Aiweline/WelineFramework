@@ -143,7 +143,7 @@ if ($isLoggedIn) {
                                             <span class="order-item-number">${order.increment_id}</span>
                                             <span class="order-item-amount"><?= __('金额：') ?>${formatPrice(order.total)}</span>
                                         </div>
-                                        <a href="<?= $frontendUrl ?>weshop/order/retryPayment?order_id=${order.order_id}" class="retry-payment-link">
+                                        <a href="<?= $frontendUrl ?>weshop/order/retry-payment?order_id=${order.order_id}" class="retry-payment-link">
                                             <?= __('继续支付') ?>
                                         </a>
                                     `;
