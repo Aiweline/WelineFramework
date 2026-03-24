@@ -23,5 +23,6 @@ class LoginTemplateGoogleHostTest extends TestCase
         $this->assertStringContainsString('$googleLoginButton = trim((string) $this->fetch(', $content);
         $this->assertStringContainsString('if ($googleLoginButton !== \'\')', $content);
         $this->assertStringContainsString('class="social-login-provider-section"', $content);
+        $this->assertStringContainsString('/customer/account/forgot-password', $content);
     }
 }
