@@ -1,0 +1,89 @@
+<?php
+$sourceItems = $this->getData('sourceItems') ?? [];
+$sources = $this->getData('sources') ?? [];
+$filters = $this->getData('filters') ?? [];
+$sourceItemIndexUrl = (string) ($this->getData('sourceItemIndexUrl') ?? $this->getBackendUrl('*/backend/inventory/source-item'));
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Inventory Source Items') ?></h1>
+            <p class="text-muted mb-0"><?= __('Review product stock by source and adjust inventory quantities.') ?></p>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" action="<?= $sourceItemIndexUrl ?>" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Source') ?></label>
+                    <select name="source_id" class="form-select">
+                        <option value="0"><?= __('All Sources') ?></option>
+                        <?php foreach ($sources as $source): ?>
+                            <?php $selected = (int) ($filters['source_id'] ?? 0) === (int) ($source['source_id'] ?? 0); ?>
+                            <option value="<?= (int) ($source['source_id'] ?? 0) ?>" <?= $selected ? 'selected' : '' ?>>
+                                <?= htmlspecialchars((string) ($source['name'] ?? ''), ENT_QUOTES) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label"><?= __('Search SKU / Product') ?></label>
+                    <input type="text" name="search" class="form-control" value="<?= htmlspecialchars((string) ($filters['search'] ?? ''), ENT_QUOTES) ?>">
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-outline-primary flex-fill"><?= __('Apply') ?></button>
+                    <a href="<?= $sourceItemIndexUrl ?>" class="btn btn-outline-secondary flex-fill"><?= __('Reset') ?></a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <?php if ($sourceItems): ?>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                        <tr>
+                            <th><?= __('ID') ?></th>
+                            <th><?= __('Source') ?></th>
+                            <th><?= __('Product') ?></th>
+                            <th><?= __('SKU') ?></th>
+                            <th><?= __('Quantity') ?></th>
+                            <th><?= __('Status') ?></th>
+                            <th><?= __('Low Stock Threshold') ?></th>
+                            <th class="text-end"><?= __('Actions') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($sourceItems as $item): ?>
+                            <?php $sourceItemId = (int) ($item['source_item_id'] ?? 0); ?>
+                            <tr>
+                                <td><?= $sourceItemId ?></td>
+                                <td><?= htmlspecialchars((string) ($item['source_name'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= htmlspecialchars((string) ($item['product_name'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= htmlspecialchars((string) ($item['sku'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= (float) ($item['quantity'] ?? 0) ?></td>
+                                <td><?= htmlspecialchars((string) ($item['status_label'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= (int) ($item['low_stock_threshold'] ?? 0) ?></td>
+                                <td class="text-end">
+                                    <a href="<?= $this->getBackendUrl('*/backend/inventory/source-item/edit', ['id' => $sourceItemId]) ?>" class="btn btn-sm btn-outline-primary">
+                                        <?= __('Edit') ?>
+                                    </a>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php else: ?>
+                <div class="text-center py-5">
+                    <h2 class="h5 mb-2"><?= __('No inventory source items found.') ?></h2>
+                    <p class="text-muted mb-0"><?= __('Source-item records are created automatically after product stock assignment.') ?></p>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
