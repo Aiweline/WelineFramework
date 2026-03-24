@@ -12,6 +12,28 @@ use WeShop\Customer\Session\CustomerSession;
 
 class IndexTest extends TestCase
 {
+    public function testIndexRedirectsGuestsToLogin(): void
+    {
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->expects($this->once())
+            ->method('getCustomer')
+            ->willReturn(null);
+
+        $pageDataService = $this->createMock(CartPageDataService::class);
+        $pageDataService->expects($this->never())->method('build');
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerSession, $pageDataService])
+            ->onlyMethods(['assign', 'fetch', 'redirect'])
+            ->getMock();
+
+        $controller->expects($this->once())->method('redirect')->with('customer/account/login');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('fetch');
+
+        $this->assertSame('', $controller->index());
+    }
+
     public function testIndexAssignsMappedCartPageDataForLoggedInCustomer(): void
     {
         $customer = $this->getMockBuilder(Customer::class)
