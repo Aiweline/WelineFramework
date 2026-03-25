@@ -12,7 +12,7 @@ use Weline\Websites\Model\AiSiteBuilderMessage;
 use Weline\Websites\Model\AiSiteBuilderSession;
 use Weline\Websites\Service\AiWorkbench\SessionService;
 
-abstract class AbstractAiWorkbenchPersistenceTest extends TestCore
+abstract class AbstractAiWorkbenchPersistenceCase extends TestCore
 {
     protected SessionService $sessionService;
 
