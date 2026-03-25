@@ -9,6 +9,8 @@ use Weline\Websites\Api\AiSiteBuilderWorkbenchProviderInterface;
 
 class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 {
+    private const HANDOFF_MODE_NATIVE_WORKSPACE = 'pagebuilder_native_workspace';
+
     public function __construct(
         private readonly Url $url,
     ) {
@@ -26,7 +28,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 
     public function getDescription(): string
     {
-        return (string)__('适合需要走 PageBuilder styles 模板、页面组件和可视化精修的建站任务。');
+        return (string)__('适合在 Websites 基础建站准备完成后，切换到 PageBuilder styles 模板、页面组件和可视化精修扩展流程的建站任务。');
     }
 
     public function isEnabled(): bool
@@ -47,6 +49,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
         array $context = []
     ): array {
         $legacyUrl = $this->url->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]);
+        $nativeEntryUrl = $this->resolveNativeEntryUrl($sessionState, $scope, $legacyUrl);
         $quickBuildUrl = $this->url->getBackendUrl('pagebuilder/backend/quickBuild/wizard');
         $domainManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/domainManagement/index');
         $websiteManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/websiteManagement/index');
@@ -69,37 +72,37 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 
         return [
             'badge' => (string)__('扩展流程'),
-            'target_url' => $legacyUrl,
+            'target_url' => $nativeEntryUrl,
             'target_label' => (string)__('进入 PageBuilder 扩展流程'),
             'workspace_label' => (string)__('创建兼容工作区'),
-            'handoff_label' => (string)__('继续到 PageBuilder 工作台'),
-            'native_entry_url' => $legacyUrl,
-            'welcome_message' => (string)__('已为你创建兼容 PageBuilder 的 AI 建站工作区。这里会先给出 AI 建议，再把 styles 模板和可视化编辑入口交给 PageBuilder。'),
+            'handoff_label' => (string)__('继续到 PageBuilder 扩展工作台'),
+            'native_entry_url' => $nativeEntryUrl,
+            'welcome_message' => (string)__('已为你创建兼容 PageBuilder 的 AI 建站工作区。这里会沿用 Websites 的信息准备结果，但页面生成和精修会由 PageBuilder 扩展流程接管，不属于 Websites 默认流程。'),
             'initial_stage' => $initialStage,
             'scope' => $resolvedScope,
             'provider_state' => [
                 'provider' => [
                     'code' => 'pagebuilder',
-                    'native_entry_url' => $legacyUrl,
+                    'native_entry_url' => $nativeEntryUrl,
                     'quick_build_url' => $quickBuildUrl,
                 ],
             ],
             'stage_guides' => [
                 'prepare' => [
-                    'description' => (string)__('先让 AI 整理建站需求和域名建议，后面再进入 PageBuilder 的 styles 模板流程。'),
-                    'ai_recommendation' => (string)__('AI 会先帮你决定更适合走哪个 PageBuilder 风格方向，减少后面模板试错。'),
-                    'confirm_label' => (string)__('确认基础信息，进入模板与页面生成'),
+                    'description' => (string)__('这一阶段先沿用 Websites 的基础建站准备，整理需求和域名建议；确认后再切换到 PageBuilder 的 styles 模板扩展流程。'),
+                    'ai_recommendation' => (string)__('AI 会先帮你收敛适合的 PageBuilder 风格方向，为后面的 styles 模板选择减少试错。'),
+                    'confirm_label' => (string)__('确认基础信息，切换到 PageBuilder 扩展'),
                     'scope_patch' => [
                         'journey_stage' => 'prepare',
                         'preferred_editor' => 'pagebuilder',
                     ],
                 ],
                 'generate' => [
-                    'title' => (string)__('页面生成（PageBuilder）'),
-                    'description' => (string)__('PageBuilder 的主题不是 Websites 通用主题，而是 `styles` 目录里的风格模板。建议先选最接近的 styles 模板，再替换页面区域和内容组件。'),
+                    'title' => (string)__('页面生成（PageBuilder 扩展）'),
+                    'description' => (string)__('从这一步开始由 PageBuilder 扩展流程接管，不再沿用 Websites 默认主题生成。PageBuilder 的主题来自 `styles` 目录里的风格模板，建议先选最接近的 styles 模板，再替换页面区域和内容组件。'),
                     'ai_recommendation_title' => (string)__('AI 模板建议'),
                     'ai_recommendation' => (string)__('AI 会优先推荐一个 `styles` 模板方向，再给出页面类型和组件建议。Header / Footer 默认固定，不建议在这一步随意改。'),
-                    'confirm_label' => (string)__('确认 styles 模板与页面方案'),
+                    'confirm_label' => (string)__('确认 styles 模板与扩展页面方案'),
                     'tool_codes' => [
                         'resume_legacy_workspace',
                         'open_page_index',
@@ -136,11 +139,11 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 [
                     'code' => 'resume_legacy_workspace',
                     'label' => (string)__('打开 PageBuilder 工作台'),
-                    'description' => (string)__('进入 PageBuilder 原生 AI 建站工作台，继续 styles 模板与精修流程。'),
+                    'description' => (string)__('进入 PageBuilder 原生 AI 建站工作台，继续由扩展流程处理 styles 模板与精修。'),
                     'type' => 'link',
                     'icon' => 'mdi mdi-view-dashboard-edit-outline',
                     'button_class' => 'btn-primary',
-                    'url' => $legacyUrl,
+                    'url' => $nativeEntryUrl,
                 ],
                 [
                     'code' => 'open_quick_build_wizard',
@@ -181,7 +184,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                 [
                     'code' => 'prepare_visual_edit_stage',
                     'label' => (string)__('应用 PageBuilder 模板流'),
-                    'description' => (string)__('把工作区切换成 PageBuilder styles 模板优先的生成方式，并进入页面生成阶段。'),
+                    'description' => (string)__('把当前工作区从 Websites 基础准备阶段切换到 PageBuilder styles 模板扩展流程，并进入页面生成阶段。'),
                     'type' => 'scope_patch',
                     'icon' => 'mdi mdi-image-edit-outline',
                     'button_class' => 'btn-outline-primary',
@@ -191,11 +194,35 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                         'preferred_flow' => 'pagebuilder_style_template',
                         'theme_generation_mode' => 'existing_style_template',
                         'pagebuilder_theme_source' => 'styles',
-                        'provider_handoff_mode' => 'legacy_workspace',
+                        'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
                         'header_footer_locked' => 1,
                     ],
                 ],
             ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed>|null $sessionState
+     * @param array<string, mixed> $scope
+     */
+    private function resolveNativeEntryUrl(?array $sessionState, array $scope, string $legacyUrl): string
+    {
+        $workspaceUrl = \trim((string)($scope['pagebuilder_workspace_url'] ?? ''));
+        if ($workspaceUrl !== '') {
+            return $workspaceUrl;
+        }
+
+        $workspacePublicId = \trim((string)($scope['pagebuilder_workspace_public_id'] ?? ''));
+        if ($workspacePublicId !== '') {
+            return $this->url->getBackendUrl('pagebuilder/backend/aiSiteAgent/workspace', ['public_id' => $workspacePublicId]);
+        }
+
+        $sessionPublicId = \trim((string)($sessionState['public_id'] ?? ''));
+        if ($sessionPublicId !== '') {
+            return $this->url->getBackendUrl('websites/backend/site-builder-agent/pagebuilder-handoff', ['public_id' => $sessionPublicId]);
+        }
+
+        return $legacyUrl;
     }
 }
