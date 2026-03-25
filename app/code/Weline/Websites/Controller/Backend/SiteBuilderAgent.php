@@ -13,6 +13,7 @@ use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
 use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\AiWorkbench\ArtifactService;
+use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\EventStreamService;
 use Weline\Websites\Service\AiWorkbench\MessageService;
 use Weline\Websites\Service\AiWorkbench\ProviderRegistry;
@@ -23,6 +24,8 @@ use Weline\Websites\Service\WebsiteAgentService;
 #[Acl('Weline_Websites::site_builder_agent', 'AI Site Workbench', 'mdi mdi-robot', 'Coordinate domain, website, and workspace site building', 'Weline_Backend::website_service')]
 class SiteBuilderAgent extends BackendController
 {
+    private const PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE = 'pagebuilder_native_workspace';
+
     #[Acl('Weline_Websites::site_builder_agent_index', 'AI Site Workbench', 'mdi mdi-robot', 'AI site workbench hub')]
     public function index(): string
     {
@@ -89,6 +92,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('messages', $this->getMessageService()->listForSession($session->getId(), $adminId, 150));
         $this->assign('events', $this->getEventStreamService()->listRecentEvents($session->getId(), $adminId, 120));
         $this->assign('last_event_id', $this->getEventStreamService()->getLatestEventId($session->getId(), $adminId));
+        $this->assign('domain_purchase_state', $this->getDomainPurchaseWorkbenchService()->buildViewState($session));
         $this->assign('stage_options', $this->getStageOptions());
         $this->assign('state_json_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/state-json', ['public_id' => $session->getPublicId()]));
         $this->assign('back_url', $this->getHubEntryUrl($session->getProviderCode(), $this->isFakeModeRequested()));
@@ -96,6 +100,8 @@ class SiteBuilderAgent extends BackendController
         $this->assign('replace_scope_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/replace-scope'));
         $this->assign('set_stage_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/set-stage'));
         $this->assign('append_message_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/append-message'));
+        $this->assign('start_domain_purchase_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/start-domain-purchase'));
+        $this->assign('domain_purchase_sse_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/domain-purchase-sse'));
         $this->assign('stream_sse_path', 'websites/backend/site-builder-agent/stream-sse');
         $this->assign('preview_full_url', $session->getPreviewUrl());
         $this->assign('provider_native_url', (string)($providerConfig['native_entry_url'] ?? ''));
@@ -372,6 +378,120 @@ class SiteBuilderAgent extends BackendController
         ]);
     }
 
+    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_start', 'Start Domain Purchase', 'mdi mdi-cart-arrow-down', 'Queue a non-blocking workbench domain purchase', 'Weline_Websites::site_builder_agent')]
+    public function postStartDomainPurchase(): string
+    {
+        $adminId = $this->getAdminId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+        }
+
+        $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+        }
+
+        $scopeError = '';
+        $scopePatch = $this->getRequestJsonObject('scope_patch', $scopeError);
+        if ($scopeError !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $scopeError]);
+        }
+
+        $result = $this->getDomainPurchaseWorkbenchService()->queuePurchase($session->getId(), $adminId, $scopePatch);
+        if (empty($result['success'])) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('Failed to queue domain purchase')),
+            ]);
+        }
+
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
+        $this->syncSessionArtifacts($fresh, $adminId);
+
+        $streamToken = (string)($result['stream_token'] ?? '');
+        $streamUrl = $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/domain-purchase-sse', [
+            'public_id' => $fresh->getPublicId(),
+            'execution_token' => $streamToken,
+        ]);
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => (string)($result['message'] ?? __('Domain purchase queued')),
+            'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
+            'startable' => !empty($result['startable']),
+            'stream_token' => $streamToken,
+            'stream_url' => $streamUrl,
+        ]);
+    }
+
+    #[Acl('Weline_Websites::site_builder_agent_pagebuilder_handoff', 'Open PageBuilder Handoff', 'mdi mdi-arrow-right-bold-circle-outline', 'Create or resume the PageBuilder extension workspace for this AI site workbench session', 'Weline_Websites::site_builder_agent')]
+    public function getPagebuilderHandoff(): string
+    {
+        $adminId = $this->getAdminId();
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+
+        if ($adminId <= 0 || $publicId === '') {
+            $this->redirect($this->getHubEntryUrl('pagebuilder', $this->isFakeModeRequested()));
+            return '';
+        }
+
+        $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            $this->redirect($this->getHubEntryUrl('pagebuilder', $this->isFakeModeRequested()));
+            return '';
+        }
+
+        if ($session->getProviderCode() !== 'pagebuilder') {
+            $this->redirect($this->getWorkspaceUrl($session->getPublicId()));
+            return '';
+        }
+
+        $handoff = $this->createOrResumePageBuilderHandoff($session, $adminId);
+        if ($handoff === null) {
+            $this->redirect($this->resolveProviderNativeEntryUrl($session->getProviderCode()));
+            return '';
+        }
+
+        if ($this->normalizeJourneyStage($session->getCurrentStage()) === 'prepare') {
+            $this->getSessionService()->setStage($session->getId(), $adminId, 'generate');
+        }
+
+        $this->getSessionService()->mergeScope(
+            $session->getId(),
+            $adminId,
+            [
+                'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
+                'provider_handoff_ready' => 1,
+                'pagebuilder_workspace_public_id' => $handoff['public_id'],
+                'pagebuilder_workspace_url' => $handoff['workspace_url'],
+                'pagebuilder_handoff_stage' => $handoff['stage'],
+                'pagebuilder_handoff_synced_at' => $this->now(),
+            ]
+        );
+
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
+        $this->syncSessionStructuredFields($fresh, $adminId);
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $fresh;
+        $this->syncSessionArtifacts($fresh, $adminId);
+        $this->getEventStreamService()->appendEvent(
+            $fresh->getId(),
+            $adminId,
+            $this->normalizeJourneyStage($fresh->getCurrentStage()),
+            'provider_handoff_opened',
+            [
+                'provider_code' => 'pagebuilder',
+                'native_workspace_public_id' => $handoff['public_id'],
+                'native_workspace_url' => $handoff['workspace_url'],
+                'native_stage' => $handoff['stage'],
+            ],
+            AiSiteBuilderEvent::LEVEL_INFO
+        );
+
+        $this->redirect($handoff['workspace_url']);
+        return '';
+    }
+
     #[Acl('Weline_Websites::site_builder_agent_stream', 'Workspace SSE Stream', 'mdi mdi-access-point', 'Stream workspace events', 'Weline_Websites::site_builder_agent')]
     public function getStreamSse(): void
     {
@@ -418,6 +538,67 @@ class SiteBuilderAgent extends BackendController
             'success' => true,
             'message' => __('Event stream finished. Reconnect any time to continue listening.'),
             'last_event_id' => $lastEventId,
+        ]);
+    }
+
+    #[Acl('Weline_Websites::site_builder_agent_domain_purchase_stream', 'Workbench Domain Purchase SSE', 'mdi mdi-access-point-network', 'Run a non-blocking workbench domain purchase stream', 'Weline_Websites::site_builder_agent')]
+    public function getDomainPurchaseSse(): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        $adminId = $this->getAdminId();
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
+
+        if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
+            $sse->sendError((string)__('Invalid parameters'));
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            $sse->sendError((string)__('Session not found or access denied'));
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $result = $this->getDomainPurchaseWorkbenchService()->executeQueuedPurchase(
+            $session->getId(),
+            $adminId,
+            $executionToken,
+            static function (string $event, array $data) use ($sse): void {
+                if ($sse->isAlive()) {
+                    $sse->sendEvent($event, $data);
+                }
+            }
+        );
+
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
+        $this->syncSessionArtifacts($fresh, $adminId);
+
+        if (!empty($result['success'])) {
+            $sse->complete([
+                'success' => true,
+                'completed' => !empty($result['completed']),
+                'message' => (string)($result['message'] ?? __('Domain purchase stream finished')),
+                'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
+            ]);
+            return;
+        }
+
+        $sse->sendEvent('error', [
+            'message' => (string)($result['message'] ?? __('Domain purchase stream failed')),
+        ]);
+        $sse->complete([
+            'success' => false,
+            'completed' => !empty($result['completed']),
+            'message' => (string)($result['message'] ?? __('Domain purchase stream failed')),
+            'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
         ]);
     }
 
@@ -1246,6 +1427,226 @@ class SiteBuilderAgent extends BackendController
     }
 
     /**
+     * @return array{public_id:string,workspace_url:string,stage:string}|null
+     */
+    private function createOrResumePageBuilderHandoff(AiSiteBuilderSession $session, int $adminUserId): ?array
+    {
+        $pageBuilderSessionService = $this->getPageBuilderSessionService();
+        if ($pageBuilderSessionService === null) {
+            return null;
+        }
+
+        $scope = $session->getScopeArray();
+        $handoffScope = $this->buildPageBuilderHandoffScope($session, $scope);
+        $handoffStage = $this->resolvePageBuilderHandoffStage($scope);
+        $existingPublicId = \trim((string)($scope['pagebuilder_workspace_public_id'] ?? ''));
+        $nativeSession = null;
+
+        if ($existingPublicId !== '') {
+            try {
+                $nativeSession = $pageBuilderSessionService->loadByPublicId($existingPublicId, $adminUserId);
+            } catch (\Throwable) {
+                $nativeSession = null;
+            }
+        }
+
+        try {
+            if ($nativeSession === null) {
+                $nativeSession = $pageBuilderSessionService->createSession($adminUserId, $handoffScope);
+                $pageBuilderSessionService->setStage($nativeSession->getId(), $adminUserId, $handoffStage);
+                $pageBuilderSessionService->appendEvent(
+                    $nativeSession->getId(),
+                    $adminUserId,
+                    'handoff_from_websites',
+                    [
+                        'source_public_id' => $session->getPublicId(),
+                        'source_provider_code' => $session->getProviderCode(),
+                        'stage' => $handoffStage,
+                    ]
+                );
+                $nativeSession = $pageBuilderSessionService->loadById($nativeSession->getId(), $adminUserId) ?? $nativeSession;
+            } else {
+                $pageBuilderSessionService->mergeScope($nativeSession->getId(), $adminUserId, $handoffScope);
+                if ($this->getPageBuilderStageRank((string)$nativeSession->getStage()) < $this->getPageBuilderStageRank($handoffStage)) {
+                    $pageBuilderSessionService->setStage($nativeSession->getId(), $adminUserId, $handoffStage);
+                }
+                $pageBuilderSessionService->appendEvent(
+                    $nativeSession->getId(),
+                    $adminUserId,
+                    'handoff_sync_from_websites',
+                    [
+                        'source_public_id' => $session->getPublicId(),
+                        'source_provider_code' => $session->getProviderCode(),
+                        'stage' => $handoffStage,
+                    ]
+                );
+                $nativeSession = $pageBuilderSessionService->loadById($nativeSession->getId(), $adminUserId) ?? $nativeSession;
+            }
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if (!\is_object($nativeSession) || !\method_exists($nativeSession, 'getPublicId')) {
+            return null;
+        }
+
+        $nativePublicId = \trim((string)$nativeSession->getPublicId());
+        if ($nativePublicId === '') {
+            return null;
+        }
+
+        return [
+            'public_id' => $nativePublicId,
+            'workspace_url' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/aiSiteAgent/workspace', ['public_id' => $nativePublicId]),
+            'stage' => \method_exists($nativeSession, 'getStage') ? (string)$nativeSession->getStage() : $handoffStage,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildPageBuilderHandoffScope(AiSiteBuilderSession $session, array $scope): array
+    {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
+        $siteTitle = \trim((string)($scope['site_title'] ?? ''));
+        $siteTagline = \trim((string)($scope['site_tagline'] ?? ''));
+        $targetDomain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? $session->getSelectedDomain())));
+        $styleTemplate = $this->resolvePageBuilderStyleTemplate($brief, $scope);
+        $recommendedPages = $this->buildRecommendedPages($brief, 'pagebuilder', $scope);
+        $defaultLocale = \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? ''));
+        $locales = $this->normalizeScopeStringList($scope['locales'] ?? $scope['language_codes'] ?? []);
+        if ($defaultLocale !== '' && !\in_array($defaultLocale, $locales, true)) {
+            $locales[] = $defaultLocale;
+        }
+
+        $virtualThemeNotes = \trim((string)($scope['virtual_theme_notes'] ?? ''));
+        if ($virtualThemeNotes === '') {
+            $virtualThemeNotes = (string)__('从 Websites 工作区接管，推荐 styles 模板：%{template}', ['template' => $styleTemplate]);
+        }
+
+        $contentNotes = \trim((string)($scope['content_notes'] ?? $scope['workbench_notes'] ?? ''));
+        if ($contentNotes === '' && $brief !== '') {
+            $contentNotes = $brief;
+        }
+
+        $handoffScope = [
+            'handoff_source' => 'weline_websites_workbench',
+            'handoff_workspace_public_id' => $session->getPublicId(),
+            'handoff_provider_code' => $session->getProviderCode(),
+            'site_title' => $siteTitle,
+            'site_tagline' => $siteTagline,
+            'brief_description' => $brief,
+            'user_description' => $brief !== '' ? $brief : \trim((string)($scope['user_description'] ?? '')),
+            'target_domain' => $targetDomain,
+            'default_locale' => $defaultLocale,
+            'locales' => $locales,
+            'preferred_editor' => 'pagebuilder',
+            'preferred_flow' => 'pagebuilder_style_template',
+            'theme_generation_mode' => 'existing_style_template',
+            'pagebuilder_theme_source' => 'styles',
+            'pagebuilder_style_template' => $styleTemplate,
+            'style_template_code' => $styleTemplate,
+            'header_footer_locked' => 1,
+            'page_types' => $recommendedPages,
+            'recommended_pages' => $recommendedPages,
+            'virtual_theme_notes' => $virtualThemeNotes,
+            'content_notes' => $contentNotes,
+        ];
+
+        $websiteId = (int)($scope['website_id'] ?? $scope['selected_website_id'] ?? $session->getWebsiteId());
+        if ($websiteId > 0) {
+            $handoffScope['website_id'] = $websiteId;
+        }
+
+        $previewPageId = (int)($scope['preview_page_id'] ?? 0);
+        if ($previewPageId > 0) {
+            $handoffScope['preview_page_id'] = $previewPageId;
+        }
+
+        $previewFullUrl = \trim((string)($scope['preview_full_url'] ?? $scope['preview_url'] ?? $session->getPreviewUrl()));
+        if ($previewFullUrl !== '') {
+            $handoffScope['preview_full_url'] = $previewFullUrl;
+        }
+
+        return $handoffScope;
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function resolvePageBuilderHandoffStage(array $scope): string
+    {
+        if ((int)($scope['preview_page_id'] ?? 0) > 0) {
+            return 'visual_edit';
+        }
+
+        if ($this->normalizeScopeStringList($scope['page_types'] ?? []) !== []) {
+            return 'page_types';
+        }
+
+        return 'virtual_theme';
+    }
+
+    private function getPageBuilderStageRank(string $stage): int
+    {
+        return match (\trim($stage)) {
+            'brief' => 10,
+            'domain' => 20,
+            'domain_wait' => 30,
+            'virtual_theme' => 40,
+            'page_types' => 50,
+            'content' => 60,
+            'visual_edit' => 70,
+            'publish' => 80,
+            default => 0,
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeScopeStringList(mixed $raw): array
+    {
+        if (\is_array($raw)) {
+            $items = $raw;
+        } elseif (\is_string($raw) && \trim($raw) !== '') {
+            $decoded = \json_decode($raw, true);
+            $items = \is_array($decoded) ? $decoded : (\preg_split('/[\s,]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+        } else {
+            $items = [];
+        }
+
+        $result = [];
+        foreach ($items as $item) {
+            if (!\is_scalar($item)) {
+                continue;
+            }
+            $item = \trim((string)$item);
+            if ($item === '' || \in_array($item, $result, true)) {
+                continue;
+            }
+            $result[] = $item;
+        }
+
+        return $result;
+    }
+
+    private function getPageBuilderSessionService(): ?object
+    {
+        $serviceClass = \GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService::class;
+        if (!\class_exists($serviceClass)) {
+            return null;
+        }
+
+        try {
+            return ObjectManager::getInstance($serviceClass);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
      * @param list<string> $toolCodes
      * @param list<array<string, mixed>> $providerTools
      * @return list<array<string, mixed>>
@@ -1351,6 +1752,7 @@ class SiteBuilderAgent extends BackendController
     /**
      * @return array{
      *   session:array<string, mixed>,
+     *   domain_purchase:array<string, mixed>,
      *   stage_guides:list<array<string, mixed>>,
      *   messages:list<array<string, mixed>>,
      *   events:list<array<string, mixed>>,
@@ -1387,6 +1789,7 @@ class SiteBuilderAgent extends BackendController
                 'scope' => $scope,
                 'provider_state' => $providerState,
             ],
+            'domain_purchase' => $this->getDomainPurchaseWorkbenchService()->buildViewState($session),
             'stage_guides' => $this->buildStageGuides($providerConfig, $scope, $currentStage),
             'messages' => $this->getMessageService()->listForSession($session->getId(), $adminUserId, $messageLimit),
             'events' => $this->getEventStreamService()->listRecentEvents($session->getId(), $adminUserId, $eventLimit),
@@ -1633,6 +2036,15 @@ class SiteBuilderAgent extends BackendController
         };
     }
 
+    private function resolveProviderNativeEntryUrl(string $providerCode): string
+    {
+        return match ($providerCode) {
+            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]),
+            'websites_default' => $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()),
+            default => $this->getHubEntryUrl($providerCode, $this->isFakeModeRequested()),
+        };
+    }
+
     private function getRequestBodyValue(string $key, mixed $default = null): mixed
     {
         $value = $this->request->getPost($key, null);
@@ -1736,6 +2148,11 @@ class SiteBuilderAgent extends BackendController
         return $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/workspace', ['public_id' => $publicId]);
     }
 
+    private function now(): string
+    {
+        return \date('Y-m-d H:i:s');
+    }
+
     private function getUrlHelper(): Url
     {
         /** @var Url $url */
@@ -1754,6 +2171,13 @@ class SiteBuilderAgent extends BackendController
     {
         /** @var EventStreamService $service */
         $service = ObjectManager::getInstance(EventStreamService::class);
+        return $service;
+    }
+
+    private function getDomainPurchaseWorkbenchService(): DomainPurchaseWorkbenchService
+    {
+        /** @var DomainPurchaseWorkbenchService $service */
+        $service = ObjectManager::getInstance(DomainPurchaseWorkbenchService::class);
         return $service;
     }
 
