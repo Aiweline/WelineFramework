@@ -5,20 +5,28 @@ declare(strict_types=1);
 namespace WeShop\Analytics\Service;
 
 use WeShop\Analytics\Interface\PixelProviderInterface;
+use WeShop\Analytics\Provider\BingAds;
 use WeShop\Analytics\Provider\FacebookPixel;
 use WeShop\Analytics\Provider\GoogleAnalytics;
+use WeShop\Analytics\Provider\TikTokPixel;
 
 class PixelDispatcher
 {
     protected ?PixelProviderInterface $googleAnalytics = null;
     protected ?PixelProviderInterface $facebookPixel = null;
+    protected ?PixelProviderInterface $tiktokPixel = null;
+    protected ?PixelProviderInterface $bingAds = null;
 
     public function __construct(
         ?GoogleAnalytics $googleAnalytics = null,
-        ?FacebookPixel $facebookPixel = null
+        ?FacebookPixel $facebookPixel = null,
+        ?TikTokPixel $tiktokPixel = null,
+        ?BingAds $bingAds = null
     ) {
         $this->googleAnalytics = $googleAnalytics;
         $this->facebookPixel = $facebookPixel;
+        $this->tiktokPixel = $tiktokPixel;
+        $this->bingAds = $bingAds;
     }
 
     /**
@@ -56,7 +64,7 @@ class PixelDispatcher
     {
         $providers = [];
 
-        foreach ([$this->googleAnalytics, $this->facebookPixel] as $provider) {
+        foreach ([$this->googleAnalytics, $this->facebookPixel, $this->tiktokPixel, $this->bingAds] as $provider) {
             if (!$provider instanceof PixelProviderInterface || !$provider->isEnabled()) {
                 continue;
             }
