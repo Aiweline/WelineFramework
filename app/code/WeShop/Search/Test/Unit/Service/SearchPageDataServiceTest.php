@@ -13,7 +13,7 @@ class SearchPageDataServiceTest extends TestCase
     public function testBuildSkipsProductSearchForEmptyKeyword(): void
     {
         $searchService = $this->createMock(SearchService::class);
-        $searchService->expects($this->never())->method('searchProducts');
+        $searchService->expects($this->never())->method('browseProducts');
         $searchService->expects($this->once())
             ->method('getPopularKeywords')
             ->with(10)
@@ -33,13 +33,31 @@ class SearchPageDataServiceTest extends TestCase
     {
         $searchService = $this->createMock(SearchService::class);
         $searchService->expects($this->once())
-            ->method('searchProducts')
-            ->with('travel bag', ['order_by' => 'price', 'order_dir' => 'asc'], 2, 12)
+            ->method('browseProducts')
+            ->with('travel bag', ['order_by' => 'price', 'order_dir' => 'asc'], 2, 12, 'default', [], true)
             ->willReturn([
                 'items' => [['product_id' => 15, 'name' => 'Travel Bag']],
                 'total' => 15,
-                'pagination' => '<nav>...</nav>',
+                'pagination' => ['page' => 2, 'page_size' => 12, 'total' => 15, 'from' => 13, 'to' => 15],
+                'pagination_html' => '<nav>...</nav>',
                 'engine' => 'meilisearch',
+                'facets' => [
+                    [
+                        'code' => 'attr_color',
+                        'name' => 'Color',
+                        'options' => [['value' => 'red', 'label' => 'Red', 'count' => 3]],
+                    ],
+                ],
+                'applied_filters' => [
+                    [
+                        'filter_code' => 'attr_color',
+                        'filter_name' => 'Color',
+                        'value' => 'red',
+                        'label' => 'Red',
+                        'remove_url' => '/search?q=travel+bag',
+                    ],
+                ],
+                'clear_all_url' => '/search?q=travel+bag',
             ]);
         $searchService->expects($this->once())
             ->method('getPopularKeywords')
@@ -51,10 +69,15 @@ class SearchPageDataServiceTest extends TestCase
 
         $this->assertTrue($result['has_keyword']);
         $this->assertSame('Travel Bag', $result['products'][0]['name']);
+        $this->assertSame('<nav>...</nav>', $result['pagination']);
+        $this->assertSame(15, $result['pagination_data']['total']);
         $this->assertSame(13, $result['search_summary']['from']);
         $this->assertSame(15, $result['search_summary']['to']);
         $this->assertSame('Showing 13-15 of 15 results', $result['search_summary']['label']);
-        $this->assertSame('Sort', $result['active_filters'][0]['label']);
-        $this->assertSame('price ASC', $result['active_filters'][0]['value']);
+        $this->assertCount(2, $result['active_filters']);
+        $this->assertSame('Color', $result['active_filters'][0]['label']);
+        $this->assertSame('Red', $result['active_filters'][0]['value']);
+        $this->assertSame('Sort', $result['active_filters'][1]['label']);
+        $this->assertSame('price ASC', $result['active_filters'][1]['value']);
     }
 }
