@@ -133,7 +133,7 @@ class Order extends FrontendRestController
 
     protected function fetchJson(array $data): string
     {
-        return parent::fetchJson($data);
+        return (string) ($this->fetch($data, self::fetch_JSON) ?: '');
     }
 
     private function getCustomerContext(): CustomerContextInterface
