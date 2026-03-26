@@ -41,7 +41,7 @@ class UrlSubmitRequest implements ObserverInterface
         $url = trim((string)($data['url'] ?? ''));
         $scope = trim((string)($data['scope'] ?? ''));
         $subjectType = (string)($data['subject_type'] ?? SeoSubject::SUBJECT_TYPE_PAGE);
-        $subjectEntityId = (int)($data['subject_id'] ?? 0);
+        $subjectEntityId = (int)($data['subject_entity_id'] ?? $data['subject_id'] ?? 0);
 
         if ($url === '' || $scope === '') {
             return;
