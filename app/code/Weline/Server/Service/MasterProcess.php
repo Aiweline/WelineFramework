@@ -343,6 +343,7 @@ class MasterProcess
         $sessionTokenFileName = (string) ($this->config['session_server_token_file_name'] ?? '');
         $memoryPort = (int) ($this->config['memory_server_port'] ?? 0);
         $memoryTokenFileName = (string) ($this->config['memory_server_token_file_name'] ?? '');
+        $sharedStateRuntime = \is_array($this->config['shared_state'] ?? null) ? $this->config['shared_state'] : [];
 
         if ($sessionPort > 0) {
             if (!isset($envConfig['session']) || !\is_array($envConfig['session'])) {
@@ -385,6 +386,16 @@ class MasterProcess
             if ($memoryTokenFileName !== '') {
                 $envConfig['wls']['memory_service']['token_file_name'] = $memoryTokenFileName;
             }
+        }
+
+        if ($sharedStateRuntime !== []) {
+            if (!isset($envConfig['wls']) || !\is_array($envConfig['wls'])) {
+                $envConfig['wls'] = [];
+            }
+            if (!isset($envConfig['wls']['shared_state']) || !\is_array($envConfig['wls']['shared_state'])) {
+                $envConfig['wls']['shared_state'] = [];
+            }
+            $envConfig['wls']['shared_state']['runtime'] = $sharedStateRuntime;
         }
 
         return $envConfig;

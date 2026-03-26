@@ -97,6 +97,8 @@ final class SessionProtocol
     /** 强制持久化 */
     public const CMD_PERSIST = 'persist';
 
+    public const CMD_SHUTDOWN = 'shutdown';
+
     /** 获取统计信息 */
     public const CMD_STATS = 'stats';
 
@@ -361,6 +363,11 @@ final class SessionProtocol
     public static function buildPersist(): string
     {
         return self::encodeRequest(self::CMD_PERSIST);
+    }
+
+    public static function buildShutdown(): string
+    {
+        return self::encodeRequest(self::CMD_SHUTDOWN);
     }
 
     /**

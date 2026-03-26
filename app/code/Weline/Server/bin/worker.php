@@ -108,11 +108,11 @@ ErrorBootstrap::init($processTag, [
 // 确保即使 Windows 隐藏窗口或 Linux 重定向丢失，日志也不会丢
 $processLogFile = '';
 if ($processName) {
-    $processLogDir = BP . 'var' . DIRECTORY_SEPARATOR . 'process';
+    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
+    $processLogDir = \dirname($processLogFile);
     if (!\is_dir($processLogDir)) {
         @\mkdir($processLogDir, 0777, true);
     }
-    $processLogFile = $processLogDir . DIRECTORY_SEPARATOR . $processName . '.log';
     // 将 PHP error_log() 重定向到进程日志文件（追加模式）
     \ini_set('error_log', $processLogFile);
 }

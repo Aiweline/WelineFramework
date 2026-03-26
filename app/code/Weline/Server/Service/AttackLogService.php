@@ -124,7 +124,10 @@ class AttackLogService
             self::$lastFlushTime = \time();
         } catch (\Throwable $e) {
             // 记录失败，写入文件日志作为备份
-            self::logToFile($e->getMessage());
+            self::logToFile(
+                $e->getMessage(),
+                \is_string($requestInfo['instance'] ?? null) ? (string)$requestInfo['instance'] : null
+            );
         }
     }
     
@@ -166,7 +169,10 @@ class AttackLogService
             
             self::getModel()->clearQuery()->logAttack($logData);
         } catch (\Throwable $e) {
-            self::logToFile($e->getMessage());
+            self::logToFile(
+                $e->getMessage(),
+                \is_string($requestInfo['instance'] ?? null) ? (string)$requestInfo['instance'] : null
+            );
         }
     }
     
@@ -184,9 +190,9 @@ class AttackLogService
     /**
      * 写入文件日志（备份）
      */
-    private static function logToFile(string $error): void
+    private static function logToFile(string $error, ?string $instance = null): void
     {
-        $logDir = BP . 'var' . DS . 'log' . DS . 'server';
+        $logDir = WlsLogService::getLogDir($instance);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
         }

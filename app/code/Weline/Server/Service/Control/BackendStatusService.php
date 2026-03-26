@@ -3,7 +3,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Control;
 
-use Weline\Framework\App\Env;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 
@@ -29,7 +28,7 @@ class BackendStatusService
 
         return [
             'success' => true,
-            'message' => (string)__('状态获取成功'),
+            'message' => (string)__('Status loaded'),
             'data' => [
                 'instance' => $instanceName,
                 'running' => (bool)($raw['running'] ?? false),
@@ -53,14 +52,20 @@ class BackendStatusService
             foreach (($roleData['instances'] ?? []) as $instanceId => $inst) {
                 $port = (int)($inst['port'] ?? 0);
                 $pid = (int)($inst['pid'] ?? 0);
+                $metadata = \is_array($inst['metadata'] ?? null) ? $inst['metadata'] : [];
 
-                // 根据角色类型获取详细健康数据
                 $health = null;
                 if ($withHealthCheck && $port > 0) {
                     $health = match ($role) {
                         'worker' => $this->fetchWorkerHealth($port),
-                        'session_server' => $this->fetchSessionServerHealth($port),
-                        'memory_server' => $this->fetchMemoryServerHealth($port),
+                        'session_server' => $this->fetchSessionServerHealth(
+                            $port,
+                            $this->resolveSharedStateTokenFileName('session_server', (array)$inst, $metadata)
+                        ),
+                        'memory_server' => $this->fetchMemoryServerHealth(
+                            $port,
+                            $this->resolveSharedStateTokenFileName('memory_server', (array)$inst, $metadata)
+                        ),
                         'dispatcher' => $this->fetchDispatcherHealth($port, $pid),
                         'redirect' => $this->fetchRedirectHealth($port, $pid),
                         default => null,
@@ -82,7 +87,7 @@ class BackendStatusService
                     'active_requests' => (int)($health['active_requests'] ?? 0),
                     'total_requests' => (int)($health['total_requests'] ?? 0),
                     'health_detail' => $health,
-                    'metadata' => \is_array($inst['metadata'] ?? null) ? $inst['metadata'] : [],
+                    'metadata' => $metadata,
                 ];
             }
             $result[] = [
@@ -91,12 +96,10 @@ class BackendStatusService
                 'instances' => $instances,
             ];
         }
+
         return $result;
     }
 
-    /**
-     * 获取 Worker 健康数据（通过 HTTP 健康检查接口）
-     */
     private function fetchWorkerHealth(int $port): ?array
     {
         $conn = @\stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 0.6);
@@ -138,12 +141,9 @@ class BackendStatusService
         ];
     }
 
-    /**
-     * 获取 Session Server 健康数据（通过 SessionProtocol STATS 命令）
-     */
-    private function fetchSessionServerHealth(int $port): ?array
+    private function fetchSessionServerHealth(int $port, string $tokenFileName): ?array
     {
-        $client = $this->buildStateClient($port, 'session_server.token');
+        $client = $this->buildStateClient($port, $tokenFileName);
         if ($client === null) {
             return null;
         }
@@ -170,12 +170,9 @@ class BackendStatusService
         ];
     }
 
-    /**
-     * 获取 Memory Server 健康数据（通过 SessionProtocol STATS 命令）
-     */
-    private function fetchMemoryServerHealth(int $port): ?array
+    private function fetchMemoryServerHealth(int $port, string $tokenFileName): ?array
     {
-        $client = $this->buildStateClient($port, 'memory_server.token');
+        $client = $this->buildStateClient($port, $tokenFileName);
         if ($client === null) {
             return null;
         }
@@ -200,13 +197,8 @@ class BackendStatusService
         ];
     }
 
-    /**
-     * 获取 Dispatcher 健康数据
-     * Dispatcher 没有直接的 HTTP 接口，通过检查进程状态获取基本信息
-     */
     private function fetchDispatcherHealth(int $port, int $pid): ?array
     {
-        // 尝试通过 TCP 连接检测存活
         $conn = @\stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 0.3);
         if (!$conn) {
             return [
@@ -219,8 +211,6 @@ class BackendStatusService
         }
         @\fclose($conn);
 
-        // 如果连接成功，说明 Dispatcher 正在运行
-        // 注意：Dispatcher 的详细统计需要通过 IPC 命令获取，这里返回基本信息
         return [
             'status' => 'healthy',
             'memory_usage' => 0,
@@ -231,13 +221,8 @@ class BackendStatusService
         ];
     }
 
-    /**
-     * 获取 Redirect Worker 健康数据
-     * Redirect 是简单的 HTTP 重定向进程，统计信息较少
-     */
     private function fetchRedirectHealth(int $port, int $pid): ?array
     {
-        // 尝试通过 TCP 连接检测存活
         $conn = @\stream_socket_client("tcp://127.0.0.1:{$port}", $errno, $errstr, 0.3);
         if (!$conn) {
             return [
@@ -259,10 +244,7 @@ class BackendStatusService
         ];
     }
 
-    /**
-     * 构建 SharedStateClient
-     */
-    private function buildStateClient(int $port, string $tokenFileName): ?SharedStateClient
+    protected function buildStateClient(int $port, string $tokenFileName): ?SharedStateClient
     {
         try {
             return new SharedStateClient('127.0.0.1', $port, [
@@ -272,5 +254,28 @@ class BackendStatusService
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $instance
+     * @param array<string, mixed> $metadata
+     */
+    private function resolveSharedStateTokenFileName(string $role, array $instance, array $metadata): string
+    {
+        $tokenFileName = \trim((string) (
+            $metadata['token_file_name']
+            ?? $instance['token_file_name']
+            ?? $metadata['configured_token_file_name']
+            ?? $instance['configured_token_file_name']
+            ?? ''
+        ));
+
+        if ($tokenFileName !== '') {
+            return $tokenFileName;
+        }
+
+        return $role === 'memory_server'
+            ? 'memory_server.token'
+            : 'session_server.token';
     }
 }

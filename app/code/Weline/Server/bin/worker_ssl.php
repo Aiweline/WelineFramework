@@ -129,11 +129,11 @@ ErrorBootstrap::init($processTag, [
 // 确保即使 Windows 隐藏窗口或 Linux 重定向丢失，日志也不会丢
 $processLogFile = '';
 if ($processName) {
-    $processLogDir = BP . 'var' . DIRECTORY_SEPARATOR . 'process';
+    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
+    $processLogDir = \dirname($processLogFile);
     if (!\is_dir($processLogDir)) {
         @\mkdir($processLogDir, 0777, true);
     }
-    $processLogFile = $processLogDir . DIRECTORY_SEPARATOR . $processName . '.log';
     // 将 PHP error_log() 重定向到进程日志文件（追加模式）
     \ini_set('error_log', $processLogFile);
 }
@@ -462,6 +462,8 @@ try {
         'connect_timeout' => 1.0,
         'timeout' => 2.0,
         'token_file_name' => $sessionTokenFileName,
+        // 启动重试阶段允许失败但不刷屏；最终失败由下面重试总控给出明确错误。
+        'log_connect_fail' => false,
     ]);
     $sessionConnected = false;
     for ($attempt = 1; $attempt <= 10; $attempt++) {
@@ -487,8 +489,8 @@ try {
     }
     // 预热 Session/Memory 连接池，避免首请求时再建连导致延迟（Linux 下尤为明显）
     try {
-        $sessionOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $sessionTokenFileName];
-        $memoryOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $memoryTokenFileName];
+        $sessionOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $sessionTokenFileName, 'log_connect_fail' => false];
+        $memoryOpts = ['connect_timeout' => 1.0, 'timeout' => 2.0, 'min_idle' => 1, 'max_size' => 8, 'token_file_name' => $memoryTokenFileName, 'log_connect_fail' => false];
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, $sessionOpts);
         \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, $memoryOpts);
     } catch (\Throwable $warmupEx) {
