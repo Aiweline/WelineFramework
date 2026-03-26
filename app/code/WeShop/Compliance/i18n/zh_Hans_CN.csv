@@ -1,52 +1,52 @@
-"Consent type is required.","缺少同意类型。"
-"Please log in to update this consent.","请先登录后再更新该同意项。"
-"Consent preference updated.","同意偏好已更新。"
-"Data Collection","数据收集"
-"Data Usage","数据使用"
-"Retention and Deletion","保留与删除"
-"Consent Controls","同意控制"
-"We collect account, order, and support interaction data to deliver and improve storefront services.","我们会收集账号、订单与客服交互数据，用于提供和优化商城服务。"
-"Collected data is used for checkout processing, fraud checks, logistics coordination, and customer support.","收集的数据用于结账处理、风险检测、物流协同与客户支持。"
-"Data retention follows legal and tax obligations, and deletion requests are handled through compliance workflows.","数据保留遵循法律和税务要求，删除请求会通过合规流程处理。"
-"You can review and update optional consent settings in your compliance center at any time.","你可以随时在合规中心查看和更新可选同意设置。"
+﻿"Consent type is required.","Consent type is required."
+"Please log in to update this consent.",请先登录后再更新该同意项。
+"Consent preference updated.",同意偏好已更新。
+"Compliance page before content",合规页面前置扩展位
+"Inject storefront content before compliance page sections.",在合规页面主要分区前注入前台内容。
+"Consent item extension",同意项扩展位
+"Inject storefront content after each consent item.",在每个同意项后注入前台内容。
+"Data Collection",数据收集
+"We collect account, order, and support interaction data to deliver and improve storefront services.",我们会收集账号、订单与客服交互数据，用于提供和优化商城服务。
+"Data Usage",数据使用
+"Collected data is used for checkout processing, fraud checks, logistics coordination, and customer support.",收集的数据用于结账处理、风险检测、物流协同与客户支持。
+"Retention and Deletion",保留与删除
+"Data retention follows legal and tax obligations, and deletion requests are handled through compliance workflows.",数据保留遵循法律和税务要求，删除请求会通过合规流程处理。
+"Consent Controls",同意控制
+"You can review and update optional consent settings in your compliance center at any time.",你可以随时在合规中心查看和更新可选同意设置。
 "Cookie Preferences","Cookie 偏好"
 "Allow analytics and preference cookies to improve storefront experience.","允许分析和偏好 Cookie 以改善商城体验。"
-"Privacy Policy Acknowledgement","隐私政策确认"
-"Confirm you have reviewed the current privacy policy for account and order data handling.","确认你已阅读当前关于账号与订单数据处理的隐私政策。"
-"Terms of Service Acknowledgement","服务条款确认"
-"Confirm acceptance of transaction and platform terms for ongoing account usage.","确认你接受交易与平台条款以继续使用账号服务。"
-"Marketing Communications","营销沟通"
-"Receive campaign updates, promotion alerts, and personalized recommendations.","接收活动更新、促销提醒与个性化推荐。"
-"Compliance","合规"
-"Consent Center","同意中心"
-"Open Compliance","进入合规中心"
-"Accepted Preferences","已接受偏好"
-"Review privacy, terms, and communication consent settings from one secure workspace.","在一个安全工作区内统一查看隐私、条款与沟通同意设置。"
-"Compliance page before content","合规页面前置扩展位"
-"Inject storefront content before compliance page sections.","在合规页面主要分区前注入前台内容。"
-"Consent item extension","同意项扩展位"
-"Inject storefront content after each consent item.","在每个同意项后注入前台内容。"
-"Compliance Center","合规中心"
-"Consent Management","同意管理"
-"Manage privacy-related preferences, track required acknowledgements, and keep account permissions aligned with your needs.","管理隐私相关偏好，跟踪必需确认项，并让账号权限保持与你的需求一致。"
-"Open Full Consent View","打开完整同意视图"
-"Read Privacy Policy","阅读隐私政策"
-"Preferences Accepted","已接受偏好"
-"Keep this score current to avoid compliance interruptions during account operations.","保持该指标最新，以避免账号操作时出现合规中断。"
-"Consent Preferences","同意偏好"
-"Required","必需"
-"Accepted","已接受"
-"Not Accepted","未接受"
-"Revoke","撤销"
-"Accept","接受"
-"Consent Workspace","同意工作区"
-"Update Consent Preferences","更新同意偏好"
-"Use this page to update optional communications and acknowledge required policy items for your account.","使用此页面更新可选沟通同意，并确认账号必需政策项。"
-"Review Privacy Details","查看隐私详情"
-"Disable","关闭"
-"Enable","开启"
-"Privacy","隐私"
-"Privacy Policy Summary","隐私政策摘要"
-"This summary highlights how storefront data is collected, processed, retained, and controlled. It complements the full legal policy text.","本摘要说明商城数据如何被收集、处理、保留与控制，可作为完整法律政策文本的补充。"
-"Manage Consent","管理同意项"
-"Back to Compliance Center","返回合规中心"
+"Privacy Policy Acknowledgement",隐私政策确认
+"Confirm you have reviewed the current privacy policy for account and order data handling.",确认你已阅读当前关于账号与订单数据处理的隐私政策。
+"Terms of Service Acknowledgement",服务条款确认
+"Confirm acceptance of transaction and platform terms for ongoing account usage.",确认你接受交易与平台条款以继续使用账号服务。
+"Marketing Communications",营销沟通
+"Receive campaign updates, promotion alerts, and personalized recommendations.",接收活动更新、促销提醒与个性化推荐。
+Compliance,合规
+"Consent Center",同意中心
+"Open Compliance",进入合规中心
+"Accepted Preferences",已接受偏好
+"Review privacy, terms, and communication consent settings from one secure workspace.",在一个安全工作区内统一查看隐私、条款与沟通同意设置。
+"Consent Workspace","Consent Workspace"
+"Update Consent Preferences","Update Consent Preferences"
+"Use this page to update optional communications and acknowledge required policy items for your account.","Use this page to update optional communications and acknowledge required policy items for your account."
+"Review Privacy Details","Review Privacy Details"
+Accepted,Accepted
+"Not Accepted","Not Accepted"
+Disable,Disable
+Enable,Enable
+"Compliance Center","Compliance Center"
+"Consent Management","Consent Management"
+"Manage privacy-related preferences, track required acknowledgements, and keep account permissions aligned with your needs.","Manage privacy-related preferences, track required acknowledgements, and keep account permissions aligned with your needs."
+"Open Full Consent View","Open Full Consent View"
+"Read Privacy Policy","Read Privacy Policy"
+"Preferences Accepted","Preferences Accepted"
+"Keep this score current to avoid compliance interruptions during account operations.","Keep this score current to avoid compliance interruptions during account operations."
+"Consent Preferences","Consent Preferences"
+Required,Required
+Revoke,Revoke
+Accept,Accept
+Privacy,Privacy
+"Privacy Policy Summary","Privacy Policy Summary"
+"This summary highlights how storefront data is collected, processed, retained, and controlled. It complements the full legal policy text.","This summary highlights how storefront data is collected, processed, retained, and controlled. It complements the full legal policy text."
+"Manage Consent","Manage Consent"
+"Back to Compliance Center","Back to Compliance Center"
