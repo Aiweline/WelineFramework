@@ -17,7 +17,7 @@ alwaysApply: false
 ## 使用流程
 
 1. 从任务里提取关键词、目标文件、修改类型。
-2. 先查 `references/development-skill-map.md`，找到最匹配的技能。
+2. 先查 `dev/ai/skills/_index.md`，找到最匹配的技能。
 3. 只读取命中的 `dev/ai/skills/<skill>/SKILL.md`。
 4. 如果目标技能正文再引用其它 skill 或 reference，再继续按需读取。
 5. 同时命中多个场景时，只保留最相关的 1~3 个技能进入上下文。
@@ -27,7 +27,7 @@ alwaysApply: false
 - `context-compression` 是常驻压缩技能，不需要因为映射再重复全量读取。
 - 修改规则、技能、计划仓时，额外读取 `cursor-as-reference`。
 - 通用模块开发优先命中 `module-development`，再按需要叠加更具体技能。
-- 详细映射统一维护在 `references/development-skill-map.md`，不要把整张映射表重复写进多个技能。
+- 详细映射统一维护在 `dev/ai/skills/_index.md`，不要把整张映射表重复写进多个技能。
 
 ## 禁止
 

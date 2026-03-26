@@ -5,7 +5,14 @@
   - Google binding and callback logic
   - 2FA orchestration
   - password reset
+  - checkout summary calculation across shipping and tax query providers
+  - shipping carrier provider contract alignment
+  - tax query provider and configurable tax-rate resolution
+  - filter URL normalization and clear-all pagination reset
+  - filter result construction without applied params and with applied chips
+  - category filter page-data assignment and canonical filter container hook coverage
   - theme compatibility checks
+  - shared cart/checkout summary row hook coverage
   - storefront account dashboard aggregation for recent orders, wishlist, recently viewed, and recommendations
   - compare page-data mapping plus compare add/index/remove controller guest/auth flows
   - recently viewed page-data mapping, current-customer recorder, and remove controller guest/auth flows
@@ -15,14 +22,17 @@
   - unified auth endpoints
   - compatibility proxies
   - backend menu-resource alignment
-  - route verification for `/api/weshop/rest/v1/auth/*`
+  - route verification for `/api/rest/v1/weshop/auth/*`
+  - storefront filter clean routes `/filters/filter`, `/filters/options`, `/filters/counts`
   - storefront route verification for `/compare`, `/compare/add`, and `/compare/remove`
   - storefront route verification for `/recently-viewed` and `/recently-viewed/remove`
 - E2E:
   - storefront and backend login flows
+  - storefront category/filter smoke covering stable category rendering plus structured filter JSON
   - Google login
   - 2FA
   - `default` theme baseline pages
+  - checkout/order clean-route smoke after totals-layer changes
   - storefront account center rendering security cards and discovery cards
   - storefront compare page open/add/remove flow once stable customer login fixtures and a live `9982` runtime are available
   - storefront recently-viewed history open/remove flow once stable customer login fixtures are available
