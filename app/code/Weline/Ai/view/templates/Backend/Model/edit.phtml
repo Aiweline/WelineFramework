@@ -690,6 +690,7 @@ if (!empty($displayConfig)) {
     testModelBtn.addEventListener('click', function() {
         var prompt = document.getElementById('test_prompt').value.trim();
         var modelId = <?= $model->getId() ?>;
+        var form = document.getElementById('model-form');
         
         if (!prompt) {
             if (typeof Swal !== 'undefined') {
@@ -709,10 +710,30 @@ if (!empty($displayConfig)) {
         testModelBtn.innerHTML = '<i class="mdi mdi-loading mdi-spin"></i> <?= __('测试中...') ?>';
         
         document.getElementById('testResult').style.display = 'none';
+
+        var providerConfigTextarea = document.getElementById('provider_config_json');
+        if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+            try {
+                JSON.parse(providerConfigTextarea.value);
+            } catch (err) {
+                testModelBtn.disabled = false;
+                testModelBtn.innerHTML = '<i class="mdi mdi-play-circle"></i> Test model';
+                if (typeof Swal !== 'undefined') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Invalid JSON',
+                        text: 'Provider config JSON is invalid. Please check the syntax.',
+                        confirmButtonText: 'OK'
+                    });
+                }
+                return;
+            }
+        }
         
-        var formData = new FormData();
-        formData.append('id', modelId);
-        formData.append('prompt', prompt);
+        var formData = form ? new FormData(form) : new FormData();
+        formData.set('id', String(modelId));
+        formData.set('prompt', prompt);
+        formData.set('test_only', '1');
         
         var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
         var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
