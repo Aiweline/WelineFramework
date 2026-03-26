@@ -1,3 +1,4 @@
+// @weline-e2e-runtime fallback
 // app/code/Weline/Theme/test/e2e/frontend/deferred-immediate-load.spec.js
 // 测试 Weline.declare 的延迟立即加载功能（data-load-order="last" 和 options.loadOrder: 'last'）
 // @weline-e2e-transport direct
