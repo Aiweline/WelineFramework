@@ -60,7 +60,7 @@ class Skill extends BackendController
         }
 
         $this->assign('skill', $skill);
-        return $this->fetch();
+        return $this->fetch('view');
     }
 
     #[Acl('Weline_Bot::skill_toggle', '切换状态', '', '启用/禁用技能')]

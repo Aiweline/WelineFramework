@@ -6,9 +6,7 @@ namespace Weline\Bot\Adapter;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
- * SEO 优化适配器
- *
- * 专为 SEO 场景设计的适配器
+ * SEO scenario adapter.
  */
 class SEOAdapter implements ScenarioAdapterInterface
 {
@@ -19,12 +17,12 @@ class SEOAdapter implements ScenarioAdapterInterface
 
     public function getName(): string
     {
-        return __('SEO 优化助手');
+        return __('SEO Assistant');
     }
 
     public function getDescription(): string
     {
-        return __('专为 SEO 场景设计，支持关键词分析、内容优化建议、Meta 标签生成、结构化数据建议等能力。');
+        return __('Adapter tuned for keyword research, content optimization, metadata, and technical SEO checks.');
     }
 
     public function getVersion(): string
@@ -39,27 +37,30 @@ class SEOAdapter implements ScenarioAdapterInterface
 
     public function adaptPrompt(string $prompt, array $params = []): string
     {
-        $keyword = $params['keyword'] ?? '';
-        $targetUrl = $params['target_url'] ?? '';
-        $language = $params['language'] ?? 'zh-CN';
+        $keyword = trim((string) ($params['keyword'] ?? ''));
+        $targetUrl = trim((string) ($params['target_url'] ?? ''));
+        $language = trim((string) ($params['language'] ?? 'zh-CN'));
 
-        $systemPrompt = "你是一个专业的 SEO 优化助手，具备以下能力：\n\n";
-        $systemPrompt .= "【核心能力】\n";
-        $systemPrompt .= "- 关键词研究和分析\n";
-        $systemPrompt .= "- 页面内容优化建议\n";
-        $systemPrompt .= "- Meta 标签（Title、Description）生成\n";
-        $systemPrompt .= "- 结构化数据（Schema.org）建议\n";
-        $systemPrompt .= "- 内链外链策略建议\n";
-        $systemPrompt .= "- 技术SEO问题检测\n\n";
+        $systemPrompt = "You are a professional SEO assistant.\n\n";
+        $systemPrompt .= "[Core Capabilities]\n";
+        $systemPrompt .= "- Keyword discovery and intent mapping\n";
+        $systemPrompt .= "- On-page structure and content optimization\n";
+        $systemPrompt .= "- Metadata generation (title, description)\n";
+        $systemPrompt .= "- Internal link and schema guidance\n";
+        $systemPrompt .= "- Technical SEO issue spotting\n\n";
+        $systemPrompt .= "[Output Rules]\n";
+        $systemPrompt .= "- Keep recommendations measurable and prioritized.\n";
+        $systemPrompt .= "- Include rationale for each major suggestion.\n";
+        $systemPrompt .= "- Avoid generic advice.\n\n";
 
-        if ($keyword) {
-            $systemPrompt .= "【目标关键词】{$keyword}\n\n";
+        if ($keyword !== '') {
+            $systemPrompt .= "[Primary Keyword]\n{$keyword}\n\n";
         }
-        if ($targetUrl) {
-            $systemPrompt .= "【目标页面】{$targetUrl}\n\n";
+        if ($targetUrl !== '') {
+            $systemPrompt .= "[Target URL]\n{$targetUrl}\n\n";
         }
-        $systemPrompt .= "【语言】{$language}\n\n";
-        $systemPrompt .= "用户请求：{$prompt}";
+        $systemPrompt .= "[Language]\n{$language}\n\n";
+        $systemPrompt .= "[User Request]\n{$prompt}";
 
         return $systemPrompt;
     }
@@ -71,7 +72,17 @@ class SEOAdapter implements ScenarioAdapterInterface
 
     public function validateParams(array $params = []): array
     {
-        return [];
+        $errors = [];
+        if (isset($params['keyword']) && !is_string($params['keyword'])) {
+            $errors[] = 'keyword must be a string';
+        }
+        if (isset($params['target_url']) && !is_string($params['target_url'])) {
+            $errors[] = 'target_url must be a string';
+        }
+        if (isset($params['language']) && !is_string($params['language'])) {
+            $errors[] = 'language must be a string';
+        }
+        return $errors;
     }
 
     public function getParamTemplate(): array
@@ -80,17 +91,17 @@ class SEOAdapter implements ScenarioAdapterInterface
             'keyword' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '目标关键词',
+                'description' => 'Primary keyword',
             ],
             'target_url' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '目标页面 URL',
+                'description' => 'Target page URL',
             ],
             'language' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '内容语言',
+                'description' => 'Content language',
                 'default' => 'zh-CN',
             ],
         ];
@@ -100,20 +111,20 @@ class SEOAdapter implements ScenarioAdapterInterface
     {
         return [
             [
-                'title' => '生成 Meta 标签',
-                'input' => '为"PHP 教程"关键词生成页面 Meta 标签',
-                'expected_output' => '返回优化后的 Title、Description、Keywords',
+                'title' => 'Metadata generation',
+                'input' => 'Generate title and meta description for keyword "php framework tutorial".',
+                'expected_output' => 'Search-optimized title/description candidates.',
             ],
             [
-                'title' => '内容优化建议',
-                'input' => '分析这篇 SEO 优化文章的内容质量',
-                'expected_output' => '返回关键词密度、可读性、结构化建议',
+                'title' => 'Content optimization',
+                'input' => 'Review this landing page and provide prioritized SEO improvements.',
+                'expected_output' => 'Actionable checklist with expected impact.',
             ],
         ];
     }
 
     public function supportsModel(string $modelCode): bool
     {
-        return true;
+        return $modelCode !== '';
     }
 }
