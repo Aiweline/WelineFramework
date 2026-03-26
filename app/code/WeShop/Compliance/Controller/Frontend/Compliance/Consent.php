@@ -10,6 +10,8 @@ use WeShop\Frontend\Controller\BaseController;
 
 class Consent extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Compliance::templates/Frontend/Compliance/Consent/index.phtml';
+
     protected ?string $layoutType = 'compliance';
 
     public function __construct(
@@ -30,7 +32,6 @@ class Consent extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
-
