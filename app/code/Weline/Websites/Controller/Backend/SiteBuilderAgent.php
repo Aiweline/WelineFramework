@@ -46,6 +46,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('selected_provider_context', $this->extractProviderContext($providerConfig));
         $this->assign('selected_stage_guides', $this->buildStageGuides($providerConfig, $scope, 'prepare'));
         $this->assign('create_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/create-session'));
+        $this->assign('recommend_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain'));
         $this->assign('current_entry_url', $this->getHubEntryUrl($selectedProvider, $fakeMode));
         $this->assign('fake_mode', $fakeMode);
         $this->assign('page_title', __('AI Site Workbench'));
@@ -275,6 +276,59 @@ class SiteBuilderAgent extends BackendController
             'provider_name' => (string)($providerConfig['name'] ?? $providerCode),
             'native_entry_url' => (string)($providerConfig['native_entry_url'] ?? ''),
         ]);
+    }
+
+    #[Acl('Weline_Websites::site_builder_agent_recommend_domain', 'Recommend Available Domain', 'mdi mdi-auto-fix', 'Recommend an available domain for the quick-start flow', 'Weline_Websites::site_builder_agent')]
+    public function postRecommendDomain(): string
+    {
+        $adminId = $this->getAdminId();
+        if ($adminId <= 0) {
+            return $this->fetchJson(['success' => false, 'message' => __('Login required')]);
+        }
+
+        $description = \trim((string)$this->getRequestBodyValue('description', ''));
+        $preferredDomain = \strtolower(\trim((string)$this->getRequestBodyValue('domain', '')));
+        $accountId = (int)$this->getRequestBodyValue('account_id', 0);
+
+        if ($accountId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Please choose a registrar account before checking live availability.'),
+            ]);
+        }
+
+        if ($description === '' && $preferredDomain === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Please describe the site goal or enter a preferred domain first.'),
+            ]);
+        }
+
+        if ($this->isFakeModeRequested()) {
+            $suggestions = $this->buildDomainSuggestions(
+                $description !== '' ? $description : $preferredDomain,
+                $preferredDomain
+            );
+            $domain = $suggestions[0] ?? $this->buildFakeDomainSuggestion($description !== '' ? $description : 'smart site');
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('AI found an available domain in local demo mode: %{domain}', ['domain' => $domain]),
+                'domain' => $domain,
+                'candidate_domains' => $suggestions,
+                'checked_results' => [
+                    [
+                        'domain' => $domain,
+                        'available' => true,
+                    ],
+                ],
+                'fake_mode' => true,
+            ]);
+        }
+
+        return $this->fetchJson(
+            $this->getWebsiteAgentService()->recommendAvailableDomain($description, $accountId, $preferredDomain)
+        );
     }
 
     #[Acl('Weline_Websites::site_builder_agent_merge_scope', 'Merge Workspace Scope', 'mdi mdi-database-plus-outline', 'Merge workspace scope JSON', 'Weline_Websites::site_builder_agent')]

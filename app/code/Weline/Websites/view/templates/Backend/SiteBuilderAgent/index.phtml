@@ -8,6 +8,7 @@
  * @var list<array{code:string,label:string,title:string,description:string,ai_recommendation_title:string,ai_recommendation:string,confirm_label:string,previous_label:string,next_stage:string,previous_stage:string,tool_codes:list<string>,scope_patch:array<string,mixed>,key_points:list<string>}> $selected_stage_guides
  * @var string $selected_provider
  * @var string $create_session_url
+ * @var string $recommend_domain_url
  * @var string $current_entry_url
  * @var bool $fake_mode
  */
@@ -24,10 +25,30 @@ $selected_stage_guides = $this->getData('selected_stage_guides');
 $selected_stage_guides = \is_array($selected_stage_guides) ? $selected_stage_guides : [];
 $selected_provider = (string)($this->getData('selected_provider') ?? 'websites_default');
 $create_session_url = (string)($this->getData('create_session_url') ?? '');
+$recommend_domain_url = (string)($this->getData('recommend_domain_url') ?? '');
 $current_entry_url = (string)($this->getData('current_entry_url') ?? $this->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => $selected_provider]));
 $fake_mode = (bool)($this->getData('fake_mode') ?? false);
 $quick_build_url = $current_entry_url . '#quick-build';
 $provider_lane_url = $current_entry_url . '#provider-lane';
+$quickBuildRegistrarOptions = [];
+foreach ($accounts as $account) {
+    $accountId = (int)($account['account_id'] ?? 0);
+    if ($accountId <= 0) {
+        continue;
+    }
+
+    $registrarName = \trim((string)($account['registrar_name'] ?? $account['registrar_code'] ?? ''));
+    $accountName = \trim((string)($account['account_name'] ?? ''));
+    $quickBuildRegistrarOptions[] = [
+        'value' => (string)$accountId,
+        'label' => $registrarName . ($accountName !== '' ? (' - ' . $accountName) : ''),
+        'group' => $registrarName !== '' ? $registrarName : (string)__('Other'),
+        'meta' => (string)($account['registrar_code'] ?? ''),
+    ];
+}
+$quickBuildRegistrarOptionsJson = \json_encode($quickBuildRegistrarOptions, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+$quickBuildRegistrarAccountId = '';
+$quickBuildRegistrarDisplay = '';
 ?>
 
 <div class="site-workbench-page">
@@ -182,14 +203,21 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                             <lang>目标域名</lang>
                             <span class="text-muted small" id="site-agent-domain-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
+                        <div class="d-flex justify-content-end mb-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="site-agent-recommend-domain-btn">
+                                <i class="mdi mdi-auto-fix me-1"></i>
+                                <lang>AI 推荐</lang>
+                            </button>
+                        </div>
                         <input type="text" class="form-control" id="site-agent-domain" scope="site_builder_agent_quick_build" name="domain" placeholder="example.com">
+                        <div class="alert alert-light border d-none mt-2 py-2 px-3 mb-0" id="site-agent-domain-recommendation" role="status"></div>
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="site-agent-account">
                             <lang>购买服务商账号</lang>
                             <span class="text-muted small" id="site-agent-account-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
-                        <select class="form-select" id="site-agent-account" scope="site_builder_agent_quick_build" name="account_id">
+                        <select class="form-select d-none" id="site-agent-account-legacy" scope="site_builder_agent_quick_build" name="account_id_legacy" aria-hidden="true" tabindex="-1">
                             <option value=""><lang>稍后再决定</lang></option>
                             <?php foreach ($accounts as $acc) { ?>
                                 <option value="<?= (int)($acc['account_id'] ?? 0) ?>">
@@ -197,6 +225,17 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                                 </option>
                             <?php } ?>
                         </select>
+                        <w:websites:registrar:select
+                            id="site-agent-account"
+                            name="account_id"
+                            value="quickBuildRegistrarAccountId"
+                            display="quickBuildRegistrarDisplay"
+                            options="quickBuildRegistrarOptionsJson"
+                            empty-label="@lang(Decide later)"
+                            placeholder="@lang(Search registrar / account...)"
+                            class="w-100"
+                            on-select="handleQuickBuildRegistrarSelect"
+                        />
                     </div>
                 </div>
 
@@ -526,7 +565,9 @@ body[data-topbar="dark"] .site-workbench-page {
     var inlineCreateWorkspaceBtn = document.getElementById('site-agent-create-workspace-inline');
     var descInput = document.getElementById('site-agent-description');
     var domainInput = document.getElementById('site-agent-domain');
-    var accountSelect = document.getElementById('site-agent-account');
+    var recommendDomainBtn = document.getElementById('site-agent-recommend-domain-btn');
+    var recommendationBox = document.getElementById('site-agent-domain-recommendation');
+    var accountValueInput = document.getElementById('site-agent-account_value');
     var useAiToggle = document.getElementById('site-agent-use-ai');
     var domainHint = document.getElementById('site-agent-domain-hint');
     var accountHint = document.getElementById('site-agent-account-hint');
@@ -537,11 +578,16 @@ body[data-topbar="dark"] .site-workbench-page {
     var terminalBoundTarget = null;
     var terminalUnlocked = true;
     var createSessionUrl = <?= json_encode($create_session_url, JSON_THROW_ON_ERROR) ?>;
+    var recommendDomainUrl = <?= json_encode($recommend_domain_url, JSON_THROW_ON_ERROR) ?>;
+    var quickBuildRegistrarOptions = <?= $quickBuildRegistrarOptionsJson ?>;
     var startSseUrl = <?= json_encode((string)$this->getBackendUrl('websites/backend/site-builder-agent/trigger-sse'), JSON_THROW_ON_ERROR) ?>;
     var fakeMode = <?= $fake_mode ? 'true' : 'false' ?>;
+    var lastRecommendedDomain = '';
     var messages = {
-        aiOptional: <?= json_encode((string)__('AI can recommend this for you.'), JSON_THROW_ON_ERROR) ?>,
-        manualRequired: <?= json_encode((string)__('Please confirm this manually when AI is off.'), JSON_THROW_ON_ERROR) ?>,
+        aiDomainOptional: <?= json_encode((string)__('AI can recommend this for you.'), JSON_THROW_ON_ERROR) ?>,
+        aiRegistrarOptional: <?= json_encode((string)__('Optional for quick start. Required for live availability checks.'), JSON_THROW_ON_ERROR) ?>,
+        manualDomainRequired: <?= json_encode((string)__('Please confirm this manually when AI is off.'), JSON_THROW_ON_ERROR) ?>,
+        manualRegistrarRequired: <?= json_encode((string)__('Please choose a registrar account when AI is off.'), JSON_THROW_ON_ERROR) ?>,
         aiModeTip: <?= json_encode((string)__('AI will suggest the domain, provider, and page plan first. You only need to confirm the result.'), JSON_THROW_ON_ERROR) ?>,
         manualModeTip: <?= json_encode((string)__('Manual mode keeps the same guided flow, but you need to provide the key information yourself.'), JSON_THROW_ON_ERROR) ?>,
         createWorkspaceFailed: <?= json_encode((string)__('Unable to create the workspace right now.'), JSON_THROW_ON_ERROR) ?>,
@@ -550,6 +596,14 @@ body[data-topbar="dark"] .site-workbench-page {
         domainRequired: <?= json_encode((string)__('Please enter a target domain first.'), JSON_THROW_ON_ERROR) ?>,
         registrarRequired: <?= json_encode((string)__('Please choose a registrar account first.'), JSON_THROW_ON_ERROR) ?>,
         briefRequired: <?= json_encode((string)__('Please describe the site goal or provide a domain first.'), JSON_THROW_ON_ERROR) ?>,
+        recommendNeedsRegistrar: <?= json_encode((string)__('Please choose a registrar account before AI checks live availability.'), JSON_THROW_ON_ERROR) ?>,
+        recommendLoading: <?= json_encode((string)__('AI is checking live availability with the selected registrar...'), JSON_THROW_ON_ERROR) ?>,
+        recommendDomainChanged: <?= json_encode((string)__('You changed the domain manually. Recommend again if you want a freshly checked suggestion.'), JSON_THROW_ON_ERROR) ?>,
+        recommendRegistrarChanged: <?= json_encode((string)__('Registrar changed. Recommend again to re-check availability.'), JSON_THROW_ON_ERROR) ?>,
+        recommendUnavailable: <?= json_encode((string)__('No available domain was found yet. Try another brief or preferred domain.'), JSON_THROW_ON_ERROR) ?>,
+        recommendationUnavailable: <?= json_encode((string)__('unavailable'), JSON_THROW_ON_ERROR) ?>,
+        recommendationAvailable: <?= json_encode((string)__('available'), JSON_THROW_ON_ERROR) ?>,
+        checkedCandidatesLabel: <?= json_encode((string)__('Checked'), JSON_THROW_ON_ERROR) ?>,
         loadingLog: <?= json_encode((string)__('Preparing the guided AI build flow...'), JSON_THROW_ON_ERROR) ?>,
         connecting: <?= json_encode((string)__('Connecting...'), JSON_THROW_ON_ERROR) ?>,
         connected: <?= json_encode((string)__('Connected'), JSON_THROW_ON_ERROR) ?>,
@@ -567,6 +621,343 @@ body[data-topbar="dark"] .site-workbench-page {
         }
     }
 
+    function escapeHtml(value) {
+        var node = document.createElement('div');
+        node.textContent = value === undefined || value === null ? '' : String(value);
+        return node.innerHTML;
+    }
+
+    function ensureQuickBuildRegistrarInstance() {
+        window.WelineRegistrarSelect = window.WelineRegistrarSelect || {};
+        if (window.WelineRegistrarSelect['site-agent-account']) {
+            return window.WelineRegistrarSelect['site-agent-account'];
+        }
+
+        var id = 'site-agent-account';
+        var wrapper = document.getElementById(id + '_wrapper');
+        var trigger = document.getElementById(id + '_trigger');
+        var dropdown = document.getElementById(id + '_dropdown');
+        var search = document.getElementById(id + '_search');
+        var list = document.getElementById(id + '_list');
+        var tags = document.getElementById(id + '_tags');
+        var hidden = document.getElementById(id + '_value');
+        var multiple = wrapper && String(wrapper.getAttribute('data-multiple') || '').toLowerCase() === 'true';
+        var selected = [];
+        var options = [];
+        var emptyLabel = '';
+        var closeOnOutsideClickBound = false;
+
+        if (!wrapper || !trigger || !dropdown || !search || !list || !tags || !hidden) {
+            return null;
+        }
+
+        emptyLabel = tags.textContent ? tags.textContent.trim() : '';
+
+        function readInitialSelection() {
+            var raw = String(hidden.value || '').trim();
+            if (!raw) {
+                return [];
+            }
+
+            return raw.split(',').map(function (value) {
+                return value.trim();
+            }).filter(Boolean);
+        }
+
+        function normalizeOptions(items) {
+            return (Array.isArray(items) ? items : []).map(function (item) {
+                return {
+                    value: String(item && item.value ? item.value : ''),
+                    label: String(item && item.label ? item.label : (item && item.value ? item.value : '')),
+                    group: String(item && item.group ? item.group : ''),
+                    meta: String(item && item.meta ? item.meta : ''),
+                    raw: item || null
+                };
+            }).filter(function (item) {
+                return item.value !== '';
+            });
+        }
+
+        function isPicked(value) {
+            return selected.indexOf(String(value)) > -1;
+        }
+
+        function syncHidden() {
+            hidden.value = selected.join(',');
+        }
+
+        function getSelected() {
+            return selected.map(function (value) {
+                return options.find(function (option) {
+                    return option.value === value;
+                }) || {
+                    value: value,
+                    label: value,
+                    group: '',
+                    meta: '',
+                    raw: null
+                };
+            });
+        }
+
+        function emitChange(item) {
+            try {
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (error) {
+            }
+
+            if (typeof window.handleQuickBuildRegistrarSelect === 'function') {
+                window.handleQuickBuildRegistrarSelect(item || null, { selected: selected.slice() });
+            }
+        }
+
+        function renderTags() {
+            tags.innerHTML = '';
+            if (selected.length === 0) {
+                var placeholder = document.createElement('span');
+                placeholder.id = id + '_display';
+                placeholder.textContent = emptyLabel;
+                tags.appendChild(placeholder);
+                return;
+            }
+
+            selected.forEach(function (value) {
+                var item = options.find(function (option) {
+                    return option.value === value;
+                });
+                if (!item) {
+                    return;
+                }
+
+                if (!multiple) {
+                    var display = document.createElement('span');
+                    display.id = id + '_display';
+                    display.textContent = item.label;
+                    tags.appendChild(display);
+                    return;
+                }
+
+                var tag = document.createElement('span');
+                tag.className = 'weline-registrar-tag';
+                tag.textContent = item.label;
+
+                var remove = document.createElement('span');
+                remove.className = 'weline-registrar-tag-remove';
+                remove.innerHTML = '&times;';
+                remove.addEventListener('click', function (event) {
+                    event.stopPropagation();
+                    selected = selected.filter(function (picked) {
+                        return picked !== value;
+                    });
+                    syncHidden();
+                    renderTags();
+                    renderList(search.value || '');
+                    emitChange(null);
+                });
+
+                tag.appendChild(remove);
+                tags.appendChild(tag);
+            });
+        }
+
+        function renderList(keyword) {
+            var normalizedKeyword = String(keyword || '').trim().toLowerCase();
+            var filtered = options.filter(function (item) {
+                return !normalizedKeyword
+                    || item.label.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.group.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.meta.toLowerCase().indexOf(normalizedKeyword) > -1;
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="weline-registrar-empty">' + escapeHtml('No matching registrar account') + '</div>';
+                return;
+            }
+
+            var grouped = {};
+            filtered.forEach(function (item) {
+                var groupKey = item.group || 'default';
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = [];
+                }
+                grouped[groupKey].push(item);
+            });
+
+            var html = '';
+            Object.keys(grouped).forEach(function (groupKey) {
+                if (groupKey !== 'default') {
+                    html += '<div class="weline-registrar-group">' + escapeHtml(groupKey) + '</div>';
+                }
+
+                grouped[groupKey].forEach(function (item) {
+                    var meta = item.meta ? '<div class="weline-registrar-item-meta">' + escapeHtml(item.meta) + '</div>' : '';
+                    html += '<div class="weline-registrar-item' + (isPicked(item.value) ? ' active' : '') + '" data-value="' + escapeHtml(item.value) + '"><div>' + escapeHtml(item.label) + '</div>' + meta + '</div>';
+                });
+            });
+
+            list.innerHTML = html;
+            Array.prototype.slice.call(list.querySelectorAll('.weline-registrar-item')).forEach(function (element) {
+                element.addEventListener('click', function () {
+                    var value = this.getAttribute('data-value') || '';
+                    var pickedItem = options.find(function (option) {
+                        return option.value === value;
+                    }) || null;
+                    if (!value) {
+                        return;
+                    }
+
+                    if (multiple) {
+                        selected = isPicked(value)
+                            ? selected.filter(function (picked) { return picked !== value; })
+                            : selected.concat(value);
+                    } else {
+                        selected = [value];
+                        dropdown.style.display = 'none';
+                    }
+
+                    syncHidden();
+                    renderTags();
+                    renderList(search.value || '');
+                    emitChange(pickedItem);
+                });
+            });
+        }
+
+        function setOptions(nextOptions) {
+            options = normalizeOptions(nextOptions);
+            selected = selected.filter(function (value) {
+                return options.some(function (option) {
+                    return option.value === value;
+                });
+            });
+            if (!multiple && selected.length > 1) {
+                selected = selected.slice(0, 1);
+            }
+            syncHidden();
+            renderTags();
+            renderList(search.value || '');
+        }
+
+        function setValue(value, emitEvent) {
+            var values = Array.isArray(value)
+                ? value.map(String)
+                : String(value || '').split(',').map(function (item) {
+                    return item.trim();
+                }).filter(Boolean);
+            selected = multiple ? values : (values[0] ? [values[0]] : []);
+            syncHidden();
+            renderTags();
+            renderList(search.value || '');
+            if (emitEvent !== false) {
+                emitChange(getSelected()[0] || null);
+            }
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            if (dropdown.style.display === 'block') {
+                renderList(search.value || '');
+                search.focus();
+            }
+        });
+
+        search.addEventListener('input', function () {
+            renderList(search.value || '');
+        });
+
+        if (!closeOnOutsideClickBound) {
+            document.addEventListener('click', function (event) {
+                if (!wrapper.contains(event.target)) {
+                    dropdown.style.display = 'none';
+                }
+            });
+            closeOnOutsideClickBound = true;
+        }
+
+        selected = readInitialSelection();
+        window.WelineRegistrarSelect[id] = {
+            setOptions: setOptions,
+            setValue: function (value) {
+                setValue(value, true);
+            },
+            getValue: function () {
+                return String(hidden.value || '');
+            },
+            getValues: function () {
+                return selected.slice();
+            },
+            getSelected: getSelected
+        };
+
+        return window.WelineRegistrarSelect[id];
+    }
+
+    function getRegistrarInstance() {
+        return ensureQuickBuildRegistrarInstance();
+    }
+
+    function hydrateQuickBuildRegistrarOptions() {
+        var registrarInstance = getRegistrarInstance();
+        if (registrarInstance && typeof registrarInstance.setOptions === 'function') {
+            registrarInstance.setOptions(Array.isArray(quickBuildRegistrarOptions) ? quickBuildRegistrarOptions : []);
+        }
+    }
+
+    function getRegistrarAccountId() {
+        var registrarInstance = getRegistrarInstance();
+        var rawValue = registrarInstance && typeof registrarInstance.getValue === 'function'
+            ? registrarInstance.getValue()
+            : (accountValueInput && accountValueInput.value ? accountValueInput.value : '');
+        var parsed = rawValue ? parseInt(rawValue, 10) : 0;
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    function buildRecommendationDetails(payload) {
+        var checkedResults = Array.isArray(payload && payload.checked_results) ? payload.checked_results : [];
+        if (checkedResults.length === 0) {
+            return '';
+        }
+
+        var details = checkedResults.slice(0, 4).map(function (item) {
+            var domain = item && item.domain ? String(item.domain) : '';
+            var status = item && item.available ? messages.recommendationAvailable : messages.recommendationUnavailable;
+            return domain ? (domain + ' ' + status) : '';
+        }).filter(Boolean);
+
+        if (details.length === 0) {
+            return '';
+        }
+
+        return '<span class="text-muted">' + escapeHtml(messages.checkedCandidatesLabel + ': ' + details.join(' | ')) + '</span>';
+    }
+
+    function setRecommendationState(type, message, detailHtml) {
+        if (!recommendationBox) {
+            return;
+        }
+
+        if (!message) {
+            recommendationBox.className = 'alert alert-light border d-none mt-2 py-2 px-3 mb-0';
+            recommendationBox.innerHTML = '';
+            return;
+        }
+
+        var stateClass = 'alert-light';
+        if (type === 'success') {
+            stateClass = 'alert-success';
+        } else if (type === 'warning') {
+            stateClass = 'alert-warning';
+        } else if (type === 'error') {
+            stateClass = 'alert-danger';
+        } else if (type === 'info') {
+            stateClass = 'alert-info';
+        }
+
+        recommendationBox.className = 'alert border mt-2 py-2 px-3 mb-0 ' + stateClass;
+        recommendationBox.innerHTML = '<div>' + escapeHtml(message) + '</div>' + (detailHtml ? '<div class="small mt-1">' + detailHtml + '</div>' : '');
+    }
+
     function syncModeUi() {
         if (!useAiToggle) {
             return;
@@ -574,10 +965,10 @@ body[data-topbar="dark"] .site-workbench-page {
 
         var useAi = !!useAiToggle.checked;
         if (domainHint) {
-            domainHint.textContent = useAi ? messages.aiOptional : messages.manualRequired;
+            domainHint.textContent = useAi ? messages.aiDomainOptional : messages.manualDomainRequired;
         }
         if (accountHint) {
-            accountHint.textContent = useAi ? messages.aiOptional : messages.manualRequired;
+            accountHint.textContent = useAi ? messages.aiRegistrarOptional : messages.manualRegistrarRequired;
         }
         if (modeTip) {
             modeTip.innerHTML = useAi
@@ -590,9 +981,99 @@ body[data-topbar="dark"] .site-workbench-page {
         return {
             description: descInput && descInput.value ? descInput.value.trim() : '',
             domain: domainInput && domainInput.value ? domainInput.value.trim() : '',
-            accountId: accountSelect && accountSelect.value ? parseInt(accountSelect.value, 10) : 0,
+            accountId: getRegistrarAccountId(),
             useAi: useAiToggle ? !!useAiToggle.checked : true
         };
+    }
+
+    function resetRecommendationAfterRegistrarChange() {
+        if (!lastRecommendedDomain) {
+            return;
+        }
+
+        lastRecommendedDomain = '';
+        setRecommendationState('info', messages.recommendRegistrarChanged);
+    }
+
+    function resetRecommendationAfterManualDomainChange() {
+        if (!lastRecommendedDomain || !domainInput) {
+            return;
+        }
+
+        var currentDomain = domainInput.value ? domainInput.value.trim().toLowerCase() : '';
+        if (currentDomain === '' || currentDomain === lastRecommendedDomain) {
+            return;
+        }
+
+        lastRecommendedDomain = '';
+        setRecommendationState('info', messages.recommendDomainChanged);
+    }
+
+    function requestAiDomainRecommendation() {
+        var formState = readFormState();
+
+        if (!formState.accountId) {
+            setRecommendationState('warning', messages.recommendNeedsRegistrar);
+            toast('warning', messages.recommendNeedsRegistrar);
+            return;
+        }
+
+        if (!formState.description && !formState.domain) {
+            setRecommendationState('warning', messages.briefRequired);
+            toast('warning', messages.briefRequired);
+            return;
+        }
+
+        if (!recommendDomainUrl) {
+            toast('error', messages.networkError);
+            return;
+        }
+
+        if (recommendDomainBtn) {
+            recommendDomainBtn.disabled = true;
+        }
+        setRecommendationState('info', messages.recommendLoading);
+
+        var fd = new FormData();
+        fd.append('description', formState.description);
+        fd.append('domain', formState.domain);
+        fd.append('account_id', formState.accountId > 0 ? String(formState.accountId) : '0');
+        if (fakeMode) {
+            fd.append('fake_mode', '1');
+        }
+
+        fetch(recommendDomainUrl, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        }).then(function (data) {
+            if (data && data.success && data.domain) {
+                if (domainInput) {
+                    domainInput.value = String(data.domain);
+                }
+                lastRecommendedDomain = String(data.domain).trim().toLowerCase();
+                setRecommendationState('success', data.message || String(data.domain), buildRecommendationDetails(data));
+                return;
+            }
+
+            lastRecommendedDomain = '';
+            setRecommendationState(
+                'warning',
+                (data && data.message) ? data.message : messages.recommendUnavailable,
+                buildRecommendationDetails(data)
+            );
+        }).catch(function () {
+            lastRecommendedDomain = '';
+            setRecommendationState('error', messages.networkError);
+            toast('error', messages.networkError);
+        }).finally(function () {
+            if (recommendDomainBtn) {
+                recommendDomainBtn.disabled = false;
+            }
+        });
     }
 
     function postCreateWorkspace(providerCode) {
@@ -930,6 +1411,24 @@ body[data-topbar="dark"] .site-workbench-page {
     if (useAiToggle) {
         useAiToggle.addEventListener('change', syncModeUi);
         syncModeUi();
+    }
+
+    hydrateQuickBuildRegistrarOptions();
+
+    window.handleQuickBuildRegistrarSelect = function () {
+        resetRecommendationAfterRegistrarChange();
+    };
+
+    if (accountValueInput) {
+        accountValueInput.addEventListener('change', resetRecommendationAfterRegistrarChange);
+    }
+
+    if (domainInput) {
+        domainInput.addEventListener('input', resetRecommendationAfterManualDomainChange);
+    }
+
+    if (recommendDomainBtn) {
+        recommendDomainBtn.addEventListener('click', requestAiDomainRecommendation);
     }
 
     bindCreateButton(createWorkspaceBtn);
