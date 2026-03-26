@@ -131,4 +131,17 @@ class DemoTableServiceTest extends TestCore
             ],
         ];
     }
+
+    public function testNormalizeModelConfigAllowsRelationDemoModels(): void
+    {
+        $service = new DemoTableService();
+        $method = new ReflectionMethod(DemoTableService::class, 'normalizeModelConfig');
+        $method->setAccessible(true);
+
+        $profileConfig = $method->invoke($service, 'Weline\DataTable\Model\TestUserProfile', []);
+        $addressConfig = $method->invoke($service, 'Weline\DataTable\Model\TestUserAddress', []);
+
+        $this->assertSame('Weline\DataTable\Model\TestUserProfile', $profileConfig['main_model']);
+        $this->assertSame('Weline\DataTable\Model\TestUserAddress', $addressConfig['main_model']);
+    }
 }
