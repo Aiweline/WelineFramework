@@ -1,5 +1,5 @@
 <?php
 
 return [
-    'router' => 'weshop_order',
+    'router' => 'weshop',
 ];
