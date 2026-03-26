@@ -106,9 +106,10 @@ class Pixel extends Model
         }
         
         // 使用索引字段排序，提高查询性能
-        $model->order(self::schema_fields_CREATED_AT . ' DESC');
+        $model->order(self::schema_fields_CREATED_AT, 'DESC');
         
-        return $model->select()->fetchArray();
+        $model->select()->fetch();
+        return $model->getItems();
     }
     
     /**
@@ -216,7 +217,7 @@ class Pixel extends Model
     {
         $result = w_obj(self::class)->reset()
             ->where(self::schema_fields_WEBSITE_ID, $websiteId)
-            ->field(self::schema_fields_EVENT)
+            ->fields(self::schema_fields_EVENT)
             ->group(self::schema_fields_EVENT)
             ->select()
             ->fetchArray();
@@ -248,6 +249,7 @@ class Pixel extends Model
             'total_count' => $totalCount,
             'un_deal_count' => $unDealCount,
             'dealed_count' => $totalCount - $unDealCount,
+            'event_counts' => $events,
             'events' => $events,
             'event_list' => $eventList,
             'event_count' => count($eventList)
@@ -882,6 +884,37 @@ public function getPixelId(): int
     {
         return (int)$this->getData(self::schema_fields_ID);
     }
+
+    public function save_before()
+    {
+        parent::save_before();
+
+        $modelData = $this->getModelData();
+        if (!array_key_exists(self::schema_fields_ID, $modelData) && $this->getId()) {
+            $this->unsetData(self::schema_fields_ID);
+            $this->unsetModelData(self::schema_fields_ID);
+        }
+
+        if ($this->getData(self::schema_fields_MODULE) === null || $this->getData(self::schema_fields_MODULE) === '') {
+            $this->setModule('Weline_Visitor');
+        }
+        if ($this->getData(self::schema_fields_LANG) === null) {
+            $this->setLang('');
+        }
+        if ($this->getData(self::schema_fields_CURRENCY) === null) {
+            $this->setCurrency('');
+        }
+        $value = $this->getData(self::schema_fields_VALUE);
+        if ($value === null || $value === '') {
+            $this->setValue(0);
+        } elseif (is_numeric($value)) {
+            $this->setValue((float)$value);
+        }
+        $browserInfo = $this->getData(self::schema_fields_BROWSER_INFO);
+        if (is_array($browserInfo)) {
+            $this->setBrowserInfo($browserInfo);
+        }
+    }
     public function getUrl(): string
     {
         return (string)$this->getData(self::schema_fields_URL);
@@ -934,9 +967,13 @@ public function getPixelId(): int
     {
         return (int)$this->getData(self::schema_fields_VALUE);
     }
-    public function getBrowserInfo(): array
+    public function getBrowserInfo(): string
     {
-        return (array)$this->getData(self::schema_fields_BROWSER_INFO);
+        $browserInfo = $this->getData(self::schema_fields_BROWSER_INFO);
+        if (is_array($browserInfo)) {
+            return json_encode($browserInfo, JSON_UNESCAPED_UNICODE) ?: '';
+        }
+        return (string)$browserInfo;
     }
     public function getCronDeal(): int
     {
@@ -994,12 +1031,15 @@ public function getPixelId(): int
     {
         return $this->setData(self::schema_fields_CURRENCY, $currency);
     }
-    public function setValue(int $value): static
+    public function setValue(int|float|string $value): static
     {
-        return $this->setData(self::schema_fields_VALUE, $value);
+        return $this->setData(self::schema_fields_VALUE, (int)round((float)$value));
     }
-    public function setBrowserInfo(array $browser_info): static
+    public function setBrowserInfo(array|string $browser_info): static
     {
+        if (is_array($browser_info)) {
+            $browser_info = json_encode($browser_info, JSON_UNESCAPED_UNICODE) ?: '';
+        }
         return $this->setData(self::schema_fields_BROWSER_INFO, $browser_info);
     }
     public function setCronDeal(int $cron_deal): static
