@@ -79,3 +79,5 @@ tests/e2e/*-debug.png
 
 # Codex 任务过程产物
 dev/ai/codex/tasks/**/artifacts/*
+dev/ai/codex/tasks/
+memory/
