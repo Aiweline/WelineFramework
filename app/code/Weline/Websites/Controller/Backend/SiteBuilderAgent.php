@@ -725,9 +725,23 @@ class SiteBuilderAgent extends BackendController
 
         $prompt = \implode("\n", $promptLines);
         $params = ['account_id' => $accountId];
+        $hasAiChunkStream = false;
 
-        $mapEvent = static function (string $eventType, array $data) use ($sse): void {
-            $message = $data['message'] ?? $data['content'] ?? null;
+        $mapEvent = static function (string $eventType, array $data) use ($sse, &$hasAiChunkStream): void {
+            if (($eventType === 'ai_response' || $eventType === 'chunk')
+                && isset($data['content'])
+                && \is_string($data['content'])
+                && $data['content'] !== '') {
+                if ($eventType === 'ai_response') {
+                    $hasAiChunkStream = true;
+                    $sse->sendEvent('chunk', ['content' => (string)$data['content']]);
+                } elseif (!$hasAiChunkStream) {
+                    $sse->sendEvent('chunk', ['content' => (string)$data['content']]);
+                }
+                return;
+            }
+
+            $message = $data['message'] ?? null;
             if (\is_string($message) && $message !== '') {
                 $sse->sendEvent('progress', ['message' => $message]);
             }
@@ -744,8 +758,8 @@ class SiteBuilderAgent extends BackendController
             $aiService = ObjectManager::getInstance(\Weline\Ai\Service\AiService::class);
             $result = $aiService->executeAgent('website_builder', $prompt, null, $params, $mapEvent);
 
-            if ($result->success && $result->content !== '') {
-                $sse->sendEvent('progress', ['message' => $result->content]);
+            if ($result->success && $result->content !== '' && !$hasAiChunkStream) {
+                $sse->sendEvent('chunk', ['content' => $result->content]);
             }
 
             $sse->complete([
