@@ -4,16 +4,16 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\test\Unit\Observer;
 
-use Weline\Framework\UnitTest\TestCore;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\Auth\AuthenticableInterface;
+use Weline\Framework\UnitTest\TestCore;
+use Weline\Visitor\Model\PixelEncryptionToken;
 use Weline\Visitor\Observer\RegisterPixel;
 use Weline\Visitor\Service\PixelEncryptionService;
-use Weline\Framework\Http\Request;
 
-/**
- * 注册像素观察者单元测试
- */
 class RegisterPixelTest extends TestCore
 {
     private RegisterPixel $observer;
@@ -26,146 +26,125 @@ class RegisterPixelTest extends TestCore
         $this->encryptionService = ObjectManager::getInstance(PixelEncryptionService::class);
     }
 
-    /**
-     * 测试：注册事件触发像素发送（有token）
-     */
-    public function testRegisterEventTriggersPixelWithToken()
+    public function testRegisterEventTriggersPixelWithToken(): void
     {
-        // 创建测试token
-        $version = 'test-register-' . time();
+        $version = 'test-register-' . uniqid('', true);
+
         try {
-            $token = $this->encryptionService->generateTokenForVersion($version);
-        } catch (\Exception $e) {
-            $this->markTestSkipped('无法创建测试token: ' . $e->getMessage());
+            $this->encryptionService->generateTokenForVersion($version);
+        } catch (\Throwable $e) {
+            $this->markTestSkipped('Unable to create token: ' . $e->getMessage());
             return;
         }
 
-        // 模拟用户对象（实现 AuthenticableInterface）
-        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
-        $user->method('getAuthIdentifier')->willReturn(789);
-
-        // 模拟请求对象
-        $request = $this->createMock(Request::class);
-        $request->method('getUriString')->willReturn('https://example.com/register');
-        $request->method('getReferer')->willReturn('https://example.com/');
-        $request->method('getServer')->willReturn('Mozilla/5.0 Test');
-        $request->method('clientIP')->willReturn('192.168.1.2');
-
-        // 设置SERVER变量
         $_SERVER['WELINE_USER_LANG'] = 'zh-CN';
         $_SERVER['WELINE_USER_CURRENCY'] = 'RMB';
         $_SERVER['WELINE_WEBSITE_ID'] = '1';
 
-        // 创建事件
-        $eventData = new \Weline\Framework\DataObject();
-        $eventData->setData('user', $user);
-        $eventData->setData('request', $request);
+        $event = $this->createEvent($this->createUser(789), $this->createRequest(
+            'https://example.com/register',
+            'https://example.com/',
+            'Mozilla/5.0 Test',
+            '192.168.1.2'
+        ));
 
-        $event = new Event();
-        $event->setData($eventData);
+        $this->observer->execute($event);
+        $this->assertTrue(true);
 
-        // 执行观察者（应该不抛出异常）
-        try {
-            $this->observer->execute($event);
-            $this->assertTrue(true, '注册事件应该成功触发像素发送');
-        } catch (\Exception $e) {
-            $this->fail('注册事件触发像素发送不应该抛出异常: ' . $e->getMessage());
-        }
-
-        // 清理
-        $token->setIsDeleted(1)->save();
+        $this->cleanupToken($version);
         unset($_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY'], $_SERVER['WELINE_WEBSITE_ID']);
     }
 
-    /**
-     * 测试：注册事件无token时静默处理
-     */
-    public function testRegisterEventWithoutToken()
+    public function testRegisterEventWithoutToken(): void
     {
-        // 确保没有token
         $currentToken = $this->encryptionService->getCurrentVersionToken();
         if ($currentToken) {
-            $this->markTestSkipped('当前环境存在token，无法测试无token场景');
+            $this->markTestSkipped('Current environment already has an active token.');
             return;
         }
 
-        // 模拟用户对象（实现 AuthenticableInterface）
-        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
-        $user->method('getAuthIdentifier')->willReturn(789);
+        $event = $this->createEvent($this->createUser(789), $this->createRequest(
+            'https://example.com/register',
+            '',
+            '',
+            '192.168.1.2'
+        ));
 
-        // 模拟请求对象
-        $request = $this->createMock(Request::class);
-        $request->method('getUriString')->willReturn('https://example.com/register');
-        $request->method('clientIP')->willReturn('192.168.1.2');
-
-        // 创建事件
-        $eventData = new \Weline\Framework\DataObject();
-        $eventData->setData('user', $user);
-        $eventData->setData('request', $request);
-
-        $event = new Event();
-        $event->setData($eventData);
-
-        // 执行观察者（应该静默返回，不抛出异常）
-        try {
-            $this->observer->execute($event);
-            $this->assertTrue(true, '无token时应该静默处理');
-        } catch (\Exception $e) {
-            $this->fail('无token时不应该抛出异常: ' . $e->getMessage());
-        }
+        $this->observer->execute($event);
+        $this->assertTrue(true);
     }
 
-    /**
-     * 测试：注册事件加密数据正确发送
-     */
-    public function testRegisterEventEncryptedDataSent()
+    public function testRegisterEventEncryptedDataSent(): void
     {
-        // 创建测试token
-        $version = 'test-register-encrypt-' . time();
+        $version = 'test-register-encrypt-' . uniqid('', true);
+
         try {
-            $token = $this->encryptionService->generateTokenForVersion($version);
-        } catch (\Exception $e) {
-            $this->markTestSkipped('无法创建测试token: ' . $e->getMessage());
+            $this->encryptionService->generateTokenForVersion($version);
+        } catch (\Throwable $e) {
+            $this->markTestSkipped('Unable to create token: ' . $e->getMessage());
             return;
         }
 
-        // 模拟用户对象（实现 AuthenticableInterface）
-        $user = $this->createMock(\Weline\Framework\Session\Auth\AuthenticableInterface::class);
-        $user->method('getAuthIdentifier')->willReturn(999);
-
-        // 模拟请求对象
-        $request = $this->createMock(Request::class);
-        $request->method('getUriString')->willReturn('https://example.com/register');
-        $request->method('getReferer')->willReturn('https://example.com/signup');
-        $request->method('getServer')->willReturn('Mozilla/5.0 Firefox');
-        $request->method('clientIP')->willReturn('203.0.113.2');
-
-        // 设置SERVER变量
         $_SERVER['WELINE_USER_LANG'] = 'en-US';
         $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
         $_SERVER['WELINE_WEBSITE_ID'] = '3';
 
-        // 创建事件
-        $eventData = new \Weline\Framework\DataObject();
-        $eventData->setData('user', $user);
-        $eventData->setData('request', $request);
+        $event = $this->createEvent($this->createUser(999), $this->createRequest(
+            'https://example.com/register',
+            'https://example.com/signup',
+            'Mozilla/5.0 Firefox',
+            '203.0.113.2'
+        ));
 
-        $event = new Event();
-        $event->setData($eventData);
+        $this->observer->execute($event);
+        $this->assertTrue(true);
 
-        // 执行观察者
-        try {
-            $this->observer->execute($event);
-            // 由于是异步发送，我们无法直接验证数据是否发送成功
-            // 但可以验证没有抛出异常
-            $this->assertTrue(true, '加密数据应该成功发送（异步）');
-        } catch (\Exception $e) {
-            $this->fail('加密数据发送不应该抛出异常: ' . $e->getMessage());
-        }
-
-        // 清理
-        $token->setIsDeleted(1)->save();
+        $this->cleanupToken($version);
         unset($_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY'], $_SERVER['WELINE_WEBSITE_ID']);
     }
-}
 
+    private function createEvent(?AuthenticableInterface $user, ?Request $request): Event
+    {
+        $data = new DataObject();
+        if ($user !== null) {
+            $data->setData('user', $user);
+        }
+        if ($request !== null) {
+            $data->setData('request', $request);
+        }
+
+        return new Event(['data' => $data]);
+    }
+
+    private function createUser(int $id): AuthenticableInterface
+    {
+        $user = $this->createMock(AuthenticableInterface::class);
+        $user->method('getAuthIdentifier')->willReturn($id);
+
+        return $user;
+    }
+
+    private function createRequest(string $uri, string $referer, string $userAgent, string $ip): Request
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('getUri')->willReturn($uri);
+        $request->method('getReferer')->willReturn($referer);
+        $request->method('clientIP')->willReturn($ip);
+        $request->method('getServer')->willReturnCallback(
+            static fn(string $key = '') => $key === 'HTTP_USER_AGENT' ? $userAgent : ''
+        );
+
+        return $request;
+    }
+
+    private function cleanupToken(string $version): void
+    {
+        try {
+            $token = ObjectManager::make(PixelEncryptionToken::class)->findByVersion($version);
+            if ($token && $token->getTokenId()) {
+                $token->delete();
+            }
+        } catch (\Throwable) {
+        }
+    }
+}
