@@ -11,8 +11,6 @@ use Weline\Framework\Manager\ObjectManager;
 
 class Cancel extends BaseController
 {
-    private const LOGIN_ROUTE = 'customer/account/login';
-
     public function __construct(
         private ?CustomerContextInterface $customerContext = null,
         private ?OrderService $orderService = null
@@ -31,7 +29,7 @@ class Cancel extends BaseController
         $customerId = (int) ($this->getCustomerContext()->getUserId() ?? 0);
         if ($customerId <= 0) {
             $this->getMessageManager()->addError(__('Please log in to continue.'));
-            $this->redirect(self::LOGIN_ROUTE);
+            $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
 

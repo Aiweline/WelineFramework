@@ -21,4 +21,12 @@ class DefaultThemeOrderPageTest extends TestCase
         $this->assertStringContainsString("WeShop_Order::templates/Frontend/Order/OrderList/index.phtml", $orderList);
         $this->assertStringContainsString("WeShop_Order::templates/Frontend/Order/View/index.phtml", $view);
     }
+
+    public function testOrderListTemplateLinksBackToCanonicalAccountRoute(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../view/templates/Frontend/Order/OrderList/index.phtml');
+        $this->assertIsString($template);
+        $this->assertStringContainsString("getUrl('weshop/customer/account/index')", $template);
+        $this->assertStringNotContainsString("getUrl('customer/account')", $template);
+    }
 }

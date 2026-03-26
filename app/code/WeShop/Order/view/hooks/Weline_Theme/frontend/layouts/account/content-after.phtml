@@ -142,7 +142,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
                         </a>
                         
                         <?php if ($canRetryPayment): ?>
-                            <a href="<?= $this->getUrl('weshop/order/retryPayment', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-retry-payment-button">
+                            <a href="<?= $this->getUrl('weshop/order/retry-payment', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-retry-payment-button">
                                 <span class="material-symbols-outlined" style="font-size: 1rem;">payment</span>
                                 <?= __('继续支付') ?>
                             </a>
@@ -157,7 +157,7 @@ $unpaidOrders = $orderService->getUnpaidOrders($customer->getId());
                                 </button>
                             </form>
                         <?php elseif ($requireReturn): ?>
-                            <a href="<?= $this->getUrl('weshop/rma/create', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-return-button" title="<?= htmlspecialchars($cancelReason ?? '') ?>">
+                            <a href="<?= $this->getUrl('rma/create', ['order_id' => $orderId]) ?>" class="weshop-action-button weshop-return-button" title="<?= htmlspecialchars($cancelReason ?? '') ?>">
                                 <span class="material-symbols-outlined" style="font-size: 1rem;">assignment_return</span>
                                 <?= __('申请退货') ?>
                             </a>
