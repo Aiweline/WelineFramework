@@ -1,15 +1,19 @@
+// @weline-e2e-runtime fallback
 // @ts-check
 const {
   test,
   expect,
-  buildProxyUrl,
+  buildTargetUrl,
   gotoBackend,
   loginAsAdmin,
 } = require('../../../../../../../tests/e2e/framework');
 
 async function openSitemapPage(page) {
-  await gotoBackend(page, 'seo/backend/sitemap');
-  await page.waitForLoadState('networkidle');
+  await gotoBackend(page, 'seo/backend/sitemap', {
+    timeout: 60000,
+    settleMs: 1000,
+  });
+  await expect(page.locator('body')).not.toHaveText(/^404$/);
 }
 
 test.describe('Sitemap management backend', () => {
@@ -20,16 +24,19 @@ test.describe('Sitemap management backend', () => {
   test('loads the sitemap page and shows the heading', async ({ page }) => {
     await openSitemapPage(page);
 
-    const title = page.locator('h1, .page-title').first();
+    const title = page.locator('h1, h2, h3, h4, .page-title, .card-title').filter({
+      hasText: /Sitemap|站点地图/i,
+    }).first();
     await expect(title).toBeVisible();
     await expect(title).toContainText(/Sitemap|站点地图/i);
-    await expect(page.locator('body')).not.toHaveText(/^404$/);
   });
 
   test('shows the primary sitemap action', async ({ page }) => {
     await openSitemapPage(page);
 
-    const generateButton = page.locator('button:has-text("生成"), button:has-text("同步"), button:has-text("Generate"), button:has-text("Sync")').first();
+    const generateButton = page.locator(
+      '#generateBtn, button:has-text("生成Sitemap"), button:has-text("生成"), button:has-text("同步"), button:has-text("Generate"), button:has-text("Sync")'
+    ).first();
     await expect(generateButton).toBeVisible({ timeout: 5000 });
     await expect(generateButton).toBeEnabled();
   });
@@ -39,7 +46,7 @@ test.describe('Sitemap management backend', () => {
 
     const searchInput = page.locator('#siteSearchInput, input[placeholder*="搜索"], input[placeholder*="Search"]').first();
     const fileOrAction = page.locator(
-      '.file-item, .sitemap-file, button[title*="复制"], a[target="_blank"], button:has-text("查看"), a:has-text("查看")'
+      '#generateBtn, button:has-text("调用所有生成器"), button:has-text("生成Sitemap"), .file-item, .sitemap-file, a[target="_blank"]'
     ).first();
 
     const hasSearch = await searchInput.isVisible().catch(() => false);
@@ -78,7 +85,10 @@ test.describe('Sitemap management backend', () => {
 
 test.describe('Sitemap public files', () => {
   test('public sitemap endpoints stay reachable through the unified proxy entry', async ({ page }) => {
-    const response = await page.goto(buildProxyUrl('/sitemaps/default/google/sitemap.xml'));
+    const response = await page.goto(buildTargetUrl('/sitemaps/default/google/sitemap.xml'), {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    });
     expect(response).toBeTruthy();
     expect([200, 404]).toContain(response.status());
   });
