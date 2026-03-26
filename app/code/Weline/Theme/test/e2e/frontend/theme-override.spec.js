@@ -1,3 +1,5 @@
+// @weline-e2e-runtime fallback
+// @weline-e2e-transport direct
 // @ts-check
 const {
   test,
