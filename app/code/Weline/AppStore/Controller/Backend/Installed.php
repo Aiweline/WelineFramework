@@ -138,9 +138,13 @@ class Installed extends BackendController
             }
 
             $token = $accountService->getApiToken();
+            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+            if (!is_string($platformUrl) || $platformUrl === '') {
+                $platformUrl = 'https://app.aiweline.com';
+            }
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                Env::get('appstore.platform_url', 'https://app.aiweline.com') . '/api/v1/platform/module/check-update',
+                $platformUrl . '/api/v1/platform/module/check-update',
                 [
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => ['modules' => $moduleList],
