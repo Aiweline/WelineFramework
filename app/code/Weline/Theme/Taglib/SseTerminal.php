@@ -90,6 +90,7 @@ class SseTerminal implements TaglibInterface
             $t_dns_response = addslashes(__('【DNS 供应商返回】'));
 
             // 解析属性
+            $t_url_not_configured = 'URL not configured';
             $code = \Weline\Taglib\Taglib::attributes($attributes);
             // path 优先：若提供 path 则用 getBackendUrl 解析为完整 URL
             $code .= "\nif (!empty(\$Taglib__path ?? '')) { \$Taglib__url = (string)\$this->getBackendUrl(\$Taglib__path); }";
@@ -157,7 +158,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-content { min-height: 100%; }';
             $html[] = '.weline-sse-terminal-line { padding: 2px 0; line-height: 1.5; word-break: break-all; display: flex; gap: 8px; }';
             $html[] = '.weline-sse-terminal-time { color: var(--backend-color-text-muted, #6c7086); flex-shrink: 0; font-size: 11px; }';
-            $html[] = '.weline-sse-terminal-text { flex: 1; }';
+            $html[] = '.weline-sse-terminal-text { flex: 1; white-space: pre-wrap; word-break: break-word; }';
             $html[] = '.weline-sse-terminal-line.info { color: var(--backend-color-text-primary, #cdd6f4); }';
             $html[] = '.weline-sse-terminal-line.success { color: var(--backend-color-success, #a6e3a1); }';
             $html[] = '.weline-sse-terminal-line.warning { color: var(--backend-color-warning, #f9e2af); }';
@@ -187,6 +188,7 @@ class SseTerminal implements TaglibInterface
             $html[] = 'var showTimestamp = ' . ($showTimestamp ? 'true' : 'false') . ';';
             $html[] = 'var allowHtml = ' . ($allowHtml ? 'true' : 'false') . ';';
             $html[] = 'var maxStreamChars = ' . $maxStreamChars . ';';
+            $html[] = 'var urlNotConfiguredText = ' . json_encode($t_url_not_configured, JSON_UNESCAPED_UNICODE) . ';';
             $tStreamTrunc = addslashes(__('【输出过长，已省略前部】'));
             $html[] = 'var streamTruncMsg = ' . json_encode($tStreamTrunc . "\n", JSON_UNESCAPED_UNICODE) . ';';
 
@@ -233,26 +235,37 @@ var streamingLine = null;
 function log(text, type) {
     type = type || 'info';
     streamingLine = null;
-    var line = document.createElement('div');
-    line.className = 'weline-sse-terminal-line ' + type;
-    
-    if (showTimestamp) {
-        var time = document.createElement('span');
-        time.className = 'weline-sse-terminal-time';
-        time.textContent = '[' + formatTime() + ']';
-        line.appendChild(time);
+
+    var raw = (text === undefined || text === null) ? '' : text;
+    var s = typeof raw === 'string' ? raw : String(raw);
+    // 兼容不同换行符，确保 '\\n' 能正确分行展示
+    s = s.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+
+    // 一条日志消息里如果包含换行符，则按行拆成多个 DOM 行，保证“完整逐行显示”
+    var lines = s.split('\\n');
+    for (var i = 0; i < lines.length; i++) {
+        var lineText = lines[i];
+        var line = document.createElement('div');
+        line.className = 'weline-sse-terminal-line ' + type;
+        
+        if (showTimestamp) {
+            var time = document.createElement('span');
+            time.className = 'weline-sse-terminal-time';
+            time.textContent = '[' + formatTime() + ']';
+            line.appendChild(time);
+        }
+        
+        var textEl = document.createElement('span');
+        textEl.className = 'weline-sse-terminal-text';
+        if (allowHtml && typeof lineText === 'string' && lineText.indexOf('<') >= 0) {
+            textEl.innerHTML = lineText;
+        } else {
+            textEl.textContent = lineText;
+        }
+        line.appendChild(textEl);
+        
+        content.appendChild(line);
     }
-    
-    var textEl = document.createElement('span');
-    textEl.className = 'weline-sse-terminal-text';
-    if (allowHtml && typeof text === 'string' && text.indexOf('<') >= 0) {
-        textEl.innerHTML = text;
-    } else {
-        textEl.textContent = text;
-    }
-    line.appendChild(textEl);
-    
-    content.appendChild(line);
     
     if (autoScroll) {
         body.scrollTop = body.scrollHeight;
@@ -366,13 +379,13 @@ function dispatchSseEvent(eventName, data) {
 function start(url, options) {
     if (isRunning) return;
     
-    url = url || currentUrl;
     if (!url) {
-        log('$t_error' + ': URL 未设置', 'error');
+        log('$t_error' + ': ' + urlNotConfiguredText, 'error');
         return;
     }
     
     options = options || {};
+    */ options = options || {};
     currentUrl = url;
     isRunning = true;
     
