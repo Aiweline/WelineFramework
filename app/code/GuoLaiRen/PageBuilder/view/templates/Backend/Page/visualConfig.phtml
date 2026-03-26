@@ -322,28 +322,31 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="header.bg_color"
-                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>">
+                                   value="<?= $styleSettings['header.bg_color'] ?? '#ffffff' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="header.text_color"
-                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>">
+                                   value="<?= $styleSettings['header.text_color'] ?? '#000000' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="header.link_color"
-                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>">
+                                   value="<?= $styleSettings['header.link_color'] ?? '#0066cc' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 字体大小 -->
@@ -368,28 +371,31 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="content.bg_color"
-                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>">
+                                   value="<?= $styleSettings['content.bg_color'] ?? '#ffffff' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="content.text_color"
-                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>">
+                                   value="<?= $styleSettings['content.text_color'] ?? '#333333' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 标题颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('标题颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="content.heading_color"
-                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>">
+                                   value="<?= $styleSettings['content.heading_color'] ?? '#000000' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- H1大小 -->
@@ -425,10 +431,11 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="content.link_color"
-                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>">
+                                   value="<?= $styleSettings['content.link_color'] ?? '#0066cc' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 字体家族 -->
@@ -454,28 +461,31 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 背景颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('背景颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="footer.bg_color"
-                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>">
+                                   value="<?= $styleSettings['footer.bg_color'] ?? '#343a40' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 文字颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('文字颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="footer.text_color"
-                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>">
+                                   value="<?= $styleSettings['footer.text_color'] ?? '#ffffff' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 标题颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('标题颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="footer.heading_color"
-                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>">
+                                   value="<?= $styleSettings['footer.heading_color'] ?? '#ffffff' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 标题大小 -->
@@ -491,19 +501,21 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
                         <!-- 链接颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="footer.link_color"
-                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>">
+                                   value="<?= $styleSettings['footer.link_color'] ?? '#adb5bd' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 链接悬停颜色 -->
                         <div class="mb-3">
                             <label class="form-label"><?= __('链接悬停颜色') ?></label>
-                            <input type="color" 
-                                   class="form-control form-control-color auto-save-field" 
+                            <input type="text"
+                                   class="form-control auto-save-field"
                                    data-config-key="footer.link_hover_color"
-                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>">
+                                   value="<?= $styleSettings['footer.link_hover_color'] ?? '#ffffff' ?>"
+                                   placeholder="rgba(255,255,255,0.05)">
                         </div>
                         
                         <!-- 字体大小 -->
