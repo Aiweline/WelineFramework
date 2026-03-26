@@ -1,15 +1,37 @@
-"Please log in to continue.","请先登录后继续。"
+﻿"Please log in to continue.","Please log in to continue."
 "Product ID is required.","缺少商品 ID。"
-"Added to compare.","已加入对比。"
+"Added to compare.",已加入对比。
+"Compare Products",商品对比
 "Compare item ID is required.","缺少对比项 ID。"
-"Compare item could not be removed.","无法移除该对比项。"
-"Removed from compare.","已从对比中移除。"
-"In stock","有货"
-"Out of stock","缺货"
-"Side-by-Side Decisions","并排决策"
-"Compare Products","商品对比"
-"Open Compare","打开对比页"
-"Products In Compare","对比中的商品"
-"Keep your shortlisted products together so price, availability, and key details stay easy to compare before checkout.","将候选商品集中在一起，方便在下单前快速比较价格、库存和关键差异。"
-"Add products from category and product pages to build a side-by-side shortlist inside your account center.","从类目页和商品详情页加入商品，在账户中心形成并排对比清单。"
-"Add to Compare","加入对比"
+"Compare item could not be removed.",无法移除该对比项。
+"Removed from compare.",已从对比中移除。
+"In stock",有货
+"Out of stock",缺货
+"Side-by-Side Decisions",并排决策
+"Open Compare",打开对比页
+"Products In Compare",对比中的商品
+"Keep your shortlisted products together so price, availability, and key details stay easy to compare before checkout.",将候选商品集中在一起，方便在下单前快速比较价格、库存和关键差异。
+"Add products from category and product pages to build a side-by-side shortlist inside your account center.",从类目页和商品详情页加入商品，在账户中心形成并排对比清单。
+"Add to Compare",加入对比
+"Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth.","Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth."
+"Continue Shopping","Continue Shopping"
+"Back to Account","Back to Account"
+"Compared Items","Compared Items"
+"Products currently lined up for side-by-side review.","Products currently lined up for side-by-side review."
+"Recommended Next","Recommended Next"
+"Fresh picks chosen around what you are comparing now.","Fresh picks chosen around what you are comparing now."
+"Compare Board","Compare Board"
+"Products In Focus","Products In Focus"
+"SKU: %1","SKU: %1"
+"Add to Cart","Add to Cart"
+"View Product","View Product"
+Remove,Remove
+Attribute,Attribute
+Price,Price
+SKU,SKU
+Availability,Availability
+Brand,Brand
+"No compared products yet","No compared products yet"
+"Add products from category or product detail pages and they will appear here for a clean side-by-side review.","Add products from category or product detail pages and they will appear here for a clean side-by-side review."
+"Guess You May Like","Guess You May Like"
+"As you compare more products, related recommendations will appear here automatically.","As you compare more products, related recommendations will appear here automatically."
