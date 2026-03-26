@@ -340,7 +340,7 @@ class LocalTagTest extends TestCase
         try {
             // 创建多个测试规则
             for ($i = 1; $i <= 3; $i++) {
-                $rule = ObjectManager::getInstance(Rule::class);
+                $rule = ObjectManager::make(Rule::class);
                 $rule->setData([
                     Rule::schema_fields_NAME => "List Test Rule {$i}",
                     Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
