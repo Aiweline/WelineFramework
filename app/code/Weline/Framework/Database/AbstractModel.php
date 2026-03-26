@@ -1204,6 +1204,13 @@ abstract class AbstractModel extends DataObject
         return $this->setData($this->_primary_key, $primary_id);
     }
 
+    public function delete(): static
+    {
+        $this->__call('delete', []);
+        $this->fetch();
+        return $this;
+    }
+
     public function getCreateTime()
     {
         return $this->getData(self::schema_fields_CREATE_TIME);
@@ -1731,7 +1738,9 @@ PAGINATION;
         // 🔧 修复：如果 unique_data 中没有主键，但数据中包含主键，也应该检查主键是否存在
         // 避免主键冲突（例如：只检查 code 字段，但 eav_entity_id 已存在的情况）
         // 注意：不能使用 reset()，因为 Query::reset() 会把 table 清空，导致“没有指定table表名！”错误
-        if (empty($check_result) && $this->_primary_key && $this->getData($this->_primary_key)) {
+        $hasCompleteCompositeIdentity = !empty($this->_unit_primary_keys)
+            && count(array_intersect($this->_unit_primary_keys, array_keys($this->unique_data))) === count($this->_unit_primary_keys);
+        if (empty($check_result) && !$hasCompleteCompositeIdentity && $this->_primary_key && $this->getData($this->_primary_key)) {
             $primaryKeyValue = $this->getData($this->_primary_key);
             // 使用 getQuery(false) + clearQuery() 清理查询条件，但保留表名和连接信息
             $primaryKeyCheck = $this->getQuery(false)
