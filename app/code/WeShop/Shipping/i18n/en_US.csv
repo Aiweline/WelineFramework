@@ -7,11 +7,15 @@
 "Checkout shipping extension slot","Checkout shipping extension slot"
 "Inject extra shipping UI blocks into checkout shipping section without overriding theme pages.","Inject extra shipping UI blocks into checkout shipping section without overriding theme pages."
 DHL,DHL
+"No DHL shipping rate is currently available.","No DHL shipping rate is currently available."
 DHL标准配送,DHL标准配送
 DHL运单创建失败,DHL运单创建失败
+"DHL shipment creation failed.","DHL shipment creation failed."
 FedEx,FedEx
+"No FedEx shipping rate is currently available.","No FedEx shipping rate is currently available."
 获取FedEx访问令牌失败,获取FedEx访问令牌失败
 FedEx标准配送,FedEx标准配送
+"FedEx shipment creation failed.","FedEx shipment creation failed."
 "Unsupported shipping method: %{1}","Unsupported shipping method: %{1}"
 "Flat Rate","Flat Rate"
 "Standard delivery with a fixed shipping fee.","Standard delivery with a fixed shipping fee."

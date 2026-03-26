@@ -9,6 +9,12 @@ namespace WeShop\Shipping\Interface;
  */
 interface ShippingProviderInterface
 {
+    public function getName(): string;
+
+    public function getCode(): string;
+
+    public function isEnabled(): bool;
+
     /**
      * 计算运费
      * 

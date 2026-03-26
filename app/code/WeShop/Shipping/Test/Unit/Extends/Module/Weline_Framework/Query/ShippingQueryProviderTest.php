@@ -35,5 +35,22 @@ class ShippingQueryProviderTest extends TestCase
 
         $this->assertSame($expected, $result);
     }
-}
 
+    public function testExecuteCalculatesShippingThroughService(): void
+    {
+        $shippingService = $this->createMock(ShippingService::class);
+        $shippingService->expects($this->once())
+            ->method('calculateShipping')
+            ->with(['subtotal' => 99.5], 'flat_rate')
+            ->willReturn(5.0);
+
+        $provider = new ShippingQueryProvider($shippingService);
+
+        $result = $provider->execute('calculateShipping', [
+            'shipping_method' => 'flat_rate',
+            'shipping_data' => ['subtotal' => 99.5],
+        ]);
+
+        $this->assertSame(5.0, $result);
+    }
+}
