@@ -62,6 +62,12 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('data-weshop-shipping-method-host', $template);
         $this->assertStringContainsString('data-weshop-payment-method-host', $template);
         $this->assertStringContainsString('data-weshop-payment-detail-host', $template);
+        $this->assertStringContainsString('data-weshop-summary-host', $template);
+        $this->assertStringContainsString('data-weshop-summary-subtotal', $template);
+        $this->assertStringContainsString('data-weshop-summary-shipping', $template);
+        $this->assertStringContainsString('data-weshop-summary-tax', $template);
+        $this->assertStringContainsString('data-weshop-summary-grand-total', $template);
+        $this->assertStringContainsString('data.cart_summary', $template);
         $this->assertStringContainsString('Retry Payment', $template);
         $this->assertStringContainsString('WeShop_Checkout::summary::rows_before', $template);
         $this->assertStringContainsString('WeShop_Checkout::summary::shipping_before', $template);
