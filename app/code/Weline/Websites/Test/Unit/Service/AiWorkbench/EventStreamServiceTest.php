@@ -7,7 +7,7 @@ namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\AiWorkbench\EventStreamService;
 
-class EventStreamServiceTest extends AbstractAiWorkbenchPersistenceTest
+class EventStreamServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     private EventStreamService $eventStreamService;
 
