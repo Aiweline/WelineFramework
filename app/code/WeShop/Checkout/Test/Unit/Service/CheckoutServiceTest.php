@@ -5,12 +5,112 @@ declare(strict_types=1);
 namespace WeShop\Checkout\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Address\Service\AddressService;
 use WeShop\Checkout\Service\CheckoutService;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 
 class CheckoutServiceTest extends TestCase
 {
+    public function testCreateOrderFromCartBuildsSummaryFromShippingAndTaxQueries(): void
+    {
+        $order = new class extends Order {
+            public function getId(mixed $default = 0)
+            {
+                return 321;
+            }
+
+            public function getIncrementId(): string
+            {
+                return 'WS202603250321';
+            }
+        };
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('getOrder')
+            ->with(321)
+            ->willReturn($order);
+
+        $queries = [];
+        $service = new class($orderService, $queries) extends CheckoutService {
+            public function __construct(
+                OrderService $orderService,
+                private array &$queries
+            ) {
+                parent::__construct($orderService);
+            }
+
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                $this->queries[] = [$provider, $operation, $params];
+
+                return match ($provider . ':' . $operation) {
+                    'cart:getCartItems' => [
+                        [
+                            'product_id' => 10,
+                            'quantity' => 2,
+                            'price' => 25.0,
+                            'product' => ['sku' => 'SKU-10', 'name' => 'Travel Bag', 'weight' => 1.2],
+                        ],
+                    ],
+                    'cart:calculateTotals' => [
+                        'subtotal' => 50.0,
+                        'discount' => 5.0,
+                    ],
+                    'shipping:calculateShipping' => 12.5,
+                    'tax:calculateTax' => 5.63,
+                    'order:createOrder' => [
+                        'order_id' => 321,
+                    ],
+                    'order:addOrderItems' => [
+                        ['item_id' => 1],
+                    ],
+                    'cart:clearCart' => true,
+                    default => null,
+                };
+            }
+        };
+
+        $createdOrder = $service->createOrderFromCart(8, [
+            'customer_id' => 8,
+            'shipping_address' => ['country_id' => 'US', 'region' => 'CA'],
+            'shipping_method' => 'flat_rate',
+            'currency' => 'USD',
+        ]);
+
+        $summary = $createdOrder->getData('weshop_checkout_summary');
+
+        $this->assertSame($order, $createdOrder);
+        $this->assertIsArray($summary);
+        $this->assertSame(50.0, $summary['subtotal']);
+        $this->assertSame(12.5, $summary['shipping']);
+        $this->assertSame(5.0, $summary['discount']);
+        $this->assertSame(5.63, $summary['tax']);
+        $this->assertSame(63.13, $summary['grand_total']);
+
+        $shippingCall = $queries[2];
+        $this->assertSame('shipping', $shippingCall[0]);
+        $this->assertSame('calculateShipping', $shippingCall[1]);
+        $this->assertSame('flat_rate', $shippingCall[2]['shipping_method']);
+        $this->assertSame('US', $shippingCall[2]['shipping_data']['address']['country_id']);
+
+        $taxCall = $queries[3];
+        $this->assertSame('tax', $taxCall[0]);
+        $this->assertSame('calculateTax', $taxCall[1]);
+        $this->assertSame(12.5, $taxCall[2]['shipping_amount']);
+        $this->assertSame(5.0, $taxCall[2]['discount']);
+
+        $orderCreateCall = $queries[4];
+        $this->assertSame('order', $orderCreateCall[0]);
+        $this->assertSame('createOrder', $orderCreateCall[1]);
+        $this->assertSame(50.0, $orderCreateCall[2]['order_data']['subtotal']);
+        $this->assertSame(12.5, $orderCreateCall[2]['order_data']['shipping_amount']);
+        $this->assertSame(5.0, $orderCreateCall[2]['order_data']['discount_amount']);
+        $this->assertSame(5.63, $orderCreateCall[2]['order_data']['tax_amount']);
+        $this->assertSame(63.13, $orderCreateCall[2]['order_data']['total']);
+    }
+
     public function testPlaceOrderCreatesOrderAndProcessesPaymentViaQueryProvider(): void
     {
         $order = new class extends Order {
@@ -124,6 +224,113 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame('getCheckoutPaymentMethods', $result['operation']);
         $this->assertSame(7, $result['params']['customer_id']);
         $this->assertSame('USD', $result['params']['currency']);
+    }
+
+    public function testPlaceOrderResolvesSavedShippingAddressForQuoteQueries(): void
+    {
+        $order = new class extends Order {
+            public function getId(mixed $default = 0)
+            {
+                return 654;
+            }
+
+            public function getIncrementId(): string
+            {
+                return 'WS202603260654';
+            }
+        };
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->exactly(2))
+            ->method('getOrder')
+            ->with(654)
+            ->willReturn($order);
+        $orderService->expects($this->once())
+            ->method('updatePaymentStatus')
+            ->with(654, OrderService::PAYMENT_STATUS_PENDING);
+
+        $addressService = $this->createMock(AddressService::class);
+        $addressService->expects($this->atLeastOnce())
+            ->method('getAddress')
+            ->with(44, 8)
+            ->willReturn([
+                'address_id' => 44,
+                'customer_id' => 8,
+                'country_id' => 'GB',
+                'country' => 'GB',
+                'region' => 'LDN',
+                'street' => '123 Market Street',
+                'city' => 'London',
+            ]);
+
+        $queries = [];
+        $service = new class($orderService, $addressService, $queries) extends CheckoutService {
+            public function __construct(
+                OrderService $orderService,
+                AddressService $addressService,
+                private array &$queries
+            ) {
+                parent::__construct($orderService, $addressService);
+            }
+
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                $this->queries[] = [$provider, $operation, $params];
+
+                return match ($provider . ':' . $operation) {
+                    'cart:getCartItems' => [
+                        [
+                            'product_id' => 10,
+                            'quantity' => 1,
+                            'price' => 80.0,
+                            'product' => ['sku' => 'SKU-10', 'name' => 'Travel Bag', 'weight' => 1.2],
+                        ],
+                    ],
+                    'cart:calculateTotals' => [
+                        'subtotal' => 80.0,
+                        'discount' => 0.0,
+                    ],
+                    'shipping:calculateShipping' => 15.0,
+                    'tax:calculateTax' => 7.6,
+                    'order:createOrder' => [
+                        'order_id' => 654,
+                    ],
+                    'order:addOrderItems' => [
+                        ['item_id' => 1],
+                    ],
+                    'cart:clearCart' => true,
+                    'payment:processPayment' => [
+                        'status' => 'pending',
+                        'payment_method' => 'paypal',
+                    ],
+                    default => null,
+                };
+            }
+        };
+
+        $result = $service->placeOrder([
+            'customer_id' => 8,
+            'shipping_address_id' => 44,
+            'shipping_method' => 'flat_rate',
+            'payment_method' => 'paypal',
+            'currency' => 'USD',
+        ]);
+
+        $shippingCall = $queries[2];
+        $this->assertSame('shipping', $shippingCall[0]);
+        $this->assertSame('calculateShipping', $shippingCall[1]);
+        $this->assertSame('GB', $shippingCall[2]['shipping_data']['address']['country_id']);
+        $this->assertSame('LDN', $shippingCall[2]['shipping_data']['address']['region']);
+
+        $taxCall = $queries[3];
+        $this->assertSame('tax', $taxCall[0]);
+        $this->assertSame('calculateTax', $taxCall[1]);
+        $this->assertSame('GB', $taxCall[2]['country']);
+        $this->assertSame('LDN', $taxCall[2]['region']);
+
+        $this->assertSame($order, $result['order']);
+        $this->assertSame(102.6, $result['order_summary']['grand_total']);
+        $this->assertSame('paypal', $result['payment_method']['code']);
     }
 
     public function testGetCheckoutShippingMethodsDelegatesToShippingQueryProvider(): void
