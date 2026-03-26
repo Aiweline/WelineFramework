@@ -8,19 +8,26 @@ use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Customer\Model\Customer as CustomerProfile;
 use WeShop\Customer\Session\CustomerSession;
 use Weline\Customer\Model\Customer as AuthCustomer;
+use Weline\Framework\Http\Request;
 
 class CustomerContext implements CustomerContextInterface
 {
     public function __construct(
         private readonly CustomerSession $customerSession,
-        private readonly CustomerProfileService $customerProfileService
+        private readonly CustomerProfileService $customerProfileService,
+        private readonly Request $request
     ) {
     }
 
     public function getAuthUser(): ?AuthCustomer
     {
         $user = $this->customerSession->getUser();
-        return $user instanceof AuthCustomer ? $user : null;
+        if ($user instanceof AuthCustomer) {
+            return $user;
+        }
+
+        $requestUser = $this->request->getData('weshop_auth_user');
+        return $requestUser instanceof AuthCustomer ? $requestUser : null;
     }
 
     public function getProfile(): ?CustomerProfile
@@ -42,6 +49,6 @@ class CustomerContext implements CustomerContextInterface
     public function getEmail(): ?string
     {
         $authUser = $this->getAuthUser();
-        return $authUser ? (string) $authUser->getUsername() : null;
+        return $authUser ? (string) $authUser->getEmail() : null;
     }
 }
