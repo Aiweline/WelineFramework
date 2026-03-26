@@ -28,18 +28,30 @@ class ParserWordsRegisterTest extends TestCase
         $request = $this->createMock(Request::class);
         $request->method('isBackend')->willReturn(true);
 
+        $backendWords = [
+            'Existing Word' => 'Existing Translation',
+            'Used Word' => 'Translated Used Word',
+        ];
+        $globalWords = [
+            'Global Word' => 'Global Translation',
+            'Used Word' => 'Translated Used Word',
+        ];
+        $batchWords = ['Used Word' => 'Translated Used Word'];
+
         $cache = $this->createMock(CachePoolInterface::class);
-        $cache->expects(self::exactly(2))
+        $cache->expects(self::exactly(4))
             ->method('get')
             ->willReturnMap([
+                [$this->buildBatchMarkerKey(ParserWordsRegister::BACKEND_WORDS_CACHE_KEY, $batchWords), false],
                 [ParserWordsRegister::BACKEND_WORDS_CACHE_KEY, ['Existing Word' => 'Existing Translation']],
+                [$this->buildBatchMarkerKey(ParserWordsRegister::WORDS_CACHE_KEY, $batchWords), false],
                 [ParserWordsRegister::WORDS_CACHE_KEY, ['Global Word' => 'Global Translation']],
             ]);
         $setCalls = [];
-        $cache->expects(self::exactly(2))
+        $cache->expects(self::exactly(4))
             ->method('set')
-            ->willReturnCallback(function (string $key, mixed $value) use (&$setCalls): bool {
-                $setCalls[$key] = $value;
+            ->willReturnCallback(function (string $key, mixed $value, int $ttl = 0) use (&$setCalls): bool {
+                $setCalls[$key] = ['value' => $value, 'ttl' => $ttl];
                 return true;
             });
 
@@ -57,19 +69,15 @@ class ParserWordsRegisterTest extends TestCase
         $observer->execute($event);
 
         self::assertSame(
-            [
-                'Existing Word' => 'Existing Translation',
-                'Used Word' => 'Translated Used Word',
-            ],
-            $setCalls[ParserWordsRegister::BACKEND_WORDS_CACHE_KEY] ?? null
+            $backendWords,
+            $setCalls[ParserWordsRegister::BACKEND_WORDS_CACHE_KEY]['value'] ?? null
         );
         self::assertSame(
-            [
-                'Global Word' => 'Global Translation',
-                'Used Word' => 'Translated Used Word',
-            ],
-            $setCalls[ParserWordsRegister::WORDS_CACHE_KEY] ?? null
+            $globalWords,
+            $setCalls[ParserWordsRegister::WORDS_CACHE_KEY]['value'] ?? null
         );
+        self::assertSame(86400, $setCalls[$this->buildBatchMarkerKey(ParserWordsRegister::BACKEND_WORDS_CACHE_KEY, $batchWords)]['ttl'] ?? null);
+        self::assertSame(86400, $setCalls[$this->buildBatchMarkerKey(ParserWordsRegister::WORDS_CACHE_KEY, $batchWords)]['ttl'] ?? null);
     }
 
     public function testExecuteSkipsCacheWritesWhenNoWordsWereUsed(): void
@@ -84,6 +92,29 @@ class ParserWordsRegisterTest extends TestCase
         $observer = new ParserWordsRegister($request);
         $this->setObserverCache($observer, $cache);
         $this->setParserState(['Used Word' => 'Translated Used Word'], []);
+
+        $event = $this->createMock(Event::class);
+        $observer->execute($event);
+    }
+
+    public function testExecuteSkipsDictionaryMergeWhenBatchWasAlreadyRecorded(): void
+    {
+        $request = $this->createMock(Request::class);
+        $request->method('isBackend')->willReturn(true);
+
+        $words = ['Used Word' => 'Translated Used Word'];
+        $cache = $this->createMock(CachePoolInterface::class);
+        $cache->expects(self::exactly(2))
+            ->method('get')
+            ->willReturnMap([
+                [$this->buildBatchMarkerKey(ParserWordsRegister::BACKEND_WORDS_CACHE_KEY, $words), 1],
+                [$this->buildBatchMarkerKey(ParserWordsRegister::WORDS_CACHE_KEY, $words), 1],
+            ]);
+        $cache->expects(self::never())->method('set');
+
+        $observer = new ParserWordsRegister($request);
+        $this->setObserverCache($observer, $cache);
+        $this->setParserState($words, ['Used Word' => 'Used Word']);
 
         $event = $this->createMock(Event::class);
         $observer->execute($event);
@@ -109,5 +140,17 @@ class ParserWordsRegisterTest extends TestCase
         $usedWordsProperty = new \ReflectionProperty(Parser::class, 'usedWords');
         $usedWordsProperty->setAccessible(true);
         $usedWordsProperty->setValue(null, $usedWords);
+    }
+
+    /**
+     * @param array<string, string> $words
+     */
+    private function buildBatchMarkerKey(string $cacheKey, array $words): string
+    {
+        $observer = new ParserWordsRegister($this->createMock(Request::class));
+        $method = new \ReflectionMethod(ParserWordsRegister::class, 'buildBatchMarkerKey');
+        $method->setAccessible(true);
+
+        return $method->invoke($observer, $cacheKey, $words);
     }
 }
