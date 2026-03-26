@@ -1,46 +1,47 @@
-﻿"Please log in to continue.","Please log in to continue."
+﻿"Notification Management","Notification Management"
 "Notification ID is required.",通知ID不能为空。
-"Notification could not be marked as read.",通知标记已读失败。
 "Notification marked as read.",通知已标记为已读。
-"Customer ID is required.",客户ID不能为空。
-"Stay Updated",实时更新
-"Notification Center",通知中心
-"Open Center",打开中心
-"Alerts and updates in one place",提醒和更新集中在一处
-"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.",订单更新、付款跟进和会员通知都可以在通知中心统一查看。
-"Notification Management",通知管理
+"Notification could not be marked as read.",通知标记已读失败。
 "Notification Detail",通知详情
+"Please log in to continue.","Please log in to continue."
+Unread,未读
+Read,已读
+"Notification not found.",通知不存在。
+"Customer ID is required.",客户ID不能为空。
+Info,信息
+Order,订单
+Payment,支付
+Membership,会员
+Promotion,促销
 "Manage customer notifications, read status, and delivery visibility for support teams.",管理客户通知、阅读状态和投递可见性，便于客服团队处理。
 "Total Notifications",通知总数
 "Unread Notifications",未读通知
 "Read Notifications",已读通知
-"Type",类型
+"Customer ID","Customer ID"
+Type,类型
 "All types",全部类型
-"Status",状态
+Status,状态
 "All statuses",全部状态
-"Title",标题
+Title,标题
 "Search by title",按标题搜索
 "Apply Filters",应用筛选
-"Reset",重置
-"ID",ID
-"Customer",客户
+Reset,重置
+ID,ID
+Customer,客户
 "Read State",阅读状态
 "Created At",创建时间
-"Actions",操作
-"View",查看
+Actions,操作
+View,查看
 "Mark as Read",标记为已读
 "No notifications found.",未找到通知记录。
 "Try adjusting filters or wait for new customer events.",请调整筛选条件或等待新的客户事件产生。
 "Back to Notifications",返回通知列表
 "Review notification metadata and content before support follow-up.",在客服跟进前审阅通知元信息和内容。
 "Basic Information",基础信息
-"Content",内容
+Content,内容
 "Already marked as read.",该通知已标记为已读。
-"Unread",未读
-"Read",已读
-"Info",信息
-"Order",订单
-"Payment",支付
-"Membership",会员
-"Promotion",促销
-"Notification not found.",通知不存在。
+"Stay Updated",实时更新
+"Notification Center",通知中心
+"Open Center",打开中心
+"Alerts and updates in one place",提醒和更新集中在一处
+"Order updates, payment follow-ups, and membership notices can all be reviewed from your notification center.",订单更新、付款跟进和会员通知都可以在通知中心统一查看。
