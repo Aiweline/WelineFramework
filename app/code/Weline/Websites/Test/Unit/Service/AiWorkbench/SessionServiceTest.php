@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 
-class SessionServiceTest extends AbstractAiWorkbenchPersistenceTest
+class SessionServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     public function testCreateAndMutateSession(): void
     {
