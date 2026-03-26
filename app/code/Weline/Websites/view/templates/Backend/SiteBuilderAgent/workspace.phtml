@@ -789,6 +789,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     var startDomainPurchaseUrl = <?= json_encode($start_domain_purchase_url, JSON_THROW_ON_ERROR) ?>;
     var domainPurchaseSseBaseUrl = <?= json_encode($domain_purchase_sse_url, JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= json_encode((string)$this->getBackendUrl($site_builder_sse_path), JSON_THROW_ON_ERROR) ?>;
+    var workspaceRegistrarOptions = <?= $registrarSelectOptionsJson ?>;
     var lastEventId = <?= (int)$last_event_id ?>;
     var domainPurchaseState = <?= json_encode($domain_purchase_state, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;
     var initialDomainEventIds = <?= json_encode(array_values(array_map(static fn(array $event): int => (int)($event['event_id'] ?? 0), $domainEvents)), JSON_THROW_ON_ERROR) ?>;
@@ -842,12 +843,245 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         domainLogSummary: <?= json_encode((string)__('展开域名阶段日志'), JSON_THROW_ON_ERROR) ?>,
         domainLogSummaryWithCount: <?= json_encode((string)__('展开域名阶段日志（%{count}）'), JSON_THROW_ON_ERROR) ?>
     };
+
+    function escapeHtml(value) {
+        var node = document.createElement('div');
+        node.textContent = value === undefined || value === null ? '' : String(value);
+        return node.innerHTML;
+    }
+
+    function ensureWorkspaceRegistrarInstance() {
+        window.WelineRegistrarSelect = window.WelineRegistrarSelect || {};
+        if (window.WelineRegistrarSelect['site-builder-registrar-account']) {
+            return window.WelineRegistrarSelect['site-builder-registrar-account'];
+        }
+
+        var id = 'site-builder-registrar-account';
+        var wrapper = document.getElementById(id + '_wrapper');
+        var trigger = document.getElementById(id + '_trigger');
+        var dropdown = document.getElementById(id + '_dropdown');
+        var search = document.getElementById(id + '_search');
+        var list = document.getElementById(id + '_list');
+        var tags = document.getElementById(id + '_tags');
+        var hidden = document.getElementById(id + '_value');
+        var multiple = wrapper && String(wrapper.getAttribute('data-multiple') || '').toLowerCase() === 'true';
+        var emptyLabel = tags && tags.textContent ? tags.textContent.trim() : '';
+        var selected = [];
+        var options = [];
+
+        if (!wrapper || !trigger || !dropdown || !search || !list || !tags || !hidden) {
+            return null;
+        }
+
+        function readInitialSelection() {
+            return String(hidden.value || '').split(',').map(function (value) {
+                return value.trim();
+            }).filter(Boolean);
+        }
+
+        function normalizeOptions(items) {
+            return (Array.isArray(items) ? items : []).map(function (item) {
+                return {
+                    value: String(item && item.value ? item.value : ''),
+                    label: String(item && item.label ? item.label : (item && item.value ? item.value : '')),
+                    group: String(item && item.group ? item.group : ''),
+                    meta: String(item && item.meta ? item.meta : ''),
+                    raw: item || null
+                };
+            }).filter(function (item) {
+                return item.value !== '';
+            });
+        }
+
+        function isPicked(value) {
+            return selected.indexOf(String(value)) > -1;
+        }
+
+        function syncHidden() {
+            hidden.value = selected.join(',');
+        }
+
+        function getSelected() {
+            return selected.map(function (value) {
+                return options.find(function (item) {
+                    return item.value === value;
+                }) || { value: value, label: value, group: '', meta: '', raw: null };
+            });
+        }
+
+        function emitChange(item) {
+            try {
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (error) {
+            }
+
+            if (typeof window.handleSiteBuilderRegistrarSelect === 'function') {
+                window.handleSiteBuilderRegistrarSelect(item || null, { selected: selected.slice() });
+            }
+        }
+
+        function renderTags() {
+            tags.innerHTML = '';
+            if (selected.length === 0) {
+                var placeholder = document.createElement('span');
+                placeholder.id = id + '_display';
+                placeholder.textContent = emptyLabel;
+                tags.appendChild(placeholder);
+                return;
+            }
+
+            selected.forEach(function (value) {
+                var item = options.find(function (option) {
+                    return option.value === value;
+                });
+                if (!item) {
+                    return;
+                }
+
+                if (!multiple) {
+                    var display = document.createElement('span');
+                    display.id = id + '_display';
+                    display.textContent = item.label;
+                    tags.appendChild(display);
+                    return;
+                }
+
+                var tag = document.createElement('span');
+                tag.className = 'weline-registrar-tag';
+                tag.textContent = item.label;
+                tags.appendChild(tag);
+            });
+        }
+
+        function renderList(keyword) {
+            var normalizedKeyword = String(keyword || '').trim().toLowerCase();
+            var filtered = options.filter(function (item) {
+                return !normalizedKeyword
+                    || item.label.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.group.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.meta.toLowerCase().indexOf(normalizedKeyword) > -1;
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="weline-registrar-empty">' + escapeHtml('No matching registrar account') + '</div>';
+                return;
+            }
+
+            var grouped = {};
+            filtered.forEach(function (item) {
+                var groupKey = item.group || 'default';
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = [];
+                }
+                grouped[groupKey].push(item);
+            });
+
+            var html = '';
+            Object.keys(grouped).forEach(function (groupKey) {
+                if (groupKey !== 'default') {
+                    html += '<div class="weline-registrar-group">' + escapeHtml(groupKey) + '</div>';
+                }
+                grouped[groupKey].forEach(function (item) {
+                    var meta = item.meta ? '<div class="weline-registrar-item-meta">' + escapeHtml(item.meta) + '</div>' : '';
+                    html += '<div class="weline-registrar-item' + (isPicked(item.value) ? ' active' : '') + '" data-value="' + escapeHtml(item.value) + '"><div>' + escapeHtml(item.label) + '</div>' + meta + '</div>';
+                });
+            });
+
+            list.innerHTML = html;
+            Array.prototype.slice.call(list.querySelectorAll('.weline-registrar-item')).forEach(function (element) {
+                element.addEventListener('click', function () {
+                    var value = this.getAttribute('data-value') || '';
+                    var pickedItem = options.find(function (option) {
+                        return option.value === value;
+                    }) || null;
+                    if (!value) {
+                        return;
+                    }
+
+                    selected = multiple
+                        ? (isPicked(value) ? selected.filter(function (picked) { return picked !== value; }) : selected.concat(value))
+                        : [value];
+                    dropdown.style.display = multiple ? 'block' : 'none';
+                    syncHidden();
+                    renderTags();
+                    renderList(search.value || '');
+                    emitChange(pickedItem);
+                });
+            });
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            if (dropdown.style.display === 'block') {
+                renderList(search.value || '');
+                search.focus();
+            }
+        });
+
+        search.addEventListener('input', function () {
+            renderList(search.value || '');
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!wrapper.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        function setOptions(nextOptions) {
+            options = normalizeOptions(nextOptions);
+            selected = selected.filter(function (value) {
+                return options.some(function (item) {
+                    return item.value === value;
+                });
+            });
+            if (!multiple && selected.length > 1) {
+                selected = selected.slice(0, 1);
+            }
+            syncHidden();
+            renderTags();
+            renderList(search.value || '');
+        }
+
+        selected = readInitialSelection();
+        window.WelineRegistrarSelect[id] = {
+            setOptions: setOptions,
+            setValue: function (value) {
+                var values = Array.isArray(value) ? value.map(String) : String(value || '').split(',').map(function (item) {
+                    return item.trim();
+                }).filter(Boolean);
+                selected = multiple ? values : (values[0] ? [values[0]] : []);
+                syncHidden();
+                renderTags();
+                renderList(search.value || '');
+                emitChange(getSelected()[0] || null);
+            },
+            getValue: function () {
+                return String(hidden.value || '');
+            },
+            getValues: function () {
+                return selected.slice();
+            },
+            getSelected: getSelected
+        };
+
+        return window.WelineRegistrarSelect[id];
+    }
+
     window.handleSiteBuilderRegistrarSelect = function (item) {
         var labelInput = document.getElementById('site-builder-registrar-label');
         if (labelInput) {
             labelInput.value = item && item.label ? String(item.label) : '';
         }
     };
+
+    function hydrateWorkspaceRegistrarOptions() {
+        var registrarInstance = ensureWorkspaceRegistrarInstance();
+        if (typeof registrarInstance.setOptions === 'function') {
+            registrarInstance.setOptions(Array.isArray(workspaceRegistrarOptions) ? workspaceRegistrarOptions : []);
+        }
+    }
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -1457,6 +1691,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     }
 
     var registrarSelectInput = document.getElementById('site-builder-registrar-account_value');
+    hydrateWorkspaceRegistrarOptions();
     if (registrarSelectInput) {
         registrarSelectInput.addEventListener('change', syncRegistrarUi);
     }
