@@ -1,0 +1,93 @@
+<style>
+    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
+    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+    .dt-demo-note{padding:16px 18px;border-radius:16px;background:#fff7ed;border:1px solid #fed7aa;margin-bottom:20px}
+    .dt-demo-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+    .dt-demo-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+    .dt-demo-panel{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff}
+    .dt-demo-panel h2{margin-top:0}
+    @media (max-width: 960px){.dt-demo-layout{grid-template-columns:1fr}}
+</style>
+
+<?= $frontend_api_bootstrap ?? '' ?>
+
+<div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-cascade-page">
+    <div class="dt-demo-top">
+        <div>
+            <h1><?= $page_title ?></h1>
+            <p><?= __('Delete users and verify order cascade cleanup.') ?></p>
+        </div>
+        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
+    </div>
+
+    <div class="dt-demo-note" data-testid="dt-cascade-note">
+        <?= __('The demo delete service removes related TestOrder rows whenever a TestUser is deleted. Use the refresh action after a delete to confirm both tables stay in sync.') ?>
+    </div>
+
+    <div class="dt-demo-actions">
+        <button type="button" class="btn btn-outline-primary" data-testid="cascade-refresh" onclick="refreshCascadeTables()"><?= __('Refresh Tables') ?></button>
+    </div>
+
+    <div class="dt-demo-layout">
+        <section class="dt-demo-panel" data-testid="dt-cascade-users-wrap">
+            <h2><?= __('Users') ?></h2>
+            <p><?= __('Delete a user here, then refresh the orders table to confirm related rows are gone.') ?></p>
+            <w:d-table id="demo-cascade-users"
+                       model="Weline\DataTable\Model\TestUser"
+                       scope="demo-cascade-users"
+                       editable="true"
+                       searchable="true"
+                       sortable="true"
+                       page-size="5"
+                       show-pagination="true"
+                       allow-frontend="true"
+                       api-url="datatable/rest/v1/demo-table"
+                       field-api-url="datatable/rest/v1/demo-form/fields">
+                <w:t-header>
+                    <w:field belong="t-header" name="id" label="ID" sortable="true"></w:field>
+                    <w:field belong="t-header" name="name" label="Name" sortable="true"></w:field>
+                    <w:field belong="t-header" name="email" label="Email" sortable="true"></w:field>
+                    <w:field belong="t-header" name="status" label="Status" sortable="true"></w:field>
+                </w:t-header>
+            </w:d-table>
+        </section>
+
+        <section class="dt-demo-panel" data-testid="dt-cascade-orders-wrap">
+            <h2><?= __('Orders') ?></h2>
+            <p><?= __('Rows here should shrink after the related user is deleted and the tables are refreshed.') ?></p>
+            <w:d-table id="demo-cascade-orders"
+                       model="Weline\DataTable\Model\TestOrder"
+                       scope="demo-cascade-orders"
+                       searchable="true"
+                       sortable="true"
+                       page-size="6"
+                       show-pagination="true"
+                       allow-frontend="true"
+                       api-url="datatable/rest/v1/demo-table"
+                       field-api-url="datatable/rest/v1/demo-form/fields">
+                <w:t-header>
+                    <w:field belong="t-header" name="id" label="ID" sortable="true"></w:field>
+                    <w:field belong="t-header" name="user_id" label="User ID" sortable="true"></w:field>
+                    <w:field belong="t-header" name="order_no" label="Order No" sortable="true"></w:field>
+                    <w:field belong="t-header" name="total_amount" label="Total Amount" sortable="true"></w:field>
+                    <w:field belong="t-header" name="order_status" label="Order Status" sortable="true"></w:field>
+                </w:t-header>
+            </w:d-table>
+        </section>
+    </div>
+</div>
+
+<script>
+    function refreshCascadeTables() {
+        if (!window.DataTableManager || !window.DataTableManager.instances) {
+            return;
+        }
+
+        ['demo-cascade-users', 'demo-cascade-orders'].forEach(function (tableId) {
+            const instance = window.DataTableManager.instances[tableId];
+            if (instance && typeof window.DataTableManager.loadData === 'function') {
+                window.DataTableManager.loadData(instance);
+            }
+        });
+    }
+</script>

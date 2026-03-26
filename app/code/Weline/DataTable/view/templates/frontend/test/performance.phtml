@@ -1,0 +1,53 @@
+<style>
+    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
+    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+    .dt-demo-note{padding:16px 18px;border-radius:16px;background:#f0fdf4;border:1px solid #bbf7d0;margin-bottom:20px}
+    .dt-demo-actions{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+</style>
+
+<?= $frontend_api_bootstrap ?? '' ?>
+
+<div class="dt-demo-page" data-demo-page="<?= $page_key ?>" data-testid="dt-performance-page">
+    <div class="dt-demo-top">
+        <div>
+            <h1><?= $page_title ?></h1>
+            <p><?= __('Auto-generated frontend table path with field metadata, pagination and search.') ?></p>
+        </div>
+        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
+    </div>
+
+    <div class="dt-demo-note" data-testid="dt-performance-note">
+        <?= __('This page intentionally leaves the inner table structure empty so the DataTable taglib and frontend manager have to generate the display fields, filter fields and toolbar behavior from model metadata.') ?>
+    </div>
+
+    <div class="dt-demo-actions">
+        <button type="button" class="btn btn-outline-primary" data-testid="performance-reload" onclick="reloadPerformanceTable()"><?= __('Reload Table') ?></button>
+    </div>
+
+    <w:d-table id="demo-performance-table"
+               model="Weline\DataTable\Model\TestProduct"
+               scope="demo-performance-products"
+               searchable="true"
+               sortable="true"
+               page-size="8"
+               show-pagination="true"
+               show-toolbar="true"
+               show-config="true"
+               allow-frontend="true"
+               api-url="datatable/rest/v1/demo-table"
+               field-api-url="datatable/rest/v1/demo-form/fields">
+    </w:d-table>
+</div>
+
+<script>
+    function reloadPerformanceTable() {
+        if (!window.DataTableManager || !window.DataTableManager.instances) {
+            return;
+        }
+
+        const instance = window.DataTableManager.instances['demo-performance-table'];
+        if (instance && typeof window.DataTableManager.loadData === 'function') {
+            window.DataTableManager.loadData(instance);
+        }
+    }
+</script>
