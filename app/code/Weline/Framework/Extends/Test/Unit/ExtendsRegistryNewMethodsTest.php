@@ -420,7 +420,15 @@ class ExtendsRegistryNewMethodsTest extends TestCase
     private function getExtendType(string $moduleName, string $extendName, array $config): ?string
     {
         $extends = $config['extends'] ?? [];
-        
+
+        if (isset($extends[$extendName]['type'])) {
+            $type = $extends[$extendName]['type'];
+            if (is_array($type)) {
+                return implode(',', $type);
+            }
+            return $type;
+        }
+
         if (isset($extends['extends'][$extendName]['type'])) {
             $type = $extends['extends'][$extendName]['type'];
             if (is_array($type)) {
@@ -593,8 +601,12 @@ class ExtendsRegistryNewMethodsTest extends TestCase
                 return 'critical';
             }
         }
-        
-        if (strpos($filePath, 'templates') !== false || strpos($filePath, 'view') !== false) {
+
+        if (str_starts_with($filePath, 'view/static/')) {
+            return 'local';
+        }
+
+        if (strpos($filePath, 'templates') !== false || str_starts_with($filePath, 'view/')) {
             return 'global';
         }
         

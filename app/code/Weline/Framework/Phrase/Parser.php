@@ -101,7 +101,15 @@ class Parser
                 if (is_numeric($key)) {
                     $key += 1;
                 }
-                $words = str_replace('%{' . $key . '}', $arg ?? '', $words);
+                $replacement = $arg ?? '';
+                // str_replace 的替换参数必须是字符串；兼容占位参数传入数字/数组/对象等情况
+                if (is_array($replacement) || is_object($replacement)) {
+                    $replacement = json_encode($replacement, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                }
+                if (!is_string($replacement)) {
+                    $replacement = (string)$replacement;
+                }
+                $words = str_replace('%{' . $key . '}', $replacement, $words);
             }
         }
 

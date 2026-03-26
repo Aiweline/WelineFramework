@@ -170,7 +170,7 @@ class Request extends Request\RequestAbstract implements RequestInterface
      */
     public function getModulePath(): string
     {
-        return $this->getRouterData('module_path');
+        return (string)($this->getRouterData('module_path') ?? '');
     }
 
     public function getHeader(string $key = ''): array|string|null
