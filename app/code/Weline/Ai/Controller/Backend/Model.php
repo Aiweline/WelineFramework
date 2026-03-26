@@ -63,6 +63,226 @@ class Model extends BackendController
         return \Weline\Framework\Manager\ObjectManager::getInstance(ModelSyncService::class);
     }
 
+    private function getTestRequestData(): array
+    {
+        $data = $this->request->getParams();
+        if (!is_array($data)) {
+            $data = [];
+        }
+
+        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
+        if (!empty($raw)) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $data = array_replace_recursive($data, $decoded);
+            }
+        }
+
+        return $data;
+    }
+
+    private function isTestOnlyRequest(array $data): bool
+    {
+        $value = $data['test_only'] ?? false;
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (bool)$value;
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function buildTestModel(AiModel $model, array $data): AiModel
+    {
+        $testModel = clone $model;
+        $this->applyTestRequestToModel($testModel, $data);
+        return $testModel;
+    }
+
+    private function applyTestRequestToModel(AiModel $model, array $data): void
+    {
+        $supplier = trim((string)($data['supplier'] ?? $data['vendor'] ?? ''));
+        if ($supplier !== '') {
+            $model->setData(AiModel::schema_fields_SUPPLIER, $supplier);
+        }
+
+        $modelCode = trim((string)($data['model_code'] ?? ''));
+        if ($modelCode !== '') {
+            $model->setData(AiModel::schema_fields_MODEL_CODE, $modelCode);
+        }
+
+        $providerModelCode = trim((string)($data['provider_model_code'] ?? ''));
+        if ($providerModelCode === '') {
+            $providerModelCode = (string)($data['model_code'] ?? $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '');
+        }
+
+        if (isset($data['config']) && is_array($data['config']) || array_key_exists('config_json', $data)) {
+            $config = $this->buildIncomingConfigData($data);
+            $model->setData(AiModel::schema_fields_CONFIG, $this->encodeJsonConfig($config));
+        }
+
+        if (isset($data['provider_config']) && is_array($data['provider_config']) || array_key_exists('provider_config_json', $data)) {
+            $config = $this->buildIncomingConfigData($data);
+            $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
+            $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
+        }
+    }
+
+    private function hasSelfConfig(AiModel $model): bool
+    {
+        return $this->hasApiCredential($model->getProviderConfig()) || $this->hasApiCredential($model->getConfig());
+    }
+
+    private function hasApiCredential(array $config): bool
+    {
+        return !empty($config['api_key']) || !empty($config['api_key_env']);
+    }
+
+    private function getRequestedProviderAccountId(AiModel $model): int
+    {
+        $providerConfig = $model->getProviderConfig();
+        return isset($providerConfig['account_id']) ? (int)$providerConfig['account_id'] : 0;
+    }
+
+    private function normalizeBooleanValue(mixed $value): bool
+    {
+        if (is_bool($value)) {
+            return $value;
+        }
+        if (is_int($value) || is_float($value)) {
+            return (bool)$value;
+        }
+
+        $normalized = strtolower(trim((string)$value));
+        if ($normalized === '') {
+            return false;
+        }
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function filterConfigValues(array $config): array
+    {
+        return array_filter($config, static function ($value) {
+            if (is_array($value)) {
+                return !empty($value);
+            }
+            return $value !== '' && $value !== null;
+        });
+    }
+
+    private function buildIncomingConfigData(array $data): array
+    {
+        $config = [];
+
+        if (array_key_exists('config_json', $data)) {
+            $configJson = trim((string)$data['config_json']);
+            if ($configJson !== '') {
+                $config = $this->decodeJsonConfig($configJson, 'config_json');
+            }
+        }
+
+        if (isset($data['config']) && is_array($data['config'])) {
+            $config = array_replace($config, $data['config']);
+        }
+
+        $config = $this->filterConfigValues($config);
+
+        if (array_key_exists('stream', $config)) {
+            $config['stream'] = $this->normalizeBooleanValue($config['stream']);
+        }
+
+        if (isset($config['api_key'])) {
+            $config['api_key'] = $this->normalizeApiKeyValue((string)$config['api_key']);
+        }
+
+        if (isset($config['api_url'])) {
+            $config['api_url'] = trim((string)$config['api_url']);
+        }
+
+        return $config;
+    }
+
+    private function buildIncomingProviderConfigData(array $data, string $providerModelCode, array $config = []): array
+    {
+        $providerConfig = [];
+
+        if (array_key_exists('provider_config_json', $data)) {
+            $providerConfigJson = trim((string)$data['provider_config_json']);
+            if ($providerConfigJson !== '') {
+                $providerConfig = $this->decodeJsonConfig($providerConfigJson, 'provider_config_json');
+            }
+        }
+
+        if (isset($data['provider_config']) && is_array($data['provider_config'])) {
+            $providerConfig = array_replace($providerConfig, $data['provider_config']);
+        }
+
+        $providerConfig = $this->filterConfigValues($providerConfig);
+
+        if (!empty($config['api_key'])) {
+            $providerConfig['api_key'] = $config['api_key'];
+        }
+
+        if (!empty($config['api_key_env']) && empty($providerConfig['api_key'])) {
+            $providerConfig['api_key_env'] = $config['api_key_env'];
+        }
+
+        if (!empty($config['api_url'])) {
+            $providerConfig['base_url'] = trim((string)$config['api_url']);
+        }
+
+        if (array_key_exists('stream', $providerConfig)) {
+            $providerConfig['stream'] = $this->normalizeBooleanValue($providerConfig['stream']);
+        }
+
+        if (isset($providerConfig['api_key'])) {
+            $providerConfig['api_key'] = $this->normalizeApiKeyValue((string)$providerConfig['api_key']);
+        }
+
+        if (isset($providerConfig['base_url'])) {
+            $providerConfig['base_url'] = trim((string)$providerConfig['base_url']);
+        }
+
+        if ($providerModelCode !== '') {
+            $providerConfig['provider_model_code'] = $providerModelCode;
+            $providerConfig['model'] = $providerModelCode;
+            $providerConfig['model_id'] = $providerModelCode;
+        }
+
+        return $providerConfig;
+    }
+
+    private function encodeJsonConfig(array $config): string
+    {
+        return empty($config) ? '' : json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    private function normalizeApiKeyValue(string $apiKey): string
+    {
+        $apiKey = trim($apiKey);
+
+        // Repair the known duplicated-prefix corruption seen on OpenAI-style keys: sk-... -> ssk-...
+        if (str_starts_with($apiKey, 'ssk-')) {
+            return 'sk-' . substr($apiKey, 4);
+        }
+
+        return $apiKey;
+    }
+
+    private function decodeJsonConfig(string $json, string $fieldName): array
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            throw new \InvalidArgumentException(__('字段 %{field} 不是有效的 JSON 配置', ['field' => $fieldName]));
+        }
+
+        return $decoded;
+    }
+
     /**
      * 模型列表页面
      * 
@@ -485,14 +705,8 @@ class Model extends BackendController
     public function testConnection(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
-        $data = $this->request->getParams();
-        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
-        if (!empty($raw)) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $data = array_merge($data, $decoded);
-            }
-        }
+        $data = $this->getTestRequestData();
+        $testOnly = $this->isTestOnlyRequest($data);
         $modelCode = $data['model_code'] ?? ($this->request->getPost('model_code') ?: $this->request->getGet('model_code'));
         
         if (!$modelCode) {
@@ -507,7 +721,10 @@ class Model extends BackendController
             $accountService = ObjectManager::getInstance(AccountService::class);
 
             // 自动检测供应商
-            $providerCode = $accountService->getProviderByModelCode($modelCode);
+            $providerCode = trim((string)($data['supplier'] ?? $data['vendor'] ?? ''));
+            if ($providerCode === '') {
+                $providerCode = $accountService->getProviderByModelCode($modelCode);
+            }
             if (!$providerCode) {
                 return $this->jsonResponse([
                     'success' => false,
@@ -521,6 +738,8 @@ class Model extends BackendController
                 ->find()
                 ->fetch();
             // 结果容器
+            $testModel = $this->buildTestModel($model, $data);
+            $providerCode = (string)($testModel->getData(AiModel::schema_fields_SUPPLIER) ?: $providerCode);
             $results = [
                 'self_config' => [
                     'tested' => false,
@@ -540,34 +759,38 @@ class Model extends BackendController
             ];
 
             // 先测自配置（如存在），但不提前返回
-            $hasSelfConfig = ($model->getId() && $model->getProviderConfig());
+            $hasSelfConfig = $this->hasSelfConfig($testModel);
             if ($hasSelfConfig) {
                 $results['self_config']['tested'] = true;
                 try {
-                    $selfRes = $this->testModelSelfConfig($model, $modelCode);
+                    $selfRes = $this->testModelSelfConfig($testModel);
                     $results['self_config']['success'] = true;
                     $results['self_config']['message'] = __('自配置测试成功');
                     $results['self_config']['response'] = $selfRes['response'] ?? '';
                     $results['self_config']['duration'] = $selfRes['duration'] ?? 0;
 
                     // 保存自配置测试成功状态
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
-                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                        ])->fetch();
+                    if (!$testOnly) {
+                        $this->getAiModel()->reset()
+                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                            ->update([
+                                AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                                AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                            ])->fetch();
+                    }
                 } catch (\Exception $e) {
                     $results['self_config']['success'] = false;
                     $results['self_config']['message'] = $e->getMessage();
 
                     // 保存自配置测试失败状态
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                        ])->fetch();
+                    if (!$testOnly) {
+                        $this->getAiModel()->reset()
+                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                            ->update([
+                                AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                                AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                            ])->fetch();
+                    }
                 }
             }
 
@@ -575,13 +798,18 @@ class Model extends BackendController
             // 检查是否有可用的供应商账户（不限制连接状态，以便测试所有账户）
             /** @var Account $accountModel */
             $accountModel = ObjectManager::getInstance(Account::class);
-            $accounts = $accountModel->clear()
-                ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
-                ->where(Account::schema_fields_IS_ACTIVE, 1)
-                ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
-                ->order(Account::schema_fields_BALANCE, 'DESC')
-                ->select()
-                ->fetchArray();
+            $requestedAccountId = $this->getRequestedProviderAccountId($testModel);
+            if ($requestedAccountId > 0) {
+                $accounts = [['id' => $requestedAccountId]];
+            } else {
+                $accounts = $accountModel->clear()
+                    ->where(Account::schema_fields_PROVIDER_CODE, $providerCode)
+                    ->where(Account::schema_fields_IS_ACTIVE, 1)
+                    ->order(Account::schema_fields_IS_DEFAULT, 'DESC')
+                    ->order(Account::schema_fields_BALANCE, 'DESC')
+                    ->select()
+                    ->fetchArray();
+            }
             
             if (!empty($accounts) && is_array($accounts)) {
                 $results['provider_account']['tested'] = true;
@@ -616,12 +844,14 @@ class Model extends BackendController
                             $results['provider_account']['connection_status'] = $testAccount->getData(Account::schema_fields_CONNECTION_STATUS);
                             
                             // 保存供应商测试成功状态
-                            $this->getAiModel()->reset()
-                                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                                ->update([
-                                    AiModel::schema_fields_PROVIDER_TEST_STATUS => 'success',
-                                    AiModel::schema_fields_PROVIDER_TEST_TIME => time()
-                                ])->fetch();
+                            if (!$testOnly) {
+                                $this->getAiModel()->reset()
+                                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                                    ->update([
+                                        AiModel::schema_fields_PROVIDER_TEST_STATUS => 'success',
+                                        AiModel::schema_fields_PROVIDER_TEST_TIME => time()
+                                    ])->fetch();
+                            }
                             
                             // 找到可用的账户后，跳出循环
                             break;
@@ -641,12 +871,14 @@ class Model extends BackendController
                     $results['provider_account']['message'] = __('所有供应商账户测试均失败');
                     
                     // 保存供应商测试失败状态
-                    $this->getAiModel()->reset()
-                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                        ->update([
-                            AiModel::schema_fields_PROVIDER_TEST_STATUS => 'failed',
-                            AiModel::schema_fields_PROVIDER_TEST_TIME => time()
-                        ])->fetch();
+                    if (!$testOnly) {
+                        $this->getAiModel()->reset()
+                            ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                            ->update([
+                                AiModel::schema_fields_PROVIDER_TEST_STATUS => 'failed',
+                                AiModel::schema_fields_PROVIDER_TEST_TIME => time()
+                            ])->fetch();
+                    }
                 }
             } else {
                 // 无可用账户，记录状态
@@ -657,15 +889,17 @@ class Model extends BackendController
 
             // 计算整体连通性（任一成功视为成功）
             $overallSuccess = ($results['self_config']['success'] || $results['provider_account']['success']);
-            try {
-                $this->getAiModel()->reset()
-                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                    ->update([
-                        AiModel::schema_fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
-                        AiModel::schema_fields_CONNECTION_TEST_TIME => time()
-                    ])->fetch();
-            } catch (\Exception $saveEx) {
-                Env::log('ai_model.log', 'Failed to save connection test status: ' . $saveEx->getMessage(), 'WARNING');
+            if (!$testOnly) {
+                try {
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::schema_fields_CONNECTION_TEST_STATUS => $overallSuccess ? 'success' : 'failed',
+                            AiModel::schema_fields_CONNECTION_TEST_TIME => time()
+                        ])->fetch();
+                } catch (\Exception $saveEx) {
+                    Env::log('ai_model.log', 'Failed to save connection test status: ' . $saveEx->getMessage(), 'WARNING');
+                }
             }
 
             // 组合返回
@@ -675,6 +909,7 @@ class Model extends BackendController
                 'data' => [
                     'model_code' => $modelCode,
                     'provider' => $providerCode,
+                    'test_only' => $testOnly,
                     'results' => $results
                 ]
             ]);
@@ -694,26 +929,23 @@ class Model extends BackendController
     /**
      * 测试模型自配置
      */
-    private function testModelSelfConfig(AiModel $model, string $modelCode): array
+    private function testModelSelfConfig(AiModel $model): array
     {
         $prompt = 'Hello, this is a connection test. Please respond with "OK".';
-        $providerConfig = $model->getProviderConfig();
+        $hasSelfConfig = $this->hasSelfConfig($model);
         
-        if (!$providerConfig || !isset($providerConfig['api_key'])) {
+        if (!$hasSelfConfig) {
             throw new \Exception(__('模型自配置不完整'));
         }
         
         // 创建临时模型用于测试
-        $testModel = clone $model;
-        $testModel->setData(AiModel::schema_fields_CONFIG, json_encode([
-            'api_key' => $providerConfig['api_key'],
-            'base_url' => $providerConfig['base_url'] ?? '',
-            'model' => $modelCode
-        ]));
         
         // 获取对应的Provider
-        $providerCode = $model->getData(AiModel::schema_fields_SUPPLIER);
+        $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
         $accountService = ObjectManager::getInstance(AccountService::class);
+        if ($providerCode === '') {
+            $providerCode = $accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+        }
         $provider = $accountService->getProviderInstance($providerCode);
         
         if (!$provider) {
@@ -721,7 +953,7 @@ class Model extends BackendController
         }
         
         $startTime = microtime(true);
-        $result = $provider->generate($testModel, $prompt, ['temperature' => 0, 'test_mode' => true]);
+        $result = $provider->generate($model, $prompt, ['temperature' => 0, 'test_mode' => true]);
         $duration = round((microtime(true) - $startTime) * 1000, 2);
         
         if (empty($result['content'])) {
@@ -744,14 +976,8 @@ class Model extends BackendController
     public function testSelfConfig(): string
     {
         // 兼容 JSON 请求体与表单/查询参数
-        $data = $this->request->getParams();
-        $raw = method_exists($this->request, 'getContent') ? ($this->request->getContent() ?: '') : '';
-        if (!empty($raw)) {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                $data = array_merge($data, $decoded);
-            }
-        }
+        $data = $this->getTestRequestData();
+        $testOnly = $this->isTestOnlyRequest($data);
         $modelCode = $data['model_code'] ?? ($this->request->getPost('model_code') ?: $this->request->getGet('model_code'));
         
         if (!$modelCode) {
@@ -776,7 +1002,8 @@ class Model extends BackendController
             }
             
             // 检查是否有自配置
-            if (!$model->getProviderConfig()) {
+            $testModel = $this->buildTestModel($model, $data);
+            if (!$this->hasSelfConfig($testModel)) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('模型没有自配置密钥')
@@ -784,21 +1011,24 @@ class Model extends BackendController
             }
             
             // 测试自配置
-            $testResult = $this->testModelSelfConfig($model, $modelCode);
+            $testResult = $this->testModelSelfConfig($testModel);
             
             // 保存自配置测试成功状态
-            $this->getAiModel()->reset()
-                ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                ->update([
-                    AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
-                    AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                ])->fetch();
+            if (!$testOnly) {
+                $this->getAiModel()->reset()
+                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                    ->update([
+                        AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'success',
+                        AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                    ])->fetch();
+            }
             
             return $this->jsonResponse([
                 'success' => true,
                 'message' => __('自配置测试成功'),
                 'data' => [
                     'model_code' => $modelCode,
+                    'test_only' => $testOnly,
                     'response' => $testResult['response'],
                     'duration' => $testResult['duration']
                 ]
@@ -806,15 +1036,17 @@ class Model extends BackendController
 
         } catch (\Exception $e) {
             // 保存自配置测试失败状态
-            try {
-                $this->getAiModel()->reset()
-                    ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
-                    ->update([
-                        AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
-                        AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
-                    ])->fetch();
-            } catch (\Exception $saveEx) {
-                Env::log('ai_model.log', 'Failed to save self config test status: ' . $saveEx->getMessage(), 'WARNING');
+            if (!$testOnly) {
+                try {
+                    $this->getAiModel()->reset()
+                        ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
+                        ->update([
+                            AiModel::schema_fields_SELF_CONFIG_TEST_STATUS => 'failed',
+                            AiModel::schema_fields_SELF_CONFIG_TEST_TIME => time()
+                        ])->fetch();
+                } catch (\Exception $saveEx) {
+                    Env::log('ai_model.log', 'Failed to save self config test status: ' . $saveEx->getMessage(), 'WARNING');
+                }
             }
 
             return $this->jsonResponse([
@@ -1066,19 +1298,8 @@ class Model extends BackendController
             }
             
             // 处理配置JSON
-            if (isset($data['config']) && is_array($data['config'])) {
-                // 过滤空值
-                $config = array_filter($data['config'], function($value) {
-                    return $value !== '' && $value !== null;
-                });
-                // 转换stream为布尔值
-                if (isset($config['stream'])) {
-                    $config['stream'] = (bool)$config['stream'];
-                }
-                $model->setData(AiModel::schema_fields_CONFIG, json_encode($config, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-            } else {
-                $model->setData(AiModel::schema_fields_CONFIG, $data['config_json'] ?? '');
-            }
+            $config = $this->buildIncomingConfigData($data);
+            $model->setData(AiModel::schema_fields_CONFIG, $this->encodeJsonConfig($config));
             
             // 处理代理信息JSON
             if (isset($data['proxy']) && is_array($data['proxy'])) {
@@ -1096,35 +1317,8 @@ class Model extends BackendController
             }
             
             // 处理提供商配置JSON
-            if (isset($data['provider_config']) && is_array($data['provider_config'])) {
-                // 过滤空值
-                $providerConfig = array_filter($data['provider_config'], function($value) {
-                    return $value !== '' && $value !== null;
-                });
-                // 写入供应商模型 code 映射（OpenAI 兼容字段 model/model_id）
-                if ($providerModelCode !== '') {
-                    $providerConfig['provider_model_code'] = $providerModelCode;
-                    $providerConfig['model'] = $providerModelCode;
-                    $providerConfig['model_id'] = $providerModelCode;
-                }
-                if (!empty($providerConfig)) {
-                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($providerConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-                } else {
-                    $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, '');
-                }
-            } else {
-                $pcRaw = $data['provider_config_json'] ?? '';
-                if (is_string($pcRaw) && trim($pcRaw) !== '') {
-                    $pcArr = json_decode($pcRaw, true);
-                    if (is_array($pcArr) && $providerModelCode !== '') {
-                        $pcArr['provider_model_code'] = $providerModelCode;
-                        $pcArr['model'] = $providerModelCode;
-                        $pcArr['model_id'] = $providerModelCode;
-                        $pcRaw = json_encode($pcArr, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-                    }
-                }
-                $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $pcRaw);
-            }
+            $providerConfig = $this->buildIncomingProviderConfigData($data, $providerModelCode, $config);
+            $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, $this->encodeJsonConfig($providerConfig));
 
             // 保存前校验：供应商必须支持映射后的供应商模型 code
             $supplierCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
