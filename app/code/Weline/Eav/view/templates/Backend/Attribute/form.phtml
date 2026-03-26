@@ -273,6 +273,57 @@
                                 </select>
                             </div>
                         </div>
+                        <div class='col-lg-4'>
+                            <div class='mb-3'>
+                                <label class='form-label' for='validationVisible'>
+                                    <lang>鍓嶇鍙</lang>
+                                </label>
+                                <select class='form-control' id='validationVisible'
+                                        scope="attribute"
+                                        v-model="params.frontend_is_visible" name='frontend_is_visible'>
+                                    <option value='0' @if{attribute.frontend_is_visible==0=>'selected'}>
+                                        <lang>鍚?</lang>
+                                    </option>
+                                    <option value='1' @if{attribute.frontend_is_visible==1=>'selected'}>
+                                        <lang>鏄?</lang>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class='col-lg-4'>
+                            <div class='mb-3'>
+                                <label class='form-label' for='validationFilterable'>
+                                    <lang>鍙瓫閫?</lang>
+                                </label>
+                                <select class='form-control' id='validationFilterable'
+                                        scope="attribute"
+                                        v-model="params.frontend_is_filterable" name='frontend_is_filterable'>
+                                    <option value='0' @if{attribute.frontend_is_filterable==0=>'selected'}>
+                                        <lang>鍚?</lang>
+                                    </option>
+                                    <option value='1' @if{attribute.frontend_is_filterable==1=>'selected'}>
+                                        <lang>鏄?</lang>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class='col-lg-4'>
+                            <div class='mb-3'>
+                                <label class='form-label' for='validationSearchable'>
+                                    <lang>鍙悳绱?</lang>
+                                </label>
+                                <select class='form-control' id='validationSearchable'
+                                        scope="attribute"
+                                        v-model="params.frontend_is_searchable" name='frontend_is_searchable'>
+                                    <option value='0' @if{attribute.frontend_is_searchable==0=>'selected'}>
+                                        <lang>鍚?</lang>
+                                    </option>
+                                    <option value='1' @if{attribute.frontend_is_searchable==1=>'selected'}>
+                                        <lang>鏄?</lang>
+                                    </option>
+                                </select>
+                            </div>
+                        </div>
                         <div class='col-lg-12'>
                             <!--高级信息-->
                             <div class='accordion mb-3' id='accordionAdvanced'>
@@ -615,6 +666,9 @@
                 name: '{{attribute.name}}',
                 type_id: '{{attribute.type_id|0}}',
                 basic_is_enable: '{{attribute.basic_is_enable|1}}',
+                frontend_is_visible: '{{attribute.frontend_is_visible|0}}',
+                frontend_is_filterable: '{{attribute.frontend_is_filterable|0}}',
+                frontend_is_searchable: '{{attribute.frontend_is_searchable|0}}',
                 data_has_option: '{{attribute.data_has_option|0}}',
                 is_system: '{{attribute.is_system|0}}',
                 data_is_multiple: '{{attribute.data_is_multiple|0}}'

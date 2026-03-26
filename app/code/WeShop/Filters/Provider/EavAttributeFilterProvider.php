@@ -207,6 +207,18 @@ class EavAttributeFilterProvider extends AbstractFilterProvider
         
         return $this->displayType;
     }
+
+    public function getSearchFacetDefinition(int $categoryId, array $context = []): ?array
+    {
+        return $this->buildEavFacetDefinition(
+            $this->attributeCode,
+            $categoryId,
+            $context,
+            $this->getCode(),
+            $this->getName(),
+            $this->getDisplayType()
+        );
+    }
     
     /**
      * 获取属性信息
@@ -217,9 +229,8 @@ class EavAttributeFilterProvider extends AbstractFilterProvider
             return $this->attributeInfo;
         }
         
-        $filterableData = $this->attributeFilterService->getFilterableAttributes(
+        $filterableData = $this->attributeFilterService->getFilterableAttributeMetadata(
             $this->entityCode,
-            [],
             [$this->attributeCode]
         );
         
@@ -267,9 +278,8 @@ class EavAttributeFilterProvider extends AbstractFilterProvider
     public function getValueLabel(string $value): string
     {
         // 获取可筛选属性数据
-        $filterableData = $this->attributeFilterService->getFilterableAttributes(
+        $filterableData = $this->attributeFilterService->getFilterableAttributeMetadata(
             $this->entityCode,
-            [],
             [$this->attributeCode]
         );
         

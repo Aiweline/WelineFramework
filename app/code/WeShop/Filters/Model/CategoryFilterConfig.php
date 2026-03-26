@@ -20,6 +20,10 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_attribute_id', columns: ['attribute_id'])]
 class CategoryFilterConfig extends Model
 {
+    public const CONFIG_FACET_MODE = 'facet_mode';
+    public const CONFIG_RANGE_BUCKETS = 'range_buckets';
+    public const CONFIG_BUCKET_SIZE = 'bucket_size';
+
     public const schema_table = 'weshop_filters_category_filter_config';
     public const schema_primary_key = 'id';
 
@@ -65,12 +69,12 @@ class CategoryFilterConfig extends Model
             $this->where(self::schema_fields_CATEGORY_ID, $categoryId)
                 ->where(self::schema_fields_FILTER_CODE, $filterCode);
             $result = $this->find()->fetchArray();
-            return !empty($result) ? $result : null;
+            return !empty($result) ? $this->normalizeConfigRow($result) : null;
         }
 
         $this->where(self::schema_fields_CATEGORY_ID, $categoryId)
             ->order(self::schema_fields_SORT_ORDER);
-        return $this->select()->fetchArray();
+        return $this->normalizeConfigRows($this->select()->fetchArray());
     }
 
     /**
@@ -84,7 +88,7 @@ class CategoryFilterConfig extends Model
             ->where(self::schema_fields_CATEGORY_ID, $categoryId)
             ->where(self::schema_fields_IS_ENABLED, 1)
             ->order(self::schema_fields_SORT_ORDER);
-        $categoryConfigs = $this->select()->fetchArray();
+        $categoryConfigs = $this->normalizeConfigRows($this->select()->fetchArray());
 
         foreach ($categoryConfigs as $config) {
             $configs[$config[self::schema_fields_FILTER_CODE]] = $config;
@@ -95,7 +99,7 @@ class CategoryFilterConfig extends Model
                 ->where(self::schema_fields_CATEGORY_ID, 0)
                 ->where(self::schema_fields_IS_ENABLED, 1)
                 ->order(self::schema_fields_SORT_ORDER);
-            $globalConfigs = $this->select()->fetchArray();
+            $globalConfigs = $this->normalizeConfigRows($this->select()->fetchArray());
 
             foreach ($globalConfigs as $config) {
                 $filterCode = $config[self::schema_fields_FILTER_CODE];
@@ -132,6 +136,42 @@ class CategoryFilterConfig extends Model
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeConfigRows(array $rows): array
+    {
+        return array_map(fn (array $row): array => $this->normalizeConfigRow($row), $rows);
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeConfigRow(array $row): array
+    {
+        $configData = $row[self::schema_fields_CONFIG_DATA] ?? [];
+
+        if (is_string($configData)) {
+            $decoded = json_decode($configData, true);
+            $configData = is_array($decoded) ? $decoded : [];
+        }
+
+        if (!is_array($configData)) {
+            $configData = [];
+        }
+
+        $configData[self::CONFIG_FACET_MODE] = (string) ($configData[self::CONFIG_FACET_MODE] ?? 'terms');
+        $configData[self::CONFIG_BUCKET_SIZE] = max(1, (int) ($configData[self::CONFIG_BUCKET_SIZE] ?? 20));
+        $rangeBuckets = $configData[self::CONFIG_RANGE_BUCKETS] ?? [];
+        $configData[self::CONFIG_RANGE_BUCKETS] = is_array($rangeBuckets) ? array_values($rangeBuckets) : [];
+
+        $row[self::schema_fields_CONFIG_DATA] = $configData;
+
+        return $row;
     }
 
     /**
