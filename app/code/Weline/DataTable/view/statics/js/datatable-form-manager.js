@@ -179,7 +179,7 @@ if (typeof __ === 'undefined') {
 
             // 渲染字段
             fields.forEach(field => {
-                const fieldHtml = this.generateFieldHtml(field);
+                const fieldHtml = this.generateFieldHtml(formId, field);
                 autoFieldsContainer.insertAdjacentHTML('beforeend', fieldHtml);
             });
 
@@ -198,8 +198,24 @@ if (typeof __ === 'undefined') {
         /**
          * 生成字段HTML
          */
-        generateFieldHtml: function (field) {
-            const fieldId = 'field-' + field.name;
+        buildFieldDomId: function (formId, fieldName) {
+            const normalize = function (value) {
+                return String(value || '')
+                    .trim()
+                    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+            };
+
+            const normalizedFieldName = normalize(fieldName);
+            const normalizedFormId = normalize(formId);
+
+            return normalizedFormId
+                ? 'field-' + normalizedFormId + '-' + normalizedFieldName
+                : 'field-' + normalizedFieldName;
+        },
+
+        generateFieldHtml: function (formId, field) {
+            const fieldId = this.buildFieldDomId(formId, field.name);
             const requiredAttr = field.required ? 'required' : '';
             const readonlyAttr = field.readonly ? 'readonly' : '';
             const disabledAttr = field.disabled ? 'disabled' : '';
@@ -1515,4 +1531,663 @@ if (typeof __ === 'undefined') {
     }
 
     return window.DataTableFormManager;
+})();
+
+(function () {
+    if (typeof window === 'undefined' || !window.DataTableFormManager) {
+        return;
+    }
+
+    const manager = window.DataTableFormManager;
+    const originalInitForm = manager.initForm.bind(manager);
+
+    function resolveApiUrl(url, fallback) {
+        const raw = String(url || fallback || '').trim();
+        if (!raw) {
+            return '';
+        }
+
+        if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) {
+            return raw;
+        }
+
+        if (typeof window.api === 'function') {
+            return window.api(raw);
+        }
+
+        if (window.site && window.site.api_host) {
+            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
+            return apiHost + raw.replace(/^\/+/, '');
+        }
+
+        return '/' + raw.replace(/^\/+/, '');
+    }
+
+    function buildApiUrl(baseUrl, endpoint) {
+        const resolvedBaseUrl = resolveApiUrl(baseUrl, '');
+        if (!endpoint) {
+            return resolvedBaseUrl;
+        }
+
+        return resolvedBaseUrl.replace(/\/+$/, '') + '/' + String(endpoint).replace(/^\/+/, '');
+    }
+
+    function deriveRecordApiUrl(fieldApiUrl) {
+        const resolvedFieldApiUrl = resolveApiUrl(fieldApiUrl, '');
+        if (!resolvedFieldApiUrl) {
+            return '';
+        }
+
+        if (resolvedFieldApiUrl.endsWith('/fields')) {
+            return resolvedFieldApiUrl.replace(/\/fields$/, '/record');
+        }
+
+        return buildApiUrl(resolvedFieldApiUrl, 'record');
+    }
+
+    function findFieldContainer(field) {
+        return field.closest('.w-form-field') || field.closest('.form-group[data-field]') || field.parentElement;
+    }
+
+    function getValidationElement(container) {
+        if (!container) {
+            return null;
+        }
+
+        let element = container.querySelector('.w-field-validation, .invalid-feedback');
+        if (!element) {
+            element = document.createElement('div');
+            element.className = 'w-field-validation invalid-feedback';
+            container.appendChild(element);
+        }
+
+        return element;
+    }
+
+    function isSuccessfulResponse(response) {
+        return !!(response && (response.success || response.code == 200 || response.code === '200'));
+    }
+
+    function parseFieldConfig(container, field) {
+        let config = {};
+        const rawConfig = container ? container.getAttribute('data-w-field') : '';
+        if (rawConfig) {
+            try {
+                config = JSON.parse(rawConfig);
+            } catch (error) {
+                console.warn('[DataTableFormManager] failed to parse data-w-field', error);
+            }
+        }
+
+        return {
+            name: config.name || field.getAttribute('data-original-name') || field.name,
+            type: config.type || field.type || field.tagName.toLowerCase(),
+            required: config.required === true || field.required || field.getAttribute('required') !== null,
+            min: config.min ?? field.getAttribute('min'),
+            max: config.max ?? field.getAttribute('max'),
+            maxlength: config.maxlength ?? field.getAttribute('maxlength'),
+            pattern: (config.validation && config.validation.pattern) || config.pattern || field.getAttribute('pattern') || '',
+            label: config.label || (container && container.getAttribute('data-field')) || field.name
+        };
+    }
+
+    function assignCollectedValue(target, name, value) {
+        if (value === undefined || name === undefined || name === null || name === '') {
+            return;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(target, name)) {
+            if (Array.isArray(target[name])) {
+                target[name].push(value);
+            } else {
+                target[name] = [target[name], value];
+            }
+            return;
+        }
+
+        target[name] = value;
+    }
+
+    function serializeFiles(fileList) {
+        const files = Array.from(fileList || []).map(file => ({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            lastModified: file.lastModified
+        }));
+
+        if (files.length <= 1) {
+            return files[0] || '';
+        }
+
+        return files;
+    }
+
+    manager.resolveApiUrl = resolveApiUrl;
+    manager.buildApiUrl = buildApiUrl;
+    manager.deriveRecordApiUrl = deriveRecordApiUrl;
+    manager.modelConfig = manager.modelConfig || {};
+
+    manager.initForm = function (formId, options) {
+        const normalizedOptions = Object.assign({}, options || {});
+        normalizedOptions.apiUrl = resolveApiUrl(normalizedOptions.apiUrl, this.config.apiUrl);
+        normalizedOptions.fieldApiUrl = resolveApiUrl(normalizedOptions.fieldApiUrl, this.config.fieldApiUrl);
+        normalizedOptions.recordApiUrl = resolveApiUrl(
+            normalizedOptions.recordApiUrl,
+            deriveRecordApiUrl(normalizedOptions.fieldApiUrl)
+        );
+        normalizedOptions.modelConfig = normalizedOptions.modelConfig || this.modelConfig || {};
+
+        const result = originalInitForm(formId, normalizedOptions);
+        const instance = this.instances[formId];
+        if (instance) {
+            instance.options = Object.assign({}, instance.options, normalizedOptions);
+            instance.loadedRecordData = instance.loadedRecordData || null;
+        }
+
+        return result;
+    };
+
+    manager.extractManualFields = function (formId) {
+        const form = document.getElementById(formId);
+        const instance = this.instances[formId];
+        if (!form || !instance) {
+            return;
+        }
+
+        const manualFields = [];
+        const fieldMap = new Map();
+        const fieldContainers = form.querySelectorAll('.w-form-field, .form-group[data-field]');
+
+        fieldContainers.forEach(container => {
+            const field = container.querySelector('input[name], select[name], textarea[name]');
+            if (!field) {
+                return;
+            }
+
+            const config = parseFieldConfig(container, field);
+            if (!manualFields.includes(config.name)) {
+                manualFields.push(config.name);
+            }
+            fieldMap.set(config.name, Object.assign(fieldMap.get(config.name) || {}, config));
+        });
+
+        instance.manualFields = manualFields;
+        instance.fields = Array.from(fieldMap.values()).concat(
+            (instance.fields || []).filter(field => !fieldMap.has(field.name))
+        );
+    };
+
+    manager.mergeFieldMetadata = function (formId, fields) {
+        const instance = this.instances[formId];
+        if (!instance) {
+            return;
+        }
+
+        const merged = new Map();
+        (instance.fields || []).forEach(field => merged.set(field.name, field));
+        (fields || []).forEach(field => {
+            if (!field || !field.name) {
+                return;
+            }
+
+            merged.set(field.name, Object.assign({}, merged.get(field.name) || {}, field));
+        });
+
+        instance.fields = Array.from(merged.values());
+    };
+
+    manager.loadAutoFields = function (formId) {
+        const instance = this.instances[formId];
+        if (!instance) {
+            return;
+        }
+
+        const autoFieldsContainer = document.getElementById('w-auto-fields-' + formId);
+        if (!autoFieldsContainer) {
+            return;
+        }
+
+        fetch(resolveApiUrl(instance.options.fieldApiUrl, this.config.fieldApiUrl), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                form_id: formId,
+                model: instance.options.model,
+                scope: instance.options.scope,
+                exclude_fields: instance.options.excludeFields || [],
+                include_fields: instance.options.includeFields || [],
+                manual_fields: instance.manualFields || [],
+                model_config: instance.options.modelConfig || {}
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (!isSuccessfulResponse(response)) {
+                    this.showError(formId, response.message || response.msg || __('加载字段失败'));
+                    return;
+                }
+
+                const payload = response.data || {};
+                this.mergeFieldMetadata(formId, payload.fields || []);
+                this.renderAutoFields(formId, payload);
+            })
+            .catch(error => {
+                console.error('[DataTableFormManager] loadAutoFields failed', error);
+                this.showError(formId, error.message || __('网络错误'));
+            });
+    };
+
+    manager.fillFormData = function (formId, data) {
+        const form = document.getElementById(formId);
+        if (!form || !data || typeof data !== 'object') {
+            return;
+        }
+
+        const controls = form.querySelectorAll('input[name], select[name], textarea[name]');
+        controls.forEach(control => {
+            const fieldName = control.getAttribute('data-original-name') || control.name;
+            if (!Object.prototype.hasOwnProperty.call(data, fieldName)) {
+                return;
+            }
+
+            const value = data[fieldName];
+            if (control.type === 'radio') {
+                control.checked = String(control.value) === String(value);
+            } else if (control.type === 'checkbox') {
+                if (Array.isArray(value)) {
+                    control.checked = value.map(String).includes(String(control.value));
+                } else {
+                    control.checked = String(value) === String(control.value) || String(value) === '1' || String(value).toLowerCase() === 'true';
+                }
+            } else if (control.multiple && Array.isArray(value)) {
+                Array.from(control.options).forEach(option => {
+                    option.selected = value.map(String).includes(String(option.value));
+                });
+            } else if (control.type !== 'file') {
+                control.value = value == null ? '' : String(value);
+            }
+        });
+    };
+
+    manager.loadRecordData = function (formId, recordId) {
+        const instance = this.instances[formId];
+        const form = document.getElementById(formId);
+        if (!instance || !form) {
+            return;
+        }
+
+        fetch(resolveApiUrl(instance.options.recordApiUrl, deriveRecordApiUrl(instance.options.fieldApiUrl)), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                form_id: formId,
+                model: instance.options.model,
+                scope: instance.options.scope,
+                record_id: recordId,
+                model_config: instance.options.modelConfig || {},
+                dependencies: instance.options.dependencies || ''
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (!isSuccessfulResponse(response)) {
+                    this.showError(formId, response.message || response.msg || __('加载记录失败'));
+                    return;
+                }
+
+                const payload = response.data && response.data.record ? response.data.record : (response.data || {});
+                instance.loadedRecordData = payload;
+
+                if (form.querySelectorAll('.multi-table-group[data-table-alias]').length > 0) {
+                    this.populateMultiTableForm(form, payload);
+                } else {
+                    this.fillFormData(formId, payload);
+                }
+            })
+            .catch(error => {
+                console.error('[DataTableFormManager] loadRecordData failed', error);
+                this.showError(formId, error.message || __('网络错误'));
+            });
+    };
+
+    manager.validateDomField = function (field) {
+        const container = findFieldContainer(field);
+        const validationElement = getValidationElement(container);
+        const config = parseFieldConfig(container, field);
+
+        let isValid = true;
+        let message = '';
+        const rawValue = field.type === 'checkbox'
+            ? (field.checked ? (field.value || '1') : '')
+            : (field.type === 'radio' ? (field.checked ? field.value : '') : field.value);
+        const value = typeof rawValue === 'string' ? rawValue.trim() : rawValue;
+
+        if (config.required) {
+            if (field.type === 'checkbox' && !field.checked) {
+                isValid = false;
+                message = __('此字段为必填项');
+            } else if (field.type === 'radio') {
+                const sameNameFields = field.form ? field.form.querySelectorAll('[name="' + field.name + '"]') : [];
+                const checked = Array.from(sameNameFields).some(item => item.checked);
+                if (!checked) {
+                    isValid = false;
+                    message = __('此字段为必填项');
+                }
+            } else if (!value) {
+                isValid = false;
+                message = __('此字段为必填项');
+            }
+        }
+
+        if (isValid && value) {
+            if ((config.type === 'email' || field.type === 'email') && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value))) {
+                isValid = false;
+                message = __('请输入有效的邮箱地址');
+            } else if ((config.type === 'number' || field.type === 'number') && Number.isNaN(Number(value))) {
+                isValid = false;
+                message = __('请输入有效的数字');
+            } else if (config.min !== null && config.min !== '' && !Number.isNaN(Number(value)) && Number(value) < Number(config.min)) {
+                isValid = false;
+                message = __('数值不能小于 %{1}', [config.min]);
+            } else if (config.max !== null && config.max !== '' && !Number.isNaN(Number(value)) && Number(value) > Number(config.max)) {
+                isValid = false;
+                message = __('数值不能大于 %{1}', [config.max]);
+            } else if (config.maxlength && String(value).length > Number(config.maxlength)) {
+                isValid = false;
+                message = __('输入长度不能超过 %{1}', [config.maxlength]);
+            } else if (config.pattern) {
+                try {
+                    const regex = new RegExp(config.pattern);
+                    if (!regex.test(String(value))) {
+                        isValid = false;
+                        message = __('字段格式不正确');
+                    }
+                } catch (error) {
+                    console.warn('[DataTableFormManager] invalid validation pattern', config.pattern, error);
+                }
+            }
+        }
+
+        field.classList.toggle('is-invalid', !isValid);
+        if (container) {
+            container.classList.toggle('w-field-error', !isValid);
+            container.classList.toggle('field-error', !isValid);
+        }
+        if (validationElement) {
+            validationElement.textContent = isValid ? '' : message;
+            validationElement.style.display = isValid ? 'none' : '';
+        }
+
+        return isValid;
+    };
+
+    manager.validateField = function (formIdOrField, fieldName) {
+        if (formIdOrField instanceof Element) {
+            return this.validateDomField(formIdOrField);
+        }
+
+        const form = document.getElementById(formIdOrField);
+        if (!form) {
+            return true;
+        }
+
+        const candidateFields = Array.from(form.querySelectorAll('input[name], select[name], textarea[name]')).filter(field => {
+            const names = [field.name, field.getAttribute('data-original-name') || ''];
+            const normalizedNames = names
+                .filter(Boolean)
+                .flatMap(name => [name, name.replace(/^[^.]+\./, '')]);
+
+            return normalizedNames.includes(fieldName);
+        });
+
+        if (candidateFields.length === 0) {
+            return true;
+        }
+
+        return candidateFields.every(field => this.validateDomField(field));
+    };
+
+    manager.validateForm = function (formId) {
+        const form = document.getElementById(formId);
+        if (!form) {
+            return false;
+        }
+
+        let isValid = true;
+        form.querySelectorAll('input[name], select[name], textarea[name]').forEach(field => {
+            if (field.disabled || ['hidden', 'button', 'submit', 'reset'].includes(field.type)) {
+                return;
+            }
+
+            if (!this.validateDomField(field)) {
+                isValid = false;
+            }
+        });
+
+        return isValid;
+    };
+
+    manager.getSerializedFieldValue = function (field) {
+        if (!field) {
+            return undefined;
+        }
+
+        if (field.type === 'file') {
+            return serializeFiles(field.files);
+        }
+
+        if (field.type === 'checkbox') {
+            if (field.name.endsWith('[]')) {
+                return field.checked ? field.value : undefined;
+            }
+
+            return field.checked ? (field.value || '1') : '';
+        }
+
+        if (field.type === 'radio') {
+            return field.checked ? field.value : undefined;
+        }
+
+        if (field.multiple) {
+            return Array.from(field.selectedOptions || []).map(option => option.value);
+        }
+
+        return field.value;
+    };
+
+    manager.collectFormData = function (formElement) {
+        const data = {};
+        const controls = formElement.querySelectorAll('input[name], select[name], textarea[name]');
+
+        controls.forEach(field => {
+            if (field.disabled || ['button', 'submit', 'reset'].includes(field.type)) {
+                return;
+            }
+
+            const value = this.getSerializedFieldValue(field);
+            assignCollectedValue(data, field.name, value);
+        });
+
+        return data;
+    };
+
+    manager.collectMultiTableData = function (formElement) {
+        const data = {};
+        const multiTableGroups = formElement.querySelectorAll('.multi-table-group[data-table-alias]');
+
+        if (multiTableGroups.length === 0) {
+            return this.collectFormData(formElement);
+        }
+
+        multiTableGroups.forEach(group => {
+            const alias = group.getAttribute('data-table-alias');
+            if (!alias) {
+                return;
+            }
+
+            data[alias] = data[alias] || {};
+            group.querySelectorAll('input[name], select[name], textarea[name]').forEach(field => {
+                if (field.disabled || ['button', 'submit', 'reset'].includes(field.type)) {
+                    return;
+                }
+
+                const originalName = field.getAttribute('data-original-name') || field.name;
+                const cleanFieldName = originalName.replace(new RegExp('^' + alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\.'), '');
+                const value = this.getSerializedFieldValue(field);
+                assignCollectedValue(data[alias], cleanFieldName, value);
+            });
+        });
+
+        const instance = this.instances[formElement.id];
+        if (instance && instance.loadedRecordData && typeof instance.loadedRecordData === 'object') {
+            Object.keys(data).forEach(alias => {
+                const loadedAliasData = instance.loadedRecordData[alias];
+                if (loadedAliasData && typeof loadedAliasData === 'object' && loadedAliasData.id && !data[alias].id) {
+                    data[alias].id = loadedAliasData.id;
+                }
+            });
+        }
+
+        return data;
+    };
+
+    manager.validateMultiTableForm = function (formElement) {
+        let isValid = true;
+        const errors = {};
+
+        formElement.querySelectorAll('.multi-table-group[data-table-alias]').forEach(group => {
+            const alias = group.getAttribute('data-table-alias') || 'default';
+            group.querySelectorAll('input[name], select[name], textarea[name]').forEach(field => {
+                if (field.disabled || ['hidden', 'button', 'submit', 'reset'].includes(field.type)) {
+                    return;
+                }
+
+                const valid = this.validateDomField(field);
+                if (!valid) {
+                    isValid = false;
+                    errors[alias] = errors[alias] || {};
+                    const originalName = field.getAttribute('data-original-name') || field.name;
+                    errors[alias][originalName] = __('字段验证失败');
+                }
+            });
+        });
+
+        return {
+            isValid: isValid,
+            errors: errors
+        };
+    };
+
+    manager.toggleFieldset = function (fieldsetId) {
+        const fieldset = document.getElementById(fieldsetId);
+        if (!fieldset) {
+            return;
+        }
+
+        fieldset.classList.toggle('collapsed');
+        const icon = fieldset.querySelector('.collapse-toggle i');
+        if (icon) {
+            icon.className = fieldset.classList.contains('collapsed')
+                ? 'fas fa-chevron-down'
+                : 'fas fa-chevron-up';
+        }
+    };
+
+    manager.setModelConfig = function (modelConfig) {
+        this.modelConfig = modelConfig || {};
+        Object.keys(this.instances || {}).forEach(formId => {
+            const instance = this.instances[formId];
+            if (instance && instance.options && (!instance.options.modelConfig || Object.keys(instance.options.modelConfig).length === 0)) {
+                instance.options.modelConfig = this.modelConfig;
+            }
+        });
+    };
+
+    manager.submitForm = function (formId) {
+        const instance = this.instances[formId];
+        const form = document.getElementById(formId);
+        if (!instance || !form) {
+            return;
+        }
+
+        const hasMultiTableGroups = form.querySelectorAll('.multi-table-group[data-table-alias]').length > 0;
+        const validationResult = hasMultiTableGroups ? this.validateMultiTableForm(form) : { isValid: this.validateForm(formId) };
+
+        if (!validationResult.isValid) {
+            this.showError(formId, __('请检查表单中的错误'));
+            return;
+        }
+
+        const requestData = {
+            model: instance.options.model,
+            scope: instance.options.scope,
+            data: hasMultiTableGroups ? this.collectMultiTableData(form) : this.collectFormData(form),
+            model_config: instance.options.modelConfig || this.modelConfig || {}
+        };
+
+        const isEdit = instance.options.mode === 'edit' && (instance.options.recordId || instance.loadedRecordData);
+        if (isEdit) {
+            requestData.id = instance.options.recordId || instance.loadedRecordData?.id || '';
+        }
+
+        if (instance.options.dependencies) {
+            requestData.dependencies = instance.options.dependencies;
+        }
+        if (instance.options.transaction !== undefined) {
+            requestData.transaction = instance.options.transaction;
+        }
+
+        this.showSubmitting(formId);
+
+        fetch(buildApiUrl(instance.options.apiUrl || this.config.apiUrl, isEdit ? 'save-data' : 'create'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestData)
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (!isSuccessfulResponse(response)) {
+                    this.showError(formId, response.message || response.msg || __('保存失败'));
+                    return;
+                }
+
+                this.showSuccess(formId, response.message || response.msg || __('保存成功'));
+
+                if (typeof window.onFormSuccess === 'function') {
+                    window.onFormSuccess(formId, response.data || {});
+                }
+
+                if (window.DataTableManager && typeof window.DataTableManager.loadData === 'function') {
+                    Object.keys(window.DataTableManager.instances || {}).forEach(tableId => {
+                        const tableInstance = window.DataTableManager.instances[tableId];
+                        if (!tableInstance || !tableInstance.options) {
+                            return;
+                        }
+
+                        if (
+                            tableInstance.options.scope === instance.options.scope ||
+                            tableInstance.options.model === instance.options.model
+                        ) {
+                            window.DataTableManager.loadData(tableInstance);
+                        }
+                    });
+                }
+
+                this.closeModal(formId);
+            })
+            .catch(error => {
+                console.error('[DataTableFormManager] submitForm failed', error);
+                this.showError(formId, error.message || __('网络错误'));
+            })
+            .finally(() => {
+                this.hideSubmitting(formId);
+            });
+    };
 })();

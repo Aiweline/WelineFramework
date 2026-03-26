@@ -22,6 +22,30 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesWeShopContractAuthTokenRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api/rest/v1/weshop/auth/token',
+            'Auth',
+            'postToken',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Auth'
+        )));
+    }
+
+    public function testMatchesWeShopContractChallengeVerifyRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api/rest/v1/weshop/auth/challenge/verify',
+            'Challenge',
+            'postVerify',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Auth\\Challenge'
+        )));
+    }
+
     public function testMatchesChallengeVerifyActionByControllerClass(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();
@@ -34,12 +58,60 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
+    public function testMatchesFrontendDemoTableInitRouteWithPublicPrefix(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'api123/CNY/zh_Hans_CN/datatable/rest/v1/demo-table/init-data',
+            'DemoTable',
+            'postInitData',
+            'Weline\\DataTable\\Api\\Rest\\V1\\DemoTable'
+        )));
+    }
+
+    public function testMatchesFrontendDemoFormFieldsRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matches($this->createRequestMock(
+            'datatable/rest/v1/demo-form/fields',
+            'DemoForm',
+            'postFields',
+            'Weline\\DataTable\\Api\\Rest\\V1\\DemoForm'
+        )));
+    }
+
     public function testDoesNotMatchProtectedFrontendApiRoute(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();
 
         $this->assertFalse($matcher->matches($this->createRequestMock(
             'api/weshop/rest/v1/order/list',
+            'Order',
+            'getList',
+            'WeShop\\Order\\Api\\Rest\\V1\\Order'
+        )));
+    }
+
+    public function testDoesNotMatchProtectedDataTableFrontendApiRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertFalse($matcher->matches($this->createRequestMock(
+            'datatable/rest/v1/data-table/data',
+            'DataTable',
+            'postData',
+            'Weline\\DataTable\\Api\\Rest\\V1\\DataTable'
+        )));
+    }
+
+    public function testDoesNotMatchProtectedWeShopContractFrontendApiRoute(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertFalse($matcher->matches($this->createRequestMock(
+            'api/rest/v1/weshop/order/list',
             'Order',
             'getList',
             'WeShop\\Order\\Api\\Rest\\V1\\Order'

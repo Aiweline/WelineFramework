@@ -2,6 +2,7 @@
 
 namespace Weline\DataTable\Taglib;
 
+use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\App\Exception;
 use Weline\Taglib\TaglibInterface;
@@ -69,10 +70,13 @@ class TableFilter implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
+            if (!FrontendAccess::isAllowed($attributes, TableContext::getCurrentTableContext() ?? [])) {
+                return FrontendAccess::deniedComment('t-filter');
+            }
             // 检查是否为后端请求
             /** @var \Weline\Framework\Http\Request $request */
             $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-            if (!$request->isBackend() && !$request->isApiBackend()) {
+            if (false) {
                 // 前端请求直接返回空（开发环境返回注释说明）
                 if (defined('DEV') && DEV) {
                     return '<!-- DataTable 过滤器标签只能在后端使用，当前为前端请求 -->';

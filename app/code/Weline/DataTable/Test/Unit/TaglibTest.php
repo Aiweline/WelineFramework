@@ -563,4 +563,29 @@ class TaglibTest extends TestCore
             $this->assertStringContainsString('d-table', $e->getMessage() . $tableContent, '标签系统应该能够识别 d-table 标签');
         }
     }
+
+    public function testTableChildTagsAreCompiledToHtmlSections()
+    {
+        $callback = Table::callback();
+        $rendered = $callback(
+            'd-table',
+            [],
+            ['', '', ''],
+            [
+                'id' => 'compiled-table',
+                'model' => 'Weline\DataTable\Model\TestUser',
+                'scope' => 'compiled-table',
+                'allow-frontend' => 'true',
+                'api-url' => 'datatable/rest/v1/demo-table',
+                'field-api-url' => 'datatable/rest/v1/demo-form/fields',
+            ]
+        );
+
+        $this->assertIsString($rendered);
+        $this->assertStringContainsString('id="w-datatable-compiled-table"', $rendered);
+        $this->assertStringContainsString('id="compiled-table"', $rendered);
+        $this->assertStringContainsString('<thead', $rendered);
+        $this->assertStringContainsString('<tbody', $rendered);
+        $this->assertStringContainsString('<tfoot', $rendered);
+    }
 }

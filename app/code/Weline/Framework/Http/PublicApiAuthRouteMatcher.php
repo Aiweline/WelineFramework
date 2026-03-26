@@ -44,6 +44,22 @@ class PublicApiAuthRouteMatcher
         'weshop/rest/v1/auth/me',
     ];
 
+    private const DEMO_PATH_PATTERNS = [
+        'datatable/rest/v1/demo-table',
+        'datatable/rest/v1/demo-table/data',
+        'datatable/rest/v1/demo-table/fields',
+        'datatable/rest/v1/demo-table/save-config',
+        'datatable/rest/v1/demo-table/clear-config',
+        'datatable/rest/v1/demo-table/create',
+        'datatable/rest/v1/demo-table/save-data',
+        'datatable/rest/v1/demo-table/delete-data',
+        'datatable/rest/v1/demo-table/export-data',
+        'datatable/rest/v1/demo-table/init-data',
+        'datatable/rest/v1/demo-table/clear-data',
+        'datatable/rest/v1/demo-form/fields',
+        'datatable/rest/v1/demo-form/record',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -105,7 +121,7 @@ class PublicApiAuthRouteMatcher
     {
         $normalizedPath = ltrim($path, '/');
 
-        foreach (self::AUTH_PATH_PATTERNS as $pattern) {
+        foreach (array_merge(self::AUTH_PATH_PATTERNS, self::DEMO_PATH_PATTERNS) as $pattern) {
             if (
                 $normalizedPath === $pattern
                 || str_ends_with($normalizedPath, '/' . $pattern)
