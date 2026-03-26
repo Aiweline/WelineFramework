@@ -79,11 +79,16 @@ $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::fro
                 
                 <!-- Price -->
                 <div class="flex items-baseline gap-3">
-                    <?php if ($product['special_price'] ?? null): ?>
-                        <span class="text-4xl font-bold text-red-500"><?= $this->formatPrice($product['special_price']) ?></span>
-                        <span class="text-xl font-medium text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($product['price']) ?></span>
+                    <?php
+                    $currentPrice = (float) ($product['price'] ?? 0);
+                    $originalPrice = (float) ($product['original_price'] ?? $currentPrice);
+                    $hasDiscount = $originalPrice > $currentPrice;
+                    ?>
+                    <?php if ($hasDiscount): ?>
+                        <span class="text-4xl font-bold text-red-500"><?= $this->formatPrice($currentPrice) ?></span>
+                        <span class="text-xl font-medium text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($originalPrice) ?></span>
                     <?php else: ?>
-                        <span class="text-4xl font-bold"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                        <span class="text-4xl font-bold"><?= $this->formatPrice($currentPrice) ?></span>
                     <?php endif; ?>
                 </div>
                 
@@ -118,14 +123,14 @@ $canonicalProductTabsContent = trim((string) $this->getHook('WeShop_Product::fro
                     
                     <!-- Add to Cart -->
                     <div class="flex flex-col gap-3 pt-4">
-                        <button type="submit" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity">
-                            <span class="material-symbols-outlined">add_shopping_cart</span>
+                        <button type="submit" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white gap-2 text-base font-bold leading-normal tracking-wide hover:opacity-90 transition-opacity weline-pixel::add_to_cart">
+                            <span class="material-symbols-outlined weline-pixel::add_to_cart">add_shopping_cart</span>
                             <?= __('Add to Cart') ?>
                         </button>
                         <w:hook name="WeShop_Product::detail::after_add_to_cart"/>
                         <w:hook name="WeShop_Product::frontend::product::detail::after-add-to-cart"/>
-                        <button type="button" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary/20 text-primary gap-2 text-base font-bold leading-normal tracking-wide hover:bg-primary/30 transition-colors add-to-wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
-                            <span class="material-symbols-outlined">favorite</span>
+                        <button type="button" class="w-full flex cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary/20 text-primary gap-2 text-base font-bold leading-normal tracking-wide hover:bg-primary/30 transition-colors add-to-wishlist weline-pixel::add_to_wishlist" data-product-id="<?= $product['product_id'] ?? 0 ?>">
+                            <span class="material-symbols-outlined weline-pixel::add_to_wishlist">favorite</span>
                             <?= __('Add to Wishlist') ?>
                         </button>
                     </div>
