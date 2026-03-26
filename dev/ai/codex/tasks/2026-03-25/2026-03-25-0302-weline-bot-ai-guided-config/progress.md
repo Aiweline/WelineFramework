@@ -1,0 +1,132 @@
+# Progress - weline bot ai guided config
+
+- 2026-03-25 03:02 Created the task workspace.
+- 2026-03-25 03:04 Loaded session context required by AGENTS.md (`SOUL.md`, `USER.md`, `memory/2026-03-25.md`, `memory/2026-03-24.md`, `dev/ai/codex/README.md`).
+- 2026-03-25 03:06 Applied `weline-framework-skill-router` and selected repo skills: `module-development`, `config-and-env`, `frontend-components`.
+- 2026-03-25 03:10 Audited `Weline_Bot` current role configuration flow:
+  - backend save logic already supports model/adapter/skills/permissions/model_config
+  - role form currently exposes only basic fields (code/name/status/icon/description/system_prompt)
+  - missing guided flow causes high cognitive load and hidden capability
+- 2026-03-25 03:12 Decided implementation path: add AI assisted role config service + role suggest endpoint + guided wizard form + safe fallback templates.
+- 2026-03-25 03:25 Implemented `RoleConfigAssistant` service with:
+  - guided role templates (general/coding/it_ops/seo)
+  - AI-generated draft (when model available)
+  - strict sanitize/whitelist fallback for skills/adapters/model_id/permissions/model_config
+- 2026-03-25 03:31 Refactored `Controller/Backend/Role.php`:
+  - added guided form data wiring
+  - added `postSuggest` / `getSuggest` endpoints for AI config draft
+  - normalized model/adapter/skill loading
+  - improved save parser (`permissions_text`, `model_config_text`, list/json compatibility)
+- 2026-03-25 03:38 Rebuilt `view/templates/Backend/Role/form.phtml` into wizard + advanced mode:
+  - template selection, project context inputs, AI suggestion action
+  - auto-apply draft into base fields/system prompt/skills/permissions/model config
+  - advanced section toggle for model/adapter/skills/permissions/json
+- 2026-03-25 03:40 Updated `etc/env.php` guided setup defaults for humanized bot configuration.
+- 2026-03-25 03:43 Added focused unit test: `RoleConfigAssistantTest` (fallback + sanitize + template filtering).
+- 2026-03-25 03:45 Verification:
+  - `php -l` passed for Role controller, new service, role form template, env config, new unit test file.
+  - `php vendor/bin/phpunit --no-coverage app/code/Weline/Bot/Test/Unit/Service/RoleConfigAssistantTest.php --colors=never` passed (`3 tests / 18 assertions`, with existing PHPUnit deprecation notice).
+  - `php tests/e2e/framework/preflight-refresh.php` passed.
+  - `php bin/w setup:upgrade --route` currently fails in this workspace due existing CLI argument validation issue (reports `--route` unknown while listing it as supported); treated as environment/framework baseline issue, not introduced by this task.
+- 2026-03-25 03:52 Encountered charset-corrupted string literals while converting files; rewrote changed Bot PHP/phtml files in UTF-8 with ASCII-safe literals and re-ran lint/phpunit/preflight successfully.
+- 2026-03-25 12:47 Continued second-pass guided UX completion after user requested "continue":
+  - upgraded `Controller/Backend/Role.php` listing payload assignment (`guide_profiles`, `initial_guide`, `max_project_count`) to support guided entry on list page
+  - rebuilt `view/templates/Backend/Role/listing.phtml` into a guided entry page with profile quick-start cards + template quick-start cards + existing role table
+  - enhanced `view/templates/Backend/Role/form.phtml` with `bot_profile` selector, initial-guide defaults, and a non-AI "Apply Template Baseline" shortcut
+  - expanded form JS payload to include `bot_profile` for AI suggestion, added profile hint rendering, and baseline-apply logic
+- 2026-03-25 12:47 Extended `RoleConfigAssistant` with profile-scale strategy:
+  - added profile/workflow/risk normalization (`single_project`, `multi_project`, `enterprise`)
+  - applied strategy layer to both AI-merged and template drafts before sanitize
+  - made system prompt and model config adapt to project count and profile governance requirements
+- 2026-03-25 12:47 Updated `RoleConfigAssistantTest` for new strategy behavior:
+  - added profile strategy coverage (enterprise + careful + safe)
+  - updated sanitize expectation to align with strategy-adjusted model config
+- 2026-03-25 12:47 Verification rerun:
+  - `php -l` passed for all touched Bot files
+  - `php vendor/bin/phpunit --no-coverage app/code/Weline/Bot/Test/Unit/Service/RoleConfigAssistantTest.php --colors=never` passed (`4 tests / 26 assertions`, existing PHPUnit deprecation notice remains)
+  - `php tests/e2e/framework/preflight-refresh.php` passed
+- 2026-03-25 13:30 Continued module hardening after user reported backend errors and incomplete Bot features:
+  - fixed a hard parser blocker by fully rewriting Bot adapters (`BotAgentAdapter`, `ITOpsAdapter`, `SEOAdapter`) with clean ASCII-safe, deterministic prompt/validation logic
+  - added missing backend feature surface to avoid route/template runtime failures:
+    - new backend controller: `Controller/Backend/Memory.php`
+    - new backend templates:
+      - `view/templates/Backend/Chat/index.phtml`
+      - `view/templates/Backend/Session/listing.phtml`
+      - `view/templates/Backend/Session/view.phtml`
+      - `view/templates/Backend/Skill/listing.phtml`
+      - `view/templates/Backend/Skill/view.phtml`
+      - `view/templates/Backend/Schedule/listing.phtml`
+      - `view/templates/Backend/Schedule/form.phtml`
+      - `view/templates/Backend/Memory/listing.phtml`
+  - rewrote `etc/backend/menu.xml` with clean menu titles/actions and kept role/skill/schedule/session/memory/console entries aligned
+  - improved `Controller/Backend/Session.php` to expose current filter values to listing template
+- 2026-03-25 13:30 Added Bot backend E2E smoke suite:
+  - `tests/e2e/specs/backend/weline-bot-backend.spec.js`
+  - covers role/skill/schedule/session/memory/chat pages plus schedule-create form
+  - asserts critical pages render and reject fatal error patterns
+- 2026-03-25 13:30 Verification rerun for this hardening pass:
+  - recursive `php -l` across `app/code/Weline/Bot/**/*.php` -> no syntax failures
+  - `php tests/e2e/framework/preflight-refresh.php` -> passed
+  - `cd tests/e2e && node start.js specs/backend/weline-bot-backend.spec.js` -> passed (`7 passed`)
+- 2026-03-25 14:55 Closed the remaining Bot backend E2E blocker:
+  - diagnosed createSessionViaApi() 404: uildApiUrl('bot/api/v1/chat/send') incorrectly prefixed the request with /api123, while generated frontend router entries and live probes confirmed the real route is /bot/api/v1/chat/send
+  - updated 	ests/e2e/specs/backend/weline-bot-backend.spec.js to call the direct frontend route via uildTargetUrl('/bot/api/v1/chat/send') and improved the failing assertion payload
+  - fixed backend view-template resolution gaps in Controller/Backend/Session.php and Controller/Backend/Skill.php by explicitly fetching the iew template for getView() actions
+- 2026-03-25 14:55 Final verification for Bot backend closure:
+  - php tests/e2e/framework/preflight-refresh.php -> passed
+  - php -l app/code/Weline/Bot/Controller/Backend/Skill.php -> passed
+  - php -l app/code/Weline/Bot/Controller/Backend/Session.php -> passed
+  - $env:PLAYWRIGHT_DISABLE_PROXY='1'; ='direct'; cd tests/e2e; node start.js specs/backend/weline-bot-backend.spec.js -> passed (10 passed)
+- 2026-03-25 16:15 Continued Bot backend hardening on the runtime chat path after the user asked to keep going:
+  - restored `app/code/Weline/Ai/Service/AiService.php` to a valid baseline and re-applied two needed improvements safely:
+    - `filterConfigOverrides()` so empty model-level overrides do not blank provider config
+    - new `generateStructured()` / `callModelApiStructured()` entry so higher-level modules can keep provider `tool_calls`
+  - rewired `app/code/Weline/Bot/Service/AgentEngine.php` away from the invalid old `AiService::executeAgent*()` contract and the missing `w_query('ai', 'getDefaultModel')` dependency:
+    - direct model-id lookup now uses `AiModel`
+    - Bot now calls `AiService::generateStructured()` with real message history + role model config
+    - stream mode degrades safely to a single final chunk instead of the broken pseudo-generator path
+    - assistant tool-call messages are persisted before tool results so follow-up turns keep valid context
+    - constructor was kept backward-compatible with stale generated factories by making `AiModel` optional at the tail
+  - normalized `SkillPackageManager::getToolsForRole()` to emit flat tool definitions that match current provider expectations instead of pre-wrapped OpenAI `function` payloads
+  - strengthened `tests/e2e/specs/backend/weline-bot-backend.spec.js` so chat-session creation now rejects internal contract/query-provider errors in the JSON payload instead of only checking `session_id`
+- 2026-03-25 16:15 Verification for the Bot/Ai contract fix:
+  - `php -l app/code/Weline/Ai/Service/AiService.php` -> passed
+  - `php -l app/code/Weline/Bot/Service/AgentEngine.php` -> passed
+  - `php -l app/code/Weline/Bot/Service/SkillPackageManager.php` -> passed
+  - `php tests/e2e/framework/preflight-refresh.php` -> passed
+  - `$env:PLAYWRIGHT_DISABLE_PROXY='1'; $env:PLAYWRIGHT_E2E_TRANSPORT='direct'; $env:PLAYWRIGHT_SKIP_PREFLIGHT='1'; cd tests/e2e; node start.js specs/backend/weline-bot-backend.spec.js --reporter=line` -> passed (`10 passed`)
+- 2026-03-25 Continued the broader regression/performance closure after the user asked to cover both AgentEngine tests and full e2e:
+  - confirmed `AgentEngineTest` already exists and currently locks the tool loop, permission-denied degradation, missing-skill degradation, iteration cap, and stream fallback paths
+  - recovered `app/code/Weline/Framework/View/Template.php` from `HEAD` after a prior accidental UTF-16 rewrite and re-verified `class_exists('Weline\\Framework\\View\\Template')`
+  - re-ran the request benchmark and confirmed the real remaining blocker was still first-query provider loading, not analytics business logic
+- 2026-03-25 Optimized framework query provider loading instead of patching storefront symptoms:
+  - refactored `Weline\\Framework\\Service\\Query\\QueryProviderRegistry` into a two-phase registry:
+    - scan provider metadata and parse literal `getProviderName()` returns from source files
+    - instantiate only the requested provider on `getProvider()`, while `getAllProviders()` / `getAllDescriptors()` still hydrate the full registry when truly needed
+  - added `QueryProviderRegistryTest` to lock both provider-name source parsing and the lazy instantiation contract
+  - restored the corrupted `Template.php` copy to a clean UTF-8 working tree version and kept the corrupted snapshot in task artifacts for traceability
+- 2026-03-25 Performance / verification refresh after the registry fix:
+  - `php -l app/code/Weline/Framework/View/Template.php` -> passed
+  - `php -l app/code/Weline/Framework/Service/Query/QueryProviderRegistry.php` -> passed
+  - `php -l app/code/Weline/Framework/Test/Unit/Service/Query/QueryProviderRegistryTest.php` -> passed
+  - `php vendor/bin/phpunit --no-coverage app/code/Weline/Framework/Test/Unit/Service/Query/QueryProviderRegistryTest.php --colors=never` -> passed (`2 tests / 7 assertions`)
+  - `php vendor/bin/phpunit --no-coverage app/code/Weline/Bot/Test/Unit/Service/AgentEngineTest.php --colors=never` -> passed (`8 tests / 97 assertions`)
+  - query-provider benchmark `getProvider('analytics')`: `15600.62ms -> 15.07ms`
+  - fallback storefront probes:
+    - `curl http://127.0.0.1:9995/customer/account/login` -> `16.11s -> 0.55s`
+    - `curl http://127.0.0.1:9995/compare` -> `0.397s`
+  - targeted frontend browser rerun:
+    - `node tests/e2e/start.js specs/frontend/weshop-compare.spec.js specs/frontend/weshop-invoice.spec.js specs/frontend/weshop-recently-viewed.spec.js specs/frontend/weshop-rma.spec.js specs/frontend/weshop-subscription.spec.js specs/frontend/weshop-wishlist.spec.js` -> passed (`7 passed`)
+  - full grouped browser regression:
+    - `PLAYWRIGHT_E2E_TRANSPORT=direct PLAYWRIGHT_DISABLE_PROXY=1 PLAYWRIGHT_REUSE_FALLBACK_RUNTIME=0 node tests/e2e/start.js` -> passed end-to-end across fallback + WLS groups
+- 2026-03-26 09:45 Continued the framework follow-up after the user asked to keep going:
+  - reloaded the session/task context, applied `weline-framework-skill-router`, and used `unified-query-provider` + `testing`
+  - extended `QueryProviderRegistryTest` with a deferred dynamic-provider regression so literal-name fast path and dynamic-name fallback are both covered
+  - added `FrameworkQueryServiceTest` to lock the query service contract:
+    - before/after event dispatch path
+    - deny-in-before-event degradation path
+    - `framework/introspect` descriptor summarization path
+  - verification:
+    - `php -l app/code/Weline/Framework/Test/Unit/Service/Query/QueryProviderRegistryTest.php` -> passed
+    - `php -l app/code/Weline/Framework/Test/Unit/Service/Query/FrameworkQueryServiceTest.php` -> passed
+    - `php vendor/bin/phpunit --no-coverage app/code/Weline/Framework/Test/Unit/Service/Query/QueryProviderRegistryTest.php app/code/Weline/Framework/Test/Unit/Service/Query/FrameworkQueryServiceTest.php --colors=never` -> passed (`6 tests / 26 assertions`)
