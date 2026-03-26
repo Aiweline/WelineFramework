@@ -7,10 +7,9 @@ namespace WeShop\Order\Controller\Frontend\Order;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Controller\BaseController;
 use WeShop\Order\Service\OrderService;
+
 class RetryPayment extends BaseController
 {
-    private const LOGIN_ROUTE = 'customer/account/login';
-
     public function __construct(
         private readonly CustomerContextInterface $customerContext,
         private readonly OrderService $orderService
@@ -29,7 +28,7 @@ class RetryPayment extends BaseController
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
             $this->getMessageManager()->addError(__('Please log in to continue.'));
-            $this->redirect(self::LOGIN_ROUTE);
+            $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
 
