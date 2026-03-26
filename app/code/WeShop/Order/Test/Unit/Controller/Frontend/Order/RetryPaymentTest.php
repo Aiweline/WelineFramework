@@ -13,6 +13,39 @@ use Weline\Framework\Manager\MessageManager;
 
 class RetryPaymentTest extends TestCase
 {
+    public function testIndexRedirectsGuestsToCanonicalLoginRoute(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->method('getUserId')->willReturn(null);
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())->method('getRetryPaymentContext');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['order_id', null, 77],
+        ]);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addError');
+
+        $controller = $this->getMockBuilder(RetryPayment::class)
+            ->setConstructorArgs([$customerContext, $orderService])
+            ->onlyMethods(['redirect', 'getMessageManager'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/customer/account/login');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('', $controller->index());
+    }
+
     public function testIndexRedirectsToCheckoutWhenRetryIsAllowed(): void
     {
         $customerContext = $this->createMock(CustomerContextInterface::class);

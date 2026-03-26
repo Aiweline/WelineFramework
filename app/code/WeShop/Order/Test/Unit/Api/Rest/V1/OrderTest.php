@@ -11,6 +11,7 @@ use WeShop\Order\Service\OrderDetailPageDataService;
 use WeShop\Order\Service\OrderListPageDataService;
 use WeShop\Order\Service\OrderService;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 
 class OrderTest extends TestCase
 {
@@ -84,6 +85,63 @@ class OrderTest extends TestCase
             ->willReturn('detail');
 
         $this->assertSame('detail', $api->getDetail());
+    }
+
+    public function testGetListRendersRealJsonPayloadForLoggedInCustomer(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())
+            ->method('getUserId')
+            ->willReturn(6);
+
+        $listPageDataService = $this->createMock(OrderListPageDataService::class);
+        $listPageDataService->expects($this->once())
+            ->method('build')
+            ->with(6, 1, 20)
+            ->willReturn([
+                'orders' => [['order_id' => 81]],
+                'unpaid_orders' => [],
+                'unpaid_count' => 0,
+                'order_count' => 1,
+                'page' => 1,
+                'page_size' => 20,
+                'page_count' => 1,
+                'has_previous' => false,
+                'has_next' => false,
+                'pagination' => ['current_page' => 1, 'page_size' => 20, 'total_pages' => 1],
+                'back_url' => 'weshop/customer/account/index',
+            ]);
+
+        $api = new Order(
+            $customerContext,
+            $this->createMock(OrderService::class),
+            $listPageDataService,
+            $this->createMock(OrderDetailPageDataService::class),
+        );
+
+        $response = $this->createMock(Response::class);
+        $response->expects($this->once())
+            ->method('setHeader')
+            ->with('Content-Type', 'application/json; charset=utf-8')
+            ->willReturnSelf();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')
+            ->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+                return match ($key) {
+                    'page', 'page_size' => null,
+                    default => $default,
+                };
+            });
+        $request->method('getResponse')->willReturn($response);
+        $this->setProtectedProperty($api, 'request', $request);
+
+        $payload = json_decode($api->getList(), true, 512, JSON_THROW_ON_ERROR);
+
+        $this->assertSame('200', $payload['code'] ?? null);
+        $this->assertSame('81', $payload['data']['orders'][0]['order_id'] ?? null);
+        $this->assertSame('1', $payload['data']['order_count'] ?? null);
+        $this->assertSame('weshop/customer/account/index', $payload['data']['back_url'] ?? null);
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

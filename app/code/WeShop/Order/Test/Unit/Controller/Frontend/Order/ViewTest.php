@@ -29,7 +29,7 @@ class ViewTest extends TestCase
 
         $controller->expects($this->once())
             ->method('redirect')
-            ->with('customer/account/login');
+            ->with('weshop/customer/account/login');
         $controller->expects($this->never())->method('assign');
         $controller->expects($this->never())->method('renderPage');
 

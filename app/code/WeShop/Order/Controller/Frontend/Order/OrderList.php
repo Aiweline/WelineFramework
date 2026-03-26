@@ -25,7 +25,7 @@ class OrderList extends BaseController
     {
         $customerId = $this->getCustomerContext()->getUserId();
         if (!$customerId) {
-            $this->redirect('customer/account/login');
+            $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
 
