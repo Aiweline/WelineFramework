@@ -7,6 +7,7 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\PreparedContentStore;
 
@@ -88,43 +89,79 @@ class ControllerFetchFileAfter implements ObserverInterface
         string $contentTemplate,
         string $contentHtml
     ): array {
+        $traceEnabled = RequestLifecycleTrace::isEnabled();
+        $traceName = 'theme::ControllerFetchFileAfter::renderLayoutChain';
+        $traceStart = $traceEnabled ? microtime(true) : 0.0;
+        if ($traceEnabled) {
+            RequestLifecycleTrace::pushCurrentParent($traceName);
+        }
+
         $currentLayoutTemplate = $layoutTemplate;
         $currentContentTemplate = $contentTemplate;
         $currentContentHtml = $contentHtml;
         $renderedHtml = $contentHtml;
 
-        for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
-            $contentRenderKey = $this->primeTemplateData(
-                $template,
-                $currentLayoutTemplate,
-                $currentContentTemplate,
-                $currentContentHtml
-            );
+        try {
+            for ($depth = 0; $depth < self::MAX_LAYOUT_WRAP_DEPTH; $depth++) {
+                $contentRenderKey = $this->primeTemplateData(
+                    $template,
+                    $currentLayoutTemplate,
+                    $currentContentTemplate,
+                    $currentContentHtml
+                );
 
-            // Clear previous layout directive before rendering.
-            $template->setData('layout', null);
-            $renderedHtml = (string)$template->fetch(
-                $currentLayoutTemplate,
-                $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
-            );
+                // Clear previous layout directive before rendering.
+                $template->setData('layout', null);
+                $layoutFetchSpan = 'theme::ControllerFetchFileAfter::layoutFetch::'
+                    . $this->traceTemplateLabel($currentLayoutTemplate)
+                    . "::depth_{$depth}";
+                $layoutFetchStart = $traceEnabled ? microtime(true) : 0.0;
+                if ($traceEnabled) {
+                    RequestLifecycleTrace::pushCurrentParent($layoutFetchSpan);
+                }
+                try {
+                    $renderedHtml = (string)$template->fetch(
+                        $currentLayoutTemplate,
+                        $this->buildLayoutFetchData($currentLayoutTemplate, $currentContentHtml, $contentRenderKey)
+                    );
+                } finally {
+                    if ($traceEnabled) {
+                        RequestLifecycleTrace::popCurrentParent();
+                        RequestLifecycleTrace::recordSpan(
+                            $layoutFetchSpan,
+                            (microtime(true) - $layoutFetchStart) * 1000,
+                            'theme'
+                        );
+                    }
+                }
 
-            $nextLayout = trim((string)$template->getData('layout'));
-            if ($nextLayout === '') {
-                return [$renderedHtml, $currentLayoutTemplate];
+                $nextLayout = trim((string)$template->getData('layout'));
+                if ($nextLayout === '') {
+                    return [$renderedHtml, $currentLayoutTemplate];
+                }
+
+                $nextLayoutTemplate = $this->resolveNextLayoutTemplate($currentLayoutTemplate, $nextLayout);
+                if ($nextLayoutTemplate === '' || $nextLayoutTemplate === $currentLayoutTemplate) {
+                    return [$renderedHtml, $currentLayoutTemplate];
+                }
+
+                // Next wrapper uses current layout output as its content.
+                $currentContentTemplate = $currentLayoutTemplate;
+                $currentContentHtml = $renderedHtml;
+                $currentLayoutTemplate = $nextLayoutTemplate;
             }
 
-            $nextLayoutTemplate = $this->resolveNextLayoutTemplate($currentLayoutTemplate, $nextLayout);
-            if ($nextLayoutTemplate === '' || $nextLayoutTemplate === $currentLayoutTemplate) {
-                return [$renderedHtml, $currentLayoutTemplate];
+            return [$renderedHtml, $currentLayoutTemplate];
+        } finally {
+            if ($traceEnabled) {
+                RequestLifecycleTrace::popCurrentParent();
+                RequestLifecycleTrace::recordSpan(
+                    $traceName,
+                    (microtime(true) - $traceStart) * 1000,
+                    'theme'
+                );
             }
-
-            // Next wrapper uses current layout output as its content.
-            $currentContentTemplate = $currentLayoutTemplate;
-            $currentContentHtml = $renderedHtml;
-            $currentLayoutTemplate = $nextLayoutTemplate;
         }
-
-        return [$renderedHtml, $currentLayoutTemplate];
     }
 
     private function primeTemplateData(
@@ -241,5 +278,16 @@ class ControllerFetchFileAfter implements ObserverInterface
         }
 
         return 'frontend';
+    }
+
+    private function traceTemplateLabel(string $templatePath): string
+    {
+        $normalizedPath = str_replace('\\', '/', $templatePath);
+        if (str_contains($normalizedPath, '::')) {
+            [$module, $path] = explode('::', $normalizedPath, 2);
+            return $module . '::' . basename($path);
+        }
+
+        return basename($normalizedPath);
     }
 }
