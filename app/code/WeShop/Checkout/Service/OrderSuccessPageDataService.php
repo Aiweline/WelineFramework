@@ -67,13 +67,26 @@ class OrderSuccessPageDataService
         $contextSummary = is_array($lastOrderContext['cart_summary'] ?? null)
             ? $lastOrderContext['cart_summary']
             : (is_array($lastOrderContext['order_summary'] ?? null) ? $lastOrderContext['order_summary'] : []);
+
+        $subtotal = (float) ($contextSummary['subtotal'] ?? $order->getData(Order::schema_fields_subtotal) ?? 0);
+        $shipping = (float) ($contextSummary['shipping'] ?? $order->getData(Order::schema_fields_shipping_amount) ?? 0);
+        $discount = (float) ($contextSummary['discount'] ?? $order->getData(Order::schema_fields_discount_amount) ?? 0);
+        $tax = (float) ($contextSummary['tax'] ?? $order->getData(Order::schema_fields_tax_amount) ?? 0);
         $grandTotal = (float) ($contextSummary['grand_total'] ?? $contextSummary['total'] ?? $order->getData(Order::schema_fields_total) ?? 0);
 
+        if ($subtotal <= 0 && $grandTotal > 0) {
+            $subtotal = max(0.0, round($grandTotal - $shipping - $tax + $discount, 2));
+        }
+
+        if ($grandTotal <= 0) {
+            $grandTotal = max(0.0, round($subtotal + $shipping + $tax - $discount, 2));
+        }
+
         return [
-            'subtotal' => (float) ($contextSummary['subtotal'] ?? $grandTotal),
-            'shipping' => (float) ($contextSummary['shipping'] ?? $order->getData('shipping_amount') ?? 0),
-            'discount' => (float) ($contextSummary['discount'] ?? $order->getData('discount_amount') ?? 0),
-            'tax' => (float) ($contextSummary['tax'] ?? $order->getData('tax_amount') ?? 0),
+            'subtotal' => $subtotal,
+            'shipping' => $shipping,
+            'discount' => $discount,
+            'tax' => $tax,
             'grand_total' => $grandTotal,
         ];
     }

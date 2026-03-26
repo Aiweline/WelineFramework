@@ -67,14 +67,28 @@ class CheckoutPageDataServiceTest extends TestCase
             ->with(12)
             ->willReturn([
                 [
+                    'address_id' => 2,
+                    'firstname' => 'Grace',
+                    'lastname' => 'Hopper',
+                    'street' => '456 Broadway',
+                    'city' => 'New York',
+                    'region' => 'NY',
+                    'country_id' => 'US',
+                    'postcode' => '10012',
+                    'telephone' => '987654321',
+                    'is_default' => false,
+                ],
+                [
                     'address_id' => 3,
                     'firstname' => 'Ada',
                     'lastname' => 'Lovelace',
                     'street' => '123 Market Street',
                     'city' => 'London',
                     'region' => 'LDN',
+                    'country_id' => 'GB',
                     'postcode' => 'EC1A',
                     'telephone' => '123456789',
+                    'is_default' => true,
                 ],
             ]);
 
@@ -85,7 +99,13 @@ class CheckoutPageDataServiceTest extends TestCase
         $checkoutService = $this->createMock(CheckoutService::class);
         $checkoutService->expects($this->once())
             ->method('getCheckoutShippingMethods')
-            ->with(12, ['area' => 'frontend'])
+            ->with(12, [
+                'area' => 'frontend',
+                'currency' => 'USD',
+                'country' => 'GB',
+                'country_id' => 'GB',
+                'region' => 'LDN',
+            ])
             ->willReturn([
                 [
                     'code' => 'flat_rate',
@@ -125,6 +145,7 @@ class CheckoutPageDataServiceTest extends TestCase
             ->method('getCountries')
             ->with('en')
             ->willReturn([
+                'GB' => 'United Kingdom',
                 'US' => 'United States',
                 'CN' => 'China',
             ]);
@@ -149,13 +170,17 @@ class CheckoutPageDataServiceTest extends TestCase
         $this->assertSame(63.5, $result['cart_summary']['grand_total']);
         $this->assertFalse((bool) $result['is_retry_payment']);
         $this->assertSame('Traveler Backpack', $result['cart_items'][0]['name']);
-        $this->assertSame('Ada Lovelace', $result['saved_addresses'][0]['name']);
+        $this->assertSame(3, $result['selected_shipping_address_id']);
+        $this->assertSame('Ada Lovelace', $result['saved_addresses'][1]['name']);
+        $this->assertSame('GB', $result['saved_addresses'][1]['country_id']);
+        $this->assertTrue((bool) $result['saved_addresses'][1]['is_default']);
         $this->assertSame('paypal', $result['payment_methods'][0]['code']);
         $this->assertSame('redirect', $result['payment_methods'][0]['flow']);
         $this->assertContains($result['payment_methods'][1]['badge'], ['Offline', '线下']);
         $this->assertStringContainsString('Use the order number as the payment reference.', $result['payment_methods'][1]['checkout_note']);
         $this->assertSame(
             [
+                ['code' => 'GB', 'name' => 'United Kingdom'],
                 ['code' => 'US', 'name' => 'United States'],
                 ['code' => 'CN', 'name' => 'China'],
             ],
