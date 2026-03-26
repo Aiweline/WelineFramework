@@ -272,13 +272,15 @@ $search = $this->getData('search') ?? '';
                                 </a>
                             <?php endif; ?>
                         </form>
-                        <w:websites:website:build
+                        <block class="Weline\Component\Block\OffCanvas"
+                               cache="0"
                                id="websites_add_website"
-                               mode="add"
+                               action="*/admin/website/add"
                                title="添加网站"
                                target-button-text="添加网站"
                                icon="mdi mdi-plus"
                                target-button-class="btn btn-primary"
+                               save="1"
                         />
                     </div>
                 </div>
