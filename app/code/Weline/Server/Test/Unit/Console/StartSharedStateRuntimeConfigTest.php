@@ -157,6 +157,40 @@ final class StartSharedStateRuntimeConfigTest extends TestCase
         );
     }
 
+    public function testSharedStateRuntimeSkipsPortReleaseForEnsuredServices(): void
+    {
+        $start = new Start();
+
+        self::assertTrue(
+            (bool) $this->invokeProtected(
+                $start,
+                'shouldSkipSharedStatePortReleaseCheck',
+                ['reuse_existing' => true]
+            )
+        );
+        self::assertTrue(
+            (bool) $this->invokeProtected(
+                $start,
+                'shouldSkipSharedStatePortReleaseCheck',
+                ['created_now' => true]
+            )
+        );
+        self::assertTrue(
+            (bool) $this->invokeProtected(
+                $start,
+                'shouldSkipSharedStatePortReleaseCheck',
+                ['shared_service' => true]
+            )
+        );
+        self::assertFalse(
+            (bool) $this->invokeProtected(
+                $start,
+                'shouldSkipSharedStatePortReleaseCheck',
+                []
+            )
+        );
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
