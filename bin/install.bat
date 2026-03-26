@@ -113,7 +113,8 @@ for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
 )
 if not defined FOUND_PATCH goto :php_download_failed
 if not defined FOUND_URL set "FOUND_URL=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.!FOUND_PATCH!-Win32-!VS!-x64.zip"
-set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! ..." & call :cecho Gray ""
+set "CECHO_MSG=PHP package URL: !FOUND_URL!" & call :cecho DarkGray ""
+set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! from: !FOUND_URL!" & call :cecho Gray ""
 curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!FOUND_URL!" 2>nul >nul && set "FOUND=1"
 if not defined FOUND goto :php_download_failed
 mkdir "%PHP_DIR%" 2>nul
@@ -138,7 +139,12 @@ dir /b "%TEMP%\vc_redist.x64.exe" 2>nul | findstr . >nul && start /wait "" "%TEM
 del "%TEMP%\vc_redist.x64.exe" 2>nul
 goto :skip_php
 :php_download_failed
-set "CECHO_MSG=Download failed. Check network. Manual: https://windows.php.net/downloads/releases/ extract to %PHP_DIR%." & call :cecho Yellow ""
+if defined FOUND_URL (
+  set "CECHO_MSG=Download failed from URL: !FOUND_URL!" & call :cecho Yellow ""
+) else (
+  set "CECHO_MSG=Download failed before a valid URL was selected." & call :cecho Yellow ""
+)
+set "CECHO_MSG=Manual source index: https://windows.php.net/downloads/releases/ (extract to %PHP_DIR%)." & call :cecho Yellow ""
 goto :skip_php
 :php_extract_failed
 set "CECHO_MSG=Extract may have different structure. Check %PHP_DIR%." & call :cecho Yellow ""
