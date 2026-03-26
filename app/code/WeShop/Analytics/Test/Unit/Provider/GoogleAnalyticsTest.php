@@ -45,4 +45,14 @@ class GoogleAnalyticsTest extends TestCase
 
         $this->assertSame('', $provider->getPixelCode());
     }
+
+    public function testGetPixelHookSnippetsReturnsHeadOnly(): void
+    {
+        $provider = new GoogleAnalytics('G-TEST123', 'secret', true);
+        $snippets = $provider->getPixelHookSnippets();
+
+        self::assertStringContainsString("id=G-TEST123", $snippets['head']);
+        self::assertSame('', $snippets['body']);
+        self::assertSame('', $snippets['footer']);
+    }
 }
