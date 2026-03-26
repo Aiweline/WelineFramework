@@ -86,12 +86,14 @@ class SeoSubject extends Model
     public function findOrCreate(string $subjectType, int $subjectId): self
     {
         $this->reset()
+            ->clearData()
             ->where(self::schema_fields_SUBJECT_TYPE, $subjectType)
             ->where(self::schema_fields_SUBJECT_ID, $subjectId)
             ->find()
             ->fetch();
 
         if (!$this->getId()) {
+            $this->clearData();
             $this->setData(self::schema_fields_SUBJECT_TYPE, $subjectType)
                 ->setData(self::schema_fields_SUBJECT_ID, $subjectId)
                 ->setData(self::schema_fields_STATUS, self::STATUS_ENABLED);
