@@ -57,9 +57,9 @@ class AccountManager
      */
     public function setDefaultAccount(int $accountId): void
     {
-        $account = $this->getAccountModel()->reset()->load($accountId);
+        $account = $this->getAccount($accountId);
         
-        if (!$account->getData(Account::schema_fields_ACCOUNT_ID)) {
+        if (!$account instanceof Account || !$account->getId()) {
             throw new \InvalidArgumentException(__('账户不存在'));
         }
 
@@ -92,6 +92,26 @@ class AccountManager
             ->fetch();
         
         return $account->getId() ? $account : null;
+    }
+
+    public function getAccount(int $accountId): ?Account
+    {
+        $account = $this->getAccountModel()->reset()
+            ->where(Account::schema_fields_ACCOUNT_ID, $accountId)
+            ->find()
+            ->fetch();
+
+        return $account instanceof Account && $account->getId() ? $account : null;
+    }
+
+    public function deleteAccount(int $accountId): void
+    {
+        $account = $this->getAccount($accountId);
+        if ($account === null) {
+            throw new \InvalidArgumentException('Account does not exist.');
+        }
+
+        $account->delete();
     }
 
     /**
