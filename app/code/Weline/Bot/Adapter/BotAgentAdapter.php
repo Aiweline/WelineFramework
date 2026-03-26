@@ -6,10 +6,7 @@ namespace Weline\Bot\Adapter;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
- * Bot 智能体适配器
- *
- * 专为 Bot 智能体设计的场景适配器
- * 提供智能体角色上下文增强、工具调用格式化等能力
+ * Default Bot scenario adapter.
  */
 class BotAgentAdapter implements ScenarioAdapterInterface
 {
@@ -20,12 +17,12 @@ class BotAgentAdapter implements ScenarioAdapterInterface
 
     public function getName(): string
     {
-        return __('Bot 智能体适配器');
+        return __('Bot Agent Adapter');
     }
 
     public function getDescription(): string
     {
-        return __('专为 Bot 智能体设计的场景适配器，支持角色上下文增强、工具调用格式化、记忆注入等能力。');
+        return __('Default adapter for role-based bot conversations with tools, memory context, and safety guardrails.');
     }
 
     public function getVersion(): string
@@ -35,190 +32,156 @@ class BotAgentAdapter implements ScenarioAdapterInterface
 
     public function getSupportedModelTypes(): array
     {
-        return ['*']; // 支持所有模型
+        return ['*'];
     }
 
-    /**
-     * 适配提示词
-     *
-     * 增强 Bot 智能体的提示词：
-     * - 添加角色上下文
-     * - 添加工具使用说明
-     * - 添加安全提示
-     */
     public function adaptPrompt(string $prompt, array $params = []): string
     {
-        $roleName = $params['role_name'] ?? 'AI 助手';
-        $skills = $params['skills'] ?? [];
-        $permissions = $params['permissions'] ?? [];
-        $memory = $params['memory'] ?? [];
+        $roleName = (string) ($params['role_name'] ?? 'AI Assistant');
+        $skills = is_array($params['skills'] ?? null) ? $params['skills'] : [];
+        $permissions = is_array($params['permissions'] ?? null) ? $params['permissions'] : [];
+        $memory = is_array($params['memory'] ?? null) ? $params['memory'] : [];
 
-        // 构建增强提示词
-        $enhancedPrompt = "你是 {$roleName}。\n\n";
+        $enhancedPrompt = "You are {$roleName}.\n\n";
 
-        // 添加记忆上下文
         if (!empty($memory)) {
-            $enhancedPrompt .= "【相关记忆】\n";
+            $enhancedPrompt .= "[Relevant Memory]\n";
             foreach ($memory as $item) {
-                $type = $item['type'] ?? 'fact';
-                $value = $item['value'] ?? '';
-                $typeLabels = [
-                    'fact' => '事实',
-                    'preference' => '偏好',
-                    'entity' => '实体',
-                    'event' => '事件',
-                ];
-                $enhancedPrompt .= "- [{$typeLabels[$type] ?? $type}] {$value}\n";
+                if (!is_array($item)) {
+                    continue;
+                }
+
+                $type = (string) ($item['type'] ?? 'fact');
+                $value = trim((string) ($item['value'] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+                $enhancedPrompt .= "- [{$type}] {$value}\n";
             }
             $enhancedPrompt .= "\n";
         }
 
-        // 添加技能说明
         if (!empty($skills)) {
-            $enhancedPrompt .= "【可用技能】\n";
+            $enhancedPrompt .= "[Available Skills]\n";
             foreach ($skills as $skill) {
-                $skillName = is_array($skill) ? ($skill['name'] ?? $skill['code']) : $skill;
-                $enhancedPrompt .= "- {$skillName}\n";
+                if (is_array($skill)) {
+                    $name = (string) ($skill['name'] ?? $skill['code'] ?? 'skill');
+                    $code = trim((string) ($skill['code'] ?? ''));
+                    $enhancedPrompt .= $code === '' ? "- {$name}\n" : "- {$name} ({$code})\n";
+                    continue;
+                }
+
+                $enhancedPrompt .= '- ' . trim((string) $skill) . "\n";
             }
             $enhancedPrompt .= "\n";
         }
 
-        // 添加权限边界提示
         if (!empty($permissions)) {
-            $enhancedPrompt .= "【权限范围】\n你可以在以下范围内操作：\n";
-            foreach ($permissions as $perm) {
-                $enhancedPrompt .= "- {$perm}\n";
+            $enhancedPrompt .= "[Permission Scope]\n";
+            foreach ($permissions as $permission) {
+                $permission = trim((string) $permission);
+                if ($permission !== '') {
+                    $enhancedPrompt .= "- {$permission}\n";
+                }
             }
             $enhancedPrompt .= "\n";
         }
 
-        // 添加安全提示
-        $enhancedPrompt .= "【安全提示】\n";
-        $enhancedPrompt .= "- 对于危险操作（如删除文件、执行命令），必须先询问用户确认\n";
-        $enhancedPrompt .= "- 不要泄露敏感信息（如 API Key、密码）\n";
-        $enhancedPrompt .= "- 遇到无法完成的任务，请诚实告知用户\n";
-        $enhancedPrompt .= "- 使用技能时，请确保参数正确且在权限范围内\n\n";
-
-        // 添加用户输入
-        $enhancedPrompt .= "【用户输入】\n{$prompt}";
+        $enhancedPrompt .= "[Safety Rules]\n";
+        $enhancedPrompt .= "- Ask for explicit confirmation before destructive or sensitive actions.\n";
+        $enhancedPrompt .= "- Never expose secrets such as API keys, tokens, or passwords.\n";
+        $enhancedPrompt .= "- If a task cannot be completed, explain constraints clearly and provide alternatives.\n";
+        $enhancedPrompt .= "- Keep outputs actionable and aligned with granted permissions.\n\n";
+        $enhancedPrompt .= "[User Input]\n{$prompt}";
 
         return $enhancedPrompt;
     }
 
-    /**
-     * 处理响应
-     *
-     * 格式化 Bot 智能体的响应：
-     * - 提取工具调用
-     * - 清理敏感信息
-     */
     public function processResponse(string $response, array $params = []): string
     {
-        // 移除可能的敏感信息（API Key 等）
-        $response = $this->redactSensitiveInfo($response);
-
-        return $response;
+        return $this->redactSensitiveInfo($response);
     }
 
-    /**
-     * 验证输入参数
-     */
     public function validateParams(array $params = []): array
     {
         $errors = [];
 
-        // 检查必需参数
         if (isset($params['role_id']) && !is_numeric($params['role_id'])) {
-            $errors[] = 'role_id 必须是数字';
+            $errors[] = 'role_id must be numeric';
         }
-
         if (isset($params['skills']) && !is_array($params['skills'])) {
-            $errors[] = 'skills 必须是数组';
+            $errors[] = 'skills must be an array';
         }
-
         if (isset($params['permissions']) && !is_array($params['permissions'])) {
-            $errors[] = 'permissions 必须是数组';
+            $errors[] = 'permissions must be an array';
         }
 
         return $errors;
     }
 
-    /**
-     * 获取参数模板
-     */
     public function getParamTemplate(): array
     {
         return [
             'role_id' => [
                 'type' => 'int',
                 'required' => false,
-                'description' => '角色 ID',
+                'description' => 'Role ID',
             ],
             'role_name' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '角色名称',
-                'default' => 'AI 助手',
+                'description' => 'Role display name',
+                'default' => 'AI Assistant',
             ],
             'skills' => [
                 'type' => 'array',
                 'required' => false,
-                'description' => '可用技能列表',
+                'description' => 'Available skill list',
             ],
             'permissions' => [
                 'type' => 'array',
                 'required' => false,
-                'description' => '权限列表',
+                'description' => 'Permission list',
             ],
             'memory' => [
                 'type' => 'array',
                 'required' => false,
-                'description' => '相关记忆',
+                'description' => 'Retrieved memory snippets',
             ],
         ];
     }
 
-    /**
-     * 获取使用示例
-     */
     public function getExamples(): array
     {
         return [
             [
-                'title' => '基础对话',
-                'description' => '使用默认角色进行对话',
-                'input' => '帮我整理一下今天的待办事项',
-                'expected_output' => 'AI 会根据角色配置和可用技能提供帮助',
+                'title' => 'Daily planning',
+                'description' => 'Use role context to summarize and prioritize TODOs.',
+                'input' => 'Please organize my tasks for today by priority.',
+                'expected_output' => 'Prioritized task list with next actions.',
             ],
             [
-                'title' => '文件操作',
-                'description' => '请求 AI 帮助处理文件',
-                'input' => '读取 /var/www/config.json 文件',
-                'expected_output' => 'AI 会调用文件系统技能完成任务',
+                'title' => 'Tool assisted task',
+                'description' => 'Read project files with permissions.',
+                'input' => 'Read /app/config/app.php and summarize key config values.',
+                'expected_output' => 'Config summary within allowed scope.',
             ],
             [
-                'title' => 'Shell 命令',
-                'description' => '请求 AI 执行命令',
-                'input' => '查看当前目录下的文件列表',
-                'expected_output' => 'AI 会调用 Shell 技能执行命令并返回结果',
+                'title' => 'Safe command guidance',
+                'description' => 'Ask for confirmation before risky operations.',
+                'input' => 'Delete all old logs under /var/log/app',
+                'expected_output' => 'Requires explicit confirmation before deletion.',
             ],
         ];
     }
 
-    /**
-     * 检查是否支持指定模型
-     */
     public function supportsModel(string $modelCode): bool
     {
-        return true; // 支持所有模型
+        return $modelCode !== '';
     }
 
-    /**
-     * 脱敏敏感信息
-     */
     private function redactSensitiveInfo(string $text): string
     {
-        // API Key 模式
         $patterns = [
             '/sk-[a-zA-Z0-9]{20,}/' => 'sk-****REDACTED****',
             '/api[_-]?key["\']?\s*[:=]\s*["\']?[a-zA-Z0-9_-]{20,}/i' => 'api_key: ****REDACTED****',
@@ -228,7 +191,7 @@ class BotAgentAdapter implements ScenarioAdapterInterface
         ];
 
         foreach ($patterns as $pattern => $replacement) {
-            $text = preg_replace($pattern, $replacement, $text);
+            $text = preg_replace($pattern, $replacement, $text) ?? $text;
         }
 
         return $text;
