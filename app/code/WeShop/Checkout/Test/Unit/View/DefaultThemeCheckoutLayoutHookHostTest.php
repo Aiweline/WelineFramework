@@ -54,10 +54,14 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('WeShop_Checkout::frontend::partials::checkout::payment-details', $template);
         $this->assertStringContainsString('weshop-checkout-form', $template);
         $this->assertStringContainsString('checkout/success', $template);
+        $this->assertStringContainsString('checkout/methods', $template);
         $this->assertStringContainsString('redirect_url', $template);
         $this->assertStringContainsString("name=\"order_id\"", $template);
         $this->assertStringContainsString('selected_shipping_address_id', $template);
         $this->assertStringContainsString('$addressId === $selectedShippingAddressId', $template);
+        $this->assertStringContainsString('data-weshop-shipping-method-host', $template);
+        $this->assertStringContainsString('data-weshop-payment-method-host', $template);
+        $this->assertStringContainsString('data-weshop-payment-detail-host', $template);
         $this->assertStringContainsString('Retry Payment', $template);
         $this->assertStringContainsString('WeShop_Checkout::summary::rows_before', $template);
         $this->assertStringContainsString('WeShop_Checkout::summary::shipping_before', $template);
