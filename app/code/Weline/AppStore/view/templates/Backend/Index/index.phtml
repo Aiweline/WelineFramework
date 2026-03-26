@@ -1,0 +1,13 @@
+<div class="container-fluid py-3">
+    <h1 class="h4 mb-3"><?= __('应用商城') ?></h1>
+
+    <?php if (!empty($is_bound)): ?>
+        <div class="alert alert-success" role="alert">
+            <?= __('官网账户已绑定，可开始浏览并安装模块。') ?>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-warning" role="alert">
+            <?= __('尚未绑定官网账户，请先前往“账户绑定”完成绑定。') ?>
+        </div>
+    <?php endif; ?>
+</div>
