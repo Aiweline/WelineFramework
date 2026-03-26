@@ -19,6 +19,11 @@ use Weline\AppStore\Model\AppStoreInstalledModule;
 class ModuleInstallerService
 {
     /**
+     * 平台 API 默认基础 URL（当配置存在但值为 null/空时兜底）
+     */
+    private const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
+
+    /**
      * 临时目录
      */
     private const TEMP_DIR = BP . 'var' . DS . 'appstore' . DS . 'temp';
@@ -45,7 +50,9 @@ class ModuleInstallerService
 
     public function __construct()
     {
-        $this->platformApiUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+        $platformUrl = Env::get('appstore.platform_url', self::DEFAULT_PLATFORM_URL);
+        // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
+        $this->platformApiUrl = (is_string($platformUrl) && $platformUrl !== '') ? $platformUrl : self::DEFAULT_PLATFORM_URL;
         $this->httpClient = new Client([
             'timeout' => 300,
             'verify' => true,
