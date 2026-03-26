@@ -99,6 +99,40 @@ class CheckoutService
     }
 
     /**
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, float>
+     */
+    public function previewCheckoutSummary(int $customerId, array $checkoutData): array
+    {
+        $checkoutData = $this->normalizeCheckoutData($checkoutData);
+        $checkoutData['customer_id'] = $customerId;
+
+        $retryOrderId = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
+        if ($retryOrderId > 0) {
+            $retryContext = $this->orderService->getRetryPaymentContext($retryOrderId, $customerId);
+            if (\is_array($retryContext) && \is_array($retryContext['summary'] ?? null)) {
+                return $this->normalizeSummary((array) $retryContext['summary']);
+            }
+        }
+
+        $cartItems = $this->query('cart', 'getCartItems', [
+            'customer_id' => $customerId,
+        ]);
+        $cartItems = \is_array($cartItems) ? $cartItems : [];
+
+        $totals = $this->query('cart', 'calculateTotals', [
+            'customer_id' => $customerId,
+        ]);
+        $totals = \is_array($totals) ? $totals : [];
+
+        if ($cartItems === []) {
+            return $this->normalizeSummary($totals);
+        }
+
+        return $this->buildCheckoutSummary($cartItems, $totals, $checkoutData);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function placeOrder(array $checkoutData): array
@@ -414,13 +448,7 @@ class CheckoutService
     {
         $summary = $order->getData('weshop_checkout_summary');
         if (\is_array($summary)) {
-            return [
-                'subtotal' => (float) ($summary['subtotal'] ?? 0),
-                'shipping' => (float) ($summary['shipping'] ?? 0),
-                'discount' => (float) ($summary['discount'] ?? 0),
-                'tax' => (float) ($summary['tax'] ?? 0),
-                'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
-            ];
+            return $this->normalizeSummary($summary);
         }
 
         $grandTotal = (float) ($order->getData(Order::schema_fields_total) ?? 0);
@@ -431,6 +459,21 @@ class CheckoutService
             'discount' => 0.0,
             'tax' => 0.0,
             'grand_total' => $grandTotal,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<string, float>
+     */
+    protected function normalizeSummary(array $summary): array
+    {
+        return [
+            'subtotal' => (float) ($summary['subtotal'] ?? 0),
+            'shipping' => (float) ($summary['shipping'] ?? 0),
+            'discount' => (float) ($summary['discount'] ?? 0),
+            'tax' => (float) ($summary['tax'] ?? 0),
+            'grand_total' => (float) ($summary['grand_total'] ?? $summary['total'] ?? 0),
         ];
     }
 }
