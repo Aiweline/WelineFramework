@@ -32,6 +32,7 @@ class Methods extends FrontendController
                 'shipping_address' => $this->readShippingAddress(),
                 'shipping_method' => (string) ($this->request->getParam('shipping_method') ?? ''),
                 'payment_method' => (string) ($this->request->getParam('payment_method') ?? ''),
+                'order_id' => (int) ($this->request->getParam('order_id') ?? $this->request->getParam('retry_order_id') ?? 0),
             ]);
 
             return $this->fetchJson([
