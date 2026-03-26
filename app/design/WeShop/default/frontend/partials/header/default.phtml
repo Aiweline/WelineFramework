@@ -68,7 +68,7 @@
         <div class="flex items-center gap-3">
             <!-- Account -->
             <w:hook name="WeShop_Frontend::header::account"/>
-            <a href="<?= $this->getUrl('customer/account') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 transition-colors">
+            <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 gap-2 min-w-0 px-3 hover:bg-primary/10 transition-colors">
                 <span class="material-symbols-outlined text-2xl">person_outline</span>
                 <span class="hidden md:inline text-sm font-medium"><?= __('Account') ?></span>
             </a>
@@ -109,7 +109,7 @@
                                     <a href="<?= $this->getUrl('cart') ?>" class="flex items-center justify-center rounded-lg border border-border-light dark:border-border-dark bg-white dark:bg-surface-dark py-2.5 text-sm font-bold text-text-primary-light dark:text-text-primary-dark hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                                         <?= __('View Cart') ?>
                                     </a>
-                                    <a href="<?= $this->getUrl('checkout') ?>" class="flex items-center justify-center rounded-lg bg-primary py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors">
+                                    <a href="<?= $this->getUrl('checkout') ?>" class="flex items-center justify-center rounded-lg bg-primary py-2.5 text-sm font-bold text-white shadow-lg shadow-primary/20 hover:bg-blue-600 transition-colors weline-pixel::begin_checkout">
                                         <?= __('Checkout') ?>
                                     </a>
                                 </div>

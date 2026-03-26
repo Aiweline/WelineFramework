@@ -56,9 +56,9 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                         <?php if ($filter['type'] === 'checkbox'): ?>
                                             <?php foreach ($filter['options'] as $option): ?>
                                                 <label class="flex items-center space-x-2 text-sm text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark cursor-pointer">
-                                                    <input type="checkbox"
-                                                           name="<?= $filter['code'] ?>[]"
-                                                           value="<?= $option['value'] ?>"
+                                                    <input type="checkbox" 
+                                                           name="<?= $filter['code'] ?>[]" 
+                                                           value="<?= $option['value'] ?>" 
                                                            <?= $option['selected'] ? 'checked' : '' ?>
                                                            class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-border-light dark:border-border-dark dark:bg-background-dark">
                                                     <span><?= htmlspecialchars($option['label']) ?></span>
@@ -69,10 +69,10 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                             <?php endforeach; ?>
                                         <?php elseif ($filter['type'] === 'range'): ?>
                                             <div class="pt-4 px-1">
-                                                <input type="range"
-                                                       name="<?= $filter['code'] ?>"
-                                                       min="<?= $filter['min'] ?>"
-                                                       max="<?= $filter['max'] ?>"
+                                                <input type="range" 
+                                                       name="<?= $filter['code'] ?>" 
+                                                       min="<?= $filter['min'] ?>" 
+                                                       max="<?= $filter['max'] ?>" 
                                                        value="<?= $filter['current'] ?? $filter['max'] ?>"
                                                        class="w-full h-2 bg-border-light dark:bg-border-dark rounded-lg appearance-none cursor-pointer accent-primary">
                                                 <div class="flex justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
@@ -83,9 +83,9 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                         <?php elseif ($filter['type'] === 'rating'): ?>
                                             <?php foreach ($filter['options'] as $option): ?>
                                                 <label class="flex items-center space-x-2 text-sm text-text-secondary-light dark:text-text-secondary-dark cursor-pointer">
-                                                    <input type="radio"
-                                                           name="<?= $filter['code'] ?>"
-                                                           value="<?= $option['value'] ?>"
+                                                    <input type="radio" 
+                                                           name="<?= $filter['code'] ?>" 
+                                                           value="<?= $option['value'] ?>" 
                                                            <?= $option['selected'] ? 'checked' : '' ?>
                                                            class="form-radio h-4 w-4 text-primary focus:ring-primary/50 border-border-light dark:border-border-dark dark:bg-background-dark">
                                                     <span class="flex items-center gap-1 text-secondary">
@@ -101,7 +101,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                 </details>
                             <?php endforeach; ?>
                         </div>
-
+                        
                         <div class="mt-4 flex gap-2">
                             <button type="submit" class="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><?= __('Apply') ?></button>
                             <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="flex-1 py-2 bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark rounded-lg text-sm font-medium text-center hover:bg-border-dark/20 dark:hover:bg-border-light/20 transition-colors"><?= !empty($appliedFilters) ? __('Clear All') : __('Clear') ?></a>
@@ -112,7 +112,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                 <?php endif; ?>
             </div>
         </aside>
-
+        
         <!-- Product Grid -->
         <div class="flex-1">
             <!-- Header -->
@@ -134,7 +134,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                             <?php endforeach; ?>
                         </select>
                     </div>
-
+                    
                     <!-- View Mode -->
                     <div class="hidden sm:flex items-center gap-2">
                         <button type="button" class="p-2 rounded-lg <?= $viewMode === 'grid' ? 'bg-primary text-white' : 'bg-border-light dark:bg-border-dark text-text-secondary-light dark:text-text-secondary-dark hover:bg-primary/20' ?> transition-colors" onclick="setViewMode('grid')">
@@ -147,7 +147,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                 </div>
             </div>
             <w:hook name="WeShop_Catalog::listing::header_after"/>
-
+            
             <!-- Products Grid -->
             <?= $canonicalCategoryProducts ?>
             <?php if ($canonicalCategoryProducts === ''): ?>
@@ -164,8 +164,8 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                     <span class="absolute top-2 left-2 text-xs font-bold px-2 py-1 bg-red-500 text-white rounded"><?= $product['discount_percent'] ?>% <?= __('OFF') ?></span>
                                 <?php endif; ?>
                                 <div class="absolute top-2 right-2 flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button type="button" class="p-2 bg-white/80 dark:bg-black/50 rounded-full add-to-wishlist" data-product-id="<?= $product['product_id'] ?>">
-                                        <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark">favorite</span>
+                                    <button type="button" class="p-2 bg-white/80 dark:bg-black/50 rounded-full add-to-wishlist weline-pixel::add_to_wishlist" data-product-id="<?= $product['product_id'] ?>">
+                                        <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark weline-pixel::add_to_wishlist">favorite</span>
                                     </button>
                                     <button type="button" class="p-2 bg-white/80 dark:bg-black/50 rounded-full add-to-compare" data-product-id="<?= $product['product_id'] ?>">
                                         <span class="material-symbols-outlined text-text-primary-light dark:text-text-primary-dark">compare_arrows</span>
@@ -173,12 +173,12 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                     <w:hook name="WeShop_Catalog::listing::product_card_actions"/>
                                 </div>
                             </a>
-
+                            
                             <!-- Product Info -->
                             <div class="flex flex-col gap-2 p-4 pt-0">
                                 <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="font-medium text-text-primary-light dark:text-text-primary-dark hover:text-primary transition-colors line-clamp-2"><?= htmlspecialchars($product['name']) ?></a>
                                 <w:hook name="WeShop_Catalog::listing::product_card_meta"/>
-
+                                
                                 <!-- Rating -->
                                 <?php $rating = $product['rating'] ?? 0; ?>
                                 <div class="flex items-center gap-1">
@@ -189,21 +189,26 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                                     </div>
                                     <span class="text-xs text-text-secondary-light dark:text-text-secondary-dark">(<?= $product['review_count'] ?? 0 ?>)</span>
                                 </div>
-
+                                
                                 <!-- Price -->
                                 <div class="flex items-baseline gap-2">
-                                    <?php if ($product['special_price'] ?? null): ?>
-                                        <span class="text-lg font-bold text-red-500"><?= $this->formatPrice($product['special_price']) ?></span>
-                                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($product['price']) ?></span>
+                                    <?php
+                                    $currentPrice = (float) ($product['price'] ?? 0);
+                                    $originalPrice = (float) ($product['original_price'] ?? $currentPrice);
+                                    $hasDiscount = $originalPrice > $currentPrice;
+                                    ?>
+                                    <?php if ($hasDiscount): ?>
+                                        <span class="text-lg font-bold text-red-500"><?= $this->formatPrice($currentPrice) ?></span>
+                                        <span class="text-sm text-text-secondary-light dark:text-text-secondary-dark line-through"><?= $this->formatPrice($originalPrice) ?></span>
                                     <?php else: ?>
-                                        <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
+                                        <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($currentPrice) ?></span>
                                     <?php endif; ?>
                                 </div>
-
+                                
                                 <!-- Add to Cart -->
-                                <button type="button" class="mt-2 w-full py-2 bg-primary text-white rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-all add-to-cart" data-product-id="<?= $product['product_id'] ?>">
+                                <button type="button" class="mt-2 w-full py-2 bg-primary text-white rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-all add-to-cart weline-pixel::add_to_cart" data-product-id="<?= $product['product_id'] ?>">
                                     <span class="flex items-center justify-center gap-2">
-                                        <span class="material-symbols-outlined !text-lg">add_shopping_cart</span>
+                                        <span class="material-symbols-outlined !text-lg weline-pixel::add_to_cart">add_shopping_cart</span>
                                         <?= __('Add to Cart') ?>
                                     </span>
                                 </button>
@@ -214,7 +219,7 @@ $buildCategoryPageUrl = function (int $targetPage) use ($category) {
                 </div>
                 <w:hook name="WeShop_Catalog::listing::products_after"/>
             <?php endif; ?>
-
+            
             <!-- Pagination -->
             <?php if ($pagination || ((int) ($paginationData['pages'] ?? 0)) > 1): ?>
                 <div class="mt-8 flex justify-center">
