@@ -160,6 +160,22 @@ class StockFilterProvider extends AbstractFilterProvider
         $this->lowStockThreshold = $threshold;
         return $this;
     }
+
+    public function getSearchFacetDefinition(int $categoryId, array $context = []): ?array
+    {
+        return [
+            'code' => $this->getCode(),
+            'name' => (string) $this->getName(),
+            'type' => 'stock',
+            'field' => 'stock',
+            'display_type' => 'checkbox',
+            'low_stock_threshold' => $this->lowStockThreshold,
+            'buckets' => [
+                ['key' => self::STOCK_IN, 'label' => (string) __('鏈夎揣')],
+                ['key' => self::STOCK_OUT, 'label' => (string) __('缂鸿揣')],
+            ],
+        ];
+    }
     
     /**
      * @inheritDoc

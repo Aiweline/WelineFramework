@@ -103,6 +103,8 @@ class SearchEngineEnvConfig
                 'version' => trim((string) ($config['version'] ?? '')),
                 'install_dir' => trim((string) ($config['install_dir'] ?? '')),
                 'config_file' => trim((string) ($config['config_file'] ?? '')),
+                'data_dir' => trim((string) ($config['data_dir'] ?? '')),
+                'log_dir' => trim((string) ($config['log_dir'] ?? '')),
             ],
             SearchEngineConfig::ENGINE_MEILISEARCH => [
                 'host' => trim((string) ($config['host'] ?? 'http://127.0.0.1:7700')) ?: 'http://127.0.0.1:7700',

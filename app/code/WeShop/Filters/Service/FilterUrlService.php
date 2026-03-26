@@ -169,7 +169,7 @@ class FilterUrlService
      */
     public function getClearAllUrl(?int $categoryId = null): string
     {
-        return $this->buildFilterUrl([]);
+        return $this->buildFilterUrl([], ['page' => null]);
     }
     
     /**
