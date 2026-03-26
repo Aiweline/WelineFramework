@@ -4,125 +4,125 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Storage;
 
-use Weline\Server\Service\SessionMemoryService;
-use Weline\Server\Service\Runtime\RoutingPolicyRegistry;
-use Weline\Server\Shared\Service\SharedMemoryService;
-use Weline\Server\Session\Client\SessionClient;
+use Weline\Server\Service\SessionStateFacade;
 
-/**
- * WLS 共享存储实现
- *
- * 通过 TCP 连接 WLS Session Server，实现跨 Worker 的 Session 共享。
- * 这是 WLS 常驻内存模式下推荐的默认存储，零外部依赖、高性能。
- *
- * This refactor intentionally removes local fallback truth path
- * to guarantee strong consistency across workers.
- */
 final class WlsSharedStorage implements SessionStorageInterface
 {
     private array $config;
     private int $defaultTtl;
-    private SessionMemoryService $sessionMemoryService;
-    private SessionClient $sessionClient;
+    private ?SessionStateFacade $sessionFacade = null;
+    private ?SessionStorageInterface $fallbackStorage = null;
+    private int $sharedUnavailableUntilTs = 0;
+    private int $retryIntervalSec;
+    private string $fallbackReason = '';
+    /** @var null|callable */
+    private $sessionFacadeFactory;
 
-    /**
-     * 构造函数
-     *
-     * @param array $config 配置项
-     */
-    public function __construct(array $config = [])
+    public function __construct(
+        array $config = [],
+        ?callable $sessionFacadeFactory = null,
+        ?SessionStorageInterface $fallbackStorage = null
+    )
     {
         $this->config = $config;
-        $this->defaultTtl = (int)($config['lifetime'] ?? $config['session_ttl'] ?? 3600);
-        $endpoint = RoutingPolicyRegistry::getSessionEndpoint();
-        $host = (string)($this->config['host'] ?? $endpoint['host']);
-        $port = (int)($this->config['port'] ?? $endpoint['port']);
-        $serviceOptions = [
-            'connect_timeout' => (float)($this->config['connect_timeout'] ?? 1.0),
-            'timeout' => (float)($this->config['timeout'] ?? 2.0),
-            'pool_size' => (int)($this->config['pool_size'] ?? 8),
-            'pool_min_idle' => (int)($this->config['pool_min_idle'] ?? 1),
-            'acquire_timeout' => (float)($this->config['acquire_timeout'] ?? 0.2),
-            'token_file_name' => (string)($this->config['token_file_name'] ?? 'session_server.token'),
-        ];
-        $sharedMemoryService = new SharedMemoryService($host, $port, $serviceOptions);
-        $this->sessionMemoryService = new SessionMemoryService($sharedMemoryService);
-        $this->sessionClient = new SessionClient($host, $port, $serviceOptions);
-        $this->sessionClient->connect();
+        $this->defaultTtl = (int) ($config['lifetime'] ?? $config['session_ttl'] ?? 3600);
+        $this->retryIntervalSec = \max(1, (int) ($config['fallback_retry_interval_sec'] ?? 5));
+        $this->sessionFacadeFactory = $sessionFacadeFactory;
+        $this->fallbackStorage = $fallbackStorage;
     }
 
-    /**
-     * @inheritDoc
-     */
+    public function __destruct()
+    {
+        $this->disconnect();
+    }
+
     public function read(string $sessionId): array
     {
-        $data = $this->sessionMemoryService->read($sessionId);
-        if (function_exists('w_log_info')) {
-            w_log_info('[WlsSharedStorage] read sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data), [], 'session');
-        }
-        return $data;
-    }
-
-    /**
-     * @inheritDoc
-     */
-    public function write(string $sessionId, array $data, int $ttl): bool
-    {
-        $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
-        $ok = $this->sessionMemoryService->write($sessionId, $data, $ttl);
-        if (function_exists('w_log_info')) {
-            w_log_info('[WlsSharedStorage] write sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'), [], 'session');
-        }
-        if (!$ok) {
-            w_log_warning(
-                '[WlsSharedStorage] Session 落库失败，请检查 Session Server 是否运行、网络与鉴权。sessionId=' . \substr($sessionId, 0, 8) . '...',
-                ['connected' => $this->sessionClient->isConnected()],
+        $facade = $this->sessionFacade();
+        $data = $facade !== null
+            ? $facade->read($sessionId)
+            : $this->fallbackStorage()->read($sessionId);
+        if (\function_exists('w_log_info')) {
+            w_log_info(
+                '[WlsSharedStorage] read sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data),
+                [],
                 'session'
             );
         }
+
+        return $data;
+    }
+
+    public function write(string $sessionId, array $data, int $ttl): bool
+    {
+        $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
+        $facade = $this->sessionFacade();
+        $ok = $facade !== null
+            ? $facade->write($sessionId, $data, $ttl)
+            : $this->fallbackStorage()->write($sessionId, $data, $ttl);
+        if (\function_exists('w_log_info')) {
+            w_log_info(
+                '[WlsSharedStorage] write sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'),
+                [],
+                'session'
+            );
+        }
+        if (!$ok && \function_exists('w_log_warning') && $facade !== null) {
+            w_log_warning(
+                '[WlsSharedStorage] Session write failed, shared session facade is not healthy. sessionId=' . \substr($sessionId, 0, 8) . '...',
+                ['connected' => $facade->ping()],
+                'session'
+            );
+        }
+
         return $ok;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function destroy(string $sessionId): bool
     {
-        $ok = $this->sessionMemoryService->destroy($sessionId);
-        if (function_exists('w_log_info')) {
-            w_log_info('[WlsSharedStorage] destroy sid=' . substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'), [], 'session');
+        $facade = $this->sessionFacade();
+        $ok = $facade !== null
+            ? $facade->destroy($sessionId)
+            : $this->fallbackStorage()->destroy($sessionId);
+        if (\function_exists('w_log_info')) {
+            w_log_info(
+                '[WlsSharedStorage] destroy sid=' . \substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'),
+                [],
+                'session'
+            );
         }
+
         return $ok;
     }
 
-    /**
-     * @inheritDoc
-     */
     public function exists(string $sessionId): bool
     {
-        return $this->sessionMemoryService->exists($sessionId);
+        $facade = $this->sessionFacade();
+
+        return $facade !== null
+            ? $facade->exists($sessionId)
+            : $this->fallbackStorage()->exists($sessionId);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function touch(string $sessionId, int $ttl): bool
     {
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
-        return $this->sessionMemoryService->touch($sessionId, $ttl);
+        $facade = $this->sessionFacade();
+
+        return $facade !== null
+            ? $facade->touch($sessionId, $ttl)
+            : $this->fallbackStorage()->touch($sessionId, $ttl);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function gc(int $maxLifetime): int
     {
-        return $this->sessionClient->gc($maxLifetime);
+        $facade = $this->sessionFacade();
+
+        return $facade !== null
+            ? $facade->gc($maxLifetime)
+            : $this->fallbackStorage()->gc($maxLifetime);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function getConfig(): array
     {
         return $this->config;
@@ -130,42 +130,109 @@ final class WlsSharedStorage implements SessionStorageInterface
 
     public function isConnected(): bool
     {
-        return $this->sessionClient->isConnected();
+        return $this->sessionFacade !== null && $this->sessionFacade->ping();
     }
 
-    /**
-     * 断开连接
-     */
     public function disconnect(): void
     {
-        $this->sessionClient->disconnect();
+        if ($this->sessionFacade !== null) {
+            $this->sessionFacade->disconnect();
+        }
+        if ($this->fallbackStorage instanceof FileStorage) {
+            // No persistent connection to close for file fallback.
+        }
     }
 
-    /**
-     * 获取统计信息
-     */
     public function getStats(): array
     {
-        $stats = $this->sessionClient->getStats();
+        $facade = $this->sessionFacade();
+        if ($facade === null) {
+            return [
+                'mode' => 'file_fallback',
+                'connected' => false,
+                'fallback_reason' => $this->fallbackReason,
+                'retry_after' => $this->sharedUnavailableUntilTs > 0 ? $this->sharedUnavailableUntilTs : null,
+            ];
+        }
+
+        $stats = $facade->getStats();
         $stats['mode'] = 'strong_consistency';
+
         return $stats;
     }
 
-    /**
-     * 心跳检测
-     */
     public function ping(): bool
     {
-        return $this->sessionClient->ping();
+        $facade = $this->sessionFacade();
+
+        return $facade !== null && $facade->ping();
     }
 
-    /**
-     * @inheritDoc
-     */
     public function list(array $options = []): array
     {
-        $filter = $options['filter'] ?? [];
-        $limit = (int)($options['limit'] ?? 50);
-        return $this->sessionClient->list(\is_array($filter) ? $filter : [], $limit);
+        $facade = $this->sessionFacade();
+        $payload = [
+            'filter' => \is_array($options['filter'] ?? null) ? $options['filter'] : [],
+            'limit' => (int) ($options['limit'] ?? 50),
+        ];
+
+        return $facade !== null
+            ? $facade->list($payload)
+            : $this->fallbackStorage()->list($payload);
+    }
+
+    private function sessionFacade(): ?SessionStateFacade
+    {
+        if ($this->sessionFacade === null) {
+            if ($this->sharedUnavailableUntilTs > \time()) {
+                return null;
+            }
+
+            try {
+                $config = $this->config;
+                $config['prefer_direct_connect'] = $config['prefer_direct_connect'] ?? true;
+                $config['fail_fast_on_unhealthy'] = $config['fail_fast_on_unhealthy'] ?? true;
+
+                if ($this->sessionFacadeFactory !== null) {
+                    $factory = $this->sessionFacadeFactory;
+                    $facade = $factory($config);
+                    if (!$facade instanceof SessionStateFacade) {
+                        throw new \RuntimeException('Session facade factory must return SessionStateFacade.');
+                    }
+                    $this->sessionFacade = $facade;
+                } else {
+                    $this->sessionFacade = new SessionStateFacade($config);
+                }
+                $this->sharedUnavailableUntilTs = 0;
+                $this->fallbackReason = '';
+            } catch (\Throwable $throwable) {
+                $this->sharedUnavailableUntilTs = \time() + $this->retryIntervalSec;
+                $this->fallbackReason = \trim($throwable->getMessage()) ?: 'Shared session facade is not healthy';
+
+                if (\function_exists('w_log_warning')) {
+                    w_log_warning(
+                        '[WlsSharedStorage] Shared session unavailable, falling back to file storage.',
+                        [
+                            'reason' => $this->fallbackReason,
+                            'retry_after' => $this->sharedUnavailableUntilTs,
+                        ],
+                        'session'
+                    );
+                }
+
+                return null;
+            }
+        }
+
+        return $this->sessionFacade;
+    }
+
+    private function fallbackStorage(): SessionStorageInterface
+    {
+        if ($this->fallbackStorage === null) {
+            $this->fallbackStorage = new FileStorage($this->config);
+        }
+
+        return $this->fallbackStorage;
     }
 }
