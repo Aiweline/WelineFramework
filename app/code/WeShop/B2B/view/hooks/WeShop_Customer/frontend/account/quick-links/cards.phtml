@@ -1,0 +1,20 @@
+<?php
+/**
+ * B2B quick-link tile for the storefront account center.
+ *
+ * @hook-priority 200
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+?>
+<a href="<?= $this->getUrl('b2b') ?>" class="group rounded-2xl border border-border-light bg-background-light p-4 transition hover:border-primary hover:shadow-sm dark:border-border-dark dark:bg-background-dark">
+    <div class="flex items-center gap-3">
+        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <span class="material-symbols-outlined text-2xl">apartment</span>
+        </div>
+        <div>
+            <p class="font-semibold text-text-primary-light group-hover:text-primary dark:text-text-primary-dark"><?= __('B2B Center') ?></p>
+            <p class="text-sm text-text-secondary-light dark:text-text-secondary-dark"><?= __('Review linked company programs and business account status.') ?></p>
+        </div>
+    </div>
+</a>
