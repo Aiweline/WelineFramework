@@ -1,0 +1,13 @@
+<div class="container-fluid py-3">
+    <h1 class="h4 mb-3"><?= __('账户绑定') ?></h1>
+
+    <?php if (!empty($is_bound) && !empty($account)): ?>
+        <div class="alert alert-success" role="alert">
+            <?= __('当前已绑定官网账户：') ?><?= $account->getPlatformEmail() ?: __('未知邮箱') ?>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-warning" role="alert">
+            <?= __('当前未绑定官网账户，请先完成绑定。') ?>
+        </div>
+    <?php endif; ?>
+</div>
