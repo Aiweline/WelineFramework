@@ -7,7 +7,7 @@ namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\AiWorkbench\MessageService;
 
-class MessageServiceTest extends AbstractAiWorkbenchPersistenceTest
+class MessageServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     private MessageService $messageService;
 
