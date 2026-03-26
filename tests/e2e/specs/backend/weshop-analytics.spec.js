@@ -18,6 +18,10 @@ test.describe('WeShop analytics backend', () => {
     await expect(body).toContainText(/Analytics Management/i);
     await expect(body).toContainText(/Google Analytics/i);
     await expect(body).toContainText(/Facebook Pixel/i);
+    await expect(body).toContainText(/TikTok Pixel/i);
+    await expect(body).toContainText(/Bing Ads/i);
+    await expect(body).toContainText(/GA4 Measurement Protocol/i);
+    await expect(body).toContainText(/Open Google Analytics/i);
     await expect(body).not.toContainText(/WLS Runtime Error|ParseError|syntax error|Fatal error/i);
   });
 });

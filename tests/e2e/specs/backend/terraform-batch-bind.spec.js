@@ -1,3 +1,4 @@
+// @weline-e2e-runtime fallback
 // @ts-check
 const { test, expect, gotoBackend, loginAsAdmin } = require('../../framework');
 
@@ -7,8 +8,10 @@ test.describe('Terraform batch bind page', () => {
   });
 
   test('renders the batch bind form', async ({ page }) => {
-    await gotoBackend(page, 'terraform/backend/domain');
-    await page.waitForTimeout(1500);
+    await gotoBackend(page, 'terraform/backend/domain/index', {
+      timeout: 60000,
+      settleMs: 1500,
+    });
 
     await expect(page.locator('#terraformBatchForm')).toBeVisible({ timeout: 5000 });
     await expect(page.locator('#cdn_provider_trigger')).toBeVisible({ timeout: 5000 });
