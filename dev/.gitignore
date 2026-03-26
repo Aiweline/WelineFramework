@@ -14,5 +14,8 @@
 !ai/
 !ai/**
 
+# 但排除 codex tasks 全目录（本地任务日志不入库）
+ai/codex/tasks/
+
 # Codex 任务过程产物保留在本地
 ai/codex/tasks/**/artifacts/*
