@@ -106,7 +106,8 @@ class View extends BaseController
             'category_id' => $category->getId(),
             'product_ids' => $filteredProductIds,
         ];
-        $eventsManager->dispatch('WeShop_Catalog::category_load_after', ['data' => $eventData]);
+        $eventPayload = ['data' => $eventData];
+        $eventsManager->dispatch('WeShop_Catalog::category_load_after', $eventPayload);
 
         $this->assign('title', $categoryData['name']);
         $this->assign('meta_title', $category->getData('meta_title') ?? $categoryData['name']);

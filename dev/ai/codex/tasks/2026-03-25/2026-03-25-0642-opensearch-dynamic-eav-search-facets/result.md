@@ -8,6 +8,7 @@
 - Search storefront UI now renders applied filters, dynamic facet groups, and pagination fallback from the browse result structure.
 - Follow-up closure fixed the real post-commit runtime gaps: the `frontend_is_searchable` column is now backed by a committed EAV migration, and product EAV indexing now reads the real product value tables so dynamic EAV text/facets are populated in live OpenSearch documents.
 - Focused storefront e2e is now pinned to the stable WLS/direct runtime for this feature, and the filters spec validates dynamic facet JSON on the proven `/filters/filter?category_id=14` path instead of the flaky category HTML route.
+- Final storefront closure restored the real category HTML path too: `catalog/category/view` now exists again as a compat alias, the category controller no longer throws on event dispatch, and the active `WeShop/motor` theme category templates now render the canonical filter container for the new browse facet payload.
 
 ## Changed Files
 
@@ -18,6 +19,7 @@
 - `app/code/WeShop/Search/extends/module/Weline_Framework/Query/SearchQueryProvider.php`
 - `app/code/WeShop/Search/Engine/ElasticsearchEngine.php`
 - `app/code/WeShop/Search/view/templates/Frontend/Search/index.phtml`
+- `app/code/WeShop/Catalog/Controller/Category/View.php`
 - `app/code/WeShop/Filters/Controller/Frontend/Ajax.php`
 - `app/code/WeShop/Filters/Service/FilterService.php`
 - `app/code/WeShop/Filters/Provider/PriceFilterProvider.php`
@@ -35,7 +37,11 @@
 - `app/code/Weline/Eav/Model/EavAttribute/Option.php`
 - `app/code/Weline/Eav/Model/EavAttribute/Type.php`
 - `app/code/Weline/Eav/test/Unit/Model/EavAttributeSchemaFieldAliasTest.php`
+- `app/code/WeShop/Catalog/Test/Unit/Controller/CleanRouteAliasControllersTest.php`
+- `app/code/WeShop/Catalog/Test/Unit/View/DefaultThemeCategoryHookHostTest.php`
 - `app/design/WeShop/default/frontend/pages/catalog/category.phtml`
+- `app/design/WeShop/motor/frontend/pages/catalog/category.phtml`
+- `app/design/WeShop/motor/frontend/layouts/category/default.phtml`
 - `app/etc/env.php`
 - `tests/e2e/specs/frontend/weshop-search.spec.js`
 - `tests/e2e/specs/frontend/weshop-filters.spec.js`
@@ -62,12 +68,19 @@
   - Passed: `2` specs
 - `PLAYWRIGHT_RUNTIME_STRATEGY=wls PLAYWRIGHT_E2E_TRANSPORT=direct node tests/e2e/start.js specs/frontend/weshop-search.spec.js specs/frontend/weshop-filters.spec.js`
   - Passed: `4` tests
+- `php bin/w setup:upgrade --route`
+  - Passed, and `route:list` now includes `catalog/category/view`
+- `php vendor/bin/phpunit --no-coverage app/code/WeShop/Catalog/Test/Unit/Controller/CleanRouteAliasControllersTest.php app/code/WeShop/Catalog/Test/Unit/View/DefaultThemeCategoryHookHostTest.php --colors=never`
+  - Passed: `4` tests / `34` assertions
 - Direct OpenSearch verification:
   - Confirmed `products` mapping contains `eav_search_text` and nested `eav_facets`
   - Confirmed `/products/_doc/product_2` contains `eav_search_text: "品牌 Apple"` and populated `eav_facets`
 - Direct filter/search verification:
   - `curl -k "https://127.0.0.1:9982/filters/filter?category_id=14"` returned dynamic `brand/color/material` facets
   - `w_query('search', 'browseProducts', ['keyword' => '品牌 Apple', ...])` returned `engine: opensearch` with dynamic EAV facets in the result
+- Direct category HTML verification:
+  - `curl -k "https://127.0.0.1:9982/catalog/category/view?id=14"` now returns rendered category HTML instead of `404/500`
+  - The active `motor` theme category HTML includes `data-filter-code="brand"` with `Apple` text from the canonical browse facet payload
 
 ## Remaining Risks
 

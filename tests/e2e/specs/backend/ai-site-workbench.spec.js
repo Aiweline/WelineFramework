@@ -22,6 +22,22 @@ function terminalContent(page) {
   return page.locator('#site-builder-agent-terminal_content');
 }
 
+async function selectFirstRegistrarAccount(page, selectorId = 'site-agent-account') {
+  const trigger = page.locator(`#${selectorId}_trigger`);
+  await expect(trigger).toBeVisible({ timeout: 30000 });
+  await trigger.click({ force: true });
+
+  const firstItem = page.locator(`#${selectorId}_list .weline-registrar-item`).first();
+  await expect(firstItem).toBeVisible({ timeout: 30000 });
+  const value = await firstItem.getAttribute('data-value');
+  await firstItem.click({ force: true });
+
+  const hiddenInput = page.locator(`#${selectorId}_value`);
+  await expect(hiddenInput).not.toHaveValue('', { timeout: 30000 });
+
+  return value;
+}
+
 async function waitForWorkspaceReload(page, action) {
   const waitForWorkspaceUrl = page.waitForURL(/site-builder-agent\/workspace\?public_id=/, {
     waitUntil: 'domcontentloaded',
@@ -279,6 +295,32 @@ test.describe('AI Site Workbench', () => {
     await expect(page.locator('#site-agent-start-btn')).toBeEnabled({ timeout: TERMINAL_TIMEOUT });
   });
 
+  test('AI domain recommend asks for a registrar first and then fills an available domain', async ({ page }) => {
+    test.slow();
+    test.setTimeout(240000);
+    await openHub(page, 'websites_default', true);
+
+    await page.fill('#site-agent-description', 'Build a coffee subscription site with a strong brand name.');
+    await page.click('#site-agent-recommend-domain-btn', { force: true });
+    await expect(page.locator('#site-agent-domain-recommendation')).toContainText('registrar', {
+      timeout: 30000,
+    });
+
+    const registrarValue = await selectFirstRegistrarAccount(page, 'site-agent-account');
+    expect(registrarValue).toBeTruthy();
+
+    await page.click('#site-agent-recommend-domain-btn', { force: true });
+    await expect(page.locator('#site-agent-domain-recommendation')).toContainText('available', {
+      timeout: 30000,
+    });
+    await expect(page.locator('#site-agent-domain')).not.toHaveValue('', {
+      timeout: 30000,
+    });
+    await expect(page.locator('#site-agent-account_value')).not.toHaveValue('', {
+      timeout: 30000,
+    });
+  });
+
   test('fake manual quick build requires a registrar and then runs the simulated purchase flow', async ({ page }) => {
     test.slow();
     test.setTimeout(300000);
@@ -287,9 +329,8 @@ test.describe('AI Site Workbench', () => {
 
     await page.uncheck('#site-agent-use-ai');
     await page.fill('#site-agent-domain', 'manual-demo.local.test');
-    const registrarValue = await page.locator('#site-agent-account option:not([value=""])').first().getAttribute('value');
+    const registrarValue = await selectFirstRegistrarAccount(page, 'site-agent-account');
     expect(registrarValue).toBeTruthy();
-    await page.selectOption('#site-agent-account', registrarValue);
     await page.click('#site-agent-start-btn', { force: true });
 
     await expect(terminal).toContainText('Local demo: simulated domain purchase and bootstrap resources', {
