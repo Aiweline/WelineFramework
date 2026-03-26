@@ -1,1 +1,5 @@
-﻿
+﻿"Tax query provider does not support operation: %{1}","Tax query provider does not support operation: %{1}"
+"Tax Query","Tax Query"
+"Provides checkout tax-rate lookup and tax calculation access.","Provides checkout tax-rate lookup and tax calculation access."
+"Calculate tax for a checkout/order subtotal.","Calculate tax for a checkout/order subtotal."
+"Resolve the tax rate for a country/region context.","Resolve the tax rate for a country/region context."
