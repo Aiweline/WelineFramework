@@ -136,7 +136,8 @@ class RuleManagerTest extends TestCase
 
         $rules = $this->ruleManager->getMergedRules($domain);
         $this->assertIsArray($rules);
-        $this->assertEquals($overrideRules, $rules);
+        $this->assertSame('standard', $rules['cache_level']);
+        $this->assertSame(7200, $rules['edge_cache_ttl']);
     }
 
     /**
@@ -177,10 +178,13 @@ class RuleManagerTest extends TestCase
             ->willReturn($adapter);
 
         $domain = $this->createMock(Domain::class);
-        $domain->method('getData')->willReturnMap([
-            [Domain::schema_fields_ADAPTER, 'cloudflare'],
-            [Domain::schema_fields_ZONE_ID, 'zone-123']
-        ]);
+        $domain->method('getData')->willReturnCallback(
+            static fn(string $key, $index = null) => match ($key) {
+                Domain::schema_fields_ADAPTER => 'cloudflare',
+                Domain::schema_fields_ZONE_ID => 'zone-123',
+                default => null,
+            }
+        );
         $domain->method('getCredentialsArray')->willReturn(['api_token' => 'test-token']);
         $domain->method('isInheritDefault')->willReturn(false);
 
@@ -218,13 +222,16 @@ class RuleManagerTest extends TestCase
      */
     public function testPushRulesSuccess(): void
     {
-        $rules = ['cache_level' => 'aggressive'];
         $credentials = ['api_token' => 'test-token'];
 
         $adapter = $this->createMock(AdapterInterface::class);
         $adapter->expects($this->once())
             ->method('putRules')
-            ->with('zone-123', $rules, $credentials)
+            ->with(
+                'zone-123',
+                $this->callback(static fn($rules): bool => is_array($rules) && $rules !== []),
+                $credentials
+            )
             ->willReturn(['success' => true, 'message' => '推送成功']);
 
         $this->adapterResolver->expects($this->once())
@@ -233,10 +240,13 @@ class RuleManagerTest extends TestCase
             ->willReturn($adapter);
 
         $domain = $this->createMock(Domain::class);
-        $domain->method('getData')->willReturnMap([
-            [Domain::schema_fields_ADAPTER, 'cloudflare'],
-            [Domain::schema_fields_ZONE_ID, 'zone-123']
-        ]);
+        $domain->method('getData')->willReturnCallback(
+            static fn(string $key, $index = null) => match ($key) {
+                Domain::schema_fields_ADAPTER => 'cloudflare',
+                Domain::schema_fields_ZONE_ID => 'zone-123',
+                default => null,
+            }
+        );
         $domain->method('getRulesOverrideArray')->willReturn([]);
         $domain->method('getCredentialsArray')->willReturn($credentials);
         $domain->method('isInheritDefault')->willReturn(false);

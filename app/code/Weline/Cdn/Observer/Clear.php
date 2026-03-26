@@ -49,7 +49,10 @@ class Clear implements ObserverInterface
         }
 
         $mode = $data['mode'] ?? 'everything';
-        $modeData = $data['data'] ?? [];
+        $modeData = $data['data'] ?? $data;
+        if (!isset($data['data']) && is_array($modeData)) {
+            unset($modeData['domain'], $modeData['mode'], $modeData['name'], $modeData['observers'], $modeData['result']);
+        }
 
         try {
             $result = $this->cachePurger->purge($data['domain'], $mode, $modeData);
