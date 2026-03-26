@@ -1,1 +1,44 @@
-"Customer ID is required.","必须提供客户ID"
+﻿"Affiliate Management","Affiliate Management"
+"Affiliate saved.","Affiliate saved."
+"Affiliate save failed.","Affiliate save failed."
+"Please log in to continue.","Please log in to continue."
+"Affiliate page hooks","Affiliate page hooks"
+"Inject storefront content above the affiliate dashboard page.","Inject storefront content above the affiliate dashboard page."
+"Affiliate summary hooks","Affiliate summary hooks"
+"Inject storefront content below the affiliate summary card.","Inject storefront content below the affiliate summary card."
+"Customer ID is required.",必须提供客户ID
+Active,Active
+Disabled,Disabled
+"Unsupported affiliate status.","Unsupported affiliate status."
+"Commission rate must be between 0 and 1.","Commission rate must be between 0 and 1."
+"Affiliate record not found.","Affiliate record not found."
+"Customer ID or affiliate ID is required.","Customer ID or affiliate ID is required."
+"Review, filter, and adjust affiliate accounts created by marketing partners.","Review, filter, and adjust affiliate accounts created by marketing partners."
+"Page %d of %d, %d affiliates found","Page %d of %d, %d affiliates found"
+"Edit Affiliate Account","Edit Affiliate Account"
+"Create Affiliate Account","Create Affiliate Account"
+"Customer ID","Customer ID"
+"Referral Code","Referral Code"
+"Commission Rate","Commission Rate"
+"Enter a decimal between 0 and 1 to represent the commission percentage.","Enter a decimal between 0 and 1 to represent the commission percentage."
+Status,Status
+"Total Commission","Total Commission"
+"Paid Commission","Paid Commission"
+Pending,Pending
+"Save Affiliate","Save Affiliate"
+"All statuses","All statuses"
+"Apply Filters","Apply Filters"
+Reset,Reset
+"Affiliate ID","Affiliate ID"
+Total,Total
+Paid,Paid
+"Created At","Created At"
+Actions,Actions
+Edit,Edit
+"No affiliate accounts found.","No affiliate accounts found."
+"Use the form to create the first affiliate or adjust filters to find existing accounts.","Use the form to create the first affiliate or adjust filters to find existing accounts."
+Growth,Growth
+"Affiliate Center","Affiliate Center"
+"Open Center","Open Center"
+"Share links and track commission","Share links and track commission"
+"Use your referral code to invite new customers and monitor earned, paid, and pending commissions.","Use your referral code to invite new customers and monitor earned, paid, and pending commissions."
