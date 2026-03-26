@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Weline\Api\test\Unit\Observer;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Auth\Data\ActorContext;
+use WeShop\Auth\Service\WeShopAuthTokenService;
+use Weline\Customer\Model\Customer as AuthCustomer;
 use Weline\Api\Observer\ApiControllerInitBefore;
 use Weline\Api\Service\ApiSecurityService;
 use Weline\Api\Service\IpWhitelistService;
@@ -20,7 +23,96 @@ class ApiControllerInitBeforeTest extends TestCase
     protected function tearDown(): void
     {
         ObjectManager::removeInstance(Request::class);
+        ObjectManager::removeInstance(WeShopAuthTokenService::class);
+        ObjectManager::removeInstance(AuthCustomer::class);
         parent::tearDown();
+    }
+
+    public function testExecuteBindsWeShopCustomerBearerTokenToRequestAndEvent(): void
+    {
+        $request = $this->createRequestMock(
+            'weshop/rest/v1/order/list',
+            'Order',
+            'getList',
+            'WeShop\\Order\\Api\\Rest\\V1\\Order',
+            authToken: 'weshop-access-token',
+            apiFrontend: true
+        );
+        ObjectManager::setInstance(Request::class, $request);
+
+        $apiSecurityService = $this->createMock(ApiSecurityService::class);
+        $apiSecurityService->expects($this->once())
+            ->method('isPublicApi')
+            ->with($request)
+            ->willReturn(false);
+
+        $legacyTokenService = $this->createMock(TokenService::class);
+        $legacyTokenService->expects($this->once())
+            ->method('validateAccessToken')
+            ->with('weshop-access-token')
+            ->willReturn(null);
+
+        $weshopTokenService = new class() extends WeShopAuthTokenService {
+            public function __construct()
+            {
+            }
+
+            public function resolveAccessToken(string $token): ?ActorContext
+            {
+                return new ActorContext(
+                    ActorContext::ACTOR_CUSTOMER,
+                    42,
+                    'frontend',
+                    ['customer'],
+                    true
+                );
+            }
+        };
+        ObjectManager::setInstance(WeShopAuthTokenService::class, $weshopTokenService);
+
+        $authCustomer = new class() extends AuthCustomer {
+            public function __construct()
+            {
+            }
+
+            public function load($id = null, $field = null): static
+            {
+                return $this;
+            }
+
+            public function getId(mixed $default = 0): int
+            {
+                return 42;
+            }
+
+            public function getEmail(): string
+            {
+                return 'buyer@example.com';
+            }
+
+            public function isSandboxAccount(): bool
+            {
+                return false;
+            }
+        };
+        ObjectManager::setInstance(AuthCustomer::class, $authCustomer);
+
+        $observer = new ApiControllerInitBefore(
+            $request,
+            $apiSecurityService,
+            $this->createMock(IpWhitelistService::class),
+            $this->createMock(UserAgentRestrictionService::class),
+            $legacyTokenService,
+            new PublicApiAuthRouteMatcher()
+        );
+
+        $event = new Event(['data' => []]);
+        $observer->execute($event);
+
+        $this->assertSame($authCustomer, $event->getData('user'));
+        $this->assertSame($authCustomer, $request->getData('weshop_auth_user'));
+        $this->assertInstanceOf(ActorContext::class, $request->getData('weshop_actor_context'));
+        $this->assertSame(42, $request->getData('weshop_actor_context')->getActorId());
     }
 
     public function testExecuteAllowsWeShopTokenRouteWithApiPrefix(): void
@@ -143,25 +235,36 @@ class ApiControllerInitBeforeTest extends TestCase
         $this->assertTrue(true);
     }
 
-    private function createRequestMock(string $routeUrlPath, string $controller, string $action, string $controllerClass): Request
+    private function createRequestMock(
+        string $routeUrlPath,
+        string $controller,
+        string $action,
+        string $controllerClass,
+        string $authToken = '',
+        bool $apiFrontend = true,
+        bool $apiBackend = false
+    ): Request
     {
-        return new class($routeUrlPath, $controller, $action, $controllerClass) extends Request {
+        return new class($routeUrlPath, $controller, $action, $controllerClass, $authToken, $apiFrontend, $apiBackend) extends Request {
             public function __construct(
                 private readonly string $routeUrlPathValue,
                 private readonly string $controllerValue,
                 private readonly string $actionValue,
-                private readonly string $controllerClassValue
+                private readonly string $controllerClassValue,
+                private readonly string $authTokenValue,
+                private readonly bool $apiFrontendValue,
+                private readonly bool $apiBackendValue
             ) {
             }
 
             public function isApiBackend(): bool
             {
-                return false;
+                return $this->apiBackendValue;
             }
 
             public function isApiFrontend(): bool
             {
-                return true;
+                return $this->apiFrontendValue;
             }
 
             public function getRouteUrlPath(string $url = ''): string
@@ -191,6 +294,15 @@ class ApiControllerInitBeforeTest extends TestCase
                     'controller' => $this->controllerClassValue,
                     default => null,
                 };
+            }
+
+            public function getAuth(string $auth_type = 'bearer')
+            {
+                if ($auth_type === 'bearer') {
+                    return $this->authTokenValue;
+                }
+
+                return null;
             }
         };
     }
