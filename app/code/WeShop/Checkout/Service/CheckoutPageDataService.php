@@ -41,11 +41,15 @@ class CheckoutPageDataService
         }
 
         $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
-        $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, [
+        $primaryShippingAddress = $this->resolvePrimaryShippingAddress($savedAddresses);
+        $selectedShippingAddressId = (int) ($primaryShippingAddress['address_id'] ?? 0);
+        $shippingContext = [
             'area' => 'frontend',
-        ]);
+            'currency' => $this->resolveCheckoutCurrency(),
+        ] + $this->resolveInitialShippingContext($savedAddresses);
+        $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, $shippingContext);
         if ($shippingMethods === []) {
-            $shippingMethods = $this->shippingService->getAvailableShippingMethods();
+            $shippingMethods = $this->shippingService->getAvailableShippingMethods($shippingContext);
         }
 
         $itemCount = array_reduce(
@@ -64,6 +68,7 @@ class CheckoutPageDataService
             'cart_summary' => $summary,
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
+            'selected_shipping_address_id' => $selectedShippingAddressId,
             'shipping_methods' => $this->mapShippingMethods($shippingMethods),
             'payment_methods' => $this->mapPaymentMethods(
                 $this->checkoutService->getCheckoutPaymentMethods($customerId, [
@@ -173,12 +178,51 @@ class CheckoutPageDataService
                 'city' => (string) ($address['city'] ?? ''),
                 'state' => (string) ($address['region'] ?? ''),
                 'region' => (string) ($address['region'] ?? ''),
+                'country' => (string) ($address['country'] ?? $address['country_id'] ?? ''),
+                'country_id' => (string) ($address['country_id'] ?? $address['country'] ?? ''),
                 'postcode' => (string) ($address['postcode'] ?? ''),
                 'telephone' => (string) ($address['telephone'] ?? ''),
+                'is_default' => (bool) ($address['is_default'] ?? false),
             ];
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedAddresses
+     * @return array<string, string>
+     */
+    protected function resolveInitialShippingContext(array $savedAddresses): array
+    {
+        $address = $this->resolvePrimaryShippingAddress($savedAddresses);
+        if ($address === []) {
+            return [];
+        }
+
+        $country = (string) ($address['country_id'] ?? $address['country'] ?? '');
+        $region = (string) ($address['region'] ?? $address['state'] ?? '');
+
+        return array_filter([
+            'country' => $country,
+            'country_id' => $country,
+            'region' => $region,
+        ], static fn (string $value): bool => $value !== '');
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedAddresses
+     * @return array<string, mixed>
+     */
+    protected function resolvePrimaryShippingAddress(array $savedAddresses): array
+    {
+        foreach ($savedAddresses as $address) {
+            if (!empty($address['is_default'])) {
+                return $address;
+            }
+        }
+
+        return $savedAddresses[0] ?? [];
     }
 
     /**

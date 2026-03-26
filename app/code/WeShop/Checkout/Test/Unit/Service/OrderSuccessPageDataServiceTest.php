@@ -84,4 +84,43 @@ class OrderSuccessPageDataServiceTest extends TestCase
         $this->assertSame(110.0, $result['order_items'][0]['row_total']);
         $this->assertSame(201, $result['recommendations'][0]['product_id']);
     }
+
+    public function testBuildFallsBackToPersistedOrderSummaryWhenCheckoutContextIsMissing(): void
+    {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('getOrderItems')
+            ->with(89)
+            ->willReturn([]);
+
+        $recommendationService = $this->createMock(ProductRecommendationService::class);
+        $recommendationService->expects($this->once())
+            ->method('getRecommendations')
+            ->with([], 4)
+            ->willReturn([]);
+
+        $order = new class() extends Order {
+            public function getId(mixed $default = 0)
+            {
+                return 89;
+            }
+        };
+        $order->setData(Order::schema_fields_increment_id, 'WS000089');
+        $order->setData(Order::schema_fields_total, 66.5);
+        $order->setData(Order::schema_fields_subtotal, 59.5);
+        $order->setData(Order::schema_fields_shipping_amount, 5.0);
+        $order->setData(Order::schema_fields_discount_amount, 3.0);
+        $order->setData(Order::schema_fields_tax_amount, 5.0);
+
+        $service = new OrderSuccessPageDataService($orderService, $recommendationService);
+        $result = $service->build($order, []);
+
+        $this->assertSame(59.5, $result['order']['subtotal']);
+        $this->assertSame(5.0, $result['order']['shipping_amount']);
+        $this->assertSame(3.0, $result['order']['discount_amount']);
+        $this->assertSame(5.0, $result['order']['tax_amount']);
+        $this->assertSame(66.5, $result['order']['grand_total']);
+        $this->assertSame(59.5, $result['subtotal']);
+        $this->assertSame(66.5, $result['grand_total']);
+    }
 }
