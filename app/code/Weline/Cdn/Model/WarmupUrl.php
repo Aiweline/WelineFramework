@@ -107,6 +107,8 @@ class WarmupUrl extends Model
             $this->setData(self::schema_fields_CREATED_AT, $now);
         }
         $this->setData(self::schema_fields_UPDATED_AT, $now);
-        return parent::beforeSave();
+        $result = parent::beforeSave();
+
+        return $result instanceof self ? $result : $this;
     }
 }
