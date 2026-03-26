@@ -14,6 +14,9 @@ class BackendAnalyticsFormContractTest extends TestCase
         $content = (string) file_get_contents($path);
 
         self::assertStringContainsString('data-analytics-provider-form', $content);
+        self::assertStringContainsString('data-analytics-quick-link=', $content);
+        self::assertStringContainsString('Configuration Guide', $content);
+        self::assertStringContainsString('Missing Required Fields', $content);
         self::assertStringContainsString('data-analytics-required=', $content);
         self::assertStringContainsString('data-analytics-sensitive=', $content);
         self::assertStringContainsString('toggleAnalyticsProviderFields', $content);

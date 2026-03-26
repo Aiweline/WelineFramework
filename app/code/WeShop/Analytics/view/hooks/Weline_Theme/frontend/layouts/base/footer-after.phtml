@@ -4,14 +4,14 @@
  * @hook-sort-order 1
  * @hook-solo false
  */
-$renderFlag = '__weshop_analytics_hook_head_rendered';
+$renderFlag = '__weshop_analytics_hook_footer_rendered';
 if (!empty($GLOBALS[$renderFlag])) {
     return;
 }
 $GLOBALS[$renderFlag] = true;
 
 $snippets = w_query('analytics', 'getFrontendPixelSnippetsBySlot', [
-    'slot' => 'head',
+    'slot' => 'footer',
 ]);
 $snippets = is_array($snippets) ? $snippets : [];
 ?>
@@ -20,12 +20,10 @@ $snippets = is_array($snippets) ? $snippets : [];
     if (!is_array($snippet)) {
         continue;
     }
-    $provider = trim((string) ($snippet['provider'] ?? ''));
     $content = trim((string) ($snippet['snippet'] ?? ''));
-    if ($provider === '' || $content === '') {
+    if ($content === '') {
         continue;
     }
     ?>
-    <meta name="weshop-analytics-provider" data-weshop-analytics-provider="<?= htmlspecialchars($provider, ENT_QUOTES) ?>" content="enabled">
     <?= $content ?>
 <?php endforeach; ?>

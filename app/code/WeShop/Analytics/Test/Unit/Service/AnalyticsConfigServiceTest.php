@@ -23,6 +23,8 @@ class AnalyticsConfigServiceTest extends TestCase
         self::assertCount(1, $apiSecretField);
         self::assertTrue((bool) ($apiSecretField[0]['sensitive'] ?? false));
         self::assertSame('password', $apiSecretField[0]['input_type'] ?? null);
+        self::assertSame('Paste your Measurement Protocol API secret', $apiSecretField[0]['placeholder'] ?? null);
+        self::assertSame('Open Google Analytics', $definitions[AnalyticsConfigService::PROVIDER_GOOGLE]['setup']['quick_links'][0]['label'] ?? null);
     }
 
     public function testGetProviderConfigMergesStoredValuesWithDefaults(): void
@@ -144,5 +146,76 @@ class AnalyticsConfigServiceTest extends TestCase
             'measurement_id' => 'G-TEST123',
             'api_secret' => 'secret-123',
         ]));
+    }
+
+    public function testGetMissingRequiredFieldLabelsReturnsOnlyMissingMandatoryFields(): void
+    {
+        $service = new AnalyticsConfigService();
+
+        self::assertSame(
+            ['API Secret'],
+            $service->getMissingRequiredFieldLabels(AnalyticsConfigService::PROVIDER_GOOGLE, [
+                'enabled' => true,
+                'measurement_id' => 'G-TEST123',
+                'api_secret' => '',
+            ])
+        );
+    }
+
+    public function testProviderDefinitionsIncludeTiktokAndBingDisabledByDefault(): void
+    {
+        $service = new AnalyticsConfigService();
+        $definitions = $service->getProviderDefinitions();
+
+        self::assertArrayHasKey(AnalyticsConfigService::PROVIDER_TIKTOK, $definitions);
+        self::assertArrayHasKey(AnalyticsConfigService::PROVIDER_BING, $definitions);
+
+        self::assertFalse((bool) ($definitions[AnalyticsConfigService::PROVIDER_TIKTOK]['defaults']['enabled'] ?? true));
+        self::assertFalse((bool) ($definitions[AnalyticsConfigService::PROVIDER_BING]['defaults']['enabled'] ?? true));
+
+        self::assertSame(
+            'pixel_id',
+            $definitions[AnalyticsConfigService::PROVIDER_TIKTOK]['fields'][0]['name'] ?? null
+        );
+        self::assertSame(
+            'access_token',
+            $definitions[AnalyticsConfigService::PROVIDER_TIKTOK]['fields'][1]['name'] ?? null
+        );
+        self::assertSame(
+            'uet_tag_id',
+            $definitions[AnalyticsConfigService::PROVIDER_BING]['fields'][0]['name'] ?? null
+        );
+        self::assertSame(
+            'api_token',
+            $definitions[AnalyticsConfigService::PROVIDER_BING]['fields'][1]['name'] ?? null
+        );
+    }
+
+    public function testSaveProviderConfigRejectsMissingRequiredTiktokAndBingFieldsWhenEnabled(): void
+    {
+        $service = new AnalyticsConfigService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Access Token');
+        $service->saveProviderConfig([
+            'provider' => AnalyticsConfigService::PROVIDER_TIKTOK,
+            'enabled' => true,
+            'pixel_id' => 'TT-PIXEL-1',
+            'access_token' => '',
+        ]);
+    }
+
+    public function testSaveProviderConfigRejectsMissingRequiredBingApiTokenWhenEnabled(): void
+    {
+        $service = new AnalyticsConfigService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('API Token');
+        $service->saveProviderConfig([
+            'provider' => AnalyticsConfigService::PROVIDER_BING,
+            'enabled' => true,
+            'uet_tag_id' => '12345678',
+            'api_token' => '',
+        ]);
     }
 }
