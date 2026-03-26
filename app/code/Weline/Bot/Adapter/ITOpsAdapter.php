@@ -6,9 +6,7 @@ namespace Weline\Bot\Adapter;
 use Weline\Ai\Interface\ScenarioAdapterInterface;
 
 /**
- * IT 运维适配器
- *
- * 专为 IT 运维场景设计的适配器
+ * IT operations scenario adapter.
  */
 class ITOpsAdapter implements ScenarioAdapterInterface
 {
@@ -19,12 +17,12 @@ class ITOpsAdapter implements ScenarioAdapterInterface
 
     public function getName(): string
     {
-        return __('IT 运维助手');
+        return __('IT Ops Assistant');
     }
 
     public function getDescription(): string
     {
-        return __('专为 IT 运维场景设计，支持服务器监控、日志分析、故障排查、自动化运维等能力。');
+        return __('Adapter tuned for monitoring, log analysis, incident triage, and change-safe operations.');
     }
 
     public function getVersion(): string
@@ -39,20 +37,28 @@ class ITOpsAdapter implements ScenarioAdapterInterface
 
     public function adaptPrompt(string $prompt, array $params = []): string
     {
-        $systemPrompt = "你是一个专业的 IT 运维助手，具备以下能力：\n\n";
-        $systemPrompt .= "【核心能力】\n";
-        $systemPrompt .= "- 服务器监控和状态检查\n";
-        $systemPrompt .= "- 日志分析和错误排查\n";
-        $systemPrompt .= "- 服务管理和配置检查\n";
-        $systemPrompt .= "- 性能优化建议\n";
-        $systemPrompt .= "- 安全审计和漏洞检查\n\n";
-        $systemPrompt .= "【工作原则】\n";
-        $systemPrompt .= "- 操作前先备份重要数据\n";
-        $systemPrompt .= "- 危险操作需用户确认\n";
-        $systemPrompt .= "- 提供详细的操作日志\n";
-        $systemPrompt .= "- 给出问题和解决方案的详细分析\n\n";
-        $systemPrompt .= "用户请求：{$prompt}";
+        $targetServer = trim((string) ($params['server'] ?? ''));
+        $targetService = trim((string) ($params['service'] ?? ''));
 
+        $systemPrompt = "You are a professional IT operations assistant.\n\n";
+        $systemPrompt .= "[Core Capabilities]\n";
+        $systemPrompt .= "- Service and host status diagnostics\n";
+        $systemPrompt .= "- Log analysis and error triage\n";
+        $systemPrompt .= "- Reliability-first remediation planning\n";
+        $systemPrompt .= "- Security and configuration sanity checks\n\n";
+        $systemPrompt .= "[Execution Rules]\n";
+        $systemPrompt .= "- Prefer safe, reversible operations.\n";
+        $systemPrompt .= "- Ask for confirmation before restart/stop/delete actions.\n";
+        $systemPrompt .= "- Provide explicit validation and rollback steps.\n\n";
+
+        if ($targetServer !== '') {
+            $systemPrompt .= "[Target Server]\n{$targetServer}\n\n";
+        }
+        if ($targetService !== '') {
+            $systemPrompt .= "[Target Service]\n{$targetService}\n\n";
+        }
+
+        $systemPrompt .= "[User Request]\n{$prompt}";
         return $systemPrompt;
     }
 
@@ -63,7 +69,14 @@ class ITOpsAdapter implements ScenarioAdapterInterface
 
     public function validateParams(array $params = []): array
     {
-        return [];
+        $errors = [];
+        if (isset($params['server']) && !is_string($params['server'])) {
+            $errors[] = 'server must be a string';
+        }
+        if (isset($params['service']) && !is_string($params['service'])) {
+            $errors[] = 'service must be a string';
+        }
+        return $errors;
     }
 
     public function getParamTemplate(): array
@@ -72,12 +85,12 @@ class ITOpsAdapter implements ScenarioAdapterInterface
             'server' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '目标服务器',
+                'description' => 'Target server name or host',
             ],
             'service' => [
                 'type' => 'string',
                 'required' => false,
-                'description' => '目标服务',
+                'description' => 'Target service name',
             ],
         ];
     }
@@ -86,20 +99,20 @@ class ITOpsAdapter implements ScenarioAdapterInterface
     {
         return [
             [
-                'title' => '检查服务状态',
-                'input' => '检查 nginx 服务状态',
-                'expected_output' => '返回 nginx 服务运行状态、端口监听、最近日志等信息',
+                'title' => 'Service health check',
+                'input' => 'Check nginx status and summarize recent errors.',
+                'expected_output' => 'Service status plus key issue analysis and next steps.',
             ],
             [
-                'title' => '日志分析',
-                'input' => '分析 /var/log/nginx/error.log 最近 100 行的错误',
-                'expected_output' => '返回错误类型统计、主要问题、修复建议',
+                'title' => 'Error-log triage',
+                'input' => 'Analyze the latest 100 lines in /var/log/nginx/error.log',
+                'expected_output' => 'Grouped error patterns with remediation guidance.',
             ],
         ];
     }
 
     public function supportsModel(string $modelCode): bool
     {
-        return true;
+        return $modelCode !== '';
     }
 }

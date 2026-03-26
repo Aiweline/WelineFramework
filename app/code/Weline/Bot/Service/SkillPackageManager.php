@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Weline\Bot\Service;
@@ -6,20 +7,12 @@ namespace Weline\Bot\Service;
 use Weline\Bot\Model\BotRole;
 use Weline\Bot\Model\BotSkill;
 
-/**
- * 技能包管理器
- *
- * 管理技能的注册、安装、获取
- */
 class SkillPackageManager
 {
     public function __construct(
         private readonly BotSkill $skillModel,
     ) {}
 
-    /**
-     * 获取技能
-     */
     public function getSkill(string $code): ?BotSkill
     {
         $skill = $this->skillModel->reset()
@@ -31,9 +24,6 @@ class SkillPackageManager
         return $skill->getId() ? $skill : null;
     }
 
-    /**
-     * 获取所有可用技能
-     */
     public function getAllSkills(): array
     {
         $skills = $this->skillModel->reset()
@@ -44,9 +34,6 @@ class SkillPackageManager
         return $skills->getItems();
     }
 
-    /**
-     * 获取角色可用的技能列表
-     */
     public function getSkillsForRole(BotRole $role): array
     {
         $skillCodes = $role->getSkills();
@@ -63,31 +50,30 @@ class SkillPackageManager
         return $skills->getItems();
     }
 
-    /**
-     * 获取角色可用的技能（OpenAI Tools 格式）
-     */
     public function getToolsForRole(BotRole $role): array
     {
         $skills = $this->getSkillsForRole($role);
         $tools = [];
 
         foreach ($skills as $skill) {
+            $parameters = $skill->getParameters();
+            if (!is_array($parameters) || empty($parameters)) {
+                $parameters = [
+                    'type' => 'object',
+                    'properties' => new \stdClass(),
+                ];
+            }
+
             $tools[] = [
-                'type' => 'function',
-                'function' => [
-                    'name' => $skill->getData(BotSkill::schema_fields_CODE),
-                    'description' => $skill->getData(BotSkill::schema_fields_DESCRIPTION),
-                    'parameters' => $skill->getParameters(),
-                ],
+                'name' => (string)$skill->getData(BotSkill::schema_fields_CODE),
+                'description' => (string)($skill->getData(BotSkill::schema_fields_DESCRIPTION) ?? ''),
+                'parameters' => $parameters,
             ];
         }
 
         return $tools;
     }
 
-    /**
-     * 安装技能
-     */
     public function install(array $skillData): BotSkill
     {
         $skill = $this->skillModel;
@@ -116,9 +102,6 @@ class SkillPackageManager
         return $skill;
     }
 
-    /**
-     * 卸载技能
-     */
     public function uninstall(string $code): bool
     {
         $skill = $this->getSkill($code);
@@ -126,7 +109,6 @@ class SkillPackageManager
             return false;
         }
 
-        // 内置技能不能卸载
         if ($skill->getData(BotSkill::schema_fields_IS_BUILTIN)) {
             return false;
         }
@@ -135,9 +117,6 @@ class SkillPackageManager
         return true;
     }
 
-    /**
-     * 禁用技能
-     */
     public function disable(string $code): bool
     {
         $skill = $this->getSkill($code);
@@ -150,9 +129,6 @@ class SkillPackageManager
         return true;
     }
 
-    /**
-     * 启用技能
-     */
     public function enable(string $code): bool
     {
         $skill = $this->skillModel->reset()
@@ -169,9 +145,6 @@ class SkillPackageManager
         return true;
     }
 
-    /**
-     * 按分类获取技能
-     */
     public function getSkillsByCategory(string $category): array
     {
         $skills = $this->skillModel->reset()
