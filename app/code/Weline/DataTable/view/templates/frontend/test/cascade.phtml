@@ -20,6 +20,8 @@
         <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
     </div>
 
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
     <div class="dt-demo-note" data-testid="dt-cascade-note">
         <?= __('The demo delete service removes related TestOrder rows whenever a TestUser is deleted. Use the refresh action after a delete to confirm both tables stay in sync.') ?>
     </div>

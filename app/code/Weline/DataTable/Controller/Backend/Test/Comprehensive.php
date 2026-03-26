@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\DataTable\Controller\Backend\Test;
 
+use Weline\DataTable\Controller\Backend\Test\Concern\HandlesBackendLayouts;
 use Weline\DataTable\Service\BackendAdminPageService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
@@ -17,6 +18,8 @@ use Weline\Framework\App\Controller\BackendController;
 )]
 class Comprehensive extends BackendController
 {
+    use HandlesBackendLayouts;
+
     private const FRONTEND_TEMPLATE_BASE = 'Weline_DataTable::templates/frontend/test/';
 
     public function __construct(
@@ -33,22 +36,27 @@ class Comprehensive extends BackendController
     public function index(): string
     {
         $this->layoutType = 'default.blank';
+        $currentLayoutKey = $this->resolveBackendLayoutKey(true, 'default');
+        $dashboardData = $this->backendAdminPageService->getDashboardData();
+        $dashboardData['scenarios'] = $this->appendScenarioUrls($this->backendAdminPageService->getScenarioCatalog(), $currentLayoutKey);
 
-        $scenarios = $this->appendScenarioUrls($this->backendAdminPageService->getScenarioCatalog());
         $this->assign(array_merge(
+            $dashboardData,
             [
                 'title' => (string) __('DataTable Comprehensive Test'),
-                'dashboardUrl' => '../index',
-                'docUrl' => '../index/doc',
-                'tagTestUrl' => '../tag-test/index',
+                'currentLayout' => $currentLayoutKey,
+                'layoutOptions' => $this->buildBackendLayoutOptions('index', $currentLayoutKey),
+                'layoutSwitcherTitle' => (string) __('Demo Route Layout'),
+                'layoutSwitcherDescription' => (string) __('This entry page stays on blank layout by design. The options below change how backend demo and compatibility routes open.'),
+                'dashboardUrl' => $this->routeWithQuery('../index', ['layout' => $currentLayoutKey]),
+                'docUrl' => $this->routeWithQuery('../index/doc', ['layout' => $currentLayoutKey]),
+                'tagTestUrl' => $this->routeWithQuery('../tag-test/index', ['layout' => $currentLayoutKey]),
                 'frontendDemoUrl' => $this->getUrl('datatable/test'),
                 'backendBasePath' => $this->getBackendBasePath(),
                 'demoInitUrl' => 'datatable/rest/v1/demo-table/init-data',
                 'demoClearUrl' => 'datatable/rest/v1/demo-table/clear-data',
                 'verifyTagsUrl' => 'datatable/backend/test/comprehensive/verify-tags',
-                'scenarios' => $scenarios,
-            ],
-            $this->backendAdminPageService->getDashboardData()
+            ]
         ));
 
         return (string) $this->fetch('Weline_DataTable::templates/Test/Comprehensive/index.phtml');
@@ -141,16 +149,20 @@ class Comprehensive extends BackendController
     #[Acl('Weline_DataTable::test_comprehensive_inheritance', '属性继承', 'mdi mdi-layers-triple-outline', '属性继承验证页')]
     public function inheritance(): string
     {
-        $this->layoutType = 'default.blank';
+        $currentLayoutKey = $this->applyBackendLayout();
 
         return (string) $this->template(
             'Weline_DataTable::templates/Test/Comprehensive/inheritance.phtml',
             [
                 'title' => (string) __('Attribute Inheritance Verification'),
                 'backendBasePath' => $this->getBackendBasePath(),
-                'dashboardUrl' => '../index',
-                'comprehensiveUrl' => 'index',
-                'tagTestUrl' => '../tag-test/index',
+                'currentLayout' => $currentLayoutKey,
+                'layoutOptions' => $this->buildBackendLayoutOptions('inheritance', $currentLayoutKey),
+                'layoutSwitcherTitle' => (string) __('Verification Page Layout'),
+                'layoutSwitcherDescription' => (string) __('Check this focused compatibility page inside different backend layout shells without changing the verification logic itself.'),
+                'dashboardUrl' => $this->routeWithQuery('../index', ['layout' => $currentLayoutKey]),
+                'comprehensiveUrl' => $this->routeWithQuery('index', ['layout' => $currentLayoutKey]),
+                'tagTestUrl' => $this->routeWithQuery('../tag-test/index', ['layout' => $currentLayoutKey]),
                 'verifyTagsUrl' => 'datatable/backend/test/comprehensive/verify-tags',
             ]
         );
@@ -171,8 +183,9 @@ class Comprehensive extends BackendController
 
     private function renderDemoPage(string $templateKey, string $pageTitle, ?string $pageKey = null): string
     {
-        $this->layoutType = 'default.blank';
+        $currentLayoutKey = $this->applyBackendLayout();
         $pageKey = $pageKey ?: $templateKey;
+        $currentRoute = $this->toRouteSegment((string) $this->request->getRouterData('class/method'));
 
         return (string) $this->template(
             self::FRONTEND_TEMPLATE_BASE . $templateKey . '.phtml',
@@ -180,7 +193,11 @@ class Comprehensive extends BackendController
                 'page_title' => (string) __($pageTitle),
                 'page_key' => $pageKey,
                 'frontend_api_bootstrap' => $this->buildFrontendApiBootstrap(),
-                'demo_links' => $this->buildBackendDemoLinks(),
+                'currentLayout' => $currentLayoutKey,
+                'layoutOptions' => $this->buildBackendLayoutOptions($currentRoute, $currentLayoutKey),
+                'layoutSwitcherTitle' => (string) __('Demo Page Layout'),
+                'layoutSwitcherDescription' => (string) __('Use these layout variants to confirm the backend-hosted demo page still behaves correctly outside the blank compatibility entry.'),
+                'demo_links' => $this->buildBackendDemoLinks($currentLayoutKey),
             ]
         );
     }
@@ -189,12 +206,12 @@ class Comprehensive extends BackendController
      * @param array<int,array<string,mixed>> $scenarios
      * @return array<int,array<string,mixed>>
      */
-    private function appendScenarioUrls(array $scenarios): array
+    private function appendScenarioUrls(array $scenarios, string $layoutKey): array
     {
         $result = [];
         foreach ($scenarios as $scenario) {
             $route = (string) ($scenario['route'] ?? 'index');
-            $scenario['url'] = $this->toRouteSegment($route);
+            $scenario['url'] = $this->routeWithQuery($this->toRouteSegment($route), ['layout' => $layoutKey]);
             $result[] = $scenario;
         }
 
@@ -204,18 +221,18 @@ class Comprehensive extends BackendController
     /**
      * @return array<string,string>
      */
-    private function buildBackendDemoLinks(): array
+    private function buildBackendDemoLinks(string $layoutKey): array
     {
         return [
-            'index' => 'index',
-            'basic' => 'basic',
-            'join' => 'join',
-            'form' => 'form',
-            'upload' => 'upload',
-            'transaction' => 'transaction',
-            'dependency' => 'dependency',
-            'cascade' => 'cascade',
-            'performance' => 'performance',
+            'index' => $this->routeWithQuery('index', ['layout' => $layoutKey]),
+            'basic' => $this->routeWithQuery('basic', ['layout' => $layoutKey]),
+            'join' => $this->routeWithQuery('join', ['layout' => $layoutKey]),
+            'form' => $this->routeWithQuery('form', ['layout' => $layoutKey]),
+            'upload' => $this->routeWithQuery('upload', ['layout' => $layoutKey]),
+            'transaction' => $this->routeWithQuery('transaction', ['layout' => $layoutKey]),
+            'dependency' => $this->routeWithQuery('dependency', ['layout' => $layoutKey]),
+            'cascade' => $this->routeWithQuery('cascade', ['layout' => $layoutKey]),
+            'performance' => $this->routeWithQuery('performance', ['layout' => $layoutKey]),
         ];
     }
 

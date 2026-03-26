@@ -17,6 +17,8 @@
         </div>
     </div>
 
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
     <section class="dt-inheritance-note">
         <?= __('The verification endpoint exercises inherited model, sortable, and searchable attributes through TableContext::inheritTableAttributes(). This page isolates that result so we can keep the compatibility route working while avoiding the old broken page shell.') ?>
     </section>

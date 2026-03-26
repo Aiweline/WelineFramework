@@ -16,6 +16,36 @@ class BackendAdminPageService
     /**
      * @var array<string,array<string,string>>
      */
+    private const BACKEND_LAYOUTS = [
+        'default' => [
+            'key' => 'default',
+            'layout_type' => 'default.default',
+            'title' => 'Admin Shell',
+            'description' => 'Full backend shell with topbar, sidebar, and standard admin chrome.',
+        ],
+        '1280' => [
+            'key' => '1280',
+            'layout_type' => 'default.1280',
+            'title' => 'Centered 1280',
+            'description' => 'Centered backend canvas with a 1280px content width.',
+        ],
+        '1440' => [
+            'key' => '1440',
+            'layout_type' => 'default.1440',
+            'title' => 'Centered 1440',
+            'description' => 'Centered backend canvas with a 1440px content width.',
+        ],
+        'blank' => [
+            'key' => 'blank',
+            'layout_type' => 'default.blank',
+            'title' => 'Blank Canvas',
+            'description' => 'Minimal backend layout without shell chrome.',
+        ],
+    ];
+
+    /**
+     * @var array<string,array<string,string>>
+     */
     private const DOCUMENTS = [
         'quickstart' => [
             'title' => 'Quick Start',
@@ -119,6 +149,47 @@ class BackendAdminPageService
             ],
             'sections' => $sections,
         ];
+    }
+
+    /**
+     * @return array<string,array<string,string>>
+     */
+    public function getBackendLayoutCatalog(bool $allowBlank = true): array
+    {
+        $catalog = self::BACKEND_LAYOUTS;
+        if (!$allowBlank) {
+            unset($catalog['blank']);
+        }
+
+        return $catalog;
+    }
+
+    public function normalizeBackendLayoutKey(
+        string $requestedLayout,
+        bool $allowBlank = true,
+        string $fallback = 'default'
+    ): string {
+        $catalog = $this->getBackendLayoutCatalog($allowBlank);
+        if (isset($catalog[$requestedLayout])) {
+            return $requestedLayout;
+        }
+
+        if (isset($catalog[$fallback])) {
+            return $fallback;
+        }
+
+        return (string) array_key_first($catalog);
+    }
+
+    public function resolveBackendLayoutType(
+        string $requestedLayout,
+        bool $allowBlank = true,
+        string $fallback = 'default'
+    ): string {
+        $catalog = $this->getBackendLayoutCatalog($allowBlank);
+        $layoutKey = $this->normalizeBackendLayoutKey($requestedLayout, $allowBlank, $fallback);
+
+        return (string) ($catalog[$layoutKey]['layout_type'] ?? 'default.default');
     }
 
     /**
