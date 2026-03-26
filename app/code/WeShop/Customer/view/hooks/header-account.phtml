@@ -13,6 +13,9 @@ $session = SessionFactory::getInstance()->createFrontendSession();
 
 // 获取前端URL（使用模板的 getUrl 方法更安全）
 $frontendUrl = $this->getUrl('');
+$apiUrlBuilder = $this->request->getUrlBuilder();
+$unpaidOrdersCountApiUrl = $apiUrlBuilder->getApiUrl('weshop_order/rest/v1/order/unpaid-count', [], false);
+$unpaidOrdersListApiUrl = $apiUrlBuilder->getApiUrl('weshop_order/rest/v1/order/unpaid-list', [], false);
 
 // 检查是否登录
 $isLoggedIn = $session->isLoggedIn();
@@ -87,7 +90,7 @@ if ($isLoggedIn) {
         (function() {
             // 异步加载未支付订单数量
             function loadUnpaidOrdersCount() {
-                fetch('<?= $frontendUrl ?>api/rest/v1/weshop_order/order/unpaid-count')
+                fetch('<?= $unpaidOrdersCountApiUrl ?>')
                     .then(response => response.json())
                     .then(data => {
                         if (data.code === 200 && data.data.count > 0) {
@@ -120,7 +123,7 @@ if ($isLoggedIn) {
             
             // 异步加载未支付订单列表
             function loadUnpaidOrdersList() {
-                fetch('<?= $frontendUrl ?>api/rest/v1/weshop_order/order/unpaid-list')
+                fetch('<?= $unpaidOrdersListApiUrl ?>')
                     .then(response => response.json())
                     .then(data => {
                         if (data.code === 200 && data.data.orders.length > 0) {
