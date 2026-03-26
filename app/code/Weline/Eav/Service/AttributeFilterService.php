@@ -6,133 +6,110 @@ namespace Weline\Eav\Service;
 
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
-use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Eav\Model\EavEntity;
-use Weline\Eav\EavModel;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
- * EAV属性筛选服务
- * 
- * 提供基于EAV属性的筛选功能
+ * EAV attribute filter/search metadata service.
  */
 class AttributeFilterService
 {
     /**
-     * @var EventsManager
-     */
-    private EventsManager $eventsManager;
-    
-    /**
-     * @var array 缓存的属性数据
+     * @var array<string, mixed>
      */
     private array $attributeCache = [];
-    
+
     /**
-     * @var array 缓存的选项数据
+     * @var array<string, mixed>
      */
     private array $optionCache = [];
-    
-    public function __construct(EventsManager $eventsManager)
-    {
-        $this->eventsManager = $eventsManager;
+
+    public function __construct(
+        private readonly EventsManager $eventsManager
+    ) {
     }
-    
+
     /**
-     * 获取实体的可筛选属性
-     * 
-     * @param string $entityCode 实体代码(如 'product')
-     * @param array $entityIds 实体ID列表
-     * @param array $attributeCodes 指定属性代码(可选)
-     * @return array 返回属性及其选项
-     * [
-     *     'attribute_code' => [
-     *         'attribute' => [...], // 属性信息
-     *         'options' => [...], // 可选值
-     *         'values' => [...], // 当前实体的值
-     *         'counts' => [...], // 每个值的实体计数
-     *     ],
-     *     ...
-     * ]
+     * @param array<int, int|string> $entityIds
+     * @param array<int, string> $attributeCodes
+     * @return array<string, array<string, mixed>>
      */
     public function getFilterableAttributes(
         string $entityCode,
         array $entityIds,
         array $attributeCodes = []
     ): array {
-        if (empty($entityIds)) {
-            return [];
+        if ($entityIds === []) {
+            return $this->getFilterableAttributeMetadata($entityCode, $attributeCodes);
         }
-        
-        // 获取实体
+
         $entity = $this->getEntity($entityCode);
         if (!$entity) {
             return [];
         }
-        
-        // 获取实体的属性
-        $attributes = $this->getEntityAttributes($entity, $attributeCodes);
-        
-        if (empty($attributes)) {
+
+        $attributes = $this->getEntityAttributes($entity, $attributeCodes, true, false);
+        if ($attributes === []) {
             return [];
         }
-        
-        $result = [];
-        
-        foreach ($attributes as $attribute) {
-            $attributeCode = $attribute->getCode();
-            
-            // 获取属性值和计数
-            $valuesData = $this->getAttributeValuesWithCounts($attribute, $entityIds);
-            
-            if (empty($valuesData['values'])) {
-                continue;
-            }
-            
-            // 获取属性选项（如果有）
-            $options = [];
-            if ($attribute->hasOption()) {
-                $options = $this->getAttributeOptions($attribute);
-            }
-            
-            $result[$attributeCode] = [
-                'attribute' => [
-                    'attribute_id' => $attribute->getId(),
-                    'code' => $attributeCode,
-                    'name' => $attribute->getName(),
-                    'type_id' => $attribute->getTypeId(),
-                    'set_id' => $attribute->getSetId(),
-                    'group_id' => $attribute->getGroupId(),
-                    'data_has_option' => $attribute->hasOption(),
-                    'data_is_multiple' => $attribute->getMultipleValued(),
-                ],
-                'options' => $options,
-                'values' => $valuesData['values'],
-                'counts' => $valuesData['counts'],
-            ];
-        }
-        
-        // 触发事件允许其他模块修改
-        $this->eventsManager->dispatch('Weline_Eav::attribute_filter_options', [
+
+        $result = $this->buildAttributeDataWithValues($attributes, $entityIds);
+
+        $eventData = [
             'entity_code' => $entityCode,
             'entity_ids' => $entityIds,
             'attribute_codes' => $attributeCodes,
             'options' => &$result,
-        ]);
-        
+        ];
+        $this->eventsManager->dispatch('Weline_Eav::attribute_filter_options', $eventData);
+
         return $result;
     }
-    
+
     /**
-     * 按属性值筛选实体
-     * 
-     * @param string $entityCode
-     * @param array $entityIds
-     * @param array $filters ['color' => ['red', 'blue'], 'size' => ['M']]
-     * @param string $logic 多个属性之间的逻辑关系 'AND'|'OR'
-     * @return array 筛选后的实体ID
+     * @param array<int, string> $attributeCodes
+     * @return array<string, array<string, mixed>>
+     */
+    public function getFilterableAttributeMetadata(
+        string $entityCode,
+        array $attributeCodes = [],
+        ?int $setId = null
+    ): array {
+        $entity = $this->getEntity($entityCode);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->buildAttributeMetadataResult(
+            $this->getEntityAttributes($entity, $attributeCodes, true, false, $setId)
+        );
+    }
+
+    /**
+     * @param array<int, string> $attributeCodes
+     * @return array<string, array<string, mixed>>
+     */
+    public function getSearchableAttributeMetadata(
+        string $entityCode,
+        array $attributeCodes = [],
+        ?int $setId = null
+    ): array {
+        $entity = $this->getEntity($entityCode);
+        if (!$entity) {
+            return [];
+        }
+
+        return $this->buildAttributeMetadataResult(
+            $this->getEntityAttributes($entity, $attributeCodes, false, true, $setId)
+        );
+    }
+
+    /**
+     * @param array<int, int|string> $entityIds
+     * @param array<string, array<int|string>|int|string> $filters
+     * @return array<int, int>
      */
     public function filterByAttributes(
         string $entityCode,
@@ -140,289 +117,418 @@ class AttributeFilterService
         array $filters,
         string $logic = 'AND'
     ): array {
-        if (empty($entityIds) || empty($filters)) {
-            return $entityIds;
+        if ($entityIds === [] || $filters === []) {
+            return array_values(array_map('intval', $entityIds));
         }
-        
-        // 获取实体
+
         $entity = $this->getEntity($entityCode);
         if (!$entity) {
-            return $entityIds;
+            return array_values(array_map('intval', $entityIds));
         }
-        
-        $filteredIds = $entityIds;
+
+        $filteredIds = array_values(array_map('intval', $entityIds));
         $matchedIdsByFilter = [];
-        
+
         foreach ($filters as $attributeCode => $values) {
-            if (empty($values)) {
+            if ($values === [] || $values === '' || $values === null) {
                 continue;
             }
-            
+
             if (!is_array($values)) {
                 $values = [$values];
             }
-            
-            // 获取属性
-            $attribute = $this->getAttribute($entity, $attributeCode);
+
+            $attribute = $this->getAttribute($entity, (string) $attributeCode);
             if (!$attribute || !$attribute->getId()) {
                 continue;
             }
-            
-            // 查询匹配的实体ID
+
             $matchedIds = $this->getEntitiesByAttributeValues($attribute, $filteredIds, $values);
-            
-            if ($logic === 'AND') {
-                // AND 逻辑：逐步缩小范围
+
+            if (strtoupper($logic) === 'AND') {
                 $filteredIds = $matchedIds;
-                if (empty($filteredIds)) {
+                if ($filteredIds === []) {
                     break;
                 }
             } else {
-                // OR 逻辑：收集所有匹配
                 $matchedIdsByFilter[] = $matchedIds;
             }
         }
-        
-        if ($logic === 'OR' && !empty($matchedIdsByFilter)) {
-            // 合并所有匹配的ID
+
+        if (strtoupper($logic) === 'OR' && $matchedIdsByFilter !== []) {
             $allMatchedIds = array_merge(...$matchedIdsByFilter);
-            $filteredIds = array_values(array_unique(array_intersect($entityIds, $allMatchedIds)));
+            $filteredIds = array_values(array_unique(array_intersect(
+                array_values(array_map('intval', $entityIds)),
+                array_map('intval', $allMatchedIds)
+            )));
         }
-        
-        // 触发事件
-        $this->eventsManager->dispatch('Weline_Eav::attribute_filter_apply', [
+
+        $eventData = [
             'entity_code' => $entityCode,
             'original_ids' => $entityIds,
             'filtered_ids' => &$filteredIds,
             'filters' => $filters,
-        ]);
-        
+        ];
+        $this->eventsManager->dispatch('Weline_Eav::attribute_filter_apply', $eventData);
+
         return $filteredIds;
     }
-    
+
     /**
-     * 获取属性值的实体计数
-     * 
-     * @param string $entityCode
-     * @param array $entityIds
-     * @param array $attributeCodes
-     * @return array
+     * @param array<int, int|string> $entityIds
+     * @param array<int, string> $attributeCodes
+     * @return array<string, array<string, int>>
      */
     public function getAttributeValueCounts(
         string $entityCode,
         array $entityIds,
         array $attributeCodes
     ): array {
-        if (empty($entityIds) || empty($attributeCodes)) {
+        if ($entityIds === [] || $attributeCodes === []) {
             return [];
         }
-        
+
         $entity = $this->getEntity($entityCode);
         if (!$entity) {
             return [];
         }
-        
+
         $result = [];
-        
+
         foreach ($attributeCodes as $attributeCode) {
             $attribute = $this->getAttribute($entity, $attributeCode);
             if (!$attribute || !$attribute->getId()) {
                 continue;
             }
-            
+
             $valuesData = $this->getAttributeValuesWithCounts($attribute, $entityIds);
             $result[$attributeCode] = $valuesData['counts'];
         }
-        
+
         return $result;
     }
-    
+
     /**
-     * 获取按属性组分组的可筛选属性
-     * 
-     * @param string $entityCode
-     * @param array $entityIds
-     * @param int|null $setId 属性集ID（可选）
-     * @return array
+     * @param array<int, int|string> $entityIds
+     * @return array<int, array<string, mixed>>
      */
     public function getFilterableAttributesByGroup(
         string $entityCode,
         array $entityIds,
         ?int $setId = null
     ): array {
-        $filterableAttributes = $this->getFilterableAttributes($entityCode, $entityIds);
-        
-        if (empty($filterableAttributes)) {
+        $filterableAttributes = $entityIds === []
+            ? $this->getFilterableAttributeMetadata($entityCode, [], $setId)
+            : $this->getFilterableAttributes($entityCode, $entityIds);
+
+        if ($filterableAttributes === []) {
             return [];
         }
-        
-        // 按属性组分组
+
         $grouped = [];
-        
+
         foreach ($filterableAttributes as $code => $data) {
-            $groupId = $data['attribute']['group_id'] ?? 0;
-            $attributeSetId = $data['attribute']['set_id'] ?? 0;
-            
-            // 如果指定了属性集，过滤不属于该集的属性
+            $groupId = (int) ($data['attribute']['group_id'] ?? 0);
+            $attributeSetId = (int) ($data['attribute']['set_id'] ?? 0);
+
             if ($setId !== null && $attributeSetId !== $setId) {
                 continue;
             }
-            
+
             if (!isset($grouped[$groupId])) {
                 $group = $this->getAttributeGroup($groupId);
                 $grouped[$groupId] = [
                     'group_id' => $groupId,
-                    'group_name' => $group ? $group->getData('name') : __('其他'),
-                    'group_code' => $group ? $group->getData('code') : 'other',
+                    'group_name' => $group ? (string) $group->getData('name') : (string) __('鍏朵粬'),
+                    'group_code' => $group ? (string) $group->getData('code') : 'other',
                     'attributes' => [],
                 ];
             }
-            
+
             $grouped[$groupId]['attributes'][$code] = $data;
         }
-        
+
         return array_values($grouped);
     }
-    
-    /**
-     * 获取实体
-     */
+
     private function getEntity(string $entityCode): ?EavEntity
     {
         try {
             /** @var EavEntity $entityModel */
             $entityModel = ObjectManager::getInstance(EavEntity::class);
             $entityModel->load('code', $entityCode);
-            
+
             return $entityModel->getId() ? $entityModel : null;
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
     }
-    
+
     /**
-     * 获取实体的属性列表
+     * @param array<int, string> $attributeCodes
+     * @return array<int, EavAttribute>
      */
-    private function getEntityAttributes(EavEntity $entity, array $attributeCodes = []): array
-    {
-        $cacheKey = $entity->getId() . '_' . implode(',', $attributeCodes);
-        
+    private function getEntityAttributes(
+        EavEntity $entity,
+        array $attributeCodes = [],
+        bool $filterableOnly = false,
+        bool $searchableOnly = false,
+        ?int $setId = null
+    ): array {
+        $cacheKey = implode(':', [
+            (string) $entity->getId(),
+            implode(',', $attributeCodes),
+            $filterableOnly ? '1' : '0',
+            $searchableOnly ? '1' : '0',
+            (string) ($setId ?? 0),
+        ]);
+
         if (isset($this->attributeCache[$cacheKey])) {
             return $this->attributeCache[$cacheKey];
         }
-        
+
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $attributeModel->reset()
             ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::schema_fields_is_enable, 1)
-            ->where(EavAttribute::schema_fields_is_filterable, 1); // 只获取可筛选的属性
-        
-        if (!empty($attributeCodes)) {
+            ->where(EavAttribute::schema_fields_is_enable, 1);
+
+        if ($setId !== null) {
+            $attributeModel->where(EavAttribute::schema_fields_set_id, $setId);
+        }
+
+        if ($filterableOnly) {
+            $attributeModel->where(EavAttribute::schema_fields_is_filterable, 1);
+        }
+
+        if ($searchableOnly) {
+            $attributeModel->where(EavAttribute::schema_fields_is_searchable, 1);
+        }
+
+        if ($attributeCodes !== []) {
             $attributeModel->where(EavAttribute::schema_fields_code, $attributeCodes, 'in');
         }
-        
+
         $attributeModel->order(EavAttribute::schema_fields_group_id)
             ->order(EavAttribute::schema_fields_attribute_id);
-        
+
         $results = $attributeModel->select()->fetch();
-        
         $attributes = [];
-        foreach ($results as $attr) {
-            if ($attr instanceof EavAttribute) {
-                $attributes[] = $attr;
+
+        foreach ($results as $item) {
+            if ($item instanceof EavAttribute) {
+                $attributes[] = $item;
+                continue;
+            }
+
+            if (is_array($item)) {
+                /** @var EavAttribute $attribute */
+                $attribute = ObjectManager::getInstance(EavAttribute::class);
+                $attribute->setData($item);
+                $attributes[] = $attribute;
             }
         }
-        
+
         $this->attributeCache[$cacheKey] = $attributes;
-        
+
         return $attributes;
     }
-    
-    /**
-     * 获取单个属性
-     */
+
     private function getAttribute(EavEntity $entity, string $attributeCode): ?EavAttribute
     {
         $cacheKey = $entity->getId() . '_' . $attributeCode;
-        
+
         if (isset($this->attributeCache[$cacheKey])) {
-            return $this->attributeCache[$cacheKey];
+            $cached = $this->attributeCache[$cacheKey];
+            return $cached instanceof EavAttribute ? $cached : null;
         }
-        
+
         /** @var EavAttribute $attributeModel */
         $attributeModel = ObjectManager::getInstance(EavAttribute::class);
         $attributeModel->reset()
             ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
             ->where(EavAttribute::schema_fields_code, $attributeCode)
             ->where(EavAttribute::schema_fields_is_enable, 1);
-        
+
         $attribute = $attributeModel->find()->fetch();
-        
+
         if ($attribute instanceof EavAttribute && $attribute->getId()) {
             $this->attributeCache[$cacheKey] = $attribute;
             return $attribute;
         }
-        
+
         return null;
     }
-    
+
     /**
-     * 获取属性值和计数
+     * @param array<int, EavAttribute> $attributes
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildAttributeMetadataResult(array $attributes): array
+    {
+        $result = [];
+
+        foreach ($attributes as $attribute) {
+            if (!$attribute instanceof EavAttribute || !$attribute->getId()) {
+                continue;
+            }
+
+            $attributeCode = $attribute->getCode();
+            $result[$attributeCode] = [
+                'attribute' => $this->mapAttribute($attribute),
+                'options' => $attribute->hasOption() ? $this->getAttributeOptions($attribute) : [],
+                'values' => [],
+                'counts' => [],
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<int, EavAttribute> $attributes
+     * @param array<int, int|string> $entityIds
+     * @return array<string, array<string, mixed>>
+     */
+    private function buildAttributeDataWithValues(array $attributes, array $entityIds): array
+    {
+        $result = [];
+
+        foreach ($attributes as $attribute) {
+            if (!$attribute instanceof EavAttribute || !$attribute->getId()) {
+                continue;
+            }
+
+            $valuesData = $this->getAttributeValuesWithCounts($attribute, $entityIds);
+            if ($valuesData['values'] === []) {
+                continue;
+            }
+
+            $attributeCode = $attribute->getCode();
+            $result[$attributeCode] = [
+                'attribute' => $this->mapAttribute($attribute),
+                'options' => $attribute->hasOption() ? $this->getAttributeOptions($attribute) : [],
+                'values' => $valuesData['values'],
+                'counts' => $valuesData['counts'],
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function mapAttribute(EavAttribute $attribute): array
+    {
+        $typeCode = '';
+        $typeElement = '';
+        $isSwatch = false;
+        $swatchColor = false;
+        $swatchImage = false;
+        $swatchText = false;
+
+        try {
+            $type = $attribute->getTypeModel();
+            $typeCode = $type->getCode();
+            $typeElement = $type->getElement();
+            $isSwatch = $type->isSwatch();
+            $swatchColor = $type->hasSwatchColor();
+            $swatchImage = $type->hasSwatchImage();
+            $swatchText = $type->hasSwatchText();
+        } catch (\Throwable) {
+        }
+
+        return [
+            'attribute_id' => (int) $attribute->getId(),
+            'code' => $attribute->getCode(),
+            'name' => $attribute->getName(),
+            'type_id' => $attribute->getTypeId(),
+            'type_code' => $typeCode,
+            'type_element' => $typeElement,
+            'set_id' => $attribute->getSetId(),
+            'group_id' => $attribute->getGroupId(),
+            'frontend_is_visible' => $attribute->isVisibleOnFront(),
+            'frontend_is_filterable' => $attribute->isFilterable(),
+            'frontend_is_searchable' => $attribute->isSearchable(),
+            'data_has_option' => $attribute->hasOption(),
+            'data_is_multiple' => $attribute->getMultipleValued(),
+            'has_option' => $attribute->hasOption(),
+            'is_multiple' => $attribute->getMultipleValued(),
+            'is_swatch' => $isSwatch,
+            'swatch_color' => $swatchColor,
+            'swatch_image' => $swatchImage,
+            'swatch_text' => $swatchText,
+        ];
+    }
+
+    /**
+     * @param array<int, int|string> $entityIds
+     * @return array{values:array<int, string>, counts:array<string, int>}
      */
     private function getAttributeValuesWithCounts(EavAttribute $attribute, array $entityIds): array
     {
-        if (empty($entityIds)) {
+        if (!$attribute->getId() || $entityIds === []) {
             return ['values' => [], 'counts' => []];
         }
-        
+
         $valueModel = $attribute->w_getValueModel();
         $valueModel->reset()
             ->fields(['value', 'COUNT(DISTINCT entity_id) as count'])
             ->where('attribute_id', $attribute->getId())
-            ->where('entity_id', $entityIds, 'in')
+            ->where('entity_id', array_values(array_map('intval', $entityIds)), 'in')
             ->where('value', null, 'IS NOT NULL')
             ->where('value', '', '!=')
             ->groupBy('value');
-        
+
         $results = $valueModel->select()->fetchArray();
-        
         $values = [];
         $counts = [];
-        
+
         foreach ($results as $row) {
-            $value = $row['value'];
-            $count = (int)$row['count'];
-            
+            $value = (string) ($row['value'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+
             $values[] = $value;
-            $counts[$value] = $count;
+            $counts[$value] = (int) ($row['count'] ?? 0);
         }
-        
+
         return ['values' => $values, 'counts' => $counts];
     }
-    
+
     /**
-     * 获取属性选项
+     * @return array<string, array<string, mixed>>
      */
     private function getAttributeOptions(EavAttribute $attribute): array
     {
+        if (!$attribute->getId()) {
+            return [];
+        }
+
         $cacheKey = 'options_' . $attribute->getId();
-        
+
         if (isset($this->optionCache[$cacheKey])) {
             return $this->optionCache[$cacheKey];
         }
-        
+
         /** @var Option $optionModel */
         $optionModel = ObjectManager::getInstance(Option::class);
         $optionModel->reset()
             ->where(Option::schema_fields_attribute_id, $attribute->getId())
             ->order(Option::schema_fields_option_id);
-        
+
         $results = $optionModel->select()->fetchArray();
-        
         $options = [];
+
         foreach ($results as $row) {
-            $options[$row[Option::schema_fields_option_id]] = [
+            $optionId = (string) ($row[Option::schema_fields_option_id] ?? '');
+            if ($optionId === '') {
+                continue;
+            }
+
+            $options[$optionId] = [
                 'option_id' => $row[Option::schema_fields_option_id],
                 'code' => $row[Option::schema_fields_code] ?? '',
                 'value' => $row[Option::schema_fields_value] ?? '',
@@ -431,59 +537,55 @@ class AttributeFilterService
                 'swatch_text' => $row[Option::schema_fields_swatch_text] ?? null,
             ];
         }
-        
+
         $this->optionCache[$cacheKey] = $options;
-        
+
         return $options;
     }
-    
+
     /**
-     * 根据属性值获取实体ID
+     * @param array<int, int> $entityIds
+     * @param array<int, int|string> $values
+     * @return array<int, int>
      */
     private function getEntitiesByAttributeValues(
         EavAttribute $attribute,
         array $entityIds,
         array $values
     ): array {
-        if (empty($entityIds) || empty($values)) {
+        if ($entityIds === [] || $values === []) {
             return [];
         }
-        
+
         $valueModel = $attribute->w_getValueModel();
         $valueModel->reset()
             ->fields('DISTINCT entity_id')
             ->where('attribute_id', $attribute->getId())
-            ->where('entity_id', $entityIds, 'in')
-            ->where('value', $values, 'in');
-        
+            ->where('entity_id', array_values(array_map('intval', $entityIds)), 'in')
+            ->where('value', array_values(array_map('strval', $values)), 'in');
+
         $results = $valueModel->select()->fetchArray();
-        
-        return array_column($results, 'entity_id');
+
+        return array_values(array_unique(array_map('intval', array_column($results, 'entity_id'))));
     }
-    
-    /**
-     * 获取属性组
-     */
+
     private function getAttributeGroup(int $groupId): ?Group
     {
         if ($groupId <= 0) {
             return null;
         }
-        
+
         try {
             /** @var Group $groupModel */
             $groupModel = ObjectManager::getInstance(Group::class);
             $groupModel->load($groupId);
-            
+
             return $groupModel->getId() ? $groupModel : null;
-        } catch (\Throwable $e) {
+        } catch (\Throwable) {
             return null;
         }
     }
-    
-    /**
-     * 清除缓存
-     */
+
     public function clearCache(): void
     {
         $this->attributeCache = [];

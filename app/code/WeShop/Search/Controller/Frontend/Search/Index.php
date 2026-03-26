@@ -39,6 +39,24 @@ class Index extends BaseController
      */
     private function collectFilters(): array
     {
+        $query = method_exists($this->request, 'getQuery') ? $this->request->getQuery() : null;
+        if (is_array($query)) {
+            $filters = [];
+            foreach ($query as $field => $value) {
+                if (in_array($field, ['q', 'page', 'page_size'], true)) {
+                    continue;
+                }
+
+                if ($value === null || $value === '') {
+                    continue;
+                }
+
+                $filters[$field] = $value;
+            }
+
+            return $filters;
+        }
+
         $filters = [];
         foreach (['category_id', 'price_min', 'price_max', 'order_by', 'order_dir'] as $field) {
             $value = $this->request->getParam($field);

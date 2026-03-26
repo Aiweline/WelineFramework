@@ -1,0 +1,17 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 1
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$request = $this->request;
+$requestCategory = $request->getData('category') ?? [];
+
+echo $this->fetch('WeShop_Filters::templates/Frontend/filters.phtml', [
+    'filters' => $this->getData('filters') ?? ($request->getData('filters') ?? []),
+    'applied_filters' => $this->getData('applied_filters') ?? ($request->getData('applied_filters') ?? []),
+    'category_id' => (int)($this->getData('category_id') ?? ($request->getData('category_id') ?? ($requestCategory['category_id'] ?? 0))),
+    'clear_all_url' => $this->getData('clear_all_url') ?? ($request->getData('clear_all_url') ?? ''),
+]);
