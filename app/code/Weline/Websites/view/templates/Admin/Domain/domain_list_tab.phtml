@@ -8,6 +8,28 @@
  */
 $domains = $domains ?? [];
 $accounts = $accounts ?? [];
+$registrarAccountOptions = [];
+foreach ($accounts as $account) {
+    $accountId = (int)($account['account_id'] ?? 0);
+    if ($accountId <= 0) {
+        continue;
+    }
+    $registrarName = \trim((string)($account['registrar_name'] ?? $account['registrar_code'] ?? ''));
+    $accountName = \trim((string)($account['account_name'] ?? ''));
+    $registrarAccountOptions[] = [
+        'value' => (string)$accountId,
+        'label' => $accountName !== '' ? $accountName . ($registrarName !== '' ? ' (' . $registrarName . ')' : '') : $registrarName,
+        'group' => $registrarName !== '' ? $registrarName : (string)__('Other'),
+        'meta' => (string)($account['registrar_code'] ?? ''),
+    ];
+}
+$registrarAccountOptionsJson = \json_encode($registrarAccountOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+$manualNsProviderOptions = [
+    ['value' => 'dnspod', 'label' => 'DNSPod', 'group' => (string)__('DNS 服务商'), 'meta' => 'ns1.dnspod.net, ns2.dnspod.net'],
+    ['value' => 'alidns', 'label' => (string)__('阿里云 DNS'), 'group' => (string)__('DNS 服务商'), 'meta' => 'ns1.alidns.com, ns2.alidns.com'],
+    ['value' => 'custom', 'label' => (string)__('自定义'), 'group' => (string)__('DNS 服务商'), 'meta' => (string)__('手动输入 Nameserver')],
+];
+$manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 ?>
 <style>
 .weline-domain-list-filter {
@@ -417,12 +439,17 @@ $accounts = $accounts ?? [];
 
 <!-- 过滤器 -->
 <div class="weline-domain-list-filter">
-    <select class="form-select form-select-sm" id="weline-domain-filter-account" onchange="WelineDomainList.loadDomains()">
-        <option value=""><?= __('所有账号') ?></option>
-        <?php foreach ($accounts as $acc): ?>
-            <option value="<?= (int)$acc['account_id'] ?>"><?= htmlspecialchars($acc['account_name'] ?? '') ?></option>
-        <?php endforeach; ?>
-    </select>
+    <w:websites:registrar:select
+        id="weline-domain-filter-account"
+        name="weline_domain_filter_account"
+        value="''"
+        display="''"
+        options="registrarAccountOptionsJson"
+        empty-label="@lang(所有账号)"
+        placeholder="@lang(搜索账号/服务商...)"
+        class="weline-domain-filter-account-select"
+        on-select="handleDomainFilterAccountChange"
+    />
     <select class="form-select form-select-sm" id="weline-domain-filter-resolve" onchange="WelineDomainList.loadDomains()">
         <option value=""><?= __('解析状态') ?></option>
         <option value="resolved"><?= __('已解析') ?></option>
@@ -486,12 +513,17 @@ $accounts = $accounts ?? [];
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label"><?= __('选择域名商账户') ?></label>
-                    <select class="form-select" id="weline-import-account-select" onchange="WelineDomainList.fetchRemoteDomains()">
-                        <option value=""><?= __('-- 请选择 --') ?></option>
-                        <?php foreach ($accounts as $acc): ?>
-                            <option value="<?= (int)$acc['account_id'] ?>"><?= htmlspecialchars($acc['account_name'] ?? '') ?></option>
-                        <?php endforeach; ?>
-                    </select>
+                    <w:websites:registrar:select
+                        id="weline-import-account-select"
+                        name="weline_import_account_select"
+                        value="''"
+                        display="''"
+                        options="registrarAccountOptionsJson"
+                        empty-label="@lang(-- 请选择 --)"
+                        placeholder="@lang(搜索账号/服务商...)"
+                        class="w-100"
+                        on-select="handleImportAccountChange"
+                    />
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -702,9 +734,17 @@ $accounts = $accounts ?? [];
                 <div id="weline-batch-ns-account-mode">
                     <div class="mb-3">
                         <label class="form-label"><?= __('选择目标账户') ?></label>
-                        <select class="form-select" id="weline-batch-ns-account">
-                            <option value=""><?= __('-- 加载中... --') ?></option>
-                        </select>
+                        <w:websites:registrar:select
+                            id="weline-batch-ns-account"
+                            name="weline_batch_ns_account"
+                            value="''"
+                            display="''"
+                            options="'[]'"
+                            empty-label="@lang(-- 加载中... --)"
+                            placeholder="@lang(搜索目标账号/服务商...)"
+                            class="w-100"
+                            on-select="handleBatchNsAccountChange"
+                        />
                         <div class="form-text"><?= __('选择已配置的域名商账户，系统将自动获取该账户的DNS服务器') ?></div>
                     </div>
                     <div class="alert alert-warning small" id="weline-batch-ns-account-no-data" style="display:none;">
@@ -720,13 +760,26 @@ $accounts = $accounts ?? [];
                 <!-- 手动输入模式 -->
                 <div id="weline-batch-ns-manual-mode" style="display:none;">
                     <div class="mb-3">
+                        <?php
+                        $nsProviderOptions = [
+                            ['value' => 'dnspod', 'label' => 'DNSPod', 'group' => (string)__('DNS 服务商'), 'meta' => 'ns1.dnspod.net, ns2.dnspod.net'],
+                            ['value' => 'alidns', 'label' => (string)__('阿里云 DNS'), 'group' => (string)__('DNS 服务商'), 'meta' => 'ns1.alidns.com, ns2.alidns.com'],
+                            ['value' => 'custom', 'label' => (string)__('自定义'), 'group' => (string)__('DNS 服务商'), 'meta' => (string)__('手动输入 Nameserver')],
+                        ];
+                        $nsProviderOptionsJson = json_encode($nsProviderOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                        ?>
                         <label class="form-label"><?= __('选择DNS服务商') ?></label>
-                        <select class="form-select" id="weline-batch-ns-provider" onchange="WelineDomainList.onNsProviderChange()">
-                            <option value=""><?= __('-- 请选择 --') ?></option>
-                            <option value="dnspod">DNSPod (ns1.dnspod.net, ns2.dnspod.net)</option>
-                            <option value="alidns"><?= __('阿里云 DNS') ?> (ns1.alidns.com, ns2.alidns.com)</option>
-                            <option value="custom"><?= __('自定义') ?></option>
-                        </select>
+                        <w:websites:registrar:select
+                            id="weline-batch-ns-provider"
+                            name="weline_batch_ns_provider"
+                            value="''"
+                            display="''"
+                            options="nsProviderOptionsJson"
+                            empty-label="@lang(-- 请选择 --)"
+                            placeholder="@lang(搜索 DNS 服务商...)"
+                            class="w-100"
+                            on-select="handleBatchNsProviderChange"
+                        />
                     </div>
 
                     <div class="mb-3" id="weline-batch-ns-custom-input" style="display:none;">
@@ -853,15 +906,30 @@ $accounts = $accounts ?? [];
 
                     <div class="mb-3">
                         <label class="form-label"><?= __('选择供应商') ?></label>
-                        <select class="form-select" id="weline-switch-dns-provider" onchange="WelineDomainList.onSwitchDnsProviderChange()">
-                            <option value=""><?= __('-- 请先选择 --') ?></option>
-                        </select>
+                        <w:websites:registrar:select
+                            id="weline-switch-dns-provider"
+                            name="weline_switch_dns_provider"
+                            value="''"
+                            display="''"
+                            options="'[]'"
+                            empty-label="@lang(-- 请先选择 --)"
+                            placeholder="@lang(搜索 DNS 服务商...)"
+                            class="w-100"
+                            on-select="handleSwitchDnsProviderChange"
+                        />
                     </div>
                     <div class="mb-3">
                         <label class="form-label"><?= __('选择账户') ?></label>
-                        <select class="form-select" id="weline-switch-dns-account">
-                            <option value=""><?= __('-- 请先选择供应商 --') ?></option>
-                        </select>
+                        <w:websites:registrar:select
+                            id="weline-switch-dns-account"
+                            name="weline_switch_dns_account"
+                            value="''"
+                            display="''"
+                            options="'[]'"
+                            empty-label="@lang(-- 请先选择供应商 --)"
+                            placeholder="@lang(搜索 DNS 账号...)"
+                            class="w-100"
+                        />
                     </div>
                 </div>
                 <!-- SSE 进度面板 -->
@@ -941,19 +1009,31 @@ $accounts = $accounts ?? [];
 
                 <div class="mb-3">
                     <label class="form-label"><?= __('DNS 管理账户') ?></label>
-                    <select class="form-select" id="weline-batch-set-dns-account">
-                        <option value=""><?= __('-- 不修改 --') ?></option>
-                        <option value="0"><?= __('清除（使用注册商账户）') ?></option>
-                    </select>
+                    <w:websites:registrar:select
+                        id="weline-batch-set-dns-account"
+                        name="weline_batch_set_dns_account"
+                        value="''"
+                        display="''"
+                        options="'[]'"
+                        empty-label="@lang(-- 不修改 --)"
+                        placeholder="@lang(搜索 DNS 管理账号...)"
+                        class="w-100"
+                    />
                     <small class="text-muted"><?= __('用于管理 DNS 解析记录的账户') ?></small>
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label"><?= __('CDN 管理账户') ?></label>
-                    <select class="form-select" id="weline-batch-set-cdn-account">
-                        <option value=""><?= __('-- 不修改 --') ?></option>
-                        <option value="0"><?= __('清除') ?></option>
-                    </select>
+                    <w:websites:registrar:select
+                        id="weline-batch-set-cdn-account"
+                        name="weline_batch_set_cdn_account"
+                        value="''"
+                        display="''"
+                        options="'[]'"
+                        empty-label="@lang(-- 不修改 --)"
+                        placeholder="@lang(搜索 CDN 管理账号...)"
+                        class="w-100"
+                    />
                     <small class="text-muted"><?= __('CDN 服务商账户（如 Cloudflare）') ?></small>
                 </div>
             </div>
@@ -986,15 +1066,29 @@ $accounts = $accounts ?? [];
         <div class="row">
             <div class="col-6 mb-3">
                 <label class="form-label"><?= __('DNS 账户') ?></label>
-                <select class="form-select" id="weline-manual-dns-account">
-                    <option value="0"><?= __('默认不设置') ?></option>
-                </select>
+                <w:websites:registrar:select
+                    id="weline-manual-dns-account"
+                    name="weline_manual_dns_account"
+                    value="''"
+                    display="''"
+                    options="'[]'"
+                    empty-label="@lang(默认不设置)"
+                    placeholder="@lang(搜索 DNS 账号...)"
+                    class="w-100"
+                />
             </div>
             <div class="col-6 mb-3">
                 <label class="form-label"><?= __('CDN 账户') ?></label>
-                <select class="form-select" id="weline-manual-cdn-account">
-                    <option value="0"><?= __('默认不设置') ?></option>
-                </select>
+                <w:websites:registrar:select
+                    id="weline-manual-cdn-account"
+                    name="weline_manual_cdn_account"
+                    value="''"
+                    display="''"
+                    options="'[]'"
+                    empty-label="@lang(默认不设置)"
+                    placeholder="@lang(搜索 CDN 账号...)"
+                    class="w-100"
+                />
             </div>
         </div>
         <div class="mb-3">
@@ -1039,15 +1133,29 @@ $accounts = $accounts ?? [];
                 <p class="text-muted small mb-3"><?= __('请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。') ?></p>
                 <div class="mb-3">
                     <label class="form-label"><?= __('DNS 管理账户') ?></label>
-                    <select class="form-select" id="weline-import-bind-dns">
-                        <option value="0"><?= __('不指定') ?></option>
-                    </select>
+                    <w:websites:registrar:select
+                        id="weline-import-bind-dns"
+                        name="weline_import_bind_dns"
+                        value="''"
+                        display="''"
+                        options="'[]'"
+                        empty-label="@lang(不指定)"
+                        placeholder="@lang(搜索 DNS 管理账号...)"
+                        class="w-100"
+                    />
                 </div>
                 <div class="mb-3">
                     <label class="form-label"><?= __('CDN 管理账户') ?></label>
-                    <select class="form-select" id="weline-import-bind-cdn">
-                        <option value="0"><?= __('不指定') ?></option>
-                    </select>
+                    <w:websites:registrar:select
+                        id="weline-import-bind-cdn"
+                        name="weline_import_bind_cdn"
+                        value="''"
+                        display="''"
+                        options="'[]'"
+                        empty-label="@lang(不指定)"
+                        placeholder="@lang(搜索 CDN 管理账号...)"
+                        class="w-100"
+                    />
                 </div>
                 <p class="text-danger small mb-3 d-none" id="weline-import-bind-hint"><?= __('请至少选择 DNS 或 CDN 中的一项') ?></p>
                 <div class="mb-2">
@@ -1114,6 +1222,328 @@ $accounts = $accounts ?? [];
     var remoteDomainData = [];
     var hideImported = false;
     var pendingImportByAccount = {};
+    var registrarAccountOptions = <?= $registrarAccountOptionsJson ?>;
+    var manualNsProviderOptions = <?= $manualNsProviderOptionsJson ?>;
+
+    function normalizeRegistrarOptions(items) {
+        return (Array.isArray(items) ? items : []).map(function (item) {
+            return {
+                value: String(item && item.value !== undefined ? item.value : ''),
+                label: String(item && item.label !== undefined ? item.label : (item && item.value !== undefined ? item.value : '')),
+                group: String(item && item.group !== undefined ? item.group : ''),
+                meta: String(item && item.meta !== undefined ? item.meta : ''),
+                raw: item || null
+            };
+        }).filter(function (item) {
+            return item.value !== '';
+        });
+    }
+
+    function buildRegistrarAccountOptions(items, extraOptions) {
+        var normalized = (Array.isArray(extraOptions) ? extraOptions.slice() : []);
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            var value = item && (item.account_id !== undefined ? item.account_id : item.id);
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+            var accountName = String(item.name || item.account_name || '');
+            var registrarName = String(item.registrar_name || item.registrar_code || '');
+            normalized.push({
+                value: String(value),
+                label: accountName !== '' ? accountName + (registrarName !== '' ? ' (' + registrarName + ')' : '') : registrarName,
+                group: registrarName,
+                meta: String(item.registrar_code || '')
+            });
+        });
+        return normalized;
+    }
+
+    function buildRegistrarProviderOptions(items, extraOptions, defaultGroupLabel) {
+        var normalized = (Array.isArray(extraOptions) ? extraOptions.slice() : []);
+        (Array.isArray(items) ? items : []).forEach(function (item) {
+            var value = item && (item.value !== undefined ? item.value : (item.code !== undefined ? item.code : ''));
+            if (value === undefined || value === null || value === '') {
+                return;
+            }
+            normalized.push({
+                value: String(value),
+                label: String(item.label || item.name || item.registrar_name || item.registrar_code || value),
+                group: String(item.group || defaultGroupLabel || ''),
+                meta: String(item.meta || item.registrar_code || value)
+            });
+        });
+        return normalized;
+    }
+
+    function ensureRegistrarSelectInstance(id, onSelectFnName) {
+        window.WelineRegistrarSelect = window.WelineRegistrarSelect || {};
+        if (window.WelineRegistrarSelect[id]) {
+            return window.WelineRegistrarSelect[id];
+        }
+
+        var wrapper = document.getElementById(id + '_wrapper');
+        var trigger = document.getElementById(id + '_trigger');
+        var dropdown = document.getElementById(id + '_dropdown');
+        var search = document.getElementById(id + '_search');
+        var list = document.getElementById(id + '_list');
+        var tags = document.getElementById(id + '_tags');
+        var hidden = document.getElementById(id + '_value');
+        var multiple = wrapper && String(wrapper.getAttribute('data-multiple') || '').toLowerCase() === 'true';
+        var emptyLabel = tags && tags.textContent ? tags.textContent.trim() : '';
+        var selected = [];
+        var options = [];
+
+        if (!wrapper || !trigger || !dropdown || !search || !list || !tags || !hidden) {
+            return null;
+        }
+
+        function readInitialSelection() {
+            return String(hidden.value || '').split(',').map(function (value) {
+                return value.trim();
+            }).filter(Boolean);
+        }
+
+        function isPicked(value) {
+            return selected.indexOf(String(value)) > -1;
+        }
+
+        function syncHidden() {
+            hidden.value = selected.join(',');
+        }
+
+        function getSelected() {
+            return selected.map(function (value) {
+                return options.find(function (item) {
+                    return item.value === value;
+                }) || { value: value, label: value, group: '', meta: '', raw: null };
+            });
+        }
+
+        function emitChange(item) {
+            try {
+                hidden.dispatchEvent(new Event('change', { bubbles: true }));
+            } catch (error) {
+            }
+
+            if (onSelectFnName && typeof window[onSelectFnName] === 'function') {
+                window[onSelectFnName](item || null, { selected: selected.slice() });
+            }
+        }
+
+        function renderTags() {
+            tags.innerHTML = '';
+            if (selected.length === 0) {
+                var placeholder = document.createElement('span');
+                placeholder.id = id + '_display';
+                placeholder.textContent = emptyLabel;
+                tags.appendChild(placeholder);
+                return;
+            }
+
+            selected.forEach(function (value) {
+                var item = options.find(function (option) {
+                    return option.value === value;
+                });
+                if (!item) {
+                    return;
+                }
+
+                if (!multiple) {
+                    var display = document.createElement('span');
+                    display.id = id + '_display';
+                    display.textContent = item.label;
+                    tags.appendChild(display);
+                    return;
+                }
+
+                var tag = document.createElement('span');
+                tag.className = 'weline-registrar-tag';
+                tag.textContent = item.label;
+                tags.appendChild(tag);
+            });
+        }
+
+        function renderList(keyword) {
+            var normalizedKeyword = String(keyword || '').trim().toLowerCase();
+            var filtered = options.filter(function (item) {
+                return !normalizedKeyword
+                    || item.label.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.group.toLowerCase().indexOf(normalizedKeyword) > -1
+                    || item.meta.toLowerCase().indexOf(normalizedKeyword) > -1;
+            });
+
+            if (filtered.length === 0) {
+                list.innerHTML = '<div class="weline-registrar-empty">' + escapeOptLabel('No matching account') + '</div>';
+                return;
+            }
+
+            var grouped = {};
+            filtered.forEach(function (item) {
+                var groupKey = item.group || 'default';
+                if (!grouped[groupKey]) {
+                    grouped[groupKey] = [];
+                }
+                grouped[groupKey].push(item);
+            });
+
+            var html = '';
+            Object.keys(grouped).forEach(function (groupKey) {
+                if (groupKey !== 'default') {
+                    html += '<div class="weline-registrar-group">' + escapeOptLabel(groupKey) + '</div>';
+                }
+                grouped[groupKey].forEach(function (item) {
+                    var meta = item.meta ? '<div class="weline-registrar-item-meta">' + escapeOptLabel(item.meta) + '</div>' : '';
+                    html += '<div class="weline-registrar-item' + (isPicked(item.value) ? ' active' : '') + '" data-value="' + escapeOptLabel(item.value) + '"><div>' + escapeOptLabel(item.label) + '</div>' + meta + '</div>';
+                });
+            });
+
+            list.innerHTML = html;
+            Array.prototype.slice.call(list.querySelectorAll('.weline-registrar-item')).forEach(function (element) {
+                element.addEventListener('click', function () {
+                    var value = this.getAttribute('data-value') || '';
+                    var pickedItem = options.find(function (option) {
+                        return option.value === value;
+                    }) || null;
+                    if (!value) {
+                        return;
+                    }
+
+                    selected = multiple
+                        ? (isPicked(value) ? selected.filter(function (picked) { return picked !== value; }) : selected.concat(value))
+                        : [value];
+                    dropdown.style.display = multiple ? 'block' : 'none';
+                    syncHidden();
+                    renderTags();
+                    renderList(search.value || '');
+                    emitChange(pickedItem);
+                });
+            });
+        }
+
+        function setOptions(nextOptions) {
+            options = normalizeRegistrarOptions(nextOptions);
+            selected = selected.filter(function (value) {
+                return options.some(function (item) {
+                    return item.value === value;
+                });
+            });
+            if (!multiple && selected.length > 1) {
+                selected = selected.slice(0, 1);
+            }
+            syncHidden();
+            renderTags();
+            renderList(search.value || '');
+        }
+
+        function setValue(value, emitEvent) {
+            var values = Array.isArray(value) ? value.map(String) : String(value || '').split(',').map(function (item) {
+                return item.trim();
+            }).filter(Boolean);
+            selected = multiple ? values : (values[0] ? [values[0]] : []);
+            syncHidden();
+            renderTags();
+            renderList(search.value || '');
+            if (emitEvent !== false) {
+                emitChange(getSelected()[0] || null);
+            }
+        }
+
+        trigger.addEventListener('click', function (event) {
+            event.stopPropagation();
+            dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+            if (dropdown.style.display === 'block') {
+                renderList(search.value || '');
+                search.focus();
+            }
+        });
+
+        search.addEventListener('input', function () {
+            renderList(search.value || '');
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!wrapper.contains(event.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        selected = readInitialSelection();
+        window.WelineRegistrarSelect[id] = {
+            setOptions: setOptions,
+            setValue: function (value) {
+                setValue(value, true);
+            },
+            getValue: function () {
+                return String(hidden.value || '');
+            },
+            getValues: function () {
+                return selected.slice();
+            },
+            getSelected: getSelected
+        };
+
+        return window.WelineRegistrarSelect[id];
+    }
+
+    function getRegistrarSelectValue(id) {
+        var instance = ensureRegistrarSelectInstance(id);
+        if (instance && typeof instance.getValue === 'function') {
+            return String(instance.getValue() || '');
+        }
+        var hidden = document.getElementById(id + '_value');
+        return hidden ? String(hidden.value || '') : '';
+    }
+
+    function setRegistrarSelectValue(id, value, onSelectFnName) {
+        var instance = ensureRegistrarSelectInstance(id, onSelectFnName);
+        if (instance && typeof instance.setValue === 'function') {
+            instance.setValue(String(value || ''));
+            return;
+        }
+        var hidden = document.getElementById(id + '_value');
+        if (hidden) {
+            hidden.value = String(value || '');
+        }
+    }
+
+    function setRegistrarSelectOptions(id, options, onSelectFnName) {
+        var instance = ensureRegistrarSelectInstance(id, onSelectFnName);
+        if (instance && typeof instance.setOptions === 'function') {
+            instance.setOptions(Array.isArray(options) ? options : []);
+        }
+    }
+
+    window.handleDomainFilterAccountChange = function () {
+        if (window.WelineDomainList && typeof window.WelineDomainList.loadDomains === 'function') {
+            window.WelineDomainList.loadDomains(1);
+        }
+    };
+
+    window.handleImportAccountChange = function () {
+        if (window.WelineDomainList && typeof window.WelineDomainList.fetchRemoteDomains === 'function') {
+            window.WelineDomainList.fetchRemoteDomains();
+        }
+    };
+
+    window.handleBatchNsAccountChange = function () {
+        if (window.WelineDomainList && typeof window.WelineDomainList.onNsAccountChange === 'function') {
+            window.WelineDomainList.onNsAccountChange();
+        }
+    };
+
+    window.handleSwitchDnsProviderChange = function () {
+        if (window.WelineDomainList && typeof window.WelineDomainList.onSwitchDnsProviderChange === 'function') {
+            window.WelineDomainList.onSwitchDnsProviderChange();
+        }
+    };
+
+    function hydrateStaticRegistrarSelects() {
+        setRegistrarSelectOptions('weline-domain-filter-account', registrarAccountOptions, 'handleDomainFilterAccountChange');
+        setRegistrarSelectOptions('weline-import-account-select', registrarAccountOptions, 'handleImportAccountChange');
+        setRegistrarSelectOptions('weline-batch-ns-provider', manualNsProviderOptions, 'handleBatchNsProviderChange');
+    }
+
+    hydrateStaticRegistrarSelects();
 
     function escapeOptLabel(s) {
         if (!s) return '';
@@ -1124,21 +1554,16 @@ $accounts = $accounts ?? [];
         fetch(urls.getDnsAccounts)
             .then(function(r) { return r.json(); })
             .then(function(data) {
-                var sd = document.getElementById('weline-import-bind-dns');
-                var sc = document.getElementById('weline-import-bind-cdn');
-                if (!sd || !sc) {
+                if (!document.getElementById('weline-import-bind-dns_wrapper') || !document.getElementById('weline-import-bind-cdn_wrapper')) {
                     if (callback) callback();
                     return;
                 }
-                sd.innerHTML = '<option value="0">' + '<?= __('不指定') ?>' + '</option>';
-                sc.innerHTML = '<option value="0">' + '<?= __('不指定') ?>' + '</option>';
+                var extraOptions = [{ value: '0', label: '<?= addslashes((string)__('不指定')) ?>', group: '', meta: '' }];
                 if (data.code === 200 && data.data) {
-                    (data.data.dns_accounts || []).forEach(function(a) {
-                        sd.innerHTML += '<option value="' + a.account_id + '">' + escapeOptLabel(a.name) + ' (' + escapeOptLabel(a.registrar_name || a.registrar_code) + ')</option>';
-                    });
-                    (data.data.cdn_accounts || []).forEach(function(a) {
-                        sc.innerHTML += '<option value="' + a.account_id + '">' + escapeOptLabel(a.name) + ' (' + escapeOptLabel(a.registrar_name || a.registrar_code) + ')</option>';
-                    });
+                    setRegistrarSelectOptions('weline-import-bind-dns', buildRegistrarAccountOptions(data.data.dns_accounts || [], extraOptions), null);
+                    setRegistrarSelectOptions('weline-import-bind-cdn', buildRegistrarAccountOptions(data.data.cdn_accounts || [], extraOptions), null);
+                    setRegistrarSelectValue('weline-import-bind-dns', '0', null);
+                    setRegistrarSelectValue('weline-import-bind-cdn', '0', null);
                 }
                 if (callback) callback();
             })
@@ -1210,7 +1635,7 @@ $accounts = $accounts ?? [];
 
     function getFilters() {
         return {
-            account_id: document.getElementById('weline-domain-filter-account').value,
+            account_id: getRegistrarSelectValue('weline-domain-filter-account'),
             resolve_status: document.getElementById('weline-domain-filter-resolve').value,
             https_status: document.getElementById('weline-domain-filter-https').value,
             search: document.getElementById('weline-domain-filter-search').value
@@ -1460,8 +1885,8 @@ $accounts = $accounts ?? [];
         var btn = document.getElementById('weline-import-confirm-btn');
         if (!btn) return;
         btn.addEventListener('click', function() {
-            var dns = parseInt(document.getElementById('weline-import-bind-dns').value, 10) || 0;
-            var cdn = parseInt(document.getElementById('weline-import-bind-cdn').value, 10) || 0;
+            var dns = parseInt(getRegistrarSelectValue('weline-import-bind-dns'), 10) || 0;
+            var cdn = parseInt(getRegistrarSelectValue('weline-import-bind-cdn'), 10) || 0;
             var hintEl = document.getElementById('weline-import-bind-hint');
             if (dns <= 0 && cdn <= 0) {
                 if (hintEl) hintEl.classList.remove('d-none');
@@ -1665,7 +2090,7 @@ $accounts = $accounts ?? [];
         if (!importModal) {
             importModal = new bootstrap.Modal(document.getElementById('welineImportDomainModal'));
         }
-        document.getElementById('weline-import-account-select').value = '';
+        setRegistrarSelectValue('weline-import-account-select', '', 'handleImportAccountChange');
         document.getElementById('weline-import-domain-list').innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4"><?= __('请选择域名商账户') ?></td></tr>';
         document.getElementById('weline-import-count').textContent = '';
         remoteDomainData = [];
@@ -1675,7 +2100,7 @@ $accounts = $accounts ?? [];
     }
 
     function fetchRemoteDomains() {
-        var accountId = document.getElementById('weline-import-account-select').value;
+        var accountId = getRegistrarSelectValue('weline-import-account-select');
         var tbody = document.getElementById('weline-import-domain-list');
 
         if (!accountId) {
@@ -1775,7 +2200,7 @@ $accounts = $accounts ?? [];
             return;
         }
 
-        var accountId = document.getElementById('weline-import-account-select').value;
+        var accountId = getRegistrarSelectValue('weline-import-account-select');
         if (!accountId) {
             toast('<?= __('请选择域名商账户') ?>', 'warning');
             return;
@@ -2211,7 +2636,7 @@ $accounts = $accounts ?? [];
     }
 
     function resetFilters() {
-        document.getElementById('weline-domain-filter-account').value = '';
+        setRegistrarSelectValue('weline-domain-filter-account', '', 'handleDomainFilterAccountChange');
         document.getElementById('weline-domain-filter-resolve').value = '';
         document.getElementById('weline-domain-filter-https').value = '';
         document.getElementById('weline-domain-filter-search').value = '';
@@ -2344,7 +2769,8 @@ $accounts = $accounts ?? [];
         document.getElementById('weline-ns-mode-account').checked = true;
         document.getElementById('weline-batch-ns-account-mode').style.display = 'block';
         document.getElementById('weline-batch-ns-manual-mode').style.display = 'none';
-        document.getElementById('weline-batch-ns-provider').value = '';
+        setRegistrarSelectValue('weline-batch-ns-account', '', 'handleBatchNsAccountChange');
+        setRegistrarSelectValue('weline-batch-ns-provider', '', 'handleBatchNsProviderChange');
         document.getElementById('weline-batch-ns-custom').value = '';
         document.getElementById('weline-batch-ns-custom-input').style.display = 'none';
         document.getElementById('weline-batch-ns-account-info').style.display = 'none';
@@ -2356,13 +2782,11 @@ $accounts = $accounts ?? [];
             document.querySelectorAll('input[name="weline-ns-switch-mode"]').forEach(function(radio) {
                 radio.addEventListener('change', onNsSwitchModeChange);
             });
-            document.getElementById('weline-batch-ns-account').addEventListener('change', onNsAccountChange);
         }
         batchChangeNsModal.show();
     }
 
     function loadRegistrarAccounts() {
-        var select = document.getElementById('weline-batch-ns-account');
         var accountModeRadio = document.getElementById('weline-ns-mode-account');
         var manualModeRadio = document.getElementById('weline-ns-mode-manual');
         var accountNoDataTip = document.getElementById('weline-batch-ns-account-no-data');
@@ -2411,8 +2835,7 @@ $accounts = $accounts ?? [];
     }
 
     function onNsAccountChange() {
-        var select = document.getElementById('weline-batch-ns-account');
-        var accountId = select.value;
+        var accountId = getRegistrarSelectValue('weline-batch-ns-account');
         var infoDiv = document.getElementById('weline-batch-ns-account-info');
         var nsSpan = document.getElementById('weline-batch-ns-account-ns');
 
@@ -2452,7 +2875,7 @@ $accounts = $accounts ?? [];
     }
 
     function onNsProviderChange() {
-        var provider = document.getElementById('weline-batch-ns-provider').value;
+        var provider = getRegistrarSelectValue('weline-batch-ns-provider');
         var customInput = document.getElementById('weline-batch-ns-custom-input');
 
         customInput.style.display = (provider === 'custom') ? 'block' : 'none';
@@ -2468,7 +2891,7 @@ $accounts = $accounts ?? [];
         var submitBtn = document.getElementById('weline-batch-ns-submit');
 
         if (mode === 'account') {
-            var accountId = document.getElementById('weline-batch-ns-account').value;
+            var accountId = getRegistrarSelectValue('weline-batch-ns-account');
             if (!accountId) {
                 toast('<?= __('请选择目标账户') ?>', 'warning');
                 return;
@@ -2504,7 +2927,7 @@ $accounts = $accounts ?? [];
                     toast('<?= __('请求失败') ?>', 'error');
                 });
         } else {
-            var provider = document.getElementById('weline-batch-ns-provider').value;
+            var provider = getRegistrarSelectValue('weline-batch-ns-provider');
             var customNs = document.getElementById('weline-batch-ns-custom').value.trim();
 
             if (!provider) {
@@ -2720,8 +3143,8 @@ $accounts = $accounts ?? [];
         var fd = new FormData();
         fd.append('domain', domain);
         fd.append('description', document.getElementById('weline-manual-description').value || '');
-        fd.append('dns_account_id', document.getElementById('weline-manual-dns-account').value || '0');
-        fd.append('cdn_account_id', document.getElementById('weline-manual-cdn-account').value || '0');
+        fd.append('dns_account_id', getRegistrarSelectValue('weline-manual-dns-account') || '0');
+        fd.append('cdn_account_id', getRegistrarSelectValue('weline-manual-cdn-account') || '0');
         fd.append('https_mode', document.getElementById('weline-manual-https-mode').value || 'none');
         fd.append('https_email', document.getElementById('weline-manual-https-email').value || '');
         fd.append('cert_fullchain_text', document.getElementById('weline-manual-cert-text').value || '');
@@ -2829,8 +3252,9 @@ $accounts = $accounts ?? [];
         var infoEl = document.getElementById('weline-switch-dns-selected-info');
         infoEl.textContent = '<?= __('已选择') ?> ' + selected.length + ' <?= __('个根域名') ?>';
 
-        document.getElementById('weline-switch-dns-provider').value = '';
-        document.getElementById('weline-switch-dns-account').innerHTML = '<option value=""><?= __('-- 请先选择供应商 --') ?></option>';
+        setRegistrarSelectValue('weline-switch-dns-provider', '', 'handleSwitchDnsProviderChange');
+        setRegistrarSelectOptions('weline-switch-dns-account', [], null);
+        setRegistrarSelectValue('weline-switch-dns-account', '', null);
 
         document.getElementById('weline-switch-dns-form-area').style.display = 'block';
         document.getElementById('weline-switch-dns-progress-area').style.display = 'none';
@@ -2878,7 +3302,7 @@ $accounts = $accounts ?? [];
     }
 
     function onSwitchDnsProviderChange() {
-        var provider = document.getElementById('weline-switch-dns-provider').value;
+        var provider = getRegistrarSelectValue('weline-switch-dns-provider');
         var accountSel = document.getElementById('weline-switch-dns-account');
         accountSel.innerHTML = '<option value=""><?= __('-- 请选择账户 --') ?></option>';
         if (!provider || !switchDnsAccountCache.accounts) return;
@@ -2897,7 +3321,7 @@ $accounts = $accounts ?? [];
             toast('<?= __('请先选择要切换的根域名') ?>', 'warning');
             return;
         }
-        var targetAccountId = document.getElementById('weline-switch-dns-account').value;
+        var targetAccountId = getRegistrarSelectValue('weline-switch-dns-account');
         if (!targetAccountId) {
             toast('<?= __('请选择目标 DNS 服务账户') ?>', 'warning');
             return;
@@ -3066,8 +3490,8 @@ $accounts = $accounts ?? [];
         infoEl.innerHTML = '<?= __('已选择') ?> <strong>' + selected.length + '</strong> <?= __('个域名') ?>';
 
         // 重置下拉框
-        document.getElementById('weline-batch-set-dns-account').value = '';
-        document.getElementById('weline-batch-set-cdn-account').value = '';
+        setRegistrarSelectValue('weline-batch-set-dns-account', '', null);
+        setRegistrarSelectValue('weline-batch-set-cdn-account', '', null);
 
         // 加载可用账户列表
         loadDnsAccountsForBatchSet();
@@ -3122,8 +3546,8 @@ $accounts = $accounts ?? [];
             return;
         }
 
-        var dnsAccountId = document.getElementById('weline-batch-set-dns-account').value;
-        var cdnAccountId = document.getElementById('weline-batch-set-cdn-account').value;
+        var dnsAccountId = getRegistrarSelectValue('weline-batch-set-dns-account');
+        var cdnAccountId = getRegistrarSelectValue('weline-batch-set-cdn-account');
 
         if (dnsAccountId === '' && cdnAccountId === '') {
             toast('<?= __('请至少选择一个账户进行设置') ?>', 'warning');
@@ -3223,10 +3647,142 @@ $accounts = $accounts ?? [];
             .catch(function() { toast('<?= __('请求失败') ?>', 'error'); });
     }
 
+    function loadRegistrarAccounts() {
+        var accountModeRadio = document.getElementById('weline-ns-mode-account');
+        var manualModeRadio = document.getElementById('weline-ns-mode-manual');
+        var accountNoDataTip = document.getElementById('weline-batch-ns-account-no-data');
+
+        setRegistrarSelectOptions('weline-batch-ns-account', [], 'handleBatchNsAccountChange');
+        setRegistrarSelectValue('weline-batch-ns-account', '', 'handleBatchNsAccountChange');
+        if (accountNoDataTip) {
+            accountNoDataTip.style.display = 'none';
+        }
+
+        fetch(urls.getRegistrarAccounts)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.code === 200 && data.data && data.data.accounts) {
+                    registrarAccountsCache = data.data.accounts;
+                    if (data.data.accounts.length === 0) {
+                        accountModeRadio.disabled = true;
+                        if (accountNoDataTip) {
+                            accountNoDataTip.style.display = 'block';
+                        }
+                        manualModeRadio.checked = true;
+                        onNsSwitchModeChange();
+                        return;
+                    }
+
+                    accountModeRadio.disabled = false;
+                    setRegistrarSelectOptions(
+                        'weline-batch-ns-account',
+                        buildRegistrarAccountOptions(data.data.accounts || [], []),
+                        'handleBatchNsAccountChange'
+                    );
+                    setRegistrarSelectValue('weline-batch-ns-account', '', 'handleBatchNsAccountChange');
+                    return;
+                }
+
+                setRegistrarSelectOptions('weline-batch-ns-account', [], 'handleBatchNsAccountChange');
+            })
+            .catch(function () {
+                setRegistrarSelectOptions('weline-batch-ns-account', [], 'handleBatchNsAccountChange');
+            });
+    }
+
+    function loadManualCreateAccounts() {
+        fetch(urls.getDnsAccounts)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data || data.code !== 200 || !data.data) {
+                    return;
+                }
+
+                var defaultOption = [{ value: '0', label: '<?= addslashes((string)__('默认不设置')) ?>', group: '', meta: '' }];
+                setRegistrarSelectOptions('weline-manual-dns-account', buildRegistrarAccountOptions(data.data.dns_accounts || [], defaultOption), null);
+                setRegistrarSelectOptions('weline-manual-cdn-account', buildRegistrarAccountOptions(data.data.cdn_accounts || [], defaultOption), null);
+                setRegistrarSelectValue('weline-manual-dns-account', '0', null);
+                setRegistrarSelectValue('weline-manual-cdn-account', '0', null);
+            })
+            .catch(function () {});
+    }
+
+    function loadDnsAccountsForSwitch() {
+        fetch(urls.getDnsAccounts)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.code !== 200 || !data.data || !data.data.dns_accounts) {
+                    return;
+                }
+                var accounts = data.data.dns_accounts;
+                var seen = {};
+                var providers = [];
+                accounts.forEach(function (acc) {
+                    var code = acc.registrar_code || '';
+                    if (code && !seen[code]) {
+                        seen[code] = true;
+                        providers.push({ code: code, name: acc.registrar_name || code });
+                    }
+                });
+                switchDnsAccountCache = { providers: providers, accounts: accounts };
+
+                setRegistrarSelectOptions(
+                    'weline-switch-dns-provider',
+                    buildRegistrarProviderOptions(providers, [], '<?= addslashes((string)__('服务商')) ?>'),
+                    'handleSwitchDnsProviderChange'
+                );
+                setRegistrarSelectValue('weline-switch-dns-provider', '', 'handleSwitchDnsProviderChange');
+                setRegistrarSelectOptions('weline-switch-dns-account', [], null);
+                setRegistrarSelectValue('weline-switch-dns-account', '', null);
+            })
+            .catch(function () { toast('<?= __('鍔犺浇璐︽埛鍒楄〃澶辫触') ?>', 'error'); });
+    }
+
+    function onSwitchDnsProviderChange() {
+        var provider = getRegistrarSelectValue('weline-switch-dns-provider');
+        if (!provider || !switchDnsAccountCache.accounts) {
+            setRegistrarSelectOptions('weline-switch-dns-account', [], null);
+            setRegistrarSelectValue('weline-switch-dns-account', '', null);
+            return;
+        }
+
+        var accounts = (switchDnsAccountCache.accounts || []).filter(function (acc) {
+            return String(acc.registrar_code || '') === provider;
+        });
+        setRegistrarSelectOptions('weline-switch-dns-account', buildRegistrarAccountOptions(accounts, []), null);
+        setRegistrarSelectValue('weline-switch-dns-account', '', null);
+    }
+
+    function loadDnsAccountsForBatchSet() {
+        fetch(urls.getDnsAccounts)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.code === 200 && data.data) {
+                    var dnsExtra = [{ value: '0', label: '<?= addslashes((string)__('清除（使用注册商账户）')) ?>', group: '', meta: '' }];
+                    var cdnExtra = [{ value: '0', label: '<?= addslashes((string)__('清除')) ?>', group: '', meta: '' }];
+
+                    setRegistrarSelectOptions('weline-batch-set-dns-account', buildRegistrarAccountOptions(data.data.dns_accounts || [], dnsExtra), null);
+                    setRegistrarSelectOptions('weline-batch-set-cdn-account', buildRegistrarAccountOptions(data.data.cdn_accounts || [], cdnExtra), null);
+                    setRegistrarSelectValue('weline-batch-set-dns-account', '', null);
+                    setRegistrarSelectValue('weline-batch-set-cdn-account', '', null);
+                }
+            })
+            .catch(function () {
+                toast('<?= __('鍔犺浇璐︽埛鍒楄〃澶辫触') ?>', 'error');
+            });
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() { loadDomains(1); });
     } else {
         loadDomains(1);
     }
 })();
+</script>
+<script>
+window.handleBatchNsProviderChange = function () {
+    if (window.WelineDomainList && typeof window.WelineDomainList.onNsProviderChange === 'function') {
+        window.WelineDomainList.onNsProviderChange();
+    }
+};
 </script>
