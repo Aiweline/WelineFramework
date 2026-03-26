@@ -120,6 +120,9 @@ class CheckoutPageDataServiceTest extends TestCase
             ->with(12, [
                 'area' => 'frontend',
                 'currency' => 'USD',
+                'country' => 'GB',
+                'country_id' => 'GB',
+                'region' => 'LDN',
             ])
             ->willReturn([
                 [
@@ -248,5 +251,130 @@ class CheckoutPageDataServiceTest extends TestCase
         $this->assertSame(3, $result['cart_count']);
         $this->assertSame(59.5, $result['cart_summary']['grand_total']);
         $this->assertSame('Trail Backpack', $result['cart_items'][0]['name']);
+    }
+
+    public function testBuildDynamicMethodDataUsesSelectedSavedAddressAndSelectedMethods(): void
+    {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'GBP';
+
+        $cartService = $this->createMock(CartService::class);
+        $cartService->expects($this->never())->method('getCartItems');
+        $cartService->expects($this->never())->method('calculateTotals');
+
+        $addressService = $this->createMock(AddressService::class);
+        $addressService->expects($this->once())
+            ->method('getCustomerAddresses')
+            ->with(12)
+            ->willReturn([
+                [
+                    'address_id' => 2,
+                    'firstname' => 'Grace',
+                    'lastname' => 'Hopper',
+                    'street' => '456 Broadway',
+                    'city' => 'New York',
+                    'region' => 'NY',
+                    'country_id' => 'US',
+                    'is_default' => true,
+                ],
+                [
+                    'address_id' => 3,
+                    'firstname' => 'Ada',
+                    'lastname' => 'Lovelace',
+                    'street' => '123 Market Street',
+                    'city' => 'London',
+                    'region' => 'LDN',
+                    'country_id' => 'GB',
+                    'is_default' => false,
+                ],
+            ]);
+
+        $shippingService = $this->createMock(ShippingService::class);
+        $shippingService->expects($this->never())->method('getAvailableShippingMethods');
+
+        $checkoutService = $this->createMock(CheckoutService::class);
+        $checkoutService->expects($this->once())
+            ->method('getCheckoutShippingMethods')
+            ->with(12, [
+                'area' => 'frontend',
+                'currency' => 'GBP',
+                'country' => 'GB',
+                'country_id' => 'GB',
+                'region' => 'LDN',
+            ])
+            ->willReturn([
+                [
+                    'code' => 'flat_rate',
+                    'name' => 'Flat Rate',
+                    'description' => 'Standard delivery.',
+                    'is_default' => true,
+                    'sort_order' => 10,
+                ],
+                [
+                    'code' => 'dhl',
+                    'name' => 'DHL',
+                    'description' => 'Express delivery.',
+                    'is_default' => false,
+                    'sort_order' => 20,
+                ],
+            ]);
+        $checkoutService->expects($this->once())
+            ->method('getCheckoutPaymentMethods')
+            ->with(12, [
+                'area' => 'frontend',
+                'currency' => 'GBP',
+                'country' => 'GB',
+                'country_id' => 'GB',
+                'region' => 'LDN',
+            ])
+            ->willReturn([
+                [
+                    'code' => 'manual_transfer',
+                    'title' => 'Manual Transfer',
+                    'description' => 'Pay later.',
+                    'is_default' => true,
+                    'sort_order' => 10,
+                ],
+                [
+                    'code' => 'paypal',
+                    'title' => 'PayPal',
+                    'description' => 'Pay online with your PayPal account.',
+                    'is_default' => false,
+                    'sort_order' => 20,
+                ],
+            ]);
+
+        $i18n = $this->createMock(I18n::class);
+        $i18n->expects($this->never())->method('getCountries');
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())->method('getRetryPaymentContext');
+
+        $service = new CheckoutPageDataService(
+            $cartService,
+            $addressService,
+            $shippingService,
+            $checkoutService,
+            $i18n,
+            $orderService
+        );
+
+        $result = $service->buildDynamicMethodData(12, [
+            'shipping_address_id' => 3,
+            'shipping_address' => [
+                'region' => 'LDN',
+            ],
+            'shipping_method' => 'dhl',
+            'payment_method' => 'paypal',
+        ]);
+
+        $this->assertSame(3, $result['selected_shipping_address_id']);
+        $this->assertSame('flat_rate', $result['shipping_methods'][0]['code']);
+        $this->assertFalse((bool) $result['shipping_methods'][0]['is_default']);
+        $this->assertSame('dhl', $result['shipping_methods'][1]['code']);
+        $this->assertTrue((bool) $result['shipping_methods'][1]['is_default']);
+        $this->assertSame('manual_transfer', $result['payment_methods'][0]['code']);
+        $this->assertFalse((bool) $result['payment_methods'][0]['is_default']);
+        $this->assertSame('paypal', $result['payment_methods'][1]['code']);
+        $this->assertTrue((bool) $result['payment_methods'][1]['is_default']);
     }
 }
