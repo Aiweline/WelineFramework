@@ -5,7 +5,6 @@ namespace Weline\Acl\Service;
 
 use Weline\Acl\Model\Acl;
 use Weline\Acl\Model\RoleAccess;
-use Weline\Framework\Database\Connection\Api\Sql\QueryInterface;
 use Weline\Framework\App\Env;
 
 /**
@@ -158,7 +157,7 @@ class AclOrphanCleanupService
         return count($sourceIds);
     }
 
-    private function buildNonUserAclQuery(): QueryInterface
+    private function buildNonUserAclQuery(): Acl
     {
         $field = Acl::schema_fields_ACL_ORIGIN;
         return $this->acl->reset()
