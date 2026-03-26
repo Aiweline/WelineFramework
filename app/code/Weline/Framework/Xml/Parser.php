@@ -184,7 +184,11 @@ class Parser
 
         // 如果 content 仍然是字符串（没有找到任何元素节点），返回空数组
         // 这样可以确保 xmlToArray() 始终返回数组类型
-        return is_array($content) ? $content : [];
+        if ($content === '') {
+            return null;
+        }
+
+        return $content;
     }
 
     /**
@@ -264,6 +268,7 @@ class Parser
 
             throw new \Weline\Framework\Exception\Core(
                 $e->getMessage(),
+                0,
                 $e
             );
         }

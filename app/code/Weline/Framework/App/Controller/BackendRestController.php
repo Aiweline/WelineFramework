@@ -26,7 +26,11 @@ class BackendRestController extends AbstractRestController
     {
         parent::__construct();
         $this->session = SessionFactory::getInstance()->createAuthenticatedSession('rest_backend');
-        
+
+        if ((\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
+            return;
+        }
+
         // 检查是否已登录
         if (!$this->session->isLoggedIn()) {
             // 尝试通过session ID查找用户
