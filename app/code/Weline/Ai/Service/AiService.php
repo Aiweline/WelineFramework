@@ -288,6 +288,33 @@ class AiService
     }
 
     /**
+     * Generate a structured provider response for tool-loop callers.
+     *
+     * This keeps provider metadata such as `tool_calls` intact.
+     *
+     * @param string $prompt
+     * @param string|null $modelCode
+     * @param string|null $scenarioCode
+     * @param array $params
+     * @return array
+     * @throws Exception
+     */
+    public function generateStructured(
+        string $prompt,
+        ?string $modelCode = null,
+        ?string $scenarioCode = null,
+        array $params = []
+    ): array {
+        $model = $this->selectModel($modelCode, $scenarioCode);
+        if (!$model) {
+            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
+            throw new Exception($reason);
+        }
+
+        return $this->callModelApiStructured($model, $prompt, $params);
+    }
+
+    /**
      * 流式生成文本内容（实例方法）
      * 
      * @param string $prompt 提示词
@@ -408,16 +435,24 @@ class AiService
      */
     private function mergeConfigToProviderConfig(AiModel $model): void
     {
-        $config = $model->getConfig();
+        $config = $this->filterConfigOverrides($model->getConfig());
         $providerConfig = $model->getProviderConfig();
-        
-        // 如果 config 不为空，用 config 的值覆盖 provider_config 的对应键
+
         if (!empty($config)) {
-            // 合并配置：config 的值覆盖 provider_config 的值
             $mergedProviderConfig = array_merge($providerConfig, $config);
-            // 更新 provider_config（仅在内存中，不保存到数据库）
             $model->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
         }
+    }
+
+    private function filterConfigOverrides(array $config): array
+    {
+        return array_filter($config, static function ($value): bool {
+            if (is_array($value)) {
+                return $value !== [];
+            }
+
+            return $value !== '' && $value !== null;
+        });
     }
     
     /**
@@ -744,6 +779,128 @@ class AiService
             // 记录错误
             w_log_error("AI API调用失败: " . $e->getMessage());
             throw new Exception("AI生成失败: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Call the model provider and keep the structured response.
+     *
+     * @param AiModel $model
+     * @param string $prompt
+     * @param array $params
+     * @return array
+     * @throws Exception
+     */
+    private function callModelApiStructured(AiModel $model, string $prompt, array $params): array
+    {
+        $startTime = microtime(true);
+        $account = null;
+        $usage = [];
+
+        try {
+            $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
+            if ($providerCode === '') {
+                $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
+            }
+            if (!$providerCode) {
+                throw new Exception('无法确定模型的供应商');
+            }
+
+            $allAccounts = $this->accountService->getProviderAccounts($providerCode);
+            if (empty($allAccounts)) {
+                throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
+            }
+
+            $isTestMode = (bool)($params['test_mode'] ?? false);
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
+                if ((int)($acc['is_active'] ?? 0) !== 1) {
+                    return false;
+                }
+                if ($isTestMode) {
+                    return true;
+                }
+                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
+            }));
+            if (empty($candidateAccounts)) {
+                $message = $isTestMode
+                    ? __('没有满足条件的%{provider}供应商账户（需激活）', ['provider' => $providerCode])
+                    : __('没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）', ['provider' => $providerCode]);
+                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink($message, 'provider', ['provider_code' => $providerCode]));
+            }
+            usort($candidateAccounts, function ($a, $b) {
+                $d1 = (int)($a['is_default'] ?? 0);
+                $d2 = (int)($b['is_default'] ?? 0);
+                if ($d1 !== $d2) {
+                    return $d2 <=> $d1;
+                }
+                $bal1 = (float)($a['balance'] ?? 0);
+                $bal2 = (float)($b['balance'] ?? 0);
+                return $bal2 <=> $bal1;
+            });
+
+            $provider = null;
+            $lastError = null;
+
+            foreach ($candidateAccounts as $accData) {
+                /** @var Account $accModel */
+                $accModel = ObjectManager::getInstance(Account::class);
+                $accModel->setData($accData);
+
+                $this->injectAccountConfig($model, $accModel);
+
+                if ($provider === null) {
+                    $provider = $this->providerFactory->getProvider($model);
+                }
+
+                try {
+                    $result = $provider->generate($model, $prompt, $params);
+                    $usage = $result['usage'] ?? [];
+
+                    $this->logUsage($model, $usage, $params);
+
+                    $account = $accModel;
+                    $requestTime = (int)((microtime(true) - $startTime) * 1000);
+                    $this->accountService->recordUsage($account, $model, $usage, [
+                        'request_type' => 'chat',
+                        'user_id' => $params['user_id'] ?? null,
+                        'user_name' => $params['user_name'] ?? null,
+                        'request_time' => $requestTime,
+                        'status' => 'success',
+                    ]);
+
+                    return $result;
+                } catch (\Exception $eTry) {
+                    $lastError = $eTry;
+                    $msg = $eTry->getMessage();
+                    $isAuthError = stripos($msg, 'Authentication') !== false
+                        || stripos($msg, 'api key') !== false
+                        || stripos($msg, 'unauthorized') !== false
+                        || stripos($msg, '401') !== false;
+                    if (!$isAuthError) {
+                        throw $eTry;
+                    }
+                }
+            }
+
+            if ($lastError) {
+                throw $lastError;
+            }
+            throw new Exception('未能使用任何账户完成请求');
+        } catch (\Exception $e) {
+            if ($account) {
+                $requestTime = (int)((microtime(true) - $startTime) * 1000);
+                $this->accountService->recordUsage($account, $model, $usage, [
+                    'request_type' => 'chat',
+                    'user_id' => $params['user_id'] ?? null,
+                    'user_name' => $params['user_name'] ?? null,
+                    'request_time' => $requestTime,
+                    'status' => 'failed',
+                    'error_message' => $e->getMessage(),
+                ]);
+            }
+
+            w_log_error('AI structured API调用失败: ' . $e->getMessage());
+            throw new Exception('AI生成失败: ' . $e->getMessage());
         }
     }
 
