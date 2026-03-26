@@ -1,9 +1,9 @@
 <?php
 /*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
+ * 鏈枃浠剁敱 绉嬫灚闆侀 缂栧啓锛屾墍鏈夎В閲婃潈褰扐iweline鎵€鏈夈€?
+ * 閭锛歛iweline@qq.com
+ * 缃戝潃锛歛iweline.com
+ * 璁哄潧锛歨ttps://bbs.aiweline.com
  */
 
 namespace Weline\Framework\Database\Model;
@@ -26,54 +26,61 @@ class Reader extends \Weline\Framework\System\ModuleFileReader
     }
 
     /**
-     * @DESC          # 读取模型 开发模式没有缓存，非开发模式读取缓存
+     * @DESC          # 璇诲彇妯″瀷 寮€鍙戞ā寮忔病鏈夌紦瀛橈紝闈炲紑鍙戞ā寮忚鍙栫紦瀛?
      *
-     * @AUTH    秋枫雁飞
+     * @AUTH    绉嬫灚闆侀
      * @EMAIL aiweline@qq.com
      * @DateTime: 2021/9/6 21:34
-     * 参数区：
+     * 鍙傛暟鍖猴細
      * @return array
      */
     public function read(): array
     {
         if (empty($this->models)) {
-            # 模型读取回调（排除非模型文件）
-            $callback     = function ($files) {
-                foreach ($files as $vendor => $vendor_modules) {
-                    foreach ($vendor_modules as $module => $models) {
-                        foreach ($models as $model_path => $model_files) {
-                            /**@var File $model_file */
-                            foreach ($model_files as $key => $model_file) {
-                                $model_class = $model_file->getNamespace() . '\\' . $model_file->getFilename();
-                                $model_class = str_replace('\\\\', '\\', $model_class);
-                                $model       = new \ReflectionClass($model_class);
-                                if (!$model->getParentClass() || ($model->getParentClass()->getName() !== \Weline\Framework\Database\Model::class)) {
-                                    unset($model_files[$key]);
-                                }
-                            }
-                            if (empty($model_files)) {
-                                unset($models[$model_path]);
-                            } else {
-                                $models[$model_path] = $model_files;
-                            }
-                        }
-                        if (empty($models)) {
-                            unset($vendor_modules[$module]);
-                        } else {
-                            $vendor_modules[$module] = $models;
-                        }
-                    }
-                    if (empty($vendor_modules)) {
-                        unset($files[$vendor]);
-                    } else {
-                        $files[$vendor] = $vendor_modules;
-                    }
-                }
-                return $files;
-            };
+            # 妯″瀷璇诲彇鍥炶皟锛堟帓闄ら潪妯″瀷鏂囦欢锛?
+            $callback = fn(array $files): array => $this->filterModelTree($files);
             $this->models = $this->getFileList($callback);
         }
 
         return $this->models;
+    }
+
+    private function filterModelTree(array $nodes): array
+    {
+        $filtered = [];
+
+        foreach ($nodes as $key => $node) {
+            if ($node instanceof File) {
+                if ($this->isDatabaseModelFile($node)) {
+                    $filtered[$key] = $node;
+                }
+                continue;
+            }
+
+            if (!is_array($node)) {
+                continue;
+            }
+
+            $children = $this->filterModelTree($node);
+            if ($children !== []) {
+                $filtered[$key] = $children;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private function isDatabaseModelFile(File $modelFile): bool
+    {
+        $modelClass = $modelFile->getNamespace() . '\\' . $modelFile->getFilename();
+        $modelClass = str_replace('\\\\', '\\', $modelClass);
+
+        try {
+            $reflection = new \ReflectionClass($modelClass);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        return $reflection->isSubclassOf(\Weline\Framework\Database\Model::class);
     }
 }

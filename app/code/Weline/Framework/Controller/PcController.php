@@ -14,6 +14,7 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -53,6 +54,29 @@ class PcController extends Core
         }
     }
 
+    protected function getRequest(): Request
+    {
+        return $this->request;
+    }
+
+    protected function getUrl(string $path = '', array $params = [], bool $merge_params = false): string
+    {
+        if (!isset($this->_url)) {
+            $this->_url = ObjectManager::getInstance(Url::class);
+        }
+
+        return $this->_url->getUrl($path, $params, $merge_params);
+    }
+
+    protected function getStaticUrl(string $path, ?string $version = null): string
+    {
+        if (!isset($this->_url)) {
+            $this->_url = ObjectManager::getInstance(Url::class);
+        }
+
+        return $this->_url->getStaticUrl($path, $version);
+    }
+
     /**
      * @param string|int $url url或者http状态码
      * @param array $params
@@ -61,10 +85,11 @@ class PcController extends Core
      * @return void
      * @throws Null
      */
-    protected function redirect(string|int $url = '', array $params = [], bool $merge_params = false): void
+    protected function redirect(string|int $url = '', array $params = [], bool $merge_params = false): string
     {
         if (empty($url)) {
             $this->request->getResponse()->redirect($this->_url->getCurrentUrl());
+            return '';
         }
         if (is_string($url)) {
             if ($this->_url->isLink($url)) {
@@ -84,6 +109,8 @@ class PcController extends Core
         } elseif ($url = 404) {
             $this->request->getResponse()->responseHttpCode($url);
         }
+
+        return '';
     }
 
     protected function getEventManager(): EventsManager

@@ -4447,6 +4447,10 @@ CMD;
         if ($cmdLine !== '') {
             // Master 进程：通过 bin/w (或 bin\w) CLI 入口启动的 server 命令
             // 命令行形如 php bin/w server:start ... 或 php bin/w s:start ...
+            $processName = self::extractCommandLineArg($cmdLine, 'name');
+            if ($processName !== '' && \str_starts_with(self::normalizeName($processName), self::WELINE_PROCESS_PREFIX)) {
+                return true;
+            }
             if ((\strpos($cmdLine, 'bin/w ') !== false || \strpos($cmdLine, 'bin\\w ') !== false)
                 && (\strpos($cmdLine, 'server:start') !== false || \strpos($cmdLine, 's:start') !== false)) {
                 return true;
@@ -4467,6 +4471,13 @@ CMD;
                 return true;
             }
             if (\strpos($cmdLine, 'dispatcher.php') !== false || \strpos($cmdLine, 'dispatcher_ssl.php') !== false) {
+                return true;
+            }
+            $sharedServiceFlag = self::extractCommandLineArg($cmdLine, 'shared-service');
+            if ($sharedServiceFlag === '1' && \strpos($cmdLine, 'session_server.php') !== false) {
+                return true;
+            }
+            if (\strpos($cmdLine, 'weline-wls-session-') !== false || \strpos($cmdLine, 'weline-wls-memory-') !== false) {
                 return true;
             }
         }
