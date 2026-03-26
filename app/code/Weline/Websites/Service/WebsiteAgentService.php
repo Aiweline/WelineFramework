@@ -176,7 +176,7 @@ class WebsiteAgentService
         if ($accountId <= 0) {
             return [
                 'success' => false,
-                'message' => (string)__('Please choose a registrar account first.'),
+                'message' => (string)__('请先选择服务商账号。'),
                 'candidate_domains' => [],
                 'checked_results' => [],
             ];
@@ -186,7 +186,7 @@ class WebsiteAgentService
         if ($candidates === []) {
             return [
                 'success' => false,
-                'message' => (string)__('Please describe the site goal or enter a preferred domain first.'),
+                'message' => (string)__('请先描述建站目标，或先输入偏好域名。'),
                 'candidate_domains' => [],
                 'checked_results' => [],
             ];
@@ -239,7 +239,7 @@ class WebsiteAgentService
         if ($recommended !== null) {
             return [
                 'success' => true,
-                'message' => (string)__('AI found an available domain: %{domain}', [
+                'message' => (string)__('AI 找到可用域名：%{domain}', [
                     'domain' => (string)$recommended['domain'],
                 ]),
                 'domain' => (string)$recommended['domain'],
@@ -250,7 +250,7 @@ class WebsiteAgentService
 
         return [
             'success' => false,
-            'message' => (string)__('No available domain was found. Please try another brief or preferred domain.'),
+            'message' => (string)__('未找到可用域名，请尝试更换简报或偏好域名。'),
             'candidate_domains' => $candidates,
             'checked_results' => $checkedResults,
         ];
