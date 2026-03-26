@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 
 /**
@@ -14,7 +15,8 @@ use WeShop\Product\Model\Product;
 class ProductQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly Product $productModel
+        private readonly Product $productModel,
+        private readonly PriceService $priceService
     ) {
     }
 
@@ -107,7 +109,7 @@ class ProductQueryProvider implements QueryProviderInterface
 
     private function productToArray(object $product): array
     {
-        return [
+        return $this->priceService->resolveProductData([
             'product_id' => (int)$product->getId(),
             'name' => $product->getData(Product::schema_fields_name),
             'short_description' => $product->getData(Product::schema_fields_short_description),
@@ -122,7 +124,7 @@ class ProductQueryProvider implements QueryProviderInterface
             'status' => (int)($product->getData(Product::schema_fields_status) ?? 0),
             'handle' => $product->getData(Product::schema_fields_HANDLE),
             'parent_id' => (int)($product->getData(Product::schema_fields_parent_id) ?? 0),
-        ];
+        ]);
     }
 
     /**
@@ -138,20 +140,23 @@ class ProductQueryProvider implements QueryProviderInterface
         if (empty($productIds)) {
             return ['min' => null, 'max' => null, 'avg' => null];
         }
-        $product = clone $this->productModel;
-        $product->reset()
-            ->fields([
-                'MIN(' . Product::schema_fields_price . ') as min_price',
-                'MAX(' . Product::schema_fields_price . ') as max_price',
-                'AVG(' . Product::schema_fields_price . ') as avg_price',
-            ])
-            ->where(Product::schema_fields_ID, $productIds, 'in')
-            ->where(Product::schema_fields_price, 0, '>');
-        $row = $product->find()->fetchArray();
+
+        $prices = [];
+        foreach ($this->loadResolvedProductsByIds($productIds) as $product) {
+            $price = $this->extractComparablePrice($product);
+            if ($price > 0.0) {
+                $prices[] = $price;
+            }
+        }
+
+        if ($prices === []) {
+            return ['min' => null, 'max' => null, 'avg' => null];
+        }
+
         return [
-            'min' => isset($row['min_price']) && $row['min_price'] !== null ? (float)$row['min_price'] : null,
-            'max' => isset($row['max_price']) && $row['max_price'] !== null ? (float)$row['max_price'] : null,
-            'avg' => isset($row['avg_price']) && $row['avg_price'] !== null ? (float)$row['avg_price'] : null,
+            'min' => min($prices),
+            'max' => max($prices),
+            'avg' => array_sum($prices) / count($prices),
         ];
     }
 
@@ -170,32 +175,28 @@ class ProductQueryProvider implements QueryProviderInterface
         if (empty($productIds)) {
             return [];
         }
-        $product = clone $this->productModel;
-        $product->reset()->fields(Product::schema_fields_ID)->where(Product::schema_fields_ID, $productIds, 'in');
-        if (count($ranges) === 1) {
-            $r = $ranges[0];
-            $product->where(Product::schema_fields_price, (float)($r['min'] ?? 0), '>=');
-            if (isset($r['max']) && $r['max'] !== null) {
-                $product->where(Product::schema_fields_price, (float)$r['max'], '<=');
+
+        $resolvedProducts = $this->loadResolvedProductsByIds($productIds);
+        $matched = [];
+
+        foreach ($productIds as $productId) {
+            $product = $resolvedProducts[$productId] ?? null;
+            if (!is_array($product)) {
+                continue;
             }
-        } else {
-            $conditions = [];
-            foreach ($ranges as $r) {
-                $min = (float)($r['min'] ?? 0);
-                $max = $r['max'] ?? null;
-                if ($max !== null) {
-                    $conditions[] = '(' . Product::schema_fields_price . ' >= ' . number_format($min, 2, '.', '') .
-                        ' AND ' . Product::schema_fields_price . ' <= ' . number_format((float)$max, 2, '.', '') . ')';
-                } else {
-                    $conditions[] = Product::schema_fields_price . ' >= ' . number_format($min, 2, '.', '');
+
+            $price = $this->extractComparablePrice($product);
+            foreach ($ranges as $range) {
+                $min = (float) ($range['min'] ?? 0);
+                $max = isset($range['max']) && $range['max'] !== null ? (float) $range['max'] : null;
+                if ($this->priceMatchesRange($price, $min, $max)) {
+                    $matched[] = $productId;
+                    break;
                 }
             }
-            if (!empty($conditions)) {
-                $product->where('(' . implode(' OR ', $conditions) . ')');
-            }
         }
-        $results = $product->select()->fetchArray();
-        return array_column($results, Product::schema_fields_ID);
+
+        return array_values(array_unique($matched));
     }
 
     /**
@@ -213,16 +214,15 @@ class ProductQueryProvider implements QueryProviderInterface
         if (empty($productIds)) {
             return 0;
         }
-        $product = clone $this->productModel;
-        $product->reset()
-            ->fields('COUNT(*) as cnt')
-            ->where(Product::schema_fields_ID, $productIds, 'in')
-            ->where(Product::schema_fields_price, $minPrice, '>=');
-        if ($maxPrice !== null) {
-            $product->where(Product::schema_fields_price, $maxPrice, '<=');
+
+        $count = 0;
+        foreach ($this->loadResolvedProductsByIds($productIds) as $product) {
+            if ($this->priceMatchesRange($this->extractComparablePrice($product), $minPrice, $maxPrice)) {
+                $count++;
+            }
         }
-        $row = $product->find()->fetchArray();
-        return (int)($row['cnt'] ?? 0);
+
+        return $count;
     }
 
     /**
@@ -346,17 +346,25 @@ class ProductQueryProvider implements QueryProviderInterface
 
         $product = clone $this->productModel;
         $product->clear();
-        $this->applyProductSearchFilters($product, $keyword, $filters);
+        $this->applyProductSearchBaseFilters($product, $keyword, $filters);
+
+        $items = array_map(
+            fn (array $item): array => $this->priceService->resolveProductData($item),
+            $product->select()->fetchArray()
+        );
+        $items = $this->filterResolvedProductsByPrice($items, $filters);
 
         $orderBy = (string)($filters['order_by'] ?? Product::schema_fields_ID);
         $orderDir = \strtoupper((string)($filters['order_dir'] ?? 'DESC')) === 'ASC' ? 'ASC' : 'DESC';
-        $product->order($orderBy, $orderDir);
-        $product->pagination($page, $pageSize);
-        $items = $product->select()->fetchArray();
+        $items = $this->sortResolvedProducts($items, $orderBy, $orderDir);
+
+        $total = count($items);
+        $product->pagination($page, $pageSize, [], 1000, $total);
+        $items = array_slice($items, max(0, ($page - 1) * $pageSize), $pageSize);
 
         return [
             'items' => $items,
-            'total' => $product->getTotalCount(),
+            'total' => $total,
             'pagination' => $product->getPagination(),
         ];
     }
@@ -390,7 +398,7 @@ class ProductQueryProvider implements QueryProviderInterface
         return \array_slice($suggestions, 0, $limit);
     }
 
-    private function applyProductSearchFilters(Product $product, string $keyword, array $filters): void
+    private function applyProductSearchBaseFilters(Product $product, string $keyword, array $filters): void
     {
         if ($keyword !== '') {
             $escapedKeyword = $this->escapeLikeValue($keyword);
@@ -413,15 +421,140 @@ class ProductQueryProvider implements QueryProviderInterface
             $product->where('category_id', $filters['category_id']);
         }
 
-        if (!empty($filters['price_min'])) {
-            $product->where(Product::schema_fields_price, (float) $filters['price_min'], '>=');
-        }
-
-        if (!empty($filters['price_max'])) {
-            $product->where(Product::schema_fields_price, (float) $filters['price_max'], '<=');
-        }
-
         $product->where(Product::schema_fields_status, 1);
+    }
+
+    /**
+     * @param array<int, int> $productIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function loadResolvedProductsByIds(array $productIds): array
+    {
+        if ($productIds === []) {
+            return [];
+        }
+
+        $product = clone $this->productModel;
+        $product->clear()->where(Product::schema_fields_ID, $productIds, 'in');
+
+        $resolvedProducts = [];
+        foreach ($product->select()->fetchArray() as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $productId = $this->extractProductId($item);
+            if ($productId <= 0) {
+                continue;
+            }
+
+            $resolvedProducts[$productId] = $this->priceService->resolveProductData($item + [
+                Product::schema_fields_ID => $productId,
+            ]);
+        }
+
+        return $resolvedProducts;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @param array<string, mixed> $filters
+     * @return array<int, array<string, mixed>>
+     */
+    private function filterResolvedProductsByPrice(array $items, array $filters): array
+    {
+        $hasMin = array_key_exists('price_min', $filters) && $filters['price_min'] !== '' && $filters['price_min'] !== null;
+        $hasMax = array_key_exists('price_max', $filters) && $filters['price_max'] !== '' && $filters['price_max'] !== null;
+
+        if (!$hasMin && !$hasMax) {
+            return $items;
+        }
+
+        $minPrice = $hasMin ? (float) $filters['price_min'] : 0.0;
+        $maxPrice = $hasMax ? (float) $filters['price_max'] : null;
+
+        return array_values(array_filter(
+            $items,
+            fn (array $item): bool => $this->priceMatchesRange($this->extractComparablePrice($item), $minPrice, $maxPrice)
+        ));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function sortResolvedProducts(array $items, string $orderBy, string $orderDir): array
+    {
+        $direction = strtoupper($orderDir) === 'ASC' ? 1 : -1;
+        $field = trim($orderBy) !== '' ? $orderBy : Product::schema_fields_ID;
+
+        usort($items, function (array $left, array $right) use ($field, $direction): int {
+            $comparison = $this->compareResolvedValues(
+                $this->extractSortableValue($left, $field),
+                $this->extractSortableValue($right, $field)
+            );
+
+            if ($comparison === 0) {
+                $comparison = $this->extractProductId($left) <=> $this->extractProductId($right);
+            }
+
+            return $comparison * $direction;
+        });
+
+        return $items;
+    }
+
+    private function compareResolvedValues(mixed $left, mixed $right): int
+    {
+        if (is_numeric($left) && is_numeric($right)) {
+            return (float) $left <=> (float) $right;
+        }
+
+        return strcmp((string) $left, (string) $right);
+    }
+
+    private function extractSortableValue(array $item, string $field): mixed
+    {
+        return match ($field) {
+            Product::schema_fields_ID, 'product_id', 'entity_id' => $this->extractProductId($item),
+            'price', 'final_price' => $this->extractComparablePrice($item),
+            'original_price', 'base_price', 'special_price', 'sale_price', 'discount_amount', 'discount_percent', 'stock', 'status', 'cost'
+                => is_numeric($item[$field] ?? null) ? (float) $item[$field] : 0.0,
+            default => strtolower(trim((string) ($item[$field] ?? ''))),
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function extractComparablePrice(array $item): float
+    {
+        if (isset($item['price']) && is_numeric($item['price'])) {
+            return max(0.0, (float) $item['price']);
+        }
+
+        if (isset($item['final_price']) && is_numeric($item['final_price'])) {
+            return max(0.0, (float) $item['final_price']);
+        }
+
+        return 0.0;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function extractProductId(array $item): int
+    {
+        return (int) ($item[Product::schema_fields_ID] ?? $item['product_id'] ?? $item['entity_id'] ?? 0);
+    }
+
+    private function priceMatchesRange(float $price, float $minPrice, ?float $maxPrice): bool
+    {
+        if ($price < $minPrice) {
+            return false;
+        }
+
+        return $maxPrice === null || $price <= $maxPrice;
     }
 
     private function escapeLikeValue(string $keyword): string
