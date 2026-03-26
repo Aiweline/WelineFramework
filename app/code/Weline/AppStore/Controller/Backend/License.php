@@ -50,9 +50,14 @@ class License extends BackendController
         }
 
         try {
+            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+            if (!is_string($platformUrl) || $platformUrl === '') {
+                $platformUrl = 'https://app.aiweline.com';
+            }
+
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                Env::get('appstore.platform_url', 'https://app.aiweline.com') . '/api/v1/platform/license/activate',
+                $platformUrl . '/api/v1/platform/license/activate',
                 [
                     'json' => [
                         'license_key' => $licenseKey,
@@ -102,9 +107,14 @@ class License extends BackendController
         }
 
         try {
+            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+            if (!is_string($platformUrl) || $platformUrl === '') {
+                $platformUrl = 'https://app.aiweline.com';
+            }
+
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                Env::get('appstore.platform_url', 'https://app.aiweline.com') . '/api/v1/platform/license/validate',
+                $platformUrl . '/api/v1/platform/license/validate',
                 [
                     'json' => [
                         'license_key' => $licenseKey,
@@ -135,9 +145,14 @@ class License extends BackendController
         }
 
         try {
+            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+            if (!is_string($platformUrl) || $platformUrl === '') {
+                $platformUrl = 'https://app.aiweline.com';
+            }
+
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                Env::get('appstore.platform_url', 'https://app.aiweline.com') . '/api/v1/platform/license/renew',
+                $platformUrl . '/api/v1/platform/license/renew',
                 [
                     'json' => [
                         'license_key' => $licenseKey,
