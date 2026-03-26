@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Search\Engine;
 
 use WeShop\Search\Api\SearchEngineInterface;
+use WeShop\Search\Api\SearchWritableEngineInterface;
 
 /**
  * Meilisearch 搜索引擎适配器
@@ -12,7 +13,7 @@ use WeShop\Search\Api\SearchEngineInterface;
  * 使用 Meilisearch PHP SDK 实现搜索功能
  * 需要安装 composer require meilisearch/meilisearch-php
  */
-class MeilisearchEngine implements SearchEngineInterface
+class MeilisearchEngine implements SearchEngineInterface, SearchWritableEngineInterface
 {
     private array $config = [];
     private ?\Meilisearch\Client $client = null;
@@ -184,6 +185,87 @@ class MeilisearchEngine implements SearchEngineInterface
     public function getEngineName(): string
     {
         return 'Meilisearch';
+    }
+
+    public function upsertDocuments(array $documents, string $primaryKey = 'document_id'): bool
+    {
+        try {
+            $this->ensureIndex();
+            $this->index->addDocuments($documents, $primaryKey);
+
+            return true;
+        } catch (\Throwable $throwable) {
+            w_log_error('Meilisearch 写入文档失败: ' . $throwable->getMessage());
+
+            return false;
+        }
+    }
+
+    public function deleteDocuments(array $documentIds): bool
+    {
+        try {
+            $this->ensureIndex();
+            $this->index->deleteDocuments(array_values(array_filter(array_map('strval', $documentIds))));
+
+            return true;
+        } catch (\Throwable $throwable) {
+            w_log_error('Meilisearch 删除文档失败: ' . $throwable->getMessage());
+
+            return false;
+        }
+    }
+
+    public function deleteByDocumentType(string $documentType): bool
+    {
+        try {
+            $this->ensureIndex();
+            $this->index->deleteDocuments(['filter' => 'document_type = "' . addslashes($documentType) . '"']);
+
+            return true;
+        } catch (\Throwable $throwable) {
+            w_log_error('Meilisearch 按文档类型删除失败: ' . $throwable->getMessage());
+
+            return false;
+        }
+    }
+
+    public function configureIndex(array $definition = []): bool
+    {
+        try {
+            $this->ensureIndex();
+            $searchableAttributes = array_values(array_unique(array_filter(array_map('strval', $definition['searchable_fields'] ?? [
+                'name',
+                'sku',
+                'spu',
+                'handle',
+                'short_description',
+                'description',
+                'searchable_text',
+                'category_names',
+            ]))));
+            $filterableAttributes = array_values(array_unique(array_filter(array_map('strval', $definition['filterable_fields'] ?? [
+                'document_type',
+                'category_ids',
+                'price',
+                'status',
+                'stock',
+            ]))));
+            $sortableAttributes = array_values(array_unique(array_filter(array_map('strval', $definition['sortable_fields'] ?? [
+                'price',
+                'name',
+                'entity_id',
+            ]))));
+
+            $this->index->updateSearchableAttributes($searchableAttributes);
+            $this->index->updateFilterableAttributes($filterableAttributes);
+            $this->index->updateSortableAttributes($sortableAttributes);
+
+            return true;
+        } catch (\Throwable $throwable) {
+            w_log_error('Meilisearch 配置索引失败: ' . $throwable->getMessage());
+
+            return false;
+        }
     }
 
     /**

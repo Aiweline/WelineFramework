@@ -19,4 +19,14 @@
     <event name="WeShop_Product::product_delete_after">
         <observer name="WeShop_Search::product_delete_after" instance="WeShop\Search\Observer\ProductDeleteAfter" disabled="false" shared="true" sort="100"/>
     </event>
+
+    <!-- 监听分类保存后事件，同步分类文档并刷新相关商品索引 -->
+    <event name="WeShop_Product::category_save_after">
+        <observer name="WeShop_Search::category_save_after" instance="WeShop\Search\Observer\CategorySaveAfter" disabled="false" shared="true" sort="100"/>
+    </event>
+
+    <!-- 监听分类删除后事件，删除分类搜索文档 -->
+    <event name="WeShop_Product::category_delete_after">
+        <observer name="WeShop_Search::category_delete_after" instance="WeShop\Search\Observer\CategoryDeleteAfter" disabled="false" shared="true" sort="100"/>
+    </event>
 </config>

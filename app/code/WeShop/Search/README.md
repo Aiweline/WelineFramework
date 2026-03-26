@@ -1,235 +1,167 @@
-# WeShop 搜索模块
+# WeShop Search
 
-## 概述
+## 概览
 
-WeShop 搜索模块提供了强大的搜索引擎功能，支持多种搜索引擎驱动，默认使用 **Meilisearch** 搜索引擎。
+`WeShop/Search` 现在默认使用 **OpenSearch** 作为搜索引擎，同时保留 `Meilisearch`、`MySQL`、`Elasticsearch`、`Algolia` 的兼容支持。
 
-## 功能特性
+模块安装后会优先读取：
 
-- ✅ **驱动模式**：支持类似数据库驱动的搜索引擎驱动机制
-- ✅ **Meilisearch 集成**：默认使用 Meilisearch，提供快速、相关且容错的搜索体验
-- ✅ **自动索引**：产品保存/删除时自动同步搜索索引
-- ✅ **搜索优化**：优化的数据结构提高搜索命中率
-- ✅ **多作用域支持**：支持不同环境（default, production, staging等）的配置隔离
-- ✅ **搜索历史**：记录用户搜索历史和热门搜索词
+- `app/code/WeShop/Search/etc/env.php` 中的模块默认配置
+- `app/etc/env.php` 中的 `search` 运行时配置
+- 数据库中的搜索引擎配置记录
 
-## 安装要求
+当数据库里还没有激活的搜索引擎配置时，模块会自动按 `env.php` 默认值初始化为 `OpenSearch`。
 
-### Meilisearch 安装
+## 环境安装
 
-1. **使用 Docker（推荐）**：
-```bash
-docker run -d \
-  --name meilisearch \
-  -p 7700:7700 \
-  -v $(pwd)/meili_data:/meili_data \
-  getmeili/meilisearch:latest
-```
-
-2. **使用 Homebrew（macOS）**：
-```bash
-brew update && brew install meilisearch
-meilisearch
-```
-
-3. **使用包管理器（Linux）**：
-```bash
-# Ubuntu/Debian
-curl -L https://install.meilisearch.com | sh
-./meilisearch
-
-# 或使用 systemd 服务
-sudo systemctl start meilisearch
-```
-
-### PHP SDK 安装
+Search 模块已接入环境依赖安装链路：
 
 ```bash
-composer require meilisearch/meilisearch-php
+php bin/w env:check
+php bin/w env:install opensearch -y
 ```
 
-## 配置
-
-### 1. 默认配置
-
-模块安装时会自动创建默认的 Meilisearch 配置：
-- **服务地址**：`http://127.0.0.1:7700`
-- **索引名称**：`products`
-- **API Key**：无（可根据需要配置）
-
-### 2. 后台配置
-
-访问：`/search/backend/engine/index` 进行搜索引擎配置管理。
-
-### 3. 配置文件
-
-配置存储在数据库表 `weshop_search_engine_config` 中，支持：
-- 多作用域配置
-- 优先级设置
-- 启用/禁用控制
-
-## 使用
-
-### 1. 索引产品数据
-
-#### 使用控制台命令
+如果通过安装入口统一执行：
 
 ```bash
-# 索引所有产品
-php bin/w search:index
-
-# 索引指定产品
-php bin/w search:index --product_id=1
-
-# 强制重新索引（删除所有现有索引）
-php bin/w search:index --force
-
-# 配置索引设置（搜索字段、过滤字段等）
-php bin/w search:index --configure
-
-# 完整操作（配置 + 强制重新索引）
-php bin/w search:index --configure --force
+php setup/server_installer/run.php
 ```
 
-#### 自动索引
+环境安装会自动完成以下动作：
 
-产品保存或删除时会自动同步索引，无需手动操作。
+1. 根据当前环境选择 OpenSearch 官方发行包
+2. 下载并解压到 `extend/server/opensearch`
+3. 生成 `extend/server/opensearch/config/opensearch.yml`
+4. 将 `app/etc/env.php` 中的 `search.default_engine` 设置为 `opensearch`
+5. 写入 `search.engines.opensearch` 的连接信息、版本号、安装目录、配置文件路径，以及可选的数据 / 日志目录
 
-### 2. 搜索产品
+默认下载版本可通过项目根目录 `weline.env` 控制：
+
+```dotenv
+INSTALL_OPENSEARCH_VERSION=3.5.0
+SEARCH_DEFAULT_ENGINE=opensearch
+SEARCH_DEFAULT_SCOPE=default
+SEARCH_OPENSEARCH_INSTALL_DIR=extend/server/opensearch
+SEARCH_OPENSEARCH_DATA_DIR=D:/WelineRuntime/opensearch-data
+SEARCH_OPENSEARCH_LOG_DIR=D:/WelineRuntime/opensearch-logs
+SEARCH_OPENSEARCH_HOST=http://127.0.0.1
+SEARCH_OPENSEARCH_PORT=9200
+SEARCH_OPENSEARCH_INDEX=products
+SEARCH_OPENSEARCH_TIMEOUT=5
+SEARCH_OPENSEARCH_CLUSTER_NAME=weline-search
+SEARCH_OPENSEARCH_NODE_NAME=weline-search-node
+SEARCH_OPENSEARCH_BIND_HOST=127.0.0.1
+```
+
+说明：
+
+- Windows 默认下载 `opensearch-{version}-windows-x64.zip`
+- Linux 默认下载 `opensearch-{version}-linux-{arch}.tar.gz`
+- 若当前平台没有默认官方稳定发行包，可在 `weline.env` 中设置 `SEARCH_OPENSEARCH_DOWNLOAD_URL`
+- `SEARCH_OPENSEARCH_INSTALL_DIR` 默认固定为 `extend/server/opensearch`
+- `SEARCH_OPENSEARCH_DATA_DIR` / `SEARCH_OPENSEARCH_LOG_DIR` 可指向其他磁盘，避免项目盘空间不足时 OpenSearch 因磁盘水位阻塞建索引
+- `SEARCH_OPENSEARCH_CONFIG_FILE`、`SEARCH_OPENSEARCH_DATA_DIR`、`SEARCH_OPENSEARCH_LOG_DIR` 支持相对路径和绝对路径
+- 临时下载与解压目录默认使用系统临时目录下的 `weline-opensearch`，也可通过 `SEARCH_OPENSEARCH_TMP_DIR` / `SEARCH_OPENSEARCH_DOWNLOAD_DIR` / `SEARCH_OPENSEARCH_EXTRACT_DIR` 覆盖
+
+## `app/etc/env.php` 配置示例
 
 ```php
-use WeShop\Search\Service\SearchService;
-use Weline\Framework\Manager\ObjectManager;
-
-/** @var SearchService $searchService */
-$searchService = ObjectManager::getInstance(SearchService::class);
-
-// 搜索产品
-$result = $searchService->searchProducts('关键词', [
-    'category_id' => 1,
-    'price_min' => 100,
-    'price_max' => 1000,
-    'order_by' => 'price',
-    'order_dir' => 'asc',
-], 1, 20);
-
-// 获取搜索建议
-$suggestions = $searchService->getSearchSuggestions('关键词', 10);
-
-// 获取热门搜索词
-$popularKeywords = $searchService->getPopularKeywords(10);
+<?php
+return [
+    'search' => [
+        'default_scope' => 'default',
+        'default_engine' => 'opensearch',
+        'engines' => [
+            'opensearch' => [
+                'host' => 'http://127.0.0.1',
+                'port' => 9200,
+                'index' => 'products',
+                'username' => '',
+                'password' => '',
+                'timeout' => 5,
+                'version' => '3.5.0',
+                'install_dir' => 'extend/server/opensearch',
+                'config_file' => 'extend/server/opensearch/config/opensearch.yml',
+                'data_dir' => 'D:/WelineRuntime/opensearch-data',
+                'log_dir' => 'D:/WelineRuntime/opensearch-logs',
+            ],
+        ],
+    ],
+];
 ```
 
-### 3. 获取搜索引擎实例
+## 搜索扩展架构
 
-```php
-use WeShop\Search\Service\SearchEngineFactory;
-use Weline\Framework\Manager\ObjectManager;
+Search 模块现在通过两个入口开放真实搜索能力：
 
-// 获取默认搜索引擎
-$engine = SearchEngineFactory::create();
+1. **文档扩展点**
 
-// 获取指定作用域的搜索引擎
-$engine = SearchEngineFactory::create('production');
+- Search 模块声明了 `extends/module/WeShop_Search/Document`
+- 其他模块实现 `WeShop\Search\Api\SearchDocumentProviderInterface` 后，即可向统一索引写入自己的搜索文档
+- 当前已接入：
+  - `WeShop_Product` 商品文档提供者
+  - `WeShop_Catalog` 分类文档提供者
 
-// 根据类型创建引擎
-$engine = SearchEngineFactory::createEngineByType('meilisearch');
-```
+2. **统一查询器**
 
-## 驱动机制
-
-### 驱动注册
-
-搜索引擎驱动通过 `SearchEngineDriverRegistry` 进行注册，类似数据库驱动机制。
-
-驱动映射文件：`generated/search/driver.php`
-
-### 创建自定义驱动
-
-1. 实现 `SearchEngineInterface` 接口
-2. 在 `Setup/InstallData.php` 中注册驱动
-3. 在 `SearchEngineFactory` 中添加支持
+- Search 模块通过 `w_query('search', ...)` 提供统一查询与索引入口
+- 可用操作：
+  - `search`
+  - `suggest`
+  - `rebuildIndex`
+  - `indexEntity`
+  - `deleteEntity`
+  - `providers`
 
 示例：
 
 ```php
-namespace YourModule\Search\Engine;
-
-use WeShop\Search\Api\SearchEngineInterface;
-
-class YourEngine implements SearchEngineInterface
-{
-    // 实现接口方法
-}
+w_query('search', 'rebuildIndex', ['provider' => 'product', 'force' => true]);
+w_query('search', 'indexEntity', ['provider' => 'category', 'entity_id' => 15]);
+w_query('search', 'suggest', ['keyword' => 'Apple', 'limit' => 5]);
 ```
 
-## 索引优化
+## 后台配置
 
-### 数据结构优化
+后台入口：
 
-产品索引包含以下优化字段：
+- `/search/backend/engine/index`
 
-1. **searchable_text**：合并多个字段的可搜索文本，提高命中率
-   - 产品名称
-   - SKU/SPU
-   - 描述
-   - 分类名称
-   - Meta 关键词
+支持：
 
-2. **category_ids**：产品分类ID数组，用于过滤
+- 新增或编辑不同作用域的搜索引擎配置
+- 默认优先展示并测试 OpenSearch 配置
+- 测试当前表单中正在编辑的引擎连接
 
-3. **category_names**：产品分类名称数组，用于搜索
+## 常用命令
 
-### 索引配置
+```bash
+# 构建搜索索引
+php bin/w search:index
 
-Meilisearch 索引配置包括：
+# 强制重建索引
+php bin/w search:index --force
 
-- **可搜索字段**：name, sku, spu, handle, short_description, description, searchable_text, category_names, meta_keywords
-- **过滤字段**：category_ids, price, status, stock
-- **排序字段**：price, product_id, name
-- **排名规则**：words, typo, proximity, attribute, sort, exactness
+# 仅重建商品索引
+php bin/w search:index --provider=product --force
 
-## 事件
+# 仅同步单个分类
+php bin/w search:index --provider=category --entity_id=15
 
-### 搜索事件
+# 写入索引设置
+php bin/w search:index --configure
 
-- `WeShop_Search::search_before` - 搜索前触发
-- `WeShop_Search::search_after` - 搜索后触发
+# 重建扩展注册表（新增文档 provider 后执行）
+php bin/w extends:rebuild
 
-### 产品事件监听
+# 检查环境依赖
+php bin/w env:check
 
-- `WeShop_Product::product_save_after` - 产品保存后自动索引
-- `WeShop_Product::product_delete_after` - 产品删除后自动清理索引
+# 安装 OpenSearch 环境依赖
+php bin/w env:install opensearch -y
+```
 
-## 性能优化建议
+## 参考
 
-1. **批量索引**：使用控制台命令批量索引，避免逐个索引
-2. **异步索引**：对于大量数据，建议使用队列异步处理
-3. **定期重建**：定期执行 `--force` 重新索引，保持数据一致性
-4. **监控索引状态**：通过 Meilisearch 仪表板监控索引状态
-
-## 故障排除
-
-### Meilisearch 连接失败
-
-1. 检查 Meilisearch 服务是否运行：`curl http://127.0.0.1:7700/health`
-2. 检查防火墙设置
-3. 检查 API Key 配置（如果启用了认证）
-
-### 索引失败
-
-1. 检查产品数据是否完整
-2. 检查 Meilisearch 服务状态
-3. 查看错误日志：`var/log/`
-
-### 搜索无结果
-
-1. 确认产品已索引：`php bin/w search:index --product_id=1`
-2. 检查索引配置：`php bin/w search:index --configure`
-3. 查看 Meilisearch 索引状态
-
-## 参考文档
-
-- [Meilisearch 官方文档](https://www.meilisearch.com/docs)
-- [Meilisearch PHP SDK](https://php-sdk.meilisearch.com/)
-- [Weline Framework 开发文档](../../../docs/dev/开发文档.md)
+- OpenSearch 安装文档：https://docs.opensearch.org/latest/install-and-configure/install-opensearch/tar/
+- OpenSearch 发行包页面：https://opensearch.org/artifacts/by-version/
