@@ -52,6 +52,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const schema_fields_basic_is_enable = 'basic_is_enable';
     public const schema_fields_frontend_is_visible = 'frontend_is_visible';
     public const schema_fields_frontend_is_filterable = 'frontend_is_filterable';
+    public const schema_fields_frontend_is_searchable = 'frontend_is_searchable';
     public const schema_fields_data_is_multiple = 'data_is_multiple';
     public const schema_fields_data_has_option = 'data_has_option';
 
@@ -63,6 +64,8 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const schema_fields_is_enable = 'basic_is_enable';
     /** @deprecated use schema_fields_frontend_is_filterable */
     public const schema_fields_is_filterable = 'frontend_is_filterable';
+    /** @deprecated use schema_fields_frontend_is_searchable */
+    public const schema_fields_is_searchable = 'frontend_is_searchable';
     /** @deprecated use schema_fields_frontend_is_visible */
     public const schema_fields_is_visible_on_front = 'frontend_is_visible';
 
@@ -301,6 +304,21 @@ class EavAttribute extends \Weline\Framework\Database\Model
             return $this->setData(self::schema_fields_frontend_is_filterable, $is_filterable ? 1 : 0);
         }
         return (bool)$this->getData(self::schema_fields_frontend_is_filterable);
+    }
+
+    /**
+     * 鏄惁鍙敤浜庢悳绱?
+     *
+     * @param bool|null $is_searchable 濡傛灉浼犲叆甯冨皵鍊煎垯璁剧疆锛屽惁鍒欒繑鍥炲綋鍓嶅€?
+     * @return bool|static
+     */
+    public function isSearchable(bool|null $is_searchable = null): bool|static
+    {
+        if (is_bool($is_searchable)) {
+            return $this->setData(self::schema_fields_frontend_is_searchable, $is_searchable ? 1 : 0);
+        }
+
+        return (bool)$this->getData(self::schema_fields_frontend_is_searchable);
     }
 
     /**

@@ -28,6 +28,7 @@ class ProductQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'getProductById' => $this->getProductById($params),
             'getProductByIds' => $this->getProductByIds($params),
+            'getProductIdsByCategoryId' => $this->getProductIdsByCategoryId($params),
             'searchProducts' => $this->searchProducts($params),
             'getProductSuggestions' => $this->getProductSuggestions($params),
             'getPriceStats' => $this->getPriceStats($params),
@@ -76,6 +77,32 @@ class ProductQueryProvider implements QueryProviderInterface
             }
         }
         return $list;
+    }
+
+    private function getProductIdsByCategoryId(array $params): array
+    {
+        $categoryId = (int)($params['category_id'] ?? 0);
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        try {
+            $pdo = $this->productModel->getConnection()->getConnector()->getLink();
+            $stmt = $pdo->prepare('SELECT product_id FROM "weshop_product_category" WHERE category_id = ?');
+            $stmt->execute([$categoryId]);
+
+            $ids = [];
+            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+                $productId = (int)($row['product_id'] ?? 0);
+                if ($productId > 0) {
+                    $ids[] = $productId;
+                }
+            }
+
+            return array_values(array_unique($ids));
+        } catch (\Throwable) {
+            return [];
+        }
     }
 
     private function productToArray(object $product): array
@@ -217,6 +244,12 @@ class ProductQueryProvider implements QueryProviderInterface
                 'attribute_id' => (int)$attribute->getId(),
                 'type_code' => $typeModel ? (string)$typeModel->getCode() : 'input_string',
                 'has_option' => (bool)$attribute->hasOption(),
+                'name' => (string)$attribute->getName(),
+                'code' => (string)$attribute->getCode(),
+                'is_multiple' => (bool)$attribute->getMultipleValued(),
+                'frontend_is_filterable' => (bool)$attribute->isFilterable(),
+                'frontend_is_searchable' => (bool)$attribute->isSearchable(),
+                'frontend_is_visible' => (bool)$attribute->isVisibleOnFront(),
             ];
         } catch (\Throwable $e) {
             return null;
@@ -413,6 +446,11 @@ class ProductQueryProvider implements QueryProviderInterface
                     'name' => 'getProductByIds',
                     'description' => __('批量获取产品信息'),
                     'params' => [['name' => 'product_ids', 'type' => 'array', 'required' => true]],
+                ],
+                [
+                    'name' => 'getProductIdsByCategoryId',
+                    'description' => __('根据分类 ID 获取关联的商品 ID 列表'),
+                    'params' => [['name' => 'category_id', 'type' => 'int', 'required' => true]],
                 ],
                 [
                     'name' => 'searchProducts',
