@@ -10,6 +10,8 @@ use WeShop\Frontend\Controller\BaseController;
 
 class Index extends BaseController
 {
+    private const CONTENT_TEMPLATE = 'WeShop_Compliance::templates/Frontend/Compliance/Index/index.phtml';
+
     protected ?string $layoutType = 'compliance';
 
     public function __construct(
@@ -30,7 +32,6 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
-
