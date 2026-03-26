@@ -23,7 +23,7 @@ class Index extends BaseController
     {
         $customer = $this->customerSession->getCustomer();
         if (!$customer) {
-            $this->redirect('customer/account/login');
+            $this->redirect($this->getStorefrontLoginRoute());
             return;
         }
 

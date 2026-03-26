@@ -14,6 +14,29 @@ use Weline\Framework\Manager\MessageManager;
 
 class IndexTest extends TestCase
 {
+    public function testIndexRedirectsGuestsToCanonicalLoginRoute(): void
+    {
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->expects($this->once())
+            ->method('getCustomer')
+            ->willReturn(null);
+
+        $pageDataService = $this->createMock(CheckoutPageDataService::class);
+        $pageDataService->expects($this->never())->method('build');
+
+        $controller = $this->getMockBuilder(Index::class)
+            ->setConstructorArgs([$customerSession, $pageDataService])
+            ->onlyMethods(['assign', 'fetch', 'redirect'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/customer/account/login');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('fetch');
+
+        $this->assertNull($controller->index());
+    }
+
     public function testIndexBuildsRetryCheckoutPageWhenOrderIdIsPresent(): void
     {
         $customer = $this->createCustomer(9);
