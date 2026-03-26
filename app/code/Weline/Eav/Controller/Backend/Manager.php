@@ -403,6 +403,7 @@ class Manager extends BackendController
             $attribute->setData('basic_is_enable', $this->request->getPost('basic_is_enable') ? 1 : 0);
             // 前端显示组
             $attribute->setData('frontend_is_filterable', $this->request->getPost('frontend_is_filterable') ? 1 : 0);
+            $attribute->setData('frontend_is_searchable', $this->request->getPost('frontend_is_searchable') ? 1 : 0);
             $attribute->setData('frontend_is_visible', $this->request->getPost('frontend_is_visible') ? 1 : 0);
             // 数据配置组
             $attribute->setData('data_is_multiple', $this->request->getPost('data_is_multiple') ? 1 : 0);

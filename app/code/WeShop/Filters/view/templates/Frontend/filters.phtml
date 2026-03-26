@@ -21,13 +21,16 @@ $filters = $this->getData('filters') ?? [];
 $appliedFilters = $this->getData('applied_filters') ?? [];
 $categoryId = $this->getData('category_id') ?? 0;
 $clearAllUrl = $this->getData('clear_all_url') ?? '';
+$filterApiUrl = $this->getUrl('filters/filter');
 
 if (empty($filters) && empty($appliedFilters)) {
     return;
 }
 ?>
 
-<div class="category-filter-mock" data-category-id="<?= $categoryId ?>">
+<div class="category-filter-mock"
+     data-category-id="<?= $categoryId ?>"
+     data-filter-api-url="<?= htmlspecialchars($filterApiUrl) ?>">
     <!-- 筛选头部 Hook -->
     <?= $this->getHook('WeShop_Filters::frontend::partials::filters::header') ?>
     
@@ -170,6 +173,8 @@ document.addEventListener('DOMContentLoaded', function() {
         window.weShopFilterController = WeShopFilters.init({
             categoryId: <?= (int)$categoryId ?>,
             filterContainer: '.category-filter-mock',
+            productContainer: '.category-products',
+            filterApiUrl: '<?= htmlspecialchars($filterApiUrl, ENT_QUOTES) ?>',
             enableAjax: true,
             updateUrl: true
         });

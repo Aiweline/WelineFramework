@@ -56,6 +56,8 @@ class SearchEngineEnvConfigTest extends TestCase
                     'version' => '3.5.0',
                     'install_dir' => 'extend/server/opensearch',
                     'config_file' => 'extend/server/opensearch/config/opensearch.yml',
+                    'data_dir' => 'extend/server/opensearch/data',
+                    'log_dir' => 'extend/server/opensearch/logs',
                 ],
             ],
         ], [
@@ -64,6 +66,8 @@ class SearchEngineEnvConfigTest extends TestCase
                 'opensearch' => [
                     'port' => 9201,
                     'index' => 'products_live',
+                    'data_dir' => 'D:/WelineRuntime/opensearch-data',
+                    'log_dir' => 'D:/WelineRuntime/opensearch-logs',
                 ],
             ],
         ]) extends SearchEngineEnvConfig {
@@ -95,6 +99,8 @@ class SearchEngineEnvConfigTest extends TestCase
         $this->assertSame('3.5.0', $engineConfig['version']);
         $this->assertSame('extend/server/opensearch', $engineConfig['install_dir']);
         $this->assertSame('extend/server/opensearch/config/opensearch.yml', $engineConfig['config_file']);
+        $this->assertSame('D:/WelineRuntime/opensearch-data', $engineConfig['data_dir']);
+        $this->assertSame('D:/WelineRuntime/opensearch-logs', $engineConfig['log_dir']);
     }
 
     public function testNormalizeEngineTypeSupportsOpenSearchCaseInsensitive(): void

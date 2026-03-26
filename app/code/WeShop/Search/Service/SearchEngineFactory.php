@@ -21,11 +21,11 @@ class SearchEngineFactory
         $configModel = ObjectManager::getInstance(SearchEngineConfig::class);
         /** @var SearchEngineEnvConfig $envConfig */
         $envConfig = ObjectManager::getInstance(SearchEngineEnvConfig::class);
+        $defaultEngineType = $envConfig->getDefaultEngineType();
 
         $config = $configModel->getActiveEngineConfig($scope);
 
         if (!$config) {
-            $defaultEngineType = $envConfig->getDefaultEngineType();
             $engine = self::createEngineByType($defaultEngineType);
             if ($engine) {
                 $engine->initConfig($envConfig->getEngineConfig($defaultEngineType));
@@ -36,13 +36,23 @@ class SearchEngineFactory
 
         $engineType = $envConfig->normalizeEngineType((string) ($config[SearchEngineConfig::schema_fields_ENGINE_TYPE] ?? ''));
         if ($engineType === '') {
-            $engineType = $envConfig->getDefaultEngineType();
+            $engineType = $defaultEngineType;
         }
 
         $configData = $configModel->setData($config)->getConfigData();
         $engine = self::createEngineByType($engineType);
         if ($engine) {
             $engine->initConfig($configData);
+        }
+
+        if ($engine && $engineType !== $defaultEngineType && !self::isEngineUsable($engine)) {
+            $fallback = self::createEngineByType($defaultEngineType);
+            if ($fallback) {
+                $fallback->initConfig($envConfig->getEngineConfig($defaultEngineType));
+                if (self::isEngineUsable($fallback)) {
+                    return $fallback;
+                }
+            }
         }
 
         return $engine;
@@ -107,5 +117,14 @@ class SearchEngineFactory
                 'description' => '托管式云搜索服务，适合已有 Algolia 账号和索引环境。',
             ],
         ];
+    }
+
+    private static function isEngineUsable(SearchEngineInterface $engine): bool
+    {
+        try {
+            return $engine->testConnection();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Filters\Provider;
 
 use WeShop\Filters\Api\FilterProviderInterface;
+use WeShop\Filters\Api\SearchFacetCapableFilterInterface;
 use WeShop\Filters\Model\CategoryFilterConfig;
 use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Framework\Manager\ObjectManager;
@@ -14,7 +15,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 
  * 提供筛选器的基础实现
  */
-abstract class AbstractFilterProvider implements FilterProviderInterface
+abstract class AbstractFilterProvider implements FilterProviderInterface, SearchFacetCapableFilterInterface
 {
     /**
      * @var int 默认排序权重
@@ -297,6 +298,105 @@ abstract class AbstractFilterProvider implements FilterProviderInterface
             }
         }
         return $this->categoryConfigCache[$categoryId];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function getCategoryConfigData(int $categoryId): array
+    {
+        $config = $this->getCategoryConfig($categoryId);
+        $configData = $config['config_data'] ?? [];
+
+        return is_array($configData) ? $configData : [];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    public function getSearchFacetDefinition(int $categoryId, array $context = []): ?array
+    {
+        return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $buckets
+     * @param array<string, mixed> $appliedFilters
+     * @param array<string, mixed> $context
+     * @return array<int, array<string, mixed>>
+     */
+    public function normalizeSearchFacetBuckets(array $buckets, array $appliedFilters = [], array $context = []): array
+    {
+        $options = [];
+
+        foreach ($buckets as $bucket) {
+            $value = (string) ($bucket['value'] ?? $bucket['key'] ?? '');
+            if ($value === '') {
+                continue;
+            }
+
+            $option = $this->buildOption(
+                $value,
+                (string) ($bucket['label'] ?? $value),
+                (int) ($bucket['count'] ?? $bucket['doc_count'] ?? 0),
+                $this->isValueSelected($value, $appliedFilters)
+            );
+
+            $swatch = [];
+            if (!empty($bucket['swatch_color'])) {
+                $swatch = ['type' => 'color', 'value' => (string) $bucket['swatch_color']];
+            } elseif (!empty($bucket['swatch_image'])) {
+                $swatch = ['type' => 'image', 'value' => (string) $bucket['swatch_image']];
+            } elseif (!empty($bucket['swatch_text'])) {
+                $swatch = ['type' => 'text', 'value' => (string) $bucket['swatch_text']];
+            }
+
+            if ($swatch !== []) {
+                $option['swatch'] = $swatch;
+            }
+
+            $options[] = $option;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>|null
+     */
+    protected function buildEavFacetDefinition(
+        string $attributeCode,
+        int $categoryId,
+        array $context = [],
+        ?string $code = null,
+        ?string $name = null,
+        ?string $displayType = null
+    ): ?array {
+        $info = $this->getProductAttributeInfo($attributeCode);
+        if (!$info || empty($info['attribute_id'])) {
+            return null;
+        }
+
+        $configData = $this->getCategoryConfigData($categoryId);
+
+        return [
+            'code' => $code ?? $this->getCode(),
+            'name' => $name ?? (string) ($info['name'] ?? $this->getName()),
+            'type' => 'eav',
+            'attribute_id' => (int) ($info['attribute_id'] ?? 0),
+            'attribute_code' => $attributeCode,
+            'display_type' => $displayType ?? $this->getDisplayType(),
+            'facet_mode' => (string) ($configData[CategoryFilterConfig::CONFIG_FACET_MODE] ?? 'terms'),
+            'range_buckets' => is_array($configData[CategoryFilterConfig::CONFIG_RANGE_BUCKETS] ?? null)
+                ? array_values($configData[CategoryFilterConfig::CONFIG_RANGE_BUCKETS])
+                : [],
+            'bucket_size' => max(1, (int) ($configData[CategoryFilterConfig::CONFIG_BUCKET_SIZE] ?? 20)),
+            'has_option' => !empty($info['has_option']),
+            'is_multiple' => !empty($info['is_multiple']),
+            'type_code' => (string) ($info['type_code'] ?? ''),
+        ];
     }
     
     /**

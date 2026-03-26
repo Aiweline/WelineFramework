@@ -6,13 +6,30 @@
 $category = $this->getData('category') ?? [];
 $products = $this->getData('products') ?? [];
 $filters = $this->getData('filters') ?? [];
+$appliedFilters = $this->getData('applied_filters') ?? [];
+$clearAllUrl = $this->getData('clear_all_url') ?? $this->getUrl('catalog/category/view', ['id' => $category['category_id'] ?? 0]);
 $pagination = $this->getData('pagination') ?? '';
+$paginationData = $this->getData('pagination_data') ?? [];
 $sortOptions = $this->getData('sort_options') ?? [];
 $currentSort = $this->getData('current_sort') ?? 'position';
 $viewMode = $this->getData('view_mode') ?? 'grid';
 $legacyFilterSidebar = trim((string) $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar'));
 $canonicalFilterContainer = trim((string) $this->getHook('WeShop_Filters::frontend::partials::filters::container'));
 $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::frontend::layouts::category::products-content'));
+$buildCategoryPageUrl = function (int $targetPage) use ($category) {
+    $params = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
+        ? $this->request->getQuery()
+        : [];
+    if (!empty($category['category_id'])) {
+        $params['id'] = $category['category_id'];
+    }
+    if (!empty($category['handle'])) {
+        $params['handle'] = $category['handle'];
+    }
+    $params['page'] = max(1, $targetPage);
+
+    return $this->getUrl('catalog/category/view', $params);
+};
 ?>
 <main class="w-full max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex flex-col lg:flex-row gap-8">
@@ -39,9 +56,9 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                         <?php if ($filter['type'] === 'checkbox'): ?>
                                             <?php foreach ($filter['options'] as $option): ?>
                                                 <label class="flex items-center space-x-2 text-sm text-text-secondary-light dark:text-text-secondary-dark hover:text-text-primary-light dark:hover:text-text-primary-dark cursor-pointer">
-                                                    <input type="checkbox" 
-                                                           name="<?= $filter['code'] ?>[]" 
-                                                           value="<?= $option['value'] ?>" 
+                                                    <input type="checkbox"
+                                                           name="<?= $filter['code'] ?>[]"
+                                                           value="<?= $option['value'] ?>"
                                                            <?= $option['selected'] ? 'checked' : '' ?>
                                                            class="form-checkbox h-4 w-4 rounded text-primary focus:ring-primary/50 border-border-light dark:border-border-dark dark:bg-background-dark">
                                                     <span><?= htmlspecialchars($option['label']) ?></span>
@@ -52,10 +69,10 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                             <?php endforeach; ?>
                                         <?php elseif ($filter['type'] === 'range'): ?>
                                             <div class="pt-4 px-1">
-                                                <input type="range" 
-                                                       name="<?= $filter['code'] ?>" 
-                                                       min="<?= $filter['min'] ?>" 
-                                                       max="<?= $filter['max'] ?>" 
+                                                <input type="range"
+                                                       name="<?= $filter['code'] ?>"
+                                                       min="<?= $filter['min'] ?>"
+                                                       max="<?= $filter['max'] ?>"
                                                        value="<?= $filter['current'] ?? $filter['max'] ?>"
                                                        class="w-full h-2 bg-border-light dark:bg-border-dark rounded-lg appearance-none cursor-pointer accent-primary">
                                                 <div class="flex justify-between text-xs text-text-secondary-light dark:text-text-secondary-dark mt-2">
@@ -66,9 +83,9 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                         <?php elseif ($filter['type'] === 'rating'): ?>
                                             <?php foreach ($filter['options'] as $option): ?>
                                                 <label class="flex items-center space-x-2 text-sm text-text-secondary-light dark:text-text-secondary-dark cursor-pointer">
-                                                    <input type="radio" 
-                                                           name="<?= $filter['code'] ?>" 
-                                                           value="<?= $option['value'] ?>" 
+                                                    <input type="radio"
+                                                           name="<?= $filter['code'] ?>"
+                                                           value="<?= $option['value'] ?>"
                                                            <?= $option['selected'] ? 'checked' : '' ?>
                                                            class="form-radio h-4 w-4 text-primary focus:ring-primary/50 border-border-light dark:border-border-dark dark:bg-background-dark">
                                                     <span class="flex items-center gap-1 text-secondary">
@@ -84,10 +101,10 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                 </details>
                             <?php endforeach; ?>
                         </div>
-                        
+
                         <div class="mt-4 flex gap-2">
                             <button type="submit" class="flex-1 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"><?= __('Apply') ?></button>
-                            <a href="<?= $this->getUrl('catalog/category/view', ['id' => $category['category_id'] ?? 0]) ?>" class="flex-1 py-2 bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark rounded-lg text-sm font-medium text-center hover:bg-border-dark/20 dark:hover:bg-border-light/20 transition-colors"><?= __('Clear') ?></a>
+                            <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="flex-1 py-2 bg-border-light dark:bg-border-dark text-text-primary-light dark:text-text-primary-dark rounded-lg text-sm font-medium text-center hover:bg-border-dark/20 dark:hover:bg-border-light/20 transition-colors"><?= !empty($appliedFilters) ? __('Clear All') : __('Clear') ?></a>
                         </div>
                     </form>
                     <w:hook name="WeShop_Filters::frontend::partials::filters::footer"/>
@@ -95,7 +112,7 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                 <?php endif; ?>
             </div>
         </aside>
-        
+
         <!-- Product Grid -->
         <div class="flex-1">
             <!-- Header -->
@@ -117,7 +134,7 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    
+
                     <!-- View Mode -->
                     <div class="hidden sm:flex items-center gap-2">
                         <button type="button" class="p-2 rounded-lg <?= $viewMode === 'grid' ? 'bg-primary text-white' : 'bg-border-light dark:bg-border-dark text-text-secondary-light dark:text-text-secondary-dark hover:bg-primary/20' ?> transition-colors" onclick="setViewMode('grid')">
@@ -130,7 +147,7 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                 </div>
             </div>
             <w:hook name="WeShop_Catalog::listing::header_after"/>
-            
+
             <!-- Products Grid -->
             <?= $canonicalCategoryProducts ?>
             <?php if ($canonicalCategoryProducts === ''): ?>
@@ -156,12 +173,12 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                     <w:hook name="WeShop_Catalog::listing::product_card_actions"/>
                                 </div>
                             </a>
-                            
+
                             <!-- Product Info -->
                             <div class="flex flex-col gap-2 p-4 pt-0">
                                 <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="font-medium text-text-primary-light dark:text-text-primary-dark hover:text-primary transition-colors line-clamp-2"><?= htmlspecialchars($product['name']) ?></a>
                                 <w:hook name="WeShop_Catalog::listing::product_card_meta"/>
-                                
+
                                 <!-- Rating -->
                                 <?php $rating = $product['rating'] ?? 0; ?>
                                 <div class="flex items-center gap-1">
@@ -172,7 +189,7 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                     </div>
                                     <span class="text-xs text-text-secondary-light dark:text-text-secondary-dark">(<?= $product['review_count'] ?? 0 ?>)</span>
                                 </div>
-                                
+
                                 <!-- Price -->
                                 <div class="flex items-baseline gap-2">
                                     <?php if ($product['special_price'] ?? null): ?>
@@ -182,7 +199,7 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                                         <span class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></span>
                                     <?php endif; ?>
                                 </div>
-                                
+
                                 <!-- Add to Cart -->
                                 <button type="button" class="mt-2 w-full py-2 bg-primary text-white rounded-lg text-sm font-medium opacity-0 group-hover:opacity-100 transition-all add-to-cart" data-product-id="<?= $product['product_id'] ?>">
                                     <span class="flex items-center justify-center gap-2">
@@ -197,11 +214,35 @@ $canonicalCategoryProducts = trim((string) $this->getHook('WeShop_Catalog::front
                 </div>
                 <w:hook name="WeShop_Catalog::listing::products_after"/>
             <?php endif; ?>
-            
+
             <!-- Pagination -->
-            <?php if ($pagination): ?>
+            <?php if ($pagination || ((int) ($paginationData['pages'] ?? 0)) > 1): ?>
                 <div class="mt-8 flex justify-center">
-                    <?= $pagination ?>
+                    <?php if ($pagination): ?>
+                        <?= $pagination ?>
+                    <?php else: ?>
+                        <?php
+                        $currentPage = (int) ($paginationData['page'] ?? 1);
+                        $totalPages = (int) ($paginationData['pages'] ?? 1);
+                        ?>
+                        <div class="flex items-center gap-4 rounded-[1.25rem] border border-border-light bg-surface-light px-5 py-3">
+                            <a
+                                href="<?= htmlspecialchars($currentPage > 1 ? $buildCategoryPageUrl($currentPage - 1) : '#') ?>"
+                                class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage > 1 ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
+                            >
+                                <?= __('Previous') ?>
+                            </a>
+                            <span class="text-sm text-text-secondary-light">
+                                <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                            </span>
+                            <a
+                                href="<?= htmlspecialchars($currentPage < $totalPages ? $buildCategoryPageUrl($currentPage + 1) : '#') ?>"
+                                class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage < $totalPages ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
+                            >
+                                <?= __('Next') ?>
+                            </a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             <?php endif; ?>
         </div>

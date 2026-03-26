@@ -166,6 +166,7 @@ class Attribute extends ApiController
             $basicIsEnable = $this->getIntParam('basic_is_enable', 1);
             // 前端显示组
             $frontendIsFilterable = $this->getIntParam('frontend_is_filterable', 0);
+            $frontendIsSearchable = $this->getIntParam('frontend_is_searchable', 0);
             $frontendIsVisible = $this->getIntParam('frontend_is_visible', 1);
             // 数据配置组
             $dataIsMultiple = $this->getIntParam('data_is_multiple', 0);
@@ -229,6 +230,7 @@ class Attribute extends ApiController
             $attribute->setData('basic_is_enable', $basicIsEnable);
             // 前端显示组
             $attribute->setData('frontend_is_filterable', $frontendIsFilterable);
+            $attribute->setData('frontend_is_searchable', $frontendIsSearchable);
             $attribute->setData('frontend_is_visible', $frontendIsVisible);
             // 数据配置组
             $attribute->setData('data_is_multiple', $dataIsMultiple);
