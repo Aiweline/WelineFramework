@@ -422,7 +422,7 @@ class FileWatcher
         $changedCount = \count($changes);
         
         // 记录到日志文件
-        $logFile = \defined('BP') ? BP . 'var/log/wls.log' : '';
+        $logFile = WlsLogService::getMainLogFile();
         if ($logFile && \is_dir(\dirname($logFile))) {
             $logMessage = '[' . \date('Y-m-d H:i:s') . "] [FileWatcher] 检测到 {$changedCount} 个文件变更，触发 code 重载\n";
             @\file_put_contents($logFile, $logMessage, FILE_APPEND);

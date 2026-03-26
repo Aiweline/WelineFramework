@@ -26,6 +26,7 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\WlsLogService;
 use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
 use Weline\Server\Strategy\ServerStrategyInterface;
@@ -399,9 +400,12 @@ class Start extends CommandAbstract
         }
         
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
+        $this->printer->note(__('Worker基础端口: %{1}', [$workerBasePort]));
         try {
             $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart);
+            $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
         } catch (\RuntimeException $exception) {
+            $this->printer->note(__('共享状态运行时解析失败: %{1}', [$exception->getMessage()]));
             $this->printer->error($exception->getMessage());
             return;
         }
@@ -617,9 +621,10 @@ class Start extends CommandAbstract
         }
         
         // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
+        $sessionRuntime = \is_array($sharedStateRuntime['session'] ?? null) ? $sharedStateRuntime['session'] : [];
         if ($count > 1 && $sessionServerPort > 0) {
-            if (($sharedStateRuntime['session']['reuse_existing'] ?? false) === true) {
-                $this->printer->success(__('Session Server 端口 %{1} 复用现有共享服务 ✓', [$sessionServerPort]));
+            if ($this->shouldSkipSharedStatePortReleaseCheck($sessionRuntime)) {
+                $this->printSharedStatePortReadyMessage('Session Server', $sessionServerPort, $sessionRuntime);
             } elseif (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
@@ -629,9 +634,10 @@ class Start extends CommandAbstract
                 return;
             }
         }
+        $memoryRuntime = \is_array($sharedStateRuntime['memory'] ?? null) ? $sharedStateRuntime['memory'] : [];
         if ($memoryServerPort > 0) {
-            if (($sharedStateRuntime['memory']['reuse_existing'] ?? false) === true) {
-                $this->printer->success(__('Memory Service 端口 %{1} 复用现有共享服务 ✓', [$memoryServerPort]));
+            if ($this->shouldSkipSharedStatePortReleaseCheck($memoryRuntime)) {
+                $this->printSharedStatePortReadyMessage('Memory Service', $memoryServerPort, $memoryRuntime);
             } elseif (!$this->checkAndReleasePort($host, $memoryServerPort, $forceRestart, 'Memory Service', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
                     $this->disableMaintenanceMode();
@@ -911,7 +917,7 @@ class Start extends CommandAbstract
             $this->printer->note(__('  php bin/w server:status --all'));
             
             // 输出日志文件路径便于排查
-            $logDir = Env::VAR_DIR . 'log' . DS . 'server' . DS;
+            $logDir = WlsLogService::getLogDir($instanceName);
             $this->printer->note(__('日志目录：%{1}', [$logDir]));
         }
         
@@ -1111,6 +1117,35 @@ class Start extends CommandAbstract
                 );
             }
         }
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     */
+    protected function shouldSkipSharedStatePortReleaseCheck(array $runtime): bool
+    {
+        return (bool) ($runtime['reuse_existing'] ?? false)
+            || (bool) ($runtime['created_now'] ?? false)
+            || (bool) ($runtime['shared_service'] ?? false)
+            || (bool) ($runtime['independent'] ?? false);
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     */
+    protected function printSharedStatePortReadyMessage(string $label, int $port, array $runtime): void
+    {
+        if ((bool) ($runtime['reuse_existing'] ?? false)) {
+            $this->printer->success(__('%{1} 端口 %{2} 复用现有共享服务 ✓', [$label, $port]));
+            return;
+        }
+
+        if ((bool) ($runtime['created_now'] ?? false)) {
+            $this->printer->success(__('%{1} 端口 %{2} 已在启动前完成拉起 ✓', [$label, $port]));
+            return;
+        }
+
+        $this->printer->success(__('%{1} 端口 %{2} 共享服务已就绪 ✓', [$label, $port]));
     }
 
     protected function getSharedStateTokenFileName(int $port, string $defaultFileName, int $defaultPort): string
@@ -3357,7 +3392,7 @@ PHP;
             return 0;
         }
         
-        $logDir = Env::VAR_DIR . 'log' . DS;
+        $logDir = WlsLogService::getLogDir($instanceName);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
         }
@@ -3422,7 +3457,7 @@ PHP;
      */
     protected function startSingleWorker(string $phpBinary, string $workerScript, string $host, int $port, int $workerId, string $instanceName, string $sslCert = '', string $sslKey = '', bool $frontend = false): array
     {
-        $logDir = Env::VAR_DIR . 'log' . DS;
+        $logDir = WlsLogService::getLogDir($instanceName);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
         }
@@ -4398,7 +4433,7 @@ PHP;
             'ssl_key' => $sslKey,
             'frontend' => $frontend,
             'http_redirect_port' => $strategyRedirect,
-            'log_dir' => Env::VAR_DIR . 'log' . DS,
+            'log_dir' => WlsLogService::getLogDir($instanceName),
             'bin_dir' => \dirname(__DIR__, 2) . DS . 'bin' . DS,
         ]);
         

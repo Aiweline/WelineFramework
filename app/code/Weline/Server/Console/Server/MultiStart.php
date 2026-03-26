@@ -14,6 +14,7 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\Service\WlsLogService;
 
 /**
  * server:multi-start - 多进程启动
@@ -38,6 +39,7 @@ class MultiStart extends CommandAbstract
         $host = $args['host'] ?? $args['h'] ?? '127.0.0.1';
         $basePort = (int) ($args['port'] ?? $args['p'] ?? 8080);
         $count = (int) ($args['count'] ?? $args['c'] ?? 4);
+        $instanceName = (string)($args['instance'] ?? $args['name'] ?? 'default');
         
         // 检测可用函数
         $this->detectAvailableFunctions();
@@ -82,7 +84,7 @@ class MultiStart extends CommandAbstract
             $workerId = $i + 1;
             
             // 使用最优方式启动进程
-            $result = $this->startWorkerProcess($phpBinary, $workerScript, $host, $port, $workerId);
+            $result = $this->startWorkerProcess($phpBinary, $workerScript, $host, $port, $workerId, $instanceName);
             
             if ($result['success']) {
                 $pidInfo = $result['pid'] > 0 ? " (PID: {$result['pid']})" : '';
@@ -258,9 +260,16 @@ class MultiStart extends CommandAbstract
     /**
      * 启动 Worker 进程 - 按优先级选择最优方式
      */
-    protected function startWorkerProcess(string $phpBinary, string $script, string $host, int $port, int $workerId): array
+    protected function startWorkerProcess(
+        string $phpBinary,
+        string $script,
+        string $host,
+        int $port,
+        int $workerId,
+        string $instanceName = 'default'
+    ): array
     {
-        $logFile = BP . "var/log/worker-{$port}.log";
+        $logFile = WlsLogService::getWorkerLogFile($port, $instanceName);
         $logDir = \dirname($logFile);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
@@ -268,7 +277,7 @@ class MultiStart extends CommandAbstract
         
         // 方案1：proc_open（最可靠，跨平台）
         if ($this->availableFunctions['proc_open'] && $this->availableFunctions['proc_close']) {
-            $result = $this->startWithProcOpen($phpBinary, $script, $host, $port, $workerId, $logFile);
+            $result = $this->startWithProcOpen($phpBinary, $script, $host, $port, $workerId, $logFile, $instanceName);
             if ($result['success']) {
                 $this->usedMethod = 'proc_open';
                 return $result;
@@ -277,7 +286,7 @@ class MultiStart extends CommandAbstract
         
         // 方案2：pcntl_fork（仅限 Linux/Mac，性能最优）
         if (!IS_WIN && $this->availableFunctions['pcntl_fork']) {
-            $result = $this->startWithPcntlFork($phpBinary, $script, $host, $port, $workerId, $logFile);
+            $result = $this->startWithPcntlFork($phpBinary, $script, $host, $port, $workerId, $logFile, $instanceName);
             if ($result['success']) {
                 $this->usedMethod = 'pcntl_fork';
                 return $result;
@@ -286,7 +295,7 @@ class MultiStart extends CommandAbstract
         
         // 方案3（备用）：exec
         if ($this->availableFunctions['exec']) {
-            $result = $this->startWithExec($phpBinary, $script, $host, $port, $workerId, $logFile);
+            $result = $this->startWithExec($phpBinary, $script, $host, $port, $workerId, $logFile, $instanceName);
             if ($result['success']) {
                 $this->usedMethod = IS_WIN ? 'PowerShell + exec' : 'nohup + exec';
                 return $result;
@@ -303,9 +312,17 @@ class MultiStart extends CommandAbstract
     /**
      * 使用 proc_open 启动进程
      */
-    protected function startWithProcOpen(string $phpBinary, string $script, string $host, int $port, int $workerId, string $logFile): array
+    protected function startWithProcOpen(
+        string $phpBinary,
+        string $script,
+        string $host,
+        int $port,
+        int $workerId,
+        string $logFile,
+        string $instanceName = 'default'
+    ): array
     {
-        $command = "{$phpBinary} \"{$script}\" {$host} {$port} {$workerId}";
+        $command = "{$phpBinary} \"{$script}\" {$host} {$port} {$workerId} {$instanceName}";
         
         $descriptorspec = [
             0 => ['pipe', 'r'],       // stdin
@@ -349,9 +366,17 @@ class MultiStart extends CommandAbstract
     /**
      * 使用 pcntl_fork 启动进程（仅限 Linux/Mac）
      */
-    protected function startWithPcntlFork(string $phpBinary, string $script, string $host, int $port, int $workerId, string $logFile): array
+    protected function startWithPcntlFork(
+        string $phpBinary,
+        string $script,
+        string $host,
+        int $port,
+        int $workerId,
+        string $logFile,
+        string $instanceName = 'default'
+    ): array
     {
-        $command = "{$phpBinary} \"{$script}\" {$host} {$port} {$workerId} > \"{$logFile}\" 2>&1";
+        $command = "{$phpBinary} \"{$script}\" {$host} {$port} {$workerId} {$instanceName} > \"{$logFile}\" 2>&1";
         
         $pid = \pcntl_fork();
         
@@ -377,7 +402,15 @@ class MultiStart extends CommandAbstract
     /**
      * 使用 exec 启动进程（备用方案）
      */
-    protected function startWithExec(string $phpBinary, string $script, string $host, int $port, int $workerId, string $logFile): array
+    protected function startWithExec(
+        string $phpBinary,
+        string $script,
+        string $host,
+        int $port,
+        int $workerId,
+        string $logFile,
+        string $instanceName = 'default'
+    ): array
     {
         if (IS_WIN) {
             // Windows: 创建临时批处理文件启动后台进程
@@ -395,7 +428,7 @@ class MultiStart extends CommandAbstract
             
             // 批处理内容：启动进程后立即退出
             $batContent = "@echo off\r\n";
-            $batContent .= "start /MIN \"Worker-{$port}\" \"{$phpBinary}\" \"{$script}\" {$host} {$port} {$workerId}\r\n";
+            $batContent .= "start /MIN \"Worker-{$port}\" \"{$phpBinary}\" \"{$script}\" {$host} {$port} {$workerId} {$instanceName}\r\n";
             $batContent .= "exit\r\n";
             
             \file_put_contents($batFile, $batContent);
@@ -409,7 +442,7 @@ class MultiStart extends CommandAbstract
             return ['success' => true, 'pid' => 0, 'error' => ''];
         } else {
             // Linux/Mac: 使用 nohup
-            $command = "nohup {$phpBinary} \"{$script}\" {$host} {$port} {$workerId} > \"{$logFile}\" 2>&1 & echo \$!";
+            $command = "nohup {$phpBinary} \"{$script}\" {$host} {$port} {$workerId} {$instanceName} > \"{$logFile}\" 2>&1 & echo \$!";
             $output = [];
             \exec($command, $output);
             

@@ -13,6 +13,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Strategy;
 
+use Weline\Server\Service\WlsLogService;
+
 /**
  * 服务器配置值对象
  * 
@@ -155,8 +157,7 @@ final class ServerConfig
      */
     private function getDefaultLogDir(): string
     {
-        $varDir = \defined('BP') ? BP . 'app' . DIRECTORY_SEPARATOR . 'var' . DIRECTORY_SEPARATOR : '';
-        return $varDir . 'log' . DIRECTORY_SEPARATOR;
+        return WlsLogService::getLogDir($this->instanceName);
     }
     
     /**
