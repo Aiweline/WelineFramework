@@ -1,24 +1,71 @@
-﻿请先登录,请先登录
-获取成功,获取成功
-订单ID不能为空,订单ID不能为空
-订单不存在,订单不存在
-订单不能取消,订单不能取消
-请先申请退货,请先申请退货
-订单已取消，退款将在3-7个工作日内处理,订单已取消，退款将在3-7个工作日内处理
-订单已取消,订单已取消
-该订单无法继续支付,该订单无法继续支付
-请完成订单支付,请完成订单支付
-"Order 查询器不支持的操作：%{1}","Order 查询器不支持的操作：%{1}"
-订单查询,订单查询
-提供订单创建与订单项写入能力,提供订单创建与订单项写入能力
-创建订单并返回订单摘要,创建订单并返回订单摘要
-批量写入订单项,批量写入订单项
-无权取消此订单,无权取消此订单
-已完成的订单不能取消，如需退货请申请退货,已完成的订单不能取消，如需退货请申请退货
-订单已退款,订单已退款
-订单已发货，请先申请退货，确认收到退货后才能取消订单,订单已发货，请先申请退货，确认收到退货后才能取消订单
-退货申请已提交，请等待确认收到退货后才能取消订单,退货申请已提交，请等待确认收到退货后才能取消订单
-当前订单状态不允许取消,当前订单状态不允许取消
+﻿"Please log in first","Please log in first"
+Success,Success
+"Order Management","Order Management"
+"Order ID is required.","Order ID is required."
+"Order status updated.","Order status updated."
+"Order status update failed.","Order status update failed."
+"Order not found.","Order not found."
+"Order Detail","Order Detail"
+"Please log in to continue.","Please log in to continue."
+"This order cannot be cancelled.","This order cannot be cancelled."
+"Order cancelled. Refund processing will follow your payment method rules.","Order cancelled. Refund processing will follow your payment method rules."
+"Order cancelled.","Order cancelled."
+"My Orders","My Orders"
+"This order cannot continue to payment.","This order cannot continue to payment."
+"Continue the payment flow from checkout.","Continue the payment flow from checkout."
+"Order Details","Order Details"
+"Unsupported order provider operation: %{1}","Unsupported order provider operation: %{1}"
+"Order Query","Order Query"
+"Provides order creation, order item persistence, and account-summary queries.","Provides order creation, order item persistence, and account-summary queries."
+"Persist order items in batch.","Persist order items in batch."
+"Return recent and unpaid orders for the customer account center.","Return recent and unpaid orders for the customer account center."
+Pending,Pending
+Processing,Processing
+Paid,Paid
+Fulfilled,Fulfilled
+Completed,Completed
+Cancelled,Cancelled
+Refunded,Refunded
+"Unsupported order status.","Unsupported order status."
+"Order status transition %{1} -> %{2} is not allowed.","Order status transition %{1} -> %{2} is not allowed."
+"Unsupported payment status.","Unsupported payment status."
+"Order does not exist.","Order does not exist."
+"You cannot cancel this order.","You cannot cancel this order."
+"The order has already been cancelled.","The order has already been cancelled."
+"The order has already been refunded.","The order has already been refunded."
+"The current order status does not allow cancellation.","The current order status does not allow cancellation."
+"The order cannot be cancelled.","The order cannot be cancelled."
+"Manage order search, review, and status transitions from one place.","Manage order search, review, and status transitions from one place."
+"Total Orders","Total Orders"
+"Completed / Cancelled","Completed / Cancelled"
+"Order Number","Order Number"
+"Search by order number","Search by order number"
+"Customer ID","Customer ID"
+"Search by customer ID","Search by customer ID"
+Status,Status
+"All statuses","All statuses"
+"Apply Filters","Apply Filters"
+Reset,Reset
+"Payment Status","Payment Status"
+Total,Total
+"Created At","Created At"
+Actions,Actions
+View,View
+"No orders found.","No orders found."
+"Try adjusting the filters or create a new order flow from the storefront.","Try adjusting the filters or create a new order flow from the storefront."
+"Back to Orders","Back to Orders"
+"Review the order payload, items, and current status.","Review the order payload, items, and current status."
+"Order Summary","Order Summary"
+"Grand Total","Grand Total"
+"Update Status","Update Status"
+"Save Status","Save Status"
+"Order Items","Order Items"
+Product,Product
+SKU,SKU
+Qty,Qty
+Price,Price
+"Row Total","Row Total"
+"No order items found.","No order items found."
 "您有 %1 个订单待支付","您有 %1 个订单待支付"
 请及时完成支付，避免订单自动取消,请及时完成支付，避免订单自动取消
 我的订单,我的订单
@@ -42,48 +89,33 @@
 取消订单,取消订单
 申请退货,申请退货
 不可取消,不可取消
-Pending,Pending
-Processing,Processing
-Paid,Paid
-Fulfilled,Fulfilled
-Completed,Completed
-Cancelled,Cancelled
-Refunded,Refunded
-Unsupported order status.,Unsupported order status.
-Order not found.,Order not found.
-Order ID is required.,Order ID is required.
-Order Management,Order Management
-"Manage order search, review, and status transitions from one place.","Manage order search, review, and status transitions from one place."
-Total Orders,Total Orders
-Completed / Cancelled,Completed / Cancelled
-Order Number,Order Number
-Search by order number,Search by order number
-Customer ID,Customer ID
-Search by customer ID,Search by customer ID
-Status,Status
-All statuses,All statuses
-Apply Filters,Apply Filters
-Reset,Reset
-Payment Status,Payment Status
-Total,Total
-Created At,Created At
-Actions,Actions
-View,View
-No orders found.,No orders found.
-Try adjusting the filters or create a new order flow from the storefront.,Try adjusting the filters or create a new order flow from the storefront.
-Order Detail,Order Detail
-"Review the order payload, items, and current status.","Review the order payload, items, and current status."
-Back to Orders,Back to Orders
-Order Summary,Order Summary
-Grand Total,Grand Total
-Update Status,Update Status
-Save Status,Save Status
-Order Items,Order Items
-Product,Product
-SKU,SKU
-Qty,Qty
-Price,Price
-Row Total,Row Total
-No order items found.,No order items found.
-Order status updated.,Order status updated.
-Order status update failed.,Order status update failed.
+"Order Snapshot","Order Snapshot"
+"Recent Orders","Recent Orders"
+"View All","View All"
+Unpaid,Unpaid
+"No orders yet. Place your first order to see activity here.","No orders yet. Place your first order to see activity here."
+"Order Center","Order Center"
+"Track your purchases, complete unpaid orders, and review delivery progress in one place.","Track your purchases, complete unpaid orders, and review delivery progress in one place."
+"Continue Shopping","Continue Shopping"
+"Back to Account","Back to Account"
+"Awaiting Payment","Awaiting Payment"
+"No orders yet","No orders yet"
+"Your order history will appear here after you place your first purchase.","Your order history will appear here after you place your first purchase."
+"Browse Products","Browse Products"
+Order,Order
+"View Details","View Details"
+"Pay Now","Pay Now"
+"Cancel this order?","Cancel this order?"
+"Cancel Order","Cancel Order"
+"Request Return","Request Return"
+"Not Cancellable","Not Cancellable"
+"Review the latest status, payment state, and ordered products for this order.","Review the latest status, payment state, and ordered products for this order."
+"Retry Payment","Retry Payment"
+"Order Information","Order Information"
+"Order ID","Order ID"
+"Increment ID","Increment ID"
+Timeline,Timeline
+N/A,N/A
+"Updated At","Updated At"
+Items,Items
+"No order items are available for this order yet.","No order items are available for this order yet."

@@ -71,6 +71,7 @@ class OrderListPageDataServiceTest extends TestCase
         $this->assertSame(2, $data['page_count']);
         $this->assertTrue($data['has_previous']);
         $this->assertFalse($data['has_next']);
+        $this->assertSame('weshop/customer/account/index', $data['back_url']);
         $this->assertCount(1, $data['orders']);
         $this->assertSame('WS100051', $data['orders'][0]['increment_id']);
         $this->assertSame('Pending', $data['orders'][0]['status_label']);
