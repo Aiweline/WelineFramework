@@ -92,27 +92,35 @@ for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
     set "CECHO_MSG=Probe URL(mirrorservice releases): !URL_MIRRORSERVICE_RELEASES!" & call :cecho DarkGray ""
     set "CECHO_MSG=Probe URL(mirrorservice archives): !URL_MIRRORSERVICE_ARCHIVES!" & call :cecho DarkGray ""
     REM Try real download directly to avoid false negatives on probe requests.
-    curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_PRIMARY!" >nul 2>&1 && (
+    set "DOWNLOAD_OK="
+    call :try_download_url "!URL_PRIMARY!"
+    if defined DOWNLOAD_OK (
       set "FOUND_PATCH=%%p"
       set "FOUND_URL=!URL_PRIMARY!"
       set "FOUND=1"
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_ARCHIVE!" >nul 2>&1 && (
+      set "DOWNLOAD_OK="
+      call :try_download_url "!URL_ARCHIVE!"
+      if defined DOWNLOAD_OK (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_ARCHIVE!"
         set "FOUND=1"
       )
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_MIRRORSERVICE_RELEASES!" >nul 2>&1 && (
+      set "DOWNLOAD_OK="
+      call :try_download_url "!URL_MIRRORSERVICE_RELEASES!"
+      if defined DOWNLOAD_OK (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_MIRRORSERVICE_RELEASES!"
         set "FOUND=1"
       )
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_MIRRORSERVICE_ARCHIVES!" >nul 2>&1 && (
+      set "DOWNLOAD_OK="
+      call :try_download_url "!URL_MIRRORSERVICE_ARCHIVES!"
+      if defined DOWNLOAD_OK (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_MIRRORSERVICE_ARCHIVES!"
         set "FOUND=1"
@@ -247,6 +255,34 @@ endlocal
 exit /b 0
 
 REM ---- Subroutines ----
+:try_download_url
+set "TRY_URL=%~1"
+if not defined TRY_URL exit /b 1
+if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
+
+REM Engine 1: curl (compatible options)
+curl -L -s --fail --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "%TEMP%\weline-php.zip" "%TRY_URL%" >nul 2>&1
+if exist "%TEMP%\weline-php.zip" (
+  for %%z in ("%TEMP%\weline-php.zip") do if %%~zz GTR 100000 (
+    set "DOWNLOAD_OK=1"
+    exit /b 0
+  )
+)
+
+REM Engine 2: PowerShell fallback
+if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%TRY_URL%' -OutFile '%TEMP%\weline-php.zip' -UseBasicParsing -TimeoutSec 300; exit 0 } catch { exit 1 }" >nul 2>&1
+if exist "%TEMP%\weline-php.zip" (
+  for %%z in ("%TEMP%\weline-php.zip") do if %%~zz GTR 100000 (
+    set "DOWNLOAD_OK=1"
+    exit /b 0
+  )
+)
+
+if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
+set "CECHO_MSG=Probe failed: %TRY_URL%" & call :cecho DarkGray ""
+exit /b 1
+
 :install_git
 REM Windows: 优先 winget，其次 Chocolatey
 where winget >nul 2>&1
