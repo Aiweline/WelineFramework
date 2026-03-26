@@ -7,7 +7,7 @@ namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\AiWorkbench\ArtifactService;
 
-class ArtifactServiceTest extends AbstractAiWorkbenchPersistenceTest
+class ArtifactServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     private ArtifactService $artifactService;
 
