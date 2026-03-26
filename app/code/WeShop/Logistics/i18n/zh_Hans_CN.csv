@@ -1,33 +1,33 @@
+﻿"Tracking Management","Tracking Management"
+"Tracking saved.",物流事件已保存。
+"Tracking save failed.",物流事件保存失败。
 订单ID不能为空,订单ID不能为空
 Pending,待处理
-Picked Up,已揽收
-In Transit,运输中
-Out for Delivery,派送中
+"Picked Up",已揽收
+"In Transit",运输中
+"Out for Delivery",派送中
 Delivered,已送达
 Exception,异常
-Order ID is required.,订单ID不能为空。
-Tracking number is required.,物流单号不能为空。
-Carrier is required.,承运商不能为空。
-Unsupported tracking status.,不支持的物流状态。
-Tracking Management,物流追踪管理
-Maintain shipment events and let customer-facing tracking stay up to date.,维护物流事件，让前台追踪时间线保持最新。
-Edit Tracking Event,编辑物流事件
-Create Tracking Event,创建物流事件
-Order ID,订单ID
-Tracking Number,物流单号
+"Order ID is required.",订单ID不能为空。
+"Tracking number is required.",物流单号不能为空。
+"Carrier is required.",承运商不能为空。
+"Unsupported tracking status.",不支持的物流状态。
+"Maintain shipment events and let customer-facing tracking stay up to date.",维护物流事件，让前台追踪时间线保持最新。
+"Edit Tracking Event",编辑物流事件
+"Create Tracking Event",创建物流事件
+"Order ID",订单ID
+"Tracking Number",物流单号
 Carrier,承运商
 Status,状态
 Location,位置
 Description,描述
-Save Tracking Event,保存物流事件
-All carriers,全部承运商
-All statuses,全部状态
-Apply Filters,应用筛选
+"Save Tracking Event",保存物流事件
+"All carriers",全部承运商
+"All statuses",全部状态
+"Apply Filters",应用筛选
 Reset,重置
-Tracked At,追踪时间
+"Tracked At",追踪时间
 Actions,操作
 Edit,编辑
-No tracking events found.,暂无物流事件。
-Create the first tracking event to start the logistics timeline.,请先创建第一条物流事件以启动物流时间线。
-Tracking saved.,物流事件已保存。
-Tracking save failed.,物流事件保存失败。
+"No tracking events found.",暂无物流事件。
+"Create the first tracking event to start the logistics timeline.",请先创建第一条物流事件以启动物流时间线。
