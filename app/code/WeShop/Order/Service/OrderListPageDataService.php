@@ -44,7 +44,7 @@ class OrderListPageDataService
                 ],
                 is_array($result['pagination'] ?? null) ? $result['pagination'] : []
             ),
-            'back_url' => 'customer',
+            'back_url' => 'weshop/customer/account/index',
         ];
     }
 
