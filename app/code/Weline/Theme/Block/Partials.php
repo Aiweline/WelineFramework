@@ -10,6 +10,7 @@
 namespace Weline\Theme\Block;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Block;
 use Weline\Framework\View\Template;
 use Weline\Theme\Helper\ComponentMetaParser;
@@ -194,63 +195,66 @@ class Partials extends Block
      */
     public function renderPartials(string $area, string $type, array $data = [], string $defaultOption = 'default'): string
     {
-        $path = $this->getPartialsPath($area, $type, $defaultOption);
-        
-        if (!$path) {
-            return '';
-        }
-        
-        // 1. 获取全局 Template 实例的 meta 数据（layout 的 meta）和 theme 数据
-        $template = Template::getInstance();
-        $layoutMeta = $template->getData('meta') ?? [];
-        $themeData = $template->getData('theme') ?? [];
-        $colorsData = $template->getData('colors') ?? [];
-        $contentTemplate = $template->getData('contentTemplate') ?? null;
+        $tracePrefix = 'theme::partials::' . $type;
 
-        // 2. 加载 partials 的 meta 数据
-        $scope = $this->resolveScope($area);
-        $metaIdentify = "partials.{$type}";
-        if ($defaultOption && $defaultOption !== 'default') {
-            $metaIdentify .= ".{$defaultOption}";
-        } else {
-            $metaIdentify = "partials.{$type}.default";
-        }
-        
-        $partialsMeta = ThemeData::getFileParams($metaIdentify, $scope);
-        
-        // 如果从 Meta 表中没有读取到参数，尝试从文件直接解析
-        if (empty($partialsMeta)) {
-            $partialsMeta = $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption);
-        }
-        
-        // 确保即使没有参数，也至少设置一个空的 meta 数组
-        if (empty($partialsMeta)) {
-            $partialsMeta = [];
-        }
-        
-        // 3. 设置数据到 Block 实例
-        // partials 自己的 meta
-        $data['meta'] = $partialsMeta;
-        // layout 的 meta（供 partials 访问）
-        $data['layout'] = $layoutMeta;
-        // theme 数据（由 ControllerFetchFileBefore Observer 设置，包含 layoutType、layoutOption 等）
-        $data['theme'] = $themeData;
-        // colors 数据（主题颜色配置）
-        $data['colors'] = $colorsData;
-        // contentTemplate（原始内容模板路径）
-        if ($contentTemplate) {
-            $data['contentTemplate'] = $contentTemplate;
-        }
-        
-        // 4. 设置其他数据
-        foreach ($data as $key => $value) {
-            $this->assign($key, $value);
-        }
-        
-        // 5. 渲染 partials
-        return $this->fetchHtml($path, $data);
+        return $this->traceCall($tracePrefix . '::render', function () use ($area, $type, $data, $defaultOption, $tracePrefix) {
+            $path = $this->traceCall(
+                $tracePrefix . '::resolve_path',
+                fn() => $this->getPartialsPath($area, $type, $defaultOption)
+            );
+
+            if (!$path) {
+                return '';
+            }
+
+            $template = Template::getInstance();
+            $layoutMeta = $template->getData('meta') ?? [];
+            $themeData = $template->getData('theme') ?? [];
+            $colorsData = $template->getData('colors') ?? [];
+            $contentTemplate = $template->getData('contentTemplate') ?? null;
+
+            $scope = $this->resolveScope($area);
+            $metaIdentify = "partials.{$type}";
+            if ($defaultOption && $defaultOption !== 'default') {
+                $metaIdentify .= ".{$defaultOption}";
+            } else {
+                $metaIdentify = "partials.{$type}.default";
+            }
+
+            $partialsMeta = $this->traceCall(
+                $tracePrefix . '::load_meta',
+                fn() => ThemeData::getFileParams($metaIdentify, $scope)
+            );
+
+            if (empty($partialsMeta)) {
+                $partialsMeta = $this->traceCall(
+                    $tracePrefix . '::parse_meta_file',
+                    fn() => $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption)
+                );
+            }
+
+            if (empty($partialsMeta)) {
+                $partialsMeta = [];
+            }
+
+            $data['meta'] = $partialsMeta;
+            $data['layout'] = $layoutMeta;
+            $data['theme'] = $themeData;
+            $data['colors'] = $colorsData;
+            if ($contentTemplate) {
+                $data['contentTemplate'] = $contentTemplate;
+            }
+
+            foreach ($data as $key => $value) {
+                $this->assign($key, $value);
+            }
+
+            return $this->traceCall(
+                $tracePrefix . '::fetch_html',
+                fn() => $this->fetchHtml($path, $data)
+            );
+        });
     }
-    
     /**
      * 重写 fetchHtml 方法，直接使用 Template 的 getFetchFile，避免使用 blocks 类型
      * @param string $fileName 文件名
@@ -321,6 +325,21 @@ class Partials extends Block
         }
         
         return $params;
+    }
+    private function traceCall(string $name, callable $callback, string $category = 'theme'): mixed
+    {
+        if (!RequestLifecycleTrace::isEnabled()) {
+            return $callback();
+        }
+
+        $start = microtime(true);
+        RequestLifecycleTrace::pushCurrentParent($name);
+        try {
+            return $callback();
+        } finally {
+            RequestLifecycleTrace::popCurrentParent();
+            RequestLifecycleTrace::recordSpan($name, (microtime(true) - $start) * 1000, $category);
+        }
     }
 }
 
