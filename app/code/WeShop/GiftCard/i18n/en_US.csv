@@ -1,7 +1,52 @@
-"Gift card does not exist.","Gift card does not exist."
-"Gift card balance is insufficient.","Gift card balance is insufficient."
+﻿"Gift Card Management","Gift Card Management"
+"Gift card saved.","Gift card saved."
+"Gift card save failed.","Gift card save failed."
+"Please log in to continue.","Please log in to continue."
+"Gift card page hooks","Gift card page hooks"
+"Inject storefront content above the gift card list page.","Inject storefront content above the gift card list page."
+"Gift card list item hooks","Gift card list item hooks"
+"Inject storefront content after each gift card entry row.","Inject storefront content after each gift card entry row."
+Active,Active
+Redeemed,Redeemed
+Expired,Expired
+Disabled,Disabled
 "Customer ID is required.","Customer ID is required."
 "Gift card amount must be greater than zero.","Gift card amount must be greater than zero."
-"No permission to use this gift card.","No permission to use this gift card."
+"Gift card does not exist.","Gift card does not exist."
 "Gift card is not active.","Gift card is not active."
 "Gift card has expired.","Gift card has expired."
+"Gift card balance is insufficient.","Gift card balance is insufficient."
+"Gift card balance cannot be negative.","Gift card balance cannot be negative."
+"Gift card balance cannot exceed the face amount.","Gift card balance cannot exceed the face amount."
+"Unsupported gift card status.","Unsupported gift card status."
+"Invalid date format.","Invalid date format."
+"Gift card number already exists.","Gift card number already exists."
+"Manage issued gift cards, remaining balances, and redemption readiness from one place.","Manage issued gift cards, remaining balances, and redemption readiness from one place."
+"Total Cards","Total Cards"
+"Active Cards","Active Cards"
+"Redeemed Cards","Redeemed Cards"
+"Total Balance","Total Balance"
+"Edit Gift Card","Edit Gift Card"
+"Create Gift Card","Create Gift Card"
+"Customer ID","Customer ID"
+"Card Number","Card Number"
+"Leave blank to auto-generate","Leave blank to auto-generate"
+Amount,Amount
+Balance,Balance
+Status,Status
+"Expires At","Expires At"
+"Save Gift Card","Save Gift Card"
+"All statuses","All statuses"
+"Apply Filters","Apply Filters"
+Reset,Reset
+"Created At","Created At"
+Actions,Actions
+Never,Never
+Edit,Edit
+"No gift cards found.","No gift cards found."
+"Create the first gift card to enable stored-value and promotion workflows.","Create the first gift card to enable stored-value and promotion workflows."
+"Wallet Value","Wallet Value"
+"Gift Cards","Gift Cards"
+"Open Wallet","Open Wallet"
+"Track balance and expiry in one place","Track balance and expiry in one place"
+"Review remaining gift card balance, active cards, and expiration dates before checkout.","Review remaining gift card balance, active cards, and expiration dates before checkout."
