@@ -203,13 +203,13 @@ class WelineTheme extends Model
         $cacheKey = 'theme_parent_' . $parentId;
         if ($cached = $this->_cache->get($cacheKey)) {
             /** @var WelineTheme $parentTheme */
-            $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+            $parentTheme = ObjectManager::make(WelineTheme::class);
             return $parentTheme->setData($cached);
         }
         // 从数据库加载
         try {
             /** @var WelineTheme $parentTheme */
-            $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+            $parentTheme = ObjectManager::make(WelineTheme::class);
             $parentTheme->load($parentId);
             
             if ($parentTheme->getId()) {
@@ -229,14 +229,14 @@ class WelineTheme extends Model
      */
     public function getThemeChain(): array
     {
-        $cacheKey = 'theme_chain_' . $this->getId();
+        $cacheKey = 'theme_chain_v2_' . $this->getId();
         
         // 尝试从缓存获取
         if ($cached = $this->_cache->get($cacheKey)) {
             $chain = [];
             foreach ($cached as $themeData) {
                 /** @var WelineTheme $theme */
-                $theme = ObjectManager::getInstance(WelineTheme::class);
+                $theme = ObjectManager::make(WelineTheme::class);
                 $chain[] = $theme->setData($themeData);
             }
             return $chain;
