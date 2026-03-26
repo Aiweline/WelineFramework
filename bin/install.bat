@@ -71,26 +71,20 @@ set "CECHO_MSG=--path-only: PHP not found at %PHP_DIR%." & call :cecho Yellow ""
 goto :skip_php
 :php_do_download
 set "VS=vs17"
-REM Speed-up: first use HEAD checks to find a valid PHP release zip,
-REM so we only download the zip once (avoid downloading many failed candidates).
+REM Only use official downloads.php.net windows release sources:
+REM active releases + archived releases.
 set "FOUND_PATCH="
 set "FOUND_URL="
-set "PHP_BASE_URL_PRIMARY=https://windows.php.net/downloads/releases/"
+set "PHP_BASE_URL_PRIMARY=https://downloads.php.net/~windows/releases/"
 set "PHP_BASE_URL_ARCHIVE=https://downloads.php.net/~windows/releases/archives/"
-set "PHP_BASE_URL_MIRRORSERVICE_RELEASES=https://www.mirrorservice.org/sites/www.php.net/downloads/releases/"
-set "PHP_BASE_URL_MIRRORSERVICE_ARCHIVES=https://www.mirrorservice.org/sites/www.php.net/downloads/releases/archives/"
 set "FOUND="
 for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
   if not defined FOUND_PATCH (
     set "URL_PRIMARY=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
     set "URL_ARCHIVE=!PHP_BASE_URL_ARCHIVE!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
-    set "URL_MIRRORSERVICE_RELEASES=!PHP_BASE_URL_MIRRORSERVICE_RELEASES!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
-    set "URL_MIRRORSERVICE_ARCHIVES=!PHP_BASE_URL_MIRRORSERVICE_ARCHIVES!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
     set "CECHO_MSG=Checking PHP !PHP_VER!.%%p ..." & call :cecho Gray ""
     set "CECHO_MSG=Probe URL(primary): !URL_PRIMARY!" & call :cecho DarkGray ""
     set "CECHO_MSG=Probe URL(archive): !URL_ARCHIVE!" & call :cecho DarkGray ""
-    set "CECHO_MSG=Probe URL(mirrorservice releases): !URL_MIRRORSERVICE_RELEASES!" & call :cecho DarkGray ""
-    set "CECHO_MSG=Probe URL(mirrorservice archives): !URL_MIRRORSERVICE_ARCHIVES!" & call :cecho DarkGray ""
     REM Try real download directly to avoid false negatives on probe requests.
     set "DOWNLOAD_OK="
     call :try_download_url "!URL_PRIMARY!"
@@ -105,24 +99,6 @@ for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
       if defined DOWNLOAD_OK (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_ARCHIVE!"
-        set "FOUND=1"
-      )
-    )
-    if not defined FOUND_PATCH (
-      set "DOWNLOAD_OK="
-      call :try_download_url "!URL_MIRRORSERVICE_RELEASES!"
-      if defined DOWNLOAD_OK (
-        set "FOUND_PATCH=%%p"
-        set "FOUND_URL=!URL_MIRRORSERVICE_RELEASES!"
-        set "FOUND=1"
-      )
-    )
-    if not defined FOUND_PATCH (
-      set "DOWNLOAD_OK="
-      call :try_download_url "!URL_MIRRORSERVICE_ARCHIVES!"
-      if defined DOWNLOAD_OK (
-        set "FOUND_PATCH=%%p"
-        set "FOUND_URL=!URL_MIRRORSERVICE_ARCHIVES!"
         set "FOUND=1"
       )
     )
@@ -160,7 +136,7 @@ if defined FOUND_URL (
 ) else (
   set "CECHO_MSG=Download failed before a valid URL was selected." & call :cecho Yellow ""
 )
-set "CECHO_MSG=Manual source index: https://windows.php.net/downloads/releases/ (extract to %PHP_DIR%)." & call :cecho Yellow ""
+set "CECHO_MSG=Manual source indexes: https://downloads.php.net/~windows/releases/ and https://downloads.php.net/~windows/releases/archives/ (extract to %PHP_DIR%)." & call :cecho Yellow ""
 goto :skip_php
 :php_extract_failed
 set "CECHO_MSG=Extract may have different structure. Check %PHP_DIR%." & call :cecho Yellow ""
