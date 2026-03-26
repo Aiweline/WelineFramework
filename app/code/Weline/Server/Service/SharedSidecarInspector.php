@@ -9,6 +9,27 @@ use Weline\Server\IPC\ControlMessage;
 
 final class SharedSidecarInspector
 {
+    public static function extractTokenFileNameFromCommandLine(string $commandLine): string
+    {
+        if ($commandLine === '') {
+            return '';
+        }
+
+        $pattern = '/--token-file-name=(?:"([^"]+)"|\'([^\']+)\'|([^\\s]+))/i';
+        if (\preg_match($pattern, $commandLine, $matches) !== 1) {
+            return '';
+        }
+
+        foreach ([1, 2, 3] as $index) {
+            $value = \trim((string) ($matches[$index] ?? ''), " \t\n\r\0\x0B\"'");
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
     /**
      * @return array{
      *   in_use: bool,
@@ -61,6 +82,10 @@ final class SharedSidecarInspector
             return $result;
         }
 
+        if (!$this->isSharedServiceProcess($commandLine, $role)) {
+            return $result;
+        }
+
         $result['reusable'] = true;
         $result['pid'] = $pid;
         $result['role'] = $role;
@@ -92,6 +117,30 @@ final class SharedSidecarInspector
         }
 
         return '';
+    }
+
+    private function isSharedServiceProcess(string $commandLine, string $role): bool
+    {
+        if (\preg_match('/--shared-service(?:=1)?(?:\\s|$)/i', $commandLine) === 1) {
+            return true;
+        }
+
+        $instanceName = $this->resolveInstanceName($commandLine);
+        if ($instanceName !== '') {
+            if ($role === ControlMessage::ROLE_MEMORY_SERVER && \str_starts_with($instanceName, 'shared-memory-')) {
+                return true;
+            }
+            if ($role === ControlMessage::ROLE_SESSION_SERVER && \str_starts_with($instanceName, 'shared-session-')) {
+                return true;
+            }
+        }
+
+        $processName = $this->extractOptionValue($commandLine, 'name');
+        if ($processName !== '' && \str_contains($processName, '-shared-')) {
+            return true;
+        }
+
+        return false;
     }
 
     private function extractOptionValue(string $commandLine, string $option): string

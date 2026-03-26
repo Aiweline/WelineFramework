@@ -5,43 +5,65 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Session;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Server\Session\Server\SessionServer;
 use Weline\Server\Session\Client\SessionClient;
+use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Shared\Client\SharedStateClient;
 
 /**
- * Session Server 集成测试
+ * Session Server integration test.
  *
- * 测试 Server 和 Client 的端到端通信。
+ * Runs a real SessionServer subprocess so the blocking client/request flow
+ * matches production usage instead of relying on same-thread manual ticking.
  */
 class SessionServerIntegrationTest extends TestCase
 {
-    private ?SessionServer $server = null;
     private ?SessionClient $client = null;
-    private int $testPort = 29970;
-    private string $testPersistPath;
+
+    /** @var resource|null */
+    private $serverProcess = null;
+
+    /** @var array<int, resource> */
+    private array $serverPipes = [];
+
+    private int $testPort = 0;
+    private string $testPersistPath = '';
+    private string $tokenFileName = '';
+    private string $runnerScriptPath = '';
+    private string $stdoutPath = '';
+    private string $stderrPath = '';
 
     protected function setUp(): void
     {
-        $this->testPersistPath = \sys_get_temp_dir() . '/wls_session_integration_' . \getmypid() . '/';
+        if (!\function_exists('proc_open')) {
+            $this->markTestSkipped('proc_open is required for SessionServer integration test');
+        }
+
+        $suffix = \bin2hex(\random_bytes(6));
+        $this->testPersistPath = \sys_get_temp_dir() . '/wls_session_integration_' . \getmypid() . '_' . $suffix . '/';
         if (!\is_dir($this->testPersistPath)) {
             \mkdir($this->testPersistPath, 0755, true);
         }
 
-        $this->server = new SessionServer([
-            'port' => $this->testPort,
-            'max_sessions' => 1000,
-            'session_ttl' => 3600,
-            'persist_path' => $this->testPersistPath,
-        ]);
+        $this->testPort = $this->reservePort();
+        $this->tokenFileName = 'session_server.integration.' . $suffix . '.token';
+        $this->runnerScriptPath = $this->testPersistPath . 'session_server_runner.php';
+        $this->stdoutPath = $this->testPersistPath . 'session_server.stdout.log';
+        $this->stderrPath = $this->testPersistPath . 'session_server.stderr.log';
 
-        if (!$this->server->start('127.0.0.1', $this->testPort)) {
-            $this->markTestSkipped('Cannot start Session Server on port ' . $this->testPort);
-        }
+        $this->writeRunnerScript();
+        $this->startServerProcess();
 
         $this->client = new SessionClient('127.0.0.1', $this->testPort, [
-            'connect_timeout' => 2.0,
-            'timeout' => 2.0,
+            'connect_timeout' => 0.5,
+            'timeout' => 1.0,
+            'token_file_name' => $this->tokenFileName,
+            'log_connect_fail' => false,
         ]);
+
+        if (!$this->waitUntilServerReady()) {
+            $this->stopServerProcess();
+            $this->markTestSkipped('Cannot start Session Server on port ' . $this->testPort . ': ' . $this->getServerOutput());
+        }
     }
 
     protected function tearDown(): void
@@ -51,248 +73,129 @@ class SessionServerIntegrationTest extends TestCase
             $this->client = null;
         }
 
-        if ($this->server !== null) {
-            $this->server->stop();
-            $this->server = null;
+        $this->stopServerProcess();
+
+        $tokenPath = BP . 'var/session/' . $this->tokenFileName;
+        if (\is_file($tokenPath)) {
+            @\unlink($tokenPath);
         }
 
-        $persistFile = $this->testPersistPath . 'wls_session_store.dat';
-        if (\is_file($persistFile)) {
-            @\unlink($persistFile);
-        }
-        if (\is_dir($this->testPersistPath)) {
-            @\rmdir($this->testPersistPath);
-        }
+        $this->removePath($this->testPersistPath);
     }
 
-    /**
-     * 处理 Server 事件
-     */
-    private function processServer(): void
-    {
-        for ($i = 0; $i < 10; $i++) {
-            $this->server->tick(10000);
-        }
-    }
-
-    /**
-     * 测试 Ping/Pong
-     */
     public function testPing(): void
     {
-        $this->processServer();
-        $result = $this->client->ping();
-        $this->processServer();
-        
-        $this->assertTrue($result);
+        $this->assertTrue($this->client->ping());
     }
 
-    /**
-     * 测试设置和获取 Session 数据
-     */
     public function testSetAndGet(): void
     {
         $sessionId = 'integration_test_session_1';
-        
-        $this->processServer();
-        $setResult = $this->client->set($sessionId, 'user_id', 12345);
-        $this->processServer();
-        
-        $this->assertTrue($setResult);
-        
-        $this->processServer();
-        $value = $this->client->get($sessionId, 'user_id');
-        $this->processServer();
-        
-        $this->assertEquals(12345, $value);
+
+        $this->assertTrue($this->client->set($sessionId, 'user_id', 12345));
+        $this->assertEquals(12345, $this->client->get($sessionId, 'user_id'));
     }
 
-    /**
-     * 测试获取整个 Session
-     */
     public function testGetAll(): void
     {
         $sessionId = 'integration_test_session_2';
-        
-        $this->processServer();
-        $this->client->set($sessionId, 'key1', 'value1');
-        $this->processServer();
-        $this->client->set($sessionId, 'key2', 'value2');
-        $this->processServer();
-        
+
+        $this->assertTrue($this->client->set($sessionId, 'key1', 'value1'));
+        $this->assertTrue($this->client->set($sessionId, 'key2', 'value2'));
+
         $all = $this->client->getAll($sessionId);
-        $this->processServer();
-        
+
         $this->assertIsArray($all);
-        $this->assertEquals('value1', $all['key1']);
-        $this->assertEquals('value2', $all['key2']);
+        $this->assertEquals('value1', $all['key1'] ?? null);
+        $this->assertEquals('value2', $all['key2'] ?? null);
     }
 
-    /**
-     * 测试批量设置 Session
-     */
     public function testSetAll(): void
     {
         $sessionId = 'integration_test_session_3';
         $data = ['name' => 'test', 'role' => 'admin', 'active' => true];
-        
-        $this->processServer();
+
         $result = $this->client->setAll($sessionId, $data);
-        $this->processServer();
-        
+
         $this->assertTrue($result);
-        
-        $all = $this->client->getAll($sessionId);
-        $this->processServer();
-        
-        $this->assertEquals($data, $all);
+        $this->assertEquals($data, $this->client->getAll($sessionId));
     }
 
-    /**
-     * 测试删除 Session 键
-     */
     public function testDelete(): void
     {
         $sessionId = 'integration_test_session_4';
-        
-        $this->processServer();
-        $this->client->set($sessionId, 'key1', 'value1');
-        $this->processServer();
-        $this->client->set($sessionId, 'key2', 'value2');
-        $this->processServer();
-        
-        $deleteResult = $this->client->delete($sessionId, 'key1');
-        $this->processServer();
-        
-        $this->assertTrue($deleteResult);
-        
-        $value = $this->client->get($sessionId, 'key1');
-        $this->processServer();
-        
-        $this->assertNull($value);
+
+        $this->assertTrue($this->client->set($sessionId, 'key1', 'value1'));
+        $this->assertTrue($this->client->set($sessionId, 'key2', 'value2'));
+        $this->assertTrue($this->client->delete($sessionId, 'key1'));
+
+        $this->assertNull($this->client->get($sessionId, 'key1'));
         $this->assertEquals('value2', $this->client->get($sessionId, 'key2'));
     }
 
-    /**
-     * 测试销毁 Session
-     */
     public function testDestroy(): void
     {
         $sessionId = 'integration_test_session_5';
-        
-        $this->processServer();
-        $this->client->set($sessionId, 'key', 'value');
-        $this->processServer();
-        
+
+        $this->assertTrue($this->client->set($sessionId, 'key', 'value'));
         $this->assertTrue($this->client->exists($sessionId));
-        $this->processServer();
-        
-        $destroyResult = $this->client->destroy($sessionId);
-        $this->processServer();
-        
-        $this->assertTrue($destroyResult);
+        $this->assertTrue($this->client->destroy($sessionId));
         $this->assertFalse($this->client->exists($sessionId));
     }
 
-    /**
-     * 测试检查 Session 是否存在
-     */
     public function testExists(): void
     {
         $sessionId = 'integration_test_session_6';
-        
-        $this->processServer();
+
         $this->assertFalse($this->client->exists($sessionId));
-        $this->processServer();
-        
-        $this->client->set($sessionId, 'key', 'value');
-        $this->processServer();
-        
+        $this->assertTrue($this->client->set($sessionId, 'key', 'value'));
         $this->assertTrue($this->client->exists($sessionId));
     }
 
-    /**
-     * 测试获取统计信息
-     */
     public function testStats(): void
     {
-        $this->processServer();
-        $this->client->set('stats_test_1', 'key', 'value');
-        $this->processServer();
-        $this->client->set('stats_test_2', 'key', 'value');
-        $this->processServer();
-        
+        $this->assertTrue($this->client->set('stats_test_1', 'key', 'value'));
+        $this->assertTrue($this->client->set('stats_test_2', 'key', 'value'));
+
         $stats = $this->client->getStats();
-        $this->processServer();
-        
+
         $this->assertIsArray($stats);
         $this->assertArrayHasKey('session_count', $stats);
         $this->assertGreaterThanOrEqual(2, $stats['session_count']);
     }
 
-    /**
-     * 测试持久化
-     */
     public function testPersist(): void
     {
-        $this->processServer();
-        $this->client->set('persist_test', 'key', 'value');
-        $this->processServer();
-        
-        $result = $this->client->persist();
-        $this->processServer();
-        
-        $this->assertTrue($result);
-        
-        $persistFile = $this->testPersistPath . 'wls_session_store.dat';
-        $this->assertFileExists($persistFile);
+        $this->assertTrue($this->client->set('persist_test', 'key', 'value'));
+        $this->assertTrue($this->client->persist());
+        $this->assertFileExists($this->testPersistPath . 'wls_session_store.dat');
     }
 
-    /**
-     * 测试 Touch 刷新过期时间
-     */
     public function testTouch(): void
     {
         $sessionId = 'integration_test_session_7';
-        
-        $this->processServer();
-        $this->client->set($sessionId, 'key', 'value');
-        $this->processServer();
-        
-        $result = $this->client->touch($sessionId, 7200);
-        $this->processServer();
-        
-        $this->assertTrue($result);
+
+        $this->assertTrue($this->client->set($sessionId, 'key', 'value'));
+        $this->assertTrue($this->client->touch($sessionId, 7200));
     }
 
-    /**
-     * 测试读取触发滑动过期
-     */
     public function testSlidingExpirationOnGetAll(): void
     {
         $sessionId = 'integration_test_session_sliding';
 
-        $this->processServer();
         if (!$this->client->set($sessionId, 'key', 'value', 1)) {
             $this->markTestSkipped('Session server write is unavailable in current environment');
         }
-        $this->processServer();
 
         \usleep(700000);
         $all = $this->client->getAll($sessionId);
-        $this->processServer();
         $this->assertSame('value', $all['key'] ?? null);
 
-        // 如果读取不续期，第二次读取会在初始 1 秒 TTL 后返回空。
         \usleep(700000);
         $allAfterSliding = $this->client->getAll($sessionId);
-        $this->processServer();
         $this->assertSame('value', $allAfterSliding['key'] ?? null);
     }
 
-    /**
-     * 测试复杂数据类型
-     */
     public function testComplexData(): void
     {
         $sessionId = 'integration_test_session_8';
@@ -311,16 +214,197 @@ class SessionServerIntegrationTest extends TestCase
                 'ip' => '192.168.1.1',
             ],
         ];
-        
-        $this->processServer();
-        $result = $this->client->setAll($sessionId, $complexData);
-        $this->processServer();
-        
-        $this->assertTrue($result);
-        
-        $retrieved = $this->client->getAll($sessionId);
-        $this->processServer();
-        
-        $this->assertEquals($complexData, $retrieved);
+
+        $this->assertTrue($this->client->setAll($sessionId, $complexData));
+        $this->assertEquals($complexData, $this->client->getAll($sessionId));
+    }
+
+    private function writeRunnerScript(): void
+    {
+        $bp = \str_replace('\\', '\\\\', BP);
+        $persistPath = \str_replace('\\', '\\\\', $this->testPersistPath);
+        $tokenFileName = \str_replace('\\', '\\\\', $this->tokenFileName);
+        $port = $this->testPort;
+
+        $script = <<<PHP
+<?php
+declare(strict_types=1);
+
+if (!defined('BP')) {
+    define('BP', '{$bp}');
+}
+if (!defined('DS')) {
+    define('DS', DIRECTORY_SEPARATOR);
+}
+
+require BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+\$server = new \\Weline\\Server\\Session\\Server\\SessionServer([
+    'port' => {$port},
+    'max_sessions' => 1000,
+    'session_ttl' => 3600,
+    'persist_path' => '{$persistPath}',
+    'token_file_name' => '{$tokenFileName}',
+]);
+
+if (!\$server->start('127.0.0.1', {$port})) {
+    fwrite(STDERR, (string) (\$server->getLastBindError() ?? 'start failed'));
+    exit(1);
+}
+
+\$server->run();
+exit(0);
+PHP;
+
+        \file_put_contents($this->runnerScriptPath, $script);
+    }
+
+    private function startServerProcess(): void
+    {
+        $descriptorSpec = [
+            0 => ['pipe', 'r'],
+            1 => ['file', $this->stdoutPath, 'a'],
+            2 => ['file', $this->stderrPath, 'a'],
+        ];
+
+        $process = \proc_open(
+            [PHP_BINARY, $this->runnerScriptPath],
+            $descriptorSpec,
+            $pipes,
+            BP,
+        );
+
+        if (!\is_resource($process)) {
+            $this->fail('Failed to start SessionServer subprocess.');
+        }
+
+        if (isset($pipes[0]) && \is_resource($pipes[0])) {
+            @\fclose($pipes[0]);
+            unset($pipes[0]);
+        }
+
+        $this->serverProcess = $process;
+        $this->serverPipes = $pipes;
+    }
+
+    private function waitUntilServerReady(): bool
+    {
+        $tokenPath = BP . 'var/session/' . $this->tokenFileName;
+        $deadline = \microtime(true) + 8.0;
+
+        while (\microtime(true) < $deadline) {
+            if (!$this->isServerProcessRunning()) {
+                return false;
+            }
+
+            if (\is_file($tokenPath) && \trim((string) @\file_get_contents($tokenPath)) !== '') {
+                if ($this->client !== null && $this->client->ping()) {
+                    return true;
+                }
+            }
+
+            \usleep(100000);
+        }
+
+        return false;
+    }
+
+    private function stopServerProcess(): void
+    {
+        if (!\is_resource($this->serverProcess)) {
+            return;
+        }
+
+        try {
+            $controlClient = new SharedStateClient('127.0.0.1', $this->testPort, [
+                'token_file_name' => $this->tokenFileName,
+                'connect_timeout' => 0.3,
+                'timeout' => 0.8,
+                'acquire_timeout' => 0.1,
+                'log_connect_fail' => false,
+            ]);
+            $controlClient->request(SessionProtocol::CMD_PERSIST);
+            $controlClient->request(SessionProtocol::CMD_SHUTDOWN);
+            $controlClient->disconnect();
+        } catch (\Throwable) {
+            // Best effort: fall through to process termination.
+        }
+
+        $deadline = \microtime(true) + 5.0;
+        while ($this->isServerProcessRunning() && \microtime(true) < $deadline) {
+            \usleep(100000);
+        }
+
+        if ($this->isServerProcessRunning()) {
+            @\proc_terminate($this->serverProcess);
+            \usleep(200000);
+        }
+
+        foreach ($this->serverPipes as $pipe) {
+            if (\is_resource($pipe)) {
+                @\fclose($pipe);
+            }
+        }
+        $this->serverPipes = [];
+
+        @\proc_close($this->serverProcess);
+        $this->serverProcess = null;
+    }
+
+    private function isServerProcessRunning(): bool
+    {
+        if (!\is_resource($this->serverProcess)) {
+            return false;
+        }
+
+        $status = \proc_get_status($this->serverProcess);
+
+        return (bool) ($status['running'] ?? false);
+    }
+
+    private function reservePort(): int
+    {
+        $socket = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertNotFalse($socket, $errstr);
+
+        $name = \stream_socket_get_name($socket, false);
+        @\fclose($socket);
+
+        self::assertIsString($name);
+        $parts = \explode(':', $name);
+        $port = (int) \end($parts);
+        self::assertGreaterThan(0, $port);
+
+        return $port;
+    }
+
+    private function getServerOutput(): string
+    {
+        $stdout = \is_file($this->stdoutPath) ? \trim((string) @\file_get_contents($this->stdoutPath)) : '';
+        $stderr = \is_file($this->stderrPath) ? \trim((string) @\file_get_contents($this->stderrPath)) : '';
+
+        return \trim($stderr . "\n" . $stdout);
+    }
+
+    private function removePath(string $path): void
+    {
+        if ($path === '') {
+            return;
+        }
+        if (\is_file($path) || \is_link($path)) {
+            @\unlink($path);
+            return;
+        }
+        if (!\is_dir($path)) {
+            return;
+        }
+
+        foreach ((array) \glob($path . '*') as $childPath) {
+            $this->removePath($childPath);
+        }
+        foreach ((array) \glob($path . '/*') as $childPath) {
+            $this->removePath($childPath);
+        }
+        @\rmdir($path);
     }
 }
