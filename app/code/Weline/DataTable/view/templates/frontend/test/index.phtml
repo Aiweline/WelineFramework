@@ -1,0 +1,79 @@
+<style>
+    .dt-demo-shell{max-width:1280px;margin:0 auto;padding:32px 20px 64px}
+    .dt-demo-hero{display:grid;gap:16px;padding:24px;border:1px solid #d9e2f1;border-radius:20px;background:linear-gradient(135deg,#f7fafc,#eef6ff)}
+    .dt-demo-actions,.dt-demo-grid{display:grid;gap:16px}
+    .dt-demo-actions{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+    .dt-demo-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:24px}
+    .dt-demo-card{display:block;padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;color:#1f2937;text-decoration:none}
+    .dt-demo-card h3{margin:0 0 8px;font-size:18px}
+    .dt-demo-card p{margin:0;color:#526071}
+    .dt-demo-buttons{display:flex;flex-wrap:wrap;gap:12px}
+    .dt-demo-status{min-height:24px;color:#0f5132}
+</style>
+
+<?= $frontend_api_bootstrap ?? '' ?>
+
+<div class="dt-demo-shell" data-demo-page="<?= $page_key ?>">
+    <section class="dt-demo-hero">
+        <div>
+            <h1><?= $page_title ?></h1>
+            <p>Frontend-safe DataTable demos backed by explicit whitelist-only REST routes.</p>
+        </div>
+        <div class="dt-demo-buttons">
+            <button type="button" class="btn btn-primary" data-testid="demo-init" onclick="demoBootstrap('init-data')">Init Demo Data</button>
+            <button type="button" class="btn btn-outline-danger" data-testid="demo-clear" onclick="demoBootstrap('clear-data')">Clear Demo Data</button>
+        </div>
+        <div id="demo-status" class="dt-demo-status" data-testid="demo-status"></div>
+    </section>
+
+    <section class="dt-demo-grid">
+        <a class="dt-demo-card" data-testid="demo-link-basic" href="<?= $demo_links['basic'] ?>">
+            <h3>Basic</h3><p>CRUD, filter, sort, pagination, export.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-join" href="<?= $demo_links['join'] ?>">
+            <h3>Join</h3><p>Alias fields and cross-table filtering.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-form" href="<?= $demo_links['form'] ?>">
+            <h3>Form</h3><p>Standalone create flow with table refresh.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-upload" href="<?= $demo_links['upload'] ?>">
+            <h3>Upload</h3><p>Image/file controls in frontend-safe forms.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-transaction" href="<?= $demo_links['transaction'] ?>">
+            <h3>Transaction</h3><p>Multi-model save wrapped in transaction.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-dependency" href="<?= $demo_links['dependency'] ?>">
+            <h3>Dependency</h3><p>Dependency ordering without transaction wrapper.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-cascade" href="<?= $demo_links['cascade'] ?>">
+            <h3>Cascade</h3><p>User delete cascades related orders.</p>
+        </a>
+        <a class="dt-demo-card" data-testid="demo-link-performance" href="<?= $demo_links['performance'] ?>">
+            <h3>Performance</h3><p>Stable large-table render and search path.</p>
+        </a>
+    </section>
+</div>
+
+<script>
+    function demoApi(path) {
+        if (typeof window.api === 'function') {
+            return window.api('datatable/rest/v1/demo-table/' + path);
+        }
+        return '/datatable/rest/v1/demo-table/' + path;
+    }
+
+    async function demoBootstrap(action) {
+        const status = document.getElementById('demo-status');
+        status.textContent = 'Working...';
+        try {
+            const response = await fetch(demoApi(action), {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'}
+            });
+            const payload = await response.json();
+            status.textContent = payload.message || payload.msg || 'Done';
+        } catch (error) {
+            status.textContent = error.message || 'Request failed';
+        }
+    }
+</script>

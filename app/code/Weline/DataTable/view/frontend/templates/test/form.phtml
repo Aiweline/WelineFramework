@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>d-form 测试页面</title>
+    <title>d-form 娴嬭瘯椤甸潰</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body {
@@ -52,104 +52,88 @@
 </head>
 <body>
     <div class="container">
-        <h1><i class="fas fa-vial"></i> d-form 表单测试页面</h1>
+        <h1><i class="fas fa-vial"></i> d-form 琛ㄥ崟娴嬭瘯椤甸潰</h1>
         
         <div class="test-section">
-            <h2>1. 基础表单测试</h2>
-            <p>这是一个基础的d-form表单，应该显示为一个"添加"按钮，点击后弹出模态框。</p>
+            <h2>1. 鍩虹琛ㄥ崟娴嬭瘯</h2>
+            <p>杩欐槸涓€涓熀纭€鐨刣-form琛ㄥ崟锛屽簲璇ユ樉绀轰负涓€涓?娣诲姞"鎸夐挳锛岀偣鍑诲悗寮瑰嚭妯℃€佹銆?/p>
             
             <div class="code-block">
-                &lt;w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="添加用户"&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" placeholder="请输入用户名" required="true"&gt;用户名&lt;/w:field&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="email" type="email" placeholder="请输入邮箱"&gt;邮箱&lt;/w:field&gt;<br>
+                &lt;w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="娣诲姞鐢ㄦ埛"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" placeholder="璇疯緭鍏ョ敤鎴峰悕" required="true"&gt;鐢ㄦ埛鍚?lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="email" type="email" placeholder="璇疯緭鍏ラ偖绠?&gt;閭&lt;/w:field&gt;<br>
                 &lt;/w:d-form&gt;
             </div>
             
             <div style="margin: 20px 0; padding: 20px; border: 2px dashed #007bff; border-radius: 6px;">
-                <w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="添加用户">
-                    <w:field belong="d-form" name="name" type="text" placeholder="请输入用户名" required="true">用户名</w:field>
-                    <w:field belong="d-form" name="email" type="email" placeholder="请输入邮箱">邮箱</w:field>
+                <w:d-form model="Weline\DataTable\Model\TestUser" scope="test-user-form" title="娣诲姞鐢ㄦ埛">
+                    <w:field belong="d-form" name="name" type="text" placeholder="璇疯緭鍏ョ敤鎴峰悕" required="true">鐢ㄦ埛鍚?/w:field>
+                    <w:field belong="d-form" name="email" type="email" placeholder="璇疯緭鍏ラ偖绠?>閭</w:field>
                 </w:d-form>
             </div>
         </div>
 
         <div class="test-section">
-            <h2>2. 带文件上传的表单测试</h2>
-            <p>这个表单包含文件和图片字段，测试文件上传功能。</p>
+            <h2>2. 甯︽枃浠朵笂浼犵殑琛ㄥ崟娴嬭瘯</h2>
+            <p>杩欎釜琛ㄥ崟鍖呭惈鏂囦欢鍜屽浘鐗囧瓧娈碉紝娴嬭瘯鏂囦欢涓婁紶鍔熻兘銆?/p>
             
             <div class="code-block">
-                &lt;w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="添加产品"&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" required="true"&gt;产品名称&lt;/w:field&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="price" type="number"&gt;价格&lt;/w:field&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB"&gt;产品图片&lt;/w:field&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB"&gt;产品文档&lt;/w:field&gt;<br>
+                &lt;w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="娣诲姞浜у搧"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="name" type="text" required="true"&gt;浜у搧鍚嶇О&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="price" type="number"&gt;浠锋牸&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB"&gt;浜у搧鍥剧墖&lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB"&gt;浜у搧鏂囨。&lt;/w:field&gt;<br>
                 &lt;/w:d-form&gt;
             </div>
             
             <div style="margin: 20px 0; padding: 20px; border: 2px dashed #28a745; border-radius: 6px;">
-                <w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="添加产品">
-                    <w:field belong="d-form" name="name" type="text" required="true">产品名称</w:field>
-                    <w:field belong="d-form" name="price" type="number">价格</w:field>
-                    <w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB">产品图片</w:field>
-                    <w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB">产品文档</w:field>
+                <w:d-form model="Weline\DataTable\Model\TestProduct" scope="test-product-form" title="娣诲姞浜у搧">
+                    <w:field belong="d-form" name="name" type="text" required="true">浜у搧鍚嶇О</w:field>
+                    <w:field belong="d-form" name="price" type="number">浠锋牸</w:field>
+                    <w:field belong="d-form" name="image" type="image" options="image/*" max-size="5MB">浜у搧鍥剧墖</w:field>
+                    <w:field belong="d-form" name="document" type="file" options="application/pdf" max-size="10MB">浜у搧鏂囨。</w:field>
                 </w:d-form>
             </div>
         </div>
 
         <div class="test-section">
-            <h2>3. 自定义按钮样式测试</h2>
-            <p>测试自定义按钮文本、样式和图标。</p>
+            <h2>3. 鑷畾涔夋寜閽牱寮忔祴璇?/h2>
+            <p>娴嬭瘯鑷畾涔夋寜閽枃鏈€佹牱寮忓拰鍥炬爣銆?/p>
             
             <div class="code-block">
-                &lt;w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="创建订单"<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button-text="创建新订单" button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart"&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="order_number" type="text" required="true"&gt;订单号&lt;/w:field&gt;<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="amount" type="number" required="true"&gt;金额&lt;/w:field&gt;<br>
+                &lt;w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="鍒涘缓璁㈠崟"<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;button-text="鍒涘缓鏂拌鍗? button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart"&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="order_number" type="text" required="true"&gt;璁㈠崟鍙?lt;/w:field&gt;<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&lt;w:field belong="d-form" name="amount" type="number" required="true"&gt;閲戦&lt;/w:field&gt;<br>
                 &lt;/w:d-form&gt;
             </div>
             
             <div style="margin: 20px 0; padding: 20px; border: 2px dashed #ffc107; border-radius: 6px;">
-                <w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="创建订单"
-                          button-text="创建新订单" button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart">
-                    <w:field belong="d-form" name="order_number" type="text" required="true">订单号</w:field>
-                    <w:field belong="d-form" name="amount" type="number" required="true">金额</w:field>
+                <w:d-form model="Weline\DataTable\Model\TestOrder" scope="test-order-form" title="鍒涘缓璁㈠崟"
+                          button-text="鍒涘缓鏂拌鍗? button-class="w-btn w-btn-success" button-icon="fas fa-shopping-cart">
+                    <w:field belong="d-form" name="order_number" type="text" required="true">璁㈠崟鍙?/w:field>
+                    <w:field belong="d-form" name="amount" type="number" required="true">閲戦</w:field>
                 </w:d-form>
             </div>
         </div>
 
         <div class="test-section">
-            <h2>4. 测试说明</h2>
+            <h2>4. 娴嬭瘯璇存槑</h2>
             <ul>
-                <li><strong>预期行为</strong>：每个测试区域应该显示一个按钮，点击按钮后弹出模态框表单</li>
-                <li><strong>模态框</strong>：应该有遮罩层、标题栏、表单内容区域和操作按钮</li>
-                <li><strong>文件字段</strong>：应该支持文件选择、预览和上传进度显示</li>
-                <li><strong>表单验证</strong>：必填字段应该有验证提示</li>
-                <li><strong>响应式</strong>：在不同屏幕尺寸下都应该正常显示</li>
+                <li><strong>棰勬湡琛屼负</strong>锛氭瘡涓祴璇曞尯鍩熷簲璇ユ樉绀轰竴涓寜閽紝鐐瑰嚮鎸夐挳鍚庡脊鍑烘ā鎬佹琛ㄥ崟</li>
+                <li><strong>妯℃€佹</strong>锛氬簲璇ユ湁閬僵灞傘€佹爣棰樻爮銆佽〃鍗曞唴瀹瑰尯鍩熷拰鎿嶄綔鎸夐挳</li>
+                <li><strong>鏂囦欢瀛楁</strong>锛氬簲璇ユ敮鎸佹枃浠堕€夋嫨銆侀瑙堝拰涓婁紶杩涘害鏄剧ず</li>
+                <li><strong>琛ㄥ崟楠岃瘉</strong>锛氬繀濉瓧娈靛簲璇ユ湁楠岃瘉鎻愮ず</li>
+                <li><strong>鍝嶅簲寮?/strong>锛氬湪涓嶅悓灞忓箷灏哄涓嬮兘搴旇姝ｅ父鏄剧ず</li>
             </ul>
         </div>
 
         <div class="test-section">
-            <h2>5. 路由测试</h2>
-            <p><strong>当前页面路由</strong>：<code>http://127.0.0.1:9981/datatable/test/index/form/index</code></p>
-            <p><strong>控制器</strong>：<code>Weline\DataTable\Controller\Test\Index::form()</code></p>
-            <p><strong>模板</strong>：<code>Weline_DataTable::test/form.phtml</code></p>
+            <h2>5. 璺敱娴嬭瘯</h2>
+            <p><strong>褰撳墠椤甸潰璺敱</strong>锛?code>http://127.0.0.1:9981/datatable/test/index/form/index</code></p>
+            <p><strong>鎺у埗鍣?/strong>锛?code>Weline\DataTable\Controller\Test\Index::form()</code></p>
+            <p><strong>妯℃澘</strong>锛?code>Weline_DataTable::test/form.phtml</code></p>
         </div>
     </div>
-
-    <script>
-        // 添加一些调试信息
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('页面加载完成');
-            console.log('DataTableFormManager:', typeof DataTableFormManager !== 'undefined' ? '已加载' : '未加载');
-            
-            // 检查模态框元素
-            const modals = document.querySelectorAll('.w-form-modal');
-            console.log('找到模态框数量:', modals.length);
-            
-            // 检查按钮元素
-            const buttons = document.querySelectorAll('.w-form-trigger');
-            console.log('找到触发按钮数量:', buttons.length);
-        });
-    </script>
 </body>
 </html>
