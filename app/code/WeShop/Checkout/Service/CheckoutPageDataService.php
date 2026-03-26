@@ -41,16 +41,7 @@ class CheckoutPageDataService
         }
 
         $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
-        $primaryShippingAddress = $this->resolvePrimaryShippingAddress($savedAddresses);
-        $selectedShippingAddressId = (int) ($primaryShippingAddress['address_id'] ?? 0);
-        $shippingContext = [
-            'area' => 'frontend',
-            'currency' => $this->resolveCheckoutCurrency(),
-        ] + $this->resolveInitialShippingContext($savedAddresses);
-        $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, $shippingContext);
-        if ($shippingMethods === []) {
-            $shippingMethods = $this->shippingService->getAvailableShippingMethods($shippingContext);
-        }
+        $methodData = $this->buildMethodDataPayload($customerId, $savedAddresses, []);
 
         $itemCount = array_reduce(
             $cartItems,
@@ -68,14 +59,9 @@ class CheckoutPageDataService
             'cart_summary' => $summary,
             'saved_addresses' => $savedAddresses,
             'shipping_addresses' => $savedAddresses,
-            'selected_shipping_address_id' => $selectedShippingAddressId,
-            'shipping_methods' => $this->mapShippingMethods($shippingMethods),
-            'payment_methods' => $this->mapPaymentMethods(
-                $this->checkoutService->getCheckoutPaymentMethods($customerId, [
-                    'area' => 'frontend',
-                    'currency' => $this->resolveCheckoutCurrency(),
-                ])
-            ),
+            'selected_shipping_address_id' => (int) ($methodData['selected_shipping_address_id'] ?? 0),
+            'shipping_methods' => $methodData['shipping_methods'] ?? [],
+            'payment_methods' => $methodData['payment_methods'] ?? [],
             'current_step' => max(1, min(3, $currentStep)),
             'countries' => $this->buildCountries(),
             'states' => [],
@@ -83,6 +69,17 @@ class CheckoutPageDataService
             'retry_order_id' => $isRetryPayment ? (int) ($retryContext['order_id'] ?? 0) : 0,
             'retry_order_increment_id' => $isRetryPayment ? (string) ($retryContext['increment_id'] ?? '') : '',
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, mixed>
+     */
+    public function buildDynamicMethodData(int $customerId, array $checkoutData = []): array
+    {
+        $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
+
+        return $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData);
     }
 
     /**
@@ -196,18 +193,8 @@ class CheckoutPageDataService
     protected function resolveInitialShippingContext(array $savedAddresses): array
     {
         $address = $this->resolvePrimaryShippingAddress($savedAddresses);
-        if ($address === []) {
-            return [];
-        }
 
-        $country = (string) ($address['country_id'] ?? $address['country'] ?? '');
-        $region = (string) ($address['region'] ?? $address['state'] ?? '');
-
-        return array_filter([
-            'country' => $country,
-            'country_id' => $country,
-            'region' => $region,
-        ], static fn (string $value): bool => $value !== '');
+        return $this->resolveShippingContext($address);
     }
 
     /**
@@ -223,6 +210,103 @@ class CheckoutPageDataService
         }
 
         return $savedAddresses[0] ?? [];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedAddresses
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, mixed>
+     */
+    protected function buildMethodDataPayload(int $customerId, array $savedAddresses, array $checkoutData): array
+    {
+        $selectedAddress = $this->resolveSelectedShippingAddress(
+            $savedAddresses,
+            (int) ($checkoutData['shipping_address_id'] ?? 0)
+        );
+        $selectedShippingAddressId = (int) ($selectedAddress['address_id'] ?? 0);
+        $inlineAddress = \is_array($checkoutData['shipping_address'] ?? null) ? $checkoutData['shipping_address'] : [];
+        $resolvedAddress = $this->mergeShippingAddress($selectedAddress, $inlineAddress);
+        $shippingContext = [
+            'area' => 'frontend',
+            'currency' => $this->resolveCheckoutCurrency(),
+        ] + $this->resolveShippingContext($resolvedAddress !== [] ? $resolvedAddress : $selectedAddress);
+
+        $shippingMethods = $this->checkoutService->getCheckoutShippingMethods($customerId, $shippingContext);
+        if ($shippingMethods === []) {
+            $shippingMethods = $this->shippingService->getAvailableShippingMethods($shippingContext);
+        }
+
+        return [
+            'selected_shipping_address_id' => $selectedShippingAddressId,
+            'shipping_methods' => $this->prioritizeSelectedMethod(
+                $this->mapShippingMethods($shippingMethods),
+                (string) ($checkoutData['shipping_method'] ?? '')
+            ),
+            'payment_methods' => $this->prioritizeSelectedMethod(
+                $this->mapPaymentMethods($this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext)),
+                (string) ($checkoutData['payment_method'] ?? '')
+            ),
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $savedAddresses
+     * @return array<string, mixed>
+     */
+    protected function resolveSelectedShippingAddress(array $savedAddresses, int $selectedAddressId): array
+    {
+        if ($selectedAddressId > 0) {
+            foreach ($savedAddresses as $address) {
+                if ((int) ($address['address_id'] ?? 0) === $selectedAddressId) {
+                    return $address;
+                }
+            }
+        }
+
+        return $this->resolvePrimaryShippingAddress($savedAddresses);
+    }
+
+    /**
+     * @param array<string, mixed> $savedAddress
+     * @param array<string, mixed> $inlineAddress
+     * @return array<string, mixed>
+     */
+    protected function mergeShippingAddress(array $savedAddress, array $inlineAddress): array
+    {
+        $filteredInlineAddress = array_filter(
+            $inlineAddress,
+            static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []
+        );
+
+        if ($savedAddress === []) {
+            return $filteredInlineAddress;
+        }
+
+        if ($filteredInlineAddress === []) {
+            return $savedAddress;
+        }
+
+        return array_merge($savedAddress, $filteredInlineAddress);
+    }
+
+    /**
+     * @param array<string, mixed> $address
+     * @return array<string, string>
+     */
+    protected function resolveShippingContext(array $address): array
+    {
+        if ($address === []) {
+            return [];
+        }
+
+        $country = (string) ($address['country_id'] ?? $address['country'] ?? '');
+        $region = (string) ($address['region'] ?? $address['state'] ?? '');
+
+        return array_filter([
+            'country' => $country,
+            'country_id' => $country,
+            'region' => $region,
+        ], static fn (string $value): bool => $value !== '');
     }
 
     /**
@@ -356,6 +440,36 @@ class CheckoutPageDataService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $methods
+     * @return array<int, array<string, mixed>>
+     */
+    protected function prioritizeSelectedMethod(array $methods, string $selectedCode): array
+    {
+        $selectedCode = trim($selectedCode);
+        if ($selectedCode === '' || $methods === []) {
+            return $methods;
+        }
+
+        $matched = false;
+        foreach ($methods as $index => $method) {
+            if ((string) ($method['code'] ?? '') === $selectedCode) {
+                $matched = true;
+                break;
+            }
+        }
+
+        if (!$matched) {
+            return $methods;
+        }
+
+        foreach ($methods as $index => $method) {
+            $methods[$index]['is_default'] = (string) ($method['code'] ?? '') === $selectedCode;
+        }
+
+        return $methods;
     }
 
     protected function resolvePaymentFlow(string $code): string
