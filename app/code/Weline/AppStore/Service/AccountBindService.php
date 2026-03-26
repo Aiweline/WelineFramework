@@ -17,6 +17,11 @@ use Weline\AppStore\Model\AppStoreAccount;
 class AccountBindService
 {
     /**
+     * 平台 API 默认基础 URL（当配置存在但值为 null/空时兜底）
+     */
+    private const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
+
+    /**
      * 平台 API 基础 URL
      */
     private string $platformUrl;
@@ -33,7 +38,9 @@ class AccountBindService
 
     public function __construct()
     {
-        $this->platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+        $platformUrl = Env::get('appstore.platform_url', self::DEFAULT_PLATFORM_URL);
+        // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
+        $this->platformUrl = (is_string($platformUrl) && $platformUrl !== '') ? $platformUrl : self::DEFAULT_PLATFORM_URL;
         
         // 加密密钥必须配置，否则抛出警告
         $encryptionKey = Env::get('appstore.encryption_key');
@@ -43,7 +50,7 @@ class AccountBindService
             if (empty($encryptionKey)) {
                 $encryptionKey = bin2hex(random_bytes(32));
                 // 记录警告日志
-                Env::log_warning('AppStore: 使用自动生成的加密密钥，建议在配置中设置 appstore.encryption_key');
+                Env::log_warning('appstore', 'AppStore: 使用自动生成的加密密钥，建议在配置中设置 appstore.encryption_key');
             }
         }
         $this->encryptionKey = $encryptionKey;
@@ -240,9 +247,15 @@ class AccountBindService
             return null;
         }
 
-        $accountData = is_array($accounts) ? $accounts[0] : $accounts;
-        $account->setData($accountData);
-        return $account;
+        $accountData = is_array($accounts) ? ($accounts[0] ?? null) : $accounts;
+        if ($accountData instanceof AppStoreAccount) {
+            return $accountData;
+        }
+        if (is_array($accountData)) {
+            $account->setData($accountData);
+            return $account;
+        }
+        return null;
     }
 
     /**
@@ -381,7 +394,9 @@ class AccountBindService
      */
     private function getOAuthRedirectUri(): string
     {
-        return Env::get('appstore.oauth_redirect_uri', $this->platformUrl . '/appstore/oauth/callback');
+        $default = $this->platformUrl . '/appstore/oauth/callback';
+        $redirectUri = Env::get('appstore.oauth_redirect_uri', $default);
+        return (is_string($redirectUri) && $redirectUri !== '') ? $redirectUri : $default;
     }
 
     /**
