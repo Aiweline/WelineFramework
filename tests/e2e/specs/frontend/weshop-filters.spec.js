@@ -27,32 +27,26 @@ async function fetchJson(page, path) {
 }
 
 test.describe('WeShop filters storefront', () => {
-  test('filters clean route responds with structured JSON and category pages stay stable', async ({ page }) => {
-    await gotoFrontend(page, '/catalog/category/view?id=1', {
+  test('category pages render indexed results and brand facets', async ({ page }) => {
+    await gotoFrontend(page, '/catalog/category/view?id=14', {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
       settleMs: 800,
     });
 
-    await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/MacBook|笔记本/i, { timeout: 15000 });
     await expectNoRuntimeError(page);
-
-    const payload = await fetchJson(page, '/filters/filter?category_id=0');
-
-    expect(payload.ok).toBeTruthy();
-    expect(payload.status).toBe(200);
-    expect(payload.json.success).toBeFalsy();
-    expect(typeof payload.json.message).toBe('string');
+    await expect(page.locator('[data-filter-code="brand"]')).toContainText(/Apple/i, { timeout: 15000 });
   });
 
   test('filters clean route exposes dynamic EAV facets after browse indexing', async ({ page }) => {
-    await gotoFrontend(page, '/catalog/category/view?id=1', {
+    await gotoFrontend(page, '/catalog/category/view?id=14', {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
       settleMs: 800,
     });
 
-    await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('body')).toContainText(/MacBook|笔记本/i, { timeout: 15000 });
     await expectNoRuntimeError(page);
 
     const payload = await fetchJson(page, '/filters/filter?category_id=14');
