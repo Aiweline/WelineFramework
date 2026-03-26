@@ -24,6 +24,14 @@ class AnalyticsAdminPageDataServiceTest extends TestCase
                 'fields' => [
                     ['name' => 'measurement_id', 'label' => 'Measurement ID', 'required' => true],
                 ],
+                'setup' => [
+                    'integration_method' => 'GA4 Measurement Protocol',
+                    'summary' => 'Google summary',
+                    'steps' => ['Step 1'],
+                    'quick_links' => [
+                        ['label' => 'Open Google Analytics', 'url' => 'https://analytics.google.com/analytics/web/'],
+                    ],
+                ],
             ],
             AnalyticsConfigService::PROVIDER_FACEBOOK => [
                 'code' => AnalyticsConfigService::PROVIDER_FACEBOOK,
@@ -67,7 +75,7 @@ class AnalyticsAdminPageDataServiceTest extends TestCase
                 ['code' => 'login', 'label' => 'Login'],
             ]);
 
-        $configService->expects(self::exactly(2))
+        $configService->expects(self::exactly(3))
             ->method('isProviderReady')
             ->willReturnMap([
                 [AnalyticsConfigService::PROVIDER_GOOGLE, [
@@ -81,7 +89,21 @@ class AnalyticsAdminPageDataServiceTest extends TestCase
                     'access_token' => '',
                     'test_event_code' => '',
                 ], false],
+                [AnalyticsConfigService::PROVIDER_GOOGLE, [
+                    'enabled' => true,
+                    'measurement_id' => 'G-TEST123',
+                    'api_secret' => 'secret',
+                ], true],
             ]);
+
+        $configService->expects(self::once())
+            ->method('getMissingRequiredFieldLabels')
+            ->with(AnalyticsConfigService::PROVIDER_GOOGLE, [
+                'enabled' => true,
+                'measurement_id' => 'G-TEST123',
+                'api_secret' => 'secret',
+            ])
+            ->willReturn([]);
 
         $snippetService->expects(self::exactly(2))
             ->method('getFrontendPixelSnippets')
@@ -97,6 +119,9 @@ class AnalyticsAdminPageDataServiceTest extends TestCase
         self::assertSame(1, $result['summary']['ready_providers']);
         self::assertSame('Google Analytics', $result['editingProvider']['label']);
         self::assertSame('G-TEST123', $result['editingProvider']['config']['measurement_id']);
+        self::assertSame('GA4 Measurement Protocol', $result['editingProvider']['setup']['integration_method']);
+        self::assertTrue($result['editingProvider']['enabled']);
+        self::assertTrue($result['editingProvider']['ready']);
         self::assertCount(2, $result['providers']);
         self::assertCount(2, $result['trackedEvents']);
         self::assertCount(1, $result['snippetPreview']);
