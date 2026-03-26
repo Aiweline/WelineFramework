@@ -3844,6 +3844,10 @@ class Taglib
         $content = $this->compile($template, $content, $fileName);
         return $content;
     }
+    public function parse(Template &$template, string $fileName = '', string $content = ''): string
+    {
+        return $this->compile($template, $content, $fileName);
+    }
 }
 
 class AstToken

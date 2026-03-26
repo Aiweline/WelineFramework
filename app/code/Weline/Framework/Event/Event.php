@@ -19,8 +19,15 @@ use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Event extends \Weline\Framework\DataObject\DataObject
 {
-    public function __construct(array $data = [])
+    public function __construct(array|string $data = [], array $legacyData = [])
     {
+        $legacyName = null;
+        if (\is_string($data)) {
+            $legacyName = $data;
+            $data = $legacyData;
+            $data['name'] ??= $legacyName;
+        }
+
         // 保持观察者配置数组结构，不在此处实例化
         // 实例化将在 dispatch() 方法中按需进行
         if (isset($data['observers'])) {
@@ -31,6 +38,12 @@ class Event extends \Weline\Framework\DataObject\DataObject
             // 保持原始配置数组结构，不进行实例化
         }
         parent::__construct($data);
+
+        if ($legacyName !== null) {
+            $this->setName($legacyName);
+        } elseif (isset($data['name']) && \is_string($data['name'])) {
+            $this->setName($data['name']);
+        }
     }
 
     public function getData(string $key = '', $index = null): mixed

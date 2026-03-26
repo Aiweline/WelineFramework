@@ -31,12 +31,28 @@ final class QueryDelegator
         }
         if ($method === 'delete') {
             $model->setDeleteFlag(true);
-            if ($model->getId()) {
+            $unitPrimaryKeys = $model->getUnitPrimaryKeys();
+            $hasCompositeIdentity = count($unitPrimaryKeys) > 1;
+            if ($hasCompositeIdentity) {
+                foreach ($unitPrimaryKeys as $unitPrimaryKey) {
+                    $value = $model->getData($unitPrimaryKey);
+                    if ($value === null || $value === '') {
+                        $hasCompositeIdentity = false;
+                        break;
+                    }
+                }
+            }
+            if ($hasCompositeIdentity) {
+                foreach ($unitPrimaryKeys as $unitPrimaryKey) {
+                    $query->where($unitPrimaryKey, $model->getData($unitPrimaryKey));
+                }
+                $query->delete();
+            } elseif ($model->getId()) {
                 $model->getQuery()->where($model->getPrimaryKey(), $model->getId())->delete();
             } elseif ($model->getQuery()->wheres) {
                 $model->getQuery()->delete();
-            } elseif ($model->getUnitPrimaryKeys() !== []) {
-                foreach ($model->getUnitPrimaryKeys() as $unit_primary_key) {
+            } elseif ($unitPrimaryKeys !== []) {
+                foreach ($unitPrimaryKeys as $unit_primary_key) {
                     if (empty($model->getData($unit_primary_key))) {
                         throw new Core(__('删除条件不能为空：确保模型存在要删除的指定主键值，或者存在查询条件!'));
                     }
