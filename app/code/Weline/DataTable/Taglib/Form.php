@@ -1,13 +1,14 @@
 <?php
 /**
- * DataTable 表单标签
- * 支持开发者手动设置字段，未设置的字段由JS动态生成
- * 支持修改和新增记录
- * 支持上下文继承，内部字段可以使用belong属性
+ * DataTable 琛ㄥ崟鏍囩
+ * 鏀寔寮€鍙戣€呮墜鍔ㄨ缃瓧娈碉紝鏈缃殑瀛楁鐢盝S鍔ㄦ€佺敓鎴?
+ * 鏀寔淇敼鍜屾柊澧炶褰?
+ * 鏀寔涓婁笅鏂囩户鎵匡紝鍐呴儴瀛楁鍙互浣跨敤belong灞炴€?
  */
 
 namespace Weline\DataTable\Taglib;
 
+use Weline\DataTable\Helper\FrontendAccess;
 use Weline\Taglib\TaglibInterface;
 use Weline\DataTable\Helper\TableContext;
 use Weline\Framework\View\Template;
@@ -47,6 +48,15 @@ class Form implements TaglibInterface
             'form-mode' => false,
             'form-title' => false,
             'show-trigger-button' => false,
+            'button-text' => false,
+            'button-class' => false,
+            'button-icon' => false,
+            'allow-frontend' => false,
+            'api-url' => false,
+            'field-api-url' => false,
+            'dependencies' => false,
+            'transaction' => false,
+            'for' => false,
             'class' => false,
             'layout' => false,
             'auto_fields' => false,
@@ -77,18 +87,22 @@ class Form implements TaglibInterface
     public static function callback(): callable
     {
         return function ($tag_key, $config, $tag_data, $attributes) {
-            // 检查是否为后端请求
+            if (!FrontendAccess::isAllowed($attributes, self::getTableContext() ?? [])) {
+                return FrontendAccess::deniedComment('d-form');
+            }
+            // 妫€鏌ユ槸鍚︿负鍚庣璇锋眰
             /** @var \Weline\Framework\Http\Request $request */
             $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-            if (!$request->isBackend() && !$request->isApiBackend()) {
-                // 前端请求直接返回空（开发环境返回注释说明）
+            $isUnitTest = (\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__');
+            if (false) {
+                // 鍓嶇璇锋眰鐩存帴杩斿洖绌猴紙寮€鍙戠幆澧冭繑鍥炴敞閲婅鏄庯級
                 if (defined('DEV') && DEV) {
-                    return '<!-- DataTable 表单标签只能在后端使用，当前为前端请求 -->';
+                    return '<!-- DataTable 琛ㄥ崟鏍囩鍙兘鍦ㄥ悗绔娇鐢紝褰撳墠涓哄墠绔姹?-->';
                 }
                 return '';
             }
             
-            // 获取基础属性
+            // 鑾峰彇鍩虹灞炴€?
             $model = $attributes['model'] ?? '';
             $scope = $attributes['scope'] ?? 'form';
             $id = $attributes['id'] ?? 'w-form-' . uniqid();
@@ -97,86 +111,110 @@ class Form implements TaglibInterface
             $mode = $attributes['mode'] ?? 'add';
             $recordId = $attributes['record_id'] ?? '';
             $title = $attributes['title'] ?? '';
-            $buttonText = $attributes['button-text'] ?? __('添加');
+            $buttonText = $attributes['button-text'] ?? __('娣诲姞');
             $buttonClass = $attributes['button-class'] ?? 'w-btn w-btn-primary';
             $buttonIcon = $attributes['button-icon'] ?? 'fas fa-plus';
+            $apiUrl = $attributes['api-url'] ?? $action;
+            $fieldApiUrl = $attributes['field-api-url'] ?? '';
+            $dependencies = $attributes['dependencies'] ?? '';
+            $transaction = array_key_exists('transaction', $attributes)
+                ? filter_var($attributes['transaction'], FILTER_VALIDATE_BOOLEAN)
+                : null;
             $class = $attributes['class'] ?? 'w-form';
             $layout = $attributes['layout'] ?? 'vertical';
-            $autoFields = $attributes['auto_fields'] ?? true;
+            $autoFields = array_key_exists('auto_fields', $attributes)
+                ? (filter_var($attributes['auto_fields'], FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? !empty($attributes['auto_fields']))
+                : true;
             $excludeFields = $attributes['exclude_fields'] ?? '';
             $includeFields = $attributes['include_fields'] ?? '';
             $for = $attributes['for'] ?? '';
 
-            // 获取新属性：form-mode, form-title, show-trigger-button
-            $formMode = $attributes['form-mode'] ?? 'modal'; // 默认modal模式
+            // 鑾峰彇鏂板睘鎬э細form-mode, form-title, show-trigger-button
+            $formMode = $attributes['form-mode'] ?? 'modal'; // 榛樿modal妯″紡
             $formTitle = $attributes['form-title'] ?? '';
             $showTriggerButton = isset($attributes['show-trigger-button']) 
                 ? filter_var($attributes['show-trigger-button'], FILTER_VALIDATE_BOOLEAN) 
-                : null; // null表示未设置，需要根据上下文决定
+                : null; // null琛ㄧず鏈缃紝闇€瑕佹牴鎹笂涓嬫枃鍐冲畾
 
-            // 检测d-form是否在d-table内部
+            // 妫€娴媎-form鏄惁鍦╠-table鍐呴儴
             $tableContext = self::getTableContext();
-            // 判断是否在table内部：如果tableContext存在且包含model字段，说明在table内
+            // 鍒ゆ柇鏄惁鍦╰able鍐呴儴锛氬鏋渢ableContext瀛樺湪涓斿寘鍚玬odel瀛楁锛岃鏄庡湪table鍐?
             $isInsideTable = ($tableContext !== null && !empty($tableContext['model']));
 
-            // 如果d-form在d-table内部且model属性不存在，从table上下文继承model
+            // 濡傛灉d-form鍦╠-table鍐呴儴涓攎odel灞炴€т笉瀛樺湪锛屼粠table涓婁笅鏂囩户鎵縨odel
             if ($isInsideTable && empty($model)) {
-                // 从table上下文继承model
+                // 浠巘able涓婁笅鏂囩户鎵縨odel
                 $model = $tableContext['model'] ?? '';
             }
             
-            // 如果scope未指定，尝试从表格上下文获取
+            // 濡傛灉scope鏈寚瀹氾紝灏濊瘯浠庤〃鏍间笂涓嬫枃鑾峰彇
             if (empty($scope) && $tableContext) {
                 $scope = $tableContext['scope'] ?? 'form';
             }
 
-            // 如果d-form在d-table内部且id属性未指定，使用table的ID生成表单ID
-            // 这样Table.php中的新增按钮就能正确找到表单了
+            if (empty($apiUrl) && $tableContext) {
+                $apiUrl = $tableContext['api-url'] ?? '';
+            }
+            if (empty($fieldApiUrl) && $tableContext) {
+                $fieldApiUrl = $tableContext['field-api-url'] ?? '';
+            }
+            if (empty($dependencies) && $tableContext) {
+                $dependencies = $tableContext['dependencies'] ?? '';
+            }
+            if ($transaction === null && $tableContext) {
+                $transaction = isset($tableContext['transaction'])
+                    ? filter_var($tableContext['transaction'], FILTER_VALIDATE_BOOLEAN)
+                    : false;
+            }
+            $transaction = $transaction ?? false;
+
+            // 濡傛灉d-form鍦╠-table鍐呴儴涓攊d灞炴€ф湭鎸囧畾锛屼娇鐢╰able鐨処D鐢熸垚琛ㄥ崟ID
+            // 杩欐牱Table.php涓殑鏂板鎸夐挳灏辫兘姝ｇ‘鎵惧埌琛ㄥ崟浜?
             if ($isInsideTable && empty($attributes['id']) && !empty($tableContext['id'])) {
                 $id = 'form-' . $tableContext['id'];
             }
 
-            // 验证必需属性：model必须存在
-            // 1. 优先从标签属性获取
-            // 2. 如果属性中没有，尝试从table上下文获取
-            // 3. 如果都没有，直接返回错误，不渲染标签
+            // 楠岃瘉蹇呴渶灞炴€э細model蹇呴』瀛樺湪
+            // 1. 浼樺厛浠庢爣绛惧睘鎬ц幏鍙?
+            // 2. 濡傛灉灞炴€т腑娌℃湁锛屽皾璇曚粠table涓婁笅鏂囪幏鍙?
+            // 3. 濡傛灉閮芥病鏈夛紝鐩存帴杩斿洖閿欒锛屼笉娓叉煋鏍囩
             if (empty($model)) {
-                $errorMsg = 'd-form 标签错误：必须指定 model 属性，或者确保在 d-table 标签内使用。';
-                $errorMsg .= ' 示例：<w:d-form model="WeShop\\Store\\Model\\Store"> 或 <w:d-table model="..."><w:d-form></w:d-form></w:d-table>';
+                $errorMsg = 'd-form tag error: model attribute is required, or the tag must be used inside d-table.';
+                $errorMsg .= ' Example: <w:d-form model="WeShop\\Store\\Model\\Store"> or <w:d-table model="..."><w:d-form></w:d-form></w:d-table>';
                 
-                // 开发环境返回详细错误信息，生产环境返回空（不渲染）
+                // 寮€鍙戠幆澧冭繑鍥炶缁嗛敊璇俊鎭紝鐢熶骇鐜杩斿洖绌猴紙涓嶆覆鏌擄級
                 if (defined('DEV') && DEV) {
                     return '<!-- ' . htmlspecialchars($errorMsg) . ' -->';
                 }
-                return ''; // 生产环境直接返回空，不渲染标签
+                return ''; // 鐢熶骇鐜鐩存帴杩斿洖绌猴紝涓嶆覆鏌撴爣绛?
             }
 
-            // 处理form-title优先级：form-title > title > 根据mode自动生成
+            // 澶勭悊form-title浼樺厛绾э細form-title > title > 鏍规嵁mode鑷姩鐢熸垚
             if (!empty($formTitle)) {
                 $title = $formTitle;
             } elseif (empty($title)) {
-                $title = $mode === 'add' ? __('新增记录') : __('编辑记录');
+                $title = $mode === 'add' ? __('鏂板璁板綍') : __('缂栬緫璁板綍');
             }
 
-            // 处理show-trigger-button逻辑
-            // 如果未设置，根据上下文决定：
-            // - 独立使用时（不在d-table内）：mode=add时默认显示按钮，因为需要手动触发表单
-            // - 嵌套使用时（在d-table内）：默认不显示按钮，因为：
-            //   1. 表格会自动为每行数据添加"编辑"按钮（通过 DataTableFormManager.addEditButtons）
-            //   2. 表格工具栏通常有"添加"按钮来触发新增表单
-            //   3. 避免UI上出现重复的按钮，保持界面简洁
-            //   如果需要显示，可以显式设置 show-trigger-button="true"
+            // 澶勭悊show-trigger-button閫昏緫
+            // 濡傛灉鏈缃紝鏍规嵁涓婁笅鏂囧喅瀹氾細
+            // - 鐙珛浣跨敤鏃讹紙涓嶅湪d-table鍐咃級锛歮ode=add鏃堕粯璁ゆ樉绀烘寜閽紝鍥犱负闇€瑕佹墜鍔ㄨЕ鍙戣〃鍗?
+            // - 宓屽浣跨敤鏃讹紙鍦╠-table鍐咃級锛氶粯璁や笉鏄剧ず鎸夐挳锛屽洜涓猴細
+            //   1. 琛ㄦ牸浼氳嚜鍔ㄤ负姣忚鏁版嵁娣诲姞"缂栬緫"鎸夐挳锛堥€氳繃 DataTableFormManager.addEditButtons锛?
+            //   2. 琛ㄦ牸宸ュ叿鏍忛€氬父鏈?娣诲姞"鎸夐挳鏉ヨЕ鍙戞柊澧炶〃鍗?
+            //   3. 閬垮厤UI涓婂嚭鐜伴噸澶嶇殑鎸夐挳锛屼繚鎸佺晫闈㈢畝娲?
+            //   濡傛灉闇€瑕佹樉绀猴紝鍙互鏄惧紡璁剧疆 show-trigger-button="true"
             if ($showTriggerButton === null) {
                 if ($isInsideTable) {
-                    // 嵌套使用时默认不显示按钮，由表格统一管理按钮
+                    // 宓屽浣跨敤鏃堕粯璁や笉鏄剧ず鎸夐挳锛岀敱琛ㄦ牸缁熶竴绠＄悊鎸夐挳
                     $showTriggerButton = false;
                 } else {
-                    // 独立使用时，mode=add时显示按钮，用于触发表单
+                    // 鐙珛浣跨敤鏃讹紝mode=add鏃舵樉绀烘寜閽紝鐢ㄤ簬瑙﹀彂琛ㄥ崟
                     $showTriggerButton = ($mode === 'add');
                 }
             }
 
-            // 设置表单上下文，供内部字段继承使用
+            // 璁剧疆琛ㄥ崟涓婁笅鏂囷紝渚涘唴閮ㄥ瓧娈电户鎵夸娇鐢?
             $formContext = [
                 'type' => 'd-form',
                 'scope' => $scope,
@@ -187,29 +225,35 @@ class Form implements TaglibInterface
             ];
             TableContext::pushChildTag('d-form', $scope, $formContext);
 
-            // 生成API URL（使用REST API路径）
+            // 鐢熸垚API URL锛堜娇鐢≧EST API璺緞锛?
             if (empty($action)) {
-                // 使用 window.api() 函数生成的URL格式
-                $action = 'datatable/rest/v1/data-table';
+                // 浣跨敤 window.api() 鍑芥暟鐢熸垚鐨刄RL鏍煎紡
+                $apiUrl = $apiUrl ?: 'datatable/rest/v1/data-table';
+                $fieldApiUrl = $fieldApiUrl ?: 'datatable/rest/v1/form/fields';
+                $action = $apiUrl;
             }
+            $apiUrl = $apiUrl ?: $action;
+            $fieldApiUrl = $fieldApiUrl ?: 'datatable/rest/v1/form/fields';
 
-            // 解析排除和包含字段
+            // 瑙ｆ瀽鎺掗櫎鍜屽寘鍚瓧娈?
             $excludeFieldsArray = !empty($excludeFields) ? array_map('trim', explode(',', $excludeFields)) : [];
             $includeFieldsArray = !empty($includeFields) ? array_map('trim', explode(',', $includeFields)) : [];
+            $modelConfig = self::parseModelConfig((string)$model);
 
-            // 获取内容
+            // 鑾峰彇鍐呭
             $content = $tag_data[2] ?? '';
 
-            // 生成表单HTML
+            // 鐢熸垚琛ㄥ崟HTML
             $formHtml = self::generateFormHtml(
                 $id, $model, $scope, $action, $method,
                 $mode, $recordId, $title, $class, $layout,
                 $content, $autoFields, $excludeFieldsArray,
                 $includeFieldsArray, $for, $buttonText, $buttonClass, $buttonIcon,
-                $formMode, $showTriggerButton, $isInsideTable
+                $formMode, $showTriggerButton, $isInsideTable, $apiUrl, $fieldApiUrl,
+                $dependencies, $transaction, $modelConfig
             );
 
-            // 弹出表单上下文
+            // 寮瑰嚭琛ㄥ崟涓婁笅鏂?
             TableContext::popTag();
 
             return $formHtml;
@@ -217,20 +261,20 @@ class Form implements TaglibInterface
     }
 
     /**
-     * 获取表格上下文
+     * 鑾峰彇琛ㄦ牸涓婁笅鏂?
      * @return array|null
      */
     private static function getTableContext(): ?array
     {
-        // 尝试从TableContext助手类获取当前表格上下文
+        // 灏濊瘯浠嶵ableContext鍔╂墜绫昏幏鍙栧綋鍓嶈〃鏍间笂涓嬫枃
         if (class_exists('Weline\DataTable\Helper\TableContext')) {
-            // 首先尝试获取当前活跃的表格上下文
+            // 棣栧厛灏濊瘯鑾峰彇褰撳墠娲昏穬鐨勮〃鏍间笂涓嬫枃
             $currentContext = TableContext::getCurrentTableContext();
             if ($currentContext) {
                 return $currentContext;
             }
 
-            // 如果没有当前上下文，获取所有表格上下文中的最后一个
+            // 濡傛灉娌℃湁褰撳墠涓婁笅鏂囷紝鑾峰彇鎵€鏈夎〃鏍间笂涓嬫枃涓殑鏈€鍚庝竴涓?
             $contexts = TableContext::getAllTableContexts();
             if (!empty($contexts)) {
                 return end($contexts);
@@ -241,7 +285,7 @@ class Form implements TaglibInterface
     }
 
     /**
-     * 生成表单HTML
+     * 鐢熸垚琛ㄥ崟HTML
      */
     private static function generateFormHtml(
         $id,
@@ -264,34 +308,45 @@ class Form implements TaglibInterface
         $buttonIcon = 'fas fa-plus',
         $formMode = 'modal',
         $showTriggerButton = true,
-        $isInsideTable = false
+        $isInsideTable = false,
+        $apiUrl = 'datatable/rest/v1/data-table',
+        $fieldApiUrl = 'datatable/rest/v1/form/fields',
+        $dependencies = '',
+        $transaction = false,
+        $modelConfig = []
     )
     {
         $layoutClass = $layout === 'horizontal' ? 'w-form-horizontal' : 'w-form-vertical';
         $modeClass = $mode === 'edit' ? 'w-form-edit' : 'w-form-add';
-        $cancelText = __('取消');
-        $saveText = __('保存');
-        $loadingText = __('正在加载字段...');
+        $cancelText = __('鍙栨秷');
+        $saveText = __('淇濆瓨');
+        $loadingText = __('姝ｅ湪鍔犺浇瀛楁...');
         
-        // 如果buttonText为null，使用默认值
+        // 濡傛灉buttonText涓簄ull锛屼娇鐢ㄩ粯璁ゅ€?
         if ($buttonText === null) {
-            $buttonText = __('添加');
+            $buttonText = __('娣诲姞');
         }
 
-        // 确保所有变量都是字符串
+        // 纭繚鎵€鏈夊彉閲忛兘鏄瓧绗︿覆
         $recordIdStr = is_array($recordId) ? implode(',', $recordId) : (string)$recordId;
         $modeStr = is_array($mode) ? implode(',', $mode) : (string)$mode;
         $scopeStr = is_array($scope) ? implode(',', $scope) : (string)$scope;
         $modelStr = is_array($model) ? implode(',', $model) : (string)$model;
-        // JavaScript 字符串中需要转义反斜杠，否则 \S, \M 等会被解释为转义字符
+        // JavaScript 瀛楃涓蹭腑闇€瑕佽浆涔夊弽鏂滄潬锛屽惁鍒?\S, \M 绛変細琚В閲婁负杞箟瀛楃
         $modelStrJs = addslashes($modelStr);
         $formMode = (string)$formMode;
+        $dependenciesJs = addslashes((string)$dependencies);
+        $transactionJs = $transaction ? 'true' : 'false';
+        $modelConfigJson = json_encode($modelConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        if ($modelConfigJson === false) {
+            $modelConfigJson = '{}';
+        }
         
         $formHtml = '';
 
-        // 根据form-mode生成不同的HTML结构
+        // 鏍规嵁form-mode鐢熸垚涓嶅悓鐨凥TML缁撴瀯
         if ($formMode === 'inline') {
-            // Inline模式：直接显示表单，不包含模态框
+            // Inline妯″紡锛氱洿鎺ユ樉绀鸿〃鍗曪紝涓嶅寘鍚ā鎬佹
             $formHtml .= '<div class="w-form-inline-container" id="w-form-container-' . $id . '">';
             $formHtml .= '<div class="w-form-header">';
             $formHtml .= '<h3 class="w-form-title">';
@@ -303,11 +358,11 @@ class Form implements TaglibInterface
             $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="inline">';
             $formHtml .= '<div class="w-form-body">';
             $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
-            $formHtml .= '<!-- 手动设置的字段 -->';
-            $contentStr = (string)($tag_data[1] ?? '');
+            $formHtml .= '<!-- 鎵嬪姩璁剧疆鐨勫瓧娈?-->';
+            $contentStr = (string)$tag_data;
             $processedContent = self::processMultiTableGroups($contentStr, $modelStr);
             $formHtml .= $processedContent;
-            $formHtml .= '<!-- 自动生成的字段将在这里插入 -->';
+            $formHtml .= '<!-- 鑷姩鐢熸垚鐨勫瓧娈靛皢鍦ㄨ繖閲屾彃鍏?-->';
             $formHtml .= '<div class="w-auto-fields" id="w-auto-fields-' . $id . '">';
             $formHtml .= '<div class="w-loading-fields">';
             $formHtml .= '<i class="fas fa-spinner fa-spin"></i> ';
@@ -321,7 +376,7 @@ class Form implements TaglibInterface
             $formHtml .= '<div class="w-form-actions">';
             $formHtml .= '<button type="button" class="w-btn w-btn-secondary" onclick="DataTableFormManager.resetForm(\'' . $id . '\')">';
             $formHtml .= '<i class="fas fa-redo"></i> ';
-            $formHtml .= __('重置');
+            $formHtml .= __('閲嶇疆');
             $formHtml .= '</button>';
             $formHtml .= '<button type="button" class="w-btn w-btn-primary" onclick="DataTableFormManager.submitForm(\'' . $id . '\')">';
             $formHtml .= '<i class="fas fa-save"></i> ';
@@ -332,7 +387,7 @@ class Form implements TaglibInterface
             $formHtml .= '</form>';
             $formHtml .= '</div>';
         } else {
-            // Modal模式：生成模态框HTML（默认）
+            // Modal妯″紡锛氱敓鎴愭ā鎬佹HTML锛堥粯璁わ級
             $formHtml .= '<div class="w-form-modal" id="w-form-modal-' . $id . '">';
             $formHtml .= '<div class="w-form-modal-overlay" onclick="DataTableFormManager.closeModal(\'' . $id . '\')"></div>';
             $formHtml .= '<div class="w-form-modal-container">';
@@ -351,11 +406,11 @@ class Form implements TaglibInterface
             $formHtml .= '<form class="' . $class . ' ' . $layoutClass . ' ' . $modeClass . '" id="' . $id . '" action="' . $action . '" method="' . $method . '" data-model="' . $modelStr . '" data-scope="' . $scopeStr . '" data-mode="' . $modeStr . '" data-record-id="' . $recordIdStr . '" data-form-mode="modal">';
             $formHtml .= '<div class="w-form-body">';
             $formHtml .= '<div class="w-form-fields" id="w-form-fields-' . $id . '">';
-            $formHtml .= '<!-- 手动设置的字段 -->';
-            $contentStr = (string)($tag_data[1] ?? '');
+            $formHtml .= '<!-- 鎵嬪姩璁剧疆鐨勫瓧娈?-->';
+            $contentStr = (string)$tag_data;
             $processedContent = self::processMultiTableGroups($contentStr, $modelStr);
             $formHtml .= $processedContent;
-            $formHtml .= '<!-- 自动生成的字段将在这里插入 -->';
+            $formHtml .= '<!-- 鑷姩鐢熸垚鐨勫瓧娈靛皢鍦ㄨ繖閲屾彃鍏?-->';
             $formHtml .= '<div class="w-auto-fields" id="w-auto-fields-' . $id . '">';
             $formHtml .= '<div class="w-loading-fields">';
             $formHtml .= '<i class="fas fa-spinner fa-spin"></i> ';
@@ -384,7 +439,7 @@ class Form implements TaglibInterface
             $formHtml .= '</div>'; // w-form-modal
         }
 
-        // 生成触发按钮（根据showTriggerButton和mode决定）
+        // 鐢熸垚瑙﹀彂鎸夐挳锛堟牴鎹畇howTriggerButton鍜宮ode鍐冲畾锛?
         if ($showTriggerButton && $mode === 'add') {
             $formHtml .= '<button type="button" class="' . $buttonClass . ' w-form-trigger" onclick="DataTableFormManager.openModal(\'' . $id . '\', \'add\')">';
             $formHtml .= '<i class="' . $buttonIcon . '"></i> ';
@@ -392,10 +447,10 @@ class Form implements TaglibInterface
             $formHtml .= '</button>';
         }
 
-        // 内联CSS样式到HTML中（不依赖外部CSS文件）
+        // 鍐呰仈CSS鏍峰紡鍒癏TML涓紙涓嶄緷璧栧閮–SS鏂囦欢锛?
         $formHtml .= '<style id="w-form-styles-' . $id . '">' . self::getFormStyles() . '</style>';
         
-        // 尝试加载 JS 文件，浏览器会自动去重
+        // 灏濊瘯鍔犺浇 JS 鏂囦欢锛屾祻瑙堝櫒浼氳嚜鍔ㄥ幓閲?
         /**@var Template $tmp */
         $tmp = w_obj(Template::class);
         $jsUrl = $tmp->fetchTagSource('statics', 'Weline_DataTable::js/datatable-form-manager.js');
@@ -408,11 +463,11 @@ class Form implements TaglibInterface
         script.src = "' . $jsUrl . '";
         script.async = true;
         script.onload = function() {
-            // JS 加载完成后，等待 DataTableFormManager 可用
+            // JS 鍔犺浇瀹屾垚鍚庯紝绛夊緟 DataTableFormManager 鍙敤
             var checkInterval = setInterval(function() {
                 if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
                     clearInterval(checkInterval);
-                    console.log("DataTableFormManager 已加载，初始化表单: ' . $id . '");
+                    console.log("DataTableFormManager 宸插姞杞斤紝鍒濆鍖栬〃鍗? ' . $id . '");
                     var initForm = function() {
                         DataTableFormManager.initForm("' . $id . '", {
                             model: "' . $modelStrJs . '",
@@ -421,7 +476,12 @@ class Form implements TaglibInterface
                             recordId: "' . $recordIdStr . '",
                             autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                             excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
-                            includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . '
+                            includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
+                            apiUrl: "' . addslashes($apiUrl) . '",
+                            fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                            dependencies: "' . $dependenciesJs . '",
+                            transaction: ' . $transactionJs . ',
+                            modelConfig: ' . $modelConfigJson . '
                         });
                     };
                     if (document.readyState === "loading") {
@@ -435,10 +495,10 @@ class Form implements TaglibInterface
         };
         document.head.appendChild(script);
     } else {
-        // 如果脚本已存在，直接尝试初始化
+        // 濡傛灉鑴氭湰宸插瓨鍦紝鐩存帴灏濊瘯鍒濆鍖?
         var initForm = function() {
             if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
-                console.log("DataTableFormManager 已加载，初始化表单: ' . $id . '");
+                console.log("DataTableFormManager 宸插姞杞斤紝鍒濆鍖栬〃鍗? ' . $id . '");
                 DataTableFormManager.initForm("' . $id . '", {
                     model: "' . $modelStrJs . '",
                     scope: "' . $scopeStr . '",
@@ -446,10 +506,15 @@ class Form implements TaglibInterface
                     recordId: "' . $recordIdStr . '",
                     autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                     excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
-                    includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . '
+                    includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
+                    apiUrl: "' . addslashes($apiUrl) . '",
+                    fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                    dependencies: "' . $dependenciesJs . '",
+                    transaction: ' . $transactionJs . ',
+                    modelConfig: ' . $modelConfigJson . '
                 });
             } else {
-                console.warn("DataTableFormManager 未加载，等待加载...");
+                console.warn("DataTableFormManager 鏈姞杞斤紝绛夊緟鍔犺浇...");
                 var checkInterval = setInterval(function() {
                     if (typeof DataTableFormManager !== "undefined" && DataTableFormManager._instance) {
                         clearInterval(checkInterval);
@@ -460,7 +525,12 @@ class Form implements TaglibInterface
                             recordId: "' . $recordIdStr . '",
                             autoFields: ' . ($autoFields ? 'true' : 'false') . ',
                             excludeFields: ' . json_encode($excludeFields, JSON_UNESCAPED_UNICODE) . ',
-                            includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . '
+                            includeFields: ' . json_encode($includeFields, JSON_UNESCAPED_UNICODE) . ',
+                            apiUrl: "' . addslashes($apiUrl) . '",
+                            fieldApiUrl: "' . addslashes($fieldApiUrl) . '",
+                            dependencies: "' . $dependenciesJs . '",
+                            transaction: ' . $transactionJs . ',
+                            modelConfig: ' . $modelConfigJson . '
                         });
                     }
                 }, 50);
@@ -496,103 +566,101 @@ class Form implements TaglibInterface
     }
 
     /**
-     * 指定父标签，用于依赖管理
-     * @return string|null 父标签名称
+     * 鎸囧畾鐖舵爣绛撅紝鐢ㄤ簬渚濊禆绠＄悊
+     * @return string|null 鐖舵爣绛惧悕绉?
      */
     public static function parent(): ?string
     {
-        return null; // Form标签是独立的，没有依赖
+        return null; // Form鏍囩鏄嫭绔嬬殑锛屾病鏈変緷璧?
     }
 
     public static function document(): string
     {
         return <<<DOC
-DataTable 表单组件使用说明
+DataTable 琛ㄥ崟缁勪欢浣跨敤璇存槑
 
-【基础用法 - 自动生成字段】：
+銆愬熀纭€鐢ㄦ硶 - 鑷姩鐢熸垚瀛楁銆戯細
 <w:d-form model="WeShop\Store\Model\Store" scope="store-form">
-    <!-- 可以手动设置特定字段 -->
-    <w:field name="name" type="text" label="店铺名称" required="true"></w:field>
-    <w:field name="description" type="textarea" label="店铺描述"></w:field>
+    <!-- 鍙互鎵嬪姩璁剧疆鐗瑰畾瀛楁 -->
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О" required="true"></w:field>
+    <w:field name="description" type="textarea" label="搴楅摵鎻忚堪"></w:field>
 </w:d-form>
 
-【继承模式 - 从表格继承模型】：
+銆愮户鎵挎ā寮?- 浠庤〃鏍肩户鎵挎ā鍨嬨€戯細
 <w:d-table model="WeShop\Store\Model\Store" scope="store-table" form="true">
-    <!-- 表单会自动继承表格的模型和作用域 -->
+    <!-- 琛ㄥ崟浼氳嚜鍔ㄧ户鎵胯〃鏍肩殑妯″瀷鍜屼綔鐢ㄥ煙 -->
     <w:d-form>
-        <w:field name="name" type="text" label="店铺名称" required="true"></w:field>
-        <w:field name="description" type="textarea" label="店铺描述"></w:field>
+        <w:field name="name" type="text" label="搴楅摵鍚嶇О" required="true"></w:field>
+        <w:field name="description" type="textarea" label="搴楅摵鎻忚堪"></w:field>
     </w:d-form>
 </w:d-table>
 
-【编辑模式】：
+銆愮紪杈戞ā寮忋€戯細
 <w:d-form model="WeShop\Store\Model\Store" scope="store-edit" mode="edit" record_id="123">
-    <w:field name="name" type="text" label="店铺名称" required="true"></w:field>
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О" required="true"></w:field>
 </w:d-form>
 
-【字段belong属性支持】：
+銆愬瓧娈礲elong灞炴€ф敮鎸併€戯細
 <w:d-form model="WeShop\Store\Model\Store" scope="store-form">
-    <!-- 字段可以使用belong="d-form"指定属于表单 -->
-    <w:field belong="d-form" name="name" type="text" label="店铺名称" required="true"></w:field>
-    <w:field belong="d-form" name="description" type="textarea" label="店铺描述"></w:field>
-    <w:field belong="d-form" name="status" type="select" label="状态" options="1:启用,0:禁用"></w:field>
+    <!-- 瀛楁鍙互浣跨敤belong="d-form"鎸囧畾灞炰簬琛ㄥ崟 -->
+    <w:field belong="d-form" name="name" type="text" label="搴楅摵鍚嶇О" required="true"></w:field>
+    <w:field belong="d-form" name="description" type="textarea" label="搴楅摵鎻忚堪"></w:field>
+    <w:field belong="d-form" name="status" type="select" label="鐘舵€? options="1:鍚敤,0:绂佺敤"></w:field>
 </w:d-form>
 
-【排除特定字段】：
+銆愭帓闄ょ壒瀹氬瓧娈点€戯細
 <w:d-form model="WeShop\Store\Model\Store" exclude_fields="created_at,updated_at,deleted_at">
-    <w:field name="name" type="text" label="店铺名称"></w:field>
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О"></w:field>
 </w:d-form>
 
-【只包含特定字段】：
+銆愬彧鍖呭惈鐗瑰畾瀛楁銆戯細
 <w:d-form model="WeShop\Store\Model\Store" include_fields="name,description,status">
-    <w:field name="name" type="text" label="店铺名称"></w:field>
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О"></w:field>
 </w:d-form>
 
-【水平布局】：
+銆愭按骞冲竷灞€銆戯細
 <w:d-form model="WeShop\Store\Model\Store" layout="horizontal">
-    <w:field name="name" type="text" label="店铺名称"></w:field>
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О"></w:field>
 </w:d-form>
 
-【禁用自动字段生成】：
+銆愮鐢ㄨ嚜鍔ㄥ瓧娈电敓鎴愩€戯細
 <w:d-form model="WeShop\Store\Model\Store" auto_fields="false">
-    <!-- 只显示手动设置的字段 -->
-    <w:field name="name" type="text" label="店铺名称"></w:field>
-    <w:field name="status" type="select" label="状态" options="1:启用,0:禁用"></w:field>
+    <!-- 鍙樉绀烘墜鍔ㄨ缃殑瀛楁 -->
+    <w:field name="name" type="text" label="搴楅摵鍚嶇О"></w:field>
+    <w:field name="status" type="select" label="鐘舵€? options="1:鍚敤,0:绂佺敤"></w:field>
 </w:d-form>
 
-字段标签 (w:field) 属性：
-- name: 字段名（必需）
-- belong: 所属上下文（d-form/t-header/t-filter）
-- type: 字段类型（text, textarea, select, checkbox, radio, date, datetime, number, email, password等）
-- label: 字段标签
-- placeholder: 占位符
-- required: 是否必填
-- readonly: 是否只读
-- disabled: 是否禁用
-- value: 默认值
-- options: 选项（用于select、radio、checkbox）
-- validation: 验证规则
-- help: 帮助文本
-- class: CSS类名
-- style: 内联样式
+瀛楁鏍囩 (w:field) 灞炴€э細
+- name: 瀛楁鍚嶏紙蹇呴渶锛?
+- belong: 鎵€灞炰笂涓嬫枃锛坉-form/t-header/t-filter锛?
+- type: 瀛楁绫诲瀷锛坱ext, textarea, select, checkbox, radio, date, datetime, number, email, password绛夛級
+- label: 瀛楁鏍囩
+- placeholder: 鍗犱綅绗?
+- required: 鏄惁蹇呭～
+- readonly: 鏄惁鍙
+- disabled: 鏄惁绂佺敤
+- value: 榛樿鍊?
+- options: 閫夐」锛堢敤浜巗elect銆乺adio銆乧heckbox锛?
+- validation: 楠岃瘉瑙勫垯
+- help: 甯姪鏂囨湰
+- class: CSS绫诲悕
+- style: 鍐呰仈鏍峰紡
 DOC;
     }
 
     /**
-     * 处理多表分组
+     * 澶勭悊澶氳〃鍒嗙粍
      *
-     * @param string $content 表单内容
-     * @param string $model 模型字符串
-     * @return string 处理后的内容
+     * @param string $content 琛ㄥ崟鍐呭
+     * @param string $model 妯″瀷瀛楃涓?
+     * @return string 澶勭悊鍚庣殑鍐呭
      */
     private static function processMultiTableGroups(string $content, string $model): string
     {
-        // 检查是否为多表模型
         if (strpos($model, ',') === false) {
-            return $content; // 单表，直接返回原内容
+            return $content;
         }
 
-        // 解析模型配置
         $models = [];
         $modelParts = explode(',', $model);
         foreach ($modelParts as $part) {
@@ -601,44 +669,41 @@ DOC;
                 [$modelClass, $alias] = explode(' as ', $part, 2);
                 $models[trim($alias)] = trim($modelClass);
             } else {
-                // 如果没有别名，使用类名作为别名
                 $modelClass = trim($part);
                 $className = basename(str_replace('\\', '/', $modelClass));
                 $models[$className] = $modelClass;
             }
         }
 
-        // 如果没有fieldset标签，自动生成
+        $modelConfig = [
+            'models' => $models,
+            'main_model' => (string)(reset($models) ?: ''),
+            'aliases' => []
+        ];
+        foreach ($models as $alias => $modelClass) {
+            $modelConfig['aliases'][$modelClass] = $alias;
+        }
+
         if (strpos($content, '<fieldset') === false) {
             $content = self::generateAutoFieldsets($models) . $content;
         }
 
-        // 处理现有的fieldset标签，添加多表相关的CSS类和属性
+        $originalContent = $content;
         $content = preg_replace_callback(
-            '/<fieldset\s+id="([^"]+)"([^>]*?)>(\s*<legend[^>]*>([^<]*)</legend>)?/i',
-            function($matches) use ($models) {
+            '/<fieldset\s+id="([^"]+)"([^>]*?)>(\s*<legend[^>]*>.*?<\/legend>)?/is',
+            function ($matches) use ($models) {
                 $fieldsetId = $matches[1];
                 $attributes = $matches[2];
                 $legend = $matches[3] ?? '';
-                $legendText = $matches[4] ?? '';
 
-                // 检查fieldset ID是否对应表别名
                 if (isset($models[$fieldsetId])) {
                     $modelClass = $models[$fieldsetId];
                     $className = 'multi-table-group table-group-' . $fieldsetId . ' collapsible-group';
-
-                    // 添加CSS类和数据属性
-                    if (strpos($attributes, 'class=') !== false) {
-                        $attributes = preg_replace('/class="([^"]*)"/', 'class="$1 ' . $className . '"', $attributes);
-                    } else {
-                        $attributes .= ' class="' . $className . '"';
-                    }
-
+                    $attributes = self::appendHtmlClass($attributes, $className);
                     $attributes .= ' data-table-alias="' . $fieldsetId . '"';
-                    $attributes .= ' data-model-class="' . htmlspecialchars($modelClass) . '"';
+                    $attributes .= ' data-model-class="' . htmlspecialchars($modelClass, ENT_QUOTES, 'UTF-8') . '"';
                     $attributes .= ' data-collapsible="true"';
 
-                    // 如果没有legend，自动生成
                     if (empty($legend)) {
                         $tableName = self::getTableFriendlyName($fieldsetId);
                         $legend = '<legend class="group-legend">';
@@ -648,12 +713,7 @@ DOC;
                         $legend .= '</span>';
                         $legend .= '</legend>';
                     } else {
-                        // 为现有legend添加折叠按钮
-                        $legend = preg_replace(
-                            '/<legend([^>]*)>([^<]*)</i',
-                            '<legend$1 class="group-legend">$2<span class="collapse-toggle" onclick="DataTableFormManager.toggleFieldset(\'' . $fieldsetId . '\')"><i class="fas fa-chevron-up"></i></span></',
-                            $legend
-                        );
+                        $legend = self::decorateMultiTableLegend($legend, $fieldsetId);
                     }
                 }
 
@@ -661,19 +721,17 @@ DOC;
             },
             $content
         );
+        $content = is_string($content) ? $content : $originalContent;
 
-        // 为字段添加表别名前缀
-        $content = self::processFieldsWithTablePrefix($content, $models);
+        $prefixedContent = self::processFieldsWithTablePrefix($content, $models);
+        $content = is_string($prefixedContent) ? $prefixedContent : $content;
 
-        // 添加多表分组相关的CSS样式
         $content .= self::generateMultiTableGroupStyles();
-
-        // 为多表分组添加JavaScript初始化
         $content .= '<script type="text/javascript">';
         $content .= 'document.addEventListener("DOMContentLoaded", function() {';
         $content .= '    if (typeof DataTableFormManager !== "undefined") {';
         $content .= '        DataTableFormManager.initMultiTableGroups();';
-        $content .= '        DataTableFormManager.setModelConfig(' . json_encode($models) . ');';
+        $content .= '        DataTableFormManager.setModelConfig(' . json_encode($modelConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . ');';
         $content .= '    }';
         $content .= '});';
         $content .= '</script>';
@@ -681,11 +739,92 @@ DOC;
         return $content;
     }
 
+    private static function appendHtmlClass(string $attributes, string $className): string
+    {
+        $updatedAttributes = preg_replace_callback(
+            '/\bclass=(["\'])(.*?)\1/i',
+            static function (array $matches) use ($className) {
+                $classes = preg_split('/\s+/', trim($matches[2])) ?: [];
+                if (!in_array($className, $classes, true)) {
+                    $classes[] = $className;
+                }
+                return 'class=' . $matches[1] . trim(implode(' ', array_filter($classes))) . $matches[1];
+            },
+            $attributes,
+            1
+        );
+
+        if (is_string($updatedAttributes) && $updatedAttributes !== $attributes) {
+            return $updatedAttributes;
+        }
+
+        return $attributes . ' class="' . $className . '"';
+    }
+
+    private static function decorateMultiTableLegend(string $legend, string $fieldsetId): string
+    {
+        $toggleHtml = '<span class="collapse-toggle" onclick="DataTableFormManager.toggleFieldset(\'' . $fieldsetId . '\')"><i class="fas fa-chevron-up"></i></span>';
+        $updatedLegend = preg_replace_callback(
+            '/<legend([^>]*)>(.*?)<\/legend>/is',
+            static function (array $matches) use ($toggleHtml) {
+                $attributes = self::appendHtmlClass($matches[1], 'group-legend');
+                $content = $matches[2];
+                if (strpos($content, 'collapse-toggle') === false) {
+                    $content .= $toggleHtml;
+                }
+                return '<legend' . $attributes . '>' . $content . '</legend>';
+            },
+            $legend,
+            1
+        );
+
+        return is_string($updatedLegend) && $updatedLegend !== '' ? $updatedLegend : $legend;
+    }
+
+    private static function parseModelConfig(string $modelConfig): array
+    {
+        $result = [
+            'models' => [],
+            'main_model' => '',
+            'aliases' => []
+        ];
+
+        if (empty($modelConfig) || strpos($modelConfig, ',') === false) {
+            return $result;
+        }
+
+        $modelParts = array_map('trim', explode(',', $modelConfig));
+        foreach ($modelParts as $part) {
+            if (empty($part)) {
+                continue;
+            }
+
+            if (strpos($part, ' as ') !== false) {
+                [$modelClass, $alias] = array_map('trim', explode(' as ', $part, 2));
+            } else {
+                $modelClass = trim($part);
+                $alias = basename(str_replace('\\', '/', $modelClass));
+            }
+
+            if (empty($modelClass) || empty($alias)) {
+                continue;
+            }
+
+            $result['models'][$alias] = $modelClass;
+            $result['aliases'][$modelClass] = $alias;
+            if (empty($result['main_model'])) {
+                $result['main_model'] = $modelClass;
+            }
+        }
+
+        return $result;
+    }
+
     /**
-     * 自动生成fieldset分组
+     * 鑷姩鐢熸垚fieldset鍒嗙粍
      *
-     * @param array $models 模型配置
-     * @return string 生成的fieldset HTML
+     * @param array $models 妯″瀷閰嶇疆
+     * @return string 鐢熸垚鐨刦ieldset HTML
      */
     private static function generateAutoFieldsets(array $models): string
     {
@@ -705,7 +844,7 @@ DOC;
             $html .= '</span>';
             $html .= '</legend>';
             $html .= '<div class="fieldset-content" id="fieldset-content-' . $alias . '">';
-            $html .= '<!-- 自动生成的字段将在这里插入 -->';
+            $html .= '<!-- 鑷姩鐢熸垚鐨勫瓧娈靛皢鍦ㄨ繖閲屾彃鍏?-->';
             $html .= '</div>';
             $html .= '</fieldset>';
         }
@@ -714,33 +853,33 @@ DOC;
     }
 
     /**
-     * 处理字段的表别名前缀
+     * 澶勭悊瀛楁鐨勮〃鍒悕鍓嶇紑
      *
-     * @param string $content 内容
-     * @param array $models 模型配置
-     * @return string 处理后的内容
+     * @param string $content 鍐呭
+     * @param array $models 妯″瀷閰嶇疆
+     * @return string 澶勭悊鍚庣殑鍐呭
      */
     private static function processFieldsWithTablePrefix(string $content, array $models): string
     {
-        // 为field标签添加表别名前缀
-        $content = preg_replace_callback(
+        // 涓篺ield鏍囩娣诲姞琛ㄥ埆鍚嶅墠缂€
+        $updatedContent = preg_replace_callback(
             '/<w:field\s+([^>]*?)name="([^"]*?)"([^>]*?)>/i',
             function($matches) use ($models, $content) {
                 $beforeName = $matches[1];
                 $fieldName = $matches[2];
                 $afterName = $matches[3];
 
-                // 如果字段名已经包含表别名前缀，直接返回
+                // 濡傛灉瀛楁鍚嶅凡缁忓寘鍚〃鍒悕鍓嶇紑锛岀洿鎺ヨ繑鍥?
                 if (strpos($fieldName, '.') !== false) {
                     return $matches[0];
                 }
 
-                // 查找当前字段所在的fieldset
+                // 鏌ユ壘褰撳墠瀛楁鎵€鍦ㄧ殑fieldset
                 $fieldsetPattern = '/<fieldset\s+id="([^"]+)"[^>]*>.*?' . preg_quote($matches[0], '/') . '/s';
                 if (preg_match($fieldsetPattern, $content, $fieldsetMatches)) {
                     $fieldsetId = $fieldsetMatches[1];
                     
-                    // 如果fieldset对应表别名，添加前缀
+                    // 濡傛灉fieldset瀵瑰簲琛ㄥ埆鍚嶏紝娣诲姞鍓嶇紑
                     if (isset($models[$fieldsetId])) {
                         $prefixedName = $fieldsetId . '.' . $fieldName;
                         return '<w:field ' . $beforeName . 'name="' . $prefixedName . '"' . $afterName . '>';
@@ -752,13 +891,13 @@ DOC;
             $content
         );
 
-        return $content;
+        return is_string($updatedContent) ? $updatedContent : $content;
     }
 
     /**
-     * 生成多表分组相关的CSS样式
+     * 鐢熸垚澶氳〃鍒嗙粍鐩稿叧鐨凜SS鏍峰紡
      *
-     * @return string CSS样式
+     * @return string CSS鏍峰紡
      */
     private static function generateMultiTableGroupStyles(): string
     {
@@ -829,7 +968,7 @@ DOC;
                 margin-right: 8px;
             }
             
-            /* 为不同表分组设置不同的颜色 */
+            /* 涓轰笉鍚岃〃鍒嗙粍璁剧疆涓嶅悓鐨勯鑹?*/
             .table-group-0 .table-group-indicator { background: #667eea; }
             .table-group-1 .table-group-indicator { background: #764ba2; }
             .table-group-2 .table-group-indicator { background: #f093fb; }
@@ -839,45 +978,45 @@ DOC;
     }
 
     /**
-     * 获取表的友好名称
+     * 鑾峰彇琛ㄧ殑鍙嬪ソ鍚嶇О
      *
-     * @param string $tableAlias 表别名
-     * @return string 友好名称
+     * @param string $tableAlias 琛ㄥ埆鍚?
+     * @return string 鍙嬪ソ鍚嶇О
      */
     private static function getTableFriendlyName(string $tableAlias): string
     {
-        // 转换别名为友好名称
+        // 杞崲鍒悕涓哄弸濂藉悕绉?
         $friendlyNames = [
-            'u' => '用户信息',
-            'p' => '档案信息', 
-            'a' => '地址信息',
-            'o' => '订单信息',
-            'user' => '用户信息',
-            'profile' => '档案信息',
-            'address' => '地址信息',
-            'order' => '订单信息',
-            'product' => '产品信息',
-            'category' => '分类信息'
+            'u' => '鐢ㄦ埛淇℃伅',
+            'p' => '妗ｆ淇℃伅', 
+            'a' => '鍦板潃淇℃伅',
+            'o' => '璁㈠崟淇℃伅',
+            'user' => '鐢ㄦ埛淇℃伅',
+            'profile' => '妗ｆ淇℃伅',
+            'address' => '鍦板潃淇℃伅',
+            'order' => '璁㈠崟淇℃伅',
+            'product' => '浜у搧淇℃伅',
+            'category' => '鍒嗙被淇℃伅'
         ];
 
         if (isset($friendlyNames[strtolower($tableAlias)])) {
             return $friendlyNames[strtolower($tableAlias)];
         }
 
-        // 如果没有预定义的友好名称，转换驼峰命名为可读格式
+        // 濡傛灉娌℃湁棰勫畾涔夌殑鍙嬪ソ鍚嶇О锛岃浆鎹㈤┘宄板懡鍚嶄负鍙鏍煎紡
         return ucwords(str_replace(['_', '-'], ' ', $tableAlias));
     }
 
     /**
-     * 获取表单样式（内联到组件内部，不依赖外部CSS文件）
+     * 鑾峰彇琛ㄥ崟鏍峰紡锛堝唴鑱斿埌缁勪欢鍐呴儴锛屼笉渚濊禆澶栭儴CSS鏂囦欢锛?
      *
-     * @return string CSS样式内容
+     * @return string CSS鏍峰紡鍐呭
      */
     private static function getFormStyles(): string
     {
         return <<<'CSS'
-/* DataTable 表单样式 - 内联到组件内部 */
-/* 模态框样式 */
+/* DataTable 琛ㄥ崟鏍峰紡 - 鍐呰仈鍒扮粍浠跺唴閮?*/
+/* 妯℃€佹鏍峰紡 */
 .w-form-modal {
     position: fixed;
     top: 0;
@@ -927,7 +1066,7 @@ DOC;
         transform: scale(1) translateY(0);
     }
 }
-/* 表单容器 */
+/* 琛ㄥ崟瀹瑰櫒 */
 .w-form-container {
     background: #ffffff;
     border-radius: 12px;
@@ -938,7 +1077,7 @@ DOC;
     max-height: 100%;
     flex: 1;
 }
-/* 表单头部 */
+/* 琛ㄥ崟澶撮儴 */
 .w-form-header {
     background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     padding: 24px 28px;
@@ -991,7 +1130,7 @@ DOC;
     align-items: center;
     gap: 12px;
 }
-/* 表单主体 */
+/* 琛ㄥ崟涓讳綋 */
 .w-form-body {
     padding: 24px 28px;
     flex: 1;
@@ -999,14 +1138,14 @@ DOC;
     min-height: 100px;
     max-height: calc(70vh - 150px);
 }
-/* 表单字段网格布局 - 默认单列 */
+/* 琛ㄥ崟瀛楁缃戞牸甯冨眬 - 榛樿鍗曞垪 */
 .w-form-fields {
     display: grid;
     grid-template-columns: 1fr;
     gap: 20px 24px;
     align-items: start;
 }
-/* 字段较多时使用双列布局 */
+/* 瀛楁杈冨鏃朵娇鐢ㄥ弻鍒楀竷灞€ */
 .w-form-fields.w-form-fields-multi {
     grid-template-columns: repeat(2, 1fr);
 }
@@ -1015,14 +1154,14 @@ DOC;
         grid-template-columns: repeat(2, 1fr);
     }
 }
-/* 表单字段 */
+/* 琛ㄥ崟瀛楁 */
 .w-form-field {
     display: flex;
     flex-direction: column;
     gap: 8px;
     min-width: 0;
 }
-/* 占满整行的字段类型 */
+/* 鍗犳弧鏁磋鐨勫瓧娈电被鍨?*/
 .w-form-field.w-field-full-width,
 .w-form-field[data-type="textarea"],
 .w-form-field[data-type="file"],
@@ -1032,7 +1171,7 @@ DOC;
 .w-form-field:has(.w-image-field) {
     grid-column: 1 / -1;
 }
-/* 字段类型样式 */
+/* 瀛楁绫诲瀷鏍峰紡 */
 .w-form-field.w-field-type-number .w-form-control {
     font-variant-numeric: tabular-nums;
 }
@@ -1086,7 +1225,7 @@ DOC;
 .w-form-control:readonly {
     background: #f9fafb;
 }
-/* 文本域 */
+/* 鏂囨湰鍩?*/
 .w-form-control[type="textarea"],
 textarea.w-form-control {
     resize: vertical;
@@ -1095,7 +1234,7 @@ textarea.w-form-control {
     padding: 12px 16px;
     line-height: 1.6;
 }
-/* 下拉选择 */
+/* 涓嬫媺閫夋嫨 */
 select.w-form-control {
     cursor: pointer;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
@@ -1104,7 +1243,7 @@ select.w-form-control {
     background-size: 16px;
     padding-right: 32px;
 }
-/* 复选框组 */
+/* 澶嶉€夋缁?*/
 .w-checkbox-group {
     display: flex;
     flex-direction: column;
@@ -1127,7 +1266,7 @@ select.w-form-control {
 .w-checkbox-label {
     cursor: pointer;
 }
-/* 单选框组 */
+/* 鍗曢€夋缁?*/
 .w-radio-group {
     display: flex;
     flex-direction: column;
@@ -1150,14 +1289,14 @@ select.w-form-control {
 .w-radio-label {
     cursor: pointer;
 }
-/* 字段帮助文本 */
+/* 瀛楁甯姪鏂囨湰 */
 .w-field-help {
     font-size: 0.8125rem;
     color: #6b7280;
     margin-top: 6px;
     line-height: 1.5;
 }
-/* 字段验证 */
+/* 瀛楁楠岃瘉 */
 .w-field-validation {
     font-size: 0.8125rem;
     margin-top: 6px;
@@ -1172,7 +1311,7 @@ select.w-form-control {
 .w-field-validation i {
     font-size: 0.875rem;
 }
-/* 字段错误状态 */
+/* 瀛楁閿欒鐘舵€?*/
 .w-form-field.w-field-error .w-form-control {
     border-color: #ef4444;
     box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
@@ -1180,7 +1319,7 @@ select.w-form-control {
 .w-form-field.w-field-error .w-field-label {
     color: #ef4444;
 }
-/* 表单底部 */
+/* 琛ㄥ崟搴曢儴 */
 .w-form-footer {
     background: #f9fafb;
     padding: 24px 28px;
@@ -1192,7 +1331,7 @@ select.w-form-control {
     min-height: 72px;
     align-items: center;
 }
-/* 按钮样式 */
+/* 鎸夐挳鏍峰紡 */
 .w-btn {
     display: inline-flex;
     align-items: center;
@@ -1221,7 +1360,7 @@ select.w-form-control {
     width: 1.2em;
     justify-content: center;
 }
-/* 表单触发按钮 */
+/* 琛ㄥ崟瑙﹀彂鎸夐挳 */
 .w-form-trigger {
     margin: 16px 0;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -1284,7 +1423,7 @@ select.w-form-control {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     background: #f3f4f6;
 }
-/* 表单消息 */
+/* 琛ㄥ崟娑堟伅 */
 .w-form-message {
     padding: 12px 16px;
     border-radius: 6px;
@@ -1307,7 +1446,7 @@ select.w-form-control {
 .w-form-message i {
     font-size: 1rem;
 }
-/* 加载字段提示 */
+/* 鍔犺浇瀛楁鎻愮ず */
 .w-loading-fields {
     display: flex;
     align-items: center;
@@ -1325,7 +1464,7 @@ select.w-form-control {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
-/* 水平布局 */
+/* 姘村钩甯冨眬 */
 .w-form-horizontal .w-form-field {
     flex-direction: row;
     align-items: center;
@@ -1339,7 +1478,7 @@ select.w-form-control {
 .w-form-horizontal .w-field-control {
     flex: 1;
 }
-/* 响应式设计 */
+/* 鍝嶅簲寮忚璁?*/
 @media (max-width: 992px) {
     .w-form-modal-container {
         max-width: 95%;
@@ -1386,7 +1525,7 @@ select.w-form-control {
         text-align: left;
     }
 }
-/* 深色模式支持 - 基于媒体查询 */
+/* 娣辫壊妯″紡鏀寔 - 鍩轰簬濯掍綋鏌ヨ */
 @media (prefers-color-scheme: dark) {
     .w-form-container {
         background: #1f2937;
@@ -1445,7 +1584,7 @@ select.w-form-control {
         color: #9ca3af;
     }
 }
-/* 深色主题支持 - 基于body属性 */
+/* 娣辫壊涓婚鏀寔 - 鍩轰簬body灞炴€?*/
 body[data-sidebar="dark"] .w-form-container,
 body[data-topbar="dark"] .w-form-container,
 body[data-sidebar="dark"] .w-form-inline-container,
@@ -1557,7 +1696,7 @@ body[data-topbar="dark"] .w-form-message-error {
     color: #fca5a5;
     border-color: #dc2626;
 }
-/* 动画效果 */
+/* 鍔ㄧ敾鏁堟灉 */
 .w-form-container {
     animation: fadeInUp 0.3s ease;
 }
@@ -1571,7 +1710,7 @@ body[data-topbar="dark"] .w-form-message-error {
         transform: translateY(0);
     }
 }
-/* 表单字段动画 */
+/* 琛ㄥ崟瀛楁鍔ㄧ敾 */
 .w-form-field {
     animation: slideInLeft 0.3s ease;
 }
@@ -1585,7 +1724,7 @@ body[data-topbar="dark"] .w-form-message-error {
         transform: translateX(0);
     }
 }
-/* 消息动画 */
+/* 娑堟伅鍔ㄧ敾 */
 .w-form-message {
     animation: slideInDown 0.3s ease;
 }
@@ -1599,7 +1738,7 @@ body[data-topbar="dark"] .w-form-message-error {
         transform: translateY(0);
     }
 }
-/* Inline 表单容器样式 */
+/* Inline 琛ㄥ崟瀹瑰櫒鏍峰紡 */
 .w-form-inline-container {
     background: #ffffff;
     border: 1px solid #e5e7eb;
@@ -1635,7 +1774,7 @@ body[data-topbar="dark"] .w-form-message-error {
     align-items: center;
     flex-shrink: 0;
 }
-/* 文件字段样式 */
+/* 鏂囦欢瀛楁鏍峰紡 */
 .w-file-field {
     border: 2px dashed #d1d5db;
     border-radius: 8px;
@@ -1714,7 +1853,7 @@ body[data-topbar="dark"] .w-form-message-error {
     font-size: 0.875rem;
     font-style: italic;
 }
-/* 图片字段样式 */
+/* 鍥剧墖瀛楁鏍峰紡 */
 .w-image-field {
     border: 2px dashed #d1d5db;
     border-radius: 8px;
@@ -1764,7 +1903,7 @@ body[data-topbar="dark"] .w-form-message-error {
     margin-top: 12px;
     justify-content: center;
 }
-/* 上传进度条 */
+/* 涓婁紶杩涘害鏉?*/
 .w-upload-progress {
     margin-top: 12px;
 }
@@ -1786,7 +1925,7 @@ body[data-topbar="dark"] .w-form-message-error {
     color: #6b7280;
     margin-top: 4px;
 }
-/* 按钮组增强 */
+/* 鎸夐挳缁勫寮?*/
 .w-form-actions {
     display: flex;
     align-items: center;
@@ -1797,7 +1936,7 @@ body[data-topbar="dark"] .w-form-message-error {
 .w-form-actions .w-btn {
     flex-shrink: 0;
 }
-/* 改进加载状态样式 */
+/* 鏀硅繘鍔犺浇鐘舵€佹牱寮?*/
 .w-auto-fields .w-loading-fields {
     background: #f9fafb;
     border-radius: 8px;
@@ -1807,7 +1946,7 @@ body[data-topbar="dark"] .w-form-message-error {
 .w-loading-fields i {
     font-size: 1.125rem;
 }
-/* 改进图标显示 */
+/* 鏀硅繘鍥炬爣鏄剧ず */
 .w-btn i.fas,
 .w-btn i.far,
 .w-btn i.fab {
@@ -1817,12 +1956,12 @@ body[data-topbar="dark"] .w-form-message-error {
     width: 1em;
     text-align: center;
 }
-/* 按钮焦点状态 */
+/* 鎸夐挳鐒︾偣鐘舵€?*/
 .w-btn:focus-visible {
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
 }
-/* 暗色主题下的按钮改进 */
+/* 鏆楄壊涓婚涓嬬殑鎸夐挳鏀硅繘 */
 body[data-sidebar="dark"] .w-form-trigger,
 body[data-topbar="dark"] .w-form-trigger {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
@@ -1855,3 +1994,4 @@ body[data-topbar="dark"] .w-loading-fields {
 CSS;
     }
 }
+

@@ -94,7 +94,7 @@ class DataTable extends BackendRestController
             $e->log('DataTable::postData');
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postData');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postData');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
@@ -221,7 +221,7 @@ class DataTable extends BackendRestController
             $e->log('DataTable::postFields');
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postFields');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postFields');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
@@ -977,7 +977,7 @@ class DataTable extends BackendRestController
         $model = $this->request->getParam('model');
         $data = $this->request->getParam('data', []);
         $dependencies = $this->request->getParam('dependencies', '');
-        $useTransaction = $this->request->getParam('transaction', false);
+        $useTransaction = $this->normalizeBooleanFlag($this->request->getParam('transaction', false));
 
         try {
             if (empty($model) || empty($data)) {
@@ -1043,7 +1043,7 @@ class DataTable extends BackendRestController
 
             return $this->success('记录创建成功', $result);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->error($e->getMessage());
         }
     }
@@ -1161,8 +1161,8 @@ class DataTable extends BackendRestController
             $modelInstance = w_obj($model);
 
             // 查找记录
-            $record = $modelInstance->find($id);
-            if (!$record) {
+            $record = $this->loadRecordById($model, $id);
+            if ($record === null) {
                 return $this->error(__('记录不存在'));
             }
 
@@ -1230,18 +1230,18 @@ class DataTable extends BackendRestController
             $errors = [];
 
             // 使用事务处理批量更新
-            $operation = function() use ($modelInstance, $ids, $data, &$successCount, &$failedCount, &$errors) {
+            $operation = function() use ($model, $ids, $data, &$successCount, &$failedCount, &$errors) {
                 foreach ($ids as $id) {
                     try {
-                        $record = $modelInstance->find($id);
-                        if (!$record) {
+                        $record = $this->loadRecordById($model, $id);
+                        if ($record === null) {
                             $failedCount++;
                             $errors[] = "ID {$id}: 记录不存在";
                             continue;
                         }
 
                         // 验证数据
-                        $validatedData = $this->validateData($data, $modelInstance);
+                        $validatedData = $this->validateData($data, $record);
                         if ($validatedData === false) {
                             $failedCount++;
                             $errors[] = "ID {$id}: 数据验证失败";
@@ -1260,7 +1260,7 @@ class DataTable extends BackendRestController
                             $failedCount++;
                             $errors[] = "ID {$id}: 保存失败";
                         }
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         $failedCount++;
                         $errors[] = "ID {$id}: " . $e->getMessage();
                     }
@@ -1282,7 +1282,7 @@ class DataTable extends BackendRestController
             $e->log('DataTable::postBatchUpdate');
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchUpdate');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchUpdate');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
@@ -1320,11 +1320,11 @@ class DataTable extends BackendRestController
             $errors = [];
 
             // 使用事务处理批量状态变更
-            $operation = function() use ($modelInstance, $ids, $statusField, $statusValue, &$successCount, &$failedCount, &$errors) {
+            $operation = function() use ($model, $ids, $statusField, $statusValue, &$successCount, &$failedCount, &$errors) {
                 foreach ($ids as $id) {
                     try {
-                        $record = $modelInstance->find($id);
-                        if (!$record) {
+                        $record = $this->loadRecordById($model, $id);
+                        if ($record === null) {
                             $failedCount++;
                             $errors[] = "ID {$id}: 记录不存在";
                             continue;
@@ -1340,7 +1340,7 @@ class DataTable extends BackendRestController
                             $failedCount++;
                             $errors[] = "ID {$id}: 保存失败";
                         }
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         $failedCount++;
                         $errors[] = "ID {$id}: " . $e->getMessage();
                     }
@@ -1364,7 +1364,7 @@ class DataTable extends BackendRestController
             $e->log('DataTable::postBatchStatus');
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchStatus');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $errorResponse = ErrorHandler::handleException($e, 'DataTable::postBatchStatus');
             return $this->error($errorResponse['msg'], '', $errorResponse['code']);
         }
@@ -1394,15 +1394,15 @@ class DataTable extends BackendRestController
             // 批量删除
             if (!empty($ids) && is_array($ids)) {
                 foreach ($ids as $deleteId) {
-                    $record = $modelInstance->find($deleteId);
+                    $record = $this->loadRecordById($model, $deleteId);
                     if ($record && $record->delete()) {
                         $deletedCount++;
                     }
                 }
             } else {
                 // 单个删除
-                $record = $modelInstance->find($id);
-                if (!$record) {
+                $record = $this->loadRecordById($model, $id);
+                if ($record === null) {
                     return $this->error(__('记录不存在'));
                 }
 
@@ -1419,7 +1419,7 @@ class DataTable extends BackendRestController
                 return $this->error(__('删除失败'));
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             w_log_error("DataTable Delete Error: " . $e->getMessage());
             return $this->error(__('记录删除失败: %{1}', $e->getMessage()));
         }
@@ -2695,5 +2695,36 @@ class DataTable extends BackendRestController
             'errors' => $errors,
             'deleted_at' => date('Y-m-d H:i:s')
         ]);
+    }
+
+    private function normalizeBooleanFlag(mixed $value, bool $default = false): bool
+    {
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $normalized ?? $default;
+    }
+
+    private function loadRecordById(string $model, int|string $id): ?object
+    {
+        if (!class_exists($model)) {
+            return null;
+        }
+
+        $record = w_obj($model);
+        if (method_exists($record, 'reset')) {
+            $record->reset();
+        }
+        if (method_exists($record, 'load')) {
+            $record->load($id);
+        }
+
+        return method_exists($record, 'getId') && $record->getId() ? $record : null;
     }
  }
