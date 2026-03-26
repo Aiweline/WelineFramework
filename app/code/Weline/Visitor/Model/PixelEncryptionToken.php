@@ -126,7 +126,7 @@ class PixelEncryptionToken extends Model
     /**
      * 设置是否已删除
      */
-    public function setIsDeleted(bool $is_deleted): static
+    public function setIsDeleted(bool|int $is_deleted): static
     {
         return $this->setData(self::schema_fields_IS_DELETED, $is_deleted ? 1 : 0);
     }
