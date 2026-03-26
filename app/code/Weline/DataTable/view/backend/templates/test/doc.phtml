@@ -9,6 +9,8 @@
     @media (max-width: 960px){.dt-doc-page{grid-template-columns:1fr}}
 </style>
 
+<?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
 <div class="dt-doc-page">
     <aside class="dt-doc-sidebar">
         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -18,7 +20,7 @@
         <div class="dt-doc-nav">
             <?php foreach (($docs ?? []) as $doc): ?>
                 <?php $isActive = (string) ($selectedDoc['key'] ?? '') === (string) ($doc['key'] ?? ''); ?>
-                <a class="dt-doc-link<?= $isActive ? ' active' : '' ?>" href="<?= $docUrl ?>?doc=<?= urlencode((string) ($doc['key'] ?? '')) ?>" data-testid="datatable-doc-link-<?= htmlspecialchars((string) ($doc['key'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <a class="dt-doc-link<?= $isActive ? ' active' : '' ?>" href="<?= htmlspecialchars((string) ($doc['url'] ?? $docUrl), ENT_QUOTES, 'UTF-8') ?>" data-testid="datatable-doc-link-<?= htmlspecialchars((string) ($doc['key'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                     <strong><?= htmlspecialchars((string) ($doc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
                     <div class="dt-doc-preview"><?= htmlspecialchars((string) ($doc['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
                 </a>
@@ -33,8 +35,8 @@
                 <div class="text-muted"><?= htmlspecialchars((string) ($selectedDoc['filename'] ?? ''), ENT_QUOTES, 'UTF-8') ?></div>
             </div>
             <div class="d-flex gap-2">
-                <a class="btn btn-outline-secondary" href="<?= $comprehensiveUrl ?>"><?= __('Open Comprehensive Test') ?></a>
-                <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>"><?= __('Open Tag Verification') ?></a>
+                <a class="btn btn-outline-secondary" href="<?= $comprehensiveUrl ?>" data-testid="datatable-doc-open-comprehensive"><?= __('Open Comprehensive Test') ?></a>
+                <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>" data-testid="datatable-doc-open-tag"><?= __('Open Tag Verification') ?></a>
             </div>
         </div>
         <p><?= htmlspecialchars((string) ($selectedDoc['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>

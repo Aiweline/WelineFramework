@@ -17,6 +17,8 @@
         <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
     </div>
 
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
     <div class="dt-demo-note" data-testid="dt-dependency-note">
         <?= __('This page uses the same alias dependency mapping as the transaction demo, but leaves transaction mode off so the ordering logic can be verified independently.') ?>
     </div>

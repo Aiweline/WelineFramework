@@ -16,6 +16,8 @@
         <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
     </div>
 
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
     <div class="dt-demo-note" data-testid="dt-performance-note">
         <?= __('This page intentionally leaves the inner table structure empty so the DataTable taglib and frontend manager have to generate the display fields, filter fields and toolbar behavior from model metadata.') ?>
     </div>
