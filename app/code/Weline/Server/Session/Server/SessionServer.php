@@ -96,15 +96,12 @@ final class SessionServer
         }
         
         $tokenFileName = (string)($this->config['token_file_name'] ?? 'session_server.token');
+        $tokenFileName = \trim($tokenFileName, " \t\n\r\0\x0B\"'");
+        $tokenFileName = \basename($tokenFileName);
         if ($tokenFileName === '') {
             $tokenFileName = 'session_server.token';
         }
         $this->tokenFilePath = $basePath . $tokenFileName;
-        
-        $written = @\file_put_contents($this->tokenFilePath, $this->authToken);
-        if ($written !== false) {
-            @\chmod($this->tokenFilePath, 0600);
-        }
     }
     
     /**
@@ -169,6 +166,14 @@ final class SessionServer
             if ($localName !== false && ($colonPos = \strrpos($localName, ':')) !== false) {
                 $this->port = (int)\substr($localName, $colonPos + 1);
             }
+        }
+
+        $this->publishAuthTokenFile();
+        if ($this->authToken === null) {
+            $this->lastBindError = 'auth token initialization failed';
+            @\fclose($this->serverSocket);
+            $this->serverSocket = null;
+            return false;
         }
 
         $this->store->loadFromFile();
@@ -245,6 +250,8 @@ final class SessionServer
      */
     public function tick(int $timeoutUsec = 0): int
     {
+        $this->ensureAuthTokenFile();
+
         if (!$this->serverSocket) {
             return 0;
         }
@@ -453,6 +460,17 @@ final class SessionServer
                 $ok = $this->store->forcePersist();
                 $response = $ok ? SessionProtocol::encodeSuccess() : SessionProtocol::encodeError('Persist failed');
                 break;
+
+            case SessionProtocol::CMD_SHUTDOWN:
+                $persisted = $this->store->forcePersist();
+                $response = SessionProtocol::encodeSuccess([
+                    'shutdown' => true,
+                    'persisted' => $persisted,
+                ]);
+                $this->sendToClient($clientId, $response);
+                $this->log('Graceful shutdown requested by authenticated client');
+                $this->setRunning(false);
+                return;
 
             case SessionProtocol::CMD_STATS:
                 $stats = $this->store->getStats();
@@ -774,8 +792,62 @@ final class SessionServer
     private function cleanupTokenFile(): void
     {
         if ($this->tokenFilePath && \is_file($this->tokenFilePath)) {
+            $currentToken = @\file_get_contents($this->tokenFilePath);
+            $currentToken = \is_string($currentToken) ? \trim($currentToken) : '';
+            $ownToken = \is_string($this->authToken) ? \trim($this->authToken) : '';
+
+            // 避免并发重启时旧进程把新进程刚写入的 token 文件误删。
+            if ($ownToken !== '' && $currentToken !== '' && !\hash_equals($ownToken, $currentToken)) {
+                return;
+            }
+
             @\unlink($this->tokenFilePath);
         }
+    }
+
+    private function ensureAuthTokenFile(): void
+    {
+        if ($this->tokenFilePath === '' || $this->authToken === null) {
+            return;
+        }
+
+        if (\is_file($this->tokenFilePath)) {
+            $currentToken = @\file_get_contents($this->tokenFilePath);
+            if (\is_string($currentToken) && \trim($currentToken) !== '') {
+                return;
+            }
+        }
+
+        $dir = \dirname($this->tokenFilePath);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+
+        $written = @\file_put_contents($this->tokenFilePath, $this->authToken, \LOCK_EX);
+        if ($written === false) {
+            $this->log("Auth token file restore failed: {$this->tokenFilePath}");
+            return;
+        }
+
+        @\chmod($this->tokenFilePath, 0600);
+        $this->log("Auth token file restored: {$this->tokenFilePath}");
+    }
+
+    private function publishAuthTokenFile(): void
+    {
+        if ($this->tokenFilePath === '' || $this->authToken === null) {
+            return;
+        }
+
+        $written = @\file_put_contents($this->tokenFilePath, $this->authToken, \LOCK_EX);
+        if ($written === false) {
+            $this->log("Auth token file write failed: {$this->tokenFilePath}, fallback to auth disabled");
+            $this->authToken = null;
+            $this->tokenFilePath = '';
+            return;
+        }
+
+        @\chmod($this->tokenFilePath, 0600);
     }
 
     /**

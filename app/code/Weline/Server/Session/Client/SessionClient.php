@@ -40,6 +40,7 @@ final class SessionClient
             'min_idle' => (int)($options['pool_min_idle'] ?? 1),
             'max_size' => (int)($options['pool_size'] ?? 8),
             'token_file_name' => (string)($options['token_file_name'] ?? 'session_server.token'),
+            'log_connect_fail' => (bool)($options['log_connect_fail'] ?? true),
         ]);
     }
 
