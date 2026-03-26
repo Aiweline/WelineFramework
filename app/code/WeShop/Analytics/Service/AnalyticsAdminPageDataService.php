@@ -50,6 +50,9 @@ class AnalyticsAdminPageDataService
         }
 
         $editingDefinition = $definitions[$editingProvider] ?? [];
+        $editingConfig = $this->analyticsConfigService->getProviderConfig($editingProvider);
+        $editingEnabled = !empty($editingConfig['enabled']);
+        $editingReady = $this->analyticsConfigService->isProviderReady($editingProvider, $editingConfig);
 
         return [
             'providers' => $providers,
@@ -65,7 +68,11 @@ class AnalyticsAdminPageDataService
                 'label' => (string) ($editingDefinition['label'] ?? $editingProvider),
                 'description' => (string) ($editingDefinition['description'] ?? ''),
                 'fields' => $editingDefinition['fields'] ?? [],
-                'config' => $this->analyticsConfigService->getProviderConfig($editingProvider),
+                'setup' => is_array($editingDefinition['setup'] ?? null) ? $editingDefinition['setup'] : [],
+                'config' => $editingConfig,
+                'enabled' => $editingEnabled,
+                'ready' => $editingReady,
+                'missingRequiredFields' => $this->analyticsConfigService->getMissingRequiredFieldLabels($editingProvider, $editingConfig),
             ],
             'snippetPreview' => $this->analyticsSnippetService->getFrontendPixelSnippets(),
         ];
