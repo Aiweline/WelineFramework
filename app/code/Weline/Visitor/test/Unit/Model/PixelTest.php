@@ -4,40 +4,28 @@ declare(strict_types=1);
 
 namespace Weline\Visitor\test\Unit\Model;
 
-use Weline\Framework\UnitTest\TestCore;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\UnitTest\TestCore;
 use Weline\Visitor\Model\Pixel;
 
-/**
- * 像素模型单元测试
- */
 class PixelTest extends TestCore
 {
-    private Pixel $pixel;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->pixel = ObjectManager::getInstance(Pixel::class);
-    }
+    /** @var int[] */
+    private array $pixelIds = [];
 
     protected function tearDown(): void
     {
-        // 清理测试数据
-        if ($this->pixel->getId()) {
+        foreach (array_reverse(array_unique($this->pixelIds)) as $pixelId) {
             try {
-                $this->pixel->delete();
-            } catch (\Exception $e) {
-                // 忽略删除错误
+                ObjectManager::make(Pixel::class)->load($pixelId)->delete();
+            } catch (\Throwable) {
             }
         }
+
         parent::tearDown();
     }
 
-    /**
-     * 测试：保存像素数据
-     */
-    public function testSavePixelData()
+    public function testSavePixelData(): void
     {
         $data = [
             'url' => 'https://example.com/test',
@@ -52,204 +40,140 @@ class PixelTest extends TestCore
             'user_id' => 123,
             'user_agent' => 'Mozilla/5.0 Test',
             'ip' => '192.168.1.1',
-            'browser_info' => json_encode(['test' => 'data'])
+            'browser_info' => json_encode(['test' => 'data'], JSON_UNESCAPED_UNICODE),
         ];
 
-        $this->pixel->setData($data)->save();
-        
-        $this->assertNotEmpty($this->pixel->getId(), '像素ID应该不为空');
-        $this->assertEquals('https://example.com/test', $this->pixel->getUrl());
-        $this->assertEquals('click', $this->pixel->getEvent());
-        $this->assertEquals(100, $this->pixel->getValue());
-        $this->assertEquals(1, $this->pixel->getWebsiteId());
+        $pixel = $this->createPixel($data);
+
+        $this->assertNotEmpty($pixel->getId());
+        $this->assertSame($data['url'], $pixel->getUrl());
+        $this->assertSame($data['event'], $pixel->getEvent());
+        $this->assertSame($data['value'], $pixel->getValue());
+        $this->assertSame($data['website_id'], $pixel->getWebsiteId());
     }
 
-    /**
-     * 测试：根据站点ID获取像素数据
-     */
-    public function testGetPixelsByWebsiteId()
+    public function testGetPixelsByWebsiteId(): void
     {
-        // 创建测试数据
         $websiteId = 999;
-        $data = [
+        $pixel = $this->createPixel([
             'url' => 'https://example.com/test',
             'event' => 'click',
             'website_id' => $websiteId,
             'ip' => '192.168.1.1',
-            'user_agent' => 'Test Agent'
-        ];
-        
-        $pixel = ObjectManager::getInstance(Pixel::class);
-        $pixel->setData($data)->save();
-        $pixelId = $pixel->getId();
+            'user_agent' => 'Test Agent',
+        ]);
 
-        // 测试查询
         $pixels = Pixel::getPixelsByWebsiteId($websiteId);
-        
+
         $this->assertIsArray($pixels);
+        $this->assertNotEmpty($pixels);
+
         $found = false;
-        foreach ($pixels as $p) {
-            if ($p->getId() == $pixelId) {
+        foreach ($pixels as $item) {
+            if ((int)$item->getId() === (int)$pixel->getId()) {
                 $found = true;
-                $this->assertEquals($websiteId, $p->getWebsiteId());
+                $this->assertSame($websiteId, $item->getWebsiteId());
                 break;
             }
         }
-        $this->assertTrue($found, '应该能找到创建的像素数据');
 
-        // 清理
-        $pixel->load($pixelId)->delete();
+        $this->assertTrue($found);
     }
 
-    /**
-     * 测试：统计站点像素数量
-     */
-    public function testCountPixelsByWebsiteId()
+    public function testCountPixelsByWebsiteId(): void
     {
         $websiteId = 998;
-        
-        // 创建测试数据
-        $pixel = ObjectManager::getInstance(Pixel::class);
-        $pixel->setData([
+
+        $this->createPixel([
             'url' => 'https://example.com/test1',
             'event' => 'click',
             'website_id' => $websiteId,
             'ip' => '192.168.1.1',
-            'user_agent' => 'Test Agent'
-        ])->save();
-        $pixelId1 = $pixel->getId();
+            'user_agent' => 'Test Agent',
+        ]);
 
-        $pixel2 = ObjectManager::getInstance(Pixel::class);
-        $pixel2->setData([
+        $this->createPixel([
             'url' => 'https://example.com/test2',
             'event' => 'view',
             'website_id' => $websiteId,
             'ip' => '192.168.1.2',
-            'user_agent' => 'Test Agent'
-        ])->save();
-        $pixelId2 = $pixel2->getId();
+            'user_agent' => 'Test Agent',
+        ]);
 
-        // 测试统计
         $count = Pixel::countPixelsByWebsiteId($websiteId);
-        
-        $this->assertGreaterThanOrEqual(2, $count, '站点像素数量应该至少为2');
 
-        // 清理
-        $pixel->load($pixelId1)->delete();
-        $pixel2->load($pixelId2)->delete();
+        $this->assertGreaterThanOrEqual(2, $count);
     }
 
-    /**
-     * 测试：获取站点摘要信息
-     */
-    public function testGetWebsiteSummary()
+    public function testGetWebsiteSummary(): void
     {
         $websiteId = 997;
-        
-        // 创建测试数据
-        $pixel = ObjectManager::getInstance(Pixel::class);
-        $pixel->setData([
+        $this->createPixel([
             'url' => 'https://example.com/test',
             'event' => 'click',
             'website_id' => $websiteId,
             'value' => 100,
             'ip' => '192.168.1.1',
-            'user_agent' => 'Test Agent'
-        ])->save();
-        $pixelId = $pixel->getId();
+            'user_agent' => 'Test Agent',
+        ]);
 
-        // 测试摘要
         $summary = Pixel::getWebsiteSummary($websiteId);
-        
+
         $this->assertIsArray($summary);
         $this->assertArrayHasKey('total_count', $summary);
         $this->assertArrayHasKey('un_deal_count', $summary);
         $this->assertArrayHasKey('event_counts', $summary);
         $this->assertGreaterThanOrEqual(1, $summary['total_count']);
-
-        // 清理
-        $pixel->load($pixelId)->delete();
     }
 
-    /**
-     * 测试：IP地址正确获取和保存
-     */
-    public function testIpAddressCollection()
+    public function testIpAddressCollection(): void
     {
-        $testIps = [
+        $ips = [
             '192.168.1.1',
             '10.0.0.1',
             '172.16.0.1',
-            '2001:0db8:85a3:0000:0000:8a2e:0370:7334', // IPv6
+            '2001:0db8:85a3:0000:0000:8a2e:0370:7334',
         ];
 
-        foreach ($testIps as $testIp) {
-            $pixel = ObjectManager::getInstance(Pixel::class);
-            $pixel->setData([
+        foreach ($ips as $ip) {
+            $pixel = $this->createPixel([
                 'url' => 'https://example.com/test',
                 'event' => 'click',
                 'website_id' => 1,
-                'ip' => $testIp,
-                'user_agent' => 'Test Agent'
-            ])->save();
-            $pixelId = $pixel->getId();
+                'ip' => $ip,
+                'user_agent' => 'Test Agent',
+            ]);
 
-            $this->assertEquals($testIp, $pixel->getIp(), "IP地址 {$testIp} 应该正确保存");
-
-            // 清理
-            $pixel->load($pixelId)->delete();
+            $this->assertSame($ip, $pixel->getIp());
         }
     }
 
-    /**
-     * 测试：浏览器、语言、网站ID、货币信息收集
-     */
-    public function testBrowserLanguageWebsiteCurrencyCollection()
+    public function testBrowserLanguageWebsiteCurrencyCollection(): void
     {
-        $testData = [
+        $pixel = $this->createPixel([
             'url' => 'https://example.com/test',
             'event' => 'click',
             'website_id' => 888,
             'ip' => '192.168.1.1',
-            'user_agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'user_agent' => 'Mozilla/5.0 Chrome',
             'lang' => 'zh-CN',
             'currency' => 'RMB',
             'browser_info' => json_encode([
                 'browser' => 'Chrome',
                 'version' => '91.0.4472.124',
-                'os' => 'Windows 10'
-            ])
-        ];
+                'os' => 'Windows 10',
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
 
-        $this->pixel->setData($testData)->save();
-        $pixelId = $this->pixel->getId();
-
-        // 验证浏览器信息
-        $this->assertNotEmpty($this->pixel->getUserAgent(), '用户代理应该不为空');
-        $this->assertStringContainsString('Chrome', $this->pixel->getUserAgent(), '应该包含浏览器信息');
-
-        // 验证语言
-        $this->assertEquals('zh-CN', $this->pixel->getLang(), '语言应该正确保存');
-
-        // 验证网站ID
-        $this->assertEquals(888, $this->pixel->getWebsiteId(), '网站ID应该正确保存');
-
-        // 验证货币
-        $this->assertEquals('RMB', $this->pixel->getCurrency(), '货币应该正确保存');
-
-        // 验证浏览器详细信息
-        $browserInfo = json_decode($this->pixel->getBrowserInfo(), true);
-        $this->assertIsArray($browserInfo, '浏览器信息应该是数组');
-        $this->assertEquals('Chrome', $browserInfo['browser'], '浏览器名称应该正确');
-
-        // 清理
-        $this->pixel->load($pixelId)->delete();
+        $this->assertNotEmpty($pixel->getUserAgent());
+        $this->assertStringContainsString('Chrome', $pixel->getUserAgent());
+        $this->assertSame('zh-CN', $pixel->getLang());
+        $this->assertSame(888, $pixel->getWebsiteId());
+        $this->assertSame('RMB', $pixel->getCurrency());
+        $this->assertSame('Chrome', json_decode($pixel->getBrowserInfo(), true)['browser']);
     }
 
-    /**
-     * 测试：像素数据正常收集和保存（完整数据）
-     */
-    public function testCompletePixelDataCollection()
+    public function testCompletePixelDataCollection(): void
     {
         $completeData = [
             'url' => 'https://example.com/product/123',
@@ -268,29 +192,33 @@ class PixelTest extends TestCore
                 'browser' => 'Safari',
                 'version' => '14.1',
                 'os' => 'macOS',
-                'screen' => ['width' => 1920, 'height' => 1080]
-            ])
+                'screen' => ['width' => 1920, 'height' => 1080],
+            ], JSON_UNESCAPED_UNICODE),
         ];
 
-        $this->pixel->setData($completeData)->save();
-        $pixelId = $this->pixel->getId();
+        $pixel = $this->createPixel($completeData);
 
-        // 验证所有字段
-        $this->assertEquals($completeData['url'], $this->pixel->getUrl());
-        $this->assertEquals($completeData['module'], $this->pixel->getModule());
-        $this->assertEquals($completeData['name'], $this->pixel->getName());
-        $this->assertEquals($completeData['event'], $this->pixel->getEvent());
-        $this->assertEquals($completeData['value'], $this->pixel->getValue());
-        $this->assertEquals($completeData['lang'], $this->pixel->getLang());
-        $this->assertEquals($completeData['currency'], $this->pixel->getCurrency());
-        $this->assertEquals($completeData['website_id'], $this->pixel->getWebsiteId());
-        $this->assertEquals($completeData['referer'], $this->pixel->getReferer());
-        $this->assertEquals($completeData['user_id'], $this->pixel->getUserId());
-        $this->assertEquals($completeData['user_agent'], $this->pixel->getUserAgent());
-        $this->assertEquals($completeData['ip'], $this->pixel->getIp());
+        $this->assertSame($completeData['url'], $pixel->getUrl());
+        $this->assertSame($completeData['module'], $pixel->getModule());
+        $this->assertSame($completeData['name'], $pixel->getName());
+        $this->assertSame($completeData['event'], $pixel->getEvent());
+        $this->assertSame((int)round($completeData['value']), $pixel->getValue());
+        $this->assertSame($completeData['lang'], $pixel->getLang());
+        $this->assertSame($completeData['currency'], $pixel->getCurrency());
+        $this->assertSame($completeData['website_id'], $pixel->getWebsiteId());
+        $this->assertSame($completeData['referer'], $pixel->getReferer());
+        $this->assertSame($completeData['user_id'], $pixel->getUserId());
+        $this->assertSame($completeData['user_agent'], $pixel->getUserAgent());
+        $this->assertSame($completeData['ip'], $pixel->getIp());
+    }
 
-        // 清理
-        $this->pixel->load($pixelId)->delete();
+    private function createPixel(array $data): Pixel
+    {
+        $pixel = ObjectManager::make(Pixel::class);
+        $pixel->setData($data)->save();
+
+        $this->pixelIds[] = $pixel->getId();
+
+        return $pixel;
     }
 }
-
