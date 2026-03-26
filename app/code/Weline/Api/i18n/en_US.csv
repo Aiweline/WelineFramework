@@ -73,10 +73,14 @@ API文档导入测试成功,"API documentation import test successful"
 权限分配成功！,权限分配成功！
 权限分配失败：%{1},权限分配失败：%{1}
 配置值不能为负数：%{1},配置值不能为负数：%{1}
-公开接口不允许携带Cookie,"Public API does not allow cookies"
-请先登录,"Please login first"
-IP地址不在白名单中,"IP address is not in whitelist"
-用户代理不匹配,"User agent does not match"
+闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie,闁稿浚鍓欑槐鎴﹀箳閵夈儱缍撳☉鎾崇Т閸樻垹鎷嬮崨濠冨劖閻㈩垼姣刼okie
+"Missing authentication token.","Missing authentication token."
+"Token is invalid or expired.","Token is invalid or expired."
+"User has been disabled.","User has been disabled."
+"IP is not allowed.","IP is not allowed."
+"User agent does not match.","User agent does not match."
+"This token cannot access backend APIs.","This token cannot access backend APIs."
+"This token cannot access frontend customer APIs.","This token cannot access frontend customer APIs."
 API模块配置,API模块配置
 配置API令牌刷新周期等参数,配置API令牌刷新周期等参数
 令牌刷新配置,令牌刷新配置
