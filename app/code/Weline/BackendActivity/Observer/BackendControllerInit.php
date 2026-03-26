@@ -76,6 +76,16 @@ class BackendControllerInit implements ObserverInterface
 
     private function shouldSkipActivityLog(): bool
     {
+        if ((\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
+            return true;
+        }
+
+        $module = (string)($this->request->getData('router/module') ?? '');
+        $requestId = (string)($this->request->getId() ?? '');
+        if ($module === '' || $requestId === '') {
+            return true;
+        }
+
         $userId = (int)($this->backendSession->getUserId() ?? 0);
         if ($userId > 0) {
             return false;
