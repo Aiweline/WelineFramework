@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ProductEavService;
 use WeShop\Product\Service\ProductRecommendationService;
@@ -16,6 +17,7 @@ use WeShop\Review\Service\ReviewService;
 class ProductViewPageDataServiceTest extends TestCase
 {
     private ProductService $productService;
+    private PriceService $priceService;
     private ProductEavService $productEavService;
     private ProductRecommendationService $productRecommendationService;
     private ReviewService $reviewService;
@@ -27,6 +29,7 @@ class ProductViewPageDataServiceTest extends TestCase
         parent::setUp();
 
         $this->productService = $this->createMock(ProductService::class);
+        $this->priceService = $this->createMock(PriceService::class);
         $this->productEavService = $this->createMock(ProductEavService::class);
         $this->productRecommendationService = $this->createMock(ProductRecommendationService::class);
         $this->reviewService = $this->createMock(ReviewService::class);
@@ -34,6 +37,7 @@ class ProductViewPageDataServiceTest extends TestCase
 
         $this->service = new ProductViewPageDataService(
             $this->productService,
+            $this->priceService,
             $this->productEavService,
             $this->productRecommendationService,
             $this->reviewService,
@@ -98,6 +102,17 @@ class ProductViewPageDataServiceTest extends TestCase
             ->method('getProduct')
             ->with(42)
             ->willReturn($product);
+        $this->priceService->expects($this->once())
+            ->method('resolveProduct')
+            ->with($product, null, 1, [])
+            ->willReturn([
+                'price' => 99.9,
+                'original_price' => 129.5,
+                'special_price' => 99.9,
+                'has_discount' => true,
+                'discount_amount' => 29.6,
+                'discount_percent' => 23,
+            ]);
 
         $this->productEavService->expects($this->once())
             ->method('getProductAttributesViewModel')
@@ -153,6 +168,9 @@ class ProductViewPageDataServiceTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertSame('Trail Jacket', $result['product']['name']);
+        $this->assertSame(99.9, $result['product']['price']);
+        $this->assertSame(129.5, $result['product']['original_price']);
+        $this->assertSame(23, $result['product']['discount_percent']);
         $this->assertSame('/media/trail-main.jpg', $result['product']['main_image']);
         $this->assertSame(3, $result['product']['review_count']);
         $this->assertSame(4.7, $result['product']['rating']);

@@ -92,6 +92,8 @@ class ProductListTest extends TestCase
 
         $this->assertSame('html', $controller->index());
         $this->assertSame('Starter Camera', $assigned['products'][0]['name']);
+        $this->assertSame(99.5, $assigned['products'][0]['original_price']);
+        $this->assertSame(0, $assigned['products'][0]['discount_percent']);
         $this->assertTrue($assigned['products'][0]['in_stock']);
         $this->assertNull($assigned['category']);
         $this->assertSame('', $assigned['search']);
