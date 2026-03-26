@@ -133,4 +133,15 @@ class WlsLoggerTest extends TestCase
         $this->assertInstanceOf(WlsLogger::class, $logger);
         $this->assertEquals('TestProcess', $logger->getProcessTag());
     }
+
+    public function testProcessTagSwitchesInstanceScopedLogDir(): void
+    {
+        $logger = WlsLogger::getInstance()->setProcessTag('Worker#1:9981@demo-instance');
+        $reflection = new \ReflectionProperty(WlsLogger::class, 'logDir');
+        $reflection->setAccessible(true);
+        $logDir = (string)$reflection->getValue($logger);
+        $normalized = \str_replace('\\', '/', \rtrim($logDir, '/')) . '/';
+
+        $this->assertStringContainsString('/wls/demo-instance/', $normalized);
+    }
 }
