@@ -1056,12 +1056,24 @@ class OpenAiProvider implements ProviderInterface
         if (!empty($config['api_key_env'])) {
             $envKey = getenv($config['api_key_env']);
             if ($envKey) {
-                return $envKey;
+                return $this->normalizeApiKey($envKey);
             }
         }
 
         // 使用配置中的密钥
-        return $config['api_key'] ?? '';
+        return $this->normalizeApiKey((string)($config['api_key'] ?? ''));
+    }
+
+    private function normalizeApiKey(string $apiKey): string
+    {
+        $apiKey = trim($apiKey);
+
+        // Repair the duplicated-prefix corruption observed in existing OpenAI-compatible model self-configs.
+        if (str_starts_with($apiKey, 'ssk-')) {
+            return 'sk-' . substr($apiKey, 4);
+        }
+
+        return $apiKey;
     }
 
     /**
