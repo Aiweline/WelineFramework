@@ -27,6 +27,11 @@ class Cloudflare implements AdapterInterface
     private const API_BASE_URL = 'https://api.cloudflare.com/client/v4';
 
     /**
+     * @var array<string, mixed>
+     */
+    private array $credentials = [];
+
+    /**
      * @inheritDoc
      */
     public function getAdapterCode(): string
@@ -56,6 +61,18 @@ class Cloudflare implements AdapterInterface
     public function getVersion(): string
     {
         return '1.0.0';
+    }
+
+    /**
+     * Legacy compatibility shim for older tests/callers.
+     *
+     * @param array<string, mixed> $credentials
+     */
+    public function setCredentials(array $credentials): static
+    {
+        $this->credentials = $credentials;
+
+        return $this;
     }
 
     /**
@@ -652,6 +669,10 @@ class Cloudflare implements AdapterInterface
      */
     private function makeRequest(string $method, string $url, array $data = [], array $credentials = []): array
     {
+        if ($credentials === []) {
+            $credentials = $this->credentials;
+        }
+
         // 验证凭据
         $apiToken = $credentials['api_token'] ?? '';
         if (empty($apiToken)) {

@@ -33,11 +33,11 @@ class RuleManager
     public function __construct(
         ObjectManager $objectManager,
         AdapterResolver $adapterResolver,
-        AccountManager $accountManager
+        ?AccountManager $accountManager = null
     ) {
         $this->objectManager = $objectManager;
         $this->adapterResolver = $adapterResolver;
-        $this->accountManager = $accountManager;
+        $this->accountManager = $accountManager ?? $objectManager->getInstance(AccountManager::class);
     }
 
     /**
@@ -123,10 +123,28 @@ class RuleManager
         }
         
         $apiRules = $query->select()->fetch();
-        
+        $ruleItems = [];
+
+        if (is_object($apiRules) && method_exists($apiRules, 'getItems')) {
+            $ruleItems = $apiRules->getItems();
+        } elseif ($apiRules instanceof \Traversable) {
+            $ruleItems = iterator_to_array($apiRules, false);
+        } elseif (is_array($apiRules)) {
+            $ruleItems = $apiRules;
+        } elseif (is_object($apiRules)) {
+            $ruleItems = [$apiRules];
+        }
+
         $rules = [];
-        foreach ($apiRules as $apiRule) {
-            $rules[] = $apiRule->toCloudflareRule();
+        foreach ($ruleItems as $apiRule) {
+            if (is_object($apiRule) && method_exists($apiRule, 'toCloudflareRule')) {
+                $rules[] = $apiRule->toCloudflareRule();
+                continue;
+            }
+
+            if (is_array($apiRule)) {
+                $rules[] = $apiRule;
+            }
         }
         
         return $rules;
@@ -141,7 +159,8 @@ class RuleManager
      */
     public function importRules(Domain $domain): array
     {
-        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::schema_fields_ADAPTER));
+        $adapterCode = (string)($domain->getData(Domain::schema_fields_ADAPTER) ?? '');
+        $adapter = $this->adapterResolver->getAdapter($adapterCode);
         if (!$adapter) {
             throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
         }
@@ -171,7 +190,8 @@ class RuleManager
      */
     public function pushRules(Domain $domain): array
     {
-        $adapter = $this->adapterResolver->getAdapter($domain->getData(Domain::schema_fields_ADAPTER));
+        $adapterCode = (string)($domain->getData(Domain::schema_fields_ADAPTER) ?? '');
+        $adapter = $this->adapterResolver->getAdapter($adapterCode);
         if (!$adapter) {
             throw new Core(__('适配器不存在：%{1}', [$domain->getData(Domain::schema_fields_ADAPTER)]));
         }
