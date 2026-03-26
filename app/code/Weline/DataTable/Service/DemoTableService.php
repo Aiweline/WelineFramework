@@ -19,10 +19,12 @@ class DemoTableService
         'Weline\DataTable\Model\TestUser',
         'Weline\DataTable\Model\TestProduct',
         'Weline\DataTable\Model\TestOrder',
+        'Weline\DataTable\Model\TestUserProfile',
+        'Weline\DataTable\Model\TestUserAddress',
     ];
 
     /**
-     * @return array{users:int,products:int,orders:int}
+     * @return array{users:int,products:int,orders:int,profiles:int,addresses:int}
      * @throws \Throwable
      */
     public function initDemoData(): array
@@ -32,20 +34,26 @@ class DemoTableService
         $users = $this->seedModel('Weline\DataTable\Model\TestUser');
         $products = $this->seedModel('Weline\DataTable\Model\TestProduct');
         $orders = $this->seedModel('Weline\DataTable\Model\TestOrder');
+        $profiles = $this->seedModel('Weline\DataTable\Model\TestUserProfile');
+        $addresses = $this->seedModel('Weline\DataTable\Model\TestUserAddress');
 
         return [
             'users' => $users,
             'products' => $products,
             'orders' => $orders,
+            'profiles' => $profiles,
+            'addresses' => $addresses,
         ];
     }
 
     /**
-     * @return array{users:int,products:int,orders:int}
+     * @return array{users:int,products:int,orders:int,profiles:int,addresses:int}
      */
     public function clearDemoData(): array
     {
         return [
+            'addresses' => $this->truncateModel('Weline\DataTable\Model\TestUserAddress'),
+            'profiles' => $this->truncateModel('Weline\DataTable\Model\TestUserProfile'),
             'orders' => $this->truncateModel('Weline\DataTable\Model\TestOrder'),
             'products' => $this->truncateModel('Weline\DataTable\Model\TestProduct'),
             'users' => $this->truncateModel('Weline\DataTable\Model\TestUser'),
@@ -496,6 +504,22 @@ class DemoTableService
                     continue;
                 }
                 $this->deleteSingleRecord('Weline\DataTable\Model\TestOrder', $orderRow['id'] ?? null);
+            }
+
+            $profiles = $this->loadSingleModelRows('Weline\DataTable\Model\TestUserProfile');
+            foreach ($profiles as $profileRow) {
+                if ((string)($profileRow['user_id'] ?? '') !== (string)$id) {
+                    continue;
+                }
+                $this->deleteSingleRecord('Weline\DataTable\Model\TestUserProfile', $profileRow['id'] ?? null);
+            }
+
+            $addresses = $this->loadSingleModelRows('Weline\DataTable\Model\TestUserAddress');
+            foreach ($addresses as $addressRow) {
+                if ((string)($addressRow['user_id'] ?? '') !== (string)$id) {
+                    continue;
+                }
+                $this->deleteSingleRecord('Weline\DataTable\Model\TestUserAddress', $addressRow['id'] ?? null);
             }
         }
 
