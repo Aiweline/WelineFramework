@@ -1,30 +1,23 @@
-﻿订阅计划管理,订阅计划管理
-编辑订阅计划,编辑订阅计划
-新建订阅计划,新建订阅计划
-计划不存在,计划不存在
-保存成功,保存成功
-保存失败：%{error},保存失败：%{error}
-删除成功,删除成功
-删除失败：%{error},删除失败：%{error}
-订阅管理,订阅管理
-缺少订阅ID,缺少订阅ID
-订阅不存在,订阅不存在
-订阅详情,订阅详情
-订阅已取消,订阅已取消
-取消失败：%{error},取消失败：%{error}
-订阅已暂停,订阅已暂停
-暂停失败：%{error},暂停失败：%{error}
-订阅已恢复,订阅已恢复
-恢复失败：%{error},恢复失败：%{error}
-"Please login first.",请先登录。
+﻿"Subscription Plan Management","Subscription Plan Management"
+"Edit Subscription Plan","Edit Subscription Plan"
+"Create Subscription Plan","Create Subscription Plan"
+"Subscription plan does not exist.","Subscription plan does not exist."
+"Saved successfully.","Saved successfully."
+"Save failed: %{error}","Save failed: %{error}"
+"Deleted successfully.","Deleted successfully."
+"Delete failed: %{error}","Delete failed: %{error}"
+"Subscription Management","Subscription Management"
 "Subscription ID is required.",缺少订阅ID。
-"Unable to cancel this subscription right now.",暂时无法取消该订阅。
-"Subscription cancelled.",订阅已取消。
-"My Subscriptions",我的订阅
-"Subscription paused.",订阅已暂停。
-"Unable to resume this subscription right now.",暂时无法恢复该订阅。
-"Subscription resumed.",订阅已恢复。
 "Subscription Details",订阅详情
+"Subscription cancelled.",订阅已取消。
+"Cancel failed: %{error}","Cancel failed: %{error}"
+"Subscription paused.",订阅已暂停。
+"Subscription resumed.",订阅已恢复。
+"Resume failed: %{error}","Resume failed: %{error}"
+"Please login first.",请先登录。
+"Unable to cancel this subscription right now.",暂时无法取消该订阅。
+"My Subscriptions",我的订阅
+"Unable to resume this subscription right now.",暂时无法恢复该订阅。
 "Subscription page before content",订阅页前置扩展内容
 "Inject content before the subscription list on the storefront subscription page.",在前台订阅列表前注入扩展内容。
 "Subscription item after content",订阅卡片后置扩展内容
@@ -59,6 +52,7 @@
 订阅计划不存在,订阅计划不存在
 订阅计划已停用,订阅计划已停用
 创建订阅：%{plan},创建订阅：%{plan}
+订阅不存在,订阅不存在
 订阅状态不允许续费,订阅状态不允许续费
 续费成功，第%{count}次续费,续费成功，第%{count}次续费
 无权操作此订阅,无权操作此订阅
@@ -74,22 +68,7 @@ Open,打开
 "Recurring Orders",周期订单
 "Open Subscriptions",打开订阅中心
 "Active and historical plans",生效与历史计划
-"Manage recurring purchases, adjust plan status, and check your next billing windows from one place.","集中管理周期购买、调整计划状态，并查看下一次扣费窗口。"
-"Total Subscriptions","订阅总数"
-"Includes active, paused, and historical plans for this account.","包含此账户下的生效、暂停和历史订阅计划。"
-"Apply","应用"
-"Subscription","订阅"
-"View Details","查看详情"
-"Cancellation reason (optional)","取消原因（可选）"
-"Cancel Subscription","取消订阅"
-"Recurring plans will appear here once you place products with subscription-enabled checkout options.","当您下单使用支持订阅的结账选项后，周期计划会展示在这里。"
-"Back To Subscriptions","返回订阅列表"
-"Billing Summary","账单摘要"
-"Plan Information","计划信息"
-"Plan details are unavailable for this subscription.","当前订阅暂时无法获取计划详情。"
-"History","历史记录"
-"No history records yet.","暂无历史记录。"
-"Review billing cycles, pause or resume plans, and manage renewals from one place.","统一查看计费周期、暂停或恢复计划，并管理续费。"
+新建订阅计划,新建订阅计划
 返回,返回
 计划名称,计划名称
 关联产品,关联产品
@@ -105,12 +84,14 @@ Open,打开
 停用,停用
 保存,保存
 错误,错误
+订阅计划管理,订阅计划管理
 暂无订阅计划,暂无订阅计划
 操作,操作
 确认删除,确认删除
 确认删除此订阅计划？,确认删除此订阅计划？
 确认,确认
 取消,取消
+订阅管理,订阅管理
 总计,总计
 活跃订阅,活跃订阅
 试用订阅,试用订阅
@@ -124,6 +105,7 @@ Open,打开
 续费次数,续费次数
 创建时间,创建时间
 查看,查看
+订阅详情,订阅详情
 暂停,暂停
 恢复,恢复
 支付方式,支付方式
