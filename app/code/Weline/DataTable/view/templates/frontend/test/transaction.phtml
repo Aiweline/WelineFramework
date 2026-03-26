@@ -17,6 +17,8 @@
         <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>"><?= __('Back') ?></a>
     </div>
 
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
+
     <div class="dt-demo-note" data-testid="dt-transaction-note">
         <?= __('This page creates a user and an order in one submit. The dependency mapping copies the saved user id into the order user_id field, and the request is wrapped in transaction mode.') ?>
     </div>
