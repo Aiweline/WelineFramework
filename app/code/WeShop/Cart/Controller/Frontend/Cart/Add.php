@@ -94,7 +94,7 @@ class Add extends FrontendController
             // 添加到购物车
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
-            $cartService->addToCart($customerId, $productId, $qty, $product->getPrice());
+            $cartService->addToCart($customerId, $productId, $qty);
 
             $this->getMessageManager()->addSuccess(__('已成功加入购物车'));
 
