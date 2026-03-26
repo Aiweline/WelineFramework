@@ -159,11 +159,18 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
             <div class="card-body p-4">
                 <div class="mb-3">
                     <label class="form-label" for="site-agent-description"><lang>你想做什么网站</lang></label>
-                    <textarea class="form-control" id="site-agent-description" rows="4" placeholder="<?= htmlspecialchars((string)__('例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                        <textarea
+                            class="form-control"
+                            id="site-agent-description"
+                            rows="4"
+                            scope="site_builder_agent_quick_build"
+                            name="description"
+                            placeholder="<?= htmlspecialchars((string)__('例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口'), ENT_QUOTES, 'UTF-8') ?>"
+                        ></textarea>
                 </div>
 
                 <div class="form-check form-switch mb-3">
-                    <input class="form-check-input" type="checkbox" role="switch" id="site-agent-use-ai" checked>
+                    <input class="form-check-input" type="checkbox" role="switch" id="site-agent-use-ai" scope="site_builder_agent_quick_build" name="use_ai" value="1" checked>
                     <label class="form-check-label" for="site-agent-use-ai">
                         <lang>先让 AI 推荐域名、服务商和页面方案</lang>
                     </label>
@@ -175,14 +182,14 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                             <lang>目标域名</lang>
                             <span class="text-muted small" id="site-agent-domain-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
-                        <input type="text" class="form-control" id="site-agent-domain" placeholder="example.com">
+                        <input type="text" class="form-control" id="site-agent-domain" scope="site_builder_agent_quick_build" name="domain" placeholder="example.com">
                     </div>
                     <div class="col-md-6">
                         <label class="form-label" for="site-agent-account">
                             <lang>购买服务商账号</lang>
                             <span class="text-muted small" id="site-agent-account-hint"><lang>AI 模式下可留空</lang></span>
                         </label>
-                        <select class="form-select" id="site-agent-account">
+                        <select class="form-select" id="site-agent-account" scope="site_builder_agent_quick_build" name="account_id">
                             <option value=""><lang>稍后再决定</lang></option>
                             <?php foreach ($accounts as $acc) { ?>
                                 <option value="<?= (int)($acc['account_id'] ?? 0) ?>">
@@ -212,6 +219,8 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
         </div>
     </div>
 
+    <w:scope url="@backend-url('taglib/backend/scope')" container-id="quick-build" event="input change click"/>
+
     <div class="col-xl-5">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0">
@@ -227,7 +236,7 @@ $provider_lane_url = $current_entry_url . '#provider-lane';
                     path="websites/backend/site-builder-agent/trigger-sse"
                     title="@lang(建站进度)"
                     height="360px"
-                    events="start,progress,done,error,warning,info"
+                    events="start,progress,chunk,done,error,warning,info"
                 />
             </div>
         </div>
@@ -634,6 +643,9 @@ body[data-topbar="dark"] .site-workbench-page {
         var currentUrl = '';
         var running = false;
         var callbacks = {};
+        var streamingLine = null;
+        var chunkRafPending = '';
+        var chunkRafScheduled = false;
 
         if (!terminalContent) {
             return null;
@@ -650,6 +662,7 @@ body[data-topbar="dark"] .site-workbench-page {
         }
 
         function appendLine(text, type) {
+            streamingLine = null;
             var safeText = (text === undefined || text === null) ? '' : String(text);
             safeText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').forEach(function (lineText) {
                 var line = document.createElement('div');
@@ -670,6 +683,59 @@ body[data-topbar="dark"] .site-workbench-page {
 
             if (terminalBody) {
                 terminalBody.scrollTop = terminalBody.scrollHeight;
+            }
+        }
+
+        function appendChunkDom(text) {
+            if (!text) {
+                return;
+            }
+
+            if (!streamingLine) {
+                streamingLine = document.createElement('div');
+                streamingLine.className = 'weline-sse-terminal-line weline-sse-terminal-streaming chunk';
+
+                var time = document.createElement('span');
+                time.className = 'weline-sse-terminal-time';
+                time.textContent = '[' + formatTime() + ']';
+                streamingLine.appendChild(time);
+
+                var textEl0 = document.createElement('span');
+                textEl0.className = 'weline-sse-terminal-text';
+                streamingLine.appendChild(textEl0);
+
+                terminalContent.appendChild(streamingLine);
+            }
+
+            var textEl = streamingLine.querySelector('.weline-sse-terminal-text') || streamingLine.lastChild;
+            if (textEl) {
+                textEl.textContent += text;
+            }
+
+            if (terminalBody) {
+                terminalBody.scrollTop = terminalBody.scrollHeight;
+            }
+        }
+
+        function flushChunkRaf() {
+            chunkRafScheduled = false;
+            var batch = chunkRafPending;
+            chunkRafPending = '';
+            if (batch) {
+                appendChunkDom(batch);
+            }
+        }
+
+        function appendChunk(text) {
+            var safeText = (text === undefined || text === null) ? '' : String(text);
+            if (!safeText) {
+                return;
+            }
+
+            chunkRafPending += safeText;
+            if (!chunkRafScheduled) {
+                chunkRafScheduled = true;
+                requestAnimationFrame(flushChunkRaf);
             }
         }
 
@@ -710,6 +776,18 @@ body[data-topbar="dark"] .site-workbench-page {
         }
 
         function dispatch(eventName, payload) {
+            if (eventName === 'chunk') {
+                var chunkMessage = payloadToMessage(payload, '');
+                if (chunkMessage) {
+                    if (typeof callbacks.chunk === 'function') {
+                        callbacks.chunk({ data: JSON.stringify(payload || {}) });
+                    } else {
+                        appendChunk(chunkMessage);
+                    }
+                }
+                return;
+            }
+
             if (typeof callbacks[eventName] === 'function') {
                 callbacks[eventName]({ data: JSON.stringify(payload || {}) });
                 return;
@@ -744,7 +822,7 @@ body[data-topbar="dark"] .site-workbench-page {
                     }
                 };
 
-                ['start', 'progress', 'warning', 'info', 'done', 'error'].forEach(function (eventName) {
+                ['start', 'progress', 'chunk', 'warning', 'info', 'done', 'error'].forEach(function (eventName) {
                     eventSource.addEventListener(eventName, function (event) {
                         var payload = parsePayload(event);
                         dispatch(eventName, payload);
@@ -766,6 +844,9 @@ body[data-topbar="dark"] .site-workbench-page {
             stop: stop,
             clear: function () {
                 terminalContent.innerHTML = '';
+                streamingLine = null;
+                chunkRafPending = '';
+                chunkRafScheduled = false;
             },
             log: function (text, type) {
                 appendLine(text, type || 'info');
