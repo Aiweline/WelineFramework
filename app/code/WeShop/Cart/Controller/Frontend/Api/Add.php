@@ -8,6 +8,7 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Cart\Service\CartService;
 use WeShop\Customer\Session\CustomerSession;
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Service\ConfigurableProductService;
 
@@ -18,6 +19,11 @@ use WeShop\Product\Service\ConfigurableProductService;
  */
 class Add extends FrontendController
 {
+    public function __construct(
+        private readonly PriceService $priceService
+    ) {
+    }
+
     /**
      * 添加商品到购物车
      * 
@@ -91,7 +97,7 @@ class Add extends FrontendController
             $isConfigurable = $configurableService->isConfigurable($productId);
 
             $finalProductId = $productId;
-            $finalPrice = $product->getPrice();
+            $finalPrice = $this->priceService->calculatePrice($productId);
 
             if ($isConfigurable) {
                 // 可配置产品必须选择选项
@@ -115,7 +121,7 @@ class Add extends FrontendController
                 }
 
                 $finalProductId = (int)$variant->getId();
-                $finalPrice = $variant->getPrice();
+                $finalPrice = $this->priceService->calculatePrice($finalProductId);
 
                 // 检查子产品库存
                 if ($variant->getStock() < $qty) {
@@ -208,7 +214,7 @@ class Add extends FrontendController
                 'product' => [
                     'id' => $productId,
                     'name' => $product->getName(),
-                    'price' => $product->getPrice(),
+                    'price' => $this->priceService->calculatePrice($productId),
                     'image' => $product->getImage(),
                 ],
                 'options' => $options,
