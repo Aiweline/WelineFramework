@@ -124,30 +124,42 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         <w:hook name="WeShop_Cart::frontend::partials::cart::summary-before"/>
                         <h2 class="text-xl font-bold text-text-primary-light dark:text-text-primary-dark mb-4"><?= __('Order Summary') ?></h2>
                         <div class="space-y-3 pb-4 border-b border-border-light dark:border-border-dark">
+                            <w:hook name="WeShop_Cart::summary::rows_before"/>
                             <div class="flex justify-between text-sm">
+                                <w:hook name="WeShop_Cart::summary::subtotal_before"/>
                                 <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Items (%1):', count($cartItems)) ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['subtotal'] ?? 0) ?></span>
+                                <w:hook name="WeShop_Cart::summary::subtotal_after"/>
                             </div>
                             <div class="flex justify-between text-sm">
+                                <w:hook name="WeShop_Cart::summary::shipping_before"/>
                                 <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Shipping & handling:') ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['shipping'] ?? 0) ?></span>
+                                <w:hook name="WeShop_Cart::summary::shipping_after"/>
                             </div>
                             <w:hook name="WeShop_Cart::frontend::partials::cart::shipping-options"/>
                             <?php if (($cartSummary['discount'] ?? 0) > 0): ?>
                                 <div class="flex justify-between text-sm">
+                                    <w:hook name="WeShop_Cart::summary::discount_before"/>
                                     <span class="text-green-600 dark:text-green-500"><?= __('Discount:') ?></span>
                                     <span class="text-green-600 dark:text-green-500 font-medium">-<?= $this->formatPrice($cartSummary['discount']) ?></span>
+                                    <w:hook name="WeShop_Cart::summary::discount_after"/>
                                 </div>
                             <?php endif; ?>
                             <w:hook name="WeShop_Cart::frontend::partials::cart::discount-display"/>
                             <div class="flex justify-between text-sm">
+                                <w:hook name="WeShop_Cart::summary::tax_before"/>
                                 <span class="text-text-secondary-light dark:text-text-secondary-dark"><?= __('Estimated tax:') ?></span>
                                 <span class="text-text-primary-light dark:text-text-primary-dark font-medium"><?= $this->formatPrice($cartSummary['tax'] ?? 0) ?></span>
+                                <w:hook name="WeShop_Cart::summary::tax_after"/>
                             </div>
+                            <w:hook name="WeShop_Cart::summary::rows_after"/>
                         </div>
                         <div class="py-4 flex justify-between items-center text-lg font-bold text-text-primary-light dark:text-text-primary-dark">
+                            <w:hook name="WeShop_Cart::summary::grand_total_before"/>
                             <span><?= __('Order Total:') ?></span>
                             <span class="text-primary"><?= $this->formatPrice($cartSummary['grand_total'] ?? 0) ?></span>
+                            <w:hook name="WeShop_Cart::summary::grand_total_after"/>
                         </div>
                         
                         <!-- Promo Code -->
@@ -163,7 +175,7 @@ $relatedProducts = $this->getData('related_products') ?? [];
                         <w:hook name="WeShop_Cart::frontend::partials::cart::express-checkout"/>
                         <w:hook name="WeShop_Cart::frontend::partials::cart::security-badges"/>
                         
-                        <a href="<?= $this->getUrl('checkout') ?>" class="w-full block text-center bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-colors">
+                        <a href="<?= $this->getUrl('checkout') ?>" class="w-full block text-center bg-primary hover:bg-primary/90 text-white font-bold py-3 px-4 rounded-lg shadow-sm transition-colors weline-pixel::begin_checkout">
                             <?= __('Proceed to Checkout') ?>
                         </a>
                         <w:hook name="WeShop_Cart::frontend::partials::cart::summary-after"/>
