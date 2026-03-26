@@ -25,6 +25,9 @@ class AnalyticsQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getFrontendPixelSnippets' => $this->analyticsSnippetService->getFrontendPixelSnippets(),
+            'getFrontendPixelSnippetsBySlot' => $this->analyticsSnippetService->getFrontendPixelSnippetsBySlot(
+                (string) ($params['slot'] ?? AnalyticsSnippetService::SLOT_HEAD)
+            ),
             'getProviderStatuses' => $this->analyticsConfigService->getProviderStatuses(),
             default => throw new \InvalidArgumentException(
                 (string) __('Analytics query provider does not support operation: %{1}', [$operation])
@@ -41,6 +44,7 @@ class AnalyticsQueryProvider implements QueryProviderInterface
             'module' => 'WeShop_Analytics',
             'operations' => [
                 ['name' => 'getFrontendPixelSnippets', 'description' => __('Get enabled storefront analytics snippets.')],
+                ['name' => 'getFrontendPixelSnippetsBySlot', 'description' => __('Get enabled storefront analytics snippets by hook slot.')],
                 ['name' => 'getProviderStatuses', 'description' => __('Get analytics provider readiness and enablement states.')],
             ],
         ];

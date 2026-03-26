@@ -71,8 +71,31 @@ class GoogleAnalytics implements PixelProviderInterface
             return '';
         }
 
-        $measurementId = $this->readMeasurementId();
+        return $this->buildHeadSnippet($this->readMeasurementId());
+    }
 
+    /**
+     * @return array{head:string,body:string,footer:string}
+     */
+    public function getPixelHookSnippets(): array
+    {
+        if (!$this->isEnabled()) {
+            return [
+                'head' => '',
+                'body' => '',
+                'footer' => '',
+            ];
+        }
+
+        return [
+            'head' => $this->buildHeadSnippet($this->readMeasurementId()),
+            'body' => '',
+            'footer' => '',
+        ];
+    }
+
+    private function buildHeadSnippet(string $measurementId): string
+    {
         return <<<HTML
 <!-- Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id={$measurementId}"></script>

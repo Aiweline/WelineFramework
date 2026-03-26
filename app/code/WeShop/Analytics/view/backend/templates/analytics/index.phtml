@@ -6,6 +6,10 @@ $trackedEvents = $this->getData('trackedEvents') ?? [];
 $snippetPreview = $this->getData('snippetPreview') ?? [];
 $analyticsIndexUrl = (string) ($this->getData('analyticsIndexUrl') ?? $this->getBackendUrl('*/backend/analytics'));
 $analyticsSaveUrl = (string) ($this->getData('analyticsSaveUrl') ?? $this->getBackendUrl('*/backend/analytics/save'));
+$editingProviderSetup = is_array($editingProvider['setup'] ?? null) ? $editingProvider['setup'] : [];
+$editingProviderQuickLinks = is_array($editingProviderSetup['quick_links'] ?? null) ? $editingProviderSetup['quick_links'] : [];
+$editingProviderSteps = is_array($editingProviderSetup['steps'] ?? null) ? $editingProviderSetup['steps'] : [];
+$editingProviderMissingFields = is_array($editingProvider['missingRequiredFields'] ?? null) ? $editingProvider['missingRequiredFields'] : [];
 ?>
 
 <div class="container-fluid py-3">
@@ -95,6 +99,69 @@ $analyticsSaveUrl = (string) ($this->getData('analyticsSaveUrl') ?? $this->getBa
                     <h2 class="h5 mb-3"><?= htmlspecialchars((string) ($editingProvider['label'] ?? __('Provider Config')), ENT_QUOTES) ?></h2>
                     <p class="text-muted"><?= htmlspecialchars((string) ($editingProvider['description'] ?? ''), ENT_QUOTES) ?></p>
 
+                    <div class="border rounded p-3 mb-4 bg-light-subtle">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <div class="text-muted small mb-1"><?= __('Integration Method') ?></div>
+                                <div class="fw-semibold"><?= htmlspecialchars((string) ($editingProviderSetup['integration_method'] ?? __('Manual Provider Config')), ENT_QUOTES) ?></div>
+                                <div class="small text-muted mt-1"><?= htmlspecialchars((string) ($editingProviderSetup['summary'] ?? ''), ENT_QUOTES) ?></div>
+                            </div>
+                            <div class="text-end">
+                                <div class="badge <?= !empty($editingProvider['ready']) ? 'bg-primary' : (!empty($editingProvider['enabled']) ? 'bg-warning text-dark' : 'bg-secondary') ?>">
+                                    <?= !empty($editingProvider['ready']) ? __('Ready') : (!empty($editingProvider['enabled']) ? __('Needs Config') : __('Disabled')) ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <?php if ($editingProviderMissingFields): ?>
+                            <div class="alert alert-warning py-2 px-3 mb-3">
+                                <div class="fw-semibold small mb-1"><?= __('Missing Required Fields') ?></div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <?php foreach ($editingProviderMissingFields as $missingField): ?>
+                                        <span class="badge bg-warning text-dark border"><?= htmlspecialchars((string) $missingField, ENT_QUOTES) ?></span>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php elseif (!empty($editingProvider['ready'])): ?>
+                            <div class="alert alert-success py-2 px-3 mb-3">
+                                <div class="fw-semibold small mb-1"><?= __('Provider Ready') ?></div>
+                                <div class="small"><?= __('Required credentials are present and the storefront snippet can be rendered.') ?></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($editingProviderQuickLinks): ?>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <?php foreach ($editingProviderQuickLinks as $quickLink): ?>
+                                    <?php
+                                    $quickLinkUrl = trim((string) ($quickLink['url'] ?? ''));
+                                    if ($quickLinkUrl === '') {
+                                        continue;
+                                    }
+                                    $quickLinkStyle = trim((string) ($quickLink['style'] ?? 'outline-secondary'));
+                                    ?>
+                                    <a href="<?= htmlspecialchars($quickLinkUrl, ENT_QUOTES) ?>"
+                                       class="btn btn-<?= htmlspecialchars($quickLinkStyle, ENT_QUOTES) ?> btn-sm"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       data-analytics-quick-link="<?= htmlspecialchars((string) ($quickLink['label'] ?? ''), ENT_QUOTES) ?>">
+                                        <?= htmlspecialchars((string) ($quickLink['label'] ?? __('Open Link')), ENT_QUOTES) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($editingProviderSteps): ?>
+                            <div>
+                                <div class="text-muted small mb-2"><?= __('Configuration Guide') ?></div>
+                                <ol class="small mb-0 ps-3">
+                                    <?php foreach ($editingProviderSteps as $step): ?>
+                                        <li class="mb-1"><?= htmlspecialchars((string) $step, ENT_QUOTES) ?></li>
+                                    <?php endforeach; ?>
+                                </ol>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
                     <form method="post" action="<?= $analyticsSaveUrl ?>" class="d-grid gap-3" data-analytics-provider-form>
                         <input type="hidden" name="provider" value="<?= htmlspecialchars((string) ($editingProvider['code'] ?? ''), ENT_QUOTES) ?>">
                         <div class="form-check form-switch">
@@ -120,10 +187,14 @@ $analyticsSaveUrl = (string) ($this->getData('analyticsSaveUrl') ?? $this->getBa
                                     name="<?= htmlspecialchars($fieldName, ENT_QUOTES) ?>"
                                     class="form-control"
                                     value="<?= htmlspecialchars($renderedFieldValue, ENT_QUOTES) ?>"
+                                    placeholder="<?= htmlspecialchars((string) ($field['placeholder'] ?? ''), ENT_QUOTES) ?>"
                                     data-analytics-required="<?= !empty($field['required']) ? '1' : '0' ?>"
                                     data-analytics-sensitive="<?= $isSensitive ? '1' : '0' ?>"
                                     autocomplete="<?= $isSensitive ? 'new-password' : 'off' ?>"
                                 >
+                                <?php if (!empty($field['help_text'])): ?>
+                                    <div class="form-text text-muted"><?= htmlspecialchars((string) ($field['help_text'] ?? ''), ENT_QUOTES) ?></div>
+                                <?php endif; ?>
                                 <?php if ($isSensitive && $fieldValue !== ''): ?>
                                     <div class="form-text text-muted"><?= __('Leave blank to keep existing value') ?></div>
                                 <?php endif; ?>
