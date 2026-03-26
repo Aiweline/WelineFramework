@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 /**@var \Weline\Framework\View\Template $this */
 // 注意：此模板可能被嵌入到其他模板的 if 块中，因此不能使用 use 语句
 // use 语句在 PHP 中必须在文件顶层，不能在控制结构内部
@@ -247,12 +247,22 @@ if ($dataLayout !== 'horizontal'):
         }
 
         #sidebar-menu ul li > a.has-arrow::after {
+            content: "";
+            position: absolute;
+            top: 50%;
             right: 1rem;
             width: 0.6rem;
             height: 0.6rem;
-            margin-top: -0.34rem;
             border-width: 0 1.5px 1.5px 0;
+            border-style: solid;
+            transform: translateY(-50%) rotate(45deg);
             transition: transform 0.22s ease, border-color 0.2s ease;
+            pointer-events: none;
+        }
+
+        #sidebar-menu ul li.mm-active > a.has-arrow::after,
+        #sidebar-menu ul li.active > a.has-arrow::after {
+            transform: translateY(-50%) rotate(-135deg);
         }
 
         #sidebar-menu ul li.mm-active > a.has-arrow::after,
