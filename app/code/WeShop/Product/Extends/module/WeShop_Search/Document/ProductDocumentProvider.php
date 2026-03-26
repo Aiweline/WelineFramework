@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Extends\Module\WeShop_Search\Document;
 
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\ProductCategory;
 use WeShop\Search\Api\SearchDocumentProviderInterface;
@@ -12,7 +13,8 @@ class ProductDocumentProvider implements SearchDocumentProviderInterface
 {
     public function __construct(
         private readonly Product $productModel,
-        private readonly ProductCategory $productCategory
+        private readonly ProductCategory $productCategory,
+        private readonly PriceService $priceService
     ) {
     }
 
@@ -115,6 +117,7 @@ class ProductDocumentProvider implements SearchDocumentProviderInterface
         $categoryIds = $this->getCategoryIds($productId);
         $categoryNames = $this->getCategoryNames($categoryIds);
         $description = trim(strip_tags((string) ($product[Product::schema_fields_description] ?? '')));
+        $priceData = $this->priceService->resolveProductData($product);
 
         return [
             'document_id' => $this->getDocumentId($productId),
@@ -127,7 +130,12 @@ class ProductDocumentProvider implements SearchDocumentProviderInterface
             'handle' => (string) ($product[Product::schema_fields_HANDLE] ?? ''),
             'short_description' => (string) ($product[Product::schema_fields_short_description] ?? ''),
             'description' => $description,
-            'price' => (float) ($product[Product::schema_fields_price] ?? 0),
+            'price' => (float) ($priceData['price'] ?? 0),
+            'original_price' => (float) ($priceData['original_price'] ?? 0),
+            'special_price' => $priceData['special_price'] ?? null,
+            'has_discount' => (bool) ($priceData['has_discount'] ?? false),
+            'discount_amount' => (float) ($priceData['discount_amount'] ?? 0),
+            'discount_percent' => (int) ($priceData['discount_percent'] ?? 0),
             'cost' => (float) ($product[Product::schema_fields_cost] ?? 0),
             'stock' => (int) ($product[Product::schema_fields_stock] ?? 0),
             'status' => (int) ($product[Product::schema_fields_status] ?? 0),
