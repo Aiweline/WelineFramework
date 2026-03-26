@@ -2706,10 +2706,13 @@ function renderTemplateConfig(configGroups) {
             fieldHtml += `</div>`;
             fieldHtml += `</div>`;
         } else if (config.type === 'color') {
-            // type="color" 只接受 #rrggbb，rgba 等会导致解析/验证错误
-            const colorHex = /^#[0-9A-Fa-f]{6}$/.test(String(rawValue || '')) ? rawValue : '#000000';
-            fieldHtml += `<input type="color" id="${fieldId}" class="form-control form-control-color auto-save-field" 
-                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(colorHex)}">`;
+            // 兼容 CSS 颜色字符串（hex / rgba / linear-gradient(...) 等）
+            // 由于 type="color" 只接受 #rrggbb，rgba 会被浏览器重置/校验失败，导致默认解析错误及保存不生效
+            const colorVal = String(rawValue ?? '');
+            const safeVal = colorVal.trim() !== '' ? colorVal : '#000000';
+            fieldHtml += `<input type="text" id="${fieldId}" class="form-control auto-save-field" 
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(safeVal)}" 
+                    placeholder="rgba(255,255,255,0.05)">`;
         } else if (config.type === 'textarea') {
             // 处理 textarea 的值：将字面量 \n 和 \r\n 转换为实际换行符
             // 注意：textarea 内容中的换行符不需要 HTML 转义，但需要转义其他 HTML 特殊字符
