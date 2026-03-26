@@ -79,6 +79,7 @@ set "PHP_BASE_URL_PRIMARY=https://windows.php.net/downloads/releases/"
 set "PHP_BASE_URL_ARCHIVE=https://downloads.php.net/~windows/releases/archives/"
 set "PHP_BASE_URL_MIRRORSERVICE_RELEASES=https://www.mirrorservice.org/sites/www.php.net/downloads/releases/"
 set "PHP_BASE_URL_MIRRORSERVICE_ARCHIVES=https://www.mirrorservice.org/sites/www.php.net/downloads/releases/archives/"
+set "FOUND="
 for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
   if not defined FOUND_PATCH (
     set "URL_PRIMARY=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
@@ -90,27 +91,31 @@ for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
     set "CECHO_MSG=Probe URL(archive): !URL_ARCHIVE!" & call :cecho DarkGray ""
     set "CECHO_MSG=Probe URL(mirrorservice releases): !URL_MIRRORSERVICE_RELEASES!" & call :cecho DarkGray ""
     set "CECHO_MSG=Probe URL(mirrorservice archives): !URL_MIRRORSERVICE_ARCHIVES!" & call :cecho DarkGray ""
-    REM Some servers may not respond well to HEAD; a tiny ranged GET is more robust.
-    curl -L -s --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -f -r 0-0 "!URL_PRIMARY!" -o NUL >nul 2>&1 && (
+    REM Try real download directly to avoid false negatives on probe requests.
+    curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_PRIMARY!" >nul 2>&1 && (
       set "FOUND_PATCH=%%p"
       set "FOUND_URL=!URL_PRIMARY!"
+      set "FOUND=1"
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -f -r 0-0 "!URL_ARCHIVE!" -o NUL >nul 2>&1 && (
+      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_ARCHIVE!" >nul 2>&1 && (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_ARCHIVE!"
+        set "FOUND=1"
       )
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -f -r 0-0 "!URL_MIRRORSERVICE_RELEASES!" -o NUL >nul 2>&1 && (
+      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_MIRRORSERVICE_RELEASES!" >nul 2>&1 && (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_MIRRORSERVICE_RELEASES!"
+        set "FOUND=1"
       )
     )
     if not defined FOUND_PATCH (
-      curl -L -s --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -f -r 0-0 "!URL_MIRRORSERVICE_ARCHIVES!" -o NUL >nul 2>&1 && (
+      curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!URL_MIRRORSERVICE_ARCHIVES!" >nul 2>&1 && (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_MIRRORSERVICE_ARCHIVES!"
+        set "FOUND=1"
       )
     )
   )
@@ -119,7 +124,6 @@ if not defined FOUND_PATCH goto :php_download_failed
 if not defined FOUND_URL set "FOUND_URL=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.!FOUND_PATCH!-Win32-!VS!-x64.zip"
 set "CECHO_MSG=PHP package URL: !FOUND_URL!" & call :cecho DarkGray ""
 set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! from: !FOUND_URL!" & call :cecho Gray ""
-curl -L -s --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 300 -f -o "%TEMP%\weline-php.zip" "!FOUND_URL!" 2>nul >nul && set "FOUND=1"
 if not defined FOUND goto :php_download_failed
 mkdir "%PHP_DIR%" 2>nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%TEMP%\weline-php.zip' -DestinationPath '%PHP_DIR%' -Force"
