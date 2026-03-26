@@ -51,10 +51,10 @@ WelineFramework,WelineFramework
 账户不存在！,"Account does not exist!"
 账户被禁用！,"Account is disabled!"
 登录异常！,"Login exception!"
-验证码错误！,"Verification code error!"
 "Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
 您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。,您的账户尚未分配角色，无法登录后台。请联系系统管理员为您分配角色。
 登录凭据错误！,"Invalid login credentials!"
+验证码生成失败，请刷新重试。,验证码生成失败，请刷新重试。
 关键参数ID不存在！,"Key parameter ID does not exist!"
 菜单不存在！,菜单不存在！
 该菜单下有子菜单，请先删除子菜单！,该菜单下有子菜单，请先删除子菜单！

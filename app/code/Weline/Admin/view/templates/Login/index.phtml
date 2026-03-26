@@ -66,14 +66,17 @@
                                         </div>
                                         <div class="row">
                                             <?php if ($this->getData('need_backend_verification_code')) {
+                                                $verificationCodeUrl = (string)$this->getData('backend_verification_code_url');
                                                 ?>
                                                 <div class="form-group">
                                                     <img id="verification-code-img" 
-                                                         src="<?= $this->getData('backend_verification_code_url') ?>"
+                                                         src="<?= $verificationCodeUrl ?>?t=<?= time() ?>"
+                                                         data-base-src="<?= $verificationCodeUrl ?>"
                                                          alt="<?= __('验证码') ?>"
                                                          style="cursor: pointer; border: 1px solid #ddd; padding: 2px;"
                                                          title="<?= __('点击刷新验证码') ?>"
-                                                         onclick="this.src='<?= $this->getData('backend_verification_code_url') ?>?t=' + new Date().getTime()">
+                                                         onerror="if(this.dataset.retry!=='1'){this.dataset.retry='1';this.src=(this.dataset.baseSrc||this.src.split('?')[0])+'?t='+Date.now();}"
+                                                         onclick="this.src=(this.dataset.baseSrc||'<?= $verificationCodeUrl ?>')+'?t=' + new Date().getTime()">
                                                     <label class="form-control-label"><?= __('验证码：') ?>
                                                         <input name="code" type="text" class="form-control" value=""
                                                                placeholder="<?= __('请输入验证码！') ?>" required>
