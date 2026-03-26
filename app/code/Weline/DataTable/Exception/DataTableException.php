@@ -51,7 +51,7 @@ class DataTableException extends FrameworkException
     {
         $errorMessage = self::getErrorMessage($code, $message);
         // 注意：父类 Core 的参数顺序是 (message, cause, code)
-        parent::__construct($errorMessage, $previous, $code);
+        parent::__construct($errorMessage, $code, $previous);
     }
 
     /**

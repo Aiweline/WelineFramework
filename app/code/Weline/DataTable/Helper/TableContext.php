@@ -156,7 +156,19 @@ class TableContext
         }
 
         // 默认继承的属性
-        $defaultInheritKeys = ['model', 'scope', 'searchable', 'sortable', 'editable'];
+        $defaultInheritKeys = [
+            'model',
+            'scope',
+            'searchable',
+            'sortable',
+            'editable',
+            'allow-frontend',
+            'api-url',
+            'field-api-url',
+            'dependencies',
+            'transaction',
+            'isolate'
+        ];
         $inheritKeys = array_merge($defaultInheritKeys, $inheritKeys);
 
         foreach ($inheritKeys as $key) {

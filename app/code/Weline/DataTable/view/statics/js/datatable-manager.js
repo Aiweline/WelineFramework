@@ -130,6 +130,15 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         confirmDelete: true
     },
 
+    buildApiUrl: function (instance, endpoint = '') {
+        const baseUrl = (instance && instance.apiUrl) ? instance.apiUrl : this.config.apiUrl;
+        if (!endpoint) {
+            return baseUrl;
+        }
+
+        return baseUrl.replace(/\/+$/, '') + '/' + String(endpoint).replace(/^\/+/, '');
+    },
+
     // 注意：editingState 已移到每个实例中，确保实例隔离
 
     /**
@@ -977,12 +986,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             $('.w-export-status-text').text(`正在获取第 ${currentPage} 页数据...`);
 
             // 使用数据获取API进行分页导出
-            const dataApiUrl = (typeof window !== 'undefined' && typeof window.api === 'function') 
-                ? window.api('datatable/rest/v1/data-table/data') 
-                : (typeof window !== 'undefined' && window.site && window.site.api_host)
-                    ? (window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/') + 'datatable/data-table/data'
-                    : '/api/rest/v1/datatable/data-table/data';
-            fetch(dataApiUrl, {
+            fetch(this.buildApiUrl(instance, 'data'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -1582,7 +1586,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         };
 
         // 发送导出请求
-        fetch(window.api('datatable/rest/v1/data-table/export-data'), {
+        fetch(this.buildApiUrl(instance, 'export-data'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2399,7 +2403,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         let bodyHtml = '';
 
         instance.data.forEach((row, index) => {
-            bodyHtml += '<tr data-row-index="' + index + '">';
+            bodyHtml += '<tr data-row-index="' + index + '" data-id="' + (row.id || row.index || '') + '">';
 
             // 添加复选框列（如果启用了批量操作）
             if (instance.options.enableBatchActions !== false) {
@@ -2702,7 +2706,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
             showConfig: instance.options.showConfig
         };
 
-        fetch(window.api('datatable/rest/v1/data-table/save-config'), {
+        fetch(this.buildApiUrl(instance, 'save-config'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2876,7 +2880,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         // 添加ID
         formData.id = instance.data[instance.editingRow].id;
 
-        fetch(window.api('datatable/rest/v1/data-table/save-data'), {
+        fetch(this.buildApiUrl(instance, 'save-data'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3096,7 +3100,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
         // 显示加载状态
         this.showLoading(tableId, __('正在删除...'));
 
-        fetch(window.api('datatable/rest/v1/data-table/delete-data'), {
+        fetch(this.buildApiUrl(instance, 'delete-data'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -3421,7 +3425,7 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 保存行数?
      */
     saveRowData: function (instance, row) {
-        fetch(window.api('datatable/rest/v1/data-table/save-data'), {
+        fetch(this.buildApiUrl(instance, 'save-data'), {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -6604,3 +6608,409 @@ if (document.readyState === 'loading') {
 } else {
     applyI18n();
 }
+
+(function () {
+    if (typeof window === 'undefined' || !window.DataTableManager) {
+        return;
+    }
+
+    const manager = window.DataTableManager;
+
+    function resolveApiUrl(url, fallback) {
+        const raw = String(url || fallback || '').trim();
+        if (!raw) {
+            return '';
+        }
+
+        if (/^https?:\/\//i.test(raw) || raw.startsWith('/')) {
+            return raw;
+        }
+
+        if (typeof window.api === 'function') {
+            return window.api(raw);
+        }
+
+        if (window.site && window.site.api_host) {
+            const apiHost = window.site.api_host.endsWith('/') ? window.site.api_host : window.site.api_host + '/';
+            return apiHost + raw.replace(/^\/+/, '');
+        }
+
+        return '/' + raw.replace(/^\/+/, '');
+    }
+
+    function toNumber(value, fallback) {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : fallback;
+    }
+
+    function showContainerLoading(instance, isLoading) {
+        const container = instance.container && instance.container[0] ? instance.container[0] : instance.container;
+        const loading = container ? container.querySelector('.datatable-loading') : null;
+        const content = container ? container.querySelector('.datatable-content') : null;
+
+        if (container) {
+            container.classList.toggle('loading', !!isLoading);
+        }
+        if (loading) {
+            loading.style.display = isLoading ? '' : 'none';
+        }
+        if (content) {
+            content.style.display = isLoading ? 'none' : '';
+        }
+    }
+
+    manager.resolveApiUrl = resolveApiUrl;
+    manager.buildApiUrl = function (instance, endpoint = '') {
+        const baseUrl = resolveApiUrl(
+            instance && instance.apiUrl ? instance.apiUrl : '',
+            this.config.apiUrl
+        );
+
+        if (instance) {
+            instance.apiUrl = baseUrl;
+        }
+
+        if (!endpoint) {
+            return baseUrl;
+        }
+
+        return baseUrl.replace(/\/+$/, '') + '/' + String(endpoint).replace(/^\/+/, '');
+    };
+
+    manager.normalizePagination = function (payload, instance) {
+        const raw = (payload && payload.pagination) || {};
+        const page = Math.max(1, toNumber(raw.page ?? payload?.page ?? instance?.currentPage, 1));
+        const pageSize = Math.max(1, toNumber(raw.pageSize ?? raw.limit ?? payload?.pageSize ?? payload?.limit ?? instance?.pageSize, 20));
+        const total = Math.max(0, toNumber(raw.total ?? payload?.total, 0));
+        const derivedLastPage = Math.max(1, Math.ceil(total / Math.max(1, pageSize)));
+        const lastPage = Math.max(1, toNumber(raw.lastPage ?? payload?.pages, derivedLastPage));
+
+        return {
+            page: page,
+            pageSize: pageSize,
+            total: total,
+            lastPage: lastPage,
+            hasPrevPage: raw.hasPrevPage !== undefined ? !!raw.hasPrevPage : page > 1,
+            hasNextPage: raw.hasNextPage !== undefined ? !!raw.hasNextPage : page < lastPage
+        };
+    };
+
+    manager.applyFieldResponse = function (tableId, response) {
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        const payload = response && response.data ? response.data : response || {};
+        const templateFields = this.extractFieldsFromDOM(tableId, 'display');
+        const templateFilterFields = this.extractFieldsFromDOM(tableId, 'filter');
+
+        instance.templateFields = templateFields;
+        instance.templateFilterFields = templateFilterFields;
+
+        const allFields = this.mergeTemplateAndApiFields(templateFields, payload.all_fields || []);
+        const displayFieldsSource = (payload.cached_display_fields && payload.cached_display_fields.length)
+            ? payload.cached_display_fields
+            : (payload.display_fields || allFields);
+        const filterFieldsSource = (payload.cached_filter_fields && payload.cached_filter_fields.length)
+            ? payload.cached_filter_fields
+            : (payload.filter_fields || templateFilterFields);
+
+        instance.allFields = allFields;
+        instance.displayFields = this.mergeTemplateAndApiFields(templateFields, displayFieldsSource);
+        instance.filterFields = this.mergeTemplateAndApiFields(templateFilterFields, filterFieldsSource);
+
+        if (!instance.displayFields.length) {
+            instance.displayFields = allFields.filter(field => field.visible !== false);
+        }
+
+        const fieldConfigModal = document.getElementById('w-field-config-modal-' + tableId);
+        if (fieldConfigModal && typeof this.renderModelFieldsFromData === 'function') {
+            this.renderModelFieldsFromData(tableId, {
+                all_fields: instance.allFields,
+                display_fields: instance.displayFields,
+                filter_fields: instance.filterFields
+            });
+        }
+    };
+
+    manager.loadModelFieldsForInit = function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        fetch(this.buildApiUrl(instance, 'fields'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                table_id: tableId,
+                model: instance.options.model,
+                scope: instance.options.scope,
+                join: instance.options.join || '',
+                model_config: instance.options.modelConfig || {}
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success || response.code == 200 || response.code === '200') {
+                    this.applyFieldResponse(tableId, response);
+                    this.loadData(instance);
+                    return;
+                }
+
+                this.showError(tableId, response.msg || response.message || __('加载字段失败'));
+            })
+            .catch(error => {
+                console.error('[DataTableManager] loadModelFieldsForInit failed', error);
+                this.showError(tableId, error.message || __('加载字段失败'));
+            });
+    };
+
+    manager.loadModelFields = function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        if (instance.allFields && instance.allFields.length) {
+            this.applyFieldResponse(tableId, {
+                data: {
+                    all_fields: instance.allFields,
+                    display_fields: instance.displayFields,
+                    filter_fields: instance.filterFields
+                }
+            });
+            return;
+        }
+
+        fetch(this.buildApiUrl(instance, 'fields'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                table_id: tableId,
+                model: instance.options.model,
+                scope: instance.options.scope,
+                join: instance.options.join || '',
+                model_config: instance.options.modelConfig || {}
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success || response.code == 200 || response.code === '200') {
+                    this.applyFieldResponse(tableId, response);
+                    return;
+                }
+
+                this.showError(tableId, response.msg || response.message || __('加载字段失败'));
+            })
+            .catch(error => {
+                console.error('[DataTableManager] loadModelFields failed', error);
+                this.showError(tableId, error.message || __('加载字段失败'));
+            });
+    };
+
+    manager.saveFieldConfig = function (tableId) {
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        const configData = {
+            all_fields: instance.allFields || [],
+            display_fields: instance.displayFields || [],
+            filter_fields: instance.filterFields || [],
+            sort_direction: 'asc'
+        };
+
+        const saveButton = document.querySelector('#w-field-config-modal-' + tableId + ' .w-btn-primary');
+        const originalText = saveButton ? saveButton.innerHTML : '';
+        if (saveButton) {
+            saveButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 保存...';
+            saveButton.disabled = true;
+        }
+
+        fetch(this.buildApiUrl(instance, 'save-config'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scope: instance.options.scope,
+                table_id: tableId,
+                display_fields: configData.display_fields,
+                filter_fields: configData.filter_fields,
+                config: configData
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success || response.code == 200 || response.code === '200') {
+                    this.closeFieldConfig(tableId);
+                    this.renderTable(instance);
+                    this.showSuccess(tableId, response.msg || response.message || __('配置已保存'));
+                    return;
+                }
+
+                this.showError(tableId, response.msg || response.message || __('保存失败'));
+            })
+            .catch(error => {
+                console.error('[DataTableManager] saveFieldConfig failed', error);
+                this.showError(tableId, error.message || __('保存失败'));
+            })
+            .finally(() => {
+                if (saveButton) {
+                    saveButton.innerHTML = originalText;
+                    saveButton.disabled = false;
+                }
+            });
+    };
+
+    manager.clearConfig = function (tableId, type) {
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        fetch(this.buildApiUrl(instance, 'clear-config'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                scope: instance.options.scope,
+                table_id: tableId,
+                type: type || 'all'
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success || response.code == 200 || response.code === '200') {
+                    if (!type || type === 'all' || type === 'header') {
+                        instance.displayFields = [];
+                    }
+                    if (!type || type === 'all' || type === 'filter') {
+                        instance.filterFields = [];
+                    }
+
+                    instance.allFields = [];
+                    this.loadModelFields(tableId);
+                    this.showSuccess(tableId, response.msg || response.message || __('配置已重置'));
+                    return;
+                }
+
+                this.showError(tableId, response.msg || response.message || __('重置失败'));
+            })
+            .catch(error => {
+                console.error('[DataTableManager] clearConfig failed', error);
+                this.showError(tableId, error.message || __('重置失败'));
+            });
+    };
+
+    manager.loadData = function (instance) {
+        if (!instance) {
+            return;
+        }
+
+        showContainerLoading(instance, true);
+
+        fetch(this.buildApiUrl(instance, 'data'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model: instance.options.model,
+                scope: instance.options.scope,
+                page: instance.currentPage || 1,
+                pageSize: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
+                limit: instance.pageSize || instance.options.pageSize || this.config.defaultPageSize,
+                search: instance.search || '',
+                filters: instance.filters || {},
+                sorts: instance.sorts || {},
+                sort: instance.sorts || {},
+                join: instance.options.join || '',
+                model_config: instance.options.modelConfig || {}
+            })
+        })
+            .then(response => response.json())
+            .then(response => {
+                showContainerLoading(instance, false);
+
+                if (!(response.success || response.code == 200 || response.code === '200')) {
+                    this.showError(instance.id, response.msg || response.message || __('加载数据失败'));
+                    return;
+                }
+
+                const payload = response.data || {};
+                instance.data = payload.data || [];
+                instance.pagination = this.normalizePagination(payload, instance);
+                instance.currentPage = instance.pagination.page;
+                instance.pageSize = instance.pagination.pageSize;
+                instance.totalCount = instance.pagination.total;
+
+                this.renderTable(instance);
+            })
+            .catch(error => {
+                console.error('[DataTableManager] loadData failed', error);
+                showContainerLoading(instance, false);
+                this.showError(instance.id, error.message || __('加载数据失败'));
+            });
+    };
+
+    manager.saveCellValue = function (cell, newValue, tableId) {
+        if (!tableId) {
+            const table = cell.closest('.w-datatable');
+            if (table) {
+                tableId = table.id;
+            }
+        }
+
+        const instance = this.instances[tableId];
+        if (!instance) {
+            return;
+        }
+
+        const row = cell.closest('tr');
+        const recordId = row ? row.getAttribute('data-id') : '';
+        const fieldName = cell.getAttribute('data-field');
+        const model = instance.options.model || (instance.container && instance.container.getAttribute ? instance.container.getAttribute('data-model') : '');
+
+        cell.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+        fetch(this.buildApiUrl(instance, 'save-data'), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({
+                model: model,
+                id: recordId,
+                data: {
+                    [fieldName]: newValue
+                }
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success || data.code == 200 || data.code === '200') {
+                    cell.innerHTML = newValue;
+                    cell.classList.add('save-success');
+                    setTimeout(() => cell.classList.remove('save-success'), 2000);
+                    return;
+                }
+
+                this.restoreCellContent(cell, instance.editingState.originalValue);
+                this.showError(tableId, data.message || data.msg || __('保存失败'));
+            })
+            .catch(error => {
+                this.restoreCellContent(cell, instance.editingState.originalValue);
+                this.showError(tableId, error.message || __('保存失败'));
+            });
+    };
+})();
