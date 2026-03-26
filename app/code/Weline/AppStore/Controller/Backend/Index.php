@@ -57,9 +57,13 @@ class Index extends BackendController
             }
 
             // 调用平台 API
+            $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
+            if (!is_string($platformUrl) || $platformUrl === '') {
+                $platformUrl = 'https://app.aiweline.com';
+            }
             $client = new \GuzzleHttp\Client();
             $response = $client->post(
-                Env::get('appstore.platform_url', 'https://app.aiweline.com') . '/api/v1/platform/module/list',
+                $platformUrl . '/api/v1/platform/module/list',
                 [
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => $this->request->getPost(),
