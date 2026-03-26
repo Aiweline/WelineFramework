@@ -33,6 +33,7 @@ class DocumentScanner
 
     /** 本次扫描中已处理的文档唯一键集合 */
     private array $seenDocumentKeys = [];
+    private array $documentFieldSupport = [];
 
     public function __construct(Document $documentModel, Catalog $catalogModel)
     {
@@ -284,8 +285,9 @@ class DocumentScanner
 
         if ($existing && $existing->getId()) {
             // 检查文件是否有变化（通过修改时间判断）
-            $storedMtime = (int)($existing->getData(Document::schema_fields_FILE_MTIME) ?? 0);
-            if ($storedMtime === $fileMtime) {
+            $supportsFileMtime = $this->documentSupportsField(Document::schema_fields_FILE_MTIME);
+            $storedMtime = $supportsFileMtime ? (int)($existing->getData(Document::schema_fields_FILE_MTIME) ?? 0) : 0;
+            if ($supportsFileMtime && $storedMtime === $fileMtime) {
                 // 文件未变化，跳过更新（但仍需确保分类正确）
                 $storedCategoryId = (int)($existing->getCategoryId() ?? 0);
                 if ($storedCategoryId !== $catalogId) {
@@ -308,10 +310,14 @@ class DocumentScanner
                 ->setData(Document::schema_fields_summary, $summary)
                 ->setFileName($fileName)
                 ->setCategoryId((string)$catalogId)
-                ->setIsAutoImported(true)
-                ->setData(Document::schema_fields_FILE_MTIME, $fileMtime)
-                ->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
-                ->save();
+                ->setIsAutoImported(true);
+            if ($this->documentSupportsField(Document::schema_fields_UPDATED_AT)) {
+                $existing->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+            }
+            if ($supportsFileMtime) {
+                $existing->setData(Document::schema_fields_FILE_MTIME, $fileMtime);
+            }
+            $existing->save();
             $result['updated']++;
             $this->progress("      ↻ " . __('更新: %{path}', ['path' => $filePath]), 'info');
         } else {
@@ -333,10 +339,14 @@ class DocumentScanner
                 ->setFileName($fileName)
                 ->setCategoryId((string)$catalogId)
                 ->setIsAutoImported(true)
-                ->setSortOrder(0)
-                ->setData(Document::schema_fields_FILE_MTIME, $fileMtime)
-                ->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'))
-                ->save();
+                ->setSortOrder(0);
+            if ($this->documentSupportsField(Document::schema_fields_UPDATED_AT)) {
+                $newDoc->setData(Document::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+            }
+            if ($this->documentSupportsField(Document::schema_fields_FILE_MTIME)) {
+                $newDoc->setData(Document::schema_fields_FILE_MTIME, $fileMtime);
+            }
+            $newDoc->save();
             $result['new']++;
             $this->progress("      ✨ " . __('新增: %{path}', ['path' => $filePath]), 'success');
         }
@@ -347,6 +357,24 @@ class DocumentScanner
     /**
      * 确保分类存在（按 name + pid 查找，不存在则创建）
      */
+    private function documentSupportsField(string $field): bool
+    {
+        if (array_key_exists($field, $this->documentFieldSupport)) {
+            return $this->documentFieldSupport[$field];
+        }
+
+        try {
+            $this->documentFieldSupport[$field] = $this->documentModel
+                ->getConnection()
+                ->getConnector()
+                ->hasField($this->documentModel->getTable(), $field);
+        } catch (\Throwable) {
+            $this->documentFieldSupport[$field] = false;
+        }
+
+        return $this->documentFieldSupport[$field];
+    }
+
     private function ensureCatalog(string $name, int $pid, int $level = 1, string $description = '', int $position = 0): Catalog
     {
         // 使用新实例查询，避免单例状态污染
