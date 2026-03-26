@@ -1,10 +1,27 @@
-﻿请先登录,请先登录
+﻿"The login challenge token is missing.","The login challenge token is missing."
+"The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
+"Two-Factor Verification","Two-Factor Verification"
+"Please enter the verification code.","Please enter the verification code."
+"Two-factor verification succeeded.","Two-factor verification succeeded."
+"The reset link is invalid or has expired.","The reset link is invalid or has expired."
+"Reset Password","Reset Password"
+"Forgot Password","Forgot Password"
+"Email is required.","Email is required."
+"Please enter a valid email address.","Please enter a valid email address."
+"If the email is registered, a reset link has been sent.","If the email is registered, a reset link has been sent."
+"Unable to create a password reset request right now.","Unable to create a password reset request right now."
+"The reset token is required.","The reset token is required."
+"Please enter a new password.","Please enter a new password."
+"The password confirmation does not match.","The password confirmation does not match."
+"Your password has been reset. Please sign in with the new password.","Your password has been reset. Please sign in with the new password."
+请先登录,请先登录
 请输入原密码,请输入原密码
 原密码错误,原密码错误
 新密码长度不能少于6位,新密码长度不能少于6位
 两次输入的新密码不一致,两次输入的新密码不一致
 更新成功,更新成功
 更新失败：%{1},更新失败：%{1}
+鐢ㄦ埛鐧诲綍,鐢ㄦ埛鐧诲綍
 您已登录,您已登录
 用户名和密码不能为空,用户名和密码不能为空
 用户不存在,用户不存在
@@ -12,16 +29,15 @@
 密码错误,密码错误
 登录成功,登录成功
 登录失败：%{1},登录失败：%{1}
+"WeShop login bridge is unavailable: %{1}","WeShop login bridge is unavailable: %{1}"
+"Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
+"Login succeeded.","Login succeeded."
 退出成功,退出成功
-用户注册,用户注册
-您已登录，无需注册,您已登录，无需注册
-请填写完整信息,请填写完整信息
-用户名长度必须在3-20个字符之间,用户名长度必须在3-20个字符之间
-密码长度不能少于6位,密码长度不能少于6位
-两次输入的密码不一致,两次输入的密码不一致
-用户名已被使用,用户名已被使用
-注册成功,注册成功
-注册失败：%{1},注册失败：%{1}
+"Create Account","Create Account"
+"You are already signed in.","You are already signed in."
+"First name and last name are required.","First name and last name are required."
+"Please accept the terms and privacy policy.","Please accept the terms and privacy policy."
+"Registration succeeded. Welcome to WeShop.","Registration succeeded. Welcome to WeShop."
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,无效的用户ID
@@ -89,6 +105,20 @@ Session标识,Session标识
 操作成功,操作成功
 确定要重置该客户的令牌吗？此操作会强制该客户重新登录。,确定要重置该客户的令牌吗？此操作会强制该客户重新登录。
 确定要删除该客户吗？此操作不可撤销。,确定要删除该客户吗？此操作不可撤销。
+"Enter the code from your authenticator app or one of your backup codes.","Enter the code from your authenticator app or one of your backup codes."
+"Verification Code","Verification Code"
+123456,123456
+"Verify and Continue","Verify and Continue"
+"Back to sign in","Back to sign in"
+"Enter your new password to finish resetting your account access.","Enter your new password to finish resetting your account access."
+"Enter the email address for your account and we will send you a reset link.","Enter the email address for your account and we will send you a reset link."
+"New Password","New Password"
+"At least 8 characters with letters and numbers","At least 8 characters with letters and numbers"
+"Confirm Password","Confirm Password"
+"Re-enter your password","Re-enter your password"
+"Email Address","Email Address"
+you@example.com,you@example.com
+"Send Reset Link","Send Reset Link"
 欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
 未知,未知
 更新失败，请稍后重试,更新失败，请稍后重试
@@ -131,14 +161,13 @@ Session标识,Session标识
 登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
 登录请求失败，请稍后重试,登录请求失败，请稍后重试
 用户登录,用户登录
-创建账户,创建账户
-已有账户？,已有账户？
-立即登录,立即登录
-注册中...,注册中...
-注册成功！,注册成功！
-注册失败，请稍后重试,注册失败，请稍后重试
-注册请求失败，请稍后重试,注册请求失败，请稍后重试
-3-20个字符,3-20个字符
-确认密码,确认密码
-再次输入密码,再次输入密码
+"Create your WeShop account with your email address.","Create your WeShop account with your email address."
+"First Name","First Name"
+Ada,Ada
+"Last Name","Last Name"
+Lovelace,Lovelace
+Password,Password
+"I agree to the terms of service and privacy policy.","I agree to the terms of service and privacy policy."
+"Already have an account?","Already have an account?"
+"Sign in","Sign in"
 安全设置,安全设置
