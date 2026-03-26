@@ -119,6 +119,7 @@ class ProductRecommendationService
     protected function normalizeProduct(array $product): array
     {
         $price = (float) ($product['price'] ?? $product[Product::schema_fields_price] ?? 0);
+        $originalPrice = (float) ($product['original_price'] ?? $price);
         $stock = (int) ($product['stock'] ?? $product[Product::schema_fields_stock] ?? 0);
 
         return [
@@ -126,6 +127,11 @@ class ProductRecommendationService
             'name' => (string) ($product['name'] ?? $product[Product::schema_fields_name] ?? ''),
             'short_description' => (string) ($product['short_description'] ?? $product[Product::schema_fields_short_description] ?? ''),
             'price' => $price,
+            'original_price' => $originalPrice,
+            'special_price' => $product['special_price'] ?? null,
+            'has_discount' => (bool) ($product['has_discount'] ?? ($originalPrice > $price)),
+            'discount_amount' => (float) ($product['discount_amount'] ?? max(0, $originalPrice - $price)),
+            'discount_percent' => (int) ($product['discount_percent'] ?? ($originalPrice > $price && $originalPrice > 0 ? round((($originalPrice - $price) / $originalPrice) * 100) : 0)),
             'image' => (string) ($product['image'] ?? $product[Product::schema_fields_image] ?? ''),
             'sku' => (string) ($product['sku'] ?? $product[Product::schema_fields_sku] ?? ''),
             'in_stock' => $stock > 0,
