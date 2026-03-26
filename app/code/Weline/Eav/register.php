@@ -13,6 +13,6 @@ Register::register(
     Register::MODULE,
     'Weline_Eav',
     __DIR__,
-    '1.1.0',
+    '1.1.1',
     '<a href="https://bbs.aiweline.com">Eav数据库模型</a>'
 );
