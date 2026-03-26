@@ -132,7 +132,7 @@ class RuleLocalDescriptionTest extends TestCase
             $rules = ObjectManager::getInstance(Rule::class);
             $rules->reset()
                 ->loadLocalDescription('', LocalDescription::class)
-                ->where(Rule::schema_fields_ID, $ruleId)
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleId)
                 ->select()
                 ->fetch();
 
@@ -339,7 +339,7 @@ class RuleLocalDescriptionTest extends TestCase
         try {
             // 创建多个测试规则
             for ($i = 1; $i <= 3; $i++) {
-                $rule = ObjectManager::getInstance(Rule::class);
+                $rule = ObjectManager::make(Rule::class);
                 $rule->setData([
                     Rule::schema_fields_NAME => "Multi Load Test {$i}",
                     Rule::schema_fields_RULE_TYPE => Rule::RULE_TYPE_AUTOMATIC,
@@ -363,7 +363,7 @@ class RuleLocalDescriptionTest extends TestCase
             $rules = ObjectManager::getInstance(Rule::class);
             $rules->reset()
                 ->loadLocalDescription('zh_Hans_CN', LocalDescription::class)
-                ->where(Rule::schema_fields_ID, $ruleIds, 'IN')
+                ->where('main_table.' . Rule::schema_fields_ID, $ruleIds, 'IN')
                 ->select()
                 ->fetch();
 

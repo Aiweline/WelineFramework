@@ -22,7 +22,7 @@ use Weline\Marketing\Model\Rule\Rule;
 class LocalDescription extends LocalModel
 {
     public const schema_table = 'weline_marketing_rule_local_description';
-    public const schema_primary_key = 'rule_id';
+    public const schema_primary_key = Rule::schema_fields_ID;
     public const indexer = 'marketing_rule_local_description';
     
     // 关联主表ID
