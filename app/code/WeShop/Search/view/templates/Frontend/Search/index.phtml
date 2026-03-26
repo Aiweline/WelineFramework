@@ -4,11 +4,24 @@
  */
 $keyword = trim((string) ($this->getData('keyword') ?? ''));
 $hasKeyword = (bool) ($this->getData('has_keyword') ?? false);
-$products = $this->getData('products') ?? [];
-$popularKeywords = $this->getData('popular_keywords') ?? [];
-$activeFilters = $this->getData('active_filters') ?? [];
-$searchSummary = $this->getData('search_summary') ?? [];
+$products = is_array($this->getData('products')) ? $this->getData('products') : [];
+$popularKeywords = is_array($this->getData('popular_keywords')) ? $this->getData('popular_keywords') : [];
+$facets = is_array($this->getData('filters')) ? $this->getData('filters') : [];
+$appliedFilters = is_array($this->getData('applied_filters')) ? $this->getData('applied_filters') : [];
+$searchSummary = is_array($this->getData('search_summary')) ? $this->getData('search_summary') : [];
 $engine = (string) ($this->getData('engine') ?? 'mysql');
+$clearAllUrl = (string) ($this->getData('clear_all_url') ?? '/search');
+$paginationHtml = (string) ($this->getData('pagination_html') ?? $this->getData('pagination') ?? '');
+$paginationData = is_array($this->getData('pagination_data')) ? $this->getData('pagination_data') : [];
+$hasBrowseContext = $hasKeyword || $appliedFilters !== [] || $facets !== [] || $products !== [];
+$buildSearchPageUrl = function (int $targetPage) {
+    $query = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
+        ? $this->request->getQuery()
+        : [];
+    $query['page'] = max(1, $targetPage);
+
+    return $this->getUrl('search', $query);
+};
 ?>
 <div class="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
     <w:hook name="WeShop_Search::frontend::layouts::search-page::before"/>
@@ -43,14 +56,25 @@ $engine = (string) ($this->getData('engine') ?? 'mysql');
                     </button>
                 </form>
 
-                <?php if (!empty($activeFilters)): ?>
+                <?php if (!empty($appliedFilters)): ?>
                     <div class="flex flex-wrap gap-2">
-                        <?php foreach ($activeFilters as $activeFilter): ?>
-                            <span class="inline-flex items-center gap-2 rounded-full bg-background-light px-3 py-2 text-xs font-medium text-text-secondary-light">
-                                <span class="text-text-primary-light"><?= htmlspecialchars($activeFilter['label'] ?? '') ?>:</span>
-                                <span><?= htmlspecialchars($activeFilter['value'] ?? '') ?></span>
-                            </span>
+                        <?php foreach ($appliedFilters as $filter): ?>
+                            <?php
+                            $removeUrl = (string) ($filter['remove_url'] ?? '');
+                            $filterName = (string) ($filter['filter_name'] ?? '');
+                            $filterLabel = (string) ($filter['label'] ?? $filter['value'] ?? '');
+                            ?>
+                            <a
+                                href="<?= htmlspecialchars($removeUrl !== '' ? $removeUrl : $clearAllUrl) ?>"
+                                class="inline-flex items-center gap-2 rounded-full bg-background-light px-3 py-2 text-xs font-medium text-text-secondary-light transition hover:border-primary hover:text-primary"
+                            >
+                                <span class="text-text-primary-light"><?= htmlspecialchars($filterName) ?>:</span>
+                                <span><?= htmlspecialchars($filterLabel) ?></span>
+                            </a>
                         <?php endforeach; ?>
+                        <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="inline-flex items-center rounded-full border border-border-light px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary-light transition hover:border-primary hover:text-primary">
+                            <?= __('Clear all') ?>
+                        </a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -78,58 +102,166 @@ $engine = (string) ($this->getData('engine') ?? 'mysql');
     </section>
 
     <section class="mt-8">
-        <?php if ($hasKeyword && !empty($products)): ?>
-            <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                <?php foreach ($products as $product): ?>
-                    <article class="overflow-hidden rounded-[1.5rem] border border-border-light bg-surface-light shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
-                        <a
-                            href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>"
-                            class="block aspect-square bg-background-light bg-cover bg-center"
-                            style="background-image: url('<?= htmlspecialchars((string) ($product['image'] ?? '')) ?>');"
-                        ></a>
-                        <div class="space-y-4 p-5">
-                            <div class="space-y-2">
-                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="line-clamp-2 text-base font-bold text-text-primary-light transition hover:text-primary">
-                                    <?= htmlspecialchars((string) ($product['name'] ?? '')) ?>
-                                </a>
-                                <?php if (!empty($product['short_description'])): ?>
-                                    <p class="line-clamp-2 text-sm leading-6 text-text-secondary-light">
-                                        <?= htmlspecialchars((string) $product['short_description']) ?>
-                                    </p>
+        <?php if ($hasBrowseContext): ?>
+            <div class="grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)]">
+                <?php if (!empty($facets) || !empty($appliedFilters)): ?>
+                    <aside class="space-y-4">
+                        <div class="rounded-[1.5rem] border border-border-light bg-surface-light p-5 shadow-sm">
+                            <div class="flex items-center justify-between gap-3">
+                                <h2 class="text-sm font-bold uppercase tracking-[0.16em] text-text-primary-light"><?= __('Filters') ?></h2>
+                                <?php if (!empty($appliedFilters)): ?>
+                                    <a href="<?= htmlspecialchars($clearAllUrl) ?>" class="text-xs font-semibold uppercase tracking-[0.16em] text-primary transition hover:text-blue-600">
+                                        <?= __('Clear all') ?>
+                                    </a>
                                 <?php endif; ?>
                             </div>
-                            <div class="flex items-center justify-between gap-4">
-                                <span class="text-lg font-black text-text-primary-light">
-                                    <?= $this->formatPrice((float) ($product['price'] ?? 0)) ?>
-                                </span>
-                                <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-blue-600">
-                                    <?= __('View') ?>
-                                </a>
+
+                            <?php foreach ($facets as $facet): ?>
+                                <?php
+                                $options = is_array($facet['options'] ?? null) ? $facet['options'] : [];
+                                if ($options === []) {
+                                    continue;
+                                }
+                                $isOpen = empty($facet['collapsed']);
+                                foreach ($options as $option) {
+                                    if (!empty($option['selected'])) {
+                                        $isOpen = true;
+                                        break;
+                                    }
+                                }
+                                ?>
+                                <details class="group border-t border-border-light py-4 first:mt-4 first:border-t-0 first:pt-0" <?= $isOpen ? 'open' : '' ?>>
+                                    <summary class="flex cursor-pointer list-none items-center justify-between gap-4">
+                                        <span class="text-sm font-semibold text-text-primary-light"><?= htmlspecialchars((string) ($facet['name'] ?? '')) ?></span>
+                                        <span class="text-xs font-semibold uppercase tracking-[0.16em] text-text-secondary-light transition group-open:rotate-180">+</span>
+                                    </summary>
+
+                                    <?php if (($facet['display_type'] ?? 'list') === 'swatch'): ?>
+                                        <div class="mt-4 flex flex-wrap gap-2">
+                                            <?php foreach ($options as $option): ?>
+                                                <?php
+                                                $toggleUrl = (string) ($option['toggle_url'] ?? '#');
+                                                $swatch = is_array($option['swatch'] ?? null) ? $option['swatch'] : [];
+                                                $swatchType = (string) ($swatch['type'] ?? '');
+                                                $swatchValue = (string) ($swatch['value'] ?? '');
+                                                ?>
+                                                <a
+                                                    href="<?= htmlspecialchars($toggleUrl) ?>"
+                                                    class="inline-flex min-h-10 items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition <?= !empty($option['selected']) ? 'border-primary bg-primary/10 text-primary' : 'border-border-light text-text-secondary-light hover:border-primary hover:text-primary' ?>"
+                                                    title="<?= htmlspecialchars((string) ($option['label'] ?? '')) ?>"
+                                                >
+                                                    <?php if ($swatchType === 'color' && $swatchValue !== ''): ?>
+                                                        <span class="h-4 w-4 rounded-full border border-border-light" style="background-color: <?= htmlspecialchars($swatchValue) ?>"></span>
+                                                    <?php elseif ($swatchType === 'image' && $swatchValue !== ''): ?>
+                                                        <img src="<?= htmlspecialchars($swatchValue) ?>" alt="<?= htmlspecialchars((string) ($option['label'] ?? '')) ?>" class="h-4 w-4 rounded-full border border-border-light object-cover" />
+                                                    <?php elseif ($swatchType === 'text' && $swatchValue !== ''): ?>
+                                                        <span class="inline-flex min-w-6 items-center justify-center rounded-full bg-background-light px-1.5 py-0.5 text-[10px] font-bold text-text-primary-light"><?= htmlspecialchars($swatchValue) ?></span>
+                                                    <?php endif; ?>
+                                                    <span><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></span>
+                                                    <span class="text-[10px] text-text-secondary-light"><?= (int) ($option['count'] ?? 0) ?></span>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php else: ?>
+                                        <div class="mt-4 space-y-2">
+                                            <?php foreach ($options as $option): ?>
+                                                <?php $toggleUrl = (string) ($option['toggle_url'] ?? '#'); ?>
+                                                <a
+                                                    href="<?= htmlspecialchars($toggleUrl) ?>"
+                                                    class="flex items-center justify-between gap-4 rounded-2xl px-3 py-2 text-sm transition <?= !empty($option['selected']) ? 'bg-primary/10 text-primary' : 'text-text-secondary-light hover:bg-background-light hover:text-text-primary-light' ?>"
+                                                >
+                                                    <span><?= htmlspecialchars((string) ($option['label'] ?? '')) ?></span>
+                                                    <span class="text-xs font-semibold"><?= (int) ($option['count'] ?? 0) ?></span>
+                                                </a>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </details>
+                            <?php endforeach; ?>
+                        </div>
+                    </aside>
+                <?php endif; ?>
+
+                <div>
+                    <?php if (!empty($products)): ?>
+                        <div class="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+                            <?php foreach ($products as $product): ?>
+                                <article class="overflow-hidden rounded-[1.5rem] border border-border-light bg-surface-light shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+                                    <a
+                                        href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>"
+                                        class="block aspect-square bg-background-light bg-cover bg-center"
+                                        style="background-image: url('<?= htmlspecialchars((string) ($product['image'] ?? '')) ?>');"
+                                    ></a>
+                                    <div class="space-y-4 p-5">
+                                        <div class="space-y-2">
+                                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="line-clamp-2 text-base font-bold text-text-primary-light transition hover:text-primary">
+                                                <?= htmlspecialchars((string) ($product['name'] ?? '')) ?>
+                                            </a>
+                                            <?php if (!empty($product['short_description'])): ?>
+                                                <p class="line-clamp-2 text-sm leading-6 text-text-secondary-light">
+                                                    <?= htmlspecialchars((string) $product['short_description']) ?>
+                                                </p>
+                                            <?php endif; ?>
+                                        </div>
+                                        <div class="flex items-center justify-between gap-4">
+                                            <span class="text-lg font-black text-text-primary-light">
+                                                <?= $this->formatPrice((float) ($product['price'] ?? 0)) ?>
+                                            </span>
+                                            <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id'] ?? 0]) ?>" class="inline-flex items-center justify-center rounded-full bg-primary px-4 py-2 text-xs font-bold uppercase tracking-[0.16em] text-white transition hover:bg-blue-600">
+                                                <?= __('View') ?>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+
+                        <?php if ($paginationHtml !== '' || ((int) ($paginationData['pages'] ?? 0)) > 1): ?>
+                            <div class="mt-8 rounded-[1.5rem] border border-border-light bg-surface-light px-5 py-4">
+                                <?php if ($paginationHtml !== ''): ?>
+                                    <?= $paginationHtml ?>
+                                <?php else: ?>
+                                    <?php
+                                    $currentPage = (int) ($paginationData['page'] ?? 1);
+                                    $totalPages = (int) ($paginationData['pages'] ?? 1);
+                                    ?>
+                                    <div class="flex items-center justify-between gap-4">
+                                        <a
+                                            href="<?= htmlspecialchars($currentPage > 1 ? $buildSearchPageUrl($currentPage - 1) : '#') ?>"
+                                            class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage > 1 ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
+                                        >
+                                            <?= __('Previous') ?>
+                                        </a>
+                                        <span class="text-sm text-text-secondary-light">
+                                            <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                                        </span>
+                                        <a
+                                            href="<?= htmlspecialchars($currentPage < $totalPages ? $buildSearchPageUrl($currentPage + 1) : '#') ?>"
+                                            class="inline-flex items-center rounded-full border border-border-light px-4 py-2 text-sm font-semibold transition <?= $currentPage < $totalPages ? 'text-text-primary-light hover:border-primary hover:text-primary' : 'pointer-events-none opacity-40' ?>"
+                                        >
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <div class="rounded-[2rem] border border-dashed border-border-light bg-surface-light px-6 py-16 text-center">
+                            <div class="mx-auto max-w-2xl space-y-4">
+                                <h2 class="text-2xl font-black tracking-[-0.03em] text-text-primary-light"><?= __('No matching products yet') ?></h2>
+                                <p class="text-sm leading-6 text-text-secondary-light">
+                                    <?= __('Try another keyword, browse a trending term, or remove filters to widen the catalog results.') ?>
+                                </p>
+                                <div class="flex flex-wrap justify-center gap-2 pt-2">
+                                    <?php foreach ($popularKeywords as $item): ?>
+                                        <a href="<?= $this->getUrl('search', ['q' => $item['keyword'] ?? '']) ?>" class="rounded-full border border-border-light px-3 py-2 text-sm text-text-secondary-light transition hover:border-primary hover:text-primary">
+                                            <?= htmlspecialchars($item['keyword'] ?? '') ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
                             </div>
                         </div>
-                    </article>
-                <?php endforeach; ?>
-            </div>
-
-            <?php if (!empty($this->getData('pagination'))): ?>
-                <div class="mt-8 rounded-[1.5rem] border border-border-light bg-surface-light px-5 py-4">
-                    <?= $this->getData('pagination') ?>
-                </div>
-            <?php endif; ?>
-        <?php elseif ($hasKeyword): ?>
-            <div class="rounded-[2rem] border border-dashed border-border-light bg-surface-light px-6 py-16 text-center">
-                <div class="mx-auto max-w-2xl space-y-4">
-                    <h2 class="text-2xl font-black tracking-[-0.03em] text-text-primary-light"><?= __('No matching products yet') ?></h2>
-                    <p class="text-sm leading-6 text-text-secondary-light">
-                        <?= __('Try another keyword, browse a trending term, or remove filters to widen the catalog results.') ?>
-                    </p>
-                    <div class="flex flex-wrap justify-center gap-2 pt-2">
-                        <?php foreach ($popularKeywords as $item): ?>
-                            <a href="<?= $this->getUrl('search', ['q' => $item['keyword'] ?? '']) ?>" class="rounded-full border border-border-light px-3 py-2 text-sm text-text-secondary-light transition hover:border-primary hover:text-primary">
-                                <?= htmlspecialchars($item['keyword'] ?? '') ?>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
         <?php else: ?>
