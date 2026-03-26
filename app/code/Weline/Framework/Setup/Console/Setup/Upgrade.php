@@ -430,7 +430,14 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             if ($key === 'command') {
                 continue;
             }
-            if (!in_array($key, self::SUPPORTED_ARG_KEYS, true)) {
+            $normalizedKey = $this->normalizeArgKey((string) $key);
+            if ($normalizedKey === '') {
+                continue;
+            }
+            if (
+                !in_array($key, self::SUPPORTED_ARG_KEYS, true)
+                && !in_array($normalizedKey, self::SUPPORTED_ARG_KEYS, true)
+            ) {
                 $unknownArgs[] = $this->formatArgForDisplay((string) $key);
             }
         }
@@ -443,6 +450,11 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             implode(', ', $unknownArgs),
             implode(', ', self::SUPPORTED_ARGS_DISPLAY),
         ]));
+    }
+
+    private function normalizeArgKey(string $argKey): string
+    {
+        return ltrim(trim($argKey), '-');
     }
 
     private function formatArgForDisplay(string $argKey): string
