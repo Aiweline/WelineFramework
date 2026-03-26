@@ -39,7 +39,7 @@ class ComponentsTest extends TestCase
     public function testControllerHasIndexMethod(): void
     {
         $reflection = new \ReflectionClass(Components::class);
-        $this->assertTrue($reflection->hasMethod('index'));
+        $this->assertTrue($reflection->hasMethod('getIndex'));
     }
 
     /**
@@ -48,7 +48,7 @@ class ComponentsTest extends TestCase
     public function testControllerHasDetailMethod(): void
     {
         $reflection = new \ReflectionClass(Components::class);
-        $this->assertTrue($reflection->hasMethod('detail'));
+        $this->assertTrue($reflection->hasMethod('getDetail'));
     }
 }
 
