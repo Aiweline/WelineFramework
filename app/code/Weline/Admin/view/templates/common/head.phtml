@@ -62,14 +62,14 @@ endif;
 <theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
 <?php
 // 加载主题色系和变量CSS文件（预览配置）
-$session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
-$previewThemeId = $session->getData('preview_theme_id');
-$previewThemeArea = $session->getData('preview_theme_area');
-
-if ($previewThemeId && $previewThemeArea === 'backend') {
-    $theme = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
-    $theme->load($previewThemeId);
-    if ($theme->getId()) {
+$previewContextService = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\PreviewContextService::class);
+if ($previewContextService->shouldUseStoredContext()) {
+    $previewContext = $previewContextService->getCurrentContext();
+    $previewThemeId = $previewContextService->getThemeIdForArea('backend', $previewContext, false);
+    if ($previewThemeId > 0) {
+        $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+        $theme = $themeContext->resolveTheme('backend');
+        if ($theme && $theme->getId()) {
         // 加载色系CSS文件
         $themeMode = \Weline\Theme\Helper\LayoutScanner::getColorConfig($theme, 'backend');
         if ($themeMode && $themeMode !== 'light'): ?>
@@ -81,10 +81,11 @@ if ($previewThemeId && $previewThemeArea === 'backend') {
         $variables = \Weline\Theme\Helper\LayoutScanner::getVariablesConfig($theme, 'backend');
         foreach ($variables as $variable) {
             if ($variable): ?>
-<theme:css>Weline_Theme::theme/backend/variables/_<?= $variable ?>.css</theme:css>
+                <theme:css>Weline_Theme::theme/backend/variables/_<?= $variable ?>.css</theme:css>
 <?php 
             endif;
         }
+    }
     }
 }
 ?>
