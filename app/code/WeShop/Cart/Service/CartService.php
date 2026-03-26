@@ -56,6 +56,11 @@ class CartService
             $productId = (int) ($item[Cart::schema_fields_PRODUCT_ID] ?? 0);
             if ($productId > 0 && isset($products[$productId])) {
                 $item['product'] = $products[$productId];
+                $item['original_price'] = (float) ($products[$productId]['original_price'] ?? $item['original_price'] ?? $item[Cart::schema_fields_PRICE] ?? 0);
+                $item['special_price'] = $products[$productId]['special_price'] ?? null;
+                $item['has_discount'] = (bool) ($products[$productId]['has_discount'] ?? false);
+                $item['discount_amount'] = (float) ($products[$productId]['discount_amount'] ?? 0);
+                $item['discount_percent'] = (int) ($products[$productId]['discount_percent'] ?? 0);
             }
         }
         unset($item);
