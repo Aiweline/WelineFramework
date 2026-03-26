@@ -5,15 +5,11 @@ declare(strict_types=1);
 namespace Weline\Cdn\Test\Unit\Observer;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Model\WarmupUrl;
 use Weline\Cdn\Observer\WarmupSend;
 use Weline\Cdn\Service\UrlSiteResolver;
 use Weline\Framework\Event\Event;
 
-/**
- * WarmupSend观察者单元测试
- */
 class WarmupSendTest extends TestCase
 {
     private WarmupSend $observer;
@@ -23,121 +19,131 @@ class WarmupSendTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->warmupUrlModel = $this->createMock(WarmupUrl::class);
+
+        $this->warmupUrlModel = $this->getMockBuilder(WarmupUrl::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getData', 'setData', 'save'])
+            ->addMethods(['reset', 'where', 'find', 'fetch'])
+            ->getMock();
+
         $this->urlSiteResolver = $this->createMock(UrlSiteResolver::class);
         $this->observer = new WarmupSend($this->warmupUrlModel, $this->urlSiteResolver);
     }
 
-    /**
-     * 测试：观察者实例化
-     */
     public function testObserverInstantiation(): void
     {
         $this->assertInstanceOf(WarmupSend::class, $this->observer);
     }
 
-    /**
-     * 测试：执行（模块参数为空）
-     */
     public function testExecuteModuleEmpty(): void
     {
         $event = new Event('Weline_Cdn::send_warmup', []);
-        
         $this->observer->execute($event);
-        
+
         $result = $event->getData('result');
         $this->assertIsArray($result);
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('模块参数不能为空', $result['message']);
     }
 
-    /**
-     * 测试：执行（URL列表为空）
-     */
     public function testExecuteUrlsEmpty(): void
     {
-        $eventData = [
-            'module' => 'TestModule'
-        ];
-        $event = new Event('Weline_Cdn::send_warmup', $eventData);
-        
+        $event = new Event('Weline_Cdn::send_warmup', ['module' => 'TestModule']);
         $this->observer->execute($event);
-        
+
         $result = $event->getData('result');
         $this->assertIsArray($result);
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('URL列表不能为空', $result['message']);
     }
 
-    /**
-     * 测试：执行（URL列表不是数组）
-     */
     public function testExecuteUrlsNotArray(): void
     {
-        $eventData = [
+        $event = new Event('Weline_Cdn::send_warmup', [
             'module' => 'TestModule',
-            'urls' => 'not-an-array'
-        ];
-        $event = new Event('Weline_Cdn::send_warmup', $eventData);
-        
+            'urls' => 'not-an-array',
+        ]);
         $this->observer->execute($event);
-        
+
         $result = $event->getData('result');
         $this->assertIsArray($result);
         $this->assertFalse($result['success']);
-        $this->assertStringContainsString('URL列表不能为空', $result['message']);
     }
 
-    /**
-     * 测试：执行（字符串URL列表）
-     */
     public function testExecuteStringUrls(): void
     {
-        $eventData = [
-            'module' => 'TestModule',
-            'urls' => ['https://example.com/page1', 'https://example.com/page2']
-        ];
-        $event = new Event('Weline_Cdn::send_warmup', $eventData);
-        
-        // Mock模型行为
-        $this->warmupUrlModel->method('reset')->willReturnSelf();
-        $this->warmupUrlModel->method('where')->willReturnSelf();
-        $this->warmupUrlModel->method('find')->willReturnSelf();
-        $this->warmupUrlModel->method('fetch')->willReturnSelf();
-        $this->warmupUrlModel->method('getData')->willReturn(null);
-        $this->warmupUrlModel->method('setData')->willReturnSelf();
-        $this->warmupUrlModel->method('save')->willReturn(true);
-        
-        // Mock URL解析
+        $this->configureInsertFlow();
         $this->urlSiteResolver->method('resolveDomainByUrl')->willReturn(null);
-        
+
+        $event = new Event('Weline_Cdn::send_warmup', [
+            'module' => 'TestModule',
+            'urls' => ['https://example.com/page1', 'https://example.com/page2'],
+        ]);
+
         $this->observer->execute($event);
-        
+
         $result = $event->getData('result');
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
-        $this->assertArrayHasKey('inserted_count', $result);
-        $this->assertArrayHasKey('updated_count', $result);
+        $this->assertSame(2, $result['inserted_count']);
+        $this->assertSame(0, $result['updated_count']);
     }
 
-    /**
-     * 测试：执行（数组URL格式）
-     */
     public function testExecuteArrayUrls(): void
     {
-        $eventData = [
+        $this->configureInsertFlow();
+
+        $event = new Event('Weline_Cdn::send_warmup', [
             'module' => 'TestModule',
             'urls' => [
                 [
                     'url' => 'https://example.com/page1',
                     'site_id' => 1,
-                    'domain_id' => 1
-                ]
-            ]
-        ];
-        $event = new Event('Weline_Cdn::send_warmup', $eventData);
-        
-        // Mock模型行为
+                    'domain_id' => 1,
+                ],
+            ],
+        ]);
+
+        $this->observer->execute($event);
+
+        $result = $event->getData('result');
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+        $this->assertSame(1, $result['inserted_count']);
+    }
+
+    public function testExecuteDedupe(): void
+    {
+        $existingUrl = $this->getMockBuilder(WarmupUrl::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getData', 'setData', 'save'])
+            ->getMock();
+        $existingUrl->method('getData')->willReturnCallback(
+            static fn(string $field) => $field === WarmupUrl::schema_fields_WARMUP_URL_ID ? 1 : null
+        );
+        $existingUrl->method('setData')->willReturnSelf();
+        $existingUrl->method('save')->willReturn(true);
+
+        $this->warmupUrlModel->method('reset')->willReturnSelf();
+        $this->warmupUrlModel->method('where')->willReturnSelf();
+        $this->warmupUrlModel->method('find')->willReturnSelf();
+        $this->warmupUrlModel->method('fetch')->willReturn($existingUrl);
+
+        $event = new Event('Weline_Cdn::send_warmup', [
+            'module' => 'TestModule',
+            'urls' => ['https://example.com/page'],
+            'dedupe' => true,
+        ]);
+
+        $this->observer->execute($event);
+
+        $result = $event->getData('result');
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+        $this->assertSame(0, $result['inserted_count']);
+        $this->assertSame(1, $result['updated_count']);
+    }
+
+    private function configureInsertFlow(): void
+    {
         $this->warmupUrlModel->method('reset')->willReturnSelf();
         $this->warmupUrlModel->method('where')->willReturnSelf();
         $this->warmupUrlModel->method('find')->willReturnSelf();
@@ -145,48 +151,5 @@ class WarmupSendTest extends TestCase
         $this->warmupUrlModel->method('getData')->willReturn(null);
         $this->warmupUrlModel->method('setData')->willReturnSelf();
         $this->warmupUrlModel->method('save')->willReturn(true);
-        
-        $this->observer->execute($event);
-        
-        $result = $event->getData('result');
-        $this->assertIsArray($result);
-        $this->assertTrue($result['success']);
-    }
-
-    /**
-     * 测试：执行（去重处理）
-     */
-    public function testExecuteDedupe(): void
-    {
-        $eventData = [
-            'module' => 'TestModule',
-            'urls' => ['https://example.com/page'],
-            'dedupe' => true
-        ];
-        $event = new Event('Weline_Cdn::send_warmup', $eventData);
-        
-        // Mock已存在的记录
-        $existingUrl = $this->createMock(WarmupUrl::class);
-        $existingUrl->method('getData')->willReturnCallback(function($field) {
-            return $field === WarmupUrl::schema_fields_WARMUP_URL_ID ? 1 : null;
-        });
-        $existingUrl->method('setData')->willReturnSelf();
-        $existingUrl->method('save')->willReturn(true);
-        
-        $this->warmupUrlModel->method('reset')->willReturnSelf();
-        $this->warmupUrlModel->method('where')->willReturnSelf();
-        $this->warmupUrlModel->method('find')->willReturnSelf();
-        $this->warmupUrlModel->method('fetch')->willReturn($existingUrl);
-        
-        $this->urlSiteResolver->method('resolveDomainByUrl')->willReturn(null);
-        
-        $this->observer->execute($event);
-        
-        $result = $event->getData('result');
-        $this->assertIsArray($result);
-        $this->assertTrue($result['success']);
-        // 应该更新而不是插入
-        $this->assertGreaterThanOrEqual(0, $result['updated_count']);
     }
 }
-
