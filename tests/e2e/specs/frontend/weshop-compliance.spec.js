@@ -1,4 +1,4 @@
-// @weline-e2e-runtime fallback
+// @weline-e2e-runtime wls
 // @weline-e2e-transport direct
 
 const { test, expect, gotoFrontend } = require('../../framework');

@@ -23,6 +23,14 @@ const ALLOW_FALLBACK_RUNTIME_REUSE = process.env.PLAYWRIGHT_REUSE_FALLBACK_RUNTI
 const RUNTIME_STRATEGIES = new Set(['auto', 'wls', 'fallback']);
 const TRANSPORT_STRATEGIES = new Set(['proxy', 'direct']);
 
+function readTestFileSource(file) {
+    try {
+        return fs.readFileSync(file, 'utf8');
+    } catch (error) {
+        return '';
+    }
+}
+
 function readRuntimeInfo(env = process.env) {
     const stdout = execFileSync('php', [RUNTIME_INFO_SCRIPT], {
         cwd: ROOT_DIR,
@@ -87,7 +95,7 @@ function toProjectRelativePath(file) {
 
 function inferRuntimeStrategyFromArgs(args = []) {
     for (const file of resolveRequestedTestFiles(args)) {
-        const source = fs.readFileSync(file, 'utf8');
+        const source = readTestFileSource(file);
         const marker = source.match(/@weline-e2e-runtime\s*:?\s*([a-z-]+)/i);
         if (marker) {
             return normalizeRuntimeStrategy(marker[1], null);
@@ -99,7 +107,7 @@ function inferRuntimeStrategyFromArgs(args = []) {
 
 function inferTransportStrategyFromArgs(args = []) {
     for (const file of resolveRequestedTestFiles(args)) {
-        const source = fs.readFileSync(file, 'utf8');
+        const source = readTestFileSource(file);
         const marker = source.match(/@weline-e2e-transport\s*:?\s*([a-z-]+)/i);
         if (marker) {
             return normalizeTransportStrategy(marker[1], null);
@@ -140,6 +148,155 @@ function normalizePlaywrightArgs(args = []) {
 
 function stripFileArgs(args = []) {
     return args.filter(arg => !(typeof arg === 'string' && !arg.startsWith('-') && arg.endsWith('.js')));
+}
+
+function getModuleFilter(args = [], env = process.env) {
+    const fromArgs = args.find(arg => typeof arg === 'string' && arg.startsWith('--module='))?.split('=')[1];
+    return env.MODULE_FILTER || fromArgs || null;
+}
+
+function collectSelectedTestFiles(args = [], env = process.env) {
+    const requestedTestFiles = resolveRequestedTestFiles(args).map(toProjectRelativePath);
+    if (requestedTestFiles.length > 0) {
+        return requestedTestFiles;
+    }
+
+    try {
+        const { collectAllTests } = require('./collect-tests');
+        const result = collectAllTests();
+        const moduleFilter = getModuleFilter(args, env);
+        let files = Array.isArray(result.all_test_files) ? result.all_test_files : [];
+
+        if (moduleFilter) {
+            const moduleTests = result.modules && result.modules[moduleFilter];
+            files = Array.isArray(moduleTests?.test_files) ? moduleTests.test_files : [];
+        }
+
+        return Array.from(new Set(files.map(file => {
+            const resolved = resolveRequestedTestFile(file) || path.resolve(ROOT_DIR, String(file));
+            return toProjectRelativePath(resolved);
+        })));
+    } catch (error) {
+        return requestedTestFiles;
+    }
+}
+
+function readSpecExecutionHints(file) {
+    const resolvedFile = resolveRequestedTestFile(file) || path.resolve(ROOT_DIR, String(file));
+    const source = readTestFileSource(resolvedFile);
+    const runtimeMarker = source.match(/@weline-e2e-runtime\s*:?\s*([a-z-]+)/i);
+    const transportMarker = source.match(/@weline-e2e-transport\s*:?\s*([a-z-]+)/i);
+
+    return {
+        runtimeStrategy: normalizeRuntimeStrategy(runtimeMarker && runtimeMarker[1], 'auto'),
+        transportStrategy: normalizeTransportStrategy(transportMarker && transportMarker[1], 'auto') || 'auto',
+    };
+}
+
+function buildExecutionGroups(files = []) {
+    const groupMap = new Map();
+
+    for (const file of files) {
+        const normalizedFile = String(file).replace(/\\/g, '/');
+        const { runtimeStrategy, transportStrategy } = readSpecExecutionHints(normalizedFile);
+        const key = `${runtimeStrategy}|${transportStrategy}`;
+
+        if (!groupMap.has(key)) {
+            groupMap.set(key, {
+                runtimeStrategy,
+                transportStrategy,
+                files: [],
+            });
+        }
+
+        groupMap.get(key).files.push(normalizedFile);
+    }
+
+    return Array.from(groupMap.values());
+}
+
+function shouldUseGroupedExecution(groups = [], requestedTestFiles = [], env = process.env) {
+    if (env.PLAYWRIGHT_SKIP_GROUPING === '1') {
+        return false;
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(env, 'PLAYWRIGHT_RUNTIME_STRATEGY')
+        || Object.prototype.hasOwnProperty.call(env, 'PLAYWRIGHT_TARGET_ORIGIN')
+    ) {
+        return false;
+    }
+
+    if (groups.length === 0) {
+        return false;
+    }
+
+    if (groups.length > 1) {
+        return true;
+    }
+
+    if (requestedTestFiles.length > 0) {
+        return false;
+    }
+
+    const [group] = groups;
+    return group.runtimeStrategy !== 'auto' || group.transportStrategy !== 'auto';
+}
+
+function describeExecutionGroup(group) {
+    return `runtime=${group.runtimeStrategy}, transport=${group.transportStrategy}, files=${group.files.length}`;
+}
+
+function runGroupedExecution(rawArgs = [], groups = []) {
+    const sharedArgs = stripFileArgs(rawArgs);
+    const scriptPath = path.resolve(__dirname, 'start.js');
+    const inheritedTransport = normalizeTransportStrategy(process.env.PLAYWRIGHT_E2E_TRANSPORT, 'auto') || 'auto';
+    const inheritedDisableProxy = process.env.PLAYWRIGHT_DISABLE_PROXY;
+
+    console.log(`[e2e] detected ${groups.length} execution groups from spec markers; running them sequentially.\n`);
+
+    for (const [index, group] of groups.entries()) {
+        const groupEnv = { ...process.env };
+        delete groupEnv.PLAYWRIGHT_RUNTIME_STRATEGY;
+        delete groupEnv.PLAYWRIGHT_E2E_TRANSPORT;
+        delete groupEnv.PLAYWRIGHT_TARGET_ORIGIN;
+        delete groupEnv.PLAYWRIGHT_DISABLE_PROXY;
+        delete groupEnv.PLAYWRIGHT_TEST_FILES;
+
+        groupEnv.PLAYWRIGHT_SKIP_GROUPING = '1';
+        groupEnv.PLAYWRIGHT_SKIP_PREFLIGHT = '1';
+
+        if (typeof inheritedDisableProxy !== 'undefined') {
+            groupEnv.PLAYWRIGHT_DISABLE_PROXY = inheritedDisableProxy;
+        }
+
+        if (group.runtimeStrategy !== 'auto') {
+            groupEnv.PLAYWRIGHT_RUNTIME_STRATEGY = group.runtimeStrategy;
+        }
+
+        if (inheritedTransport !== 'auto') {
+            groupEnv.PLAYWRIGHT_E2E_TRANSPORT = inheritedTransport;
+        }
+
+        if (group.transportStrategy !== 'auto') {
+            groupEnv.PLAYWRIGHT_E2E_TRANSPORT = group.transportStrategy;
+        }
+
+        console.log(`[e2e] group ${index + 1}/${groups.length}: ${describeExecutionGroup(group)}`);
+        console.log(`[e2e] files: ${group.files.join(', ')}\n`);
+
+        try {
+            execFileSync(process.execPath, [scriptPath, ...sharedArgs, ...group.files], {
+                stdio: 'inherit',
+                cwd: __dirname,
+                env: groupEnv,
+            });
+        } catch (error) {
+            return error.status || 1;
+        }
+    }
+
+    return 0;
 }
 
 function resolvePhpBinary() {
@@ -293,7 +450,7 @@ async function startFallbackPhpServer(port) {
     );
 
     const ready = await waitForUrl(origin, {
-        attempts: 60,
+        attempts: 120,
         intervalMs: 500,
         timeoutMs: 2000,
     });
@@ -423,26 +580,36 @@ async function main() {
         const rawArgs = process.argv.slice(2);
         const args = normalizePlaywrightArgs(rawArgs);
         const requestedTestFiles = resolveRequestedTestFiles(rawArgs).map(toProjectRelativePath);
+        const selectedTestFiles = collectSelectedTestFiles(rawArgs, process.env);
+        const executionGroups = buildExecutionGroups(selectedTestFiles);
+        const useGroupedExecution = shouldUseGroupedExecution(executionGroups, requestedTestFiles, process.env);
+
+        const runtimeStrategy = resolveRuntimeStrategy(args, process.env);
+        const transportStrategy = resolveTransportStrategy(args, process.env) || 'auto';
+        if (process.env.PLAYWRIGHT_SKIP_PREFLIGHT !== '1') {
+            console.log('[e2e] running framework preflight...\n');
+            try {
+                const preflight = runFrameworkPreflight(resolvePhpBinary, process.env);
+                if (preflight.output) {
+                    console.log(`${preflight.output}\n`);
+                }
+            } catch (error) {
+                console.error('[e2e] framework preflight failed.');
+                if (error.details) {
+                    console.error(`${error.details}\n`);
+                }
+                throw error;
+            }
+        }
+
+        if (useGroupedExecution) {
+            return runGroupedExecution(rawArgs, executionGroups);
+        }
+
         if (requestedTestFiles.length > 0) {
             process.env.PLAYWRIGHT_TEST_FILES = JSON.stringify(requestedTestFiles);
         } else {
             delete process.env.PLAYWRIGHT_TEST_FILES;
-        }
-
-        const runtimeStrategy = resolveRuntimeStrategy(args, process.env);
-        const transportStrategy = resolveTransportStrategy(args, process.env) || 'auto';
-        console.log('[e2e] running framework preflight...\n');
-        try {
-            const preflight = runFrameworkPreflight(resolvePhpBinary, process.env);
-            if (preflight.output) {
-                console.log(`${preflight.output}\n`);
-            }
-        } catch (error) {
-            console.error('[e2e] framework preflight failed.');
-            if (error.details) {
-                console.error(`${error.details}\n`);
-            }
-            throw error;
         }
 
         const preparedRuntime = await prepareRuntime(args);
