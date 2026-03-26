@@ -30,6 +30,17 @@ class Option extends \Weline\Framework\Database\Model
     public const fields_swatch_color = 'swatch_color';
     public const fields_swatch_text = 'swatch_text';
 
+    public const schema_fields_ID = 'option_id';
+    public const schema_fields_option_id = 'option_id';
+    public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_attribute_id = 'attribute_id';
+    public const schema_fields_code = 'code';
+    public const schema_fields_CODE = 'code';
+    public const schema_fields_value = 'value';
+    public const schema_fields_swatch_image = 'swatch_image';
+    public const schema_fields_swatch_color = 'swatch_color';
+    public const schema_fields_swatch_text = 'swatch_text';
+
     public array $_unit_primary_keys = ['option_id', 'attribute_id', 'code'];
     public array $_index_sort_keys = ['option_id', 'attribute_id', 'code'];
 
