@@ -13,11 +13,23 @@
 if (!\defined('BP')) {
     \define('BP', \dirname(__DIR__) . \DIRECTORY_SEPARATOR);
 }
+if (!\defined('DS')) {
+    \define('DS', \DIRECTORY_SEPARATOR);
+}
+if (!\defined('APP_PATH')) {
+    \define('APP_PATH', BP . 'app' . DS);
+}
+if (!\defined('APP_ETC_PATH')) {
+    \define('APP_ETC_PATH', APP_PATH . 'etc' . DS);
+}
+if (!\defined('PUB')) {
+    \define('PUB', BP . 'pub' . DS);
+}
 if (!\defined('VENDOR_PATH')) {
-    \define('VENDOR_PATH', BP . 'vendor' . \DIRECTORY_SEPARATOR);
+    \define('VENDOR_PATH', BP . 'vendor' . DS);
 }
 if (!\defined('APP_CODE_PATH')) {
-    \define('APP_CODE_PATH', BP . 'app' . \DIRECTORY_SEPARATOR . 'code' . \DIRECTORY_SEPARATOR);
+    \define('APP_CODE_PATH', APP_PATH . 'code' . DS);
 }
 
 // 注册 app/code 和 generated/code 优先的自动加载器（在 Composer 之前，prepend=true）
