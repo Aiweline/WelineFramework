@@ -45,7 +45,7 @@ class Domain extends BackendController
         }
 
         $this->assign('websites', $websites);
-        return $this->fetch();
+        return $this->fetch('batch');
     }
 
     #[AclAttribute('Weline_Terraform::terraform_batch_bind_submit', '提交批量绑定', 'mdi-play', '提交批量绑定')]
