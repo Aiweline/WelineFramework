@@ -48,8 +48,18 @@ $TargetPath = Join-Path (Get-Location) $InstallDir
 if (Test-Path (Join-Path $TargetPath ".git")) {
     Write-Host "Directory $InstallDir already exists. Updating..."
     Set-Location $TargetPath
-    git fetch origin 2>$null
-    git checkout $Branch 2>$null; if (-not $?) { git pull origin $Branch 2>$null }
+    git fetch origin
+
+    # Ensure branch is checked out locally; create tracking branch when missing.
+    git show-ref --verify --quiet ("refs/heads/" + $Branch)
+    if ($LASTEXITCODE -eq 0) {
+        git checkout $Branch
+    } else {
+        git checkout -B $Branch ("origin/" + $Branch)
+    }
+
+    # Always try fast-forward update so each run has deterministic latest code state.
+    git pull --ff-only origin $Branch
     Set-Location (Get-Location)
 } else {
     Write-Host "Cloning WelineFramework (branch: $Branch) into $InstallDir..."
