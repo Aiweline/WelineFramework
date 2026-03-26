@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Service;
 
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\QA\Service\QAService;
 use WeShop\Review\Service\ReviewService;
@@ -14,6 +15,7 @@ class ProductViewPageDataService
 
     public function __construct(
         private readonly ProductService $productService,
+        private readonly PriceService $priceService,
         private readonly ProductEavService $productEavService,
         private readonly ProductRecommendationService $productRecommendationService,
         private readonly ReviewService $reviewService,
@@ -121,6 +123,7 @@ class ProductViewPageDataService
     {
         $images = $this->extractImages($product);
         $ratingDistribution = $this->buildRatingDistribution($reviewsPayload['items']);
+        $priceData = $this->priceService->resolveProduct($product);
 
         return [
             'product_id' => (int) $product->getId(),
@@ -128,8 +131,12 @@ class ProductViewPageDataService
             'short_description' => (string) ($product->getData(Product::schema_fields_short_description) ?? ''),
             'description' => (string) ($product->getData(Product::schema_fields_description) ?? ''),
             'description_title' => (string) __('Product Description'),
-            'price' => (float) ($product->getData(Product::schema_fields_price) ?? 0),
-            'special_price' => $this->normalizeNullableFloat($product->getData('special_price')),
+            'price' => (float) ($priceData['price'] ?? 0),
+            'original_price' => (float) ($priceData['original_price'] ?? 0),
+            'special_price' => $this->normalizeNullableFloat($priceData['special_price'] ?? null),
+            'has_discount' => (bool) ($priceData['has_discount'] ?? false),
+            'discount_amount' => (float) ($priceData['discount_amount'] ?? 0),
+            'discount_percent' => (int) ($priceData['discount_percent'] ?? 0),
             'cost' => (float) ($product->getData(Product::schema_fields_cost) ?? 0),
             'sku' => (string) ($product->getData(Product::schema_fields_sku) ?? ''),
             'stock' => (int) ($product->getData(Product::schema_fields_stock) ?? 0),
