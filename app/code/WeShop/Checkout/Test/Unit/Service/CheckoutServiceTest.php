@@ -12,6 +12,104 @@ use WeShop\Order\Service\OrderService;
 
 class CheckoutServiceTest extends TestCase
 {
+    public function testPreviewCheckoutSummaryBuildsSummaryFromCartAndQuoteQueries(): void
+    {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())->method('getRetryPaymentContext');
+
+        $queries = [];
+        $service = new class($orderService, $queries) extends CheckoutService {
+            public function __construct(
+                OrderService $orderService,
+                private array &$queries
+            ) {
+                parent::__construct($orderService);
+            }
+
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                $this->queries[] = [$provider, $operation, $params];
+
+                return match ($provider . ':' . $operation) {
+                    'cart:getCartItems' => [
+                        [
+                            'product_id' => 10,
+                            'quantity' => 2,
+                            'price' => 25.0,
+                            'product' => ['sku' => 'SKU-10', 'name' => 'Travel Bag', 'weight' => 1.2],
+                        ],
+                    ],
+                    'cart:calculateTotals' => [
+                        'subtotal' => 50.0,
+                        'discount' => 5.0,
+                    ],
+                    'shipping:calculateShipping' => 12.5,
+                    'tax:calculateTax' => 5.63,
+                    default => null,
+                };
+            }
+        };
+
+        $summary = $service->previewCheckoutSummary(8, [
+            'shipping_address' => ['country_id' => 'US', 'region' => 'CA'],
+            'shipping_method' => 'flat_rate',
+            'currency' => 'USD',
+        ]);
+
+        $this->assertSame(50.0, $summary['subtotal']);
+        $this->assertSame(12.5, $summary['shipping']);
+        $this->assertSame(5.0, $summary['discount']);
+        $this->assertSame(5.63, $summary['tax']);
+        $this->assertSame(63.13, $summary['grand_total']);
+        $this->assertSame('cart', $queries[0][0]);
+        $this->assertSame('getCartItems', $queries[0][1]);
+        $this->assertSame(8, $queries[0][2]['customer_id']);
+        $this->assertSame('cart', $queries[1][0]);
+        $this->assertSame('calculateTotals', $queries[1][1]);
+        $this->assertSame('flat_rate', $queries[2][2]['shipping_method']);
+        $this->assertSame('US', $queries[2][2]['shipping_data']['address']['country_id']);
+        $this->assertSame(12.5, $queries[3][2]['shipping_amount']);
+    }
+
+    public function testPreviewCheckoutSummaryUsesPersistedRetrySummaryWhenRetryOrderIdIsPresent(): void
+    {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('getRetryPaymentContext')
+            ->with(88, 12)
+            ->willReturn([
+                'summary' => [
+                    'subtotal' => 59.5,
+                    'shipping' => 0.0,
+                    'discount' => 0.0,
+                    'tax' => 0.0,
+                    'grand_total' => 59.5,
+                ],
+            ]);
+
+        $service = new class($orderService) extends CheckoutService {
+            public function __construct(OrderService $orderService)
+            {
+                parent::__construct($orderService);
+            }
+
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                throw new \RuntimeException('Quote preview should not query cart/shipping/tax during retry.');
+            }
+        };
+
+        $summary = $service->previewCheckoutSummary(12, [
+            'retry_order_id' => 88,
+            'shipping_method' => 'flat_rate',
+            'currency' => 'USD',
+        ]);
+
+        $this->assertSame(59.5, $summary['subtotal']);
+        $this->assertSame(0.0, $summary['shipping']);
+        $this->assertSame(59.5, $summary['grand_total']);
+    }
+
     public function testCreateOrderFromCartBuildsSummaryFromShippingAndTaxQueries(): void
     {
         $order = new class extends Order {
