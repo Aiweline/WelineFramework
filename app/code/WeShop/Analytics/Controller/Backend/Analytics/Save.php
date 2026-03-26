@@ -20,15 +20,23 @@ class Save extends BaseController
         $redirectUrl = $this->_url->getBackendUrl('*/backend/analytics', ['provider' => $provider]);
 
         try {
-            $this->analyticsConfigService->saveProviderConfig([
+            $payload = [
                 'provider' => $provider,
                 'enabled' => $this->request->getParam('enabled', 0),
-                'measurement_id' => $this->request->getParam('measurement_id', ''),
-                'api_secret' => $this->request->getParam('api_secret', ''),
-                'pixel_id' => $this->request->getParam('pixel_id', ''),
-                'access_token' => $this->request->getParam('access_token', ''),
-                'test_event_code' => $this->request->getParam('test_event_code', ''),
-            ]);
+            ];
+
+            $definitions = $this->analyticsConfigService->getProviderDefinitions();
+            $fields = is_array($definitions[$provider]['fields'] ?? null) ? $definitions[$provider]['fields'] : [];
+            foreach ($fields as $field) {
+                $fieldName = trim((string) ($field['name'] ?? ''));
+                if ($fieldName === '') {
+                    continue;
+                }
+
+                $payload[$fieldName] = $this->request->getParam($fieldName, '');
+            }
+
+            $this->analyticsConfigService->saveProviderConfig($payload);
 
             $this->getMessageManager()->addSuccess(__('Analytics provider config saved.'));
         } catch (\Throwable $throwable) {

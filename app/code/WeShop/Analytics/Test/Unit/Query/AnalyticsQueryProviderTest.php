@@ -45,4 +45,23 @@ class AnalyticsQueryProviderTest extends TestCase
 
         self::assertTrue($result[0]['ready']);
     }
+
+    public function testExecuteReturnsFrontendSnippetsBySlot(): void
+    {
+        $snippetService = $this->createMock(AnalyticsSnippetService::class);
+        $configService = $this->createMock(AnalyticsConfigService::class);
+
+        $snippetService->expects(self::once())
+            ->method('getFrontendPixelSnippetsBySlot')
+            ->with('body')
+            ->willReturn([
+                ['provider' => 'facebook', 'snippet' => '<noscript>fb</noscript>'],
+            ]);
+
+        $provider = new AnalyticsQueryProvider($snippetService, $configService);
+        $result = $provider->execute('getFrontendPixelSnippetsBySlot', ['slot' => 'body']);
+
+        self::assertCount(1, $result);
+        self::assertSame('facebook', $result[0]['provider']);
+    }
 }
