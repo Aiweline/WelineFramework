@@ -44,6 +44,23 @@ class Type extends \Weline\Framework\Database\Model
     public const fields_required = 'required';
     public const fields_field_type = 'field_type';
     public const fields_field_length = 'field_length';
+
+    public const schema_fields_ID = 'type_id';
+    public const schema_fields_type_id = 'type_id';
+    public const schema_fields_code = 'code';
+    public const schema_fields_name = 'name';
+    public const schema_fields_is_swatch = 'is_swatch';
+    public const schema_fields_swatch_image = 'swatch_image';
+    public const schema_fields_swatch_color = 'swatch_color';
+    public const schema_fields_swatch_text = 'swatch_text';
+    public const schema_fields_frontend_attrs = 'frontend_attrs';
+    public const schema_fields_model_class = 'model_class';
+    public const schema_fields_model_class_data = 'model_class_data';
+    public const schema_fields_element = 'element';
+    public const schema_fields_default_value = 'default_value';
+    public const schema_fields_required = 'required';
+    public const schema_fields_field_type = 'field_type';
+    public const schema_fields_field_length = 'field_length';
     public array $_unit_primary_keys = ['type_id'];
     public array $_index_sort_keys = ['type_id'];
 

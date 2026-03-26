@@ -9,6 +9,7 @@ use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Eav\Model\EavAttribute\Set;
+use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -122,7 +123,7 @@ class ProductEavService
             $query->where(EavAttribute::schema_fields_set_id, $setId);
         }
 
-        $attributes = $query->select()->fetch();
+        $attributes = $query->select()->fetchArray();
         if (!is_array($attributes)) {
             return [];
         }
@@ -150,9 +151,9 @@ class ProductEavService
     public function getAttributeOptions(int $attributeId): array
     {
         $options = $this->attributeOption->reset()
-            ->where(Option::schema_fields_attribute_id, $attributeId)
+            ->where(Option::fields_attribute_id, $attributeId)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         if (!is_array($options)) {
             return [];
@@ -160,15 +161,15 @@ class ProductEavService
 
         return array_map(function ($option) {
             return [
-                'option_id' => (int) ($option[Option::schema_fields_option_id] ?? 0),
-                'code' => $option[Option::schema_fields_code] ?? '',
-                'value' => $option[Option::schema_fields_value] ?? '',
-                'swatch_image' => $option[Option::schema_fields_swatch_image] ?? null,
-                'swatch_color' => $option[Option::schema_fields_swatch_color] ?? null,
-                'swatch_text' => $option[Option::schema_fields_swatch_text] ?? null,
-                'is_swatch' => !empty($option[Option::schema_fields_swatch_image])
-                    || !empty($option[Option::schema_fields_swatch_color])
-                    || !empty($option[Option::schema_fields_swatch_text]),
+                'option_id' => (int) ($option[Option::fields_option_id] ?? 0),
+                'code' => $option[Option::fields_code] ?? '',
+                'value' => $option[Option::fields_value] ?? '',
+                'swatch_image' => $option[Option::fields_swatch_image] ?? null,
+                'swatch_color' => $option[Option::fields_swatch_color] ?? null,
+                'swatch_text' => $option[Option::fields_swatch_text] ?? null,
+                'is_swatch' => !empty($option[Option::fields_swatch_image])
+                    || !empty($option[Option::fields_swatch_color])
+                    || !empty($option[Option::fields_swatch_text]),
             ];
         }, $options);
     }
@@ -186,7 +187,7 @@ class ProductEavService
         $sets = $this->attributeSet->reset()
             ->where(Set::schema_fields_eav_entity_id, $productEntity->getId())
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         return is_array($sets) ? $sets : [];
     }
@@ -200,7 +201,7 @@ class ProductEavService
             ->where(Group::schema_fields_set_id, $setId)
             ->order(Group::schema_fields_ID)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         return is_array($groups) ? $groups : [];
     }
@@ -216,7 +217,7 @@ class ProductEavService
             ->where(EavAttribute::schema_fields_group_id, $groupId)
             ->where(EavAttribute::schema_fields_is_enable, 1)
             ->select()
-            ->fetch();
+            ->fetchArray();
 
         return is_array($attributes) ? $attributes : [];
     }
@@ -232,34 +233,24 @@ class ProductEavService
         $multipleValued = (bool) ($attributeData[EavAttribute::schema_fields_multiple_valued] ?? false);
         $typeId = (int) ($attributeData[EavAttribute::schema_fields_type_id] ?? 0);
 
-        /** @var EavAttribute $attribute */
-        $attribute = ObjectManager::getInstance(EavAttribute::class);
-        $attribute->load($attributeId);
-
-        if (!$attribute->getId()) {
+        $typeModel = $this->loadAttributeTypeModel($typeId);
+        if ($typeModel === null) {
             return null;
         }
 
         try {
-            $product = ObjectManager::getInstance(Product::class);
-            $product->load($productId);
-            $attribute->current_setEntity($product);
-            $typeModel = $attribute->getTypeModel();
-
-            $value = $attribute->getValue($productId);
-            $displayValue = $value;
+            $rawValues = $this->loadProductAttributeValues($attributeId, $typeModel->getCode(), $productId);
+            $value = $this->formatAttributeValue($rawValues, $multipleValued);
+            $displayValue = is_array($value) ? implode(', ', $value) : (string) ($value ?? '');
             $options = [];
 
-            if ($hasOption && $value !== null && $value !== '') {
-                $options = $attribute->getOptionsWithValue(true);
-
-                if (is_array($options)) {
-                    $displayValues = [];
-                    foreach ($options as $option) {
-                        if (isset($option['selected']) && $option['selected']) {
-                            $displayValues[] = $option[Option::schema_fields_value] ?? $option['value'] ?? '';
-                        }
-                    }
+            if ($hasOption && $rawValues !== []) {
+                $options = $this->resolveSelectedOptions($attributeId, $rawValues);
+                $displayValues = array_values(array_filter(array_map(
+                    static fn (array $option): string => trim((string) ($option['value'] ?? '')),
+                    $options
+                )));
+                if ($displayValues !== []) {
                     $displayValue = implode(', ', $displayValues);
                 }
             }
@@ -273,16 +264,16 @@ class ProductEavService
                 'type_element' => $typeModel->getElement(),
                 'has_option' => $hasOption,
                 'multiple_valued' => $multipleValued,
-                'frontend_is_filterable' => $attribute->isFilterable(),
-                'frontend_is_searchable' => $attribute->isSearchable(),
-                'frontend_is_visible' => $attribute->isVisibleOnFront(),
+                'frontend_is_filterable' => (bool) ($attributeData[EavAttribute::schema_fields_frontend_is_filterable] ?? false),
+                'frontend_is_searchable' => (bool) ($attributeData[EavAttribute::schema_fields_frontend_is_searchable] ?? false),
+                'frontend_is_visible' => (bool) ($attributeData[EavAttribute::schema_fields_frontend_is_visible] ?? false),
                 'is_swatch' => $typeModel->isSwatch(),
                 'swatch_color' => $typeModel->hasSwatchColor(),
                 'swatch_image' => $typeModel->hasSwatchImage(),
                 'swatch_text' => $typeModel->hasSwatchText(),
                 'value' => $value,
                 'display_value' => $displayValue,
-                'options' => $hasOption ? $attribute->getOptions() : [],
+                'options' => $hasOption ? $this->getAttributeOptions($attributeId) : [],
                 'selected_options' => $options,
             ];
         } catch (\Exception $e) {
@@ -309,6 +300,101 @@ class ProductEavService
                 'error' => $e->getMessage(),
             ];
         }
+    }
+
+    private function loadAttributeTypeModel(int $typeId): ?Type
+    {
+        if ($typeId <= 0) {
+            return null;
+        }
+
+        /** @var Type $typeModel */
+        $typeModel = ObjectManager::getInstance(Type::class);
+        $typeModel->reset()->clearData()->load($typeId);
+
+        return $typeModel->getId() ? $typeModel : null;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function loadProductAttributeValues(int $attributeId, string $typeCode, int $productId): array
+    {
+        if ($attributeId <= 0 || $productId <= 0) {
+            return [];
+        }
+
+        $sanitizedTypeCode = $this->sanitizeTypeCode($typeCode);
+        if ($sanitizedTypeCode === '') {
+            return [];
+        }
+
+        $valueTable = 'm_eav_product_' . $sanitizedTypeCode;
+        $product = ObjectManager::getInstance(Product::class);
+        $pdo = $product->getConnection()->getConnector()->getLink();
+        $sql = "SELECT value FROM \"{$valueTable}\" WHERE attribute_id = :attribute_id AND entity_id = :entity_id";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            ':attribute_id' => $attributeId,
+            ':entity_id' => $productId,
+        ]);
+
+        $values = [];
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $value = trim((string) ($row['value'] ?? ''));
+            if ($value !== '') {
+                $values[] = $value;
+            }
+        }
+
+        return array_values(array_unique($values));
+    }
+
+    /**
+     * @param array<int, string> $rawValues
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveSelectedOptions(int $attributeId, array $rawValues): array
+    {
+        if ($rawValues === []) {
+            return [];
+        }
+
+        $selectedValueMap = array_fill_keys(array_map('strval', $rawValues), true);
+        $selectedOptions = [];
+
+        foreach ($this->getAttributeOptions($attributeId) as $option) {
+            $optionId = (string) ($option['option_id'] ?? '');
+            if ($optionId === '' || !isset($selectedValueMap[$optionId])) {
+                continue;
+            }
+
+            $option['selected'] = 1;
+            $selectedOptions[] = $option;
+        }
+
+        return $selectedOptions;
+    }
+
+    /**
+     * @param array<int, string> $rawValues
+     */
+    private function formatAttributeValue(array $rawValues, bool $multipleValued): array|string|null
+    {
+        if ($rawValues === []) {
+            return null;
+        }
+
+        if ($multipleValued || count($rawValues) > 1) {
+            return $rawValues;
+        }
+
+        return $rawValues[0];
+    }
+
+    private function sanitizeTypeCode(string $typeCode): string
+    {
+        return preg_replace('/[^a-z0-9_]/', '', strtolower(trim($typeCode))) ?: '';
     }
 
     /**
@@ -371,8 +457,8 @@ class ProductEavService
                     continue;
                 }
 
-                $valueKeyword = (string) ($option[Option::schema_fields_option_id] ?? $option['option_id'] ?? '');
-                $valueText = trim((string) ($option[Option::schema_fields_value] ?? $option['value'] ?? $valueKeyword));
+                $valueKeyword = (string) ($option[Option::fields_option_id] ?? $option['option_id'] ?? '');
+                $valueText = trim((string) ($option[Option::fields_value] ?? $option['value'] ?? $valueKeyword));
                 if ($valueKeyword === '' && $valueText === '') {
                     continue;
                 }
@@ -482,7 +568,7 @@ class ProductEavService
                 $swatchData[] = [
                     'type' => !empty($option['swatch_image']) ? 'image' : (!empty($option['swatch_color']) ? 'color' : 'text'),
                     'value' => $option['swatch_image'] ?? $option['swatch_color'] ?? $option['swatch_text'] ?? '',
-                    'label' => $option[Option::schema_fields_value] ?? $option['value'] ?? '',
+                    'label' => $option[Option::fields_value] ?? $option['value'] ?? '',
                 ];
             }
         }
