@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\DataTable\Controller\Backend\Test;
 
 use Weline\Admin\Controller\BaseController;
+use Weline\DataTable\Controller\Backend\Test\Concern\HandlesBackendLayouts;
 use Weline\DataTable\Service\BackendAdminPageService;
 use Weline\Framework\Acl\Acl;
 
@@ -17,6 +18,8 @@ use Weline\Framework\Acl\Acl;
 )]
 class Index extends BaseController
 {
+    use HandlesBackendLayouts;
+
     public function __construct(
         private readonly BackendAdminPageService $backendAdminPageService
     ) {
@@ -30,18 +33,23 @@ class Index extends BaseController
     )]
     public function index(): string
     {
-        $this->layoutType = 'default.blank';
+        $currentLayoutKey = $this->applyBackendLayout();
 
         $dashboardData = $this->backendAdminPageService->getDashboardData();
-        $dashboardData['scenarios'] = $this->appendScenarioUrls($dashboardData['scenarios'] ?? []);
+        $dashboardData['scenarios'] = $this->appendScenarioUrls($dashboardData['scenarios'] ?? [], $currentLayoutKey);
+        $dashboardData['docs'] = $this->decorateDocumentLinks($dashboardData['docs'] ?? [], 'index/doc', $currentLayoutKey);
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('DataTable Backend Dashboard'),
-                'dashboardUrl' => 'index',
-                'comprehensiveUrl' => 'comprehensive/index',
-                'tagTestUrl' => 'tag-test/index',
-                'docUrl' => 'index/doc',
+                'currentLayout' => $currentLayoutKey,
+                'layoutOptions' => $this->buildBackendLayoutOptions('index', $currentLayoutKey),
+                'layoutSwitcherTitle' => (string) __('Backend Layouts'),
+                'layoutSwitcherDescription' => (string) __('Switch the backend shell here to validate the admin dashboard and related DataTable pages under different layout variants.'),
+                'dashboardUrl' => $this->routeWithQuery('index', ['layout' => $currentLayoutKey]),
+                'comprehensiveUrl' => $this->routeWithQuery('comprehensive/index', ['layout' => $currentLayoutKey]),
+                'tagTestUrl' => $this->routeWithQuery('tag-test/index', ['layout' => $currentLayoutKey]),
+                'docUrl' => $this->routeWithQuery('index/doc', ['layout' => $currentLayoutKey]),
                 'frontendDemoUrl' => $this->getUrl('datatable/test'),
                 'frontendApiBasePath' => $this->getFrontendApiBasePath(),
                 'demoInitUrl' => 'datatable/rest/v1/demo-table/init-data',
@@ -61,17 +69,29 @@ class Index extends BaseController
     )]
     public function doc(): string
     {
+        $currentLayoutKey = $this->applyBackendLayout();
         $selectedDoc = (string) $this->request->getParam('doc', 'quickstart');
+        $pageData = $this->backendAdminPageService->getDocumentationPageData($selectedDoc);
+        $selectedDocKey = (string) ($pageData['selectedDoc']['key'] ?? 'quickstart');
+        $pageData['docs'] = $this->decorateDocumentLinks($pageData['docs'] ?? [], 'doc', $currentLayoutKey);
+        $pageData['selectedDoc']['url'] = $this->routeWithQuery('doc', [
+            'doc' => $selectedDocKey,
+            'layout' => $currentLayoutKey,
+        ]);
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('DataTable Documentation'),
-                'dashboardUrl' => '../index',
-                'comprehensiveUrl' => '../comprehensive/index',
-                'tagTestUrl' => '../tag-test/index',
-                'docUrl' => 'doc',
+                'currentLayout' => $currentLayoutKey,
+                'layoutOptions' => $this->buildBackendLayoutOptions('doc', $currentLayoutKey, true, ['doc' => $selectedDocKey]),
+                'layoutSwitcherTitle' => (string) __('Documentation Layout'),
+                'layoutSwitcherDescription' => (string) __('Use the same document page in different backend shells to verify spacing, navigation, and long-form content behavior.'),
+                'dashboardUrl' => $this->routeWithQuery('../index', ['layout' => $currentLayoutKey]),
+                'comprehensiveUrl' => $this->routeWithQuery('../comprehensive/index', ['layout' => $currentLayoutKey]),
+                'tagTestUrl' => $this->routeWithQuery('../tag-test/index', ['layout' => $currentLayoutKey]),
+                'docUrl' => $this->routeWithQuery('doc', ['layout' => $currentLayoutKey]),
             ],
-            $this->backendAdminPageService->getDocumentationPageData($selectedDoc)
+            $pageData
         ));
 
         return (string) $this->fetchBase('Weline_DataTable::backend/templates/test/doc.phtml');
@@ -87,12 +107,12 @@ class Index extends BaseController
      * @param array<int,array<string,mixed>> $scenarios
      * @return array<int,array<string,mixed>>
      */
-    private function appendScenarioUrls(array $scenarios): array
+    private function appendScenarioUrls(array $scenarios, string $layoutKey): array
     {
         foreach ($scenarios as &$scenario) {
             $route = (string) ($scenario['route'] ?? 'index');
             $segment = preg_replace('/([a-z])([A-Z])/', '$1-$2', $route) ?: $route;
-            $scenario['url'] = 'comprehensive/' . strtolower($segment);
+            $scenario['url'] = $this->routeWithQuery('comprehensive/' . strtolower($segment), ['layout' => $layoutKey]);
         }
         unset($scenario);
 

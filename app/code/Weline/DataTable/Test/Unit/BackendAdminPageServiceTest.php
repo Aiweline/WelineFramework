@@ -47,4 +47,19 @@ class BackendAdminPageServiceTest extends TestCase
         self::assertArrayHasKey('auto_generation', $report['sections']);
         self::assertGreaterThan(0, $report['summary']['total_checks']);
     }
+
+    public function testBackendLayoutCatalogAndFallbackResolutionAreStable(): void
+    {
+        $service = new BackendAdminPageService();
+
+        $layoutCatalog = $service->getBackendLayoutCatalog(false);
+
+        self::assertArrayHasKey('default', $layoutCatalog);
+        self::assertArrayHasKey('1280', $layoutCatalog);
+        self::assertArrayHasKey('1440', $layoutCatalog);
+        self::assertArrayNotHasKey('blank', $layoutCatalog);
+        self::assertSame('default.1440', $service->resolveBackendLayoutType('1440'));
+        self::assertSame('default.default', $service->resolveBackendLayoutType('unsupported', false));
+        self::assertSame('default', $service->normalizeBackendLayoutKey('unsupported', false));
+    }
 }

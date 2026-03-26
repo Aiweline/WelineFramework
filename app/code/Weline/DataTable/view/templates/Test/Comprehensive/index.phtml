@@ -11,7 +11,7 @@
     .dt-backend-summary{padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff}
     .dt-backend-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
     .dt-backend-pill{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:#eef4ff;color:#274690;font-size:12px}
-    .dt-backend-code{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;white-space:pre-wrap;word-break:break-word;pointer-events:none}
+    .dt-backend-code{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;white-space:pre-wrap;word-break:break-word}
 </style>
 
 <div class="dt-backend-shell" data-testid="datatable-comprehensive-page">
@@ -33,6 +33,8 @@
         </div>
         <div id="backend-demo-status" class="dt-backend-status" data-testid="backend-demo-status"></div>
     </section>
+
+    <?= $this->fetch('Weline_DataTable::backend/templates/test/layout-switcher.phtml') ?>
 
     <section class="dt-backend-grid">
         <article class="dt-backend-summary">
