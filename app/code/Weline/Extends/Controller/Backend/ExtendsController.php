@@ -20,6 +20,7 @@ use Weline\Framework\Manager\MessageManager;
 /**
  * 扩展管理控制器
  */
+if (!class_exists(ExtendsController::class, false)) {
 class ExtendsController extends BackendController
 {
     /**
@@ -325,5 +326,6 @@ class ExtendsController extends BackendController
             $this->redirect('*/index');
         }
     }
+}
 }
 
