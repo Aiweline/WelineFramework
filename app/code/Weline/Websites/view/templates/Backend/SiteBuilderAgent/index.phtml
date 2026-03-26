@@ -42,7 +42,7 @@ foreach ($accounts as $account) {
     $quickBuildRegistrarOptions[] = [
         'value' => (string)$accountId,
         'label' => $registrarName . ($accountName !== '' ? (' - ' . $accountName) : ''),
-        'group' => $registrarName !== '' ? $registrarName : (string)__('Other'),
+        'group' => $registrarName !== '' ? $registrarName : (string)__('其他'),
         'meta' => (string)($account['registrar_code'] ?? ''),
     ];
 }
@@ -584,31 +584,31 @@ body[data-topbar="dark"] .site-workbench-page {
     var fakeMode = <?= $fake_mode ? 'true' : 'false' ?>;
     var lastRecommendedDomain = '';
     var messages = {
-        aiDomainOptional: <?= json_encode((string)__('AI can recommend this for you.'), JSON_THROW_ON_ERROR) ?>,
-        aiRegistrarOptional: <?= json_encode((string)__('Optional for quick start. Required for live availability checks.'), JSON_THROW_ON_ERROR) ?>,
-        manualDomainRequired: <?= json_encode((string)__('Please confirm this manually when AI is off.'), JSON_THROW_ON_ERROR) ?>,
-        manualRegistrarRequired: <?= json_encode((string)__('Please choose a registrar account when AI is off.'), JSON_THROW_ON_ERROR) ?>,
-        aiModeTip: <?= json_encode((string)__('AI will suggest the domain, provider, and page plan first. You only need to confirm the result.'), JSON_THROW_ON_ERROR) ?>,
-        manualModeTip: <?= json_encode((string)__('Manual mode keeps the same guided flow, but you need to provide the key information yourself.'), JSON_THROW_ON_ERROR) ?>,
-        createWorkspaceFailed: <?= json_encode((string)__('Unable to create the workspace right now.'), JSON_THROW_ON_ERROR) ?>,
-        networkError: <?= json_encode((string)__('Network request failed. Please try again.'), JSON_THROW_ON_ERROR) ?>,
-        terminalLoading: <?= json_encode((string)__('Terminal is still loading. Please try again.'), JSON_THROW_ON_ERROR) ?>,
-        domainRequired: <?= json_encode((string)__('Please enter a target domain first.'), JSON_THROW_ON_ERROR) ?>,
-        registrarRequired: <?= json_encode((string)__('Please choose a registrar account first.'), JSON_THROW_ON_ERROR) ?>,
-        briefRequired: <?= json_encode((string)__('Please describe the site goal or provide a domain first.'), JSON_THROW_ON_ERROR) ?>,
-        recommendNeedsRegistrar: <?= json_encode((string)__('Please choose a registrar account before AI checks live availability.'), JSON_THROW_ON_ERROR) ?>,
-        recommendLoading: <?= json_encode((string)__('AI is checking live availability with the selected registrar...'), JSON_THROW_ON_ERROR) ?>,
-        recommendDomainChanged: <?= json_encode((string)__('You changed the domain manually. Recommend again if you want a freshly checked suggestion.'), JSON_THROW_ON_ERROR) ?>,
-        recommendRegistrarChanged: <?= json_encode((string)__('Registrar changed. Recommend again to re-check availability.'), JSON_THROW_ON_ERROR) ?>,
-        recommendUnavailable: <?= json_encode((string)__('No available domain was found yet. Try another brief or preferred domain.'), JSON_THROW_ON_ERROR) ?>,
-        recommendationUnavailable: <?= json_encode((string)__('unavailable'), JSON_THROW_ON_ERROR) ?>,
-        recommendationAvailable: <?= json_encode((string)__('available'), JSON_THROW_ON_ERROR) ?>,
-        checkedCandidatesLabel: <?= json_encode((string)__('Checked'), JSON_THROW_ON_ERROR) ?>,
-        loadingLog: <?= json_encode((string)__('Preparing the guided AI build flow...'), JSON_THROW_ON_ERROR) ?>,
-        connecting: <?= json_encode((string)__('Connecting...'), JSON_THROW_ON_ERROR) ?>,
-        connected: <?= json_encode((string)__('Connected'), JSON_THROW_ON_ERROR) ?>,
-        disconnected: <?= json_encode((string)__('Disconnected'), JSON_THROW_ON_ERROR) ?>,
-        connectionFailed: <?= json_encode((string)__('Connection failed. Please try again.'), JSON_THROW_ON_ERROR) ?>
+        aiDomainOptional: <?= json_encode((string)__('AI 可为你推荐。'), JSON_THROW_ON_ERROR) ?>,
+        aiRegistrarOptional: <?= json_encode((string)__('可选（用于快速开始）。如需实时可用性检测则必须选择。'), JSON_THROW_ON_ERROR) ?>,
+        manualDomainRequired: <?= json_encode((string)__('关闭 AI 后请手动确认。'), JSON_THROW_ON_ERROR) ?>,
+        manualRegistrarRequired: <?= json_encode((string)__('关闭 AI 后请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
+        aiModeTip: <?= json_encode((string)__('AI 会先推荐域名、服务商和页面方案，你只需确认结果。'), JSON_THROW_ON_ERROR) ?>,
+        manualModeTip: <?= json_encode((string)__('手动模式会保留同样的引导流程，但关键信息需要你自行填写。'), JSON_THROW_ON_ERROR) ?>,
+        createWorkspaceFailed: <?= json_encode((string)__('当前无法创建工作区。'), JSON_THROW_ON_ERROR) ?>,
+        networkError: <?= json_encode((string)__('网络请求失败，请重试。'), JSON_THROW_ON_ERROR) ?>,
+        terminalLoading: <?= json_encode((string)__('终端仍在加载中，请稍后重试。'), JSON_THROW_ON_ERROR) ?>,
+        domainRequired: <?= json_encode((string)__('请先输入目标域名。'), JSON_THROW_ON_ERROR) ?>,
+        registrarRequired: <?= json_encode((string)__('请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
+        briefRequired: <?= json_encode((string)__('请先描述建站目标，或先提供一个域名。'), JSON_THROW_ON_ERROR) ?>,
+        recommendNeedsRegistrar: <?= json_encode((string)__('AI 进行实时可用性检测前，请先选择服务商账号。'), JSON_THROW_ON_ERROR) ?>,
+        recommendLoading: <?= json_encode((string)__('AI 正在使用所选服务商检测实时可用性...'), JSON_THROW_ON_ERROR) ?>,
+        recommendDomainChanged: <?= json_encode((string)__('你已手动修改域名；如需最新检测结果，请重新推荐。'), JSON_THROW_ON_ERROR) ?>,
+        recommendRegistrarChanged: <?= json_encode((string)__('服务商已变更，请重新推荐以重新检测可用性。'), JSON_THROW_ON_ERROR) ?>,
+        recommendUnavailable: <?= json_encode((string)__('暂未找到可用域名，请尝试更换简报或偏好域名。'), JSON_THROW_ON_ERROR) ?>,
+        recommendationUnavailable: <?= json_encode((string)__('不可用'), JSON_THROW_ON_ERROR) ?>,
+        recommendationAvailable: <?= json_encode((string)__('可用'), JSON_THROW_ON_ERROR) ?>,
+        checkedCandidatesLabel: <?= json_encode((string)__('已检测'), JSON_THROW_ON_ERROR) ?>,
+        loadingLog: <?= json_encode((string)__('正在准备 AI 引导建站流程...'), JSON_THROW_ON_ERROR) ?>,
+        connecting: <?= json_encode((string)__('连接中...'), JSON_THROW_ON_ERROR) ?>,
+        connected: <?= json_encode((string)__('已连接'), JSON_THROW_ON_ERROR) ?>,
+        disconnected: <?= json_encode((string)__('已断开'), JSON_THROW_ON_ERROR) ?>,
+        connectionFailed: <?= json_encode((string)__('连接失败，请重试。'), JSON_THROW_ON_ERROR) ?>
     };
 
     function toast(type, message) {
