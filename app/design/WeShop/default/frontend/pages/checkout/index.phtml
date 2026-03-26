@@ -10,6 +10,7 @@ $countries = $this->getData('countries') ?? [];
 $isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
 $retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
 $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
+$checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
 ?>
 <w:hook name="WeShop_Checkout::page::before"/>
 
@@ -322,38 +323,36 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
             <?php endforeach; ?>
         </div>
 
-        <div class="weshop-checkout-summary-totals">
+        <div class="weshop-checkout-summary-totals" data-weshop-summary-host data-weshop-summary-currency="<?= htmlspecialchars($checkoutCurrency) ?>">
             <w:hook name="WeShop_Checkout::summary::rows_before"/>
             <div class="weshop-checkout-summary-row">
                 <w:hook name="WeShop_Checkout::summary::subtotal_before"/>
                 <span><?= __('Subtotal') ?></span>
-                <span><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
+                <span data-weshop-summary-subtotal><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
                 <w:hook name="WeShop_Checkout::summary::subtotal_after"/>
             </div>
             <div class="weshop-checkout-summary-row">
                 <w:hook name="WeShop_Checkout::summary::shipping_before"/>
                 <span><?= __('Shipping') ?></span>
-                <span><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
+                <span data-weshop-summary-shipping><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
                 <w:hook name="WeShop_Checkout::summary::shipping_after"/>
             </div>
             <div class="weshop-checkout-summary-row">
                 <w:hook name="WeShop_Checkout::summary::tax_before"/>
                 <span><?= __('Tax') ?></span>
-                <span><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
+                <span data-weshop-summary-tax><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
                 <w:hook name="WeShop_Checkout::summary::tax_after"/>
             </div>
-            <?php if ((float) ($cartSummary['discount'] ?? 0) > 0): ?>
-                <div class="weshop-checkout-summary-row">
-                    <w:hook name="WeShop_Checkout::summary::discount_before"/>
-                    <span><?= __('Discount') ?></span>
-                    <span>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
-                    <w:hook name="WeShop_Checkout::summary::discount_after"/>
-                </div>
-            <?php endif; ?>
+            <div class="weshop-checkout-summary-row" data-weshop-summary-discount-row <?= (float) ($cartSummary['discount'] ?? 0) > 0 ? '' : 'hidden' ?>>
+                <w:hook name="WeShop_Checkout::summary::discount_before"/>
+                <span><?= __('Discount') ?></span>
+                <span data-weshop-summary-discount>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::discount_after"/>
+            </div>
             <div class="weshop-checkout-summary-row weshop-checkout-summary-total">
                 <w:hook name="WeShop_Checkout::summary::grand_total_before"/>
                 <span><?= __('Grand Total') ?></span>
-                <span><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
+                <span data-weshop-summary-grand-total><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
                 <w:hook name="WeShop_Checkout::summary::grand_total_after"/>
             </div>
             <w:hook name="WeShop_Checkout::summary::rows_after"/>
@@ -373,6 +372,13 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
         var shippingMethodHost = document.querySelector('[data-weshop-shipping-method-host]');
         var paymentMethodHost = document.querySelector('[data-weshop-payment-method-host]');
         var paymentDetailHost = document.querySelector('[data-weshop-payment-detail-host]');
+        var summaryHost = document.querySelector('[data-weshop-summary-host]');
+        var subtotalValue = document.querySelector('[data-weshop-summary-subtotal]');
+        var shippingValue = document.querySelector('[data-weshop-summary-shipping]');
+        var taxValue = document.querySelector('[data-weshop-summary-tax]');
+        var discountRow = document.querySelector('[data-weshop-summary-discount-row]');
+        var discountValue = document.querySelector('[data-weshop-summary-discount]');
+        var grandTotalValue = document.querySelector('[data-weshop-summary-grand-total]');
         var refreshTimer = null;
 
         function syncNewAddressRequirement() {
@@ -422,6 +428,64 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
 
             var checked = form.querySelector('input[name="' + name + '"]:checked');
             return checked ? checked.value : '';
+        }
+
+        function formatSummaryAmount(value) {
+            var amount = Number(value || 0);
+            var currency = summaryHost ? String(summaryHost.getAttribute('data-weshop-summary-currency') || 'USD') : 'USD';
+
+            if (window.Intl && typeof window.Intl.NumberFormat === 'function') {
+                try {
+                    return new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: currency,
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }).format(amount);
+                } catch (error) {
+                    console.warn('Checkout summary currency formatting fallback:', error);
+                }
+            }
+
+            return amount.toFixed(2);
+        }
+
+        function renderCartSummary(summary) {
+            if (!summaryHost || !summary) {
+                return;
+            }
+
+            var normalized = {
+                subtotal: Number(summary.subtotal || 0),
+                shipping: Number(summary.shipping || 0),
+                discount: Number(summary.discount || 0),
+                tax: Number(summary.tax || 0),
+                grand_total: Number(summary.grand_total || summary.total || 0)
+            };
+
+            if (subtotalValue) {
+                subtotalValue.textContent = formatSummaryAmount(normalized.subtotal);
+            }
+
+            if (shippingValue) {
+                shippingValue.textContent = formatSummaryAmount(normalized.shipping);
+            }
+
+            if (taxValue) {
+                taxValue.textContent = formatSummaryAmount(normalized.tax);
+            }
+
+            if (discountValue) {
+                discountValue.textContent = '-' + formatSummaryAmount(normalized.discount);
+            }
+
+            if (discountRow) {
+                discountRow.hidden = normalized.discount <= 0;
+            }
+
+            if (grandTotalValue) {
+                grandTotalValue.textContent = formatSummaryAmount(normalized.grand_total);
+            }
         }
 
         function renderShippingMethods(methods) {
@@ -569,6 +633,7 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
                 renderShippingMethods(Array.isArray(data.shipping_methods) ? data.shipping_methods : []);
                 renderPaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : []);
                 renderPaymentDetails(Array.isArray(data.payment_methods) ? data.payment_methods : []);
+                renderCartSummary(data.cart_summary || {});
             }).catch(function (error) {
                 console.error('Checkout method refresh error:', error);
                 showCheckoutMessage('Unable to refresh checkout methods right now.', 'error');
@@ -598,6 +663,7 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
                 }
 
                 if (target.name === 'shipping_address_id'
+                    || target.name === 'shipping_method'
                     || target.name === 'shipping_address[country_id]'
                     || target.name === 'shipping_address[region]') {
                     scheduleCheckoutMethodRefresh();
