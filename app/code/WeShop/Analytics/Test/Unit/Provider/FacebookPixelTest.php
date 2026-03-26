@@ -46,4 +46,14 @@ class FacebookPixelTest extends TestCase
 
         $this->assertStringContainsString("fbq('init', '123456')", $provider->getPixelCode());
     }
+
+    public function testGetPixelHookSnippetsSplitsHeadAndBody(): void
+    {
+        $provider = new FacebookPixel('123456', 'token', true);
+        $snippets = $provider->getPixelHookSnippets();
+
+        self::assertStringContainsString("fbq('init', '123456')", $snippets['head']);
+        self::assertStringContainsString('noscript', $snippets['body']);
+        self::assertSame('', $snippets['footer']);
+    }
 }
