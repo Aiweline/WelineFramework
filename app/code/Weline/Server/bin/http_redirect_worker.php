@@ -80,11 +80,11 @@ if ($isFrontend) {
 
 // 进程日志文件（持久化，跨重启保留）
 if ($processName) {
-    $processLogDir = BP . 'var' . DIRECTORY_SEPARATOR . 'process';
+    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
+    $processLogDir = \dirname($processLogFile);
     if (!\is_dir($processLogDir)) {
         @\mkdir($processLogDir, 0777, true);
     }
-    $processLogFile = $processLogDir . DIRECTORY_SEPARATOR . $processName . '.log';
     \ini_set('error_log', $processLogFile);
 }
 

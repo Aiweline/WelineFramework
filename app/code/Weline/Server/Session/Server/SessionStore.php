@@ -43,6 +43,9 @@ final class SessionStore
 
     /** 持久化文件路径 */
     private string $persistPath;
+    
+    /** 持久化失败后的下一次重试时间戳 */
+    private int $nextPersistRetryAt = 0;
 
     /** 持久化间隔（秒） */
     private int $persistInterval;
@@ -55,6 +58,9 @@ final class SessionStore
 
     /** 最小持久化间隔（秒），防止高并发下重复刷盘 */
     private int $persistMinInterval = 5;
+    
+    /** 持久化失败后重试退避（秒） */
+    private int $persistFailureBackoffSec = 5;
 
     /** 自上次持久化后的写入次数 */
     private int $writesSinceLastPersist = 0;
@@ -107,10 +113,22 @@ final class SessionStore
         if (!\is_dir($basePath)) {
             @\mkdir($basePath, 0755, true);
         }
-        $this->persistPath = \rtrim($basePath, '/\\') . '/wls_session_store.dat';
+        $persistFileName = \trim((string)($config['persist_file_name'] ?? 'wls_session_store.dat'));
+        if ($persistFileName === '') {
+            $persistFileName = 'wls_session_store.dat';
+        }
+        $persistFileName = \basename(\str_replace('\\', '/', $persistFileName));
+        if ($persistFileName === '' || $persistFileName === '.' || $persistFileName === '..') {
+            $persistFileName = 'wls_session_store.dat';
+        }
+        $this->persistPath = \rtrim($basePath, '/\\') . '/' . $persistFileName;
         $this->persistMinInterval = (int)($config['persist_min_interval'] ?? 5);
         if ($this->persistMinInterval < 1) {
             $this->persistMinInterval = 1;
+        }
+        $this->persistFailureBackoffSec = (int)($config['persist_failure_backoff_sec'] ?? $this->persistMinInterval);
+        if ($this->persistFailureBackoffSec < 1) {
+            $this->persistFailureBackoffSec = 1;
         }
         
         $this->lastPersistTime = \time();
@@ -183,23 +201,47 @@ final class SessionStore
             return true;
         }
 
-        $tempPath = $this->persistPath . '.tmp';
-        $content = \serialize($this->store);
+        if (!$this->ensurePersistDirectory()) {
+            return false;
+        }
         
-        if (@\file_put_contents($tempPath, $content) === false) {
-            $this->log('Failed to write persist file');
+        $tempPath = $this->persistPath . '.tmp.' . \getmypid() . '.' . \str_replace('.', '', \uniqid('', true));
+        try {
+            $content = \serialize($this->store);
+        } catch (\Throwable $throwable) {
+            $this->markPersistFailure('Failed to serialize persist payload: ' . $throwable->getMessage());
+            return false;
+        }
+        
+        if (@\file_put_contents($tempPath, $content, LOCK_EX) === false) {
+            @\unlink($tempPath);
+            $this->markPersistFailure($this->buildLastPhpErrorMessage(
+                'Failed to write persist temp file',
+                $tempPath
+            ));
             return false;
         }
 
         if (!@\rename($tempPath, $this->persistPath)) {
-            @\unlink($tempPath);
-            $this->log('Failed to rename persist file');
-            return false;
+            // Windows 下 rename 可能无法覆盖目标文件，尝试 unlink 后再 rename 一次。
+            $renamed = false;
+            if (@\is_file($this->persistPath) && @\unlink($this->persistPath)) {
+                $renamed = @\rename($tempPath, $this->persistPath);
+            }
+            if (!$renamed) {
+                @\unlink($tempPath);
+                $this->markPersistFailure($this->buildLastPhpErrorMessage(
+                    'Failed to replace persist file',
+                    $this->persistPath
+                ));
+                return false;
+            }
         }
 
         $this->dirty = false;
         $this->lastPersistTime = \time();
         $this->writesSinceLastPersist = 0;
+        $this->nextPersistRetryAt = 0;
         $this->persistCount++;
         $this->log('Persisted ' . \count($this->store) . ' sessions to file');
         return true;
@@ -217,6 +259,10 @@ final class SessionStore
 
         $now = \time();
         $elapsed = $now - $this->lastPersistTime;
+
+        if ($this->nextPersistRetryAt > $now) {
+            return false;
+        }
 
         // 节流：距上次持久化不足 persistMinInterval 秒则不持久化（避免 get/touch 导致刷屏）
         if ($elapsed < $this->persistMinInterval) {
@@ -691,6 +737,8 @@ final class SessionStore
             'eviction_count' => $this->evictionCount,
             'gc_cleaned_count' => $this->gcCleanedCount,
             'persist_count' => $this->persistCount,
+            'persist_path' => $this->persistPath,
+            'persist_retry_at' => $this->nextPersistRetryAt,
         ];
     }
     
@@ -855,5 +903,49 @@ final class SessionStore
     {
         $this->dirty = true;
         return $this->persistToFile();
+    }
+
+    /**
+     * 确保持久化目录存在。
+     */
+    private function ensurePersistDirectory(): bool
+    {
+        $persistDir = \dirname($this->persistPath);
+        if ($persistDir === '' || $persistDir === '.' || $persistDir === DIRECTORY_SEPARATOR) {
+            $this->markPersistFailure('Invalid persist directory: ' . $persistDir);
+            return false;
+        }
+        if (\is_dir($persistDir)) {
+            return true;
+        }
+        if (!@\mkdir($persistDir, 0755, true) && !\is_dir($persistDir)) {
+            $this->markPersistFailure($this->buildLastPhpErrorMessage(
+                'Failed to create persist directory',
+                $persistDir
+            ));
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 构建带系统错误信息的日志。
+     */
+    private function buildLastPhpErrorMessage(string $prefix, string $path): string
+    {
+        $error = \error_get_last();
+        if (\is_array($error) && !empty($error['message'])) {
+            return $prefix . ': path=' . $path . ', error=' . $error['message'];
+        }
+        return $prefix . ': path=' . $path;
+    }
+
+    /**
+     * 标记持久化失败并设置退避，防止刷屏。
+     */
+    private function markPersistFailure(string $message): void
+    {
+        $this->nextPersistRetryAt = \time() + $this->persistFailureBackoffSec;
+        $this->log($message . ', retry_in=' . $this->persistFailureBackoffSec . 's');
     }
 }
