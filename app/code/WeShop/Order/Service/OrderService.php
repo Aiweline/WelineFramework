@@ -57,6 +57,10 @@ class OrderService
             ->setData(Order::schema_fields_increment_id, $incrementId)
             ->setData(Order::schema_fields_customer_id, (int) ($orderData['customer_id'] ?? 0))
             ->setData(Order::schema_fields_status, (string) ($orderData['status'] ?? self::STATUS_PENDING))
+            ->setData(Order::schema_fields_subtotal, (float) ($orderData['subtotal'] ?? 0))
+            ->setData(Order::schema_fields_shipping_amount, (float) ($orderData['shipping_amount'] ?? 0))
+            ->setData(Order::schema_fields_discount_amount, (float) ($orderData['discount_amount'] ?? 0))
+            ->setData(Order::schema_fields_tax_amount, (float) ($orderData['tax_amount'] ?? 0))
             ->setData(Order::schema_fields_total, (float) ($orderData['total'] ?? 0))
             ->setData(Order::schema_fields_created_at, date('Y-m-d H:i:s'))
             ->setData(Order::schema_fields_updated_at, date('Y-m-d H:i:s'))
@@ -168,7 +172,7 @@ class OrderService
             $order->where('payment_status', [self::PAYMENT_STATUS_PENDING, self::PAYMENT_STATUS_FAILED], 'IN');
         }
 
-        return $order->select()->getTotalCount();
+        return max(0, (int) ($order->select()->getTotalCount() ?? 0));
     }
 
     public function getUnpaidOrders(int $customerId): array
@@ -482,21 +486,30 @@ class OrderService
      */
     protected function buildOrderSummary(Order $order, array $items): array
     {
-        $subtotal = 0.0;
+        $subtotal = (float) ($order->getData(Order::schema_fields_subtotal) ?? 0);
+        $shipping = (float) ($order->getData(Order::schema_fields_shipping_amount) ?? 0);
+        $discount = (float) ($order->getData(Order::schema_fields_discount_amount) ?? 0);
+        $tax = (float) ($order->getData(Order::schema_fields_tax_amount) ?? 0);
+
+        $fallbackSubtotal = 0.0;
         foreach ($items as $item) {
-            $subtotal += (float) ($item['total'] ?? 0);
+            $fallbackSubtotal += (float) ($item['total'] ?? 0);
+        }
+
+        if ($subtotal <= 0 && $fallbackSubtotal > 0) {
+            $subtotal = $fallbackSubtotal;
         }
 
         $grandTotal = (float) ($order->getData(Order::schema_fields_total) ?? 0);
         if ($grandTotal <= 0 && $subtotal > 0) {
-            $grandTotal = $subtotal;
+            $grandTotal = max(0.0, round($subtotal + $shipping + $tax - $discount, 2));
         }
 
         return [
             'subtotal' => $subtotal,
-            'shipping' => 0.0,
-            'discount' => 0.0,
-            'tax' => 0.0,
+            'shipping' => $shipping,
+            'discount' => $discount,
+            'tax' => $tax,
             'grand_total' => $grandTotal,
         ];
     }

@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace WeShop\Checkout\Service;
 
+use WeShop\Address\Service\AddressService;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 
 class CheckoutService
 {
     public function __construct(
-        private readonly OrderService $orderService
+        private readonly OrderService $orderService,
+        private readonly ?AddressService $addressService = null
     ) {
     }
 
@@ -31,18 +34,16 @@ class CheckoutService
             throw new \Exception((string) __('The cart is empty and cannot be checked out.'));
         }
 
-        $summary = [
-            'subtotal' => (float) ($totals['subtotal'] ?? 0),
-            'shipping' => (float) ($totals['shipping'] ?? 0),
-            'discount' => (float) ($totals['discount'] ?? 0),
-            'tax' => (float) ($totals['tax'] ?? 0),
-            'grand_total' => (float) ($totals['total'] ?? 0),
-        ];
+        $summary = $this->buildCheckoutSummary($cartItems, $totals, $checkoutData);
 
         $orderSummary = $this->query('order', 'createOrder', [
             'order_data' => [
                 'customer_id' => $customerId,
                 'status' => OrderService::STATUS_PENDING,
+                'subtotal' => $summary['subtotal'],
+                'shipping_amount' => $summary['shipping'],
+                'discount_amount' => $summary['discount'],
+                'tax_amount' => $summary['tax'],
                 'total' => $summary['grand_total'],
             ],
         ]);
@@ -88,10 +89,11 @@ class CheckoutService
 
         $order->setData('weshop_checkout_summary', $summary);
 
-        EventsManager::getInstance()->dispatch('WeShop_Checkout::order_created', [
+        $eventData = [
             'order' => $order,
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Checkout::order_created', $eventData);
 
         return $order;
     }
@@ -162,8 +164,8 @@ class CheckoutService
 
     public function validateCheckoutData(array $checkoutData): bool
     {
-        $hasShippingAddress = !empty($checkoutData['shipping_address']) || (int) ($checkoutData['shipping_address_id'] ?? 0) > 0;
-        if (!$hasShippingAddress) {
+        $shippingAddress = $this->normalizeShippingAddress($checkoutData);
+        if ($shippingAddress === []) {
             throw new \InvalidArgumentException((string) __('Shipping address information is required.'));
         }
 
@@ -184,6 +186,29 @@ class CheckoutService
     }
 
     /**
+     * @param array<int, mixed> $cartItems
+     * @param array<string, mixed> $totals
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, float>
+     */
+    protected function buildCheckoutSummary(array $cartItems, array $totals, array $checkoutData): array
+    {
+        $subtotal = (float) ($totals['subtotal'] ?? $this->calculateSubtotalFromCartItems($cartItems));
+        $discount = max(0.0, (float) ($totals['discount'] ?? 0.0));
+        $shipping = $this->calculateCheckoutShipping($cartItems, $subtotal, $checkoutData);
+        $tax = $this->calculateCheckoutTax($cartItems, $subtotal, $discount, $shipping, $checkoutData);
+        $grandTotal = max(0.0, round($subtotal + $shipping + $tax - $discount, 2));
+
+        return [
+            'subtotal' => round($subtotal, 2),
+            'shipping' => $shipping,
+            'discount' => round($discount, 2),
+            'tax' => $tax,
+            'grand_total' => $grandTotal,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     protected function normalizeCheckoutData(array $checkoutData): array
@@ -199,6 +224,153 @@ class CheckoutService
         $checkoutData['order_id'] = (int) ($checkoutData['order_id'] ?? $checkoutData['retry_order_id'] ?? 0);
 
         return $checkoutData;
+    }
+
+    /**
+     * @param array<int, mixed> $cartItems
+     */
+    protected function calculateSubtotalFromCartItems(array $cartItems): float
+    {
+        $subtotal = 0.0;
+        foreach ($cartItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $price = (float) ($item['price'] ?? 0);
+            $quantity = (int) ($item['quantity'] ?? $item['qty'] ?? 1);
+            $subtotal += $price * $quantity;
+        }
+
+        return $subtotal;
+    }
+
+    /**
+     * @param array<int, mixed> $cartItems
+     * @param array<string, mixed> $checkoutData
+     */
+    protected function calculateCheckoutShipping(array $cartItems, float $subtotal, array $checkoutData): float
+    {
+        $shippingMethod = (string) ($checkoutData['shipping_method'] ?? '');
+        if ($shippingMethod === '') {
+            return 0.0;
+        }
+
+        $shippingAmount = $this->query('shipping', 'calculateShipping', [
+            'shipping_method' => $shippingMethod,
+            'shipping_data' => [
+                'customer_id' => (int) ($checkoutData['customer_id'] ?? 0),
+                'subtotal' => $subtotal,
+                'currency' => (string) ($checkoutData['currency'] ?? ''),
+                'address' => $this->normalizeShippingAddress($checkoutData),
+                'items' => $this->mapCartItemsForShipping($cartItems),
+            ],
+        ]);
+
+        return round(max(0.0, is_numeric($shippingAmount) ? (float) $shippingAmount : 0.0), 2);
+    }
+
+    /**
+     * @param array<int, mixed> $cartItems
+     * @param array<string, mixed> $checkoutData
+     */
+    protected function calculateCheckoutTax(
+        array $cartItems,
+        float $subtotal,
+        float $discount,
+        float $shipping,
+        array $checkoutData
+    ): float {
+        $address = $this->normalizeShippingAddress($checkoutData);
+        $country = (string) ($address['country_id'] ?? $address['country'] ?? '');
+        $region = (string) ($address['region'] ?? '');
+
+        $taxAmount = $this->query('tax', 'calculateTax', [
+            'subtotal' => $subtotal,
+            'country' => $country,
+            'region' => $region,
+            'shipping_amount' => $shipping,
+            'discount' => $discount,
+            'context' => [
+                'shipping_amount' => $shipping,
+                'discount' => $discount,
+                'currency' => (string) ($checkoutData['currency'] ?? ''),
+                'customer_id' => (int) ($checkoutData['customer_id'] ?? 0),
+                'items' => $this->mapCartItemsForShipping($cartItems),
+            ],
+        ]);
+
+        return round(max(0.0, is_numeric($taxAmount) ? (float) $taxAmount : 0.0), 2);
+    }
+
+    /**
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, mixed>
+     */
+    protected function normalizeShippingAddress(array $checkoutData): array
+    {
+        $address = is_array($checkoutData['shipping_address'] ?? null) ? $checkoutData['shipping_address'] : [];
+        $addressId = (int) ($checkoutData['shipping_address_id'] ?? 0);
+        if ($addressId <= 0) {
+            return $address;
+        }
+
+        $resolved = $this->resolveSavedShippingAddress($addressId, (int) ($checkoutData['customer_id'] ?? 0));
+        if ($resolved === []) {
+            return $address;
+        }
+
+        if ($address === []) {
+            return $resolved;
+        }
+
+        return array_merge($resolved, array_filter(
+            $address,
+            static fn (mixed $value): bool => $value !== null && $value !== '' && $value !== []
+        ));
+    }
+
+    /**
+     * @param array<int, mixed> $cartItems
+     * @return array<int, array<string, mixed>>
+     */
+    protected function mapCartItemsForShipping(array $cartItems): array
+    {
+        $result = [];
+        foreach ($cartItems as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $product = is_array($item['product'] ?? null) ? $item['product'] : [];
+            $result[] = [
+                'product_id' => (int) ($item['product_id'] ?? 0),
+                'qty' => (int) ($item['quantity'] ?? $item['qty'] ?? 1),
+                'price' => (float) ($item['price'] ?? 0),
+                'weight' => (float) ($item['weight'] ?? $product['weight'] ?? 0),
+                'sku' => (string) ($product['sku'] ?? $item['product_sku'] ?? ''),
+                'name' => (string) ($product['name'] ?? $item['product_name'] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
+
+    protected function getEventsManager(): EventsManager
+    {
+        return ObjectManager::getInstance(EventsManager::class);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function resolveSavedShippingAddress(int $addressId, int $customerId): array
+    {
+        if ($addressId <= 0 || $this->addressService === null) {
+            return [];
+        }
+
+        $address = $this->addressService->getAddress($addressId, $customerId > 0 ? $customerId : null);
+
+        return is_array($address) ? $address : [];
     }
 
     protected function reuseRetryPaymentOrder(int $customerId, int $orderId): Order
