@@ -1,5 +1,11 @@
-﻿请先登录,请先登录
-地址保存成功,地址保存成功
-无权删除此地址,无权删除此地址
-地址不存在,地址不存在
-无权设置此地址为默认,无权设置此地址为默认
+﻿"Please log in to continue.","Please log in to continue."
+"Address ID is required.","Address ID is required."
+"Default address updated.","Default address updated."
+"Address could not be removed.","Address could not be removed."
+"Address removed successfully.","Address removed successfully."
+"Address saved successfully.","Address saved successfully."
+"Fulfillment Ready","Fulfillment Ready"
+"Address Book","Address Book"
+"Manage Addresses","Manage Addresses"
+"Keep checkout fast across countries","Keep checkout fast across countries"
+"Save delivery destinations for personal orders, repeat purchases, and faster checkout from any compatible storefront theme.","Save delivery destinations for personal orders, repeat purchases, and faster checkout from any compatible storefront theme."
