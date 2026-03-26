@@ -890,6 +890,7 @@ if (!empty($displayConfig)) {
                     var prompt = document.getElementById('test_prompt').value.trim();
                     var modelCodeInput = document.getElementById('model_code');
                     var modelCode = modelCodeInput ? modelCodeInput.value : '<?= $model ? addslashes($model->getData('model_code')) : '' ?>';
+                    var form = document.getElementById('modelEditForm');
                     
                     if (!prompt) {
                         if (typeof Swal !== 'undefined') {
@@ -907,10 +908,30 @@ if (!empty($displayConfig)) {
                     testModelBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> <?= __('测试中...') ?>';
                     
                     document.getElementById('testResult').style.display = 'none';
+
+                    var providerConfigTextarea = document.getElementById('provider_config_json');
+                    if (providerConfigTextarea && providerConfigTextarea.value.trim()) {
+                        try {
+                            JSON.parse(providerConfigTextarea.value);
+                        } catch (e) {
+                            testModelBtn.disabled = false;
+                            testModelBtn.innerHTML = '<i class="bi bi-play-circle"></i> Test model';
+                            if (typeof Swal !== 'undefined') {
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Invalid JSON',
+                                    text: 'Provider config JSON is invalid. Please check the syntax.',
+                                    confirmButtonText: 'OK'
+                                });
+                            }
+                            return;
+                        }
+                    }
                     
-                    var formData = new FormData();
-                    formData.append('model_code', modelCode);
-                    formData.append('prompt', prompt);
+                    var formData = form ? new FormData(form) : new FormData();
+                    formData.set('model_code', modelCode);
+                    formData.set('prompt', prompt);
+                    formData.set('test_only', '1');
                     
                     var tcUrl = '<?= $this->getBackendUrl("*/backend/model/testConnection") ?>';
                     var tcReq = window.Weline.Api.request(tcUrl, { method: 'POST', body: formData });
