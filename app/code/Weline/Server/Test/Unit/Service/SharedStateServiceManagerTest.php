@@ -373,6 +373,129 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame('consumer-6', $registry->records[ControlMessage::ROLE_MEMORY_SERVER]['last_ensured_by_instance'] ?? '');
     }
 
+    public function testEnsureRuntimeReusesViaProtocolPingWhenInspectorMarksNonReusable(): void
+    {
+        $registry = new class extends SharedStateServiceRegistry {
+            public array $records = [];
+
+            public function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function putRecord(string $role, array $record): void
+            {
+                $this->records[$role] = $record;
+            }
+
+            public function removeRecord(string $role): void
+            {
+                unset($this->records[$role]);
+            }
+
+            public function touchConsumer(string $role, string $instanceName): void
+            {
+                $record = $this->records[$role] ?? [];
+                $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+                $consumers[$instanceName] = ['last_ensured_at' => 'now'];
+                $record['consumers'] = $consumers;
+                $this->records[$role] = $record;
+            }
+        };
+
+        $registry->records[ControlMessage::ROLE_MEMORY_SERVER] = [
+            'role' => ControlMessage::ROLE_MEMORY_SERVER,
+            'host' => '127.0.0.1',
+            'port' => 19971,
+            'token_file_name' => 'memory_server.token',
+        ];
+
+        $manager = new class($registry) extends SharedStateServiceManager {
+            public array $spawnCalls = [];
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry
+            ) {}
+
+            protected function getRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                if ((string) $definition['role'] === ControlMessage::ROLE_MEMORY_SERVER) {
+                    return [
+                        'reusable' => true,
+                        'pid' => 8002,
+                        'port' => 19971,
+                        'role' => ControlMessage::ROLE_MEMORY_SERVER,
+                        'token_file_name' => 'memory_server.token',
+                        'process_name' => 'weline-wls-memory-shared-19971',
+                        'instance_name' => 'shared-memory-19971',
+                    ];
+                }
+
+                return [
+                    'in_use' => true,
+                    'reusable' => false,
+                    'pid' => 0,
+                    'process_name' => '',
+                ];
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                if ((string) $definition['role'] === ControlMessage::ROLE_SESSION_SERVER) {
+                    return $tokenFileName === 'session_server.token';
+                }
+
+                return $tokenFileName === 'memory_server.token';
+            }
+
+            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName): int
+            {
+                $this->spawnCalls[] = [$definition['role'], $requesterInstanceName];
+
+                return 0;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                return $port === 19970;
+            }
+
+            protected function buildConnectivityTrustInspection(array $definition, array $inspection): array
+            {
+                $port = (int) $definition['port'];
+
+                return [
+                    'in_use' => true,
+                    'reusable' => true,
+                    'pid' => 9001,
+                    'port' => $port,
+                    'role' => (string) $definition['role'],
+                    'instance_name' => 'shared-session-' . $port,
+                    'token_file_name' => (string) $definition['token_file_name'],
+                    'process_name' => 'weline-wls-session-shared-' . $port,
+                    'command_line' => '',
+                ];
+            }
+        };
+
+        $runtime = $manager->ensureRuntime('consumer-ping', [], []);
+
+        self::assertTrue((bool) ($runtime['session']['reuse_existing'] ?? false));
+        self::assertTrue((bool) ($runtime['memory']['reuse_existing'] ?? false));
+        self::assertSame([], $manager->spawnCalls);
+        self::assertArrayHasKey('consumer-ping', $registry->records[ControlMessage::ROLE_SESSION_SERVER]['consumers'] ?? []);
+    }
+
     public function testEnsureRuntimeThrowsWhenSharedPortIsOccupiedByForeignProcess(): void
     {
         $registry = new class extends SharedStateServiceRegistry {
@@ -420,6 +543,11 @@ final class SharedStateServiceManagerTest extends TestCase
             {
                 return $port === 29170;
             }
+
+            protected function tryDirectProtocolProbeForOccupiedPort(array $definition): ?string
+            {
+                return null;
+            }
         };
 
         $this->expectException(\RuntimeException::class);
@@ -430,5 +558,165 @@ final class SharedStateServiceManagerTest extends TestCase
             ['session_server_port' => 29170],
             []
         );
+    }
+
+    public function testEnsureRuntimeReusesByProcessSignatureWhenProtocolProbeCannotAuthenticate(): void
+    {
+        $registry = new class extends SharedStateServiceRegistry {
+            public array $records = [];
+
+            public function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function putRecord(string $role, array $record): void
+            {
+                $this->records[$role] = $record;
+            }
+
+            public function removeRecord(string $role): void
+            {
+                unset($this->records[$role]);
+            }
+
+            public function touchConsumer(string $role, string $instanceName): void
+            {
+                $record = $this->records[$role] ?? [];
+                $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+                $consumers[$instanceName] = ['last_ensured_at' => 'now'];
+                $record['consumers'] = $consumers;
+                $this->records[$role] = $record;
+            }
+        };
+
+        $manager = new class($registry) extends SharedStateServiceManager {
+            public array $spawnCalls = [];
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry
+            ) {}
+
+            protected function getRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                if ((string) $definition['role'] === ControlMessage::ROLE_SESSION_SERVER) {
+                    return [
+                        'in_use' => true,
+                        'reusable' => false,
+                        'pid' => 0,
+                        'process_name' => '',
+                    ];
+                }
+
+                return [
+                    'reusable' => true,
+                    'pid' => 8002,
+                    'port' => 19971,
+                    'role' => ControlMessage::ROLE_MEMORY_SERVER,
+                    'token_file_name' => 'memory_server.token',
+                    'process_name' => 'weline-wls-memory-shared-19971',
+                    'instance_name' => 'shared-memory-19971',
+                ];
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return (string) $definition['role'] === ControlMessage::ROLE_MEMORY_SERVER
+                    && $tokenFileName === 'memory_server.token';
+            }
+
+            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName): int
+            {
+                $this->spawnCalls[] = [$definition['role'], $requesterInstanceName];
+
+                return 0;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                return $port === 19970;
+            }
+
+            protected function tryDirectProtocolProbeForOccupiedPort(array $definition): ?string
+            {
+                return null;
+            }
+
+            protected function inspectPortOccupant(int $port): array
+            {
+                if ($port !== 19970) {
+                    return [];
+                }
+
+                return [
+                    'in_use' => true,
+                    'pid' => 9901,
+                    'pid_running' => true,
+                    'is_weline' => true,
+                    'process_name' => 'weline-wls-session-shared-19970',
+                    'command_line' => 'php app/code/Weline/Server/bin/session_server.php 127.0.0.1 19970 shared-session-19970 --shared-service=1 --token-file-name=session_server.token',
+                ];
+            }
+        };
+
+        $runtime = $manager->ensureRuntime('consumer-signature', [], []);
+
+        self::assertTrue((bool) ($runtime['session']['reuse_existing'] ?? false));
+        self::assertSame(9901, (int) ($runtime['session']['pid'] ?? 0));
+        self::assertSame('session_server.token', $runtime['session']['token_file_name'] ?? '');
+        self::assertTrue((bool) ($runtime['memory']['reuse_existing'] ?? false));
+        self::assertSame([], $manager->spawnCalls);
+        self::assertArrayHasKey('consumer-signature', $registry->records[ControlMessage::ROLE_SESSION_SERVER]['consumers'] ?? []);
+    }
+
+    public function testBuildServiceDefinitionUsesLongerDefaultEnsureTimeout(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            /**
+             * @param array<string, mixed> $config
+             * @param array<string, mixed> $envConfig
+             * @return array<string, mixed>
+             */
+            public function exposeBuildServiceDefinition(
+                string $role,
+                string $requesterInstanceName,
+                array $config,
+                array $envConfig
+            ): array {
+                return $this->buildServiceDefinition($role, $requesterInstanceName, $config, $envConfig);
+            }
+        };
+
+        $defaultDefinition = $manager->exposeBuildServiceDefinition(
+            ControlMessage::ROLE_MEMORY_SERVER,
+            'consumer-timeout-default',
+            [],
+            []
+        );
+        self::assertSame(30.0, (float) ($defaultDefinition['ensure_timeout_sec'] ?? 0.0));
+
+        $customDefinition = $manager->exposeBuildServiceDefinition(
+            ControlMessage::ROLE_MEMORY_SERVER,
+            'consumer-timeout-custom',
+            [],
+            [
+                'wls' => [
+                    'shared_state' => [
+                        'ensure_timeout_sec' => 12.5,
+                    ],
+                ],
+            ]
+        );
+        self::assertSame(12.5, (float) ($customDefinition['ensure_timeout_sec'] ?? 0.0));
     }
 }

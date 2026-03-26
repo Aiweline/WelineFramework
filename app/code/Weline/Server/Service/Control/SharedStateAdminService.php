@@ -1,12 +1,13 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Weline\Server\Service\Control;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\Runtime\SchedulerSystem;
-use Weline\Framework\Session\SessionFactory;
-use Weline\Framework\Session\Storage\WlsSharedStorage;
+use Weline\Server\Service\SharedStateProtocolProbe;
+use Weline\Server\Service\SharedStateServiceManager;
+use Weline\Server\Service\MemoryStateFacade;
+use Weline\Server\Service\SessionStateFacade;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Client\SharedStateClient;
 
@@ -16,6 +17,20 @@ class SharedStateAdminService
     private const ROLE_MEMORY = 'memory';
     private const SESSION_NAMESPACE = 'sess';
     private const SESSION_NAMESPACE_STATE_ID = '__kv__:sess';
+
+    private ?SessionStateFacade $sessionFacade = null;
+    private ?MemoryStateFacade $memoryFacade = null;
+    private SharedStateServiceManager $sharedStateServiceManager;
+
+    public function __construct(
+        ?SessionStateFacade $sessionFacade = null,
+        ?MemoryStateFacade $memoryFacade = null,
+        ?SharedStateServiceManager $sharedStateServiceManager = null
+    ) {
+        $this->sessionFacade = $sessionFacade;
+        $this->memoryFacade = $memoryFacade;
+        $this->sharedStateServiceManager = $sharedStateServiceManager ?? new SharedStateServiceManager();
+    }
 
     public function getSessionOverview(): array
     {
@@ -31,13 +46,10 @@ class SharedStateAdminService
     {
         $limit = $this->normalizeLimit($limit, 200);
         $payloadFilter = $this->sanitizePayloadFilter($filter);
-        $storage = SessionFactory::getInstance()->createStorage();
         $stateFilter = $filter;
-        if ($storage instanceof WlsSharedStorage) {
-            // WLS unified state server carries multiple namespaces; session list must be scoped.
-            $stateFilter['__domain'] = self::ROLE_SESSION;
-        }
-        $rawItems = $storage->list([
+        $stateFilter['__domain'] = self::ROLE_SESSION;
+
+        $rawItems = $this->sessionFacade()->list([
             'filter' => $stateFilter,
             'limit' => $limit,
         ]);
@@ -47,26 +59,17 @@ class SharedStateAdminService
             if (!\is_array($item)) {
                 continue;
             }
-            $sessionId = (string)($item['session_id'] ?? '');
+
+            $sessionId = (string) ($item['session_id'] ?? '');
             $data = \is_array($item['data'] ?? null) ? $item['data'] : [];
 
-            // 兼容聚合存储：__ns__:sess:__kv__:sess => [sid => payload]
             if ($sessionId === '__ns__:sess:__kv__:sess') {
                 foreach ($data as $realSessionId => $sessionPayload) {
                     if (!\is_string($realSessionId) || $realSessionId === '' || !\is_array($sessionPayload)) {
                         continue;
                     }
-                    if (!empty($payloadFilter)) {
-                        $match = true;
-                        foreach ($payloadFilter as $key => $value) {
-                            if (($sessionPayload[$key] ?? null) !== $value) {
-                                $match = false;
-                                break;
-                            }
-                        }
-                        if (!$match) {
-                            continue;
-                        }
+                    if (!$this->matchesPayloadFilter($sessionPayload, $payloadFilter)) {
+                        continue;
                     }
                     $rows[] = [
                         'session_id' => $realSessionId,
@@ -81,6 +84,10 @@ class SharedStateAdminService
                 continue;
             }
 
+            if (!$this->matchesPayloadFilter($data, $payloadFilter)) {
+                continue;
+            }
+
             $rows[] = [
                 'session_id' => $sessionId,
                 'data_count' => \count($data),
@@ -91,93 +98,76 @@ class SharedStateAdminService
                 break;
             }
         }
+
         return $rows;
     }
 
-    /**
-     * 获取 Session 完整详情（所有字段）
-     */
     public function getSessionDetail(string $sessionId): array
     {
         if ($sessionId === '') {
             return [];
         }
-        $storage = SessionFactory::getInstance()->createStorage();
-        $data = $storage->read($sessionId);
-        if (!\is_array($data) || empty($data)) {
+
+        $data = $this->sessionFacade()->read($sessionId);
+        if ($data === []) {
             return [];
         }
+
         $rows = [];
         foreach ($data as $key => $value) {
             $rows[] = [
-                'key' => (string)$key,
+                'key' => (string) $key,
                 'type' => \gettype($value),
                 'preview' => $this->previewValue($value),
                 'preview_detail' => $this->buildPreviewDetail($value),
             ];
         }
+
         return $rows;
     }
 
     public function destroySession(string $sessionId): bool
     {
-        if ($sessionId === '') {
-            return false;
-        }
-        $client = $this->buildClient(self::ROLE_SESSION);
-        // Prefer deleting from sess namespace to avoid accidentally deleting cache namespace records.
-        $response = $client->request(SessionProtocol::CMD_DELETE, [
-            'ns' => self::SESSION_NAMESPACE,
-            'sid' => self::SESSION_NAMESPACE_STATE_ID,
-            'key' => $sessionId,
-        ]);
-        if ($this->isOk($response)) {
-            return true;
-        }
-        // Backward compatibility: older deployments may still store sessions by raw sid.
-        $fallback = $client->request(SessionProtocol::CMD_DESTROY, ['sid' => $sessionId]);
-        return $this->isOk($fallback);
+        return $sessionId !== '' && $this->sessionFacade()->destroy($sessionId);
     }
 
     public function gcSession(int $maxLifetime): bool
     {
-        $client = $this->buildClient(self::ROLE_SESSION);
-        $response = $client->request(SessionProtocol::CMD_GC, [
-            'max_lifetime' => \max(1, $maxLifetime),
-            'domain' => self::ROLE_SESSION,
-        ]);
-        return $this->isOk($response);
+        $facade = $this->sessionFacade();
+        if (!$facade->ping()) {
+            return false;
+        }
+
+        $facade->gc(\max(1, $maxLifetime));
+
+        return true;
     }
 
     public function persistSession(): bool
     {
-        $client = $this->buildClient(self::ROLE_SESSION);
-        $response = $client->request(SessionProtocol::CMD_PERSIST);
-        return $this->isOk($response);
+        return $this->sessionFacade()->persist();
     }
 
     public function listMemoryNamespaces(int $limit = 200): array
     {
         $limit = $this->normalizeLimit($limit, 500);
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_LIST, [
+        $items = $this->memoryFacade()->list([
             'filter' => [],
             'limit' => $limit,
         ]);
-        if (!$this->isOk($response)) {
-            return [];
-        }
-        $items = (array)SessionProtocol::getData((array)$response);
+
         $result = [];
         foreach ($items as $item) {
             if (!\is_array($item)) {
                 continue;
             }
-            $sid = (string)($item['session_id'] ?? '');
+
+            $sid = (string) ($item['session_id'] ?? '');
             $namespace = $this->extractNamespace($sid);
             if ($namespace === '') {
                 continue;
             }
+
             $data = \is_array($item['data'] ?? null) ? $item['data'] : [];
             $result[$namespace] = [
                 'namespace' => $namespace,
@@ -185,7 +175,9 @@ class SharedStateAdminService
                 'sample_keys' => \array_slice(\array_keys($data), 0, 6),
             ];
         }
+
         \ksort($result);
+
         return \array_values($result);
     }
 
@@ -194,18 +186,8 @@ class SharedStateAdminService
         if ($namespace === '') {
             return [];
         }
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_GET_ALL, [
-            'ns' => $namespace,
-            'sid' => '__kv__:' . $namespace,
-        ]);
-        if (!$this->isOk($response)) {
-            return [];
-        }
-        $payload = SessionProtocol::getData((array)$response);
-        if (!\is_array($payload)) {
-            return [];
-        }
+
+        $payload = $this->memoryFacade()->getAll($namespace);
         $rows = [];
         $index = 0;
         foreach ($payload as $key => $value) {
@@ -213,135 +195,116 @@ class SharedStateAdminService
                 break;
             }
             $rows[] = [
-                'key' => (string)$key,
+                'key' => (string) $key,
                 'type' => \gettype($value),
                 'preview' => $this->previewValue($value),
                 'preview_detail' => $this->buildPreviewDetail($value),
             ];
             $index++;
         }
+
         return $rows;
     }
 
     public function clearMemoryNamespace(string $namespace): bool
     {
-        if ($namespace === '') {
-            return false;
-        }
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_DESTROY, [
-            'ns' => $namespace,
-            'sid' => '__kv__:' . $namespace,
-        ]);
-        return $this->isOk($response);
+        return $namespace !== '' && $this->memoryFacade()->clearNamespace($namespace);
     }
 
     public function deleteMemoryKey(string $namespace, string $key): bool
     {
-        if ($namespace === '' || $key === '') {
-            return false;
-        }
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_DELETE, [
-            'ns' => $namespace,
-            'sid' => '__kv__:' . $namespace,
-            'key' => $key,
-        ]);
-        return $this->isOk($response);
+        return $namespace !== '' && $key !== '' && $this->memoryFacade()->delete($namespace, $key);
     }
 
     public function persistMemory(): bool
     {
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_PERSIST);
-        return $this->isOk($response);
+        return $this->memoryFacade()->persist();
     }
 
     public function gcMemory(int $maxLifetime): bool
     {
-        $client = $this->buildClient(self::ROLE_MEMORY);
-        $response = $client->request(SessionProtocol::CMD_GC, ['max_lifetime' => \max(1, $maxLifetime)]);
-        return $this->isOk($response);
+        $facade = $this->memoryFacade();
+        if (!$facade->ping()) {
+            return false;
+        }
+
+        $facade->gc(\max(1, $maxLifetime));
+
+        return true;
     }
 
     private function getOverview(string $role): array
     {
-        $config = $this->getEndpointConfig($role);
-        $client = $this->buildClient($role);
-        $ping = $client->ping();
-        if (!$ping) {
-            // 常驻进程场景下，连接池可能处于刚重连状态，补一次轻量重试降低误报。
-            SchedulerSystem::usleep(20000);
-            $ping = $client->ping();
+        $runtime = $this->sharedStateServiceManager->peekRuntime($role);
+        $host = (string) ($runtime['host'] ?? '127.0.0.1');
+        $port = (int) ($runtime['port'] ?? ($role === self::ROLE_MEMORY ? 19971 : 19970));
+        $defaultTokenFileName = (string) ($runtime['token_file_name'] ?? ($role === self::ROLE_MEMORY ? 'memory_server.token' : 'session_server.token'));
+        $probeTokenFileName = null;
+        $ping = false;
+        $stats = [];
+        $probeError = '';
+
+        if ($port > 0) {
+            $probeTokenFileName = $this->resolveProbeTokenFileName($host, $port, $defaultTokenFileName);
+            if ($probeTokenFileName !== null) {
+                $client = $this->buildStateClient($host, $port, $probeTokenFileName);
+                if ($client !== null) {
+                    try {
+                        $response = $client->request(SessionProtocol::CMD_STATS);
+                        $ping = \is_array($response) && SessionProtocol::isSuccess($response);
+                        $data = $ping ? SessionProtocol::getData($response) : [];
+                        $stats = \is_array($data) ? $data : [];
+                        if (!$ping) {
+                            $probeError = 'stats_request_failed';
+                        }
+                    } catch (\Throwable $throwable) {
+                        $probeError = $throwable->getMessage();
+                    } finally {
+                        $client->disconnect();
+                    }
+                } else {
+                    $probeError = 'client_build_failed';
+                }
+            } else {
+                $probeError = 'unreachable';
+            }
+        } else {
+            $probeError = 'port_missing';
         }
-        $statsResp = $client->request(SessionProtocol::CMD_STATS);
-        $statsOk = $this->isOk($statsResp);
-        $stats = $statsOk ? (array)SessionProtocol::getData((array)$statsResp) : [];
-        $connected = $ping || $statsOk;
-        $error = (!$connected && \is_array($statsResp)) ? (string)(SessionProtocol::getError($statsResp) ?? '') : '';
+
         return [
-            'connected' => $connected,
-            'host' => $config['host'],
-            'port' => $config['port'],
-            'token_file_name' => $config['token_file_name'],
+            'connected' => $ping,
+            'host' => $host,
+            'port' => $port,
+            'token_file_name' => $probeTokenFileName ?? $defaultTokenFileName,
             'stats' => $stats,
             'probe' => [
                 'ping_ok' => $ping,
-                'stats_ok' => $statsOk,
-                'error' => $error,
+                'stats_ok' => $stats !== [],
+                'error' => $probeError,
             ],
+            'registered' => (bool) ($runtime['registered'] ?? false),
+            'consumer_count' => (int) ($runtime['consumer_count'] ?? 0),
+            'shutdown_due_at' => $runtime['shutdown_due_at'] ?? null,
         ];
     }
 
-    private function buildClient(string $role): SharedStateClient
+    private function sessionFacade(): SessionStateFacade
     {
-        $config = $this->getEndpointConfig($role);
-        return new SharedStateClient(
-            (string)$config['host'],
-            (int)$config['port'],
-            [
-                'token_file_name' => (string)$config['token_file_name'],
-                'acquire_timeout' => 0.3,
-            ]
-        );
-    }
-
-    private function getEndpointConfig(string $role): array
-    {
-        $registry = new \Weline\Server\Service\SharedStateServiceRegistry();
-
-        if ($role === self::ROLE_MEMORY) {
-            $record = $registry->getRecord('memory_server');
-            $host = (string)(Env::get('wls.memory_service.host') ?? '127.0.0.1');
-            $host = \trim($host);
-            if ($host === '') {
-                $host = '127.0.0.1';
-            }
-            $port = (int)(Env::get('wls.memory_service.port') ?? 19971);
-            return [
-                'host' => (string) ($record['host'] ?? ($host !== '' ? $host : '127.0.0.1')),
-                'port' => (int) ($record['port'] ?? ($port > 0 ? $port : 19971)),
-                'token_file_name' => (string) ($record['token_file_name'] ?? 'memory_server.token'),
-            ];
+        if ($this->sessionFacade === null) {
+            $this->sessionFacade = new SessionStateFacade();
         }
 
-        $record = $registry->getRecord('session_server');
-        $host = (string)(Env::get('session.server_host') ?? '127.0.0.1');
-        $host = \trim($host);
-        if ($host === '') {
-            $host = '127.0.0.1';
-        }
-        $port = (int)(Env::get('session.server_port') ?? 19970);
-        return [
-            'host' => (string) ($record['host'] ?? ($host !== '' ? $host : '127.0.0.1')),
-            'port' => (int) ($record['port'] ?? ($port > 0 ? $port : 19970)),
-            'token_file_name' => (string) ($record['token_file_name'] ?? 'session_server.token'),
-        ];
+        return $this->sessionFacade;
     }
 
-    private function isOk(?array $response): bool
+    private function memoryFacade(): MemoryStateFacade
     {
-        return \is_array($response) && SessionProtocol::isSuccess($response);
+        if ($this->memoryFacade === null) {
+            $this->memoryFacade = new MemoryStateFacade();
+        }
+
+        return $this->memoryFacade;
     }
 
     private function normalizeLimit(int $limit, int $max): int
@@ -350,8 +313,6 @@ class SharedStateAdminService
     }
 
     /**
-     * 过滤掉仅用于 SharedState 协议层的内部键，避免误伤真实 Session payload 筛选。
-     *
      * @param array<string, mixed> $filter
      * @return array<string, mixed>
      */
@@ -359,12 +320,32 @@ class SharedStateAdminService
     {
         $payloadFilter = [];
         foreach ($filter as $key => $value) {
-            if (\str_starts_with((string)$key, '__')) {
+            if (\str_starts_with((string) $key, '__')) {
                 continue;
             }
-            $payloadFilter[(string)$key] = $value;
+            $payloadFilter[(string) $key] = $value;
         }
+
         return $payloadFilter;
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $filter
+     */
+    private function matchesPayloadFilter(array $payload, array $filter): bool
+    {
+        if ($filter === []) {
+            return true;
+        }
+
+        foreach ($filter as $key => $value) {
+            if (($payload[$key] ?? null) !== $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function extractNamespace(string $sessionId): string
@@ -377,6 +358,7 @@ class SharedStateAdminService
         if ($pos === false) {
             return $body;
         }
+
         return \substr($body, 0, $pos);
     }
 
@@ -388,16 +370,18 @@ class SharedStateAdminService
             if ($count >= 5) {
                 break;
             }
-            $name = (string)$key;
+            $name = (string) $key;
             $preview[$name] = $this->isSensitiveKey($name) ? '***' : $this->previewValue($value);
             $count++;
         }
+
         return $preview;
     }
 
     private function isSensitiveKey(string $key): bool
     {
         $name = \strtolower($key);
+
         return \str_contains($name, 'password')
             || \str_contains($name, 'token')
             || \str_contains($name, 'secret')
@@ -407,10 +391,11 @@ class SharedStateAdminService
     private function previewValue(mixed $value): string
     {
         if (\is_scalar($value) || $value === null) {
-            $text = (string)$value;
+            $text = (string) $value;
             if (\strlen($text) > 120) {
                 return \substr($text, 0, 120) . '...';
             }
+
             return $text;
         }
         if (\is_array($value)) {
@@ -419,6 +404,7 @@ class SharedStateAdminService
         if (\is_object($value)) {
             return 'object(' . $value::class . ')';
         }
+
         return \gettype($value);
     }
 
@@ -440,7 +426,6 @@ class SharedStateAdminService
                 'json' => null,
             ];
         }
-
         if (\is_array($value)) {
             return [
                 'kind' => 'array',
@@ -449,9 +434,9 @@ class SharedStateAdminService
                 'json' => $this->toPreviewJson($value),
             ];
         }
-
         if (\is_object($value)) {
             $props = \get_object_vars($value);
+
             return [
                 'kind' => 'object',
                 'display' => 'object(' . $value::class . ')',
@@ -481,6 +466,7 @@ class SharedStateAdminService
         if (\strlen($json) > 1200) {
             return \substr($json, 0, 1200) . '...';
         }
+
         return $json;
     }
 
@@ -493,6 +479,7 @@ class SharedStateAdminService
             if (\is_object($value)) {
                 return '[object:' . $value::class . ']';
             }
+
             return \is_scalar($value) || $value === null ? $value : \gettype($value);
         }
 
@@ -504,9 +491,10 @@ class SharedStateAdminService
                     $result['__truncated'] = true;
                     break;
                 }
-                $result[(string)$k] = $this->normalizePreviewValue($v, $depth + 1);
+                $result[(string) $k] = $this->normalizePreviewValue($v, $depth + 1);
                 $count++;
             }
+
             return $result;
         }
 
@@ -521,9 +509,30 @@ class SharedStateAdminService
             if (\is_string($value) && \strlen($value) > 240) {
                 return \substr($value, 0, 240) . '...';
             }
+
             return $value;
         }
 
         return \gettype($value);
+    }
+
+    protected function resolveProbeTokenFileName(string $host, int $port, string $defaultTokenFileName): ?string
+    {
+        return SharedStateProtocolProbe::findWorkingTokenBasename($host, $port, $defaultTokenFileName);
+    }
+
+    protected function buildStateClient(string $host, int $port, string $tokenFileName): ?SharedStateClient
+    {
+        try {
+            return new SharedStateClient($host, $port, [
+                'token_file_name' => $tokenFileName,
+                'acquire_timeout' => 0.3,
+                'connect_timeout' => 0.5,
+                'timeout' => 1.0,
+                'log_connect_fail' => false,
+            ]);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

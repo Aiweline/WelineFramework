@@ -19,10 +19,12 @@ use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Console\Console\Server\Stop as CliStop;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\SharedStateServiceManager;
 
 /**
  * server:stop - 停止常驻内存服务器
@@ -205,6 +207,7 @@ class Stop extends CommandAbstract
             $this->showInstanceInfo($instanceInfo);
             // 清理可能残留的进程和文件（含按 PID 与按名前缀，确保 Worker/Dispatcher 等全部退出）
             $this->runResidualCleanupPair($name, $instanceInfo);
+            $this->releaseSharedStateConsumersForInstance($name);
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
@@ -232,6 +235,9 @@ class Stop extends CommandAbstract
             $this->runResidualCleanupPair($name, $instanceInfo);
         }
         
+        // 从共享 Session/Memory 注册表移除本实例消费者，避免误导其它工具
+        $this->releaseSharedStateConsumersForInstance($name);
+
         // 删除实例文件
         $manager->deleteInstance($name);
         
@@ -839,6 +845,9 @@ class Stop extends CommandAbstract
         }
 
         foreach ($info->services as $service) {
+            if ((bool) ($service->metadata['shared_external'] ?? false)) {
+                continue;
+            }
             $pid = (int) ($service->pid ?? 0);
             if ($pid > 0) {
                 $pids[$pid] = true;
@@ -846,6 +855,18 @@ class Stop extends CommandAbstract
         }
 
         return \array_map('intval', \array_keys($pids));
+    }
+
+    /**
+     * 停止实例时从共享服务 registry 移除消费者；残留清理因此不会误杀仍被其它 WLS 实例使用的 Session/Memory 进程。
+     */
+    private function releaseSharedStateConsumersForInstance(string $instanceName): void
+    {
+        try {
+            (new SharedStateServiceManager())->releaseInstanceConsumers($instanceName);
+        } catch (\Throwable) {
+            // best-effort：registry 损坏或并发时不阻塞停机
+        }
     }
 
     /**

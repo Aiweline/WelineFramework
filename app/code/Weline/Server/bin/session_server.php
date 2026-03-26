@@ -17,9 +17,11 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
-$host = $argv[1] ?? '127.0.0.1';
+$normalizeArgValue = static fn(string $value): string => \trim($value, " \t\n\r\0\x0B\"'");
+
+$host = $normalizeArgValue((string)($argv[1] ?? '127.0.0.1'));
 $port = (int)($argv[2] ?? 19970);
-$instanceName = $argv[3] ?? 'default';
+$instanceName = $normalizeArgValue((string)($argv[3] ?? 'default'));
 
 $processName = '';
 $controlPort = 0;
@@ -33,10 +35,11 @@ $bootstrapInstance = '';
 $sharedService = false;
 
 foreach ($argv as $arg) {
+    $arg = (string) $arg;
     if (\str_starts_with($arg, '--name=')) {
-        $processName = \substr($arg, 7);
+        $processName = $normalizeArgValue((string)\substr($arg, 7));
     } elseif (\str_starts_with($arg, '--instance-name=')) {
-        $instanceName = (string)\substr($arg, 16);
+        $instanceName = $normalizeArgValue((string)\substr($arg, 16));
     } elseif (\str_starts_with($arg, '--control-port=')) {
         $controlPort = (int)\substr($arg, 15);
     } elseif (\str_starts_with($arg, '--master-pid=')) {
@@ -44,21 +47,22 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--epoch=')) {
         $orchestratorEpoch = (int)\substr($arg, 8);
     } elseif (\str_starts_with($arg, '--launch-id=')) {
-        $orchestratorLaunchId = (string)\substr($arg, 12);
+        $orchestratorLaunchId = $normalizeArgValue((string)\substr($arg, 12));
     } elseif (\str_starts_with($arg, '--role=')) {
-        $argRole = (string)\substr($arg, 7);
+        $argRole = $normalizeArgValue((string)\substr($arg, 7));
         if ($argRole !== '') {
             $role = $argRole;
         }
     } elseif (\str_starts_with($arg, '--token-file-name=')) {
-        $tokenFileName = (string)\substr($arg, 18);
+        $tokenFileName = $normalizeArgValue((string)\substr($arg, 18));
     } elseif (\str_starts_with($arg, '--bootstrap-instance=')) {
-        $bootstrapInstance = (string)\substr($arg, 21);
+        $bootstrapInstance = $normalizeArgValue((string)\substr($arg, 21));
     } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
         $sharedService = true;
     } elseif ($arg === '--frontend' || $arg === '-f') {
         $isFrontend = true;
     }
+
 }
 
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
@@ -101,11 +105,11 @@ if ($isFrontend) {
 }
 
 if ($processName) {
-    $processLogDir = BP . 'var' . DIRECTORY_SEPARATOR . 'process';
+    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
+    $processLogDir = \dirname($processLogFile);
     if (!\is_dir($processLogDir)) {
         @\mkdir($processLogDir, 0777, true);
     }
-    $processLogFile = $processLogDir . DIRECTORY_SEPARATOR . $processName . '.log';
     \ini_set('error_log', $processLogFile);
 }
 
@@ -129,7 +133,13 @@ $isDev = (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
 $sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
     ? $envConfig['wls']['session'] : [];
 $sessionConfig['port'] = $port;
+$sessionConfig['role'] = $role;
 $sessionConfig['persist_path'] = BP . 'var' . DIRECTORY_SEPARATOR . 'session' . DIRECTORY_SEPARATOR;
+$persistFileName = \trim((string)($sessionConfig['persist_file_name'] ?? ''));
+if ($persistFileName === '') {
+    $persistFileName = $role === 'memory_server' ? 'wls_memory_store.dat' : 'wls_session_store.dat';
+}
+$sessionConfig['persist_file_name'] = $persistFileName;
 $safeRole = \preg_replace('/[^a-z0-9_]/i', '_', (string)$role) ?: 'session_server';
 $tokenFileName = \trim($tokenFileName);
 if ($tokenFileName === '') {
@@ -159,10 +169,74 @@ WlsLogger::info_("DEV=" . ($isDev ? 'ON' : 'OFF') . ", Frontend=" . ($isFrontend
 WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50000) .
     ", persist_interval=" . ($sessionConfig['persist_interval'] ?? 60) . "s" .
     ", session_ttl=" . ($sessionConfig['session_ttl'] ?? 3600) . "s");
+WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls_session_store.dat'));
 
 $ipcReceivedShutdown = false;
 $kernel = null;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+$sharedStateRegistry = $sharedService ? new \Weline\Server\Service\SharedStateServiceRegistry() : null;
+$sharedStateManager = $sharedService ? new \Weline\Server\Service\SharedStateServiceManager() : null;
+$lastSharedLifecycleCheckAt = 0;
+$parseSharedStateTimestamp = static function (mixed $value): ?int {
+    if (!\is_string($value) || \trim($value) === '') {
+        return null;
+    }
+
+    $timestamp = \strtotime($value);
+
+    return $timestamp === false ? null : $timestamp;
+};
+$shouldSelfShutdownSharedService = static function (array $record) use ($parseSharedStateTimestamp): bool {
+    $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
+    if ($consumers !== []) {
+        return false;
+    }
+
+    $shutdownDueAt = $parseSharedStateTimestamp($record['shutdown_due_at'] ?? null);
+
+    return $shutdownDueAt !== null && $shutdownDueAt <= \time();
+};
+$runSharedLifecycleSelfCheck = static function () use (
+    &$lastSharedLifecycleCheckAt,
+    $sharedService,
+    $sharedStateManager,
+    $sharedStateRegistry,
+    $role,
+    $shouldSelfShutdownSharedService,
+    $server,
+    $host,
+    $port
+): void {
+    if (!$sharedService) {
+        return;
+    }
+
+    $now = \time();
+    if ($now === $lastSharedLifecycleCheckAt) {
+        return;
+    }
+
+    $lastSharedLifecycleCheckAt = $now;
+
+    try {
+        $sweepResult = $sharedStateManager?->sweepStaleConsumersIfAvailable($role) ?? [];
+        if (($sweepResult['skipped_locked'] ?? false) === true) {
+            return;
+        }
+        $record = $sharedStateRegistry?->getRecord($role) ?? [];
+        if (\is_array($record) && $shouldSelfShutdownSharedService($record)) {
+            WlsLogger::info_(
+                "Shared service idle shutdown due reached for {$role} on {$host}:{$port}, stopping self."
+            );
+            $server->getStore()->forcePersist();
+            $server->setRunning(false);
+        }
+    } catch (\Throwable $throwable) {
+        WlsLogger::warning_(
+            'Shared service lifecycle self-check failed: ' . $throwable->getMessage()
+        );
+    }
+};
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
@@ -243,7 +317,9 @@ while ($server->isRunning()) {
         $kernel->reconnect();
     }
 
-    if ($orphanGuard->shouldExit(
+    $runSharedLifecycleSelfCheck();
+
+    if (!$sharedService && $orphanGuard->shouldExit(
         $masterPid,
         $kernel !== null && $kernel->isConnected(),
         $ipcReceivedShutdown,
