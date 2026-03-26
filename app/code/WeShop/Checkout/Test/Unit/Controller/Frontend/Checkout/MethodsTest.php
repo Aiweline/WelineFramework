@@ -55,6 +55,7 @@ class MethodsTest extends TestCase
                 ],
                 'shipping_method' => 'dhl',
                 'payment_method' => 'paypal',
+                'order_id' => 0,
             ])
             ->willReturn([
                 'selected_shipping_address_id' => 3,
@@ -63,6 +64,11 @@ class MethodsTest extends TestCase
                 ],
                 'payment_methods' => [
                     ['code' => 'paypal', 'is_default' => true],
+                ],
+                'cart_summary' => [
+                    'shipping' => 12.0,
+                    'tax' => 4.76,
+                    'grand_total' => 76.26,
                 ],
             ]);
 
@@ -74,6 +80,8 @@ class MethodsTest extends TestCase
                 ['shipping', null, null],
                 ['shipping_method', null, 'dhl'],
                 ['payment_method', null, 'paypal'],
+                ['order_id', null, null],
+                ['retry_order_id', null, null],
             ]);
 
         $controller = $this->getMockBuilder(Methods::class)
@@ -86,7 +94,8 @@ class MethodsTest extends TestCase
                 return ($payload['success'] ?? false) === true
                     && (int) ($payload['data']['selected_shipping_address_id'] ?? 0) === 3
                     && (string) ($payload['data']['shipping_methods'][0]['code'] ?? '') === 'dhl'
-                    && (string) ($payload['data']['payment_methods'][0]['code'] ?? '') === 'paypal';
+                    && (string) ($payload['data']['payment_methods'][0]['code'] ?? '') === 'paypal'
+                    && (float) ($payload['data']['cart_summary']['grand_total'] ?? 0) === 76.26;
             }))
             ->willReturn('json');
 
