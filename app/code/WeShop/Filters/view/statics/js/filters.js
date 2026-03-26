@@ -19,7 +19,7 @@
                 paginationContainer: '.pagination-container',
                 
                 // API 端点 (格式: /module/controller/action)
-                filterApiUrl: '/weshop/filters/frontend/ajax/filter',
+                filterApiUrl: '/filters/filter',
                 
                 // 分类ID
                 categoryId: 0,
@@ -706,12 +706,14 @@
                 const categoryId = filterContainer.dataset.categoryId 
                     || document.body.dataset.categoryId 
                     || 0;
+                const filterApiUrl = filterContainer.dataset.filterApiUrl || '/filters/filter';
                 
                 if (categoryId) {
                     window.weShopFilterController = WeShopFilters.init({
                         categoryId: parseInt(categoryId),
                         filterContainer: '.category-filter-mock',
-                        productContainer: '.product-list-container, .category-products',
+                        productContainer: '.category-products',
+                        filterApiUrl: filterApiUrl,
                         enableAjax: true,
                         updateUrl: true,
                     });

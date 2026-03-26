@@ -138,6 +138,18 @@ class ColorFilterProvider extends AbstractFilterProvider
             return $productIds;
         }
     }
+
+    public function getSearchFacetDefinition(int $categoryId, array $context = []): ?array
+    {
+        return $this->buildEavFacetDefinition(
+            $this->attributeCode,
+            $categoryId,
+            $context,
+            $this->getCode(),
+            (string) $this->getName(),
+            $this->getDisplayType()
+        );
+    }
     
     
     /**

@@ -7,8 +7,11 @@ namespace WeShop\Filters\Service;
 use WeShop\Filters\Api\FilterProviderInterface;
 use WeShop\Filters\Api\FilterResultInterface;
 use WeShop\Filters\Api\FilterCollectionInterface;
+use WeShop\Filters\Model\CategoryFilterConfig;
 use WeShop\Filters\Model\FilterRegistry;
 use WeShop\Filters\Model\FilterResult;
+use WeShop\Filters\Provider\EavAttributeFilterProvider;
+use Weline\Eav\Service\AttributeFilterService;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -130,6 +133,8 @@ class FilterService
      */
     public function collectFilters(int $categoryId, array $productIds): FilterCollectionInterface
     {
+        $this->registerConfiguredEavFilters($categoryId);
+        $this->registerAutoDiscoveredEavFilters($productIds);
         $collection = $this->registry->getForCategory($categoryId);
         
         // 触发筛选器收集事件，允许其他模块添加自定义筛选器
@@ -141,6 +146,60 @@ class FilterService
         $this->eventsManager->dispatch('WeShop_Filters::filters_collect', $eventData);
         
         return $collection;
+    }
+
+    private function registerConfiguredEavFilters(int $categoryId): void
+    {
+        if ($categoryId <= 0) {
+            return;
+        }
+
+        try {
+            $configModel = ObjectManager::getInstance(CategoryFilterConfig::class);
+            foreach ($configModel->getEnabledFilters($categoryId) as $config) {
+                $filterCode = trim((string) ($config[CategoryFilterConfig::schema_fields_filter_code] ?? ''));
+                if (!str_starts_with($filterCode, 'attr_')) {
+                    continue;
+                }
+
+                $provider = EavAttributeFilterProvider::create(
+                    substr($filterCode, 5),
+                    '',
+                    (int) ($config[CategoryFilterConfig::schema_fields_sort_order] ?? 200)
+                );
+                $provider->setDisplayType((string) ($config[CategoryFilterConfig::schema_fields_display_type] ?? 'list'));
+                $provider->setCollapsed((bool) ($config[CategoryFilterConfig::schema_fields_is_collapsed] ?? false));
+                $this->registry->register($provider);
+            }
+        } catch (\Throwable) {
+        }
+    }
+
+    private function registerAutoDiscoveredEavFilters(array $productIds): void
+    {
+        try {
+            $attributeService = ObjectManager::getInstance(AttributeFilterService::class);
+            $metadata = $attributeService->getFilterableAttributeMetadata('product');
+        } catch (\Throwable) {
+            return;
+        }
+
+        $sortOrder = 200;
+        foreach ($metadata as $attributeCode => $data) {
+            if ($this->registry->has($attributeCode) || $this->registry->has('attr_' . $attributeCode)) {
+                continue;
+            }
+
+            $provider = EavAttributeFilterProvider::create(
+                $attributeCode,
+                (string) ($data['attribute']['name'] ?? $attributeCode),
+                $sortOrder++
+            );
+            if (!empty($data['attribute']['is_swatch'])) {
+                $provider->setDisplayType('swatch');
+            }
+            $this->registry->register($provider);
+        }
     }
     
     /**

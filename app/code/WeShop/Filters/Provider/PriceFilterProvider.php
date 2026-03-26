@@ -423,6 +423,37 @@ class PriceFilterProvider extends AbstractFilterProvider
         $this->dynamicRangeCount = $count;
         return $this;
     }
+
+    public function getSearchFacetDefinition(int $categoryId, array $context = []): ?array
+    {
+        $configData = $this->getCategoryConfigData($categoryId);
+        $currencySymbol = $this->currencySymbol;
+        $rangeBuckets = is_array($configData['range_buckets'] ?? null) && $configData['range_buckets'] !== []
+            ? array_values($configData['range_buckets'])
+            : array_map(static fn (array $range): array => [
+                'from' => $range[PriceRange::schema_fields_min_price] ?? null,
+                'to' => $range[PriceRange::schema_fields_max_price] ?? null,
+                'key' => sprintf(
+                    '%s-%s',
+                    $range[PriceRange::schema_fields_min_price] ?? '',
+                    $range[PriceRange::schema_fields_max_price] ?? ''
+                ),
+                'label' => PriceRange::generateLabel(
+                    (float) ($range[PriceRange::schema_fields_min_price] ?? 0),
+                    isset($range[PriceRange::schema_fields_max_price]) ? (float) $range[PriceRange::schema_fields_max_price] : null,
+                    $currencySymbol
+                ),
+            ], $this->getDefaultRanges());
+
+        return [
+            'code' => $this->getCode(),
+            'name' => (string) $this->getName(),
+            'type' => 'price',
+            'field' => 'price',
+            'display_type' => 'list',
+            'range_buckets' => $rangeBuckets,
+        ];
+    }
     
     /**
      * @inheritDoc
