@@ -4,9 +4,10 @@
 在配置写入数据库前触发，允许其他模块验证或修改配置值。,在配置写入数据库前触发，允许其他模块验证或修改配置值。
 配置设置后,配置设置后
 "在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。","在配置成功写入数据库后触发，通知其他模块配置已变更。Server 模块监听此事件以感知配置变化。"
-"SystemConfig 查询器不支持的操作：%{1}","SystemConfig 查询器不支持的操作：%{1}"
-系统配置查询,系统配置查询
-提供系统配置的读写能力,提供系统配置的读写能力
-获取配置值,获取配置值
+"SystemConfig query provider does not support: %{1}","SystemConfig query provider does not support: %{1}"
+"System config query","System config query"
+"Provides system config read and write operations.","Provides system config read and write operations."
+"Get a config value.","Get a config value."
 backend|frontend,backend|frontend
-设置配置值,设置配置值
+"Get all config values for a module.","Get all config values for a module."
+"Set a config value.","Set a config value."
