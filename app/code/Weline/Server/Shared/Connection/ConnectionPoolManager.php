@@ -137,7 +137,8 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $this->port,
             (float)($this->options['connect_timeout'] ?? 1.0),
             (float)($this->options['timeout'] ?? 2.0),
-            $tokenFilePath
+            $tokenFilePath,
+            (bool)($this->options['log_connect_fail'] ?? true)
         );
     }
 
