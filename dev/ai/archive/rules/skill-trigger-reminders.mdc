@@ -5,4 +5,4 @@ alwaysApply: true
 
 # 开发场景→技能映射
 
-先做场景匹配，再只读取命中的技能正文；同时命中多个场景时，只读取最相关的 1~3 个技能。完整映射表见 `dev/ai/skills/skill-trigger-reminders/references/development-skill-map.md`。
+先做场景匹配，再只读取命中的技能正文；同时命中多个场景时，只读取最相关的 1~3 个技能。完整映射表见 `dev/ai/skills/_index.md`。

@@ -4,11 +4,11 @@
     "description": "分布式任务总线 - 自监督智能体系统（带规则分析和代码备份）",
     
     "paths": {
-        "plans": "dev/ai/plans",
+        "plans": "dev/ai/archive/plans",
         "agents": "dev/ai/agents",
         "tasks": "dev/ai/agents/tasks.json",
         "skills": "dev/ai/skills",
-        "rules": "dev/ai/rules",
+        "rules": "dev/ai/archive/rules",
         "backup": "dev/ai/code_backup"
     },
     
