@@ -171,6 +171,91 @@ class WebsiteAgentService
      * @param string $description 站点描述
      * @return array<string> 建议域名列表
      */
+    public function recommendAvailableDomain(string $description, int $accountId, string $preferredDomain = ''): array
+    {
+        if ($accountId <= 0) {
+            return [
+                'success' => false,
+                'message' => (string)__('Please choose a registrar account first.'),
+                'candidate_domains' => [],
+                'checked_results' => [],
+            ];
+        }
+
+        $candidates = $this->buildRecommendationCandidates($description, $preferredDomain);
+        if ($candidates === []) {
+            return [
+                'success' => false,
+                'message' => (string)__('Please describe the site goal or enter a preferred domain first.'),
+                'candidate_domains' => [],
+                'checked_results' => [],
+            ];
+        }
+
+        $availabilityResults = $this->queryService->execute('websites', 'checkAvailability', [
+            'account_id' => $accountId,
+            'domains' => $candidates,
+        ]);
+
+        $resultsByDomain = [];
+        if (\is_array($availabilityResults)) {
+            foreach ($availabilityResults as $result) {
+                if (!\is_array($result)) {
+                    continue;
+                }
+
+                $domain = $this->normalizeRecommendationCandidate((string)($result['domain'] ?? ''));
+                if ($domain === '') {
+                    continue;
+                }
+
+                $normalized = [
+                    'domain' => $domain,
+                    'available' => !empty($result['available']),
+                ];
+                $error = \trim((string)($result['error'] ?? ''));
+                if ($error !== '') {
+                    $normalized['error'] = $error;
+                }
+
+                $resultsByDomain[$domain] = $normalized;
+            }
+        }
+
+        $checkedResults = [];
+        $recommended = null;
+        foreach ($candidates as $candidate) {
+            $result = $resultsByDomain[$candidate] ?? [
+                'domain' => $candidate,
+                'available' => false,
+            ];
+            $checkedResults[] = $result;
+
+            if ($recommended === null && !empty($result['available'])) {
+                $recommended = $result;
+            }
+        }
+
+        if ($recommended !== null) {
+            return [
+                'success' => true,
+                'message' => (string)__('AI found an available domain: %{domain}', [
+                    'domain' => (string)$recommended['domain'],
+                ]),
+                'domain' => (string)$recommended['domain'],
+                'candidate_domains' => $candidates,
+                'checked_results' => $checkedResults,
+            ];
+        }
+
+        return [
+            'success' => false,
+            'message' => (string)__('No available domain was found. Please try another brief or preferred domain.'),
+            'candidate_domains' => $candidates,
+            'checked_results' => $checkedResults,
+        ];
+    }
+
     public function suggestDomainsFromDescription(string $description): array
     {
         $desc = \preg_replace('/[\s\x{3000}\x{4e00}-\x{9fff}]+/u', ' ', $description);
@@ -189,5 +274,54 @@ class WebsiteAgentService
             $suggestions[] = $base . $tld;
         }
         return \array_slice(\array_unique($suggestions), 0, 5);
+    }
+
+    private function buildRecommendationCandidates(string $description, string $preferredDomain = ''): array
+    {
+        $candidates = [];
+        $appendCandidate = function (string $candidate) use (&$candidates): void {
+            $normalized = $this->normalizeRecommendationCandidate($candidate);
+            if ($normalized === '' || \in_array($normalized, $candidates, true)) {
+                return;
+            }
+
+            $candidates[] = $normalized;
+        };
+
+        $preferredDomain = \strtolower(\trim($preferredDomain));
+        if ($preferredDomain !== '') {
+            $normalizedPreferred = $this->normalizeRecommendationCandidate($preferredDomain);
+            if ($normalizedPreferred !== '') {
+                $appendCandidate($normalizedPreferred);
+                $base = (string)(\preg_replace('/\.[a-z]{2,}$/i', '', $normalizedPreferred) ?? '');
+                foreach (['.com', '.net', '.site', '.cn'] as $suffix) {
+                    $appendCandidate($base . $suffix);
+                }
+            } elseif (\preg_match('/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/i', $preferredDomain)) {
+                foreach (['.com', '.net', '.site', '.cn'] as $suffix) {
+                    $appendCandidate($preferredDomain . $suffix);
+                }
+            }
+        }
+
+        foreach ($this->suggestDomainsFromDescription($description) as $suggestion) {
+            if (!\is_string($suggestion)) {
+                continue;
+            }
+
+            $appendCandidate($suggestion);
+        }
+
+        return \array_slice($candidates, 0, 5);
+    }
+
+    private function normalizeRecommendationCandidate(string $candidate): string
+    {
+        $candidate = \strtolower(\trim($candidate));
+        if ($candidate === '') {
+            return '';
+        }
+
+        return \preg_match('/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/', $candidate) ? $candidate : '';
     }
 }
