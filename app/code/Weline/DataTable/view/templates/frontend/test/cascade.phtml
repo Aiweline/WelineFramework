@@ -43,12 +43,14 @@
                        allow-frontend="true"
                        api-url="datatable/rest/v1/demo-table"
                        field-api-url="datatable/rest/v1/demo-form/fields">
-                <w:t-header>
-                    <w:field belong="t-header" name="id" label="ID" sortable="true"></w:field>
-                    <w:field belong="t-header" name="name" label="Name" sortable="true"></w:field>
-                    <w:field belong="t-header" name="email" label="Email" sortable="true"></w:field>
-                    <w:field belong="t-header" name="status" label="Status" sortable="true"></w:field>
-                </w:t-header>
+                <thead>
+                    <tr>
+                        <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
+                        <th data-field="name" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Name">Name</th>
+                        <th data-field="email" data-type="email" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Email">Email</th>
+                        <th data-field="status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Status">Status</th>
+                    </tr>
+                </thead>
             </w:d-table>
         </section>
 
@@ -65,13 +67,15 @@
                        allow-frontend="true"
                        api-url="datatable/rest/v1/demo-table"
                        field-api-url="datatable/rest/v1/demo-form/fields">
-                <w:t-header>
-                    <w:field belong="t-header" name="id" label="ID" sortable="true"></w:field>
-                    <w:field belong="t-header" name="user_id" label="User ID" sortable="true"></w:field>
-                    <w:field belong="t-header" name="order_no" label="Order No" sortable="true"></w:field>
-                    <w:field belong="t-header" name="total_amount" label="Total Amount" sortable="true"></w:field>
-                    <w:field belong="t-header" name="order_status" label="Order Status" sortable="true"></w:field>
-                </w:t-header>
+                <thead>
+                    <tr>
+                        <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
+                        <th data-field="user_id" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="User ID">User ID</th>
+                        <th data-field="order_no" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order No">Order No</th>
+                        <th data-field="total_amount" data-type="number" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Total Amount">Total Amount</th>
+                        <th data-field="order_status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Order Status">Order Status</th>
+                    </tr>
+                </thead>
             </w:d-table>
         </section>
     </div>
