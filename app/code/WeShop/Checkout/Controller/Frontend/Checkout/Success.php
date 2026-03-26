@@ -36,7 +36,7 @@ class Success extends BaseController
         $customer = $this->getCustomerSession()->getCustomer();
         if (!$customer || !$customer->getId()) {
             $this->getMessageManager()->addError(__('Please log in to continue.'));
-            $this->redirect('customer/account/login');
+            $this->redirect($this->getStorefrontLoginRoute());
             return '';
         }
 
