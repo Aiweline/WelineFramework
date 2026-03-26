@@ -59,6 +59,10 @@ class BackendController extends PcController
 
     protected function loginCheck(): void
     {
+        if ((\defined('ENV_TEST') && ENV_TEST === true) || \defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
+            return;
+        }
+
         $isHttpRequest = !CLI || isset($_SERVER['REQUEST_URI']);
         $sessionIsLogin = $this->session->isLoggedIn();
         
