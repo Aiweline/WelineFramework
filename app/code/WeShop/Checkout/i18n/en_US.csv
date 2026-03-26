@@ -1,4 +1,5 @@
-﻿购物车为空，无法结账,购物车为空，无法结账
+﻿"This order can no longer be retried.","This order can no longer be retried."
+"The checkout is empty.","The checkout is empty."
 "Please log in to continue.","Please log in to continue."
 "Order placed successfully.","Order placed successfully."
 "Order ID is required.","Order ID is required."
@@ -33,3 +34,25 @@ Redirect,Redirect
 "Payment flow: %1","Payment flow: %1"
 "Complete this payment flow after confirming the order.","Complete this payment flow after confirming the order."
 "No shipping methods are available for the current checkout context.","No shipping methods are available for the current checkout context."
+"Order Confirmed!","Order Confirmed!"
+"Thank you for your purchase","Thank you for your purchase"
+"Order Number:","Order Number:"
+"Order placed on","Order placed on"
+Total,Total
+"Order Items","Order Items"
+"Qty: %1","Qty: %1"
+"Shipping Address","Shipping Address"
+"Payment Method","Payment Method"
+"Card ending in %1","Card ending in %1"
+Subtotal,Subtotal
+Shipping,Shipping
+Discount,Discount
+Tax,Tax
+"Confirmation Email","Confirmation Email"
+"A confirmation email has been sent to your address.","A confirmation email has been sent to your address."
+Processing,Processing
+"Your order is being processed and will ship soon.","Your order is being processed and will ship soon."
+Tracking,Tracking
+"Customers who bought this also bought","Customers who bought this also bought"
+"View Order Details","View Order Details"
+"Continue Shopping","Continue Shopping"
