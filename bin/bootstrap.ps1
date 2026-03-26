@@ -10,8 +10,30 @@ $RepoUrl = if ($env:WELINE_REPO_URL) { $env:WELINE_REPO_URL } else { "https://gi
 $InstallDir = "weline"
 
 # 检测是否已在项目目录（脚本在 bin 下，上级应有 setup\server_installer\run.php）
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Root = Split-Path -Parent $ScriptDir
+$scriptPath = $null
+try {
+    $scriptPath = $MyInvocation.MyCommand.Path
+} catch {
+    $scriptPath = $null
+}
+
+# When executed via `iex (DownloadString(...))`, there may be no real script file path,
+# so $MyInvocation.MyCommand.Path could be empty/null.
+if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+    try {
+        $scriptPath = $PSCommandPath
+    } catch {
+        $scriptPath = $null
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($scriptPath)) {
+    $ScriptDir = Split-Path -Parent $scriptPath
+    $Root = Split-Path -Parent $ScriptDir
+} else {
+    # Fallback: assume current working directory is the project root.
+    $Root = (Get-Location).Path
+}
 $RunPhp = Join-Path $Root "setup\server_installer\run.php"
 $InstallBat = Join-Path $Root "bin\install.bat"
 
