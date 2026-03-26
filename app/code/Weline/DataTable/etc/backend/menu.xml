@@ -2,54 +2,50 @@
 <menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    
-    <!-- DataTable模块 - 归入开发者 > 编辑器与组件 -->
     <menu source="Weline_DataTable::datatable_module"
           name="datatable_module"
           title="DataTable"
           parent="Weline_Backend::editor_component_group"
-          icon="mdi mdi-table"
+          icon="mdi mdi-table-large"
           order="30">
-        
         <menu source="Weline_DataTable::datatable_test_index"
               name="datatable_test_index"
-              title="测试首页"
+              title="后台仪表盘"
               action="datatable/backend/test/index"
-              icon="mdi mdi-home-outline"
+              icon="mdi mdi-view-dashboard-outline"
               order="10"/>
-        
+
         <menu source="Weline_DataTable::datatable_test_comprehensive"
               name="datatable_test_comprehensive"
               title="综合测试"
               action="datatable/backend/test/comprehensive/index"
               icon="mdi mdi-test-tube"
               order="20"/>
-        
+
         <menu source="Weline_DataTable::datatable_test_tag"
               name="datatable_test_tag"
-              title="标签测试"
+              title="标签验证"
               action="datatable/backend/test/tag-test/index"
-              icon="mdi mdi-tag-outline"
+              icon="mdi mdi-tag-check-outline"
               order="30"/>
-        
+
         <menu source="Weline_DataTable::datatable_doc"
               name="datatable_doc"
               title="文档说明"
-              icon="mdi mdi-book-open-variant"
+              icon="mdi mdi-book-open-page-variant-outline"
               order="40">
-            
             <menu source="Weline_DataTable::datatable_doc_quickstart"
                   name="datatable_doc_quickstart"
                   title="快速入门"
-                  action="datatable/backend/test/index/doc"
-                  icon="mdi mdi-speedometer"
+                  action="datatable/backend/test/index/doc?doc=quickstart"
+                  icon="mdi mdi-rocket-launch-outline"
                   order="10"/>
-            
+
             <menu source="Weline_DataTable::datatable_doc_guide"
                   name="datatable_doc_guide"
                   title="使用指南"
-                  action="datatable/backend/test/index/doc"
-                  icon="mdi mdi-book-open-page-variant-outline"
+                  action="datatable/backend/test/index/doc?doc=guide"
+                  icon="mdi mdi-book-open-blank-variant"
                   order="20"/>
         </menu>
     </menu>
