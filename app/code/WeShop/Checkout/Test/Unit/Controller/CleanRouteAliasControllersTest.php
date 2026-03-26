@@ -6,6 +6,7 @@ namespace WeShop\Checkout\Test\Unit\Controller;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Checkout\Controller\Index;
+use WeShop\Checkout\Controller\Methods;
 use WeShop\Checkout\Controller\PlaceOrder;
 use WeShop\Checkout\Controller\Success;
 
@@ -26,6 +27,16 @@ class CleanRouteAliasControllersTest extends TestCase
         $this->assertTrue($reflection->hasMethod('index'));
         $this->assertTrue($reflection->hasMethod('post'));
         $this->assertTrue($reflection->isSubclassOf(\WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::class));
+    }
+
+    public function testCheckoutMethodsAliasExists(): void
+    {
+        $reflection = new \ReflectionClass(Methods::class);
+
+        $this->assertTrue(class_exists(Methods::class));
+        $this->assertTrue($reflection->hasMethod('index'));
+        $this->assertTrue($reflection->hasMethod('post'));
+        $this->assertTrue($reflection->isSubclassOf(\WeShop\Checkout\Controller\Frontend\Checkout\Methods::class));
     }
 
     public function testCheckoutSuccessAliasExists(): void
