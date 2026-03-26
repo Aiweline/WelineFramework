@@ -1,20 +1,85 @@
-﻿库存源添加成功！,库存源添加成功！
-库存源添加失败！,库存源添加失败！
-库存源不存在！,库存源不存在！
-库存源保存成功！,库存源保存成功！
-库存源保存失败！,库存源保存失败！
-默认库存源不能删除！,默认库存源不能删除！
-库存源删除成功！,库存源删除成功！
-库存源删除失败！,库存源删除失败！
-库存记录不存在！,库存记录不存在！
-库存保存成功！,库存保存成功！
-库存保存失败！,库存保存失败！
-库存调整成功！,库存调整成功！
-库存调整失败！,库存调整失败！
-产品ID无效！,产品ID无效！
+﻿"Inventory Sources","Inventory Sources"
+"Inventory source created.","Inventory source created."
+"Unable to create inventory source.","Unable to create inventory source."
+"Create Inventory Source","Create Inventory Source"
+"Invalid source id.","Invalid source id."
+"Inventory source saved.","Inventory source saved."
+"Unable to save inventory source.","Unable to save inventory source."
+"Inventory source not found.","Inventory source not found."
+"Edit Inventory Source","Edit Inventory Source"
+"Inventory source deleted.","Inventory source deleted."
+"Unable to delete inventory source.","Unable to delete inventory source."
+"Inventory Source Items","Inventory Source Items"
+"Invalid source item id.","Invalid source item id."
+"Inventory stock updated.","Inventory stock updated."
+"Unable to update inventory stock.","Unable to update inventory stock."
+"Edit Inventory Source Item","Edit Inventory Source Item"
+"Inventory source item not found.","Inventory source item not found."
+"Inventory batch adjustment completed.","Inventory batch adjustment completed."
+"Inventory batch adjustment failed.","Inventory batch adjustment failed."
+"Invalid product id.","Invalid product id."
 库存变更,库存变更
 库存数量变更时触发（增加/减少）。,库存数量变更时触发（增加/减少）。
 低库存警告,低库存警告
 库存低于阈值时触发。,库存低于阈值时触发。
 缺货,缺货
 产品库存归零时触发。,产品库存归零时触发。
+"Inventory source does not exist.","Inventory source does not exist."
+"Inventory source item does not exist.","Inventory source item does not exist."
+"In Stock","In Stock"
+"Out of Stock","Out of Stock"
+"Quantity cannot be negative.","Quantity cannot be negative."
+"Low stock threshold cannot be negative.","Low stock threshold cannot be negative."
+"The default source cannot be deleted.","The default source cannot be deleted."
+"Source code is required.","Source code is required."
+"Source code only supports lowercase letters, numbers, underscore, and dash.","Source code only supports lowercase letters, numbers, underscore, and dash."
+"Source name is required.","Source name is required."
+"Define source profile and priority for inventory allocation.","Define source profile and priority for inventory allocation."
+"Back to Sources","Back to Sources"
+Code,Code
+Name,Name
+Description,Description
+Country,Country
+Region,Region
+City,City
+Postcode,Postcode
+Address,Address
+Phone,Phone
+Email,Email
+"Contact Name","Contact Name"
+Priority,Priority
+Enabled,Enabled
+"Use Default Carrier","Use Default Carrier"
+"Save Source","Save Source"
+Cancel,Cancel
+"Manage warehouses and inventory source metadata for stock allocation.","Manage warehouses and inventory source metadata for stock allocation."
+"Add Source","Add Source"
+ID,ID
+"Country / City","Country / City"
+Actions,Actions
+Yes,Yes
+No,No
+Edit,Edit
+"Delete this inventory source?","Delete this inventory source?"
+Delete,Delete
+"No inventory sources yet.","No inventory sources yet."
+"Create your first source to start multi-source stock management.","Create your first source to start multi-source stock management."
+"Create Source","Create Source"
+"Adjust stock quantity and warning threshold for this source-product pair.","Adjust stock quantity and warning threshold for this source-product pair."
+"Back to Source Items","Back to Source Items"
+Reference,Reference
+Source,Source
+Product,Product
+SKU,SKU
+Quantity,Quantity
+"Low Stock Threshold","Low Stock Threshold"
+"Current Status","Current Status"
+"Save Stock","Save Stock"
+"Review product stock by source and adjust inventory quantities.","Review product stock by source and adjust inventory quantities."
+"All Sources","All Sources"
+"Search SKU / Product","Search SKU / Product"
+Apply,Apply
+Reset,Reset
+Status,Status
+"No inventory source items found.","No inventory source items found."
+"Source-item records are created automatically after product stock assignment.","Source-item records are created automatically after product stock assignment."
