@@ -32,7 +32,7 @@ $buildPaginationUrl = function (int $targetPage) use ($pageSize): string {
                     <a href="<?= $this->getUrl('weshop') ?>" class="inline-flex items-center justify-center rounded-2xl bg-primary px-5 py-3 font-semibold text-white transition hover:bg-primary/90">
                         <?= __('Continue Shopping') ?>
                     </a>
-                    <a href="<?= $this->getUrl('customer/account') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
+                    <a href="<?= $this->getUrl('weshop/customer/account/index') ?>" class="inline-flex items-center justify-center rounded-2xl border border-border-light px-5 py-3 font-semibold text-text-primary-light transition hover:border-primary hover:text-primary dark:border-border-dark dark:text-text-primary-dark">
                         <?= __('Back to Account') ?>
                     </a>
                 </div>
