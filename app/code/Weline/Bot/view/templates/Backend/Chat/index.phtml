@@ -1,0 +1,98 @@
+<?php
+/**
+ * Bot chat console landing page.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$roles = is_array($roles ?? null) ? $roles : [];
+$roleManageUrl = $this->getBackendUrl('*/backend/role/listing');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Bot Chat Console') ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($roleManageUrl, ENT_QUOTES) ?>"><?= __('Bot') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('Chat Console') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Available Roles') ?></h5>
+            </div>
+            <div class="card-body">
+                <?php if (!empty($roles)): ?>
+                    <div class="list-group">
+                        <?php foreach ($roles as $role): ?>
+                            <?php
+                            $code = (string) $get($role, 'code', '');
+                            $name = (string) $get($role, 'name', $code);
+                            $description = (string) $get($role, 'description', '');
+                            ?>
+                            <div class="list-group-item">
+                                <div class="fw-semibold"><?= htmlspecialchars($name) ?></div>
+                                <div class="small text-muted"><?= htmlspecialchars($code) ?></div>
+                                <?php if ($description !== ''): ?>
+                                    <div class="small mt-1"><?= htmlspecialchars($description) ?></div>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="alert alert-warning mb-0">
+                        <?= __('No enabled role found. Please create and enable roles first.') ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Console Status') ?></h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2"><?= __('Backend console entry is healthy. Use API or frontend chat entry to send messages.') ?></p>
+                <ul class="mb-3">
+                    <li><?= __('Role management: configure role/model/skills and permissions.') ?></li>
+                    <li><?= __('Session management: inspect chat history and archived conversations.') ?></li>
+                    <li><?= __('Schedule management: create automatic prompt jobs.') ?></li>
+                </ul>
+                <a href="<?= htmlspecialchars($roleManageUrl, ENT_QUOTES) ?>" class="btn btn-primary">
+                    <i class="mdi mdi-account-cog me-1"></i><?= __('Go To Role Management') ?>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
