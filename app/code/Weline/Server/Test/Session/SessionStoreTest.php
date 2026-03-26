@@ -33,13 +33,7 @@ class SessionStoreTest extends TestCase
 
     protected function tearDown(): void
     {
-        $persistFile = $this->testPersistPath . 'wls_session_store.dat';
-        if (\is_file($persistFile)) {
-            @\unlink($persistFile);
-        }
-        if (\is_dir($this->testPersistPath)) {
-            @\rmdir($this->testPersistPath);
-        }
+        $this->removePath($this->testPersistPath);
     }
 
     /**
@@ -275,6 +269,35 @@ class SessionStoreTest extends TestCase
         $this->assertEquals('persist_user', $newStore->get($sessionId, 'name'));
     }
 
+    public function testPersistUsesCustomFileName(): void
+    {
+        $store = new SessionStore([
+            'persist_path' => $this->testPersistPath,
+            'persist_file_name' => 'wls_memory_store.dat',
+        ]);
+
+        $store->set('custom_file_session', 'key', 'value');
+        $this->assertTrue($store->forcePersist());
+        $this->assertFileExists($this->testPersistPath . 'wls_memory_store.dat');
+    }
+
+    public function testPersistRecreatesMissingDirectory(): void
+    {
+        $missingDir = $this->testPersistPath . 'missing-dir/';
+        $store = new SessionStore([
+            'persist_path' => $missingDir,
+            'persist_file_name' => 'wls_session_store.dat',
+        ]);
+
+        if (\is_dir($missingDir)) {
+            @\rmdir($missingDir);
+        }
+
+        $store->set('missing_dir_session', 'key', 'value');
+        $this->assertTrue($store->forcePersist());
+        $this->assertFileExists($missingDir . 'wls_session_store.dat');
+    }
+
     /**
      * 测试 LRU 淘汰
      */
@@ -295,5 +318,21 @@ class SessionStoreTest extends TestCase
         $sessionIds = $smallStore->getAllSessionIds();
         $this->assertLessThanOrEqual(5, \count($sessionIds));
         $this->assertContains('session6', $sessionIds);
+    }
+
+    private function removePath(string $path): void
+    {
+        if (\is_file($path) || \is_link($path)) {
+            @\unlink($path);
+            return;
+        }
+        if (!\is_dir($path)) {
+            return;
+        }
+
+        foreach ((array)\glob($path . '/*') as $childPath) {
+            $this->removePath($childPath);
+        }
+        @\rmdir($path);
     }
 }

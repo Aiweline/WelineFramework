@@ -136,6 +136,135 @@ class ServerInstanceManager
     }
 
     /**
+     * Resolve a user-provided instance name against persisted instances.
+     *
+     * Exact matches win first. If there is no exact hit, a unique
+     * case-insensitive prefix match is accepted.
+     */
+    public function resolvePersistedInstanceName(string $name): ?string
+    {
+        $name = \trim($name);
+        if ($name === '') {
+            return null;
+        }
+
+        $persistedNames = $this->listPersistedInstanceNames();
+        if ($persistedNames === []) {
+            return null;
+        }
+
+        foreach ($persistedNames as $candidate) {
+            if ($candidate === $name) {
+                return $candidate;
+            }
+        }
+
+        $lowerName = \strtolower($name);
+        $caseInsensitiveExactMatches = [];
+        $prefixMatches = [];
+
+        foreach ($persistedNames as $candidate) {
+            $candidateLower = \strtolower($candidate);
+            if ($candidateLower === $lowerName) {
+                $caseInsensitiveExactMatches[] = $candidate;
+                continue;
+            }
+
+            if (\str_starts_with($candidateLower, $lowerName)) {
+                $prefixMatches[] = $candidate;
+            }
+        }
+
+        if (\count($caseInsensitiveExactMatches) === 1) {
+            return $caseInsensitiveExactMatches[0];
+        }
+
+        if (\count($prefixMatches) === 1) {
+            return $prefixMatches[0];
+        }
+
+        return null;
+    }
+
+    /**
+     * Return the closest persisted instance names for a user-provided input.
+     *
+     * Prefix matches are preferred, then substring matches, then short-edit-distance
+     * candidates. The result is deterministic and trimmed to $limit items.
+     *
+     * @return string[]
+     */
+    public function suggestPersistedInstanceNames(string $name, int $limit = 3): array
+    {
+        $name = \trim($name);
+        if ($name === '' || $limit <= 0) {
+            return [];
+        }
+
+        $persistedNames = $this->listPersistedInstanceNames();
+        if ($persistedNames === []) {
+            return [];
+        }
+
+        $lowerName = \strtolower($name);
+        $thresholdBase = \max(2, (int) \floor(\strlen($lowerName) / 3));
+        $ranked = [];
+
+        foreach ($persistedNames as $candidate) {
+            $candidateLower = \strtolower($candidate);
+            $score = null;
+            $position = 0;
+
+            if ($candidateLower === $lowerName) {
+                $score = 0;
+            } elseif (\str_starts_with($candidateLower, $lowerName)) {
+                $score = 10 + (\strlen($candidateLower) - \strlen($lowerName));
+            } else {
+                $containsPos = \strpos($candidateLower, $lowerName);
+                if ($containsPos !== false) {
+                    $score = 30 + $containsPos;
+                    $position = $containsPos;
+                } else {
+                    $distance = \levenshtein($lowerName, $candidateLower);
+                    $threshold = \max($thresholdBase, (int) \floor(\strlen($candidateLower) / 3));
+                    if ($distance > $threshold) {
+                        continue;
+                    }
+                    $score = 60 + $distance;
+                }
+            }
+
+            $ranked[] = [
+                'name' => $candidate,
+                'score' => $score,
+                'position' => $position,
+                'length' => \strlen($candidateLower),
+            ];
+        }
+
+        \usort($ranked, static function (array $left, array $right): int {
+            if ($left['score'] !== $right['score']) {
+                return $left['score'] <=> $right['score'];
+            }
+
+            if ($left['position'] !== $right['position']) {
+                return $left['position'] <=> $right['position'];
+            }
+
+            if ($left['length'] !== $right['length']) {
+                return $left['length'] <=> $right['length'];
+            }
+
+            return \strcmp($left['name'], $right['name']);
+        });
+
+        return \array_values(\array_map(
+            static fn(array $item): string => $item['name'],
+            \array_slice($ranked, 0, $limit)
+        ));
+    }
+
+    /**
      * 清理所有陈旧的实例记录
      */
     public function cleanupStaleInstances(): int
@@ -388,10 +517,11 @@ class ServerInstanceManager
     private function collectTrackedPids(string $name, array $rawData): array
     {
         $pids = [];
+        $ignoredPids = $this->collectSharedExternalTrackedPids($rawData);
 
         foreach (['pid', 'master_pid', 'dispatcher_pid', 'redirect_pid', 'session_server_pid'] as $field) {
             $pid = (int) ($rawData[$field] ?? 0);
-            if ($pid > 0) {
+            if ($pid > 0 && !isset($ignoredPids[$pid])) {
                 $pids[$pid] = true;
             }
         }
@@ -410,6 +540,9 @@ class ServerInstanceManager
 
             foreach (($roleData['instances'] ?? []) as $instanceData) {
                 if (!\is_array($instanceData)) {
+                    continue;
+                }
+                if ($this->isSharedExternalServiceRecord($instanceData)) {
                     continue;
                 }
 
@@ -515,6 +648,9 @@ class ServerInstanceManager
 
             foreach (($roleData['instances'] ?? []) as $instanceData) {
                 if (!\is_array($instanceData)) {
+                    continue;
+                }
+                if ($this->isSharedExternalServiceRecord($instanceData)) {
                     continue;
                 }
 
@@ -1026,6 +1162,10 @@ class ServerInstanceManager
         $hasActiveService = false;
 
         foreach ($info->services as $service) {
+            if ($this->isSharedExternalServiceInfo($service)) {
+                continue;
+            }
+
             $isRunning = $realtime ? $service->isRunning() : $service->isExpectedRunningState();
             if (!$isRunning) {
                 continue;
@@ -1054,6 +1194,43 @@ class ServerInstanceManager
             'dispatchers' => $dispatchers,
             'ports' => $ports,
         ];
+    }
+
+    /**
+     * @return array<int, true>
+     */
+    private function collectSharedExternalTrackedPids(array $rawData): array
+    {
+        $pids = [];
+
+        foreach (($rawData['services'] ?? []) as $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+
+            foreach (($roleData['instances'] ?? []) as $instanceData) {
+                if (!\is_array($instanceData) || !$this->isSharedExternalServiceRecord($instanceData)) {
+                    continue;
+                }
+
+                $pid = (int) ($instanceData['pid'] ?? 0);
+                if ($pid > 0) {
+                    $pids[$pid] = true;
+                }
+            }
+        }
+
+        return $pids;
+    }
+
+    private function isSharedExternalServiceRecord(array $instanceData): bool
+    {
+        return (bool) ($instanceData['metadata']['shared_external'] ?? false);
+    }
+
+    private function isSharedExternalServiceInfo(ServiceInfo $service): bool
+    {
+        return (bool) ($service->metadata['shared_external'] ?? false);
     }
 
     // ========================================================================
@@ -1101,7 +1278,7 @@ class ServerInstanceManager
      */
     public function getLogFile(string $name): string
     {
-        $dir = BP . 'var/log/server/';
+        $dir = WlsLogService::getLogDir($name);
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }

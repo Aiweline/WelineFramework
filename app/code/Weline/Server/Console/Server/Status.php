@@ -206,7 +206,7 @@ class Status extends CommandAbstract
     protected function showInstanceStatus(string $name): void
     {
         $manager = $this->getInstanceManager();
-        $info = $manager->getInstanceInfo($name, false);
+        $info = $manager->getInstanceInfo($name);
 
         if ($info === null) {
             $this->printer->warning(__('实例 [%{1}] 不存在', [$name]));
@@ -356,7 +356,7 @@ class Status extends CommandAbstract
     {
         $active = [];
         foreach ($instances as $name => $info) {
-            if ($this->isMasterRunning($info, $processInfoMap) || $this->getServiceStats($info, $processInfoMap)['running'] > 0) {
+            if ($this->isMasterRunning($info, $processInfoMap) || $this->getServiceStats($info, $processInfoMap, false)['running'] > 0) {
                 $active[$name] = $info;
             }
         }
@@ -417,11 +417,16 @@ class Status extends CommandAbstract
      * @param array<int, array{pid: int, exists: bool, name: string, command: string, memory: string, cpu: string, start_time: string}> $processInfoMap
      * @return array{total: int, running: int, stopped: int}
      */
-    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap): array
+    protected function getServiceStats(ServerInstanceInfo $info, array $processInfoMap, bool $includeSharedExternal = true): array
     {
-        $total = \count($info->services);
+        $total = 0;
         $running = 0;
         foreach ($info->services as $service) {
+            if (!$includeSharedExternal && $this->isSharedExternalService($service)) {
+                continue;
+            }
+
+            $total++;
             if ($this->isServiceRunning($service, $processInfoMap)) {
                 $running++;
             }
@@ -432,6 +437,11 @@ class Status extends CommandAbstract
             'running' => $running,
             'stopped' => $total - $running,
         ];
+    }
+
+    protected function isSharedExternalService(ServiceInfo $service): bool
+    {
+        return (bool) ($service->metadata['shared_external'] ?? false);
     }
 
     /**
