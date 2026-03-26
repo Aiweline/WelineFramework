@@ -16,8 +16,12 @@
 "Process a payment for an order.",为订单执行支付处理。
 "Query payment status by order number.",按订单号查询支付状态。
 "An order instance is required for payment processing.",支付处理需要订单实例。
+"Unable to sign the Alipay request with the configured private key.","Unable to sign the Alipay request with the configured private key."
 "Collect payment from the customer when the shipment is delivered.",配送送达时向客户收款。
 "Please complete a manual bank transfer after the order is placed.",请在订单创建后完成手动银行转账。
+"%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
+"Order %{1}","Order %{1}"
+"Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
 "Manual Transfer",手动转账
 "Pay by bank transfer after the order is created.",订单创建后通过银行转账付款。
 "Use the order number as the payment reference.",请使用订单号作为付款备注。
@@ -40,16 +44,25 @@ PayPal,PayPal
 "Merchant Email",商户邮箱
 "Webhook ID","Webhook ID"
 Alipay,支付宝
-"Reserved for future Alipay gateway rollout.",为后续支付宝网关接入预留。
+"Pay with Alipay through a hosted redirect checkout.","Pay with Alipay through a hosted redirect checkout."
 "App ID","应用 ID"
 "Merchant ID","商户 ID"
 "Public Key",公钥
 "Private Key",私钥
+"Notify URL","Notify URL"
+"Return URL","Return URL"
+"Product Code","Product Code"
+"Payment Timeout","Payment Timeout"
+"Signature Type","Signature Type"
 "WeChat Pay",微信支付
-"Reserved for future WeChat Pay gateway rollout.",为后续微信支付网关接入预留。
+"Pay with WeChat Pay through the unified order gateway.","Pay with WeChat Pay through the unified order gateway."
 "API v3 Key","API v3 密钥"
 "Merchant Certificate Path",商户证书路径
+"Trade Type","Trade Type"
+"Scene Info","Scene Info"
+"Client IP Override","Client IP Override"
 "Unsupported payment method: %{1}",不支持的支付方式：%{1}
+"Payment method %{1} is missing required configuration: %{2}","Payment method %{1} is missing required configuration: %{2}"
 "Payment provider is not configured for %{1}.","支付提供方未为 %{1} 配置。"
 "Payment provider is invalid for %{1}.","支付提供方 %{1} 配置无效。"
 支付管理,支付管理
