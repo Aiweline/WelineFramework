@@ -22,7 +22,8 @@ class PooledConnection implements PooledConnectionInterface
         private readonly int $port,
         private readonly float $connectTimeout = 1.0,
         private readonly float $timeout = 2.0,
-        private readonly string $tokenFilePath = ''
+        private readonly string $tokenFilePath = '',
+        private readonly bool $logConnectFailure = true
     ) {
     }
 
@@ -53,7 +54,9 @@ class PooledConnection implements PooledConnectionInterface
             $ctx
         );
         if (!$socket) {
-            $this->log("Connect failed: {$errstr} ({$errno})");
+            if ($this->logConnectFailure) {
+                $this->log("Connect failed: {$errstr} ({$errno})");
+            }
             return false;
         }
 

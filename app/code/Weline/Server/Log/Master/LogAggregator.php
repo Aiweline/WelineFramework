@@ -271,7 +271,7 @@ class LogAggregator
         $timestamp = \date('Y-m-d H:i:s');
         $line = "[{$timestamp}] [{$tag}] [{$level}] {$message}\n";
 
-        $logDir = LogConfig::getLogDir();
+        $logDir = LogConfig::getLogDir(null, $tag);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
         }

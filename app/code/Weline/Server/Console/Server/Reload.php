@@ -51,7 +51,7 @@ class Reload extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
-        $instanceName = $this->parseInstanceName($args);
+        $requestedInstanceName = $this->parseInstanceName($args);
         
         // 强制模式：批量杀死后重启，不等待排水
         $forceMode = isset($args['f']) || isset($args['force']);
@@ -65,16 +65,36 @@ class Reload extends CommandAbstract
         
         /** @var ServerInstanceManager $manager */
         $manager = ObjectManager::getInstance(ServerInstanceManager::class);
-        
-        // 获取运行状态
-        $stats = $manager->getRunningStats();
-        if ($stats['workers'] === 0) {
+        $instanceName = $manager->resolvePersistedInstanceName($requestedInstanceName) ?? $requestedInstanceName;
+
+        if ($instanceName !== $requestedInstanceName) {
+            $this->printer->note(__('实例 [%{1}] 自动匹配到 [%{2}]', [$requestedInstanceName, $instanceName]));
+        }
+
+        $targetRunningWorkers = $manager->countRunningWorkers($instanceName);
+        if ($targetRunningWorkers <= 0) {
+            $globalStats = $manager->getRunningStats();
+            if (($globalStats['workers'] ?? 0) > 0) {
+                $this->printer->warning(__('实例 [%{1}] 未检测到运行中的 WLS Worker', [$requestedInstanceName]));
+                if ($manager->hasInstance($instanceName)) {
+                    $this->printer->note(__('可执行 server:listing -r 查看当前运行中的实例'));
+                } else {
+                    $suggestions = $manager->suggestPersistedInstanceNames($requestedInstanceName);
+                    if ($suggestions !== []) {
+                        $this->printer->note(__('你可能想要的实例：%{1}', [\implode(', ', $suggestions)]));
+                        $this->printer->note(__('如需重载最接近的实例，可执行 server:reload %{1}', [$suggestions[0]]));
+                    } else {
+                        $this->printer->note(__('请确认实例名称，或执行 server:listing 查看所有实例'));
+                    }
+                }
+                return;
+            }
             $this->printer->warning(__('未检测到运行中的 WLS Worker'));
             $this->printer->note(__('请先启动服务器：php bin/w server:start'));
             return;
         }
-        
-        $totalWorkers = $stats['workers'];
+
+        $totalWorkers = $targetRunningWorkers;
         
         if ($forceMode) {
             $this->printer->warning(__('强制重载模式：批量杀死所有 Worker 后重新启动'));
@@ -238,8 +258,9 @@ class Reload extends CommandAbstract
         $message = (string) ($msg['message'] ?? '');
 
         if ($message !== '') {
-            $this->printProgress($message, $lastProgress);
-            return $message;
+            $friendlyMessage = $this->normalizeProgressMessage($message);
+            $this->printProgress($friendlyMessage, $lastProgress);
+            return $friendlyMessage;
         }
         
         $stageText = match ($stage) {
@@ -256,6 +277,35 @@ class Reload extends CommandAbstract
         $progress = __('Worker #%{1} %{2} (%{3}/%{4})', [$currentWorkerId, $stageText, $completed, $total]);
         $this->printProgress($progress, $lastProgress);
         return $progress;
+    }
+
+    /**
+     * 将 Orchestrator 的原始进度文案转换为更友好的中文提示。
+     */
+    protected function normalizeProgressMessage(string $message): string
+    {
+        $text = \trim($message);
+        if ($text === '') {
+            return $message;
+        }
+
+        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+starting workers\s+\[([^\]]*)\]\s+concurrently$/i', $text, $m)) {
+            return (string) __('第 %{1}/%{2} 批：并发启动 Worker [%{3}]', [$m[1], $m[2], $m[3]]);
+        }
+
+        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+draining workers\s+\[([^\]]*)\]$/i', $text, $m)) {
+            return (string) __('第 %{1}/%{2} 批：Worker [%{3}] 正在排水', [$m[1], $m[2], $m[3]]);
+        }
+
+        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+waiting workers\s+\[([^\]]*)\]\s+ready$/i', $text, $m)) {
+            return (string) __('第 %{1}/%{2} 批：等待 Worker [%{3}] 就绪', [$m[1], $m[2], $m[3]]);
+        }
+
+        if (\preg_match('/^Batch\s+(\d+)\/(\d+):\s+workers\s+\[([^\]]*)\]\s+rejoined dispatcher$/i', $text, $m)) {
+            return (string) __('第 %{1}/%{2} 批：Worker [%{3}] 已回加 Dispatcher', [$m[1], $m[2], $m[3]]);
+        }
+
+        return $message;
     }
 
     protected function estimateWaitTimeout(int $totalWorkers): int
@@ -368,13 +418,47 @@ class Reload extends CommandAbstract
      */
     protected function parseInstanceName(array $args): string
     {
+        $optionKeys = [
+            'f' => true,
+            'force' => true,
+            'n' => true,
+            'no-wait' => true,
+            'instance' => true,
+            'name' => true,
+            'h' => true,
+            'help' => true,
+        ];
+
+        if (isset($args['instance']) && \is_string($args['instance']) && \trim($args['instance']) !== '') {
+            return \trim($args['instance']);
+        }
+
+        if (isset($args['name']) && \is_string($args['name']) && \trim($args['name']) !== '') {
+            return \trim($args['name']);
+        }
+
         foreach ($args as $key => $val) {
             if (\is_int($key) && \is_string($val) && !str_starts_with($val, '-') && !str_contains($val, ':')) {
                 return $val;
             }
         }
-        
-        return $args['instance'] ?? $args['name'] ?? 'default';
+
+        // 兼容部分命令解析器：`server:reload test` 可能被解析为 ['test' => true]
+        foreach ($args as $key => $val) {
+            if (!\is_string($key) || isset($optionKeys[$key])) {
+                continue;
+            }
+            if (!\is_bool($val) || $val !== true) {
+                continue;
+            }
+            if (\str_starts_with($key, '-')) {
+                continue;
+            }
+
+            return \trim($key) !== '' ? \trim($key) : 'default';
+        }
+
+        return 'default';
     }
     
     /**

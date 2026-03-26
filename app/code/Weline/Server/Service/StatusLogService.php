@@ -86,7 +86,10 @@ class StatusLogService
             self::$lastLogTime = $now;
         } catch (\Throwable $e) {
             // 静默失败，避免影响业务
-            self::logError($e->getMessage());
+            self::logError(
+                $e->getMessage(),
+                \is_string($workerInfo['instance'] ?? null) ? (string)$workerInfo['instance'] : null
+            );
         }
     }
     
@@ -124,7 +127,10 @@ class StatusLogService
             
             self::getModel()->clearQuery()->logStatus($data);
         } catch (\Throwable $e) {
-            self::logError($e->getMessage());
+            self::logError(
+                $e->getMessage(),
+                \is_string($dispatcherInfo['instance'] ?? null) ? (string)$dispatcherInfo['instance'] : null
+            );
         }
     }
     
@@ -162,7 +168,10 @@ class StatusLogService
             
             self::getModel()->clearQuery()->logStatus($data);
         } catch (\Throwable $e) {
-            self::logError($e->getMessage());
+            self::logError(
+                $e->getMessage(),
+                \is_string($masterInfo['instance'] ?? null) ? (string)$masterInfo['instance'] : null
+            );
         }
     }
     
@@ -180,9 +189,9 @@ class StatusLogService
     /**
      * 记录错误日志
      */
-    private static function logError(string $error): void
+    private static function logError(string $error, ?string $instance = null): void
     {
-        $logDir = BP . 'var' . DS . 'log' . DS . 'server';
+        $logDir = WlsLogService::getLogDir($instance);
         if (!\is_dir($logDir)) {
             @\mkdir($logDir, 0755, true);
         }
