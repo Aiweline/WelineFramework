@@ -38,4 +38,20 @@ class DefaultThemeCategoryHookHostTest extends TestCase
             $this->assertStringContainsString('WeShop_Catalog::frontend::layouts::category::products-content', $template);
         }
     }
+
+    public function testMotorThemeCategoryHostsCanonicalFilterContainerFallback(): void
+    {
+        $templates = [
+            __DIR__ . '/../../../../../../design/WeShop/motor/frontend/pages/catalog/category.phtml',
+            __DIR__ . '/../../../../../../design/WeShop/motor/frontend/layouts/category/default.phtml',
+        ];
+
+        foreach ($templates as $templatePath) {
+            $template = file_get_contents($templatePath);
+            $this->assertIsString($template);
+            $this->assertStringContainsString("WeShop_Filters::frontend::partials::filters::container", $template);
+            $this->assertStringContainsString("WeShop_Filters::templates/Frontend/filters.phtml", $template);
+            $this->assertStringContainsString('$useCanonicalFilterContainer', $template);
+        }
+    }
 }
