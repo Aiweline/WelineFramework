@@ -96,7 +96,7 @@ class ThemePathResolver implements ThemePathResolverInterface
         if ($parentId) {
             try {
                 /** @var WelineTheme $parentTheme */
-                $parentTheme = ObjectManager::getInstance(WelineTheme::class);
+                $parentTheme = ObjectManager::make(WelineTheme::class);
                 $parentTheme->load($parentId);
                 
                 if ($parentTheme->getId()) {

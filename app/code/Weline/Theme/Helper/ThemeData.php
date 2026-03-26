@@ -224,7 +224,25 @@ class ThemeData
      */
     public static function getFileParams(string $identify, string $scope = 'default', ?string $locale = null): array
     {
-        return self::getParamValues($identify, $scope, $locale);
+        $traceEnabled = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled();
+        $traceName = 'theme_data::getFileParams::' . $identify;
+        $traceStart = $traceEnabled ? microtime(true) : 0.0;
+        if ($traceEnabled) {
+            \Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent($traceName);
+        }
+
+        try {
+            return self::getParamValues($identify, $scope, $locale);
+        } finally {
+            if ($traceEnabled) {
+                \Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent();
+                \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+                    $traceName,
+                    (microtime(true) - $traceStart) * 1000,
+                    'theme'
+                );
+            }
+        }
     }
 
     /**
