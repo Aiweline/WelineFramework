@@ -1,12 +1,17 @@
 # AI 规则与技能（主仓）
 
-本目录为 Cursor 规则与技能的**主存储位置**，`.cursor/rules`、`.cursor/skills`、`.cursor/plans` 通过目录联结引用此处。
+`dev/ai` 是仓内 AI 约束、技能与任务记录的主目录。
 
-- **rules/** — 始终应用的规则（.mdc）
-- **skills/** — 按场景触发的技能（各技能目录下的 SKILL.md 等）
-- **plans/** — 总计划文件（.plan.md）
+## 当前结构（整理后）
 
-编辑时请在本目录修改。
+- `skills/`：唯一有效技能源（按场景触发）
+- `skills/_index.md`：唯一技能路由表（Single Source of Truth）
+- `codex/`：任务工作区与过程记录
+- `agents/`：agent 协议与配置
+- `scripts/`：脚本工具
+- `archive/`：历史/兼容归档（不再作为主入口）
+
+归档目录包括：`codex-skills/`、`rules/`、`plans/`、`my-skills/`、`tools/`、`local-lm-studio-to-cursor-switch/`、`docs/`。
 
 ---
 
@@ -19,15 +24,15 @@
 
 ---
 
-## 规则一览（rules/）
+## 规则目录说明
 
-| 规则文件 | 说明 |
-|----------|------|
-| code-generation-rules.mdc | 代码生成强制规则、前端/CSS/JS/通知规范、禁止 generated/ |
-| cursor-as-reference.mdc | .cursor 仅引用，主仓在 dev/ai |
-| skill-trigger-reminders.mdc | 场景→技能触发表（计划、CSS/JS、通知、模块间查询、Session 等） |
-| error-prevention-event.mdc | 事件 dispatch/数据格式/触发顺序 |
-| wls-state-management.mdc | WLS static 状态须注册 StateManager 重置 |
+`.mdc` 规则已迁移到 `archive/rules/` 作为历史兼容资料；当前主流程请以：
+
+- `CLAUDE.md`
+- `global-constraints.md`
+- `skills/*/SKILL.md`
+
+为准。
 
 ---
 
@@ -36,14 +41,12 @@
 先看 **skill-trigger-reminders**，再按场景只读取命中的技能正文，不要批量读取全部 `skills/*/SKILL.md`。
 
 - 映射入口：`skills/skill-trigger-reminders/SKILL.md`
-- 完整开发技能映射：`skills/skill-trigger-reminders/references/development-skill-map.md`
-- 常驻压缩：`skills/context-compression/SKILL.md`
-- 规则/技能/计划仓定位：`skills/cursor-as-reference/SKILL.md`
+- 完整开发技能映射（唯一索引）：`skills/_index.md`
 - Codex 任务工作区：`skills/codex-task-workspace/SKILL.md`
 
 ## 新增技能
 
 1. 在 `dev/ai/skills/<skill-slug>/SKILL.md` 创建技能，目录名使用小写英文加连字符。
-2. 在 `skills/skill-trigger-reminders/references/development-skill-map.md` 增加场景关键词映射。
-3. 如需让规则层也能更快命中，同步更新 `rules/skill-trigger-reminders.mdc`。
-4. 如果技能描述的是 `dev/ai` 仓自身的规则、技能、计划结构，先阅读 `skills/cursor-as-reference/SKILL.md` 再修改。
+2. 在 `skills/_index.md` 增加场景关键词映射。
+3. 同步更新 `skills/skill-trigger-reminders/SKILL.md`（如有触发逻辑变化）。
+4. 历史兼容入口 `skills/skill-trigger-reminders/references/development-skill-map.md` 仅保留跳转说明，不再维护表格正文。

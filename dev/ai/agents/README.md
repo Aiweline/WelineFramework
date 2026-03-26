@@ -21,11 +21,11 @@ dev/ai/agents/
 
 ### 1. 创建计划
 
-在 `dev/ai/plans/` 下创建计划文件：
+在 `dev/ai/archive/plans/` 下创建计划文件：
 
 ```bash
 # 创建新计划
-touch dev/ai/plans/my-feature.plan.md
+touch dev/ai/archive/plans/my-feature.plan.md
 ```
 
 计划文件格式：
@@ -100,7 +100,7 @@ tail -f var/log/watchdog.log
 ## 工作流程
 
 ```
-1. 创建计划文件 (dev/ai/plans/*.plan.md)
+1. 创建计划文件 (dev/ai/archive/plans/*.plan.md)
 2. 执行 cursor:plan:execute {plan_name}
 3. Master Brain 解析计划，拆解任务
 4. 任务写入 tasks.json
