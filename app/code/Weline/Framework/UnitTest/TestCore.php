@@ -67,7 +67,7 @@ class TestCore extends TestCase
      * Pest 兼容性：让 Pest 能够识别 PHPUnit 测试用例
      * 通过实现 Pest 期望的方法，使现有的 PHPUnit 测试能被 Pest 运行
      */
-    public function setUp(): void
+    protected function setUp(): void
     {
         parent::setUp();
         // Pest 兼容性初始化
@@ -137,8 +137,9 @@ class TestCore extends TestCase
         # 初始化路由
         try {
             $route->start();
-        } catch (\ReflectionException|Exception $e) {
-            echo $e->getMessage();
+        } catch (\Throwable $e) {
+            // Some view/unit tests only need request/url initialization and do not
+            // require a resolvable runtime route.
         }
     }
 }

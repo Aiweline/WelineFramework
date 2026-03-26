@@ -143,6 +143,38 @@ class ProcesserTest extends TestCore
         self::assertSame('weline-worker-port-9980', Processer::getSearchableIdentifier($cmd));
     }
 
+    public function testIsWelineServerProcessAcceptsQuotedSharedSidecarName(): void
+    {
+        $pid = 654320;
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->expects(self::once())
+            ->method('getProcessCommandLine')
+            ->with($pid)
+            ->willReturn('"C:\php\php.exe" "app/code/Weline/Server/bin/session_server.php" "127.0.0.1" "19970" "shared-session-19970" --instance-name="shared-session-19970" --shared-service=1 --name="weline-wls-session-shared-19970"');
+
+        $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
+        $reflection->setAccessible(true);
+        $reflection->setValue(null, $driver);
+
+        self::assertTrue(Processer::isWelineServerProcess($pid));
+    }
+
+    public function testIsWelineServerProcessAcceptsSharedSessionServerWithoutExplicitName(): void
+    {
+        $pid = 654321;
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->expects(self::once())
+            ->method('getProcessCommandLine')
+            ->with($pid)
+            ->willReturn('"C:\php\php.exe" "app/code/Weline/Server/bin/session_server.php" "127.0.0.1" "19970" "shared-session-19970" --instance-name="shared-session-19970" --shared-service=1');
+
+        $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
+        $reflection->setAccessible(true);
+        $reflection->setValue(null, $driver);
+
+        self::assertTrue(Processer::isWelineServerProcess($pid));
+    }
+
     /* ---------- Driver (LSP/OCP) ---------- */
 
     public function testGetDriverReturnsProcessDriverInterface(): void
