@@ -12,9 +12,51 @@ use WeShop\Customer\Session\CustomerSession;
 use WeShop\Order\Model\Order;
 use WeShop\Order\Service\OrderService;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\MessageManager;
 
 class SuccessTest extends TestCase
 {
+    public function testIndexRedirectsGuestsToCanonicalLoginRoute(): void
+    {
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->expects($this->once())
+            ->method('getCustomer')
+            ->willReturn(null);
+
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())->method('getOrder');
+
+        $pageDataService = $this->createMock(OrderSuccessPageDataService::class);
+        $pageDataService->expects($this->never())->method('build');
+
+        $request = $this->createMock(Request::class);
+        $request->expects($this->once())
+            ->method('getParam')
+            ->with('order_id')
+            ->willReturn(88);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addError');
+
+        $controller = $this->getMockBuilder(Success::class)
+            ->setConstructorArgs([$customerSession, $orderService, $pageDataService])
+            ->onlyMethods(['assign', 'fetch', 'redirect', 'getMessageManager'])
+            ->getMock();
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('fetch');
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/customer/account/login');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('', $controller->index());
+    }
+
     public function testIndexAssignsSuccessPageDataForMatchingCustomerOrder(): void
     {
         $customer = $this->getMockBuilder(Customer::class)
