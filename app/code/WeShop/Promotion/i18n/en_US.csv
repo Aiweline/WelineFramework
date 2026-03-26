@@ -1,60 +1,49 @@
-﻿优惠券管理,优惠券管理
-优惠券保存成功,优惠券保存成功
-限时特惠,限时特惠
-超值优惠等你来,超值优惠等你来
-新品上市,新品上市
-发现最新潮流,发现最新潮流
-活动优惠,活动优惠
-优惠券不存在,优惠券不存在
-优惠券不可用,优惠券不可用
+﻿"Coupon dashboard","Coupon dashboard"
+"Coupon saved successfully.","Coupon saved successfully."
+"Failed to save coupon.","Failed to save coupon."
 "Coupon code is required.","Coupon code is required."
 "Coupon is not available.","Coupon is not available."
 "Coupon applied successfully.","Coupon applied successfully."
-"Coupon verification failed, please retry.","Coupon verification failed, please retry."
-"Estimated discount:","Estimated discount:"
 "Promotion Hub","Promotion Hub"
 "Today Deals","Today Deals"
 "Seasonal Sale","Seasonal Sale"
-"Promotion Center","Promotion Center"
-"Explore campaign products, compare discounts, and move directly into checkout-ready offers.","Explore campaign products, compare discounts, and move directly into checkout-ready offers."
-"Hub","Hub"
-"Deals","Deals"
-"Sale","Sale"
-"Matched Products","Matched Products"
-"Campaign candidates currently available for this storefront view.","Campaign candidates currently available for this storefront view."
+"Homepage hero banner","Homepage hero banner"
+"Inject content into the storefront homepage hero banner area.","Inject content into the storefront homepage hero banner area."
+"Homepage deals before","Homepage deals before"
+"Inject content before the homepage deals grid.","Inject content before the homepage deals grid."
+"Homepage deals after","Homepage deals after"
+"Inject content after the homepage deals grid.","Inject content after the homepage deals grid."
+"Promotion page before content","Promotion page before content"
+"Inject content before the promotion product grid on storefront promotion pages.","Inject content before the promotion product grid on storefront promotion pages."
+"Promotion page after content","Promotion page after content"
+"Inject content after the promotion product grid on storefront promotion pages.","Inject content after the promotion product grid on storefront promotion pages."
+优惠券不存在,优惠券不存在
+优惠券不可用,优惠券不可用
+"End date must be after start date.","End date must be after start date."
+"Invalid date format.","Invalid date format."
 "Flash Deal Spotlight","Flash Deal Spotlight"
 "Prices update daily based on inventory and campaign windows.","Prices update daily based on inventory and campaign windows."
 "Browse Deals","Browse Deals"
 "Seasonal Sale Picks","Seasonal Sale Picks"
 "Curated sale products chosen for checkout-ready savings.","Curated sale products chosen for checkout-ready savings."
 "Open Sale","Open Sale"
-"Promotion Products","Promotion Products"
-"No promotion products yet","No promotion products yet"
-"This campaign view has no eligible products right now. Check again soon for refreshed deals.","This campaign view has no eligible products right now. Check again soon for refreshed deals."
-"Promo Quick Apply","Promo Quick Apply"
-"Use your coupon code now to preview discount eligibility before checkout.","Use your coupon code now to preview discount eligibility before checkout."
-"Coupon code","Coupon code"
-"Verify","Verify"
-"Promotion page before content","Promotion page before content"
-"Inject content before the promotion product grid on storefront promotion pages.","Inject content before the promotion product grid on storefront promotion pages."
-"Promotion page after content","Promotion page after content"
-"Inject content after the promotion product grid on storefront promotion pages.","Inject content after the promotion product grid on storefront promotion pages."
-"Sale view prioritizes the strongest discount opportunities available now.","Sale view prioritizes the strongest discount opportunities available now."
-"Deals view surfaces the latest low-price entries for fast comparison.","Deals view surfaces the latest low-price entries for fast comparison."
-"Promotion hub combines campaign highlights and product-level savings in one flow.","Promotion hub combines campaign highlights and product-level savings in one flow."
-"Need help choosing between offers? Add candidates to wishlist and compare before checkout.","Need help choosing between offers? Add candidates to wishlist and compare before checkout."
-"Open Wishlist","Open Wishlist"
-"Open Compare","Open Compare"
-"Coupon dashboard","Coupon dashboard"
 "Total coupons","Total coupons"
 "Active coupons","Active coupons"
 "Expired coupons","Expired coupons"
 "Total redemption value","Total redemption value"
 "Recent coupons","Recent coupons"
 "No coupons yet.","No coupons yet."
-"Code","Code"
-"Type","Type"
-"Value","Value"
-"Start","Start"
-"End","End"
-"Active","Active"
+Code,Code
+Type,Type
+Value,Value
+Start,Start
+End,End
+Active,Active
+Yes,Yes
+No,No
+"Need help choosing between offers? Add candidates to wishlist and compare before checkout.","Need help choosing between offers? Add candidates to wishlist and compare before checkout."
+"Open Wishlist","Open Wishlist"
+"Open Compare","Open Compare"
+"Sale view prioritizes the strongest discount opportunities available now.","Sale view prioritizes the strongest discount opportunities available now."
+"Deals view surfaces the latest low-price entries for fast comparison.","Deals view surfaces the latest low-price entries for fast comparison."
+"Promotion hub combines campaign highlights and product-level savings in one flow.","Promotion hub combines campaign highlights and product-level savings in one flow."
