@@ -27,7 +27,7 @@ class IndexTest extends TestCase
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
 
-        $controller->expects($this->once())->method('redirect')->with('customer/account/login');
+        $controller->expects($this->once())->method('redirect')->with('weshop/customer/account/login');
         $controller->expects($this->never())->method('assign');
         $controller->expects($this->never())->method('fetch');
 
