@@ -19,7 +19,7 @@ class LocalModel extends Model implements LocalModelInterface
 {
 
     #[Col('varchar', 20, nullable: false, comment: '语言代码')]
-    public const schema_fields_LOCALE_CODE = 'locale_code';
+    public const schema_fields_LOCALE_CODE = self::schema_fields_local_code;
     public array $_unit_primary_keys = [self::schema_fields_local_code];
     public array $_index_sort_keys = [self::schema_fields_local_code];
     use TraitLocalModel;
