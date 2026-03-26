@@ -1,0 +1,52 @@
+<script>
+    (function () {
+        var apiHost = __API_HOST__;
+        var apiArea = __API_AREA__;
+
+        window.site = window.site || {};
+        if (apiHost) {
+            window.site.host = window.site.host || apiHost;
+            window.site.api_host = apiHost;
+        }
+        if (apiArea) {
+            window.site.api_area = apiArea;
+        }
+
+        if (typeof window.api !== 'function') {
+            window.api = function (path, params) {
+                var target = String(path || '').replace(/^\/+/, '');
+                var url = String(window.site.api_host || window.location.origin).replace(/\/+$/, '');
+                var area = String(window.site.api_area || '').replace(/^\/+|\/+$/g, '');
+
+                if (area) {
+                    url += '/' + area;
+                }
+                if (target) {
+                    url += '/' + target;
+                }
+
+                if (params && typeof params === 'object') {
+                    var searchParams = new URLSearchParams();
+                    Object.keys(params).forEach(function (key) {
+                        var value = params[key];
+                        if (value === null || value === undefined) {
+                            return;
+                        }
+                        searchParams.append(key, value);
+                    });
+
+                    var query = searchParams.toString();
+                    if (query) {
+                        url += (url.indexOf('?') === -1 ? '?' : '&') + query;
+                    }
+                }
+
+                return url;
+            };
+        }
+
+        if (typeof window.frontend_api !== 'function') {
+            window.frontend_api = window.api;
+        }
+    })();
+</script>

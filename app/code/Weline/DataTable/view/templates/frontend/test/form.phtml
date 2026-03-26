@@ -1,0 +1,55 @@
+<style>
+    .dt-demo-page{max-width:1280px;margin:0 auto;padding:24px 20px 64px}
+    .dt-demo-top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+    .dt-demo-layout{display:grid;grid-template-columns:minmax(320px,420px) minmax(0,1fr);gap:20px}
+    @media (max-width: 960px){.dt-demo-layout{grid-template-columns:1fr}}
+</style>
+
+<?= $frontend_api_bootstrap ?? '' ?>
+
+<div class="dt-demo-page" data-demo-page="<?= $page_key ?>">
+    <div class="dt-demo-top">
+        <div>
+            <h1><?= $page_title ?></h1>
+            <p>Standalone inline form that refreshes a related table.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="<?= $demo_links['index'] ?>">Back</a>
+    </div>
+
+    <div class="dt-demo-layout">
+        <section>
+            <w:d-form id="demo-standalone-form"
+                      model="Weline\DataTable\Model\TestUser"
+                      scope="demo-standalone-user"
+                      form-mode="inline"
+                      title="Create User"
+                      allow-frontend="true"
+                      api-url="datatable/rest/v1/demo-table"
+                      field-api-url="datatable/rest/v1/demo-form/fields"
+                      auto_fields="true"
+                      include_fields="name,email,phone,status"
+                      show-trigger-button="false"></w:d-form>
+        </section>
+        <section>
+            <w:d-table id="demo-standalone-table"
+                       model="Weline\DataTable\Model\TestUser"
+                       scope="demo-standalone-user"
+                       searchable="true"
+                       sortable="true"
+                       page-size="5"
+                       show-pagination="true"
+                       allow-frontend="true"
+                       api-url="datatable/rest/v1/demo-table"
+                       field-api-url="datatable/rest/v1/demo-form/fields">
+                <thead>
+                    <tr>
+                        <th data-field="id" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="ID">ID</th>
+                        <th data-field="name" data-type="text" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Name">Name</th>
+                        <th data-field="email" data-type="email" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Email">Email</th>
+                        <th data-field="status" data-type="select" data-sortable="true" data-searchable="true" data-template-defined="true" data-belong="t-header" data-content="Status">Status</th>
+                    </tr>
+                </thead>
+            </w:d-table>
+        </section>
+    </div>
+</div>
