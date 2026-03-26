@@ -25,12 +25,14 @@ class WeShopAuthTokenService
         $this->revokeActorTokens($actorContext->getActorType(), $actorContext->getActorId());
 
         $accessToken = $this->createTokenRecord($actorContext, AuthToken::TYPE_ACCESS, $accessTtl);
+        $accessTokenValue = (string) $accessToken->getData(AuthToken::schema_fields_TOKEN);
+        $accessExpiresAt = (int) $accessToken->getData(AuthToken::schema_fields_EXPIRES_AT);
         $refreshToken = $this->createTokenRecord($actorContext, AuthToken::TYPE_REFRESH, $refreshTtl);
 
         return [
-            'access_token' => (string) $accessToken->getData(AuthToken::schema_fields_TOKEN),
+            'access_token' => $accessTokenValue,
             'refresh_token' => (string) $refreshToken->getData(AuthToken::schema_fields_TOKEN),
-            'expires_at' => (int) $accessToken->getData(AuthToken::schema_fields_EXPIRES_AT),
+            'expires_at' => $accessExpiresAt,
         ];
     }
 
