@@ -46,6 +46,7 @@
 "field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
 "field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
 field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。,field标签（字段：%{1}）配置错误：%{2}。请确保在父标签（t-header或t-filter）中正确设置了model属性，或确保field标签位于d-table标签内。
+"field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。","field标签（字段：%{1}）配置错误：未找到别名""%{2}""对应的模型。请检查 d-table 的 model 配置。"
 "field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。","field标签验证失败：Model类""%{1}""不存在！请检查类名是否正确，确保Model类已正确加载。常见Model类：Weline\Demo\Model\Demo、WeShop\Product\Model\Product等。"
 "field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。","field标签（字段：%{1}）在Model类""%{2}""中不存在！可用字段：%{3}。请检查字段名称是否正确，或确认该字段在Model中已定义。"
 "field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。","field标签验证失败：实例化Model类""%{1}""时发生错误：%{2}。请检查Model类是否正确配置。"
@@ -116,6 +117,11 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 请输入有效的电话号码,请输入有效的电话号码
 请选择图片文件,请选择图片文件
 预览图片,预览图片
+"数值不能小于 %{1}","数值不能小于 %{1}"
+"数值不能大于 %{1}","数值不能大于 %{1}"
+"输入长度不能超过 %{1}","输入长度不能超过 %{1}"
+字段格式不正确,字段格式不正确
+字段验证失败,字段验证失败
 表格主题配置,表格主题配置
 显示选项,显示选项
 显示斑马纹,显示斑马纹
@@ -209,6 +215,7 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 重置配置失败，请稍后重试,重置配置失败，请稍后重试
 收起,收起
 网络错误：%{1},网络错误：%{1}
+配置已保存,配置已保存
 "DataTable 综合功能测试","DataTable 综合功能测试"
 "Weline Admin 管理面板","Weline Admin 管理面板"
 DataTable,DataTable
