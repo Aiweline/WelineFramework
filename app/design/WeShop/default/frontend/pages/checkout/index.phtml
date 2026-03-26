@@ -3,6 +3,7 @@ $cartItems = $this->getData('cart_items') ?? [];
 $cartSummary = $this->getData('cart_summary') ?? [];
 $customer = $this->getData('customer') ?? null;
 $savedAddresses = $this->getData('saved_addresses') ?? [];
+$selectedShippingAddressId = (int) ($this->getData('selected_shipping_address_id') ?? 0);
 $shippingMethods = $this->getData('shipping_methods') ?? [];
 $paymentMethods = $this->getData('payment_methods') ?? [];
 $countries = $this->getData('countries') ?? [];
@@ -212,7 +213,8 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
                 <div class="weshop-checkout-choice-list" style="margin-bottom: 1rem;">
                     <?php foreach ($savedAddresses as $index => $address): ?>
                         <label class="weshop-checkout-choice">
-                            <input type="radio" name="shipping_address_id" value="<?= (int) ($address['address_id'] ?? 0) ?>" <?= $index === 0 ? 'checked' : '' ?>>
+                            <?php $addressId = (int) ($address['address_id'] ?? 0); ?>
+                            <input type="radio" name="shipping_address_id" value="<?= $addressId ?>" <?= ($selectedShippingAddressId > 0 ? $addressId === $selectedShippingAddressId : $index === 0) ? 'checked' : '' ?>>
                             <span>
                                 <div class="weshop-checkout-choice-title"><?= htmlspecialchars((string) ($address['name'] ?? '')) ?></div>
                                 <div class="weshop-checkout-choice-meta">
@@ -292,7 +294,7 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
             </label>
             <div style="margin-top: 1rem;">
                 <w:hook name="WeShop_Checkout::review::place_order_button"/>
-                <button class="weshop-checkout-submit" type="submit"><?= __('Place Order') ?></button>
+                <button class="weshop-checkout-submit weline-pixel::begin_checkout" type="submit"><?= __('Place Order') ?></button>
             </div>
             <w:hook name="WeShop_Checkout::review::after"/>
         </section>
@@ -315,28 +317,40 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
         </div>
 
         <div class="weshop-checkout-summary-totals">
+            <w:hook name="WeShop_Checkout::summary::rows_before"/>
             <div class="weshop-checkout-summary-row">
+                <w:hook name="WeShop_Checkout::summary::subtotal_before"/>
                 <span><?= __('Subtotal') ?></span>
                 <span><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::subtotal_after"/>
             </div>
             <div class="weshop-checkout-summary-row">
+                <w:hook name="WeShop_Checkout::summary::shipping_before"/>
                 <span><?= __('Shipping') ?></span>
                 <span><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::shipping_after"/>
             </div>
             <div class="weshop-checkout-summary-row">
+                <w:hook name="WeShop_Checkout::summary::tax_before"/>
                 <span><?= __('Tax') ?></span>
                 <span><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::tax_after"/>
             </div>
             <?php if ((float) ($cartSummary['discount'] ?? 0) > 0): ?>
                 <div class="weshop-checkout-summary-row">
+                    <w:hook name="WeShop_Checkout::summary::discount_before"/>
                     <span><?= __('Discount') ?></span>
                     <span>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
+                    <w:hook name="WeShop_Checkout::summary::discount_after"/>
                 </div>
             <?php endif; ?>
             <div class="weshop-checkout-summary-row weshop-checkout-summary-total">
+                <w:hook name="WeShop_Checkout::summary::grand_total_before"/>
                 <span><?= __('Grand Total') ?></span>
                 <span><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::grand_total_after"/>
             </div>
+            <w:hook name="WeShop_Checkout::summary::rows_after"/>
         </div>
         <w:hook name="WeShop_Checkout::summary::after"/>
     </aside>
