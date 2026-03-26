@@ -11,6 +11,43 @@ use WeShop\Auth\Service\WeShopAuthTokenService;
 
 class WeShopAuthTokenServiceTest extends TestCase
 {
+    public function testCreateTokenPairSnapshotsAccessTokenBeforeRefreshMutation(): void
+    {
+        $revokeRecord = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['where', 'fetch'])
+            ->onlyMethods(['delete'])
+            ->getMock();
+        $revokeRecord->method('where')->willReturnSelf();
+        $revokeRecord->method('delete')->willReturnSelf();
+        $revokeRecord->method('fetch')->willReturnSelf();
+
+        $sharedData = [];
+        $tokenHistory = [];
+        $expiresHistory = [];
+        $sharedRecord = $this->createMutableRecordMock($sharedData, $tokenHistory, $expiresHistory);
+
+        $authToken = $this->getMockBuilder(AuthToken::class)
+            ->disableOriginalConstructor()
+            ->addMethods(['reset'])
+            ->getMock();
+        $authToken->expects($this->exactly(3))
+            ->method('reset')
+            ->willReturnOnConsecutiveCalls($revokeRecord, $sharedRecord, $sharedRecord);
+
+        $service = new WeShopAuthTokenService($authToken);
+        $tokens = $service->createTokenPair(
+            new ActorContext(ActorContext::ACTOR_CUSTOMER, 12, 'frontend', ['customer'], true)
+        );
+
+        $this->assertCount(2, $tokenHistory);
+        $this->assertCount(2, $expiresHistory);
+        $this->assertSame($tokenHistory[0], $tokens['access_token']);
+        $this->assertSame($tokenHistory[1], $tokens['refresh_token']);
+        $this->assertNotSame($tokens['access_token'], $tokens['refresh_token']);
+        $this->assertSame($expiresHistory[0], $tokens['expires_at']);
+    }
+
     public function testCreateTokenPairStoresActorAreaOnAccessAndRefreshTokens(): void
     {
         $revokeRecord = $this->getMockBuilder(AuthToken::class)
@@ -228,16 +265,25 @@ class WeShopAuthTokenServiceTest extends TestCase
         $this->assertTrue($service->revoke('refresh-token-41'));
     }
 
-    private function createMutableRecordMock(array &$data): AuthToken
+    private function createMutableRecordMock(array &$data, array &$tokenHistory = [], array &$expiresHistory = []): AuthToken
     {
         $record = $this->getMockBuilder(AuthToken::class)
             ->disableOriginalConstructor()
             ->onlyMethods(['clearData', 'setData', 'setScopes', 'save', 'getData'])
             ->getMock();
 
-        $record->method('clearData')->willReturnSelf();
-        $record->method('setData')->willReturnCallback(function (string $key, mixed $value) use (&$data, $record) {
+        $record->method('clearData')->willReturnCallback(function () use (&$data, $record) {
+            $data = [];
+            return $record;
+        });
+        $record->method('setData')->willReturnCallback(function (string $key, mixed $value) use (&$data, &$tokenHistory, &$expiresHistory, $record) {
             $data[$key] = $value;
+            if ($key === AuthToken::schema_fields_TOKEN) {
+                $tokenHistory[] = $value;
+            }
+            if ($key === AuthToken::schema_fields_EXPIRES_AT) {
+                $expiresHistory[] = $value;
+            }
             return $record;
         });
         $record->method('setScopes')->willReturnCallback(function (array $scopes) use (&$data, $record) {
