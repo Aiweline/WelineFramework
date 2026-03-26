@@ -271,13 +271,19 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
         <section class="weshop-checkout-card">
             <h2><?= __('Shipping Method') ?></h2>
             <w:hook name="WeShop_Shipping::frontend::layouts::checkout::methods"/>
-            <w:hook name="WeShop_Checkout::frontend::partials::checkout::shipping-methods"/>
+            <div data-weshop-shipping-method-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::shipping-methods"/>
+            </div>
         </section>
 
         <section class="weshop-checkout-card">
             <h2><?= __('Payment Method') ?></h2>
-            <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>
-            <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-details"/>
+            <div data-weshop-payment-method-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>
+            </div>
+            <div data-weshop-payment-detail-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-details"/>
+            </div>
         </section>
 
         <section class="weshop-checkout-card">
@@ -363,6 +369,11 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
         var form = document.getElementById('weshop-checkout-form');
         var submitButton = form ? form.querySelector('button[type="submit"]') : null;
         var successUrl = '<?= $this->getUrl('checkout/success') ?>';
+        var methodsUrl = '<?= $this->getUrl('checkout/methods') ?>';
+        var shippingMethodHost = document.querySelector('[data-weshop-shipping-method-host]');
+        var paymentMethodHost = document.querySelector('[data-weshop-payment-method-host]');
+        var paymentDetailHost = document.querySelector('[data-weshop-payment-detail-host]');
+        var refreshTimer = null;
 
         function syncNewAddressRequirement() {
             var hasSavedAddress = false;
@@ -392,7 +403,207 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
             console.error(message);
         }
 
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, function (character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[character] || character;
+            });
+        }
+
+        function getCheckedValue(name) {
+            if (!form) {
+                return '';
+            }
+
+            var checked = form.querySelector('input[name="' + name + '"]:checked');
+            return checked ? checked.value : '';
+        }
+
+        function renderShippingMethods(methods) {
+            if (!shippingMethodHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                shippingMethodHost.innerHTML = '<div class="weshop-checkout-empty"><?= __('No shipping methods are available for the current checkout context.') ?></div>';
+                return;
+            }
+
+            var html = '<div class="weshop-checkout-choice-list" data-weshop-shipping-method-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<label class="weshop-checkout-choice">'
+                    + '<input type="radio" name="shipping_method" value="' + escapeHtml(method.code) + '"' + (method.is_default ? ' checked' : '') + ' required>'
+                    + '<span>'
+                    + '<div class="weshop-checkout-choice-title">' + escapeHtml(method.name || method.title || method.code) + '</div>';
+
+                if (method.description) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                html += '</span></label>';
+            });
+            html += '</div>';
+            shippingMethodHost.innerHTML = html;
+        }
+
+        function renderPaymentMethods(methods) {
+            if (!paymentMethodHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                paymentMethodHost.innerHTML = '<div class="weshop-checkout-empty"><?= __('No payment methods are available for the current checkout context.') ?></div>';
+                return;
+            }
+
+            var html = '<div class="weshop-checkout-choice-list" data-weshop-payment-method-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<label class="weshop-checkout-choice">'
+                    + '<input type="radio" name="payment_method" value="' + escapeHtml(method.code) + '"' + (method.is_default ? ' checked' : '') + ' required>'
+                    + '<span style="flex: 1; min-width: 0;">'
+                    + '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">'
+                    + '<div class="weshop-checkout-choice-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
+
+                if (method.badge) {
+                    html += '<span class="weshop-checkout-payment-badge">' + escapeHtml(method.badge) + '</span>';
+                }
+
+                html += '</div>';
+
+                if (method.description) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                if (method.checkout_note) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.checkout_note) + '</div>';
+                }
+
+                html += '</span></label>';
+            });
+            html += '</div>';
+            paymentMethodHost.innerHTML = html;
+        }
+
+        function renderPaymentDetails(methods) {
+            if (!paymentDetailHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                paymentDetailHost.innerHTML = '';
+                return;
+            }
+
+            var html = '<div class="weshop-checkout-payment-details" data-weshop-payment-detail-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<article class="weshop-checkout-payment-detail' + (method.is_default ? ' is-active' : '') + '" data-weshop-payment-detail="' + escapeHtml(method.code) + '">'
+                    + '<div class="weshop-checkout-payment-detail-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
+
+                if (method.flow_label) {
+                    html += '<div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %1', '__FLOW__') ?>'.replace('__FLOW__', escapeHtml(method.flow_label)) + '</div>';
+                }
+
+                if (method.checkout_note) {
+                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.checkout_note) + '</div>';
+                } else if (method.description) {
+                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                html += '</article>';
+            });
+            html += '</div>';
+            paymentDetailHost.innerHTML = html;
+            syncPaymentDetails();
+        }
+
+        function syncPaymentDetails() {
+            if (!form) {
+                return;
+            }
+
+            var selectedCode = getCheckedValue('payment_method');
+            document.querySelectorAll('[data-weshop-payment-detail]').forEach(function (panel) {
+                var isActive = panel.getAttribute('data-weshop-payment-detail') === selectedCode;
+                panel.classList.toggle('is-active', isActive);
+            });
+        }
+
+        function refreshCheckoutMethods() {
+            if (!form) {
+                return Promise.resolve();
+            }
+
+            return fetch(methodsUrl, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (!payload || !payload.success) {
+                    showCheckoutMessage((payload && payload.message) || 'Unable to refresh checkout methods right now.', 'error');
+                    return;
+                }
+
+                var data = payload.data || {};
+                renderShippingMethods(Array.isArray(data.shipping_methods) ? data.shipping_methods : []);
+                renderPaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : []);
+                renderPaymentDetails(Array.isArray(data.payment_methods) ? data.payment_methods : []);
+            }).catch(function (error) {
+                console.error('Checkout method refresh error:', error);
+                showCheckoutMessage('Unable to refresh checkout methods right now.', 'error');
+            });
+        }
+
+        function scheduleCheckoutMethodRefresh() {
+            if (refreshTimer) {
+                window.clearTimeout(refreshTimer);
+            }
+
+            refreshTimer = window.setTimeout(function () {
+                refreshCheckoutMethods();
+            }, 180);
+        }
+
         if (form) {
+            form.addEventListener('change', function (event) {
+                var target = event.target;
+                if (!target || !target.name) {
+                    return;
+                }
+
+                if (target.name === 'payment_method') {
+                    syncPaymentDetails();
+                    return;
+                }
+
+                if (target.name === 'shipping_address_id'
+                    || target.name === 'shipping_address[country_id]'
+                    || target.name === 'shipping_address[region]') {
+                    scheduleCheckoutMethodRefresh();
+                }
+            });
+
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
 
@@ -427,7 +638,17 @@ $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ??
             });
         }
 
+        newAddressFields.forEach(function (field) {
+            field.addEventListener('input', scheduleCheckoutMethodRefresh);
+            field.addEventListener('change', scheduleCheckoutMethodRefresh);
+        });
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', scheduleCheckoutMethodRefresh);
+        });
+
         syncNewAddressRequirement();
+        syncPaymentDetails();
     })();
 </script>
 
