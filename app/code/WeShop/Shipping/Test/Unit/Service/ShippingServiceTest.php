@@ -9,6 +9,23 @@ use WeShop\Shipping\Service\ShippingService;
 
 class ShippingServiceTest extends TestCase
 {
+    public function testCalculateShippingReturnsConfiguredBuiltinAmounts(): void
+    {
+        $service = new ShippingService();
+
+        $this->assertSame(5.0, $service->calculateShipping([], 'flat_rate'));
+        $this->assertSame(0.0, $service->calculateShipping([], 'free_shipping'));
+        $this->assertSame(0.0, $service->calculateShipping([], 'local_pickup'));
+    }
+
+    public function testCalculateShippingRejectsDisabledCarrierMethod(): void
+    {
+        $service = new ShippingService();
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->calculateShipping([], 'dhl');
+    }
+
     public function testGetCheckoutShippingMethodsReturnsEnabledMethodsSortedForCheckout(): void
     {
         $service = new ShippingService();
@@ -36,4 +53,3 @@ class ShippingServiceTest extends TestCase
         $this->assertSame('Local Pickup', $methods['local_pickup'] ?? null);
     }
 }
-
