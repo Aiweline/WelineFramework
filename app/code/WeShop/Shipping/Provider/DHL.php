@@ -39,6 +39,20 @@ class DHL implements ShippingProviderInterface
     {
         return $this->enabled && !empty($this->siteId) && !empty($this->password);
     }
+
+    public function calculateShipping(array $shippingData): float
+    {
+        $rates = $this->calculateRates(
+            $this->extractAddress($shippingData),
+            $this->extractItems($shippingData)
+        );
+        $lowestRate = $this->pickLowestRateAmount($rates);
+        if ($lowestRate === null) {
+            throw new \RuntimeException((string) __('No DHL shipping rate is currently available.'));
+        }
+
+        return $lowestRate;
+    }
     
     public function calculateRates(array $address, array $items): array
     {
@@ -206,6 +220,16 @@ class DHL implements ShippingProviderInterface
             ];
         }
     }
+
+    public function createShipping(array $orderData): string
+    {
+        $shipment = $this->createShipment($orderData);
+        if (!($shipment['success'] ?? false) || empty($shipment['tracking_number'])) {
+            throw new \RuntimeException((string) ($shipment['message'] ?? __('DHL shipment creation failed.')));
+        }
+
+        return (string) $shipment['tracking_number'];
+    }
     
     public function trackShipment(string $trackingNumber): array
     {
@@ -263,7 +287,64 @@ class DHL implements ShippingProviderInterface
             ];
         }
     }
-    
+
+    public function trackShipping(string $trackingNumber): array
+    {
+        return $this->trackShipment($trackingNumber);
+    }
+
+    /**
+     * @param array<string, mixed> $shippingData
+     * @return array<string, mixed>
+     */
+    private function extractAddress(array $shippingData): array
+    {
+        $address = $shippingData['address'] ?? $shippingData['shipping_address'] ?? [];
+        if (is_array($address) && $address !== []) {
+            return $address;
+        }
+
+        return array_filter([
+            'city' => $shippingData['city'] ?? null,
+            'country' => $shippingData['country'] ?? $shippingData['country_id'] ?? null,
+            'postcode' => $shippingData['postcode'] ?? null,
+        ], static fn(mixed $value): bool => $value !== null && $value !== '');
+    }
+
+    /**
+     * @param array<string, mixed> $shippingData
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractItems(array $shippingData): array
+    {
+        $items = $shippingData['items'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        return array_values(array_filter($items, static fn(mixed $item): bool => is_array($item)));
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $rates
+     */
+    private function pickLowestRateAmount(array $rates): ?float
+    {
+        $amounts = [];
+        foreach ($rates as $rate) {
+            if (!is_array($rate) || !isset($rate['price']) || !is_numeric($rate['price'])) {
+                continue;
+            }
+            $amounts[] = (float) $rate['price'];
+        }
+
+        if ($amounts === []) {
+            return null;
+        }
+
+        return min($amounts);
+    }
+
     private function httpPost(string $url, string $data): string
     {
         $ch = curl_init();
