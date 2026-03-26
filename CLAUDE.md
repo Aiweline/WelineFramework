@@ -97,7 +97,7 @@ Test/Unit/            — PHPUnit unit tests
 
 ## Skills Reference (dev/ai/skills/)
 
-Load the matching skill for specialized topics — don't batch-read all skills. Use `dev/ai/skills/skill-trigger-reminders/references/development-skill-map.md` for keyword → skill mapping. Key skills:
+Load the matching skill for specialized topics — don't batch-read all skills. Use `dev/ai/skills/_index.md` for keyword → skill mapping. Key skills:
 
 | Keywords | Skill path |
 |---|---|

@@ -44,6 +44,8 @@ weline-async.json
 
 # Playwright MCP 运行时文件
 .playwright-mcp/
+.claude/
+.openclaw/
 
 # 临时文件和调试文件
 # 根目录脚本/抓包产生的 tmp- 前缀文件（勿提交）
