@@ -1,497 +1,168 @@
-<?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
-$themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
-?>
-<!DOCTYPE html>
-<!--
- *@Author       秋枫雁飞
- *@Email        aiweline@qq.com
- *@Forum        https://bbs.aiweline.com
- *@DESC         DataTable 综合功能测试页面
--->
-<html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
-<head>
-    @template(Weline_Admin::common/head.phtml)
-    <title><?= __('DataTable 综合功能测试') ?> - <?= __('Weline Admin 管理面板') ?></title>
-    <style>
-        .test-card {
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-            margin-bottom: 20px;
-        }
-        .test-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-        }
-        .test-card .card-body {
-            padding: 1.5rem;
-        }
-        .test-card .card-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #495057;
-        }
-        .test-card .card-text {
-            color: #6c757d;
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-        .test-category {
-            margin-bottom: 2rem;
-        }
-        .test-category h5 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 1rem;
-            color: #495057;
-            padding-bottom: 0.5rem;
-            border-bottom: 2px solid #e9ecef;
-        }
-        .status-indicator {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-        .status-success { background-color: #28a745; }
-        .status-error { background-color: #dc3545; }
-        .status-warning { background-color: #ffc107; }
-        .feature-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .feature-list li {
-            padding: 8px 0;
-            border-bottom: 1px solid #e9ecef;
-            color: #6c757d;
-        }
-        .feature-list li:last-child {
-            border-bottom: none;
-        }
-        .code-block {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            margin: 10px 0;
-            overflow-x: auto;
-        }
-        .code-block code {
-            color: #495057;
-        }
-        .hero-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 2rem 0;
-            margin-bottom: 2rem;
-            border-radius: 8px;
-        }
-        .hero-section h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-        }
-        .hero-section p {
-            font-size: 1rem;
-            opacity: 0.9;
-            margin-bottom: 0;
-        }
-        .btn-test {
-            margin: 5px;
-        }
-        #verificationOutput {
-            margin-top: 20px;
-        }
-    </style>
-</head>
+<style>
+    .dt-backend-shell{max-width:1400px;margin:0 auto;padding:32px 20px 64px;display:flex;flex-direction:column;gap:24px}
+    .dt-backend-hero{display:grid;gap:18px;padding:28px;border:1px solid #d9e2f1;border-radius:24px;background:linear-gradient(135deg,#f7fafc,#eef6ff)}
+    .dt-backend-actions{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+    .dt-backend-status{min-height:24px;color:#166534}
+    .dt-backend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+    .dt-backend-card{display:block;padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;color:#1f2937;text-decoration:none}
+    .dt-backend-card h3,.dt-backend-summary h3{margin:0 0 10px}
+    .dt-backend-card p,.dt-backend-summary p{margin:0;color:#526071}
+    .dt-backend-section{display:grid;gap:16px}
+    .dt-backend-summary{padding:20px;border:1px solid #dfe7ef;border-radius:18px;background:#fff}
+    .dt-backend-pills{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+    .dt-backend-pill{display:inline-flex;align-items:center;padding:5px 10px;border-radius:999px;background:#eef4ff;color:#274690;font-size:12px}
+    .dt-backend-code{padding:18px;border:1px solid #dfe7ef;border-radius:18px;background:#fff;white-space:pre-wrap;word-break:break-word;pointer-events:none}
+</style>
 
-<body <?= $themeConfig->getLayouts() ?? ''; ?>>
-
-<!--加载中组件 开始-->
-@template(Weline_Admin::common/page/loading.phtml)
-<!--加载中组件 结束-->
-
-<!-- 开始 页面 -->
-<div id="layout-wrapper">
-
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    @template(Weline_Admin::common/left-sidebar.phtml)
-    <!--左侧菜单栏 结束-->
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-    <div class="main-content">
-
-        <div class="page-content">
-            <div class="container-fluid">
-
-                <!-- start page title -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-                            <h4 class="mb-sm-0"><?= __('DataTable 综合功能测试') ?></h4>
-
-                            <div class="page-title-right">
-                                <ol class="breadcrumb m-0">
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('DataTable') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('测试') ?></a></li>
-                                    <li class="breadcrumb-item active"><?= __('综合测试') ?></li>
-                                </ol>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-                <!-- end page title -->
-
-                <!-- start page message -->
-                <div class="row">
-                    <template>Weline_Component::message.phtml</template>
-                </div>
-                <!-- end message -->
-
-                <!-- 标题区域 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="hero-section">
-                            <div class="text-center">
-                                <h1>
-                                    <i class="mdi mdi-test-tube me-2"></i><?= __('DataTable 综合功能测试') ?>
-                                </h1>
-                                <p><?= __('全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等') ?></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 功能概览 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card test-card">
-                            <div class="card-body">
-                                <h4 class="card-title">
-                                    <i class="mdi mdi-information-outline me-2"></i><?= __('功能概览') ?>
-                                </h4>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h5><?= __('核心功能') ?></h5>
-                                        <ul class="feature-list">
-                                            <li><span class="status-indicator status-success"></span><?= __('标签注册系统') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('表格显示功能') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('表单功能') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('字段类型支持') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('多模型查询') ?></li>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h5><?= __('高级特性') ?></h5>
-                                        <ul class="feature-list">
-                                            <li><span class="status-indicator status-success"></span><?= __('属性继承机制') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('上下文管理') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('自动生成功能') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('字段验证') ?></li>
-                                            <li><span class="status-indicator status-success"></span><?= __('JavaScript集成') ?></li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 测试导航 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card test-card">
-                            <div class="card-body">
-                                <h4 class="card-title">
-                                    <i class="mdi mdi-play-circle-outline me-2"></i><?= __('功能测试') ?>
-                                </h4>
-                                <p class="card-text"><?= __('点击以下按钮测试不同的DataTable功能模块：') ?></p>
-                                
-                                <?php if (isset($testCases) && !empty($testCases)): ?>
-                                    <?php 
-                                    $categories = [];
-                                    foreach ($testCases as $testCase) {
-                                        $category = $testCase['category'] ?? __('其他');
-                                        if (!isset($categories[$category])) {
-                                            $categories[$category] = [];
-                                        }
-                                        $categories[$category][] = $testCase;
-                                    }
-                                    ?>
-                                    <?php foreach ($categories as $categoryName => $categoryTests): ?>
-                                        <div class="test-category">
-                                            <h5>
-                                                <i class="mdi mdi-folder-outline me-2"></i><?= htmlspecialchars($categoryName ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                            </h5>
-                                            <div class="row">
-                                                <?php foreach ($categoryTests as $testCase): ?>
-                                                    <div class="col-md-4 mb-3">
-                                                        <div class="card h-100">
-                                                            <div class="card-body">
-                                                                <h6 class="card-title">
-                                                                    <i class="mdi mdi-<?= htmlspecialchars($testCase['icon'] ?? 'circle', ENT_QUOTES, 'UTF-8') ?> me-2"></i>
-                                                                    <?= htmlspecialchars($testCase['name'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                                                </h6>
-                                                                <p class="card-text text-muted small"><?= htmlspecialchars($testCase['description'] ?? '', ENT_QUOTES, 'UTF-8') ?></p>
-                                                                <a href="<?= htmlspecialchars($testCase['url'] ?? '', ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-primary">
-                                                                    <i class="mdi mdi-play me-1"></i><?= __('开始测试') ?>
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                <?php endforeach; ?>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php else: ?>
-                                    <div class="row">
-                                        <div class="col-md-6">
-                                            <h5><?= __('基础功能') ?></h5>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/basic') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-table me-2"></i><?= __('基本表格功能') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/form') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-form-select me-2"></i><?= __('表单功能') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/filter') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-magnify me-2"></i><?= __('过滤搜索') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/sorting') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-sort me-2"></i><?= __('排序分页') ?>
-                                            </a>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <h5><?= __('高级功能') ?></h5>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/fieldTypes') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-format-list-bulleted me-2"></i><?= __('字段类型') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/multiModel') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-link me-2"></i><?= __('多模型查询') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/autoGeneration') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-auto-fix me-2"></i><?= __('自动生成') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/inheritance') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-sitemap me-2"></i><?= __('属性继承') ?>
-                                            </a>
-                                            <a href="<?= $this->getUrl('datatable/test/comprehensive/crud') ?>" class="btn btn-primary btn-test">
-                                                <i class="mdi mdi-database me-2"></i><?= __('CRUD操作') ?>
-                                            </a>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 标签验证 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card test-card">
-                            <div class="card-body">
-                                <h4 class="card-title">
-                                    <i class="mdi mdi-check-circle-outline me-2"></i><?= __('标签功能验证') ?>
-                                </h4>
-                                <p class="card-text"><?= __('验证DataTable标签系统的各个组件是否正常工作：') ?></p>
-                                
-                                <div id="verificationResults">
-                                    <button id="verifyTagsBtn" class="btn btn-primary" onclick="verifyTags()">
-                                        <i class="mdi mdi-test-tube me-2"></i><?= __('开始验证') ?>
-                                    </button>
-                                </div>
-                                
-                                <div id="verificationOutput" style="display: none;">
-                                    <h5 class="mt-3"><?= __('验证结果：') ?></h5>
-                                    <div id="verificationContent"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 使用示例 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card test-card">
-                            <div class="card-body">
-                                <h4 class="card-title">
-                                    <i class="mdi mdi-code-tags me-2"></i><?= __('使用示例') ?>
-                                </h4>
-                                <p class="card-text"><?= __('以下是DataTable的基本使用示例：') ?></p>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6><?= __('基本表格') ?></h6>
-                                        <div class="code-block">
-                                            <code>&lt;w:d-table model="Weline\DataTable\Model\TestUser" scope="user-demo"&gt;
-    &lt;w:t-header&gt;
-        &lt;w:field belong="t-header" name="user_id" sortable="true" width="80"&gt;ID&lt;/w:field&gt;
-        &lt;w:field belong="t-header" name="username" sortable="true" width="150"&gt;用户名&lt;/w:field&gt;
-        &lt;w:field belong="t-header" name="email" sortable="true" width="200"&gt;邮箱&lt;/w:field&gt;
-    &lt;/w:t-header&gt;
-&lt;/w:d-table&gt;</code>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h6><?= __('带过滤器的表格') ?></h6>
-                                        <div class="code-block">
-                                            <code>&lt;w:d-table model="Weline\DataTable\Model\TestUser" scope="user-filter"&gt;
-    &lt;w:t-filter&gt;
-        &lt;w:field belong="t-filter" name="username" type="text" placeholder="搜索用户名"&gt;&lt;/w:field&gt;
-    &lt;/w:t-filter&gt;
-    &lt;w:t-header&gt;
-        &lt;w:field belong="t-header" name="user_id"&gt;ID&lt;/w:field&gt;
-        &lt;w:field belong="t-header" name="username"&gt;用户名&lt;/w:field&gt;
-    &lt;/w:t-header&gt;
-&lt;/w:d-table&gt;</code>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 测试数据 -->
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card test-card">
-                            <div class="card-body">
-                                <h4 class="card-title">
-                                    <i class="mdi mdi-database me-2"></i><?= __('测试数据') ?>
-                                </h4>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <h6><?= __('可用模型') ?></h6>
-                                        <ul class="feature-list">
-                                            <?php if (isset($models) && !empty($models)): ?>
-                                                <?php foreach ($models as $modelClass => $modelName): ?>
-                                                    <li><?= htmlspecialchars($modelClass ?? '', ENT_QUOTES, 'UTF-8') ?> - <?= htmlspecialchars($modelName ?? '', ENT_QUOTES, 'UTF-8') ?></li>
-                                                <?php endforeach; ?>
-                                            <?php else: ?>
-                                                <li>Weline\DataTable\Model\TestUser</li>
-                                                <li>Weline\DataTable\Model\TestProduct</li>
-                                                <li>Weline\DataTable\Model\TestOrder</li>
-                                                <li>Weline\DataTable\Model\TestUserProfile</li>
-                                                <li>Weline\DataTable\Model\TestUserAddress</li>
-                                            <?php endif; ?>
-                                        </ul>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <h6><?= __('测试范围标识') ?></h6>
-                                        <ul class="feature-list">
-                                            <li>user-management</li>
-                                            <li>product-management</li>
-                                            <li>order-management</li>
-                                        </ul>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div> <!-- container-fluid -->
+<div class="dt-backend-shell" data-testid="datatable-comprehensive-page">
+    <section class="dt-backend-hero">
+        <div>
+            <h1><?= __('DataTable Comprehensive Test') ?></h1>
+            <p><?= __('Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404.') ?></p>
         </div>
-        <!-- End Page-content -->
+        <div class="dt-backend-actions">
+            <a class="btn btn-outline-secondary" href="<?= $dashboardUrl ?>"><?= __('Back To Dashboard') ?></a>
+            <a class="btn btn-outline-secondary" href="<?= $docUrl ?>"><?= __('Open Documentation') ?></a>
+            <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>"><?= __('Open Tag Verification') ?></a>
+            <a class="btn btn-outline-secondary" href="<?= $frontendDemoUrl ?>" target="_blank" rel="noreferrer"><?= __('Open Frontend Demo') ?></a>
+        </div>
+        <div class="dt-backend-actions">
+            <button type="button" class="btn btn-primary" data-testid="backend-demo-init" onclick="runBackendDemoAction('<?= htmlspecialchars((string) $demoInitUrl, ENT_QUOTES, 'UTF-8') ?>')"><?= __('Init Demo Data') ?></button>
+            <button type="button" class="btn btn-outline-danger" data-testid="backend-demo-clear" onclick="runBackendDemoAction('<?= htmlspecialchars((string) $demoClearUrl, ENT_QUOTES, 'UTF-8') ?>')"><?= __('Clear Demo Data') ?></button>
+            <button type="button" class="btn btn-outline-primary" data-testid="backend-demo-verify" onclick="verifyBackendTags()"><?= __('Run Tag Verification') ?></button>
+        </div>
+        <div id="backend-demo-status" class="dt-backend-status" data-testid="backend-demo-status"></div>
+    </section>
 
-        <footer class="footer">
-            <div class="container-fluid">
-                <div class="row">
-                    <div class="col-sm-6">
-                        <script>document.write(new Date().getFullYear())</script>
-                        © Weline.
-                    </div>
-                    <div class="col-sm-6">
-                        <div class="text-sm-end d-none d-sm-block">
-                            Crafted with <i class="mdi mdi-heart text-danger"></i> By <a
-                                    href="https://www.aiweline.com/">秋枫雁飞(aiweline)</a>
-                        </div>
-                    </div>
-                </div>
+    <section class="dt-backend-grid">
+        <article class="dt-backend-summary">
+            <h3><?= __('Scenario Coverage') ?></h3>
+            <p><?= (int) ($summary['scenario_count'] ?? 0) ?> <?= __('routes available') ?></p>
+            <div class="dt-backend-pills">
+                <span class="dt-backend-pill"><?= (int) ($summary['direct_demo_count'] ?? 0) ?> <?= __('direct demos') ?></span>
+                <span class="dt-backend-pill"><?= (int) ($summary['compatibility_route_count'] ?? 0) ?> <?= __('compatibility routes') ?></span>
             </div>
-        </footer>
+        </article>
+        <article class="dt-backend-summary">
+            <h3><?= __('Model Coverage') ?></h3>
+            <p><?= (int) ($summary['model_count'] ?? 0) ?> <?= __('demo models') ?></p>
+            <div class="dt-backend-pills">
+                <?php foreach (($models ?? []) as $model): ?>
+                    <span class="dt-backend-pill"><?= htmlspecialchars((string) ($model['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+            </div>
+        </article>
+        <article class="dt-backend-summary">
+            <h3><?= __('Documentation Coverage') ?></h3>
+            <p><?= (int) ($summary['doc_count'] ?? 0) ?> <?= __('documents linked from backend') ?></p>
+            <div class="dt-backend-pills">
+                <?php foreach (($docs ?? []) as $doc): ?>
+                    <span class="dt-backend-pill"><?= htmlspecialchars((string) ($doc['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+            </div>
+        </article>
+    </section>
 
-    </div>
-    <!-- end main content-->
+    <?php
+    $scenarioGroups = [];
+    foreach (($scenarios ?? []) as $scenario) {
+        $group = (string) ($scenario['group'] ?? __('Other'));
+        $scenarioGroups[$group][] = $scenario;
+    }
+    ?>
+    <?php foreach ($scenarioGroups as $groupName => $groupScenarios): ?>
+        <section class="dt-backend-section">
+            <div>
+                <h2><?= htmlspecialchars((string) $groupName, ENT_QUOTES, 'UTF-8') ?></h2>
+                <p><?= $groupName === 'Direct demos'
+                    ? __('These routes render working DataTable demo pages directly in the backend.')
+                    : __('These routes exist to repair legacy menu links and old bookmarks without keeping the broken standalone templates.') ?></p>
+            </div>
+            <div class="dt-backend-grid">
+                <?php foreach ($groupScenarios as $scenario): ?>
+                    <a class="dt-backend-card" href="<?= htmlspecialchars((string) ($scenario['url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-testid="scenario-link-<?= htmlspecialchars((string) ($scenario['route'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <h3><?= htmlspecialchars((string) ($scenario['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+                        <p><?= htmlspecialchars((string) ($scenario['description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endforeach; ?>
 
+    <section class="dt-backend-section">
+        <div>
+            <h2><?= __('Demo Model Relations') ?></h2>
+            <p><?= __('The demo service now exposes a fuller relation set so backend routes can seed user, order, product, profile, and address data together.') ?></p>
+        </div>
+        <div class="dt-backend-grid">
+            <?php foreach (($models ?? []) as $model): ?>
+                <article class="dt-backend-summary">
+                    <h3><?= htmlspecialchars((string) ($model['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+                    <p><code><?= htmlspecialchars((string) ($model['class'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></p>
+                    <p><?= htmlspecialchars((string) ($model['purpose'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+                    <div class="dt-backend-pills">
+                        <?php foreach (($model['relations'] ?? []) as $relation): ?>
+                            <span class="dt-backend-pill"><?= htmlspecialchars((string) $relation, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </section>
+
+    <section class="dt-backend-section">
+        <div>
+            <h2><?= __('Verification Output') ?></h2>
+            <p><?= __('The button above hits the backend verify route directly and prints the returned JSON so we can quickly spot taglib regressions.') ?></p>
+        </div>
+        <div id="backend-verify-output" class="dt-backend-code" data-testid="backend-verify-output"><?= __('No verification run yet.') ?></div>
+    </section>
 </div>
-<!-- END layout-wrapper -->
-
-<!--右边栏-->
-@template(Weline_Admin::common/right-sidebar.phtml)
 
 <script>
-    function verifyTags() {
-        const btn = document.getElementById('verifyTagsBtn');
-        const output = document.getElementById('verificationOutput');
-        const content = document.getElementById('verificationContent');
-        
-        btn.innerHTML = '<i class="mdi mdi-loading mdi-spin me-2"></i><?= __('验证中...') ?>';
-        btn.disabled = true;
-        
-        fetch('<?= $this->getUrl("datatable/test/comprehensive/verifyTags") ?>')
-            .then(response => response.json())
-            .then(data => {
-                let html = '<div class="row">';
-                
-                Object.keys(data.data).forEach(category => {
-                    html += '<div class="col-md-6 mb-3">';
-                    html += '<div class="card">';
-                    html += '<div class="card-header"><h6>' + category + '</h6></div>';
-                    html += '<div class="card-body">';
-                    
-                    Object.keys(data.data[category]).forEach(test => {
-                        const result = data.data[category][test];
-                        const statusClass = result.status === 'success' ? 'text-success' : 'text-danger';
-                        const icon = result.status === 'success' ? 'mdi-check-circle' : 'mdi-close-circle';
-                        
-                        html += '<div class="mb-2">';
-                        html += '<i class="mdi ' + icon + ' ' + statusClass + ' me-2"></i>';
-                        html += '<strong>' + test + ':</strong> ' + result.message;
-                        html += '</div>';
-                    });
-                    
-                    html += '</div></div></div>';
-                });
-                
-                html += '</div>';
-                content.innerHTML = html;
-                output.style.display = 'block';
-                
-            })
-            .catch(error => {
-                content.innerHTML = '<div class="alert alert-danger"><?= __('验证失败：') ?>' + error.message + '</div>';
-                output.style.display = 'block';
-            })
-            .finally(() => {
-                btn.innerHTML = '<i class="mdi mdi-test-tube me-2"></i><?= __('重新验证') ?>';
-                btn.disabled = false;
+    function resolveBackendRoute(route) {
+        var normalizedRoute = String(route || '').replace(/^\/+/, '');
+        var currentPath = String(window.location && window.location.pathname || '');
+        var basePath = '<?= htmlspecialchars((string) ($backendBasePath ?? ''), ENT_QUOTES, 'UTF-8') ?>'.replace(/\/+$/, '');
+
+        if (currentPath.indexOf('/@backend') === 0) {
+            return '/@backend/' + normalizedRoute;
+        }
+
+        return basePath + '/' + normalizedRoute;
+    }
+
+    async function runBackendDemoAction(route) {
+        const status = document.getElementById('backend-demo-status');
+        status.textContent = 'Working...';
+        try {
+            const endpoint = typeof window.frontend_api === 'function' ? window.frontend_api(route) : route;
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin',
+                body: JSON.stringify({})
             });
+            const payload = await response.json();
+            status.textContent = payload.message || payload.msg || 'Done';
+        } catch (error) {
+            status.textContent = error.message || 'Request failed';
+        }
+    }
+
+    async function verifyBackendTags() {
+        const output = document.getElementById('backend-verify-output');
+        output.textContent = 'Working...';
+        try {
+            const response = await fetch(resolveBackendRoute('<?= htmlspecialchars((string) $verifyTagsUrl, ENT_QUOTES, 'UTF-8') ?>'), {
+                method: 'GET',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin'
+            });
+            const payload = await response.json();
+            output.textContent = JSON.stringify(payload, null, 2);
+        } catch (error) {
+            output.textContent = error.message || 'Verification request failed';
+        }
     }
 </script>
-
-@template(Weline_Admin::common/footer.phtml)
-</body>
-</html>
