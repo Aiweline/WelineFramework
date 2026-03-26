@@ -1,225 +1,64 @@
-<!DOCTYPE html>
-<html lang="zh-CN" data-theme="<?= htmlspecialchars($themeMode ?? '', ENT_QUOTES, 'UTF-8') ?>">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DataTable 属性继承功能</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        <?php
-        $themeColorValue = $themeColor ?? '#667eea';
-        $themeColorDark = $themeColorValue;
-        if (preg_match('/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i', $themeColorValue, $matches)) {
-            $r = max(0, min(255, hexdec($matches[1]) - 20));
-            $g = max(0, min(255, hexdec($matches[2]) - 20));
-            $b = max(0, min(255, hexdec($matches[3]) - 20));
-            $themeColorDark = sprintf('#%02x%02x%02x', $r, $g, $b);
-        }
-        $isDark = ($themeMode ?? '') === 'dark';
-        ?>
-        :root {
-            --theme-color: <?= htmlspecialchars($themeColorValue, ENT_QUOTES, 'UTF-8') ?>;
-            --theme-color-dark: <?= htmlspecialchars($themeColorDark, ENT_QUOTES, 'UTF-8') ?>;
-        }
-        body { 
-            background-color: <?= $isDark ? '#1a1a1a' : '#f8f9fa' ?>; 
-            color: <?= $isDark ? '#ffffff' : '#333333' ?>;
-            font-family: 'Segoe UI', sans-serif; 
-        }
-        .demo-section { 
-            background: <?= $isDark ? '#2d2d2d' : '#ffffff' ?>; 
-            border-radius: 10px; 
-            box-shadow: 0 4px 6px rgba(0,0,0,<?= $isDark ? '0.5' : '0.1' ?>); 
-            padding: 25px; 
-            margin-bottom: 30px; 
-            border: 1px solid <?= $isDark ? '#404040' : '#dee2e6' ?>;
-        }
-        .code-block { 
-            background: <?= $isDark ? '#1e1e1e' : '#f8f9fa' ?>; 
-            border: 1px solid <?= $isDark ? '#404040' : '#dee2e6' ?>; 
-            border-radius: 5px; 
-            padding: 15px; 
-            font-family: 'Courier New', monospace; 
-            font-size: 14px; 
-            margin: 15px 0; 
-            color: <?= $isDark ? '#d4d4d4' : '#333333' ?>;
-        }
-        .inherit-demo { 
-            border: 2px solid var(--theme-color); 
-            border-radius: 8px; 
-            padding: 20px; 
-            margin: 20px 0; 
-            background: <?= $isDark ? '#1a2a2f' : '#f0fcff' ?>; 
-        }
-        .inherit-arrow { 
-            font-size: 2rem; 
-            color: var(--theme-color); 
-            text-align: center; 
-            margin: 20px 0; 
-        }
-        .context-box { 
-            border: 1px solid <?= $isDark ? '#404040' : '#6c757d' ?>; 
-            border-radius: 5px; 
-            padding: 15px; 
-            margin: 10px 0; 
-            background: <?= $isDark ? '#252525' : '#f8f9fa' ?>; 
-        }
-        .text-muted {
-            color: <?= $isDark ? '#b0b0b0' : '#6c757d' ?> !important;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--theme-color) 0%, var(--theme-color-dark) 100%);
-            border: none;
-        }
-    </style>
-</head>
-<body <?= htmlspecialchars($layouts ?? '', ENT_QUOTES, 'UTF-8') ?>>
-    <div class="container mt-4">
-        <div class="row">
-            <div class="col-12">
-                <div class="demo-section">
-                    <h2 class="mb-3">
-                        <i class="fas fa-sitemap me-3"></i>DataTable 属性继承功能
-                    </h2>
-                    <p class="text-muted">展示DataTable模块的属性继承机制，包括上下文管理和属性传递</p>
-                </div>
-            </div>
+<style>
+    .dt-inheritance-page{max-width:1080px;margin:0 auto;padding:24px 20px 64px;display:grid;gap:20px}
+    .dt-inheritance-card{padding:22px;border:1px solid #dbe4f0;border-radius:20px;background:#fff}
+    .dt-inheritance-note{padding:18px;border-radius:18px;background:#eef6ff;border:1px solid #d6e8fb}
+    .dt-inheritance-output{white-space:pre-wrap;background:#f8fafc;border:1px solid #e2e8f0;border-radius:14px;padding:18px}
+</style>
+
+<div class="dt-inheritance-page" data-testid="datatable-inheritance-page">
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center">
+        <div>
+            <h1><?= __('Attribute Inheritance Verification') ?></h1>
+            <p><?= __('This backend route focuses on the inherited table attributes and scope generation checks that were previously hidden inside the broken legacy template set.') ?></p>
         </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="demo-section">
-                    <h4 class="mb-3">
-                        <i class="fas fa-level-up-alt me-2"></i>基本属性继承
-                    </h4>
-                    <p class="text-muted">子标签自动继承父标签的属性，简化配置并保持一致性。</p>
-                    
-                    <div class="code-block">
-&lt;w:d-table model="Weline\DataTable\Model\TestUser" 
-          scope="inherit-demo" 
-          sortable="true" 
-          searchable="true"&gt;
-    &lt;w:t-header&gt;
-        &lt;w:field belong="t-header" name="id"&gt;ID&lt;/w:field&gt;
-        &lt;w:field belong="t-header" name="username"&gt;用户名&lt;/w:field&gt;
-    &lt;/w:t-header&gt;
-    &lt;w:t-filter&gt;
-        &lt;w:field belong="t-filter" name="username" type="text"&gt;&lt;/w:field&gt;
-    &lt;/w:t-filter&gt;
-&lt;/w:d-table&gt;
-                    </div>
-
-                    <div class="inherit-demo">
-                        <h6><i class="fas fa-arrow-down me-2"></i>继承流程：</h6>
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="context-box">
-                                    <h6>父标签 (d-table)</h6>
-                                    <ul class="small">
-                                        <li>model: TestUser</li>
-                                        <li>scope: inherit-demo</li>
-                                        <li>sortable: true</li>
-                                        <li>searchable: true</li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="col-md-4 text-center">
-                                <div class="inherit-arrow">
-                                    <i class="fas fa-long-arrow-alt-down"></i>
-                                </div>
-                                <p class="small">自动继承</p>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="context-box">
-                                    <h6>子标签 (t-header/t-filter)</h6>
-                                    <ul class="small">
-                                        <li>model: TestUser ✓</li>
-                                        <li>scope: inherit-demo-header ✓</li>
-                                        <li>sortable: true ✓</li>
-                                        <li>searchable: true ✓</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="demo-section">
-                    <h4 class="mb-3">
-                        <i class="fas fa-cog me-2"></i>继承规则说明
-                    </h4>
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h6>自动继承的属性</h6>
-                            <ul class="list-unstyled">
-                                <li><i class="fas fa-check text-success me-2"></i>model - 数据模型</li>
-                                <li><i class="fas fa-check text-success me-2"></i>scope - 作用域</li>
-                                <li><i class="fas fa-check text-success me-2"></i>searchable - 搜索功能</li>
-                                <li><i class="fas fa-check text-success me-2"></i>sortable - 排序功能</li>
-                                <li><i class="fas fa-check text-success me-2"></i>editable - 编辑功能</li>
-                            </ul>
-                        </div>
-                        <div class="col-md-6">
-                            <h6>覆盖规则</h6>
-                            <ul class="list-unstyled">
-                                <li><i class="fas fa-exclamation text-warning me-2"></i>子标签可以覆盖继承的属性</li>
-                                <li><i class="fas fa-exclamation text-warning me-2"></i>scope会自动添加后缀</li>
-                                <li><i class="fas fa-exclamation text-warning me-2"></i>model不支持覆盖</li>
-                                <li><i class="fas fa-exclamation text-warning me-2"></i>保留原始属性作为备用</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="demo-section">
-                    <h4 class="mb-3">
-                        <i class="fas fa-code me-2"></i>作用域后缀规则
-                    </h4>
-                    <div class="row">
-                        <div class="col-md-4">
-                            <div class="text-center">
-                                <h6>t-header</h6>
-                                <div class="code-block">parent-scope + "-header"</div>
-                                <p class="small text-muted">示例：user-table-header</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-center">
-                                <h6>t-filter</h6>
-                                <div class="code-block">parent-scope + "-filter"</div>
-                                <p class="small text-muted">示例：user-table-filter</p>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="text-center">
-                                <h6>field</h6>
-                                <div class="code-block">parent-scope + "-field"</div>
-                                <p class="small text-muted">示例：user-table-field</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="text-center">
-                    <a href="<?= $this->getUrl('datatable/test/comprehensive/index') ?>" class="btn btn-primary">
-                        <i class="fas fa-arrow-left me-2"></i>返回综合测试首页
-                    </a>
-                </div>
-            </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="<?= $comprehensiveUrl ?>"><?= __('Back') ?></a>
+            <a class="btn btn-outline-secondary" href="<?= $tagTestUrl ?>?focus=attribute_inheritance"><?= __('Open Full Tag Report') ?></a>
         </div>
     </div>
-</body>
-</html>
+
+    <section class="dt-inheritance-note">
+        <?= __('The verification endpoint exercises inherited model, sortable, and searchable attributes through TableContext::inheritTableAttributes(). This page isolates that result so we can keep the compatibility route working while avoiding the old broken page shell.') ?>
+    </section>
+
+    <section class="dt-inheritance-card">
+        <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+            <h2 class="mb-0"><?= __('Run Verification') ?></h2>
+            <button type="button" class="btn btn-primary" data-testid="datatable-inheritance-run" onclick="loadInheritanceVerification()"><?= __('Run Now') ?></button>
+        </div>
+        <div id="datatable-inheritance-output" class="dt-inheritance-output" data-testid="datatable-inheritance-output"><?= __('No verification run yet.') ?></div>
+    </section>
+</div>
+
+<script>
+    function resolveInheritanceBackendRoute(route) {
+        var normalizedRoute = String(route || '').replace(/^\/+/, '');
+        var currentPath = String(window.location && window.location.pathname || '');
+        var basePath = '<?= htmlspecialchars((string) ($backendBasePath ?? ''), ENT_QUOTES, 'UTF-8') ?>'.replace(/\/+$/, '');
+
+        if (currentPath.indexOf('/@backend') === 0) {
+            return '/@backend/' + normalizedRoute;
+        }
+
+        return basePath + '/' + normalizedRoute;
+    }
+
+    async function loadInheritanceVerification() {
+        const host = document.getElementById('datatable-inheritance-output');
+        host.textContent = 'Working...';
+        try {
+            const response = await fetch(resolveInheritanceBackendRoute('<?= htmlspecialchars((string) $verifyTagsUrl, ENT_QUOTES, 'UTF-8') ?>'), {
+                method: 'GET',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
+                credentials: 'same-origin'
+            });
+            const payload = await response.json();
+            const section = payload && payload.data && payload.data.sections
+                ? payload.data.sections.attribute_inheritance || payload.data.attribute_inheritance || {}
+                : {};
+            host.textContent = JSON.stringify(section, null, 2);
+        } catch (error) {
+            host.textContent = error.message || 'Verification failed';
+        }
+    }
+</script>
