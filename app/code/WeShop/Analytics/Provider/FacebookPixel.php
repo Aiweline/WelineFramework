@@ -59,6 +59,36 @@ class FacebookPixel implements PixelProviderInterface
 
         $pixelId = $this->readPixelId();
 
+        $headSnippet = $this->buildHeadSnippet($pixelId);
+        $bodySnippet = $this->buildBodySnippet($pixelId);
+
+        return trim($headSnippet . "\n" . $bodySnippet);
+    }
+
+    /**
+     * @return array{head:string,body:string,footer:string}
+     */
+    public function getPixelHookSnippets(): array
+    {
+        if (!$this->isEnabled()) {
+            return [
+                'head' => '',
+                'body' => '',
+                'footer' => '',
+            ];
+        }
+
+        $pixelId = $this->readPixelId();
+
+        return [
+            'head' => $this->buildHeadSnippet($pixelId),
+            'body' => $this->buildBodySnippet($pixelId),
+            'footer' => '',
+        ];
+    }
+
+    private function buildHeadSnippet(string $pixelId): string
+    {
         return <<<HTML
 <!-- Facebook Pixel Code -->
 <script>
@@ -70,6 +100,12 @@ class FacebookPixel implements PixelProviderInterface
   fbq('init', '{$pixelId}');
   fbq('track', 'PageView');
 </script>
+HTML;
+    }
+
+    private function buildBodySnippet(string $pixelId): string
+    {
+        return <<<HTML
 <noscript><img height="1" width="1" style="display:none"
   src="https://www.facebook.com/tr?id={$pixelId}&ev=PageView&noscript=1"/></noscript>
 HTML;
