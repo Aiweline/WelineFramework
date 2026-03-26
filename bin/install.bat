@@ -86,6 +86,10 @@ for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
     set "URL_MIRRORSERVICE_RELEASES=!PHP_BASE_URL_MIRRORSERVICE_RELEASES!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
     set "URL_MIRRORSERVICE_ARCHIVES=!PHP_BASE_URL_MIRRORSERVICE_ARCHIVES!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
     set "CECHO_MSG=Checking PHP !PHP_VER!.%%p ..." & call :cecho Gray ""
+    set "CECHO_MSG=Probe URL(primary): !URL_PRIMARY!" & call :cecho DarkGray ""
+    set "CECHO_MSG=Probe URL(archive): !URL_ARCHIVE!" & call :cecho DarkGray ""
+    set "CECHO_MSG=Probe URL(mirrorservice releases): !URL_MIRRORSERVICE_RELEASES!" & call :cecho DarkGray ""
+    set "CECHO_MSG=Probe URL(mirrorservice archives): !URL_MIRRORSERVICE_ARCHIVES!" & call :cecho DarkGray ""
     REM Some servers may not respond well to HEAD; a tiny ranged GET is more robust.
     curl -L -s --retry 3 --retry-all-errors --retry-delay 2 --connect-timeout 10 --max-time 60 -f -r 0-0 "!URL_PRIMARY!" -o NUL >nul 2>&1 && (
       set "FOUND_PATCH=%%p"
