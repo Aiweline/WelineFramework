@@ -3,7 +3,6 @@
 "Added to wishlist.","Added to wishlist."
 "Wishlist item ID is required.","Wishlist item ID is required."
 "Removed from wishlist.","Removed from wishlist."
-无权移除此愿望清单项,无权移除此愿望清单项
-"You are not allowed to remove this wishlist item.","无权移除此愿望清单项。"
-"Wishlist","收藏夹"
+"You are not allowed to remove this wishlist item.",无权移除此愿望清单项。
+Wishlist,收藏夹
 "Resume with %1 saved item(s).","继续处理你已保存的 %1 个商品。"
