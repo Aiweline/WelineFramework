@@ -79,7 +79,7 @@ class CheckoutPageDataService
     {
         $savedAddresses = $this->mapSavedAddresses($this->addressService->getCustomerAddresses($customerId));
 
-        return $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData);
+        return $this->buildMethodDataPayload($customerId, $savedAddresses, $checkoutData, true);
     }
 
     /**
@@ -217,7 +217,12 @@ class CheckoutPageDataService
      * @param array<string, mixed> $checkoutData
      * @return array<string, mixed>
      */
-    protected function buildMethodDataPayload(int $customerId, array $savedAddresses, array $checkoutData): array
+    protected function buildMethodDataPayload(
+        int $customerId,
+        array $savedAddresses,
+        array $checkoutData,
+        bool $includeSummaryPreview = false
+    ): array
     {
         $selectedAddress = $this->resolveSelectedShippingAddress(
             $savedAddresses,
@@ -236,17 +241,36 @@ class CheckoutPageDataService
             $shippingMethods = $this->shippingService->getAvailableShippingMethods($shippingContext);
         }
 
-        return [
+        $prioritizedShippingMethods = $this->prioritizeSelectedMethod(
+            $this->mapShippingMethods($shippingMethods),
+            (string) ($checkoutData['shipping_method'] ?? '')
+        );
+        $prioritizedPaymentMethods = $this->prioritizeSelectedMethod(
+            $this->mapPaymentMethods($this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext)),
+            (string) ($checkoutData['payment_method'] ?? '')
+        );
+
+        $payload = [
             'selected_shipping_address_id' => $selectedShippingAddressId,
-            'shipping_methods' => $this->prioritizeSelectedMethod(
-                $this->mapShippingMethods($shippingMethods),
-                (string) ($checkoutData['shipping_method'] ?? '')
-            ),
-            'payment_methods' => $this->prioritizeSelectedMethod(
-                $this->mapPaymentMethods($this->checkoutService->getCheckoutPaymentMethods($customerId, $shippingContext)),
-                (string) ($checkoutData['payment_method'] ?? '')
-            ),
+            'shipping_methods' => $prioritizedShippingMethods,
+            'payment_methods' => $prioritizedPaymentMethods,
         ];
+
+        if (!$includeSummaryPreview) {
+            return $payload;
+        }
+
+        $previewCheckoutData = $checkoutData;
+        $previewCheckoutData['shipping_address_id'] = $selectedShippingAddressId;
+        $previewCheckoutData['shipping_address'] = $resolvedAddress !== [] ? $resolvedAddress : $selectedAddress;
+        $previewCheckoutData['shipping_method'] = $this->resolveSelectedMethodCode($prioritizedShippingMethods);
+        $previewCheckoutData['payment_method'] = $this->resolveSelectedMethodCode($prioritizedPaymentMethods);
+
+        $payload['cart_summary'] = $this->normalizeSummary(
+            $this->checkoutService->previewCheckoutSummary($customerId, $previewCheckoutData)
+        );
+
+        return $payload;
     }
 
     /**
@@ -470,6 +494,20 @@ class CheckoutPageDataService
         }
 
         return $methods;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $methods
+     */
+    protected function resolveSelectedMethodCode(array $methods): string
+    {
+        foreach ($methods as $method) {
+            if (!empty($method['is_default'])) {
+                return (string) ($method['code'] ?? '');
+            }
+        }
+
+        return (string) ($methods[0]['code'] ?? '');
     }
 
     protected function resolvePaymentFlow(string $code): string

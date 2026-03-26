@@ -342,6 +342,24 @@ class CheckoutPageDataServiceTest extends TestCase
                     'sort_order' => 20,
                 ],
             ]);
+        $checkoutService->expects($this->once())
+            ->method('previewCheckoutSummary')
+            ->with(
+                12,
+                $this->callback(static function (array $checkoutData): bool {
+                    return (int) ($checkoutData['shipping_address_id'] ?? 0) === 3
+                        && (string) ($checkoutData['shipping_method'] ?? '') === 'dhl'
+                        && (string) ($checkoutData['payment_method'] ?? '') === 'paypal'
+                        && (string) (($checkoutData['shipping_address']['region'] ?? '')) === 'LDN';
+                })
+            )
+            ->willReturn([
+                'subtotal' => 59.5,
+                'shipping' => 12.0,
+                'discount' => 0.0,
+                'tax' => 4.76,
+                'grand_total' => 76.26,
+            ]);
 
         $i18n = $this->createMock(I18n::class);
         $i18n->expects($this->never())->method('getCountries');
@@ -376,5 +394,100 @@ class CheckoutPageDataServiceTest extends TestCase
         $this->assertFalse((bool) $result['payment_methods'][0]['is_default']);
         $this->assertSame('paypal', $result['payment_methods'][1]['code']);
         $this->assertTrue((bool) $result['payment_methods'][1]['is_default']);
+        $this->assertSame(12.0, $result['cart_summary']['shipping']);
+        $this->assertSame(4.76, $result['cart_summary']['tax']);
+        $this->assertSame(76.26, $result['cart_summary']['grand_total']);
+    }
+
+    public function testBuildDynamicMethodDataUsesEffectiveFallbackShippingMethodForSummaryPreview(): void
+    {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+
+        $cartService = $this->createMock(CartService::class);
+        $cartService->expects($this->never())->method('getCartItems');
+        $cartService->expects($this->never())->method('calculateTotals');
+
+        $addressService = $this->createMock(AddressService::class);
+        $addressService->expects($this->once())
+            ->method('getCustomerAddresses')
+            ->with(18)
+            ->willReturn([
+                [
+                    'address_id' => 9,
+                    'firstname' => 'Grace',
+                    'lastname' => 'Hopper',
+                    'region' => 'CA',
+                    'country_id' => 'US',
+                    'is_default' => true,
+                ],
+            ]);
+
+        $shippingService = $this->createMock(ShippingService::class);
+        $shippingService->expects($this->never())->method('getAvailableShippingMethods');
+
+        $checkoutService = $this->createMock(CheckoutService::class);
+        $checkoutService->expects($this->once())
+            ->method('getCheckoutShippingMethods')
+            ->willReturn([
+                [
+                    'code' => 'flat_rate',
+                    'name' => 'Flat Rate',
+                    'is_default' => true,
+                    'sort_order' => 10,
+                ],
+                [
+                    'code' => 'dhl',
+                    'name' => 'DHL',
+                    'is_default' => false,
+                    'sort_order' => 20,
+                ],
+            ]);
+        $checkoutService->expects($this->once())
+            ->method('getCheckoutPaymentMethods')
+            ->willReturn([
+                [
+                    'code' => 'manual_transfer',
+                    'title' => 'Manual Transfer',
+                    'is_default' => true,
+                    'sort_order' => 10,
+                ],
+            ]);
+        $checkoutService->expects($this->once())
+            ->method('previewCheckoutSummary')
+            ->with(
+                18,
+                $this->callback(static function (array $checkoutData): bool {
+                    return (int) ($checkoutData['shipping_address_id'] ?? 0) === 9
+                        && (string) ($checkoutData['shipping_method'] ?? '') === 'flat_rate';
+                })
+            )
+            ->willReturn([
+                'subtotal' => 40.0,
+                'shipping' => 5.0,
+                'discount' => 0.0,
+                'tax' => 3.6,
+                'grand_total' => 48.6,
+            ]);
+
+        $i18n = $this->createMock(I18n::class);
+        $orderService = $this->createMock(OrderService::class);
+
+        $service = new CheckoutPageDataService(
+            $cartService,
+            $addressService,
+            $shippingService,
+            $checkoutService,
+            $i18n,
+            $orderService
+        );
+
+        $result = $service->buildDynamicMethodData(18, [
+            'shipping_address_id' => 9,
+            'shipping_method' => 'overnight',
+        ]);
+
+        $this->assertSame('flat_rate', $result['shipping_methods'][0]['code']);
+        $this->assertTrue((bool) $result['shipping_methods'][0]['is_default']);
+        $this->assertSame(48.6, $result['cart_summary']['grand_total']);
     }
 }
