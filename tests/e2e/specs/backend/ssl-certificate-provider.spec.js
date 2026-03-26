@@ -1,3 +1,4 @@
+// @weline-e2e-runtime fallback
 // @ts-check
 const { test, expect, gotoBackend, loginAsAdmin } = require('../../framework');
 
@@ -7,8 +8,10 @@ test.describe('SSL certificate provider options', () => {
   });
 
   test('shows provider options in the request modal', async ({ page }) => {
-    await gotoBackend(page, 'server/admin/ssl-certificate');
-    await page.waitForTimeout(1000);
+    await gotoBackend(page, 'server/backend/ssl-certificate', {
+      timeout: 60000,
+      settleMs: 1000,
+    });
 
     const openButton = page.locator('button[data-bs-target="#requestModal"], a[data-bs-target="#requestModal"]').first();
     await openButton.waitFor({ timeout: 5000 }).catch(() => {});
