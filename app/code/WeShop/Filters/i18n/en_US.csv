@@ -6,8 +6,8 @@
 分类筛选缓存已清除,"Category filter cache cleared"
 所有筛选缓存已清除,"All filter cache cleared"
 "清除缓存失败: %1","Clear cache failed: %1"
-无效的分类ID,"Invalid category ID"
-参数无效,"Invalid parameter"
+"Invalid category ID.","Invalid category ID."
+"Missing required filter parameters.","Missing required filter parameters."
 筛选器收集,"Filter collection"
 收集所有可用的筛选器，其他模块可通过此事件添加自定义筛选,"Collect all available filters; other modules can add custom filters via this event"
 筛选条件应用前,"Before applying filters"
@@ -74,6 +74,8 @@ EAV属性筛选,"EAV attribute filter"
 库存状态,Availability
 有货,"In Stock"
 缺货,"Out of Stock"
+鏈夎揣,鏈夎揣
+缂鸿揣,缂鸿揣
 库存紧张,"Low Stock"
 筛选条件,Filters
 清除全部,"Clear All"
