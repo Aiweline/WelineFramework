@@ -1,0 +1,92 @@
+<?php
+/**
+ * Schedule listing page.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$schedules = is_array($schedules ?? null) ? $schedules : [];
+$listingUrl = $this->getBackendUrl('*/backend/schedule/listing');
+$addUrl = $this->getBackendUrl('*/backend/schedule/add');
+
+$get = static function (mixed $item, string $key, mixed $default = ''): mixed {
+    if (is_array($item)) {
+        return $item[$key] ?? $default;
+    }
+    if (is_object($item)) {
+        if (method_exists($item, 'getData')) {
+            $value = $item->getData($key);
+            return $value ?? $default;
+        }
+        if (isset($item->{$key})) {
+            return $item->{$key};
+        }
+    }
+    return $default;
+};
+?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= __('Schedule Management') ?></h4>
+            <a href="<?= htmlspecialchars($addUrl, ENT_QUOTES) ?>" class="btn btn-primary">
+                <i class="mdi mdi-plus me-1"></i><?= __('New Schedule') ?>
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th><?= __('Name') ?></th>
+                            <th><?= __('Role ID') ?></th>
+                            <th><?= __('Trigger') ?></th>
+                            <th><?= __('Status') ?></th>
+                            <th><?= __('Next Run') ?></th>
+                            <th><?= __('Actions') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php if (!empty($schedules)): ?>
+                            <?php foreach ($schedules as $schedule): ?>
+                                <?php $id = (int) $get($schedule, 'schedule_id', 0); ?>
+                                <tr>
+                                    <td><?= $id ?></td>
+                                    <td><?= htmlspecialchars((string) $get($schedule, 'name', '')) ?></td>
+                                    <td><?= (int) $get($schedule, 'role_id', 0) ?></td>
+                                    <td><?= htmlspecialchars((string) $get($schedule, 'trigger_expr', '')) ?></td>
+                                    <td><span class="badge bg-light text-dark"><?= htmlspecialchars((string) $get($schedule, 'status', '')) ?></span></td>
+                                    <td><?= htmlspecialchars((string) $get($schedule, 'next_run_at', '')) ?></td>
+                                    <td>
+                                        <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($this->getBackendUrl('*/backend/schedule/edit?id=' . $id), ENT_QUOTES) ?>">
+                                            <?= __('Edit') ?>
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <tr>
+                                <td colspan="7" class="text-center py-4 text-muted"><?= __('No schedules found.') ?></td>
+                            </tr>
+                        <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <var>pagination</var>
+            </div>
+        </div>
+    </div>
+</div>
