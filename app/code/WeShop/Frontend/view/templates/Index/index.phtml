@@ -35,11 +35,16 @@
                     <div>
                         <a href="<?= $this->getUrl('product/view', ['id' => $product['product_id']]) ?>" class="text-base font-medium text-text-primary-light dark:text-text-primary-dark truncate block hover:text-primary"><?= htmlspecialchars($product['name'] ?? '') ?></a>
                         <div class="flex items-center gap-2">
-                            <?php if ($product['special_price'] ?? null): ?>
-                                <p class="text-lg font-bold text-secondary-dark line-through"><?= $this->formatPrice($product['price']) ?></p>
-                                <p class="text-lg font-bold text-red-500"><?= $this->formatPrice($product['special_price']) ?></p>
+                            <?php
+                            $currentPrice = (float) ($product['price'] ?? 0);
+                            $originalPrice = (float) ($product['original_price'] ?? $currentPrice);
+                            $hasDiscount = $originalPrice > $currentPrice;
+                            ?>
+                            <?php if ($hasDiscount): ?>
+                                <p class="text-lg font-bold text-secondary-dark line-through"><?= $this->formatPrice($originalPrice) ?></p>
+                                <p class="text-lg font-bold text-red-500"><?= $this->formatPrice($currentPrice) ?></p>
                             <?php else: ?>
-                                <p class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($product['price'] ?? 0) ?></p>
+                                <p class="text-lg font-bold text-text-primary-light dark:text-text-primary-dark"><?= $this->formatPrice($currentPrice) ?></p>
                             <?php endif; ?>
                         </div>
                         <?php if ($product['discount_percent'] ?? null): ?>
