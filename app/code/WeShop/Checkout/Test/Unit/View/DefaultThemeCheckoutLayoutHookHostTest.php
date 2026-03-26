@@ -19,6 +19,8 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
             $this->assertStringContainsString('WeShop_Checkout::frontend::layouts::checkout::payment-content', $template);
             $this->assertStringContainsString('{{content}}', $template);
             $this->assertStringContainsString('{{meta.content}}', $template);
+            $this->assertStringContainsString("getUrl('weshop/customer/account/login')", $template);
+            $this->assertStringNotContainsString("getUrl('customer/account/login')", $template);
 
             $paymentHostPos = strpos($template, 'WeShop_Checkout::frontend::layouts::checkout::payment-content');
             $contentPos = strpos($template, '{{content}}');
@@ -29,6 +31,16 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
             $this->assertIsInt($metaContentPos);
             $this->assertGreaterThan($contentPos, $paymentHostPos);
             $this->assertGreaterThan($metaContentPos, $paymentHostPos);
+        }
+    }
+
+    public function testCheckoutSuccessLayoutVariantsLinkBackToCanonicalAccountRoute(): void
+    {
+        foreach ([1, 2, 3, 4] as $variant) {
+            $template = file_get_contents(__DIR__ . "/../../../../../../design/WeShop/default/frontend/layouts/checkout_success/order_confirmation_page_{$variant}.phtml");
+            $this->assertIsString($template);
+            $this->assertStringContainsString("getUrl('weshop/customer/account/index')", $template);
+            $this->assertStringNotContainsString("getUrl('customer/account')", $template);
         }
     }
 
@@ -44,6 +56,12 @@ class DefaultThemeCheckoutLayoutHookHostTest extends TestCase
         $this->assertStringContainsString('checkout/success', $template);
         $this->assertStringContainsString('redirect_url', $template);
         $this->assertStringContainsString("name=\"order_id\"", $template);
+        $this->assertStringContainsString('selected_shipping_address_id', $template);
+        $this->assertStringContainsString('$addressId === $selectedShippingAddressId', $template);
         $this->assertStringContainsString('Retry Payment', $template);
+        $this->assertStringContainsString('WeShop_Checkout::summary::rows_before', $template);
+        $this->assertStringContainsString('WeShop_Checkout::summary::shipping_before', $template);
+        $this->assertStringContainsString('WeShop_Checkout::summary::tax_after', $template);
+        $this->assertStringContainsString('WeShop_Checkout::summary::grand_total_after', $template);
     }
 }

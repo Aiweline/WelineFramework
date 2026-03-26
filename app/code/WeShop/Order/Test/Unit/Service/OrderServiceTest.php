@@ -10,6 +10,44 @@ use WeShop\Order\Service\OrderService;
 
 class OrderServiceTest extends TestCase
 {
+    public function testCreateOrderPersistsOrderSummaryFields(): void
+    {
+        $order = new class extends Order {
+            public function __construct()
+            {
+            }
+
+            public function clearData(bool $with_query = true): static
+            {
+                parent::clearData($with_query);
+
+                return $this;
+            }
+
+            public function save(\Weline\Framework\Database\AbstractModel|array|string|bool $data = [], array|string $sequence = ''): int|bool
+            {
+                return true;
+            }
+        };
+
+        $service = $this->makeService($order);
+        $createdOrder = $service->createOrder([
+            'customer_id' => 9,
+            'status' => OrderService::STATUS_PENDING,
+            'subtotal' => 59.5,
+            'shipping_amount' => 5.0,
+            'discount_amount' => 7.0,
+            'tax_amount' => 2.0,
+            'total' => 59.5,
+        ]);
+
+        $this->assertSame(59.5, (float) $createdOrder->getData(Order::schema_fields_subtotal));
+        $this->assertSame(5.0, (float) $createdOrder->getData(Order::schema_fields_shipping_amount));
+        $this->assertSame(7.0, (float) $createdOrder->getData(Order::schema_fields_discount_amount));
+        $this->assertSame(2.0, (float) $createdOrder->getData(Order::schema_fields_tax_amount));
+        $this->assertSame(59.5, (float) $createdOrder->getData(Order::schema_fields_total));
+    }
+
     public function testUpdateOrderStatusRejectsIllegalTransition(): void
     {
         $order = $this->createMock(Order::class);
@@ -54,6 +92,10 @@ class OrderServiceTest extends TestCase
         $order->setData(Order::schema_fields_customer_id, 9);
         $order->setData(Order::schema_fields_status, OrderService::STATUS_PENDING);
         $order->setData(Order::schema_fields_increment_id, 'WS000077');
+        $order->setData(Order::schema_fields_subtotal, 59.5);
+        $order->setData(Order::schema_fields_shipping_amount, 5.0);
+        $order->setData(Order::schema_fields_discount_amount, 7.0);
+        $order->setData(Order::schema_fields_tax_amount, 2.0);
         $order->setData(Order::schema_fields_total, 59.5);
 
         $service = $this->makeService($order, [
@@ -84,6 +126,9 @@ class OrderServiceTest extends TestCase
         $this->assertSame('Trail Backpack', $result['items'][0]['name']);
         $this->assertSame(59.5, $result['summary']['grand_total']);
         $this->assertSame(59.5, $result['summary']['subtotal']);
+        $this->assertSame(5.0, $result['summary']['shipping']);
+        $this->assertSame(7.0, $result['summary']['discount']);
+        $this->assertSame(2.0, $result['summary']['tax']);
     }
 
     public function testGetOrderByIncrementIdLoadsByIncrementField(): void
@@ -119,6 +164,44 @@ class OrderServiceTest extends TestCase
         $this->assertInstanceOf(Order::class, $result);
         $this->assertSame(['WS000088', Order::schema_fields_increment_id, false], $result->loadedArgs);
         $this->assertSame(88, $result->getId());
+    }
+
+    public function testGetUnpaidOrderCountFallsBackToZeroWhenUnderlyingTotalCountIsNull(): void
+    {
+        $order = new class extends Order {
+            public function __construct()
+            {
+            }
+
+            public function clear(bool $with_query = true): static
+            {
+                return $this;
+            }
+
+            public function where(array|string $field, mixed $value = null, string $condition = '=', string $where_logic = 'AND', string $array_where_logic_type = 'AND'): static
+            {
+                return $this;
+            }
+
+            public function hasField(string $field): bool
+            {
+                return $field === 'payment_status';
+            }
+
+            public function select(string $fields = ''): static
+            {
+                return $this;
+            }
+
+            public function getTotalCount(): mixed
+            {
+                return null;
+            }
+        };
+
+        $service = $this->makeService($order);
+
+        $this->assertSame(0, $service->getUnpaidOrderCount(9));
     }
 
     /**
