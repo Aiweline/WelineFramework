@@ -27,6 +27,6 @@ class FrontendLoginStickerTest extends TestCase
         $this->assertStringContainsString('return;', $content);
         $this->assertStringContainsString('weshop_googleauth/frontend/auth/start', $content);
         $this->assertStringContainsString("'area' => 'frontend'", $content);
-        $this->assertStringContainsString("'redirect_url' => $redirectUrl", $content);
+        $this->assertStringContainsString("'redirect_url' => \$redirectUrl", $content);
     }
 }
