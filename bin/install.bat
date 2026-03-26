@@ -71,14 +71,20 @@ set "CECHO_MSG=--path-only: PHP not found at %PHP_DIR%." & call :cecho Yellow ""
 goto :skip_php
 :php_do_download
 set "VS=vs17"
-set "FOUND="
+REM Speed-up: first use HEAD checks to find a valid PHP release zip,
+REM so we only download the zip once (avoid downloading many failed candidates).
+set "FOUND_PATCH="
 for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
-  if not defined FOUND (
+  if not defined FOUND_PATCH (
     set "URL=https://windows.php.net/downloads/releases/php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
-    set "CECHO_MSG=Downloading PHP !PHP_VER!.%%p ..." & call :cecho Gray ""
-    curl -L -s -f -o "%TEMP%\weline-php.zip" "!URL!" 2>nul && set "FOUND=1"
+    set "CECHO_MSG=Checking PHP !PHP_VER!.%%p ..." & call :cecho Gray ""
+    curl -L -s -f -I "!URL!" >nul 2>&1 && set "FOUND_PATCH=%%p"
   )
 )
+if not defined FOUND_PATCH goto :php_download_failed
+set "URL=https://windows.php.net/downloads/releases/php-!PHP_VER!.!FOUND_PATCH!-Win32-!VS!-x64.zip"
+set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! ..." & call :cecho Gray ""
+curl -L -s -f -o "%TEMP%\weline-php.zip" "!URL!" 2>nul >nul && set "FOUND=1"
 if not defined FOUND goto :php_download_failed
 mkdir "%PHP_DIR%" 2>nul
 powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%TEMP%\weline-php.zip' -DestinationPath '%PHP_DIR%' -Force"
