@@ -1,18 +1,56 @@
 <?php
 /**
- * 角色管理列表
+ * Guided role listing and quick-start page.
  *
  * @var \Weline\Framework\View\Template $this
  */
+$roles = is_array($roles ?? null) ? $roles : [];
+$roleTemplates = is_array($role_templates ?? null) ? $role_templates : [];
+$guideConfig = is_array($guide_config ?? null) ? $guide_config : [];
+$guideProfiles = is_array($guide_profiles ?? null) ? $guide_profiles : [];
+$initialGuide = is_array($initial_guide ?? null) ? $initial_guide : [];
+
+$guideEnabled = (bool)($guide_enabled ?? ($guideConfig['enabled'] ?? true));
+$defaultTemplateCode = (string)($initialGuide['template_code'] ?? ($guideConfig['default_template'] ?? 'general_assistant'));
+$defaultBotProfile = (string)($initialGuide['bot_profile'] ?? ($guideConfig['default_profile'] ?? 'multi_project'));
+$defaultProjectCount = max(1, (int)($initialGuide['project_count'] ?? 1));
+$maxProjectCount = max(1, (int)($max_project_count ?? ($guideConfig['max_project_count'] ?? 200)));
+
+$listingUrl = $this->getBackendUrl('*/backend/role/listing');
+$addRoleUrl = $this->getBackendUrl('*/backend/role/add');
+
+$buildAddUrl = static function (string $baseUrl, array $params): string {
+    $filtered = [];
+    foreach ($params as $key => $value) {
+        $str = trim((string)$value);
+        if ($str !== '') {
+            $filtered[$key] = $str;
+        }
+    }
+
+    if (empty($filtered)) {
+        return $baseUrl;
+    }
+
+    $query = http_build_query($filtered);
+    return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $query;
+};
+
+$profileProjectDefaults = [
+    'single_project' => 1,
+    'multi_project' => min(12, $maxProjectCount),
+    'enterprise' => min(30, $maxProjectCount),
+];
 ?>
+
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
-            <h4 class="mb-sm-0"><lang>角色管理</lang></h4>
+            <h4 class="mb-sm-0"><?= __('Role Management') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="javascript:void(0);"><lang>Bot</lang></a></li>
-                    <li class="breadcrumb-item active"><lang>角色管理</lang></li>
+                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>"><?= __('Bot') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('Role Management') ?></li>
                 </ol>
             </div>
         </div>
@@ -20,66 +58,174 @@
 </div>
 
 <div class="row">
-    <template>Weline_Component::message.phtml</template>
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+    </div>
 </div>
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
+        <div class="card border-primary">
             <div class="card-body">
-                <div class="d-flex justify-content-end mb-3">
-                    <a href="@backend-url('*/backend/role/add')" class="btn btn-primary">
-                        <i class="mdi mdi-plus me-1"></i><lang>新增角色</lang>
-                    </a>
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div>
+                        <h5 class="card-title mb-1"><?= __('Guided Role Setup') ?></h5>
+                        <p class="text-muted mb-0">
+                            <?= __('Start with profile and template presets, then use AI suggestion to auto-fill advanced fields.') ?>
+                        </p>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge <?= $guideEnabled ? 'bg-success' : 'bg-secondary' ?>">
+                            <?= $guideEnabled ? __('Guide Enabled') : __('Guide Disabled') ?>
+                        </span>
+                        <a class="btn btn-primary"
+                           href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                               'template_code' => $defaultTemplateCode,
+                               'bot_profile' => $defaultBotProfile,
+                               'project_count' => $defaultProjectCount,
+                           ]), ENT_QUOTES) ?>">
+                            <i class="mdi mdi-auto-fix me-1"></i><?= __('Create Guided Role') ?>
+                        </a>
+                    </div>
                 </div>
+
+                <?php if (!empty($guideProfiles)): ?>
+                <div class="row g-3 mt-3">
+                    <?php foreach ($guideProfiles as $profile): ?>
+                    <?php
+                    $profileCode = (string)($profile['code'] ?? '');
+                    $profileName = (string)($profile['name'] ?? $profileCode);
+                    $profileDesc = (string)($profile['description'] ?? '');
+                    $profileProjects = (int)($profileProjectDefaults[$profileCode] ?? $defaultProjectCount);
+                    ?>
+                    <div class="col-md-4">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="mb-1"><?= htmlspecialchars($profileName) ?></h6>
+                            <p class="text-muted mb-3 small"><?= htmlspecialchars($profileDesc) ?></p>
+                            <a class="btn btn-sm btn-outline-primary"
+                               href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                                   'template_code' => $defaultTemplateCode,
+                                   'bot_profile' => $profileCode,
+                                   'project_count' => min($profileProjects, $maxProjectCount),
+                               ]), ENT_QUOTES) ?>">
+                                <?= __('Use This Profile') ?>
+                            </a>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php if (!empty($roleTemplates)): ?>
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><?= __('Template Quick Start') ?></h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <?php foreach ($roleTemplates as $template): ?>
+                    <?php
+                    $templateCode = (string)($template['code'] ?? '');
+                    $templateName = (string)($template['name'] ?? $templateCode);
+                    $templateDesc = (string)($template['description'] ?? '');
+                    $bestFor = (array)($template['best_for'] ?? []);
+                    ?>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="border rounded p-3 h-100 d-flex flex-column">
+                            <h6 class="mb-1"><?= htmlspecialchars($templateName) ?></h6>
+                            <p class="text-muted small mb-2"><?= htmlspecialchars($templateDesc) ?></p>
+                            <?php if (!empty($bestFor)): ?>
+                            <div class="mb-3">
+                                <?php foreach ($bestFor as $tag): ?>
+                                <span class="badge bg-light text-dark me-1 mb-1"><?= htmlspecialchars((string)$tag) ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
+                            <div class="mt-auto">
+                                <a class="btn btn-sm btn-outline-primary"
+                                   href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                                       'template_code' => $templateCode,
+                                       'bot_profile' => $defaultBotProfile,
+                                       'project_count' => $defaultProjectCount,
+                                   ]), ENT_QUOTES) ?>">
+                                    <?= __('Use Template') ?>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><?= __('Existing Roles') ?></h5>
+                <a href="<?= htmlspecialchars($addRoleUrl, ENT_QUOTES) ?>" class="btn btn-primary">
+                    <i class="mdi mdi-plus me-1"></i><?= __('New Role') ?>
+                </a>
+            </div>
+            <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
                         <thead>
                         <tr>
                             <th>ID</th>
-                            <th><lang>代码</lang></th>
-                            <th><lang>名称</lang></th>
-                            <th><lang>状态</lang></th>
-                            <th><lang>默认</lang></th>
-                            <th><lang>更新时间</lang></th>
-                            <th><lang>操作</lang></th>
+                            <th><?= __('Code') ?></th>
+                            <th><?= __('Name') ?></th>
+                            <th><?= __('Status') ?></th>
+                            <th><?= __('Default') ?></th>
+                            <th><?= __('Updated At') ?></th>
+                            <th><?= __('Actions') ?></th>
                         </tr>
                         </thead>
                         <tbody>
-                        <foreach name="roles" item="role" key="k">
+                        <?php if (!empty($roles)): ?>
+                            <?php foreach ($roles as $role): ?>
+                            <?php
+                            $roleId = (int)($role['role_id'] ?? 0);
+                            $isEnabled = (string)($role['status'] ?? '') === 'enabled';
+                            $isDefault = (int)($role['is_default'] ?? 0) === 1;
+                            ?>
                             <tr>
-                                <td>{{role.role_id}}</td>
-                                <td>{{role.code}}</td>
-                                <td>{{role.name}}</td>
+                                <td><?= $roleId ?></td>
+                                <td><?= htmlspecialchars((string)($role['code'] ?? '')) ?></td>
+                                <td><?= htmlspecialchars((string)($role['name'] ?? '')) ?></td>
                                 <td>
-                                    <if condition="role.status == 'enabled'">
-                                        <span class="badge bg-success"><lang>启用</lang></span>
-                                    <else/>
-                                        <span class="badge bg-secondary"><lang>禁用</lang></span>
-                                    </if>
+                                    <span class="badge <?= $isEnabled ? 'bg-success' : 'bg-secondary' ?>">
+                                        <?= $isEnabled ? __('Enabled') : __('Disabled') ?>
+                                    </span>
                                 </td>
                                 <td>
-                                    <if condition="role.is_default == 1">
-                                        <span class="badge bg-info"><lang>是</lang></span>
-                                    <else/>
-                                        <span class="badge bg-light text-dark"><lang>否</lang></span>
-                                    </if>
+                                    <span class="badge <?= $isDefault ? 'bg-info' : 'bg-light text-dark' ?>">
+                                        <?= $isDefault ? __('Yes') : __('No') ?>
+                                    </span>
                                 </td>
-                                <td>{{role.updated_at}}</td>
+                                <td><?= htmlspecialchars((string)($role['updated_at'] ?? '')) ?></td>
                                 <td>
-                                    <a href="@backend-url('*/backend/role/edit?id={{role.role_id}}')" class="btn btn-sm btn-outline-primary">
-                                        <i class="mdi mdi-pencil"></i> <lang>编辑</lang>
+                                    <a href="<?= htmlspecialchars($this->getBackendUrl('*/backend/role/edit?id=' . $roleId), ENT_QUOTES) ?>"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="mdi mdi-pencil"></i> <?= __('Edit') ?>
                                     </a>
                                 </td>
                             </tr>
-                        </foreach>
-                        <empty name="roles">
+                            <?php endforeach; ?>
+                        <?php else: ?>
                             <tr>
-                                <td colspan="7" class="text-center py-4">
-                                    <span class="text-muted"><lang>暂无角色数据</lang></span>
-                                </td>
+                                <td colspan="7" class="text-center py-4 text-muted"><?= __('No role records yet.') ?></td>
                             </tr>
-                        </empty>
+                        <?php endif; ?>
                         </tbody>
                     </table>
                 </div>

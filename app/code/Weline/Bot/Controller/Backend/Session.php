@@ -41,6 +41,8 @@ class Session extends BackendController
 
         $this->assign('sessions', $sessions->getItems());
         $this->assign('pagination', $sessions->getPagination());
+        $this->assign('current_status', $status);
+        $this->assign('current_channel', $channel);
         return $this->fetch();
     }
 
@@ -65,7 +67,7 @@ class Session extends BackendController
 
         $this->assign('session', $session);
         $this->assign('messages', $messages);
-        return $this->fetch();
+        return $this->fetch('view');
     }
 
     #[Acl('Weline_Bot::session_archive', '归档会话', '', '归档会话')]
