@@ -26,7 +26,8 @@ $productId = $product['product_id'] ?? 0;
 $name = $product['name'] ?? '';
 $shortDescription = $product['short_description'] ?? '';
 $price = (float)($product['price'] ?? 0);
-$cost = (float)($product['cost'] ?? 0);
+$originalPrice = (float)($product['original_price'] ?? $product['cost'] ?? $price);
+$cost = $originalPrice;
 $sku = $product['sku'] ?? '';
 $stock = (int)($product['stock'] ?? 0);
 $inStock = $product['in_stock'] ?? ($stock > 0);
@@ -106,10 +107,10 @@ if (empty($images) && !empty($mainImage)) {
                     <span class="currency-symbol">¥</span>
                     <span class="price-amount"><?= number_format($price, 2) ?></span>
                 </span>
-                <?php if ($cost > 0 && $cost < $price): ?>
+                <?php if ($originalPrice > $price): ?>
                 <span class="product-original-price">
                     <span class="currency-symbol">¥</span>
-                    <span class="price-amount"><?= number_format($cost, 2) ?></span>
+                    <span class="price-amount"><?= number_format($originalPrice, 2) ?></span>
                 </span>
                 <span class="product-discount"><?= round((1 - $price / $cost) * 100) ?>% <?= __('优惠') ?></span>
                 <?php endif; ?>

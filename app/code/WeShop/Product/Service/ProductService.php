@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Product\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
 use WeShop\Product\Model\Category;
 
@@ -13,6 +14,11 @@ use WeShop\Product\Model\Category;
  */
 class ProductService
 {
+    public function __construct(
+        private readonly PriceService $priceService
+    ) {
+    }
+
     /**
      * 获取产品
      * 
@@ -131,7 +137,10 @@ class ProductService
         
         // 分页
         $product->pagination($page, $pageSize);
-        $items = $product->select()->fetchArray();
+        $items = array_map(
+            fn (array $item): array => $this->priceService->resolveProductData($item),
+            $product->select()->fetchArray()
+        );
         $pagination = $product->getPagination();
         
         return [
