@@ -19,7 +19,7 @@ test.describe('WeShop product clean route', () => {
 
     await expect(page).toHaveURL(/product\/view/i, { timeout: 15000 });
     await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
-    await expect(page.locator('#product-form')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: /Add to Cart/i })).toBeVisible({ timeout: 15000 });
     await expectNoRuntimeError(page);
   });
 });
