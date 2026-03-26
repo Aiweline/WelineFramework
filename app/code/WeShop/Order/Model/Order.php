@@ -21,11 +21,19 @@ class Order extends Model
     public const schema_fields_status = 'status';
     #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: '订单总额')]
     public const schema_fields_total = 'total';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Subtotal')]
+    public const schema_fields_subtotal = 'subtotal';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Shipping amount')]
+    public const schema_fields_shipping_amount = 'shipping_amount';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Discount amount')]
+    public const schema_fields_discount_amount = 'discount_amount';
+    #[Col(type: 'decimal', length: '10,2', nullable: true, default: '0.00', comment: 'Tax amount')]
+    public const schema_fields_tax_amount = 'tax_amount';
     #[Col(type: 'datetime', nullable: true, comment: '创建时间')]
     public const schema_fields_created_at = 'created_at';
     #[Col(type: 'datetime', nullable: true, comment: '更新时间')]
     public const schema_fields_updated_at = 'updated_at';
     public string $indexer = 'order_indexer';
     public array $_unit_primary_keys = ['order_id'];
-    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'total', 'created_at'];
+    public array $_index_sort_keys = ['order_id', 'increment_id', 'customer_id', 'status', 'total', 'subtotal', 'created_at'];
 }
