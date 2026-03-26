@@ -1,0 +1,13 @@
+<div class="container-fluid py-3">
+    <h1 class="h4 mb-3"><?= __('许可证管理') ?></h1>
+
+    <?php if (empty($is_bound)): ?>
+        <div class="alert alert-warning" role="alert">
+            <?= __('请先绑定官网账户后再管理许可证。') ?>
+        </div>
+    <?php else: ?>
+        <div class="alert alert-info" role="alert">
+            <?= __('已加载许可证列表，可通过接口执行激活、校验和续订。') ?>
+        </div>
+    <?php endif; ?>
+</div>
