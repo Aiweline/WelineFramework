@@ -41,7 +41,15 @@
 "缺少必需参数: model 或 record_id","缺少必需参数: model 或 record_id"
 获取记录成功,获取记录成功
 "获取记录失败: %{1}","获取记录失败: %{1}"
+"DataTable Comprehensive Test","DataTable Comprehensive Test"
 %{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
+"Demo form record loading only supports single-model records.","Demo form record loading only supports single-model records."
+"Record does not exist.","Record does not exist."
+"Joined demo tables do not support delete.","Joined demo tables do not support delete."
+"Demo export only supports single-model tables.","Demo export only supports single-model tables."
+"Demo table model is required.","Demo table model is required."
+"Invalid demo join condition: %{1}","Invalid demo join condition: %{1}"
+"Frontend demo access is not allowed for model %{1}","Frontend demo access is not allowed for model %{1}"
 "field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。","field标签（字段：%{1}）缺少必填属性belong！请指定belong=""t-header""、belong=""t-filter""或belong=""d-form""。"
 "field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。","field标签（字段：%{1}）的belong属性值无效：%{2}。有效值：t-header、t-filter 或 d-form。"
 "field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。","field标签（字段：%{1}）的belong属性值""%{2}""与父标签类型""%{3}""不匹配！请确保belong属性值与父标签类型一致。"
@@ -56,16 +64,17 @@ field标签（字段：%{1}）在t-filter上下文中，type属性值无效：%{
 "field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。","field标签（字段：%{1}）在t-filter上下文中，select类型的字段必须指定options属性！请添加options属性，格式：value:label,value2:label2。"
 "field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。","field标签（字段：%{1}）在t-filter上下文中，select类型的options属性格式错误：%{2}。正确格式：value:label,value2:label2。请检查options属性格式。"
 field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3},field标签（字段：%{1}）在t-filter上下文中不支持%{2}属性！该属性仅用于t-header中的表格头部字段。请将%{2}属性移除，或将该field标签移动到t-header标签内。%{3}
-添加,Add
-新增记录,"Add Record"
-编辑记录,"Edit Record"
-取消,Cancel
-保存,Save
-正在加载字段...,"Loading fields..."
-重置,Reset
+娣诲姞,娣诲姞
+鏂板璁板綍,鏂板璁板綍
+缂栬緫璁板綍,缂栬緫璁板綍
+鍙栨秷,鍙栨秷
+淇濆瓨,淇濆瓨
+姝ｅ湪鍔犺浇瀛楁...,姝ｅ湪鍔犺浇瀛楁...
+閲嶇疆,閲嶇疆
 d-table标签必须指定model属性！,"d-table tag must specify model attribute!"
 d-table标签必须指定scope属性！,"d-table tag must specify scope attribute!"
 新增,新增
+新增记录,"Add Record"
 自动生成,"Auto Generated"
 数据表格,"Data Table"
 字段设置,"Field Settings"
@@ -78,6 +87,7 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 刷新数据,"Refresh Data"
 只显示重要数据,"Show Important Only"
 重置配置,"Reset Configuration"
+重置,Reset
 重置表头字段配置,"Reset Header Field Configuration"
 重置表头,"Reset Header"
 重置筛选字段配置,重置筛选字段配置
@@ -100,7 +110,12 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 加载中...,Loading...
 显示字段,"Display Fields"
 筛选字段,"Filter Fields"
+取消,Cancel
 保存配置,"Save Configuration"
+编辑记录,"Edit Record"
+保存,Save
+添加,Add
+正在加载字段...,"Loading fields..."
 加载字段失败,"Failed to load fields"
 网络错误,"Network error"
 请选择,"Please Select"
@@ -216,48 +231,47 @@ d-table标签必须指定scope属性！,"d-table tag must specify scope attribut
 收起,Collapse
 网络错误：%{1},"Network error: %{1}"
 配置已保存,配置已保存
-"DataTable 综合功能测试","DataTable 综合功能测试"
-"Weline Admin 管理面板","Weline Admin 管理面板"
 DataTable,DataTable
-测试,测试
-综合测试,综合测试
-全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等,全面测试DataTable模块的核心功能，包括表格显示、表单、字段类型、多模型查询等
-功能概览,功能概览
-核心功能,核心功能
-标签注册系统,标签注册系统
-表格显示功能,表格显示功能
-表单功能,表单功能
-字段类型支持,字段类型支持
-多模型查询,多模型查询
-高级特性,高级特性
-属性继承机制,属性继承机制
-上下文管理,上下文管理
-自动生成功能,自动生成功能
-字段验证,字段验证
-JavaScript集成,JavaScript集成
-功能测试,功能测试
-点击以下按钮测试不同的DataTable功能模块：,点击以下按钮测试不同的DataTable功能模块：
-其他,其他
-开始测试,开始测试
-基础功能,基础功能
-基本表格功能,基本表格功能
-过滤搜索,过滤搜索
-排序分页,排序分页
-高级功能,高级功能
-字段类型,字段类型
-属性继承,属性继承
-CRUD操作,CRUD操作
-标签功能验证,标签功能验证
-验证DataTable标签系统的各个组件是否正常工作：,验证DataTable标签系统的各个组件是否正常工作：
-开始验证,开始验证
-验证结果：,验证结果：
-使用示例,使用示例
-以下是DataTable的基本使用示例：,以下是DataTable的基本使用示例：
-基本表格,基本表格
-带过滤器的表格,带过滤器的表格
-测试数据,测试数据
-可用模型,可用模型
-测试范围标识,测试范围标识
-验证中...,验证中...
-验证失败：,验证失败：
-重新验证,重新验证
+Test,Test
+Comprehensive,Comprehensive
+"Exercise DataTable core capabilities including tables, forms, field types, multi-model queries, filters, sorting, and CRUD flows.","Exercise DataTable core capabilities including tables, forms, field types, multi-model queries, filters, sorting, and CRUD flows."
+"Feature Overview","Feature Overview"
+"Core Features","Core Features"
+"Tag registration","Tag registration"
+"Table rendering","Table rendering"
+"Form support","Form support"
+"Field type coverage","Field type coverage"
+"Multi-model queries","Multi-model queries"
+"Advanced Features","Advanced Features"
+"Attribute inheritance","Attribute inheritance"
+"Context management","Context management"
+"Auto generation","Auto generation"
+"Field validation","Field validation"
+"JavaScript integration","JavaScript integration"
+"Feature Tests","Feature Tests"
+"Use the links below to exercise each DataTable capability.","Use the links below to exercise each DataTable capability."
+Other,Other
+"Open Test","Open Test"
+"Basic Features","Basic Features"
+"Basic Table","Basic Table"
+Form,Form
+"Filter Search","Filter Search"
+"Sorting Pagination","Sorting Pagination"
+"Field Types","Field Types"
+"Multi-model Query","Multi-model Query"
+"Auto Generation","Auto Generation"
+Inheritance,Inheritance
+CRUD,CRUD
+"Tag Verification","Tag Verification"
+"Verify that the DataTable tag system components are wired correctly.","Verify that the DataTable tag system components are wired correctly."
+"Start Verification","Start Verification"
+"Verification Results","Verification Results"
+"Usage Examples","Usage Examples"
+"Reference snippets for common DataTable usage patterns.","Reference snippets for common DataTable usage patterns."
+"Table with Filters","Table with Filters"
+"Test Data","Test Data"
+"Available Models","Available Models"
+"Test Scopes","Test Scopes"
+Verifying...,Verifying...
+"Verification failed:","Verification failed:"
+"Run Again","Run Again"
