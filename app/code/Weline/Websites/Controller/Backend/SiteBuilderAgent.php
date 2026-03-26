@@ -49,9 +49,9 @@ class SiteBuilderAgent extends BackendController
         $this->assign('recommend_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain'));
         $this->assign('current_entry_url', $this->getHubEntryUrl($selectedProvider, $fakeMode));
         $this->assign('fake_mode', $fakeMode);
-        $this->assign('page_title', __('AI Site Workbench'));
-        $this->assign('breadcrumb_parent', __('Website Services'));
-        $this->assign('breadcrumb_current', __('AI Site Workbench'));
+        $this->assign('page_title', __('AI 建站工作台'));
+        $this->assign('breadcrumb_parent', __('网站服务'));
+        $this->assign('breadcrumb_current', __('AI 建站工作台'));
 
         return $this->fetch();
     }
@@ -63,16 +63,16 @@ class SiteBuilderAgent extends BackendController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
 
         if ($adminId <= 0 || $publicId === '') {
-            $this->assign('title', __('AI Site Workspace'));
-            $this->assign('error_message', __('Login required or invalid session token'));
+            $this->assign('title', __('AI 建站工作区'));
+            $this->assign('error_message', __('需要登录或会话令牌无效'));
             $this->assign('back_url', $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()));
             return $this->fetch();
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->assign('title', __('AI Site Workspace'));
-            $this->assign('error_message', __('Session not found or access denied'));
+            $this->assign('title', __('AI 建站工作区'));
+            $this->assign('error_message', __('会话不存在或无访问权限'));
             $this->assign('back_url', $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()));
             return $this->fetch();
         }
@@ -81,7 +81,7 @@ class SiteBuilderAgent extends BackendController
         $scope = \is_array($providerConfig['scope'] ?? null) ? $providerConfig['scope'] : [];
         $currentStage = $this->normalizeJourneyStage($session->getCurrentStage());
 
-        $this->assign('title', __('AI Site Workspace'));
+        $this->assign('title', __('AI 建站工作区'));
         $this->assign('session', $session);
         $this->assign('provider_context', $this->extractProviderContext($providerConfig));
         $this->assign('provider_tools', \is_array($providerConfig['tools'] ?? null) ? $providerConfig['tools'] : []);
@@ -120,12 +120,12 @@ class SiteBuilderAgent extends BackendController
         $adminId = $this->getAdminId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
 
         return $this->fetchJson([
@@ -139,7 +139,7 @@ class SiteBuilderAgent extends BackendController
     {
         $adminId = $this->getAdminId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('Login required')]);
+            return $this->fetchJson(['success' => false, 'message' => __('需要登录')]);
         }
 
         $providerCode = \trim((string)$this->getRequestBodyValue('provider_code', 'websites_default'));
@@ -283,7 +283,7 @@ class SiteBuilderAgent extends BackendController
     {
         $adminId = $this->getAdminId();
         if ($adminId <= 0) {
-            return $this->fetchJson(['success' => false, 'message' => __('Login required')]);
+            return $this->fetchJson(['success' => false, 'message' => __('需要登录')]);
         }
 
         $description = \trim((string)$this->getRequestBodyValue('description', ''));
@@ -293,14 +293,14 @@ class SiteBuilderAgent extends BackendController
         if ($accountId <= 0) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Please choose a registrar account before checking live availability.'),
+                'message' => __('检测实时可用性前，请先选择服务商账号。'),
             ]);
         }
 
         if ($description === '' && $preferredDomain === '') {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('Please describe the site goal or enter a preferred domain first.'),
+                'message' => __('请先描述建站目标，或先输入偏好域名。'),
             ]);
         }
 
@@ -313,7 +313,7 @@ class SiteBuilderAgent extends BackendController
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('AI found an available domain in local demo mode: %{domain}', ['domain' => $domain]),
+                'message' => __('本地演示模式下，AI 找到可用域名：%{domain}', ['domain' => $domain]),
                 'domain' => $domain,
                 'candidate_domains' => $suggestions,
                 'checked_results' => [
@@ -351,16 +351,16 @@ class SiteBuilderAgent extends BackendController
         $stage = $this->resolveJourneyStage((string)$this->getRequestBodyValue('stage', ''));
 
         if ($adminId <= 0 || $publicId === '' || $stage === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
 
         if (!$this->getSessionService()->setStage($session->getId(), $adminId, $stage)) {
-            return $this->fetchJson(['success' => false, 'message' => __('Failed to update stage')]);
+            return $this->fetchJson(['success' => false, 'message' => __('更新阶段失败')]);
         }
 
         $this->getEventStreamService()->appendEvent(
@@ -394,12 +394,12 @@ class SiteBuilderAgent extends BackendController
         $messageType = \trim((string)$this->getRequestBodyValue('message_type', 'note'));
 
         if ($adminId <= 0 || $publicId === '' || $content === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
 
         if (!\in_array($role, ['user', 'assistant', 'system'], true)) {
@@ -410,7 +410,7 @@ class SiteBuilderAgent extends BackendController
         }
 
         if (!$this->getMessageService()->appendMessage($session->getId(), $adminId, $role, $content, $messageType)) {
-            return $this->fetchJson(['success' => false, 'message' => __('Failed to save message')]);
+            return $this->fetchJson(['success' => false, 'message' => __('保存消息失败')]);
         }
 
         $this->getEventStreamService()->appendEvent(
@@ -438,12 +438,12 @@ class SiteBuilderAgent extends BackendController
         $adminId = $this->getAdminId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
 
         $scopeError = '';
@@ -456,7 +456,7 @@ class SiteBuilderAgent extends BackendController
         if (empty($result['success'])) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => (string)($result['message'] ?? __('Failed to queue domain purchase')),
+                'message' => (string)($result['message'] ?? __('加入域名购买队列失败')),
             ]);
         }
 
@@ -471,7 +471,7 @@ class SiteBuilderAgent extends BackendController
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)($result['message'] ?? __('Domain purchase queued')),
+            'message' => (string)($result['message'] ?? __('已加入域名购买队列')),
             'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
             'startable' => !empty($result['startable']),
             'stream_token' => $streamToken,
@@ -557,19 +557,19 @@ class SiteBuilderAgent extends BackendController
         $lastEventId = (int)$this->request->getGet('last_event_id', 0);
 
         if ($adminId <= 0 || $publicId === '') {
-            $sse->sendError(__('Invalid parameters'));
+            $sse->sendError(__('参数无效'));
             $sse->complete(['success' => false]);
             return;
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $sse->sendError(__('Session not found or access denied'));
+            $sse->sendError(__('会话不存在或无访问权限'));
             $sse->complete(['success' => false]);
             return;
         }
 
-        $sse->sendEvent('start', ['message' => __('Connected to workspace event stream')]);
+        $sse->sendEvent('start', ['message' => __('已连接工作区事件流')]);
         $sse->sendEvent('snapshot', $this->buildWorkspaceState($session, $adminId, 40, 40));
 
         $deadline = \time() + 900;
@@ -590,7 +590,7 @@ class SiteBuilderAgent extends BackendController
 
         $sse->complete([
             'success' => true,
-            'message' => __('Event stream finished. Reconnect any time to continue listening.'),
+            'message' => __('事件流已结束，可随时重连继续监听。'),
             'last_event_id' => $lastEventId,
         ]);
     }
@@ -609,14 +609,14 @@ class SiteBuilderAgent extends BackendController
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
 
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
-            $sse->sendError((string)__('Invalid parameters'));
+            $sse->sendError((string)__('参数无效'));
             $sse->complete(['success' => false]);
             return;
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $sse->sendError((string)__('Session not found or access denied'));
+            $sse->sendError((string)__('会话不存在或无访问权限'));
             $sse->complete(['success' => false]);
             return;
         }
@@ -639,19 +639,19 @@ class SiteBuilderAgent extends BackendController
             $sse->complete([
                 'success' => true,
                 'completed' => !empty($result['completed']),
-                'message' => (string)($result['message'] ?? __('Domain purchase stream finished')),
+                'message' => (string)($result['message'] ?? __('域名购买事件流已结束')),
                 'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
             ]);
             return;
         }
 
         $sse->sendEvent('error', [
-            'message' => (string)($result['message'] ?? __('Domain purchase stream failed')),
+            'message' => (string)($result['message'] ?? __('域名购买事件流失败')),
         ]);
         $sse->complete([
             'success' => false,
             'completed' => !empty($result['completed']),
-            'message' => (string)($result['message'] ?? __('Domain purchase stream failed')),
+            'message' => (string)($result['message'] ?? __('域名购买事件流失败')),
             'state' => $result['state'] ?? $this->getDomainPurchaseWorkbenchService()->buildViewState($fresh),
         ]);
     }
@@ -664,7 +664,7 @@ class SiteBuilderAgent extends BackendController
 
         $sse = new SseWriter();
         $sse->start();
-        $sse->sendEvent('start', ['message' => __('Starting the guided AI site build flow...')]);
+        $sse->sendEvent('start', ['message' => __('正在启动 AI 引导建站流程...')]);
 
         try {
             $description = \trim((string)$this->request->getGet('description', ''));
@@ -674,17 +674,17 @@ class SiteBuilderAgent extends BackendController
             $fakeMode = $this->isFakeModeRequested();
 
             if (!$useAi && $domain === '') {
-                $sse->sendEvent('error', ['message' => __('Please fill in a target domain first')]);
+                $sse->sendEvent('error', ['message' => __('请先填写目标域名')]);
                 $sse->complete(['success' => false]);
                 return;
             }
             if (!$useAi && $accountId <= 0) {
-                $sse->sendEvent('error', ['message' => __('Please choose a registrar account first')]);
+                $sse->sendEvent('error', ['message' => __('请先选择服务商账号')]);
                 $sse->complete(['success' => false]);
                 return;
             }
             if ($description === '' && $domain === '') {
-                $sse->sendEvent('error', ['message' => __('Please describe the site goal or provide a domain first')]);
+                $sse->sendEvent('error', ['message' => __('请先描述建站目标，或先提供一个域名')]);
                 $sse->complete(['success' => false]);
                 return;
             }
@@ -700,7 +700,7 @@ class SiteBuilderAgent extends BackendController
             }
 
             if ($domain === '' || $accountId <= 0) {
-                $sse->sendEvent('error', ['message' => __('Please provide both the target domain and registrar account, or enable AI mode first.')]);
+                $sse->sendEvent('error', ['message' => __('请同时提供目标域名和服务商账号，或先启用 AI 模式。')]);
                 $sse->complete(['success' => false]);
                 return;
             }
@@ -727,19 +727,19 @@ class SiteBuilderAgent extends BackendController
             if (!empty($result['success'])) {
                 $sse->complete([
                     'success' => true,
-                    'message' => $result['message'] ?? __('Site build completed'),
+                    'message' => $result['message'] ?? __('建站流程已完成'),
                     'domain' => $result['domain'] ?? '',
                     'website_id' => $result['website_id'] ?? 0,
                 ]);
                 return;
             }
 
-            $sse->sendEvent('error', ['message' => $result['message'] ?? __('Execution failed')]);
+            $sse->sendEvent('error', ['message' => $result['message'] ?? __('执行失败')]);
             $sse->complete(['success' => false]);
         } catch (\Throwable $e) {
             $sse->sendEvent('error', [
                 'message' => $e->getMessage(),
-                'detail' => __('The guided site build flow failed unexpectedly'),
+                'detail' => __('引导建站流程发生意外失败'),
             ]);
             $sse->complete(['success' => false]);
         }
@@ -818,7 +818,7 @@ class SiteBuilderAgent extends BackendController
 
             $sse->complete([
                 'success' => $result->success,
-                'message' => $result->success ? __('AI planning completed') : ($result->error ?? __('AI execution failed')),
+                'message' => $result->success ? __('AI 规划完成') : ($result->error ?? __('AI 执行失败')),
             ]);
         } catch (\Throwable $e) {
             $sse->sendEvent('error', ['message' => $e->getMessage()]);
@@ -840,7 +840,7 @@ class SiteBuilderAgent extends BackendController
         $resolvedAccountId = $accountId > 0
             ? $accountId
             : (int)($registrar['account_id'] ?? 0);
-        $registrarLabel = (string)($registrar['display'] ?? __('Local registrar recommendation unavailable'));
+        $registrarLabel = (string)($registrar['display'] ?? __('本地演示服务商推荐不可用'));
         $brief = $description !== '' ? $description : $resolvedDomain;
         $seed = $brief . '|' . $resolvedDomain . '|' . ($useAi ? 'ai' : 'manual') . '|' . $resolvedAccountId;
         $hash = \substr(\hash('sha256', $seed), 0, 12);
@@ -849,15 +849,15 @@ class SiteBuilderAgent extends BackendController
         $previewUrl = $this->buildSimulatedPreviewUrl($resolvedDomain, 'websites_default', []);
 
         $timeline = [
-            ['progress', ['message' => (string)__('Local demo: brief understood'), 'stage' => 'prepare', 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已理解需求简报'), 'stage' => 'prepare', 'fake_mode' => true]],
             ['info', ['message' => (string)__('Local demo: recommended registrar %{registrar}', ['registrar' => $registrarLabel]), 'stage' => 'prepare', 'account_id' => $resolvedAccountId, 'fake_mode' => true]],
             ['info', ['message' => (string)__('Local demo: suggested domain %{domain}', ['domain' => $resolvedDomain]), 'stage' => 'prepare', 'domain' => $resolvedDomain, 'fake_mode' => true]],
-            ['info', ['message' => (string)__('Local demo: simulated availability check passed for %{domain}', ['domain' => $resolvedDomain]), 'stage' => 'prepare', 'domain' => $resolvedDomain, 'availability' => 'simulated_available', 'fake_mode' => true]],
-            ['progress', ['message' => (string)__('Local demo: simulated domain purchase and bootstrap resources'), 'stage' => 'prepare', 'domain' => $resolvedDomain, 'account_id' => $resolvedAccountId, 'registrar' => $registrarLabel, 'fake_mode' => true]],
-            ['progress', ['message' => (string)__('Local demo: simulated DNS resolution and certificate issuance'), 'stage' => 'complete', 'domain' => $resolvedDomain, 'dns_status' => 'simulated_ready', 'certificate_status' => 'simulated_issued', 'fake_mode' => true]],
-            ['progress', ['message' => (string)__('Local demo: generated page structure and starter content'), 'stage' => 'generate', 'website_id' => $websiteId, 'fake_mode' => true]],
-            ['progress', ['message' => (string)__('Local demo: generated theme direction and virtual theme'), 'stage' => 'generate', 'theme_id' => $themeId, 'fake_mode' => true]],
-            ['progress', ['message' => (string)__('Local demo: prepared visual-edit preview'), 'stage' => 'complete', 'preview_url' => $previewUrl, 'fake_mode' => true]],
+            ['info', ['message' => (string)__('本地演示：模拟可用性检测通过 %{domain}', ['domain' => $resolvedDomain]), 'stage' => 'prepare', 'domain' => $resolvedDomain, 'availability' => 'simulated_available', 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已模拟域名购买并初始化基础资源'), 'stage' => 'prepare', 'domain' => $resolvedDomain, 'account_id' => $resolvedAccountId, 'registrar' => $registrarLabel, 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已模拟 DNS 解析与证书签发'), 'stage' => 'complete', 'domain' => $resolvedDomain, 'dns_status' => 'simulated_ready', 'certificate_status' => 'simulated_issued', 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已生成页面结构与初始内容'), 'stage' => 'generate', 'website_id' => $websiteId, 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已生成主题方向与虚拟主题'), 'stage' => 'generate', 'theme_id' => $themeId, 'fake_mode' => true]],
+            ['progress', ['message' => (string)__('本地演示：已准备可视化编辑预览'), 'stage' => 'complete', 'preview_url' => $previewUrl, 'fake_mode' => true]],
         ];
 
         foreach ($timeline as [$eventName, $payload]) {
@@ -867,7 +867,7 @@ class SiteBuilderAgent extends BackendController
 
         $result = [
             'success' => true,
-            'message' => (string)__('Local demo flow completed'),
+            'message' => (string)__('本地演示流程已完成'),
             'domain' => $resolvedDomain,
             'website_id' => $websiteId,
             'theme_id' => $themeId,
@@ -914,14 +914,14 @@ class SiteBuilderAgent extends BackendController
         return [
             [
                 'account_id' => 900001,
-                'account_name' => (string)__('Local demo primary account'),
-                'registrar_name' => (string)__('Local demo registrar'),
+                'account_name' => (string)__('本地演示主账号'),
+                'registrar_name' => (string)__('本地演示服务商'),
                 'registrar_code' => 'local_demo',
             ],
             [
                 'account_id' => 900002,
-                'account_name' => (string)__('Local demo backup account'),
-                'registrar_name' => (string)__('Sandbox domains'),
+                'account_name' => (string)__('本地演示备用账号'),
+                'registrar_name' => (string)__('沙盒域名'),
                 'registrar_code' => 'sandbox_demo',
             ],
         ];
@@ -997,18 +997,18 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderActionLabel(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('Open PageBuilder flow'),
-            'websites_default' => (string)__('Open Websites flow'),
-            default => (string)__('Open provider flow'),
+            'pagebuilder' => (string)__('打开 PageBuilder 流程'),
+            'websites_default' => (string)__('打开 Websites 流程'),
+            default => (string)__('打开服务商流程'),
         };
     }
 
     private function resolveProviderBadge(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => (string)__('Styles flow'),
-            'websites_default' => (string)__('Shared flow'),
-            default => (string)__('Provider flow'),
+            'pagebuilder' => (string)__('样式流程'),
+            'websites_default' => (string)__('共享流程'),
+            default => (string)__('服务商流程'),
         };
     }
 
@@ -1018,9 +1018,9 @@ class SiteBuilderAgent extends BackendController
     private function getStageOptions(): array
     {
         return [
-            ['value' => 'prepare', 'label' => (string)__('Prepare')],
-            ['value' => 'generate', 'label' => (string)__('Generate')],
-            ['value' => 'complete', 'label' => (string)__('Complete')],
+            ['value' => 'prepare', 'label' => (string)__('准备')],
+            ['value' => 'generate', 'label' => (string)__('生成')],
+            ['value' => 'complete', 'label' => (string)__('完成')],
         ];
     }
 
@@ -1875,12 +1875,12 @@ class SiteBuilderAgent extends BackendController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
 
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('Invalid parameters')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Session not found or access denied')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
         }
 
         $jsonKey = $merge ? 'scope_patch' : 'scope';
@@ -1904,7 +1904,7 @@ class SiteBuilderAgent extends BackendController
 
         $fresh = $this->getSessionService()->loadById($session->getId(), $adminId);
         if ($fresh === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('Failed to reload workspace session')]);
+            return $this->fetchJson(['success' => false, 'message' => __('重新加载工作区会话失败')]);
         }
 
         $this->syncSessionStructuredFields($fresh, $adminId);
@@ -1971,7 +1971,7 @@ class SiteBuilderAgent extends BackendController
                 'provider_context' => $providerContext,
                 'scope' => $scope,
             ],
-            (string)__('Workspace scope snapshot')
+            (string)__('工作区范围快照')
         );
 
         $this->getArtifactService()->upsertArtifact(
@@ -1985,7 +1985,7 @@ class SiteBuilderAgent extends BackendController
                 'native_entry_url' => (string)($providerConfig['native_entry_url'] ?? ''),
                 'handoff_label' => (string)($providerConfig['handoff_label'] ?? $this->resolveProviderHandoffLabel($session->getProviderCode())),
             ],
-            (string)__('Provider handoff')
+            (string)__('服务商交接信息')
         );
     }
 
