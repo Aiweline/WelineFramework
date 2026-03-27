@@ -6,6 +6,7 @@ namespace Weline\Websites\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\Sse\LastEventIdResolver;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -554,7 +555,7 @@ class SiteBuilderAgent extends BackendController
 
         $adminId = $this->getAdminId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
-        $lastEventId = (int)$this->request->getGet('last_event_id', 0);
+        $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
 
         if ($adminId <= 0 || $publicId === '') {
             $sse->sendError(__('参数无效'));
