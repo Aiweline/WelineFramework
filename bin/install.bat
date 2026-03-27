@@ -243,17 +243,19 @@ set "TRY_URL=%~1"
 if not defined TRY_URL exit /b 1
 if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
 
-REM Engine 1: curl (compatible options)
-curl -L -s --fail --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "%PHP_ZIP%" "%TRY_URL%" >nul 2>&1
+REM Engine 1: PowerShell (more reliable than curl on some Windows networks/CDNs)
+set "CECHO_MSG=Attempting download via PowerShell: %TRY_URL%" & call :cecho DarkGray ""
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%TRY_URL%' -OutFile '%PHP_ZIP%' -UseBasicParsing -TimeoutSec 180; exit 0 } catch { exit 1 }" >nul 2>&1
 call :validate_zip_file "%PHP_ZIP%"
 if not errorlevel 1 (
   set "DOWNLOAD_OK=1"
   exit /b 0
 )
 
-REM Engine 2: PowerShell fallback
+REM Engine 2: curl fallback
 if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%TRY_URL%' -OutFile '%PHP_ZIP%' -UseBasicParsing -TimeoutSec 300; exit 0 } catch { exit 1 }" >nul 2>&1
+set "CECHO_MSG=PowerShell download did not produce a valid ZIP. Trying curl fallback..." & call :cecho DarkGray ""
+curl.exe -L --fail --retry 2 --retry-delay 2 --connect-timeout 10 --max-time 60 --progress-bar -o "%PHP_ZIP%" "%TRY_URL%" 2>nul
 call :validate_zip_file "%PHP_ZIP%"
 if not errorlevel 1 (
   set "DOWNLOAD_OK=1"
