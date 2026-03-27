@@ -49,10 +49,18 @@ REM Versions (weline.env or default)
 if not defined INSTALL_PGSQL_VERSION set "INSTALL_PGSQL_VERSION=16"
 if not defined INSTALL_MYSQL_VERSION set "INSTALL_MYSQL_VERSION=8.0"
 
-REM PHP version major.minor (weline.env INSTALL_PHP_VERSION or default 8.4)
+REM PHP version can be major.minor or exact major.minor.patch
 set "PHP_VER=8.4"
 if defined INSTALL_PHP_VERSION set "PHP_VER=!INSTALL_PHP_VERSION!"
-for /f "tokens=1,2 delims=." %%a in ("!PHP_VER!") do set "PHP_VER=%%a.%%b"
+set "PHP_BASE_VER="
+set "PHP_PATCH_HINT="
+for /f "tokens=1,2,3 delims=." %%a in ("!PHP_VER!") do (
+  set "PHP_BASE_VER=%%a.%%b"
+  set "PHP_PATCH_HINT=%%c"
+)
+if not defined PHP_BASE_VER set "PHP_BASE_VER=!PHP_VER!"
+set "PHP_PATCH_CANDIDATES=16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0"
+if defined PHP_PATCH_HINT set "PHP_PATCH_CANDIDATES=!PHP_PATCH_HINT!"
 
 mkdir "%SERVER%" 2>nul
 
@@ -78,38 +86,36 @@ set "FOUND_PATCH="
 set "FOUND_URL="
 set "PHP_BASE_URL_PRIMARY=https://downloads.php.net/~windows/releases/"
 set "PHP_BASE_URL_ARCHIVE=https://downloads.php.net/~windows/releases/archives/"
-set "FOUND="
-for %%p in (16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1 0) do (
+for %%p in (!PHP_PATCH_CANDIDATES!) do (
   if not defined FOUND_PATCH (
-    set "URL_PRIMARY=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
-    set "URL_ARCHIVE=!PHP_BASE_URL_ARCHIVE!php-!PHP_VER!.%%p-Win32-!VS!-x64.zip"
-    set "CECHO_MSG=Checking PHP !PHP_VER!.%%p ..." & call :cecho Gray ""
+    set "URL_PRIMARY=!PHP_BASE_URL_PRIMARY!php-!PHP_BASE_VER!.%%p-Win32-!VS!-x64.zip"
+    set "URL_ARCHIVE=!PHP_BASE_URL_ARCHIVE!php-!PHP_BASE_VER!.%%p-Win32-!VS!-x64.zip"
+    set "CECHO_MSG=Checking PHP !PHP_BASE_VER!.%%p ..." & call :cecho Gray ""
     set "CECHO_MSG=Probe URL(primary): !URL_PRIMARY!" & call :cecho DarkGray ""
     set "CECHO_MSG=Probe URL(archive): !URL_ARCHIVE!" & call :cecho DarkGray ""
-    REM Try real download directly to avoid false negatives on probe requests.
-    set "DOWNLOAD_OK="
-    call :try_download_url "!URL_PRIMARY!"
-    if defined DOWNLOAD_OK (
+    set "PROBE_OK="
+    call :probe_url_exists "!URL_PRIMARY!"
+    if defined PROBE_OK (
       set "FOUND_PATCH=%%p"
       set "FOUND_URL=!URL_PRIMARY!"
-      set "FOUND=1"
     )
     if not defined FOUND_PATCH (
-      set "DOWNLOAD_OK="
-      call :try_download_url "!URL_ARCHIVE!"
-      if defined DOWNLOAD_OK (
+      set "PROBE_OK="
+      call :probe_url_exists "!URL_ARCHIVE!"
+      if defined PROBE_OK (
         set "FOUND_PATCH=%%p"
         set "FOUND_URL=!URL_ARCHIVE!"
-        set "FOUND=1"
       )
     )
   )
 )
 if not defined FOUND_PATCH goto :php_download_failed
-if not defined FOUND_URL set "FOUND_URL=!PHP_BASE_URL_PRIMARY!php-!PHP_VER!.!FOUND_PATCH!-Win32-!VS!-x64.zip"
+if not defined FOUND_URL set "FOUND_URL=!PHP_BASE_URL_PRIMARY!php-!PHP_BASE_VER!.!FOUND_PATCH!-Win32-!VS!-x64.zip"
 set "CECHO_MSG=PHP package URL: !FOUND_URL!" & call :cecho DarkGray ""
-set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! from: !FOUND_URL!" & call :cecho Gray ""
-if not defined FOUND goto :php_download_failed
+set "CECHO_MSG=Downloading PHP !PHP_BASE_VER!.!FOUND_PATCH! from: !FOUND_URL!" & call :cecho Gray ""
+set "DOWNLOAD_OK="
+call :try_download_url "!FOUND_URL!"
+if not defined DOWNLOAD_OK goto :php_download_transport_failed
 mkdir "%PHP_DIR%" 2>nul
 call :validate_zip_file "%PHP_ZIP%"
 if errorlevel 1 goto :php_invalid_archive
@@ -141,6 +147,10 @@ if defined FOUND_URL (
   set "CECHO_MSG=Download failed before a valid URL was selected." & call :cecho Yellow ""
 )
 set "CECHO_MSG=Manual source indexes: https://downloads.php.net/~windows/releases/ and https://downloads.php.net/~windows/releases/archives/ (extract to %PHP_DIR%)." & call :cecho Yellow ""
+goto :skip_php
+:php_download_transport_failed
+set "CECHO_MSG=PHP package URL exists but download failed for: !FOUND_URL!" & call :cecho Yellow ""
+set "CECHO_MSG=The installer will not fall back to an older PHP patch after a transport failure. Retry the same version or download it manually into %PHP_DIR%." & call :cecho Yellow ""
 goto :skip_php
 :php_invalid_archive
 set "CECHO_MSG=Downloaded PHP package is not a valid ZIP archive. A proxy/CDN error page may have been saved instead. Check %PHP_ZIP% and retry." & call :cecho Yellow ""
@@ -264,6 +274,17 @@ if not errorlevel 1 (
 
 if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
 set "CECHO_MSG=Probe failed: %TRY_URL%" & call :cecho DarkGray ""
+exit /b 1
+
+:probe_url_exists
+set "PROBE_URL=%~1"
+set "PROBE_OK="
+if not defined PROBE_URL exit /b 1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r=Invoke-WebRequest -Uri '%PROBE_URL%' -Method Head -UseBasicParsing -TimeoutSec 30; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 400) { exit 0 } exit 1 } catch { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+  set "PROBE_OK=1"
+  exit /b 0
+)
 exit /b 1
 
 :validate_zip_file
