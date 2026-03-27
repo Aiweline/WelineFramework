@@ -22,6 +22,9 @@ class MasterControlServer
 {
     // ========== Worker 状态常量 ==========
 
+    /** 控制面一次性连接（CLI/status/reload/stop 等） */
+    private const ROLE_CONTROL = 'control';
+
     /** 已注册但未就绪 */
     public const STATE_REGISTERED = 'registered';
     /** 就绪，可接收流量 */
@@ -204,13 +207,52 @@ class MasterControlServer
             return "Unknown(#{$clientId})";
         }
         $c = $this->clients[$clientId];
-        $role = $c['role'] ?? 'unregistered';
-        $pid  = $c['pid'] ?? 0;
+        $role = (string) ($c['role'] ?? '');
+        $pid  = (int) ($c['pid'] ?? 0);
+        $peerName = (string) ($c['peer_name'] ?? '');
         if ($role === ControlMessage::ROLE_WORKER || $role === ControlMessage::ROLE_MAINTENANCE) {
             $wid = $c['worker_id'] ?? 0;
             return \ucfirst($role) . "#{$wid}(pid:{$pid})";
         }
-        return \ucfirst($role) . "(pid:{$pid})";
+        if ($role !== '') {
+            $label = $this->formatRoleLabel($role);
+            if ($pid > 0) {
+                return "{$label}(pid:{$pid})";
+            }
+            if ($peerName !== '') {
+                return "{$label}({$peerName})";
+            }
+
+            return "{$label}(pid:0)";
+        }
+        if ($peerName !== '') {
+            return "Unregistered({$peerName})";
+        }
+
+        return "Unregistered(#{$clientId})";
+    }
+
+    private function formatRoleLabel(string $role): string
+    {
+        return match ($role) {
+            self::ROLE_CONTROL => 'Control',
+            default => \str_replace(' ', '', \ucwords(\str_replace(['_', '-'], ' ', $role))),
+        };
+    }
+
+    private function classifyClientFromMessage(int $clientId, array $msg): void
+    {
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+
+        $type = (string) ($msg['type'] ?? '');
+        $this->clients[$clientId]['message_count'] = (int) ($this->clients[$clientId]['message_count'] ?? 0) + 1;
+        $this->clients[$clientId]['last_message_type'] = $type;
+
+        if (($this->clients[$clientId]['role'] ?? null) === null && $type === ControlMessage::TYPE_COMMAND) {
+            $this->clients[$clientId]['role'] = self::ROLE_CONTROL;
+        }
     }
 
     /**
@@ -250,6 +292,11 @@ class MasterControlServer
         @\stream_set_write_buffer($conn, 0);
 
         $clientId = (int) $conn;
+        $peerName = 'unknown';
+        $peerNameRaw = @\stream_socket_get_name($conn, true);
+        if (\is_string($peerNameRaw) && $peerNameRaw !== '') {
+            $peerName = $peerNameRaw;
+        }
         $this->clients[$clientId] = [
             'socket'                => $conn,
             'buffer'                => '',
@@ -261,9 +308,10 @@ class MasterControlServer
             'launch_id'             => '',
             'state'                 => null,
             'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
+            'peer_name'             => $peerName,
+            'message_count'         => 0,
+            'last_message_type'     => '',
         ];
-
-        $peerName = @\stream_socket_get_name($conn, true) ?: 'unknown';
         $this->ipcLog("[IPC-Master] CONNECT 新客户端连接 #{$clientId} from {$peerName}");
     }
 
@@ -293,6 +341,11 @@ class MasterControlServer
             @\stream_set_write_buffer($conn, 0);
 
             $clientId = (int) $conn;
+            $peerName = 'unknown';
+            $peerNameRaw = @\stream_socket_get_name($conn, true);
+            if (\is_string($peerNameRaw) && $peerNameRaw !== '') {
+                $peerName = $peerNameRaw;
+            }
             $this->clients[$clientId] = [
                 'socket'                => $conn,
                 'buffer'                => '',
@@ -304,9 +357,10 @@ class MasterControlServer
                 'launch_id'             => '',
                 'state'                 => null,
                 'resurrection_priority' => ControlMessage::RESURRECTION_NONE,
+                'peer_name'             => $peerName,
+                'message_count'         => 0,
+                'last_message_type'     => '',
             ];
-
-            $peerName = @\stream_socket_get_name($conn, true) ?: 'unknown';
             $this->ipcLog("[IPC-Master] CONNECT 新客户端连接 #{$clientId} from {$peerName}");
             $accepted[] = $clientId;
         }
@@ -343,6 +397,7 @@ class MasterControlServer
         $messages = ControlMessage::extractMessages($this->clients[$clientId]['buffer']);
 
         foreach ($messages as $msg) {
+            $this->classifyClientFromMessage($clientId, $msg);
             $type = $msg['type'] ?? 'unknown';
             $tag  = $this->formatClientTag($clientId);
             if ($type !== ControlMessage::TYPE_LOG) {

@@ -847,17 +847,91 @@ if (isset($scope['page_types']) && \is_array($scope['page_types'])) {
 
     var sseBtn = document.getElementById('pb-ai-start-sse');
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-site-agent-terminal'] : null;
+    var sseReconnectTimer = null;
+
+    function buildStreamUrl() {
+        var sep = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
+        return streamBaseUrl + sep + 'public_id=' + encodeURIComponent(publicId) + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+    }
+
+    function parseTerminalPayload(event) {
+        if (!event || typeof event.data !== 'string' || event.data === '') {
+            return {};
+        }
+        try {
+            return JSON.parse(event.data);
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function updateStreamCursor(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return;
+        }
+        var nextId = parseInt(payload.last_event_id || payload.event_id || 0, 10) || 0;
+        if (nextId > lastEventId) {
+            lastEventId = nextId;
+        }
+    }
+
+    function formatStreamLog(entry) {
+        var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+        var stage = payload.stage_label || payload.stage || entry.event_type || 'log';
+        var message = payload.message || entry.event_type || '';
+        if (!message && Object.keys(payload).length > 0) {
+            try {
+                message = JSON.stringify(payload, null, 2);
+            } catch (e) {
+                message = String(entry.event_type || 'log');
+            }
+        }
+        if (!message) {
+            return stage;
+        }
+        return stage ? (stage + ': ' + message) : message;
+    }
+
+    function scheduleStreamReconnect() {
+        if (sseReconnectTimer) {
+            return;
+        }
+        sseReconnectTimer = window.setTimeout(function () {
+            sseReconnectTimer = null;
+            if (!terminal || terminal.isRunning()) {
+                return;
+            }
+            terminal.setUrl(buildStreamUrl());
+            terminal.start(buildStreamUrl());
+            sseBtn.disabled = true;
+        }, 1500);
+    }
+
     if (sseBtn && terminal) {
+        terminal.on('log', function (event) {
+            var entry = parseTerminalPayload(event);
+            updateStreamCursor(entry);
+            terminal.log(formatStreamLog(entry), entry.level || 'info');
+        });
+
+        terminal.on('done', function (event) {
+            updateStreamCursor(parseTerminalPayload(event));
+            sseBtn.disabled = false;
+            scheduleStreamReconnect();
+        });
+
+        terminal.on('error', function (event) {
+            updateStreamCursor(parseTerminalPayload(event));
+            sseBtn.disabled = false;
+            scheduleStreamReconnect();
+        });
+
         sseBtn.addEventListener('click', function () {
             clearMsg();
-            var sep = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
-            var url = streamBaseUrl + sep + 'public_id=' + encodeURIComponent(publicId) + '&last_event_id=' + encodeURIComponent(String(lastEventId));
             terminal.clear();
-            terminal.setUrl(url);
+            terminal.setUrl(buildStreamUrl());
             sseBtn.disabled = true;
-            terminal.start();
-            terminal.on('done', function () { sseBtn.disabled = false; });
-            terminal.on('error', function () { sseBtn.disabled = false; });
+            terminal.start(buildStreamUrl());
         });
     }
 })();
