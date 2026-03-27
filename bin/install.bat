@@ -12,6 +12,7 @@ set "ROOT=%CD%"
 set "SERVER=%ROOT%\extend\server"
 set "PHP_DIR=%SERVER%\php"
 set "PHP_EXE=%PHP_DIR%\php.exe"
+set "PHP_ZIP=%TEMP%\weline-php.zip"
 set "PATH_ONLY="
 set "DO_PHP=0"
 set "DO_PGSQL=0"
@@ -110,8 +111,11 @@ set "CECHO_MSG=PHP package URL: !FOUND_URL!" & call :cecho DarkGray ""
 set "CECHO_MSG=Downloading PHP !PHP_VER!.!FOUND_PATCH! from: !FOUND_URL!" & call :cecho Gray ""
 if not defined FOUND goto :php_download_failed
 mkdir "%PHP_DIR%" 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%TEMP%\weline-php.zip' -DestinationPath '%PHP_DIR%' -Force"
-del "%TEMP%\weline-php.zip" 2>nul
+call :validate_zip_file "%PHP_ZIP%"
+if errorlevel 1 goto :php_invalid_archive
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Expand-Archive -Path '%PHP_ZIP%' -DestinationPath '%PHP_DIR%' -Force"
+if errorlevel 1 goto :php_extract_failed
+del "%PHP_ZIP%" 2>nul
 for /d %%d in ("%PHP_DIR%\php-*") do (
   move "%%d\*" "%PHP_DIR%\" >nul 2>&1
   rmdir "%%d" 2>nul
@@ -137,6 +141,9 @@ if defined FOUND_URL (
   set "CECHO_MSG=Download failed before a valid URL was selected." & call :cecho Yellow ""
 )
 set "CECHO_MSG=Manual source indexes: https://downloads.php.net/~windows/releases/ and https://downloads.php.net/~windows/releases/archives/ (extract to %PHP_DIR%)." & call :cecho Yellow ""
+goto :skip_php
+:php_invalid_archive
+set "CECHO_MSG=Downloaded PHP package is not a valid ZIP archive. A proxy/CDN error page may have been saved instead. Check %PHP_ZIP% and retry." & call :cecho Yellow ""
 goto :skip_php
 :php_extract_failed
 set "CECHO_MSG=Extract may have different structure. Check %PHP_DIR%." & call :cecho Yellow ""
@@ -203,7 +210,7 @@ if not exist "%ROOT%\setup\server_installer\run.php" (
   )
   REM 确保当前用户对项目目录有完全控制权限（避免后续操作权限问题）
   set "CECHO_MSG=Setting project directory permissions for current user..." & call :cecho Gray ""
-  icacls "%ROOT%" /grant:r "%USERNAME%":(OI)(CI)F /T /Q >nul 2>&1
+  call :grant_current_user_full_control "%ROOT%"
   set "CECHO_MSG=Code installed (branch: %BRANCH%)." & call :cecho Green ""
 )
 
@@ -234,30 +241,43 @@ REM ---- Subroutines ----
 :try_download_url
 set "TRY_URL=%~1"
 if not defined TRY_URL exit /b 1
-if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
+if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
 
 REM Engine 1: curl (compatible options)
-curl -L -s --fail --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "%TEMP%\weline-php.zip" "%TRY_URL%" >nul 2>&1
-if exist "%TEMP%\weline-php.zip" (
-  for %%z in ("%TEMP%\weline-php.zip") do if %%~zz GTR 100000 (
-    set "DOWNLOAD_OK=1"
-    exit /b 0
-  )
+curl -L -s --fail --retry 3 --retry-delay 2 --connect-timeout 10 --max-time 300 -o "%PHP_ZIP%" "%TRY_URL%" >nul 2>&1
+call :validate_zip_file "%PHP_ZIP%"
+if not errorlevel 1 (
+  set "DOWNLOAD_OK=1"
+  exit /b 0
 )
 
 REM Engine 2: PowerShell fallback
-if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%TRY_URL%' -OutFile '%TEMP%\weline-php.zip' -UseBasicParsing -TimeoutSec 300; exit 0 } catch { exit 1 }" >nul 2>&1
-if exist "%TEMP%\weline-php.zip" (
-  for %%z in ("%TEMP%\weline-php.zip") do if %%~zz GTR 100000 (
-    set "DOWNLOAD_OK=1"
-    exit /b 0
-  )
+if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { Invoke-WebRequest -Uri '%TRY_URL%' -OutFile '%PHP_ZIP%' -UseBasicParsing -TimeoutSec 300; exit 0 } catch { exit 1 }" >nul 2>&1
+call :validate_zip_file "%PHP_ZIP%"
+if not errorlevel 1 (
+  set "DOWNLOAD_OK=1"
+  exit /b 0
 )
 
-if exist "%TEMP%\weline-php.zip" del "%TEMP%\weline-php.zip" 2>nul
+if exist "%PHP_ZIP%" del "%PHP_ZIP%" 2>nul
 set "CECHO_MSG=Probe failed: %TRY_URL%" & call :cecho DarkGray ""
 exit /b 1
+
+:validate_zip_file
+set "VALIDATE_ZIP_FILE=%~1"
+if not defined VALIDATE_ZIP_FILE exit /b 1
+if not exist "%VALIDATE_ZIP_FILE%" exit /b 1
+for %%z in ("%VALIDATE_ZIP_FILE%") do if %%~zz LEQ 100000 exit /b 1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$path=$env:VALIDATE_ZIP_FILE; try { $stream=[System.IO.File]::OpenRead($path); $zip=$null; try { $zip=New-Object -TypeName System.IO.Compression.ZipArchive -ArgumentList @($stream, [System.IO.Compression.ZipArchiveMode]::Read, $false); if ($zip.Entries.Count -gt 0) { exit 0 } exit 1 } finally { if ($zip -ne $null) { $zip.Dispose() }; if ($stream -ne $null) { $stream.Dispose() } } } catch { exit 1 }" >nul 2>&1
+if errorlevel 1 exit /b 1
+exit /b 0
+
+:grant_current_user_full_control
+set "PERMISSION_TARGET=%~1"
+if not defined PERMISSION_TARGET exit /b 0
+icacls "%PERMISSION_TARGET%" /grant:r "%USERNAME%":(OI)(CI)F /T /Q >nul 2>&1
+exit /b 0
 
 :install_git
 REM Windows: 优先 winget，其次 Chocolatey
