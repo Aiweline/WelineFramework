@@ -503,6 +503,8 @@ function start(url, options) {
         if (eventSource.readyState === EventSource.CLOSED) {
             setStatus('disconnected', '$t_disconnected');
             stop();
+        } else if (eventSource.readyState === EventSource.CONNECTING) {
+            setStatus('connecting', '$t_connecting');
         } else {
             setStatus('error', '$t_error');
             log('$t_error', 'error');
