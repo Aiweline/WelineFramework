@@ -21,8 +21,33 @@ class DetectWebsite implements ObserverInterface
     private const CACHE_KEY_WEBSITE_ROWS = 'websites.detect.website_rows.v1';
     private const CACHE_KEY_WEBSITE_DOMAINS = 'websites.detect.website_domains.v1';
     private const CACHE_KEY_EXPANDED_SITES = 'websites.detect.expanded_sites.v1';
+    private const CACHE_KEY_MATCHED_SITE_PREFIX = 'websites.detect.matched_site.';
 
     private ?CachePoolInterface $cache = null;
+
+    /**
+     * Process-local website cache for WLS/shared observers.
+     *
+     * @var array<string, array<int, array<string, mixed>>>
+     */
+    private static array $processArrayCache = [];
+
+    /**
+     * @var array<string, int>
+     */
+    private static array $processArrayCacheExpiresAt = [];
+
+    /**
+     * Process-local scalar/mixed cache for request match results.
+     *
+     * @var array<string, mixed>
+     */
+    private static array $processValueCache = [];
+
+    /**
+     * @var array<string, int>
+     */
+    private static array $processValueCacheExpiresAt = [];
 
     public function execute(Event &$event): void
     {
@@ -53,6 +78,14 @@ class DetectWebsite implements ObserverInterface
         $site = $websiteModel->reset();
         $site->setData($matchedSite);
         $this->processSite($event, $site);
+    }
+
+    public static function clearProcessCache(): void
+    {
+        self::$processArrayCache = [];
+        self::$processArrayCacheExpiresAt = [];
+        self::$processValueCache = [];
+        self::$processValueCacheExpiresAt = [];
     }
 
     public function processSite(Event &$event, Website $site): void
@@ -326,6 +359,13 @@ class DetectWebsite implements ObserverInterface
             return \is_array($cached) ? $cached : null;
         }
 
+        $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($requestUrl);
+        $processCached = $this->getProcessValueCache($processKey);
+        if ($processCached !== null || $this->hasProcessValueCache($processKey)) {
+            RequestContext::set($requestKey, $processCached);
+            return \is_array($processCached) ? $processCached : null;
+        }
+
         $matchedSite = null;
         $currentHost = \parse_url($requestUrl, PHP_URL_HOST);
         if (\is_string($currentHost) && $currentHost !== '') {
@@ -335,7 +375,9 @@ class DetectWebsite implements ObserverInterface
             $matchedSite = $this->findSiteByWebsiteUrl($requestUrl, $websiteModel);
         }
 
-        RequestContext::set($requestKey, $matchedSite ?? false);
+        $cachedValue = $matchedSite ?? false;
+        RequestContext::set($requestKey, $cachedValue);
+        $this->setProcessValueCache($processKey, $cachedValue);
 
         return $matchedSite;
     }
@@ -408,8 +450,15 @@ class DetectWebsite implements ObserverInterface
             return \is_array($cached) ? $cached : [];
         }
 
+        $processCached = $this->getProcessArrayCache($cacheKey);
+        if ($processCached !== null) {
+            RequestContext::set($requestKey, $processCached);
+            return $processCached;
+        }
+
         $cached = $this->getCache()->get($cacheKey);
         if (\is_array($cached)) {
+            $this->setProcessArrayCache($cacheKey, $cached);
             RequestContext::set($requestKey, $cached);
             return $cached;
         }
@@ -420,9 +469,60 @@ class DetectWebsite implements ObserverInterface
         }
 
         RequestContext::set($requestKey, $value);
+        $this->setProcessArrayCache($cacheKey, $value);
         $this->getCache()->set($cacheKey, $value, self::CACHE_TTL);
 
         return $value;
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function getProcessArrayCache(string $cacheKey): ?array
+    {
+        $expiresAt = self::$processArrayCacheExpiresAt[$cacheKey] ?? 0;
+        if ($expiresAt < \time()) {
+            unset(self::$processArrayCache[$cacheKey], self::$processArrayCacheExpiresAt[$cacheKey]);
+            return null;
+        }
+
+        $cached = self::$processArrayCache[$cacheKey] ?? null;
+        return \is_array($cached) ? $cached : null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $value
+     */
+    private function setProcessArrayCache(string $cacheKey, array $value): void
+    {
+        self::$processArrayCache[$cacheKey] = $value;
+        self::$processArrayCacheExpiresAt[$cacheKey] = \time() + self::CACHE_TTL;
+    }
+
+    private function hasProcessValueCache(string $cacheKey): bool
+    {
+        $expiresAt = self::$processValueCacheExpiresAt[$cacheKey] ?? 0;
+        if ($expiresAt < \time()) {
+            unset(self::$processValueCache[$cacheKey], self::$processValueCacheExpiresAt[$cacheKey]);
+            return false;
+        }
+
+        return \array_key_exists($cacheKey, self::$processValueCache);
+    }
+
+    private function getProcessValueCache(string $cacheKey): mixed
+    {
+        if (!$this->hasProcessValueCache($cacheKey)) {
+            return null;
+        }
+
+        return self::$processValueCache[$cacheKey];
+    }
+
+    private function setProcessValueCache(string $cacheKey, mixed $value): void
+    {
+        self::$processValueCache[$cacheKey] = $value;
+        self::$processValueCacheExpiresAt[$cacheKey] = \time() + self::CACHE_TTL;
     }
 
     /**
