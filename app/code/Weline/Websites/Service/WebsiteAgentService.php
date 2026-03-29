@@ -20,6 +20,8 @@ use Weline\Websites\Model\Website;
 
 class WebsiteAgentService
 {
+    private const DEV_SIM_DOMAIN = 'weline-dev.local';
+
     public function __construct(
         private readonly DomainPurchaseService $purchaseService,
         private readonly DomainResolveService $resolveService,
@@ -54,32 +56,62 @@ class WebsiteAgentService
         if ($domain === '') {
             return ['success' => false, 'message' => __('域名不能为空')];
         }
-        if ($accountId <= 0) {
+        $isLocalDomain = $this->isLocalDevelopmentDomain($domain);
+        if ($accountId <= 0 && !$isLocalDomain) {
             return ['success' => false, 'message' => __('请选择域名商账号')];
         }
 
         $emit('start', ['message' => __('正在检查域名可用性...')]);
 
-        // 1. 检查可用性
-        $checkResult = $this->queryService->execute('websites', 'checkAvailability', [
-            'account_id' => $accountId,
-            'domains' => [$domain],
-        ]);
+        if ($this->isDevSimulationDomain($domain) || $isLocalDomain) {
+            $emit('progress', [
+                'message' => __('开发环境模拟：域名 %{1} 视为可用', [$domain]),
+                'progress' => 10,
+                'simulated' => true,
+            ]);
+            $available = true;
+        } else {
+            // 1. 检查可用性
+            $checkResult = $this->queryService->execute('websites', 'checkAvailability', [
+                'account_id' => $accountId,
+                'domains' => [$domain],
+            ]);
 
-        $available = false;
-        if (\is_array($checkResult)) {
-            foreach ($checkResult as $item) {
-                if (isset($item['domain']) && \strtolower((string) $item['domain']) === $domain && ($item['available'] ?? false)) {
-                    $available = true;
-                    break;
+            $available = false;
+            if (\is_array($checkResult)) {
+                foreach ($checkResult as $item) {
+                    if (isset($item['domain']) && \strtolower((string) $item['domain']) === $domain && ($item['available'] ?? false)) {
+                        $available = true;
+                        break;
+                    }
                 }
             }
         }
+
         if (!$available) {
             $emit('error', ['message' => __('域名 %{1} 不可用，请更换后重试', [$domain])]);
             return ['success' => false, 'message' => __('域名不可用')];
         }
         $emit('progress', ['message' => __('域名 %{1} 可用', [$domain]), 'progress' => 10]);
+
+        if ($isLocalDomain) {
+            $emit('progress', ['message' => __('本地域名 %{1} 跳过域名商流程，直接模拟建站成功', [$domain]), 'progress' => 90, 'simulated' => true]);
+            $emit('done', [
+                'message' => __('建站完成（本地模拟）'),
+                'domain' => $domain,
+                'website_id' => 0,
+                'order_id' => 0,
+                'https_ok' => false,
+                'simulated' => true,
+            ]);
+            return [
+                'success' => true,
+                'message' => __('建站完成（本地模拟）：%{1}', [$domain]),
+                'domain' => $domain,
+                'website_id' => 0,
+                'order_id' => 0,
+            ];
+        }
 
         // 2. 购买域名（含自动解析、自动建站）
         $emit('progress', ['message' => __('正在购买域名...'), 'progress' => 20]);
@@ -256,27 +288,79 @@ class WebsiteAgentService
         ];
     }
 
-    public function suggestDomainsFromDescription(string $description): array
+    /**
+     * @return list<string>
+     */
+    public function getRecommendationCandidates(string $description, string $preferredDomain = '', int $limit = 60): array
     {
-        $desc = \preg_replace('/[\s\x{3000}\x{4e00}-\x{9fff}]+/u', ' ', $description);
-        $desc = \trim(\preg_replace('/\s+/', ' ', $desc));
-        if ($desc === '') {
-            return ['mysite.com', 'mysite.net', 'mysite.cn'];
-        }
-        $words = \explode(' ', $desc);
-        $base = \strtolower(\preg_replace('/[^a-z0-9]/i', '', $words[0] ?? 'site'));
-        if (\strlen($base) < 2) {
-            $base = 'mysite';
-        }
-        $tlds = ['.com', '.net', '.cn'];
-        $suggestions = [];
-        foreach ($tlds as $tld) {
-            $suggestions[] = $base . $tld;
-        }
-        return \array_slice(\array_unique($suggestions), 0, 5);
+        $limit = $limit > 0 ? $limit : 60;
+        return \array_slice($this->buildRecommendationCandidates($description, $preferredDomain, $limit), 0, $limit);
     }
 
-    private function buildRecommendationCandidates(string $description, string $preferredDomain = ''): array
+    /**
+     * @param list<string> $candidates
+     * @return array<string, array{domain:string,available:bool,error?:string}>
+     */
+    public function checkCandidateAvailability(int $accountId, array $candidates): array
+    {
+        if ($accountId <= 0 || $candidates === []) {
+            return [];
+        }
+
+        $availabilityResults = $this->queryService->execute('websites', 'checkAvailability', [
+            'account_id' => $accountId,
+            'domains' => \array_values($candidates),
+        ]);
+
+        $resultsByDomain = [];
+        if (\is_array($availabilityResults)) {
+            foreach ($availabilityResults as $result) {
+                if (!\is_array($result)) {
+                    continue;
+                }
+                $domain = $this->normalizeRecommendationCandidate((string)($result['domain'] ?? ''));
+                if ($domain === '') {
+                    continue;
+                }
+                $normalized = [
+                    'domain' => $domain,
+                    'available' => !empty($result['available']),
+                ];
+                $error = \trim((string)($result['error'] ?? ''));
+                if ($error !== '') {
+                    $normalized['error'] = $error;
+                }
+                $resultsByDomain[$domain] = $normalized;
+            }
+        }
+
+        return $resultsByDomain;
+    }
+
+    public function suggestDomainsFromDescription(string $description): array
+    {
+        $tokens = $this->extractBrandTokens($description);
+        if ($tokens === []) {
+            $tokens = ['build'];
+        }
+
+        $bases = $this->buildBrandBases($tokens);
+        $tlds = ['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'];
+        $suggestions = [];
+
+        foreach ($bases as $base) {
+            foreach ($tlds as $tld) {
+                $suggestions[] = $base . $tld;
+                if (\count($suggestions) >= 30) {
+                    break 2;
+                }
+            }
+        }
+
+        return \array_values(\array_unique($suggestions));
+    }
+
+    private function buildRecommendationCandidates(string $description, string $preferredDomain = '', int $maxCandidates = 12): array
     {
         $candidates = [];
         $appendCandidate = function (string $candidate) use (&$candidates): void {
@@ -294,11 +378,11 @@ class WebsiteAgentService
             if ($normalizedPreferred !== '') {
                 $appendCandidate($normalizedPreferred);
                 $base = (string)(\preg_replace('/\.[a-z]{2,}$/i', '', $normalizedPreferred) ?? '');
-                foreach (['.com', '.net', '.site', '.cn'] as $suffix) {
+                foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
                     $appendCandidate($base . $suffix);
                 }
             } elseif (\preg_match('/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/i', $preferredDomain)) {
-                foreach (['.com', '.net', '.site', '.cn'] as $suffix) {
+                foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
                     $appendCandidate($preferredDomain . $suffix);
                 }
             }
@@ -312,7 +396,7 @@ class WebsiteAgentService
             $appendCandidate($suggestion);
         }
 
-        return \array_slice($candidates, 0, 5);
+        return \array_slice($candidates, 0, $maxCandidates > 0 ? $maxCandidates : 12);
     }
 
     private function normalizeRecommendationCandidate(string $candidate): string
@@ -323,5 +407,162 @@ class WebsiteAgentService
         }
 
         return \preg_match('/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/', $candidate) ? $candidate : '';
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractBrandTokens(string $text): array
+    {
+        $normalized = \strtolower((string)\preg_replace('/[^a-z0-9]+/i', ' ', $text));
+        $normalized = \trim((string)\preg_replace('/\s+/', ' ', $normalized));
+        $locationTokens = $this->extractLocationTokens($text);
+        if ($normalized === '') {
+            return $locationTokens;
+        }
+
+        $stopWords = [
+            'the', 'and', 'for', 'with', 'shop', 'store', 'site', 'website',
+            'build', 'builder', 'online', 'platform', 'system', 'service',
+            'solution', 'project', 'app', 'web',
+        ];
+
+        $tokens = [];
+        foreach (\explode(' ', $normalized) as $part) {
+            $part = \trim($part);
+            if ($part === '' || \strlen($part) < 3 || \in_array($part, $stopWords, true)) {
+                continue;
+            }
+            $tokens[] = $part;
+            if (\count($tokens) >= 6) {
+                break;
+            }
+        }
+
+        return \array_values(\array_unique(\array_merge($locationTokens, $tokens)));
+    }
+
+    /**
+     * @param list<string> $tokens
+     * @return list<string>
+     */
+    private function buildBrandBases(array $tokens): array
+    {
+        if ($tokens === []) {
+            return ['build', 'sitehub', 'webcraft'];
+        }
+
+        $bases = [];
+        $appendBase = static function (string $base) use (&$bases): void {
+            $base = \strtolower(\trim((string)\preg_replace('/[^a-z0-9-]/i', '', $base)));
+            if ($base === '' || \strlen($base) < 3 || \strlen($base) > 63 || \in_array($base, $bases, true)) {
+                return;
+            }
+            $bases[] = $base;
+        };
+
+        foreach ($tokens as $token) {
+            $appendBase($token);
+        }
+
+        $first = $tokens[0] ?? 'build';
+        $second = $tokens[1] ?? '';
+        $third = $tokens[2] ?? '';
+
+        if ($second !== '') {
+            $appendBase($first . $second);
+            $appendBase($first . '-' . $second);
+            $appendBase($second . $first);
+        }
+        if ($third !== '') {
+            $appendBase($first . $third);
+        }
+
+        foreach (['hub', 'lab', 'go', 'now', 'cloud', 'app', 'pro'] as $suffix) {
+            $appendBase($first . $suffix);
+            if ($second !== '') {
+                $appendBase($first . $second . $suffix);
+            }
+            if (\count($bases) >= 20) {
+                break;
+            }
+        }
+
+        if (\count($bases) < 10) {
+            $hash = \substr(\md5(\implode('-', $tokens)), 0, 4);
+            $appendBase($first . $hash);
+            if ($second !== '') {
+                $appendBase($first . $second . $hash);
+            }
+        }
+
+        return \array_slice($bases, 0, 20);
+    }
+
+    private function isDevSimulationDomain(string $domain): bool
+    {
+        return (\defined('DEV') && DEV)
+            && \strtolower(\trim($domain)) === self::DEV_SIM_DOMAIN;
+    }
+
+    private function isLocalDevelopmentDomain(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === 'localhost') {
+            return true;
+        }
+        return \str_ends_with($domain, '.local') || \str_ends_with($domain, '.localhost');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractLocationTokens(string $text): array
+    {
+        $tokens = [];
+        $append = static function (string $token) use (&$tokens): void {
+            $token = \strtolower(\trim($token));
+            if ($token === '' || \strlen($token) < 2 || \in_array($token, $tokens, true)) {
+                return;
+            }
+            $tokens[] = $token;
+        };
+        // 不维护城市白名单，直接从提示词语义连接词后提取地点/区域词组。
+        if (\preg_match_all('/\b(?:in|at|from|for|to|near|within)\s+([a-z][a-z0-9\s-]{1,40})\b/i', $text, $matches) === 1) {
+            foreach (($matches[1] ?? []) as $phrase) {
+                if (!\is_string($phrase)) {
+                    continue;
+                }
+                $raw = \strtolower(\trim($phrase));
+                $raw = (string)\preg_replace('/\b(?:and|or|with|of|the)\b.*/i', '', $raw);
+                $slug = (string)\preg_replace('/[^a-z0-9]+/', '', $raw);
+                if ($slug === '' || \strlen($slug) < 2) {
+                    continue;
+                }
+                $append($slug);
+                $append('in' . $slug);
+                $append($slug . 'in');
+            }
+        }
+
+        // 支持 `xxx-in`、`in-xxx` 这类显式写法。
+        if (\preg_match_all('/\b([a-z0-9]{2,20})-in\b/i', $text, $suffixMatches) === 1) {
+            foreach (($suffixMatches[1] ?? []) as $word) {
+                if (\is_string($word)) {
+                    $append(\strtolower($word));
+                    $append(\strtolower($word) . 'in');
+                }
+            }
+        }
+        if (\preg_match_all('/\bin-([a-z0-9]{2,20})\b/i', $text, $prefixMatches) === 1) {
+            foreach (($prefixMatches[1] ?? []) as $word) {
+                if (\is_string($word)) {
+                    $append(\strtolower($word));
+                    $append('in' . \strtolower($word));
+                }
+            }
+        }
+
+        return $tokens;
     }
 }

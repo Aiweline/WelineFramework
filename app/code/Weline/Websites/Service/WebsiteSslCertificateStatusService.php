@@ -13,6 +13,7 @@ use Weline\Websites\Model\DomainPool;
 
 final class WebsiteSslCertificateStatusService
 {
+    private const DEV_SIM_DOMAIN = 'weline-dev.local';
     private const STATUS_PENDING = 'pending';
     private const STATUS_ACTIVE = 'active';
     private const STATUS_EXPIRED = 'expired';
@@ -24,6 +25,16 @@ final class WebsiteSslCertificateStatusService
         $hostname = \strtolower(\trim($hostname));
         if ($hostname === '') {
             return null;
+        }
+        if ($this->isDevSimulationDomain($hostname)) {
+            return [
+                'cert_id' => 9990001,
+                'status' => self::STATUS_ACTIVE,
+                'is_expired' => false,
+                'expires_at' => '2099-12-31 23:59:59',
+                'domain' => $hostname,
+                'simulated' => true,
+            ];
         }
 
         try {
@@ -40,6 +51,9 @@ final class WebsiteSslCertificateStatusService
 
     public function hasValidManagedCertificate(string $hostname, ?int $preferredCertId): bool
     {
+        if ($this->isDevSimulationDomain($hostname)) {
+            return true;
+        }
         try {
             return (bool) w_query('server', 'hasValidManagedCertificate', [
                 'hostname' => $hostname,
@@ -157,5 +171,11 @@ final class WebsiteSslCertificateStatusService
     private function isExpired(?array $cert): bool
     {
         return (bool) ($cert['is_expired'] ?? true);
+    }
+
+    private function isDevSimulationDomain(string $hostname): bool
+    {
+        return (\defined('DEV') && DEV)
+            && \strtolower(\trim($hostname)) === self::DEV_SIM_DOMAIN;
     }
 }
