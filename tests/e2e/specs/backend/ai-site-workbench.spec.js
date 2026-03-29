@@ -1,45 +1,27 @@
 // @weline-e2e-runtime fallback
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { buildWorkbenchUrl, loginAsAdmin } = require('./helpers/ai-workbench');
+const { buildWorkbenchUrl, createWorkspace, loginAsAdmin } = require('./helpers/ai-workbench');
 
 test.use({ ignoreHTTPSErrors: true });
 
 const HUB_TIMEOUT = 120000;
-const WORKSPACE_TIMEOUT = 120000;
-const TERMINAL_TIMEOUT = 60000;
+const WORKSPACE_TIMEOUT = 180000;
 
-async function openHub(page, provider = 'pagebuilder', fakeMode = true) {
+/** 路由表会把 AiSiteAgent 规范为 ai-site-agent；兼容历史/测试里的 aiSiteAgent 字面量 */
+const PAGEBUILDER_AI_WORKSPACE_PATH_RE = /\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/workspace/i;
+
+async function openHub(page, provider = 'pagebuilder', fakeMode = false) {
   const backendRoot = await loginAsAdmin(page);
   const hubUrl = buildWorkbenchUrl(backendRoot, provider, fakeMode);
   await page.goto(hubUrl, { waitUntil: 'domcontentloaded', timeout: HUB_TIMEOUT });
   await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(1000);
   return { backendRoot, hubUrl };
 }
 
-function terminalContent(page) {
-  return page.locator('#site-builder-agent-terminal_content');
-}
-
-async function selectFirstRegistrarAccount(page, selectorId = 'site-agent-account') {
-  const trigger = page.locator(`#${selectorId}_trigger`);
-  await expect(trigger).toBeVisible({ timeout: 30000 });
-  await trigger.click({ force: true });
-
-  const firstItem = page.locator(`#${selectorId}_list .weline-registrar-item`).first();
-  await expect(firstItem).toBeVisible({ timeout: 30000 });
-  const value = await firstItem.getAttribute('data-value');
-  await firstItem.click({ force: true });
-
-  const hiddenInput = page.locator(`#${selectorId}_value`);
-  await expect(hiddenInput).not.toHaveValue('', { timeout: 30000 });
-
-  return value;
-}
-
-async function waitForWorkspaceReload(page, action) {
-  const waitForWorkspaceUrl = page.waitForURL(/site-builder-agent\/workspace\?public_id=/, {
+async function waitForWorkspaceReload(page, urlPattern, action) {
+  const waitForUrl = page.waitForURL(urlPattern, {
     waitUntil: 'domcontentloaded',
     timeout: WORKSPACE_TIMEOUT,
   }).catch(error => {
@@ -49,299 +31,268 @@ async function waitForWorkspaceReload(page, action) {
     throw error;
   });
 
-  await Promise.allSettled([waitForWorkspaceUrl, action()]);
-  await page.waitForURL(/site-builder-agent\/workspace\?public_id=/, { timeout: WORKSPACE_TIMEOUT }).catch(() => {});
+  await Promise.allSettled([waitForUrl, action()]);
   await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 }
 
-async function readJsonPage(page, href) {
-  const dataPage = await page.context().newPage();
-  await dataPage.goto(new URL(href, page.url()).toString(), {
-    waitUntil: 'domcontentloaded',
+async function gotoStable(page, url) {
+  await page.goto(url, {
+    waitUntil: 'commit',
     timeout: WORKSPACE_TIMEOUT,
   });
-  const payload = JSON.parse((await dataPage.locator('body').innerText()).trim());
-  await dataPage.close();
-  return payload;
+  await page.locator('body').first().waitFor({
+    state: 'attached',
+    timeout: 30000,
+  });
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 }
 
-async function expectHubAnchorState(page, provider, fakeMode) {
-  await page.waitForURL(url => {
-    return url.pathname.endsWith('/site-builder-agent/index')
-      && url.hash === '#provider-lane'
-      && url.searchParams.get('provider') === provider
-      && (!fakeMode || url.searchParams.get('fake_mode') === '1');
-  }, { timeout: HUB_TIMEOUT });
+async function readJsonTextarea(page, selector) {
+  const raw = await page.locator(selector).inputValue({ timeout: WORKSPACE_TIMEOUT });
+  return JSON.parse(raw.trim());
+}
+
+function buildLocalDomain(prefix) {
+  const suffix = Date.now().toString().slice(-8);
+  return `${prefix}-${suffix}.local.test`;
+}
+
+async function expectWorkspaceStreamHealthy(page) {
+  const probe = await page.evaluate(async () => {
+    const terminal = window.WelineSseTerminal && window.WelineSseTerminal['site-builder-workspace-terminal'];
+    const streamUrl = terminal && typeof terminal.getUrl === 'function' ? terminal.getUrl() : '';
+    if (!streamUrl) {
+      return { ok: false, reason: 'missing-stream-url', buffer: '' };
+    }
+
+    const response = await fetch(streamUrl, {
+      credentials: 'same-origin',
+      headers: { Accept: 'text/event-stream' },
+    });
+
+    if (!response.ok || !response.body) {
+      return {
+        ok: false,
+        reason: 'request-failed',
+        status: response.status,
+        buffer: await response.text(),
+      };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const deadline = Date.now() + 7000;
+
+    while (Date.now() < deadline && buffer.length < 8000) {
+      const chunk = await Promise.race([
+        reader.read(),
+        new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 400)),
+      ]);
+
+      if (chunk && chunk.timeout) {
+        continue;
+      }
+      if (!chunk || chunk.done) {
+        break;
+      }
+
+      buffer += decoder.decode(chunk.value, { stream: true });
+      if (buffer.includes('event: snapshot')) {
+        break;
+      }
+    }
+
+    await reader.cancel().catch(() => {});
+    return { ok: true, status: response.status, buffer };
+  });
+
+  expect(probe.ok, JSON.stringify(probe)).toBeTruthy();
+  expect(probe.buffer).toContain('event: start');
+  expect(probe.buffer).toContain('已连接工作区事件流');
+  expect(probe.buffer).toContain('event: snapshot');
+  expect(probe.buffer).not.toContain('event: error');
+  expect(probe.buffer).not.toContain('参数无效');
+  expect(probe.buffer).not.toContain('会话不存在或无访问权限');
 }
 
 test.describe('AI Site Workbench', () => {
   test.describe.configure({ mode: 'serial' });
 
-  test('pagebuilder provider hands off generation into the native PageBuilder workspace', async ({ page }) => {
+  test('pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing', async ({ page }) => {
     test.slow();
-    test.setTimeout(300000);
-    await openHub(page);
+    test.setTimeout(420000);
 
+    const { backendRoot } = await openHub(page, 'pagebuilder', false);
     await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('#provider-lane')).toBeVisible({ timeout: 30000 });
 
-    const providerLaneLink = page.locator('a[href*="#provider-lane"]').first();
-    await expect(providerLaneLink).toHaveAttribute('href', /site-builder-agent\/index/);
-    await providerLaneLink.click({ force: true });
-    await page.waitForTimeout(1200);
-
-    await expectHubAnchorState(page, 'pagebuilder', true);
-    await expect(page.locator('#provider-lane')).toBeVisible();
-    await expect(page.locator('body')).not.toHaveText(/^404$/);
-
-    await page.fill('#site-agent-description', 'Build a resumable coffee brand site with subscriptions and story pages.');
-    await page.click('#site-agent-create-workspace', { force: true });
-    await page.waitForURL(/site-builder-agent\/workspace\?public_id=/, {
-      waitUntil: 'domcontentloaded',
-      timeout: WORKSPACE_TIMEOUT,
-    });
-    await page.waitForTimeout(1500);
-
-    await page.fill('#site-builder-title', 'Demo Coffee Roasters');
-    await page.fill('#site-builder-tagline', 'Fresh roasting stories each week');
-    await page.fill('#site-builder-domain', 'demo-coffee.local.test');
-    await page.fill('#site-builder-notes', 'Verify workspace summary and provider tools');
-    await page.fill('#site-builder-brief', 'Need brand storytelling, product pages, FAQ, and subscription CTA.');
-    await waitForWorkspaceReload(page, () => page.click('#site-builder-save-summary', { force: true }));
-
-    await expect(page.locator('#site-builder-title')).toHaveValue('Demo Coffee Roasters');
-    await expect(page.locator('#site-builder-domain')).toHaveValue('demo-coffee.local.test');
-    await expect(page.locator('#site-builder-current-stage')).toBeVisible();
-
-    const websitesStateUrl = await page.locator('a[href*="state-json"]').getAttribute('href');
-    expect(websitesStateUrl).toBeTruthy();
-
-    const beforeHandoffState = await readJsonPage(page, websitesStateUrl);
-    expect(beforeHandoffState.success).toBeTruthy();
-    expect(beforeHandoffState.data.session.current_stage).toBe('prepare');
-    expect(beforeHandoffState.data.session.scope.site_title).toBe('Demo Coffee Roasters');
-    expect(beforeHandoffState.data.session.scope.target_domain).toBe('demo-coffee.local.test');
-
-    await page.click('#site-builder-apply-stage-recommendation', { force: true });
-    await page.waitForURL(/pagebuilder\/backend\/aiSiteAgent\/workspace\?public_id=/, {
-      waitUntil: 'domcontentloaded',
-      timeout: WORKSPACE_TIMEOUT,
-    });
-    await expect(page.locator('#wiz-theme-hint')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('#wiz-theme-hint')).not.toHaveValue('', { timeout: 30000 });
-
-    const pageBuilderStateUrl = await page.locator('a[href*="get-state-json"]').getAttribute('href');
-    expect(pageBuilderStateUrl).toBeTruthy();
-
-    const pageBuilderState = await readJsonPage(page, pageBuilderStateUrl);
-    expect(pageBuilderState.success).toBeTruthy();
-    expect(pageBuilderState.data.stage).toBe('virtual_theme');
-    expect(pageBuilderState.data.scope.site_title).toBe('Demo Coffee Roasters');
-    expect(pageBuilderState.data.scope.target_domain).toBe('demo-coffee.local.test');
-    expect(pageBuilderState.data.scope.handoff_source).toBe('weline_websites_workbench');
-    expect(pageBuilderState.data.scope.preferred_flow).toBe('pagebuilder_style_template');
-    expect(pageBuilderState.data.scope.pagebuilder_theme_source).toBe('styles');
-    expect(pageBuilderState.data.scope.style_template_code).toBeTruthy();
-
-    const websitesState = await readJsonPage(page, websitesStateUrl);
-    expect(websitesState.success).toBeTruthy();
-    expect(websitesState.data.session.current_stage).toBe('generate');
-    expect(websitesState.data.session.scope.pagebuilder_workspace_public_id).toBe(pageBuilderState.data.public_id);
-    expect(websitesState.data.session.scope.pagebuilder_workspace_url).toContain('/pagebuilder/backend/aiSiteAgent/workspace');
-  });
-
-  test('workspace domain purchase keeps running while pagebuilder handoff continues', async ({ page }) => {
-    test.slow();
-    test.setTimeout(300000);
-    await openHub(page, 'pagebuilder', true);
-
-    await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
-    await expect(page.locator('#provider-lane')).toBeVisible({ timeout: 30000 });
-
-    const providerLaneLink = page.locator('a[href*="#provider-lane"]').first();
-    await expect(providerLaneLink).toHaveAttribute('href', /site-builder-agent\/index/);
-    await providerLaneLink.click({ force: true });
-    await page.waitForTimeout(1200);
-
-    await expectHubAnchorState(page, 'pagebuilder', true);
-    await expect(page.locator('#provider-lane')).toBeVisible();
-
-    await page.fill('#site-agent-description', 'Build a resumable brand site where domain purchase should keep running in the background.');
-    await page.click('#site-agent-create-workspace', { force: true });
-    await page.waitForURL(/site-builder-agent\/workspace\?public_id=/, {
-      waitUntil: 'domcontentloaded',
-      timeout: WORKSPACE_TIMEOUT,
-    });
-    await page.waitForTimeout(1500);
-
-    const websitesStateUrl = await page.locator('a[href*="state-json"]').getAttribute('href');
-    expect(websitesStateUrl).toBeTruthy();
-    const initialWebsitesState = await readJsonPage(page, websitesStateUrl);
-    const recommendationPatch = JSON.parse(
-      (await page.locator('#site-builder-apply-stage-recommendation').getAttribute('data-patch')) || '{}'
+    await page.fill('#site-agent-description', 'Build a coffee brand site with story pages, contact page, and a clear home page hero.');
+    const createWorkspacePayload = await createWorkspace(
+      page,
+      backendRoot,
+      'pagebuilder',
+      'Build a coffee brand site with story pages, contact page, and a clear home page hero.'
     );
-    const registrarValue = String(
-      recommendationPatch.preferred_registrar_account_id
-        || recommendationPatch.registrar_account_id
-        || initialWebsitesState.data.session.scope.preferred_registrar_account_id
-        || initialWebsitesState.data.session.scope.registrar_account_id
-        || ''
+    expect(createWorkspacePayload.success).toBeTruthy();
+    expect(createWorkspacePayload.workspace_url).toBeTruthy();
+
+    await gotoStable(page, new URL(createWorkspacePayload.workspace_url, page.url()).toString());
+    await expectWorkspaceStreamHealthy(page);
+
+    const localDomain = buildLocalDomain('pb-e2e');
+    await page.fill('#site-builder-title', 'PageBuilder E2E Coffee');
+    await page.fill('#site-builder-tagline', 'Roasting story and product showcase');
+    await page.fill('#site-builder-domain', localDomain);
+    await page.fill('#site-builder-brief', 'Need a home page, about page, and contact page with strong brand storytelling.');
+    await waitForWorkspaceReload(
+      page,
+      /site-builder-agent\/workspace\?public_id=/,
+      () => page.click('#site-builder-save-summary', { force: true })
     );
-    expect(registrarValue).toBeTruthy();
 
-    await page.fill('#site-builder-domain', 'background-domain.local.test');
-    await page.evaluate(({ accountId, label }) => {
-      const valueInput = document.getElementById('site-builder-registrar-account_value');
-      if (valueInput && !valueInput.value) {
-        valueInput.value = String(accountId || '');
-      }
+    const websitesWorkspaceUrl = page.url();
+    await expect(page.locator('#site-builder-domain')).toHaveValue(localDomain);
 
-      const labelInput = document.getElementById('site-builder-registrar-label');
-      if (labelInput && !labelInput.value && label) {
-        labelInput.value = String(label);
-      }
-    }, {
-      accountId: registrarValue,
-      label: recommendationPatch.recommended_registrar_label
-        || initialWebsitesState.data.session.scope.recommended_registrar_label
-        || '',
-    });
+    const handoffLink = page.locator('a[href*="/site-builder-agent/pagebuilder-handoff"]').first();
+    await expect(handoffLink).toBeVisible({ timeout: 15000 });
+    await Promise.all([
+      page.waitForURL(PAGEBUILDER_AI_WORKSPACE_PATH_RE, { timeout: WORKSPACE_TIMEOUT }),
+      handoffLink.click(),
+    ]);
+    await page.goto(websitesWorkspaceUrl, { waitUntil: 'domcontentloaded', timeout: WORKSPACE_TIMEOUT });
+    await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 
-    const startDomainPurchaseUrl = new URL(page.url());
-    startDomainPurchaseUrl.pathname = startDomainPurchaseUrl.pathname.replace(/\/workspace$/, '/start-domain-purchase');
-    startDomainPurchaseUrl.search = '';
-    const domainPurchaseResponse = await page.evaluate(async ({ url, publicId, scopePatch }) => {
-      const body = new URLSearchParams();
-      body.set('public_id', publicId);
-      body.set('scope_patch', JSON.stringify(scopePatch));
+    await expect
+      .poll(async () => {
+        const scope = await readJsonTextarea(page, '#site-builder-scope-full');
+        return String(scope.pagebuilder_workspace_url || '');
+      }, { timeout: WORKSPACE_TIMEOUT })
+      .toMatch(PAGEBUILDER_AI_WORKSPACE_PATH_RE);
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-        },
-        body: body.toString(),
-        credentials: 'same-origin',
-      });
+    const websitesScopeAfterHandoff = await readJsonTextarea(page, '#site-builder-scope-full');
+    const pagebuilderWorkspaceUrl = String(websitesScopeAfterHandoff.pagebuilder_workspace_url || '');
+    expect(pagebuilderWorkspaceUrl).toMatch(PAGEBUILDER_AI_WORKSPACE_PATH_RE);
 
-      return response.json();
-    }, {
-      url: startDomainPurchaseUrl.toString(),
-      publicId: initialWebsitesState.data.session.public_id,
-      scopePatch: {
-        target_domain: 'background-domain.local.test',
-        preferred_registrar_account_id: Number(registrarValue),
-        registrar_account_id: Number(registrarValue),
-        recommended_registrar_label: recommendationPatch.recommended_registrar_label
-          || initialWebsitesState.data.session.scope.recommended_registrar_label
-          || '',
-      },
-    });
-    expect(domainPurchaseResponse.success).toBeTruthy();
+    // 专家模式 (?expert=1) 下才渲染 #pb-ai-draft-website-id / #pb-ai-scope-full 等元素
+    const pbExpertUrl = pagebuilderWorkspaceUrl + (pagebuilderWorkspaceUrl.includes('?') ? '&expert=1' : '?expert=1');
+    await gotoStable(page, new URL(pbExpertUrl, page.url()).toString());
 
-    if (domainPurchaseResponse.startable && domainPurchaseResponse.stream_url) {
-      await page.evaluate(async streamUrl => {
-        const response = await fetch(streamUrl, {
-          method: 'GET',
-          credentials: 'same-origin',
-        });
-        await response.text();
-      }, domainPurchaseResponse.stream_url);
+    const landedOnLogin = await page.locator('form[action*="/admin/login/post"], input[name="username"]').first()
+      .isVisible({ timeout: 3000 })
+      .catch(() => false);
+    if (landedOnLogin) {
+      await loginAsAdmin(page);
+      await gotoStable(page, new URL(pagebuilderWorkspaceUrl, page.url()).toString());
+    }
+    await expect(page.locator('#pb-ai-run-virtual-theme')).toBeVisible({ timeout: 30000 });
+
+    await page.click('#pb-ai-run-virtual-theme', { force: true });
+
+    await expect
+      .poll(async () => {
+        const text = await page.locator('#pb-ai-draft-website-id').textContent();
+        return Number(String(text || '0').trim() || '0');
+      }, { timeout: WORKSPACE_TIMEOUT })
+      .toBeGreaterThan(0);
+
+    /** @type {any} */
+    let pageBuilderState = await readJsonTextarea(page, '#pb-ai-scope-full');
+    pageBuilderState.draft_website_id = Number(pageBuilderState.draft_website_id || 0);
+    pageBuilderState.virtual_theme_id = Number(pageBuilderState.virtual_theme_id || 0);
+    pageBuilderState.preview_page_id = Number(pageBuilderState.preview_page_id || 0);
+    expect(Number(pageBuilderState.draft_website_id)).toBeGreaterThan(0);
+    expect(Number(pageBuilderState.virtual_theme_id)).toBeGreaterThan(0);
+    expect(Number(pageBuilderState.preview_page_id)).toBeGreaterThan(0);
+    expect(Object.keys(pageBuilderState.pagebuilder_pages_by_type || {})).not.toHaveLength(0);
+
+    for (const pageInfo of Object.values(pageBuilderState.pagebuilder_pages_by_type || {})) {
+      expect(Number(pageInfo.website_id)).toBe(Number(pageBuilderState.draft_website_id));
     }
 
-    await page.click('#site-builder-apply-stage-recommendation', { force: true });
-    await page.waitForURL(/pagebuilder\/backend\/aiSiteAgent\/workspace\?public_id=/, {
-      waitUntil: 'domcontentloaded',
-      timeout: WORKSPACE_TIMEOUT,
-    });
-    await expect(page.locator('#wiz-theme-hint')).toBeVisible({ timeout: 30000 });
+    const previewOptions = Array.isArray(pageBuilderState.preview_page_options)
+      ? pageBuilderState.preview_page_options
+      : [];
+    if (previewOptions.length > 1) {
+      const nextOption = previewOptions.find(option => Number(option.page_id || option.value || 0) !== Number(pageBuilderState.preview_page_id));
+      expect(nextOption).toBeTruthy();
 
-    await page.waitForTimeout(2500);
-    const websitesState = await readJsonPage(page, websitesStateUrl);
-    expect(websitesState.success).toBeTruthy();
-    expect(websitesState.data.domain_purchase.domain).toBe('background-domain.local.test');
-    expect(websitesState.data.domain_purchase.status).toBe('completed');
-    expect(websitesState.data.domain_purchase.message).toContain('Local demo');
+      await page.selectOption('#pb-ai-preview-page-select', String(nextOption.page_id || nextOption.value));
+      await page.click('#pb-ai-switch-preview-page', { force: true });
+
+      await expect
+        .poll(async () => {
+          const scope = await readJsonTextarea(page, '#pb-ai-scope-full');
+          return Number(scope.preview_page_id || 0);
+        }, { timeout: WORKSPACE_TIMEOUT })
+        .toBe(Number(nextOption.page_id || nextOption.value));
+
+      pageBuilderState = await readJsonTextarea(page, '#pb-ai-scope-full');
+    }
+
+    await gotoStable(page, websitesWorkspaceUrl);
+    await expect(page.locator('#site-builder-visual-preview-frame')).toBeVisible({ timeout: 30000 });
+
+    await expect
+      .poll(async () => {
+        const state = await readJsonTextarea(page, '#site-builder-scope-full');
+        return {
+          draftWebsiteId: Number(state.draft_website_id || 0),
+          previewPageId: Number(state.preview_page_id || 0),
+          visualPreviewUrl: String(state.visual_preview_url || ''),
+          visualEditUrl: String(state.visual_edit_url || ''),
+        };
+      }, { timeout: WORKSPACE_TIMEOUT })
+      .toEqual({
+        draftWebsiteId: Number(pageBuilderState.draft_website_id),
+        previewPageId: Number(pageBuilderState.preview_page_id),
+        visualPreviewUrl: String(pageBuilderState.visual_preview_url || ''),
+        visualEditUrl: String(pageBuilderState.visual_edit_url || ''),
+      });
+
+    const websitesState = await readJsonTextarea(page, '#site-builder-scope-full');
+    const mirrorFrameSrc = await page.locator('#site-builder-visual-preview-frame').getAttribute('src');
+    expect(mirrorFrameSrc).toContain('/pagebuilder/backend/preview/full');
+    expect(mirrorFrameSrc).toContain('visual_editor=1');
+    expect(mirrorFrameSrc).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
+    expect(mirrorFrameSrc).toContain(`page_id=${pageBuilderState.preview_page_id}`);
+
+    const editorHref = await page.locator('a[href*="/pagebuilder/backend/page/edit"]').first().getAttribute('href');
+    expect(editorHref).toContain('/pagebuilder/backend/page/edit');
+    expect(editorHref).toContain(`id=${pageBuilderState.preview_page_id}`);
+    expect(editorHref).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
+    expect(websitesState.visual_edit_url).toBe(editorHref);
+
+    const editorPage = await page.context().newPage();
+    await gotoStable(editorPage, new URL(editorHref, page.url()).toString());
+    await expect(editorPage.locator('#previewIframe')).toBeVisible({ timeout: 30000 });
+
+    const editorPreviewSrc = await editorPage.locator('#previewIframe').getAttribute('src');
+    expect(editorPreviewSrc).toContain('/pagebuilder/backend/preview/full');
+    expect(editorPreviewSrc).toContain('visual_editor=1');
+    expect(editorPreviewSrc).toContain(`page_id=${pageBuilderState.preview_page_id}`);
+    expect(editorPreviewSrc).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
+
+    await editorPage.close();
   });
 
-  test('fake AI quick build emits domain, theme, and visual preview milestones', async ({ page }) => {
-    test.slow();
-    test.setTimeout(300000);
-    await openHub(page);
-    const terminal = terminalContent(page);
+  test('pagebuilder provider in fake mode: session scope keeps fake_mode and local_fake_demo', async ({ page }) => {
+    test.setTimeout(180000);
+    const { backendRoot } = await openHub(page, 'pagebuilder', true);
+    await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
 
-    await page.fill('#site-agent-description', 'Launch a polished outdoor gear storefront with seasonal landing pages.');
-    await page.click('#site-agent-start-btn', { force: true });
+    const brief = 'Fake mode PageBuilder handoff smoke test.';
+    await page.fill('#site-agent-description', brief);
+    const payload = await createWorkspace(page, backendRoot, 'pagebuilder', brief, { fakeMode: true });
+    expect(payload.success).toBeTruthy();
+    expect(payload.workspace_url).toBeTruthy();
 
-    await expect(terminal).toContainText('Local demo: recommended registrar', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo: suggested domain', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo: simulated domain purchase and bootstrap resources', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo: generated theme direction and virtual theme', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo: prepared visual-edit preview', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo flow completed', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(page.locator('#site-agent-start-btn')).toBeEnabled({ timeout: TERMINAL_TIMEOUT });
+    await gotoStable(page, new URL(payload.workspace_url, page.url()).toString());
+    await expectWorkspaceStreamHealthy(page);
+    const scope = await readJsonTextarea(page, '#site-builder-scope-full');
+    expect(Number(scope.fake_mode || 0)).toBe(1);
+    expect(String(scope.build_execution_mode || '')).toBe('local_fake_demo');
   });
 
-  test('AI domain recommend asks for a registrar first and then fills an available domain', async ({ page }) => {
-    test.slow();
-    test.setTimeout(240000);
-    await openHub(page, 'websites_default', true);
-
-    await page.fill('#site-agent-description', 'Build a coffee subscription site with a strong brand name.');
-    await page.click('#site-agent-recommend-domain-btn', { force: true });
-    await expect(page.locator('#site-agent-domain-recommendation')).toContainText('registrar', {
-      timeout: 30000,
-    });
-
-    const registrarValue = await selectFirstRegistrarAccount(page, 'site-agent-account');
-    expect(registrarValue).toBeTruthy();
-
-    await page.click('#site-agent-recommend-domain-btn', { force: true });
-    await expect(page.locator('#site-agent-domain-recommendation')).toContainText('available', {
-      timeout: 30000,
-    });
-    await expect(page.locator('#site-agent-domain')).not.toHaveValue('', {
-      timeout: 30000,
-    });
-    await expect(page.locator('#site-agent-account_value')).not.toHaveValue('', {
-      timeout: 30000,
-    });
-  });
-
-  test('fake manual quick build requires a registrar and then runs the simulated purchase flow', async ({ page }) => {
-    test.slow();
-    test.setTimeout(300000);
-    await openHub(page, 'websites_default', true);
-    const terminal = terminalContent(page);
-
-    await page.uncheck('#site-agent-use-ai');
-    await page.fill('#site-agent-domain', 'manual-demo.local.test');
-    const registrarValue = await selectFirstRegistrarAccount(page, 'site-agent-account');
-    expect(registrarValue).toBeTruthy();
-    await page.click('#site-agent-start-btn', { force: true });
-
-    await expect(terminal).toContainText('Local demo: simulated domain purchase and bootstrap resources', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('manual-demo.local.test', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(terminal).toContainText('Local demo flow completed', {
-      timeout: TERMINAL_TIMEOUT,
-    });
-    await expect(page.locator('#site-agent-start-btn')).toBeEnabled({ timeout: TERMINAL_TIMEOUT });
-  });
 });

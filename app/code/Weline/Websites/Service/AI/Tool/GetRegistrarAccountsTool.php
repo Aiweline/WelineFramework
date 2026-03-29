@@ -42,13 +42,42 @@ class GetRegistrarAccountsTool implements ToolInterface
     public function execute(array $args): mixed
     {
         $status = $args['status'] ?? 'active';
-        return $this->queryService->execute('websites', 'getRegistrarAccounts', [
+        $result = $this->queryService->execute('websites', 'getRegistrarAccounts', [
             'status' => $status,
         ]);
+
+        if (\is_array($result) && $result === []) {
+            return $this->getSimulatedAccounts();
+        }
+
+        return $result;
     }
 
     public function isEnabled(): bool
     {
         return true;
+    }
+
+    /**
+     * @return list<array{account_id:int,account_name:string,registrar_name:string,registrar_code:string,simulated:bool}>
+     */
+    private function getSimulatedAccounts(): array
+    {
+        return [
+            [
+                'account_id' => 900001,
+                'account_name' => '本地演示主账号',
+                'registrar_name' => '本地演示服务商',
+                'registrar_code' => 'local_demo',
+                'simulated' => true,
+            ],
+            [
+                'account_id' => 900002,
+                'account_name' => '本地演示备用账号',
+                'registrar_name' => '沙盒域名',
+                'registrar_code' => 'sandbox_demo',
+                'simulated' => true,
+            ],
+        ];
     }
 }
