@@ -55,8 +55,14 @@ class PurchaseDomainAndBuildSiteTool implements ToolInterface
         $description = \trim((string) ($args['description'] ?? ''));
         $domain = \trim((string) ($args['domain'] ?? ''));
         $accountId = (int) ($args['account_id'] ?? 0);
-        if ($domain === '' || $accountId <= 0) {
+        if ($domain === '') {
             return ['success' => false, 'message' => 'domain and account_id are required'];
+        }
+        if ($accountId <= 0 && !$this->isLocalDevelopmentDomain($domain)) {
+            return ['success' => false, 'message' => 'domain and account_id are required'];
+        }
+        if ($accountId <= 0) {
+            $accountId = 900001;
         }
         if ($description === '') {
             $description = $domain;
@@ -67,5 +73,14 @@ class PurchaseDomainAndBuildSiteTool implements ToolInterface
     public function isEnabled(): bool
     {
         return true;
+    }
+
+    private function isLocalDevelopmentDomain(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === 'localhost') {
+            return true;
+        }
+        return \str_ends_with($domain, '.local') || \str_ends_with($domain, '.localhost');
     }
 }

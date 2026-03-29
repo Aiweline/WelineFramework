@@ -13,6 +13,7 @@ use Weline\Framework\App\Env;
  */
 class CertificateRequestService
 {
+    private const DEV_SIM_DOMAIN = 'weline-dev.local';
     /**
      * 统一发起证书申请（委托 Server 模块执行，参数集中在此处构造）
      *
@@ -25,6 +26,15 @@ class CertificateRequestService
         $domain = \trim((string) ($options['domain'] ?? ''));
         if ($domain === '') {
             return ['success' => false, 'message' => (string) __('域名不能为空')];
+        }
+        if ($this->isDevSimulationDomain($domain)) {
+            return [
+                'success' => true,
+                'message' => (string) __('开发环境模拟证书已签发：%{domain}', ['domain' => $domain]),
+                'cert_id' => 9990001,
+                'cert_path' => '/tmp/weline-dev-local.crt',
+                'simulated' => true,
+            ];
         }
 
         $webroot = \trim((string) ($options['webroot'] ?? ''));
@@ -60,6 +70,12 @@ class CertificateRequestService
         }
 
         return w_query('server', 'requestCertificate', $params);
+    }
+
+    private function isDevSimulationDomain(string $domain): bool
+    {
+        return (\defined('DEV') && DEV)
+            && \strtolower(\trim($domain)) === self::DEV_SIM_DOMAIN;
     }
 
     private function normalizeChallengeStrategy(mixed $v): string

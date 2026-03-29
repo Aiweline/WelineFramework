@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service\AiWorkbench;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Websites\Model\AiSiteBuilderEvent;
 use Weline\Websites\Model\AiSiteBuilderSession;
+use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Service\DomainLifecycleOrchestrationService;
 use Weline\Websites\Service\DomainPurchaseService;
 
@@ -15,6 +18,8 @@ class DomainPurchaseWorkbenchService
     private const STALE_RUNNING_SECONDS = 2700;
     private const WAIT_TIMEOUT_SECONDS = 2700;
     private const POLL_INTERVAL_MICROSECONDS = 5000000;
+    private const DEFAULT_FAKE_DOMAIN = 'weline-dev.local';
+    private const DEFAULT_FAKE_REGISTRAR_ACCOUNT_ID = 900001;
 
     public function __construct(
         private readonly SessionService $sessionService,
@@ -147,7 +152,12 @@ class DomainPurchaseWorkbenchService
         $state = $this->buildViewState($session);
         $scope = $session->getScopeArray();
         $domain = $this->normalizeDomain((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? $state['domain']));
-        $registrarAccountId = (int)($scope['registrar_account_id'] ?? $scope['preferred_registrar_account_id'] ?? $state['registrar_account_id']);
+        $requestedRegistrarAccountId = (int)($scope['registrar_account_id'] ?? $scope['preferred_registrar_account_id'] ?? $state['registrar_account_id']);
+        $registrarAccountId = $this->resolveUsableRegistrarAccountId($requestedRegistrarAccountId);
+
+        if ($this->isFakeMode($session)) {
+            return $this->completeFakePurchaseImmediately($session, $adminUserId, $domain, $registrarAccountId);
+        }
 
         if (!$this->isValidDomain($domain)) {
             return [
@@ -161,6 +171,17 @@ class DomainPurchaseWorkbenchService
                 'success' => false,
                 'message' => (string)__('请先选择域名购买服务商账号'),
             ];
+        }
+        if ($registrarAccountId !== $requestedRegistrarAccountId) {
+            $scopePatch = [
+                'preferred_registrar_account_id' => $registrarAccountId,
+                'registrar_account_id' => $registrarAccountId,
+            ];
+            $scope = \array_replace($scope, $scopePatch);
+            $this->applyScopeToSession($session, $scope);
+            $session->save();
+            $session = $this->reloadSession($sessionId, $adminUserId) ?? $session;
+            $state = $this->buildViewState($session);
         }
 
         if ($state['status'] === 'running' && !$this->isStateStale($state)) {
@@ -232,6 +253,63 @@ class DomainPurchaseWorkbenchService
     }
 
     /**
+     * 在本地模拟模式下直接完成域名购买状态，避免进入真实域名商流程。
+     *
+     * @return array{
+     *   success:bool,
+     *   message:string,
+     *   state:array<string, mixed>,
+     *   startable:bool,
+     *   stream_token:string
+     * }
+     */
+    private function completeFakePurchaseImmediately(
+        AiSiteBuilderSession $session,
+        int $adminUserId,
+        string $domain,
+        int $registrarAccountId
+    ): array {
+        $domain = $this->isValidDomain($domain) ? $domain : self::DEFAULT_FAKE_DOMAIN;
+        $registrarAccountId = $registrarAccountId > 0 ? $registrarAccountId : self::DEFAULT_FAKE_REGISTRAR_ACCOUNT_ID;
+
+        $runtime = [
+            'status' => 'completed',
+            'stage' => 'completed',
+            'message' => (string)__('本地模拟已开启：已跳过真实域名商流程并标记为完成'),
+            'domain' => $domain,
+            'registrar_account_id' => $registrarAccountId,
+            'order_id' => 990001,
+            'purchase_order_id' => 880001,
+            'execution_token' => '',
+            'updated_at' => $this->now(),
+            'started_at' => $this->now(),
+            'finished_at' => $this->now(),
+        ];
+
+        $this->persistRuntime(
+            $session,
+            $runtime,
+            $this->buildScopePatchFromRuntime($runtime)
+        );
+        $this->appendRuntimeEvent(
+            $session,
+            $adminUserId,
+            'domain_purchase_completed',
+            $runtime,
+            'success'
+        );
+
+        $fresh = $this->reloadSession($session->getId(), $adminUserId) ?? $session;
+        return [
+            'success' => true,
+            'message' => $runtime['message'],
+            'state' => $this->buildViewState($fresh),
+            'startable' => false,
+            'stream_token' => '',
+        ];
+    }
+
+    /**
      * @param null|callable(string, array<string, mixed>):void $emit
      * @return array{success:bool,completed:bool,message:string,state?:array<string, mixed>}
      */
@@ -251,20 +329,27 @@ class DomainPurchaseWorkbenchService
         }
 
         $state = $this->buildViewState($session);
-        if ($executionToken === '' || ((string)($state['execution_token'] ?? '') !== '' && (string)($state['execution_token'] ?? '') !== $executionToken)) {
-            return [
-                'success' => false,
-                'completed' => false,
-                'message' => (string)__('域名购买执行令牌已过期，请重新发起购买'),
-            ];
-        }
-
         if ($state['status'] === 'completed') {
+            $this->emit($emit, 'start', [
+                'message' => (string)__('域名购买长连接已启动'),
+                'domain' => $state['domain'] ?? '',
+                'status' => $state['status'] ?? 'completed',
+                'stage' => $state['stage'] ?? 'completed',
+                'stage_label' => $state['stage_label'] ?? (string)__('域名完备'),
+            ]);
             return [
                 'success' => true,
                 'completed' => true,
                 'message' => (string)__('当前域名购买流程已完成'),
                 'state' => $state,
+            ];
+        }
+
+        if ($executionToken === '' || ((string)($state['execution_token'] ?? '') !== '' && (string)($state['execution_token'] ?? '') !== $executionToken)) {
+            return [
+                'success' => false,
+                'completed' => false,
+                'message' => (string)__('域名购买执行令牌已过期，请重新发起购买'),
             ];
         }
 
@@ -317,7 +402,7 @@ class DomainPurchaseWorkbenchService
             AiSiteBuilderEvent::LEVEL_INFO
         );
 
-        if ($this->isFakeMode($session)) {
+        if ($this->shouldUseSseSimulationMode($session, $state)) {
             return $this->runFakePurchaseFlow($session, $adminUserId, $emit);
         }
 
@@ -372,7 +457,7 @@ class DomainPurchaseWorkbenchService
         ];
 
         foreach ($timeline as $item) {
-            \usleep((int)($item['sleep'] ?? 0));
+            SchedulerSystem::yieldDelay((int)(($item['sleep'] ?? 0) / 1000));
 
             $patch = \array_replace([
                 'domain' => $state['domain'],
@@ -421,13 +506,23 @@ class DomainPurchaseWorkbenchService
     ): array {
         $state = $this->buildViewState($session);
         $domain = (string)($state['domain'] ?? '');
-        $registrarAccountId = (int)($state['registrar_account_id'] ?? 0);
+        $requestedRegistrarAccountId = (int)($state['registrar_account_id'] ?? 0);
+        $registrarAccountId = $this->resolveUsableRegistrarAccountId($requestedRegistrarAccountId);
 
         if (!$this->isValidDomain($domain)) {
             return $this->failPurchase($session, $adminUserId, (string)__('请先填写有效的目标域名'), 'purchase', $emit);
         }
         if ($registrarAccountId <= 0) {
             return $this->failPurchase($session, $adminUserId, (string)__('请先选择域名购买服务商账号'), 'purchase', $emit);
+        }
+        if ($registrarAccountId !== $requestedRegistrarAccountId) {
+            $scope = $session->getScopeArray();
+            $scope['preferred_registrar_account_id'] = $registrarAccountId;
+            $scope['registrar_account_id'] = $registrarAccountId;
+            $this->applyScopeToSession($session, $scope);
+            $session->save();
+            $session = $this->reloadSession($session->getId(), $adminUserId) ?? $session;
+            $state = $this->buildViewState($session);
         }
 
         $this->emit($emit, 'progress', [
@@ -611,7 +706,7 @@ class DomainPurchaseWorkbenchService
                 );
             }
 
-            \usleep(self::POLL_INTERVAL_MICROSECONDS);
+            SchedulerSystem::yieldDelay(5000);
         }
 
         return $this->failPurchase(
@@ -706,6 +801,41 @@ class DomainPurchaseWorkbenchService
     {
         $scope = $session->getScopeArray();
         return !empty($scope['fake_mode']) || (string)($scope['build_execution_mode'] ?? '') === 'local_fake_demo';
+    }
+
+    /**
+     * SSE 域名购买流专用模拟门闸：
+     * - 显式 fake_mode/local_fake_demo；
+     * - DEV 下本地域名（localhost/.local/.localhost）；
+     * - 约定的本地模拟账号（>= 900000）。
+     */
+    private function shouldUseSseSimulationMode(AiSiteBuilderSession $session, array $state): bool
+    {
+        if ($this->isFakeMode($session)) {
+            return true;
+        }
+
+        $domain = $this->normalizeDomain((string)($state['domain'] ?? ''));
+        $registrarAccountId = (int)($state['registrar_account_id'] ?? 0);
+
+        if (\defined('DEV') && DEV && $this->isLocalDevelopmentDomain($domain)) {
+            return true;
+        }
+
+        return $registrarAccountId >= self::DEFAULT_FAKE_REGISTRAR_ACCOUNT_ID;
+    }
+
+    private function isLocalDevelopmentDomain(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+        if ($domain === 'localhost') {
+            return true;
+        }
+
+        return \str_ends_with($domain, '.local') || \str_ends_with($domain, '.localhost');
     }
 
     private function now(): string
@@ -985,6 +1115,66 @@ class DomainPurchaseWorkbenchService
         if ($emit !== null) {
             $emit($event, $payload);
         }
+    }
+
+    private function resolveUsableRegistrarAccountId(int $requestedAccountId): int
+    {
+        $activeAccounts = $this->getActiveRegistrarAccounts();
+        if ($activeAccounts === []) {
+            return $requestedAccountId > 0 ? $requestedAccountId : 0;
+        }
+
+        if ($requestedAccountId > 0) {
+            foreach ($activeAccounts as $account) {
+                if ((int)($account['account_id'] ?? 0) === $requestedAccountId) {
+                    return $requestedAccountId;
+                }
+            }
+        }
+
+        return (int)($activeAccounts[0]['account_id'] ?? 0);
+    }
+
+    /**
+     * @return list<array{account_id:int,account_name:string,registrar_name:string,registrar_code:string}>
+     */
+    private function getActiveRegistrarAccounts(): array
+    {
+        try {
+            /** @var DomainRegistrarAccount $accountModel */
+            $accountModel = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $rows = $accountModel->getAccountsWithRegistrar();
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!\is_array($rows)) {
+            return [];
+        }
+
+        $active = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ((string)($row['status'] ?? '') !== 'active') {
+                continue;
+            }
+
+            $accountId = (int)($row['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                continue;
+            }
+
+            $active[] = [
+                'account_id' => $accountId,
+                'account_name' => (string)($row['account_name'] ?? ''),
+                'registrar_name' => (string)($row['registrar_name'] ?? ''),
+                'registrar_code' => (string)($row['registrar_code'] ?? ''),
+            ];
+        }
+
+        return $active;
     }
 
 }
